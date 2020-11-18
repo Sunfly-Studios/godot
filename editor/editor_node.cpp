@@ -693,6 +693,11 @@ void EditorNode::_notification(int p_what) {
 				EditorFileSystem::get_singleton()->connect("filesystem_changed", callable_mp(this, &EditorNode::_execute_upgrades), CONNECT_ONE_SHOT);
 				EditorFileSystem::get_singleton()->scan();
 			}
+
+			ResourceImporterTexture::get_singleton()->update_imports();
+
+			// if using a main thread only renderer, we need to update the resource previews
+			EditorResourcePreview::get_singleton()->update();
 		} break;
 
 		case NOTIFICATION_ENTER_TREE: {
@@ -5125,7 +5130,10 @@ String EditorNode::_get_system_info() const {
 		rendering_method = "Mobile";
 	} else if (rendering_method == "gl_compatibility") {
 		rendering_method = "Compatibility";
+	} else if (rendering_method == "gl_legacy") {
+		rendering_method = "Legacy";
 	}
+
 	if (driver_name == "vulkan") {
 		driver_name = "Vulkan";
 	} else if (driver_name == "d3d12") {
@@ -5139,6 +5147,12 @@ String EditorNode::_get_system_info() const {
 			driver_name = "OpenGL 3";
 		} else {
 			driver_name = "OpenGL ES 3";
+		}
+	} else if (driver_name == "opengl2") {
+		if (OS::get_singleton()->get_gles_over_gl()) {
+			driver_name = "OpenGL 2";
+		} else {
+			driver_name = "OpenGL ES 2";
 		}
 	} else if (driver_name == "metal") {
 		driver_name = "Metal";
@@ -6717,6 +6731,8 @@ void EditorNode::_update_renderer_color() {
 		renderer->add_theme_color_override(SceneStringName(font_color), theme->get_color(SNAME("mobile_color"), EditorStringName(Editor)));
 	} else if (rendering_method == "gl_compatibility") {
 		renderer->add_theme_color_override(SceneStringName(font_color), theme->get_color(SNAME("gl_compatibility_color"), EditorStringName(Editor)));
+	} else if (rendering_method == "gl_legacy") {
+		renderer->add_theme_color_override(SceneStringName(font_color), theme->get_color(SNAME("gl_legacy_color"), EditorStringName(Editor)));
 	}
 }
 
@@ -6731,7 +6747,7 @@ void EditorNode::_renderer_selected(int p_which) {
 
 	renderer_request = rendering_method;
 	video_restart_dialog->set_text(
-			vformat(TTR("Changing the renderer requires restarting the editor.\n\nChoosing Save & Restart will change the rendering method to:\n- Desktop platforms: %s\n- Mobile platforms: %s\n- Web platform: gl_compatibility"),
+			vformat(TTR("Changing the renderer requires restarting the editor.\n\nChoosing Save & Restart will change the rendering method to:\n- Desktop platforms: %s\n- Mobile platforms: %s\n- Web platform: gl_compatibility.\n"),
 					renderer_request, renderer_request.replace("forward_plus", "mobile")));
 	video_restart_dialog->popup_centered();
 	renderer->select(renderer_current);
@@ -6749,6 +6765,9 @@ void EditorNode::_add_renderer_entry(const String &p_renderer_name, bool p_mark_
 	if (p_renderer_name == "gl_compatibility") {
 		item_text = TTR("Compatibility");
 	}
+	if (p_renderer_name == "gl_legacy") {
+		item_text = TTR("Legacy");
+	}
 	if (p_mark_overridden) {
 		item_text += " " + TTR("(Overridden)");
 	}
@@ -6757,7 +6776,7 @@ void EditorNode::_add_renderer_entry(const String &p_renderer_name, bool p_mark_
 
 void EditorNode::_set_renderer_name_save_and_restart() {
 	ProjectSettings::get_singleton()->set("rendering/renderer/rendering_method", renderer_request);
-	if (renderer_request == "mobile" || renderer_request == "gl_compatibility") {
+	if (renderer_request == "mobile" || renderer_request == "gl_compatibility" || renderer_request == "gl_legacy") {
 		// Also change the mobile override if changing to a compatible rendering method.
 		// This prevents visual discrepancies between desktop and mobile platforms.
 		ProjectSettings::get_singleton()->set("rendering/renderer/rendering_method.mobile", renderer_request);

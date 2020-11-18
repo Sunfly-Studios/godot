@@ -1,5 +1,5 @@
 /*************************************************************************/
-/*  GodotXRGame.kt                                                       */
+/*  texture_loader_gles2.h                                               */
 /*************************************************************************/
 /*                       This file is part of:                           */
 /*                           GODOT ENGINE                                */
@@ -28,51 +28,22 @@
 /* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                */
 /*************************************************************************/
 
-package org.godotengine.editor
+#pragma once
 
-import org.godotengine.godot.GodotLib
-import org.godotengine.godot.xr.XRMode
+#include "drivers/gles2/rasterizer_platforms.h"
+#ifdef GLES2_BACKEND_ENABLED
 
-/**
- * Provide support for running XR apps / games from the editor window.
- */
-open class GodotXRGame: BaseGodotGame() {
+#include "core/io/resource_loader.h"
+#include "scene/resources/texture.h"
 
-	override fun overrideOrientationRequest() = true
+class ResourceFormatGLES2Texture : public ResourceFormatLoader {
+public:
+	virtual RES load(const String &p_path, const String &p_original_path = "", Error *r_error = nullptr, bool p_use_sub_threads = false, float *r_progress = nullptr, bool p_no_cache = false);
+	virtual void get_recognized_extensions(List<String> *p_extensions) const;
+	virtual bool handles_type(const String &p_type) const;
+	virtual String get_resource_type(const String &p_path) const;
 
-	override fun getCommandLine(): MutableList<String> {
-		val updatedArgs = super.getCommandLine()
-		if (!updatedArgs.contains(XRMode.OPENXR.cmdLineArg)) {
-			updatedArgs.add(XRMode.OPENXR.cmdLineArg)
-		}
-		if (!updatedArgs.contains(XR_MODE_ARG)) {
-			updatedArgs.add(XR_MODE_ARG)
-			updatedArgs.add("on")
-		}
-		return updatedArgs
-	}
+	virtual ~ResourceFormatGLES2Texture() {}
+};
 
-	override fun getEditorWindowInfo() = XR_RUN_GAME_INFO
-
-	override fun getGodotAppLayout() = R.layout.godot_xr_game_layout
-
-	override fun getProjectPermissionsToEnable(): MutableList<String> {
-		val permissionsToEnable = super.getProjectPermissionsToEnable()
-
-		val xrRuntimePermission = getXRRuntimePermissions()
-		if (xrRuntimePermission.isNotEmpty() && GodotLib.getGlobal("xr/openxr/enabled").toBoolean()) {
-			// We only request permissions when the `automatically_request_runtime_permissions`
-			// project setting is enabled.
-			// If the project setting is not defined, we fall-back to the default behavior which is
-			// to automatically request permissions.
-			val automaticallyRequestPermissionsSetting = GodotLib.getGlobal("xr/openxr/extensions/automatically_request_runtime_permissions")
-			val automaticPermissionsRequestEnabled = automaticallyRequestPermissionsSetting.isNullOrEmpty() ||
-				automaticallyRequestPermissionsSetting.toBoolean()
-			if (automaticPermissionsRequestEnabled) {
-				permissionsToEnable.addAll(xrRuntimePermission)
-			}
-		}
-
-		return permissionsToEnable
-	}
-}
+#endif

@@ -2188,6 +2188,22 @@ Error Main::setup(const char *execpath, int argc, char *argv[], bool p_second_ph
 
 	{
 		// GL Compatibility driver overrides per platform.
+		GLOBAL_DEF_RST("rendering/gl_legacy/driver", "opengl2");
+		GLOBAL_DEF_RST(PropertyInfo(Variant::STRING, "rendering/gl_legacy/driver.windows", PROPERTY_HINT_ENUM, "opengl2,opengl2_angle"), "opengl2");
+		GLOBAL_DEF_RST(PropertyInfo(Variant::STRING, "rendering/gl_legacy/driver.linuxbsd", PROPERTY_HINT_ENUM, "opengl2,opengl2_es"), "opengl2");
+		GLOBAL_DEF_RST(PropertyInfo(Variant::STRING, "rendering/gl_legacy/driver.web", PROPERTY_HINT_ENUM, "opengl2"), "opengl2");
+		GLOBAL_DEF_RST(PropertyInfo(Variant::STRING, "rendering/gl_legacy/driver.android", PROPERTY_HINT_ENUM, "opengl2"), "opengl2");
+		GLOBAL_DEF_RST(PropertyInfo(Variant::STRING, "rendering/gl_legacy/driver.ios", PROPERTY_HINT_ENUM, "opengl2"), "opengl2");
+		GLOBAL_DEF_RST(PropertyInfo(Variant::STRING, "rendering/gl_legacy/driver.macos", PROPERTY_HINT_ENUM, "opengl2,opengl2_angle"), "opengl2");
+
+		GLOBAL_DEF_RST("rendering/gl_legacy/nvidia_disable_threaded_optimization", true);
+		GLOBAL_DEF_RST("rendering/gl_legacy/fallback_to_angle", true);
+		GLOBAL_DEF_RST("rendering/gl_legacy/fallback_to_native", true);
+		GLOBAL_DEF_RST("rendering/gl_legacy/fallback_to_gles", true);
+	}
+
+	{
+		// GL Compatibility driver overrides per platform.
 		GLOBAL_DEF_RST("rendering/gl_compatibility/driver", "opengl3");
 		GLOBAL_DEF_RST(PropertyInfo(Variant::STRING, "rendering/gl_compatibility/driver.windows", PROPERTY_HINT_ENUM, "opengl3,opengl3_angle"), "opengl3");
 		GLOBAL_DEF_RST(PropertyInfo(Variant::STRING, "rendering/gl_compatibility/driver.linuxbsd", PROPERTY_HINT_ENUM, "opengl3,opengl3_es"), "opengl3");
@@ -3075,17 +3091,15 @@ Error Main::setup2(bool p_show_boot_logo) {
 	/* Initialize Display Server */
 
 	{
-		OS::get_singleton()->benchmark_begin_measure("Servers", "Display");
+		String display_driver = DisplayServer::get_create_function_name(display_driver_idx);
 
-		if (display_driver.is_empty()) {
-			display_driver = GLOBAL_GET("display/display_server/driver");
-		}
-
-		int display_driver_idx = -1;
-
-		if (display_driver.is_empty() || display_driver == "default") {
-			display_driver_idx = 0;
-		} else {
+		// rendering_driver now held in static global String in main and initialized in setup()
+		print_line("creating display driver : " + display_driver);
+		print_line("creating rendering driver : " + rendering_driver);
+		Error err;
+		display_server = DisplayServer::create(display_driver_idx, rendering_driver, window_mode, window_vsync_mode, window_flags, window_size, err);
+		if (err != OK || display_server == nullptr) {
+			//ok i guess we can't use this display server, try other ones
 			for (int i = 0; i < DisplayServer::get_create_function_count(); i++) {
 				String name = DisplayServer::get_create_function_name(i);
 				if (display_driver == name) {

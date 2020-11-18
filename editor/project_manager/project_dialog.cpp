@@ -476,6 +476,13 @@ void ProjectDialog::_renderer_selected() {
 				String::utf8("\n•  ") + TTR("Intended for low-end/older devices.") +
 				String::utf8("\n•  ") + TTR("Uses OpenGL 3 backend (OpenGL 3.3/ES 3.0/WebGL2).") +
 				String::utf8("\n•  ") + TTR("Fastest rendering of simple scenes."));
+	} else if (renderer_type == "gl_legacy") {
+		renderer_info->set_text(
+				String::utf8("•  ") + TTR("Supports desktop, mobile + web platforms.") +
+				String::utf8("\n•  ") + TTR("Basic 3D graphics only.") +
+				String::utf8("\n•  ") + TTR("Intended for legacy and extremely low-end hardware.") +
+				String::utf8("\n•  ") + TTR("Uses OpenGL 2 backend (OpenGL 2.1/ES 2.0/WebGL 1.0).") +
+				String::utf8("\n•  ") + TTR("Widest compatibility at the cost of rendering features."));
 	} else {
 		WARN_PRINT("Unknown renderer type. Please report this as a bug on GitHub.");
 	}

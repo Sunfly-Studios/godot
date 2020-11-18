@@ -1,12 +1,12 @@
 /*************************************************************************/
-/*  GodotXRGame.kt                                                       */
+/*  rasterizer_gles2.h                                                   */
 /*************************************************************************/
 /*                       This file is part of:                           */
 /*                           GODOT ENGINE                                */
 /*                      https://godotengine.org                          */
 /*************************************************************************/
-/* Copyright (c) 2007-2022 Juan Linietsky, Ariel Manzur.                 */
-/* Copyright (c) 2014-2022 Godot Engine contributors (cf. AUTHORS.md).   */
+/* Copyright (c) 2007-2021 Juan Linietsky, Ariel Manzur.                 */
+/* Copyright (c) 2014-2021 Godot Engine contributors (cf. AUTHORS.md).   */
 /*                                                                       */
 /* Permission is hereby granted, free of charge, to any person obtaining */
 /* a copy of this software and associated documentation files (the       */
@@ -28,51 +28,62 @@
 /* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                */
 /*************************************************************************/
 
-package org.godotengine.editor
+#pragma once
 
-import org.godotengine.godot.GodotLib
-import org.godotengine.godot.xr.XRMode
+#include "drivers/gles2/rasterizer_platforms.h"
+#ifdef GLES2_BACKEND_ENABLED
 
-/**
- * Provide support for running XR apps / games from the editor window.
- */
-open class GodotXRGame: BaseGodotGame() {
+#include "rasterizer_canvas_gles2.h"
+#include "rasterizer_scene_gles2.h"
+#include "rasterizer_storage_gles2.h"
+#include "servers/rendering/renderer_compositor.h"
 
-	override fun overrideOrientationRequest() = true
+class RasterizerGLES2 : public RendererCompositor {
+private:
+	uint64_t frame = 1;
+	float delta = 0;
 
-	override fun getCommandLine(): MutableList<String> {
-		val updatedArgs = super.getCommandLine()
-		if (!updatedArgs.contains(XRMode.OPENXR.cmdLineArg)) {
-			updatedArgs.add(XRMode.OPENXR.cmdLineArg)
-		}
-		if (!updatedArgs.contains(XR_MODE_ARG)) {
-			updatedArgs.add(XR_MODE_ARG)
-			updatedArgs.add("on")
-		}
-		return updatedArgs
+	double time_total = 0.0;
+	double time_scale = 1.0;
+
+protected:
+	RasterizerCanvasGLES2 canvas;
+	RasterizerStorageGLES2 storage;
+	RasterizerSceneGLES2 scene;
+
+	void _blit_render_target_to_screen(RID p_render_target, const Rect2 &p_screen_rect);
+
+public:
+	RendererStorage *get_storage() { return &storage; }
+	RendererCanvasRender *get_canvas() { return &canvas; }
+	RendererSceneRender *get_scene() { return &scene; }
+
+	void set_boot_image(const Ref<Image> &p_image, const Color &p_color, bool p_scale, bool p_use_filter = true);
+
+	void initialize();
+	void begin_frame(double frame_step);
+
+	void prepare_for_blitting_render_targets();
+	void blit_render_targets_to_screen(DisplayServer::WindowID p_screen, const BlitToScreen *p_render_targets, int p_amount);
+
+	void end_frame(bool p_swap_buffers);
+
+	void finalize() {}
+
+	static RendererCompositor *_create_current() {
+		return memnew(RasterizerGLES2);
 	}
 
-	override fun getEditorWindowInfo() = XR_RUN_GAME_INFO
-
-	override fun getGodotAppLayout() = R.layout.godot_xr_game_layout
-
-	override fun getProjectPermissionsToEnable(): MutableList<String> {
-		val permissionsToEnable = super.getProjectPermissionsToEnable()
-
-		val xrRuntimePermission = getXRRuntimePermissions()
-		if (xrRuntimePermission.isNotEmpty() && GodotLib.getGlobal("xr/openxr/enabled").toBoolean()) {
-			// We only request permissions when the `automatically_request_runtime_permissions`
-			// project setting is enabled.
-			// If the project setting is not defined, we fall-back to the default behavior which is
-			// to automatically request permissions.
-			val automaticallyRequestPermissionsSetting = GodotLib.getGlobal("xr/openxr/extensions/automatically_request_runtime_permissions")
-			val automaticPermissionsRequestEnabled = automaticallyRequestPermissionsSetting.isNullOrEmpty() ||
-				automaticallyRequestPermissionsSetting.toBoolean()
-			if (automaticPermissionsRequestEnabled) {
-				permissionsToEnable.addAll(xrRuntimePermission)
-			}
-		}
-
-		return permissionsToEnable
+	static void make_current() {
+		_create_func = _create_current;
 	}
-}
+
+	virtual bool is_low_end() const { return true; }
+	uint64_t get_frame_number() const { return frame; }
+	double get_frame_delta_time() const { return delta; }
+
+	RasterizerGLES2();
+	~RasterizerGLES2() {}
+};
+
+#endif // GLES2_BACKEND_ENABLED

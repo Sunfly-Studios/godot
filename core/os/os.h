@@ -52,6 +52,11 @@ public:
 		RENDER_SEPARATE_THREAD,
 	};
 
+	enum RenderMainThreadMode {
+		RENDER_MAIN_THREAD_ONLY,
+		RENDER_ANY_THREAD,
+	};
+
 	enum StdHandleType {
 		STD_HANDLE_INVALID,
 		STD_HANDLE_CONSOLE,
@@ -119,6 +124,8 @@ protected:
 	HasServerFeatureCallback has_server_feature_callback = nullptr;
 	bool _separate_thread_render = false;
 	bool _silent_crash_handler = false;
+	RenderThreadMode _render_thread_mode = RENDER_THREAD_SAFE;
+	RenderMainThreadMode _render_main_thread_mode = RENDER_ANY_THREAD;
 
 	// Functions used by Main to initialize/deinitialize the OS.
 	void add_logger(Logger *p_logger);
@@ -296,6 +303,10 @@ public:
 	virtual Dictionary get_memory_info() const;
 
 	bool is_separate_thread_rendering_enabled() const { return _separate_thread_render; }
+
+	RenderThreadMode get_render_thread_mode() const { return _render_thread_mode; }
+	RenderMainThreadMode get_render_main_thread_mode() const { return _render_main_thread_mode; }
+	void set_render_main_thread_mode(RenderMainThreadMode p_thread_mode) { _render_main_thread_mode = p_thread_mode; }
 
 	virtual String get_locale() const;
 	String get_locale_language() const;

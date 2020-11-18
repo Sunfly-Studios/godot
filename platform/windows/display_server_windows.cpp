@@ -57,6 +57,9 @@
 #if defined(GLES3_ENABLED)
 #include "drivers/gles3/rasterizer_gles3.h"
 #endif
+#if defined(GLES2_ENABLED)
+#include "drivers/gles2/rasterizer_gles3.h"
+#endif
 
 #include <avrt.h>
 #include <dwmapi.h>
@@ -94,6 +97,10 @@ int constexpr FS_TRANSP_BORDER = 2;
 #if defined(__GNUC__)
 // Workaround GCC warning from -Wcast-function-type.
 #define GetProcAddress (void *)GetProcAddress
+#endif
+
+#if defined(GLES_WINDOWS_ENABLED)
+#include "drivers/gles2/rasterizer_gles2.h"
 #endif
 
 static String format_error_message(DWORD id) {
@@ -1643,7 +1650,7 @@ DisplayServer::WindowID DisplayServerWindows::create_sub_window(WindowMode p_mod
 		_create_rendering_context_window(window_id);
 	}
 #endif
-#ifdef GLES3_ENABLED
+#if GLES3_ENABLED
 	_create_gl_window(window_id);
 #endif
 
@@ -1795,6 +1802,11 @@ void DisplayServerWindows::delete_sub_window(WindowID p_window) {
 		gl_manager_native->window_destroy(p_window);
 	}
 #endif
+#ifdef GLES_WINDOWS_ENABLED
+	if (rendering_driver == "GLES2") {
+		gl_manager->window_destroy(p_window);
+	}
+#endif
 
 	_destroy_window(p_window);
 
@@ -1857,6 +1869,12 @@ int64_t DisplayServerWindows::window_get_native_handle(HandleType p_handle_type,
 			return 0;
 		}
 	}
+}
+
+void DisplayServerWindows::gl_window_make_current(DisplayServer::WindowID p_window_id) {
+#if defined(GLES_WINDOWS_ENABLED)
+	gl_manager->window_make_current(p_window_id);
+#endif
 }
 
 void DisplayServerWindows::window_attach_instance_id(ObjectID p_instance, WindowID p_window) {
@@ -6340,6 +6358,14 @@ Error DisplayServerWindows::_create_window(WindowID p_window_id, WindowMode p_mo
 			::DwmSetWindowAttribute(wd.hWnd, use_legacy_dark_mode_before_20H1 ? DWMWA_USE_IMMERSIVE_DARK_MODE_BEFORE_20H1 : DWMWA_USE_IMMERSIVE_DARK_MODE, &value, sizeof(value));
 		}
 
+#ifdef GLES_WINDOWS_ENABLED
+		print_line("rendering_driver " + rendering_driver);
+		if (rendering_driver == "GLES2") {
+			Error err = gl_manager->window_create(id, wd.hWnd, hInstance, WindowRect.right - WindowRect.left, WindowRect.bottom - WindowRect.top);
+			ERR_FAIL_COND_V_MSG(err != OK, INVALID_WINDOW_ID, "Can't create a GLES2 window");
+		}
+#endif
+
 		RegisterTouchWindow(wd.hWnd, 0);
 		DragAcceptFiles(wd.hWnd, true);
 
@@ -7260,6 +7286,8 @@ DisplayServerWindows::DisplayServerWindows(const String &p_rendering_driver, Win
 		RasterizerGLES3::make_current(false);
 	}
 #endif
+	// Init context and rendering device
+#if defined(GLES_WINDOWS_ENABLED)
 
 	window_set_vsync_mode(p_vsync_mode, MAIN_WINDOW_ID);
 
@@ -7331,6 +7359,10 @@ Vector<String> DisplayServerWindows::get_rendering_drivers_func() {
 #ifdef GLES3_ENABLED
 	drivers.push_back("opengl3");
 	drivers.push_back("opengl3_angle");
+#endif
+#ifdef GLES2_ENABLED
+	drivers.push_back("opengl2");
+	drivers.push_back("opengl2_angle");
 #endif
 
 	return drivers;
@@ -7477,7 +7509,7 @@ DisplayServerWindows::~DisplayServerWindows() {
 	if (restore_mouse_trails > 1) {
 		SystemParametersInfoA(SPI_SETMOUSETRAILS, restore_mouse_trails, nullptr, 0);
 	}
-#ifdef GLES3_ENABLED
+#if defined(GLES3_ENABLED) || defined(GLES2_ENABLED)
 	if (gl_manager_angle) {
 		memdelete(gl_manager_angle);
 		gl_manager_angle = nullptr;

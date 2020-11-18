@@ -1,12 +1,12 @@
 /*************************************************************************/
-/*  GodotXRGame.kt                                                       */
+/*  rasterizer_storage_common.h                                          */
 /*************************************************************************/
 /*                       This file is part of:                           */
 /*                           GODOT ENGINE                                */
 /*                      https://godotengine.org                          */
 /*************************************************************************/
-/* Copyright (c) 2007-2022 Juan Linietsky, Ariel Manzur.                 */
-/* Copyright (c) 2014-2022 Godot Engine contributors (cf. AUTHORS.md).   */
+/* Copyright (c) 2007-2021 Juan Linietsky, Ariel Manzur.                 */
+/* Copyright (c) 2014-2021 Godot Engine contributors (cf. AUTHORS.md).   */
 /*                                                                       */
 /* Permission is hereby granted, free of charge, to any person obtaining */
 /* a copy of this software and associated documentation files (the       */
@@ -28,51 +28,50 @@
 /* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                */
 /*************************************************************************/
 
-package org.godotengine.editor
+#ifndef RASTERIZER_STORAGE_COMMON_H
+#define RASTERIZER_STORAGE_COMMON_H
 
-import org.godotengine.godot.GodotLib
-import org.godotengine.godot.xr.XRMode
+class RasterizerStorageCommon {
+public:
+	enum FVF {
+		FVF_UNBATCHED,
+		FVF_REGULAR,
+		FVF_COLOR,
+		FVF_LIGHT_ANGLE,
+		FVF_MODULATED,
+		FVF_LARGE,
+	};
 
-/**
- * Provide support for running XR apps / games from the editor window.
- */
-open class GodotXRGame: BaseGodotGame() {
+	// these flags are specifically for batching
+	// some of the logic is thus in rasterizer_storage.cpp
+	// we could alternatively set bitflags for each 'uses' and test on the fly
+	enum BatchFlags {
+		PREVENT_COLOR_BAKING = 1 << 0,
+		PREVENT_VERTEX_BAKING = 1 << 1,
 
-	override fun overrideOrientationRequest() = true
+		// custom vertex shaders using BUILTINS that vary per item
+		PREVENT_ITEM_JOINING = 1 << 2,
 
-	override fun getCommandLine(): MutableList<String> {
-		val updatedArgs = super.getCommandLine()
-		if (!updatedArgs.contains(XRMode.OPENXR.cmdLineArg)) {
-			updatedArgs.add(XRMode.OPENXR.cmdLineArg)
-		}
-		if (!updatedArgs.contains(XR_MODE_ARG)) {
-			updatedArgs.add(XR_MODE_ARG)
-			updatedArgs.add("on")
-		}
-		return updatedArgs
-	}
+		USE_MODULATE_FVF = 1 << 3,
+		USE_LARGE_FVF = 1 << 4,
+	};
 
-	override fun getEditorWindowInfo() = XR_RUN_GAME_INFO
+	enum BatchType : uint16_t {
+		BT_DEFAULT = 0,
+		BT_RECT = 1,
+		BT_LINE = 2,
+		BT_LINE_AA = 3,
+		BT_POLY = 4,
+		BT_DUMMY = 5, // dummy batch is just used to keep the batch creation loop simple
+	};
 
-	override fun getGodotAppLayout() = R.layout.godot_xr_game_layout
+	enum BatchTypeFlags {
+		BTF_DEFAULT = 1 << BT_DEFAULT,
+		BTF_RECT = 1 << BT_RECT,
+		BTF_LINE = 1 << BT_LINE,
+		BTF_LINE_AA = 1 << BT_LINE_AA,
+		BTF_POLY = 1 << BT_POLY,
+	};
+};
 
-	override fun getProjectPermissionsToEnable(): MutableList<String> {
-		val permissionsToEnable = super.getProjectPermissionsToEnable()
-
-		val xrRuntimePermission = getXRRuntimePermissions()
-		if (xrRuntimePermission.isNotEmpty() && GodotLib.getGlobal("xr/openxr/enabled").toBoolean()) {
-			// We only request permissions when the `automatically_request_runtime_permissions`
-			// project setting is enabled.
-			// If the project setting is not defined, we fall-back to the default behavior which is
-			// to automatically request permissions.
-			val automaticallyRequestPermissionsSetting = GodotLib.getGlobal("xr/openxr/extensions/automatically_request_runtime_permissions")
-			val automaticPermissionsRequestEnabled = automaticallyRequestPermissionsSetting.isNullOrEmpty() ||
-				automaticallyRequestPermissionsSetting.toBoolean()
-			if (automaticPermissionsRequestEnabled) {
-				permissionsToEnable.addAll(xrRuntimePermission)
-			}
-		}
-
-		return permissionsToEnable
-	}
-}
+#endif // RASTERIZER_STORAGE_COMMON_H

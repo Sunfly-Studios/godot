@@ -55,10 +55,10 @@
 #include "servers/rendering/rendering_device.h"
 #endif
 
-#if defined(GLES3_ENABLED)
+#if defined(GLES3_ENABLED) || defined(GLES2_ENABLED)
 #include "gl_manager_windows_angle.h"
 #include "gl_manager_windows_native.h"
-#endif // GLES3_ENABLED
+#endif // GLES3_ENABLED || defined(GLES2_ENABLED)
 
 #include "native_menu_windows.h"
 
@@ -444,7 +444,7 @@ class DisplayServerWindows : public DisplayServer {
 	int old_x, old_y;
 	Point2i center;
 
-#if defined(GLES3_ENABLED)
+#if defined(GLES3_ENABLED) || defined(GLES2_ENABLED)
 	GLManagerANGLE_Windows *gl_manager_angle = nullptr;
 	GLManagerNative_Windows *gl_manager_native = nullptr;
 #endif

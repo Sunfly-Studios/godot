@@ -47,3 +47,6 @@
 #elif defined(__NetBSD__)
 #define PTHREAD_NETBSD_SET_NAME
 #endif
+
+#define GLES3_INCLUDE_H "thirdparty/glad/glad/glad.h"
+#define GLES2_INCLUDE_H "thirdparty/glad/glad/glad.h"

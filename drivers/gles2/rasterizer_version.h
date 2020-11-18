@@ -1,12 +1,12 @@
 /*************************************************************************/
-/*  GodotXRGame.kt                                                       */
+/*  rasterizer_version.h                                                 */
 /*************************************************************************/
 /*                       This file is part of:                           */
 /*                           GODOT ENGINE                                */
 /*                      https://godotengine.org                          */
 /*************************************************************************/
-/* Copyright (c) 2007-2022 Juan Linietsky, Ariel Manzur.                 */
-/* Copyright (c) 2014-2022 Godot Engine contributors (cf. AUTHORS.md).   */
+/* Copyright (c) 2007-2021 Juan Linietsky, Ariel Manzur.                 */
+/* Copyright (c) 2014-2021 Godot Engine contributors (cf. AUTHORS.md).   */
 /*                                                                       */
 /* Permission is hereby granted, free of charge, to any person obtaining */
 /* a copy of this software and associated documentation files (the       */
@@ -28,51 +28,57 @@
 /* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                */
 /*************************************************************************/
 
-package org.godotengine.editor
+#pragma once
 
-import org.godotengine.godot.GodotLib
-import org.godotengine.godot.xr.XRMode
+//#define GLES_OVER_GL
 
-/**
- * Provide support for running XR apps / games from the editor window.
- */
-open class GodotXRGame: BaseGodotGame() {
+//#define GODOT_3
+#define GODOT_4
 
-	override fun overrideOrientationRequest() = true
+#ifdef GODOT_4
+// visual server becomes rendering server
+#define GD_VS RS
 
-	override fun getCommandLine(): MutableList<String> {
-		val updatedArgs = super.getCommandLine()
-		if (!updatedArgs.contains(XRMode.OPENXR.cmdLineArg)) {
-			updatedArgs.add(XRMode.OPENXR.cmdLineArg)
-		}
-		if (!updatedArgs.contains(XR_MODE_ARG)) {
-			updatedArgs.add(XR_MODE_ARG)
-			updatedArgs.add("on")
-		}
-		return updatedArgs
-	}
+#define GD_RD RenderingDevice
 
-	override fun getEditorWindowInfo() = XR_RUN_GAME_INFO
+//#define GD_COMMAND_LINE CommandPrimitive
+#else
 
-	override fun getGodotAppLayout() = R.layout.godot_xr_game_layout
+//class ContextGL_Windows {
+//	HDC hDC;
+//	HGLRC hRC;
+//	unsigned int pixel_format;
+//	HWND hWnd;
+//	bool opengl_3_context;
+//	bool use_vsync;
+#define GD_VS VS
 
-	override fun getProjectPermissionsToEnable(): MutableList<String> {
-		val permissionsToEnable = super.getProjectPermissionsToEnable()
+// no rendering device in 3.2?
+#define GD_RD VS
 
-		val xrRuntimePermission = getXRRuntimePermissions()
-		if (xrRuntimePermission.isNotEmpty() && GodotLib.getGlobal("xr/openxr/enabled").toBoolean()) {
-			// We only request permissions when the `automatically_request_runtime_permissions`
-			// project setting is enabled.
-			// If the project setting is not defined, we fall-back to the default behavior which is
-			// to automatically request permissions.
-			val automaticallyRequestPermissionsSetting = GodotLib.getGlobal("xr/openxr/extensions/automatically_request_runtime_permissions")
-			val automaticPermissionsRequestEnabled = automaticallyRequestPermissionsSetting.isNullOrEmpty() ||
-				automaticallyRequestPermissionsSetting.toBoolean()
-			if (automaticPermissionsRequestEnabled) {
-				permissionsToEnable.addAll(xrRuntimePermission)
-			}
-		}
+//public:
+//	void release_current();
 
-		return permissionsToEnable
-	}
-}
+//	void make_current();
+
+//	int get_window_width();
+//	int get_window_height();
+//	void swap_buffers();
+
+//	Error initialize();
+
+//	void set_use_vsync(bool p_use);
+//	bool is_using_vsync() const;
+
+//	ContextGL_Windows(HWND hwnd, bool p_opengl_3_context);
+//	~ContextGL_Windows();
+//};
+
+//#endif
+//#define GD_COMMAND_LINE CommandLine
+
+#define GD_TYPE_LINE TYPE_LINE
+#define GD_TYPE_POLYLINE TYPE_POLYLINE
+#define GD_TYPE_POLYGON TYPE_POLYGON
+#define GD_TYPE_CIRCLE TYPE_CIRCLE
+#endif

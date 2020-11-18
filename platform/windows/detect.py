@@ -930,8 +930,12 @@ def configure_mingw(env: "SConsEnvironment"):
         env.Append(LIBS=["libNIR.windows." + env["arch"]])
         env.Append(LIBS=["version"])  # Mesa dependency.
 
-    if env["opengl3"]:
-        env.Append(CPPDEFINES=["GLES3_ENABLED"])
+    if env["opengl3"] or env["opengl2"]:
+        if env["opengl3"]:
+            env.Append(CPPDEFINES=["GLES3_ENABLED"])
+        if env["opengl2"]:
+            env.Append(CPPDEFINES=["GLES2_ENABLED"])
+        
         if env["angle_libs"] != "":
             env.AppendUnique(CPPDEFINES=["EGL_STATIC"])
             env.Append(LIBPATH=[env["angle_libs"]])

@@ -1,12 +1,12 @@
 /*************************************************************************/
-/*  GodotXRGame.kt                                                       */
+/*  rasterizer_platforms.h                                               */
 /*************************************************************************/
 /*                       This file is part of:                           */
 /*                           GODOT ENGINE                                */
 /*                      https://godotengine.org                          */
 /*************************************************************************/
-/* Copyright (c) 2007-2022 Juan Linietsky, Ariel Manzur.                 */
-/* Copyright (c) 2014-2022 Godot Engine contributors (cf. AUTHORS.md).   */
+/* Copyright (c) 2007-2021 Juan Linietsky, Ariel Manzur.                 */
+/* Copyright (c) 2014-2021 Godot Engine contributors (cf. AUTHORS.md).   */
 /*                                                                       */
 /* Permission is hereby granted, free of charge, to any person obtaining */
 /* a copy of this software and associated documentation files (the       */
@@ -28,51 +28,46 @@
 /* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                */
 /*************************************************************************/
 
-package org.godotengine.editor
+#pragma once
 
-import org.godotengine.godot.GodotLib
-import org.godotengine.godot.xr.XRMode
+/////////////////////////////////////////////////////
+// override for intellisense .. ONLY FOR DEVELOPMENT
+//#ifndef X11_ENABLED
+//#define X11_ENABLED
+//#endif
+//#define GLES2_BACKEND_ENABLED
+/////////////////////////////////////////////////////
 
-/**
- * Provide support for running XR apps / games from the editor window.
- */
-open class GodotXRGame: BaseGodotGame() {
+#if defined(OPENGL_ENABLED) || defined(GLES_ENABLED)
 
-	override fun overrideOrientationRequest() = true
+// platform specific defines to compile in / out GLES support
+// these can later be made from Scons
+#ifdef X11_ENABLED
+#define GLES_X11_ENABLED
+#endif
 
-	override fun getCommandLine(): MutableList<String> {
-		val updatedArgs = super.getCommandLine()
-		if (!updatedArgs.contains(XRMode.OPENXR.cmdLineArg)) {
-			updatedArgs.add(XRMode.OPENXR.cmdLineArg)
-		}
-		if (!updatedArgs.contains(XR_MODE_ARG)) {
-			updatedArgs.add(XR_MODE_ARG)
-			updatedArgs.add("on")
-		}
-		return updatedArgs
-	}
+#ifdef WINDOWS_ENABLED
+//#define GLES_WINDOWS_ENABLED
+#endif
 
-	override fun getEditorWindowInfo() = XR_RUN_GAME_INFO
+#ifdef IPHONE_ENABLED
+//#define GLES_IPHONE_ENABLED
+#endif
 
-	override fun getGodotAppLayout() = R.layout.godot_xr_game_layout
+#ifdef OSX_ENABLED
+//#define GLES_OSX_ENABLED
+#endif
 
-	override fun getProjectPermissionsToEnable(): MutableList<String> {
-		val permissionsToEnable = super.getProjectPermissionsToEnable()
+#ifdef ANDROID_ENABLED
+//#define GLES_ANDROID_ENABLED
+#endif
 
-		val xrRuntimePermission = getXRRuntimePermissions()
-		if (xrRuntimePermission.isNotEmpty() && GodotLib.getGlobal("xr/openxr/enabled").toBoolean()) {
-			// We only request permissions when the `automatically_request_runtime_permissions`
-			// project setting is enabled.
-			// If the project setting is not defined, we fall-back to the default behavior which is
-			// to automatically request permissions.
-			val automaticallyRequestPermissionsSetting = GodotLib.getGlobal("xr/openxr/extensions/automatically_request_runtime_permissions")
-			val automaticPermissionsRequestEnabled = automaticallyRequestPermissionsSetting.isNullOrEmpty() ||
-				automaticallyRequestPermissionsSetting.toBoolean()
-			if (automaticPermissionsRequestEnabled) {
-				permissionsToEnable.addAll(xrRuntimePermission)
-			}
-		}
+#if defined(GLES_X11_ENABLED) || defined(GLES_WINDOW_ENABLED) || defined(GLES_IPHONE_ENABLED) || defined(GLES_OSX_ENABLED) || defined(GLES_ANDROID_ENABLED)
+#define GLES2_BACKEND_ENABLED
+#endif
 
-		return permissionsToEnable
-	}
-}
+#if defined(GLES_X11_ENABLED) || defined(GLES_WINDOW_ENABLED) || defined(GLES_IPHONE_ENABLED) || defined(GLES_OSX_ENABLED) || defined(GLES_ANDROID_ENABLED)
+#define GLES3_BACKEND_ENABLED
+#endif
+
+#endif // defined(OPENGL_ENABLED) || defined(GLES_ENABLED)

@@ -45,6 +45,7 @@ def _helper_module(name, path):
 
 _helper_module("gles3_builders", "gles3_builders.py")
 _helper_module("glsl_builders", "glsl_builders.py")
+_helper_module("gles2_builders", "gles2_builders.py")
 _helper_module("methods", "methods.py")
 _helper_module("platform_methods", "platform_methods.py")
 _helper_module("version", "version.py")
@@ -55,6 +56,7 @@ _helper_module("misc.utility.color", "misc/utility/color.py")
 # Local
 import gles3_builders
 import glsl_builders
+import gles2_builders
 import methods
 import scu_builders
 from misc.utility.color import is_stderr_color, print_error, print_info, print_warning
@@ -184,6 +186,7 @@ opts.Add(BoolVariable("brotli", "Enable Brotli for decompression and WOFF2 fonts
 opts.Add(BoolVariable("xaudio2", "Enable the XAudio2 audio driver on supported platforms", False))
 opts.Add(BoolVariable("vulkan", "Enable the Vulkan rendering driver", True))
 opts.Add(BoolVariable("opengl3", "Enable the OpenGL/GLES3 rendering driver", True))
+opts.Add(BoolVariable("opengl2", "Enable the OpenGL/GLES2 rendering driver", True))
 opts.Add(BoolVariable("d3d12", "Enable the Direct3D 12 rendering driver on supported platforms", False))
 opts.Add(BoolVariable("metal", "Enable the Metal rendering driver on supported platforms (Apple arm64 only)", False))
 opts.Add(BoolVariable("openxr", "Enable the OpenXR driver", True))
@@ -1098,6 +1101,11 @@ GLSL_BUILDERS = {
     ),
     "GLES3_GLSL": env.Builder(
         action=env.Run(gles3_builders.build_gles3_headers),
+        suffix="glsl.gen.h",
+        src_suffix=".glsl",
+    ),
+    "GLES2_GLSL": env.Builder(
+        action=env.Run(gles2_builders.build_gles2_headers),
         suffix="glsl.gen.h",
         src_suffix=".glsl",
     ),
