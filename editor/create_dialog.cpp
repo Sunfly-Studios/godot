@@ -41,7 +41,7 @@
 void CreateDialog::popup_create(bool p_dont_clear, bool p_replace_mode, const String &p_current_type, const String &p_current_name) {
 	_fill_type_list();
 
-	icon_fallback = search_options->has_theme_icon(base_type, EditorStringName(EditorIcons)) ? base_type : "Object";
+	icon_fallback = search_results->has_theme_icon(base_type, EditorStringName(EditorIcons)) ? base_type : "Object";
 
 	if (p_dont_clear) {
 		search_box->select_all();
@@ -201,13 +201,13 @@ bool CreateDialog::_should_hide_type(const StringName &p_type) const {
 }
 
 void CreateDialog::_update_search() {
-	search_options->clear();
-	search_options_types.clear();
+	search_results->clear();
+	search_result_types.clear();
 
-	TreeItem *root = search_options->create_item();
+	TreeItem *root = search_results->create_item();
 	root->set_text(0, base_type);
-	root->set_icon(0, search_options->get_editor_theme_icon(icon_fallback));
-	search_options_types[base_type] = root;
+	root->set_icon(0, search_results->get_editor_theme_icon(icon_fallback));
+	search_result_types[base_type] = root;
 	_configure_search_option_item(root, base_type, ClassDB::class_exists(base_type) ? TypeCategory::CPP_TYPE : TypeCategory::OTHER_TYPE);
 
 	const String search_text = search_box->get_text();
@@ -241,12 +241,12 @@ void CreateDialog::_update_search() {
 		favorite->set_disabled(true);
 		help_bit->set_custom_text(String(), String(), vformat(TTR("No results for \"%s\"."), search_text.replace("[", "[lb]")));
 		get_ok_button()->set_disabled(true);
-		search_options->deselect_all();
+		search_results->deselect_all();
 	}
 }
 
 void CreateDialog::_add_type(const StringName &p_type, TypeCategory p_type_category) {
-	if (search_options_types.has(p_type)) {
+	if (search_result_types.has(p_type)) {
 		return;
 	}
 
@@ -298,8 +298,8 @@ void CreateDialog::_add_type(const StringName &p_type, TypeCategory p_type_categ
 
 	_add_type(inherits, inherited_type);
 
-	TreeItem *item = search_options->create_item(search_options_types[inherits]);
-	search_options_types[p_type] = item;
+	TreeItem *item = search_results->create_item(search_result_types[inherits]);
+	search_result_types[p_type] = item;
 	_configure_search_option_item(item, p_type, p_type_category);
 }
 
@@ -339,7 +339,14 @@ void CreateDialog::_configure_search_option_item(TreeItem *r_item, const StringN
 
 	r_item->set_icon(0, EditorNode::get_singleton()->get_class_icon(p_type));
 	if (!instantiable) {
-		r_item->set_custom_color(0, search_options->get_theme_color(SNAME("font_disabled_color"), EditorStringName(Editor)));
+		r_item->set_custom_color(0, search_results->get_theme_color(SNAME("font_disabled_color"), EditorStringName(Editor)));
+	}
+	
+	if (!can_instantiate) {
+		r_item->set_icon(0, EditorNode::get_singleton()->get_class_icon(p_type, "NodeDisabled"));
+		r_item->set_selectable(0, false);
+	} else {
+		r_item->set_icon(0, EditorNode::get_singleton()->get_class_icon(p_type, icon_fallback));
 	}
 
 	HashMap<String, DocData::ClassDoc>::Iterator class_doc = EditorHelp::get_doc_data()->class_list.find(p_type);
@@ -427,7 +434,7 @@ void CreateDialog::_confirmed() {
 		return;
 	}
 
-	TreeItem *selected = search_options->get_selected();
+	TreeItem *selected = search_results->get_selected();
 	if (!selected->get_meta("__instantiable", true)) {
 		return;
 	}
@@ -462,10 +469,10 @@ void CreateDialog::_sbox_input(const Ref<InputEvent> &p_event) {
 	Ref<InputEventKey> key = p_event;
 	if (key.is_valid()) {
 		if (key->is_action("ui_up", true) || key->is_action("ui_down", true) || key->is_action("ui_page_up") || key->is_action("ui_page_down")) {
-			search_options->gui_input(key);
+			search_results->gui_input(key);
 			search_box->accept_event();
 		} else if (key->is_action_pressed("ui_select", true)) {
-			TreeItem *ti = search_options->get_selected();
+			TreeItem *ti = search_results->get_selected();
 			if (ti) {
 				ti->set_collapsed(!ti->is_collapsed());
 			}
@@ -495,7 +502,7 @@ void CreateDialog::_notification(int p_what) {
 
 		case NOTIFICATION_THEME_CHANGED: {
 			const int icon_width = get_theme_constant(SNAME("class_icon_size"), EditorStringName(Editor));
-			search_options->add_theme_constant_override("icon_max_width", icon_width);
+			search_results->add_theme_constant_override("icon_max_width", icon_width);
 			favorites->add_theme_constant_override("icon_max_width", icon_width);
 			recent->set_fixed_icon_size(Size2(icon_width, icon_width));
 
@@ -506,13 +513,13 @@ void CreateDialog::_notification(int p_what) {
 }
 
 void CreateDialog::select_type(const String &p_type, bool p_center_on_item) {
-	if (!search_options_types.has(p_type)) {
+	if (!search_result_types.has(p_type)) {
 		return;
 	}
 
-	TreeItem *to_select = search_options_types[p_type];
+	TreeItem *to_select = search_result_types[p_type];
 	to_select->select(0);
-	search_options->scroll_to_item(to_select, p_center_on_item);
+	search_results->scroll_to_item(to_select, p_center_on_item);
 
 	help_bit->parse_symbol("class|" + p_type + "|");
 
@@ -529,14 +536,14 @@ void CreateDialog::select_type(const String &p_type, bool p_center_on_item) {
 }
 
 void CreateDialog::select_base() {
-	if (search_options_types.is_empty()) {
+	if (search_result_types.is_empty()) {
 		_update_search();
 	}
 	select_type(base_type, false);
 }
 
 String CreateDialog::get_selected_type() {
-	TreeItem *selected = search_options->get_selected();
+	TreeItem *selected = search_results->get_selected();
 	if (!selected) {
 		return String();
 	}
@@ -550,7 +557,7 @@ void CreateDialog::set_base_type(const String &p_base) {
 }
 
 Variant CreateDialog::instantiate_selected() {
-	TreeItem *selected = search_options->get_selected();
+	TreeItem *selected = search_results->get_selected();
 
 	if (!selected) {
 		return Variant();
@@ -591,21 +598,18 @@ void CreateDialog::cancel_pressed() {
 }
 
 void CreateDialog::_favorite_toggled() {
-	TreeItem *item = search_options->get_selected();
-	if (!item) {
+	String name = get_selected_type();
+	if (name.is_empty()) {
 		return;
 	}
 
-	String name = item->get_text(0);
-
 	if (favorite_list.has(name)) {
 		favorite_list.erase(name);
-		favorite->set_pressed(false);
 	} else {
 		favorite_list.push_back(name);
-		favorite->set_pressed(true);
 	}
 
+	// Also updates the favorites button.
 	_save_and_update_favorite_list();
 }
 
@@ -637,18 +641,47 @@ void CreateDialog::_favorite_activated() {
 }
 
 Variant CreateDialog::get_drag_data_fw(const Point2 &p_point, Control *p_from) {
-	TreeItem *ti = favorites->get_item_at_position(p_point);
-	if (ti) {
-		Dictionary d;
-		d["type"] = "create_favorite_drag";
-		d["class"] = ti->get_text(0);
+	Dictionary d;
+	Ref<Texture2D> icon;
+	String name;
+	if (p_from == favorites) {
+		// Dragging from favorites.
+		TreeItem *ti = favorites->get_item_at_position(p_point);
+
+		if (ti) {
+			d["type"] = "favorites";
+			name = ti->get_text(0);
+			icon = ti->get_icon(0);
+		}
+	} else if (p_from == search_results) {
+		// Dragging from search results.
+		TreeItem *ti = search_results->get_item_at_position(p_point);
+
+		if (ti) {
+			d["type"] = "search_results";
+			name = ti->get_text(0);
+			icon = ti->get_icon(0);
+		}
+	} else if (p_from == recent) {
+		// Dragging from recent.
+		int idx = recent->get_item_at_position(p_point);
+
+		if (idx >= 0) {
+			d["type"] = "recent";
+			icon = recent->get_item_icon(idx);
+			name = recent->get_item_text(idx);
+		}
+	}
+
+	if (!d.is_empty()) {
+		d["class"] = name;
 
 		Button *tb = memnew(Button);
 		tb->set_flat(true);
-		tb->set_button_icon(ti->get_icon(0));
-		tb->set_text(ti->get_text(0));
+		tb->set_button_icon(icon);
+		tb->set_text(name);
 		tb->set_auto_translate_mode(AUTO_TRANSLATE_MODE_DISABLED);
-		favorites->set_drag_preview(tb);
+		p_from->set_drag_preview(tb);
 
 		return d;
 	}
@@ -657,9 +690,11 @@ Variant CreateDialog::get_drag_data_fw(const Point2 &p_point, Control *p_from) {
 }
 
 bool CreateDialog::can_drop_data_fw(const Point2 &p_point, const Variant &p_data, Control *p_from) const {
-	Dictionary d = p_data;
-	if (d.has("type") && String(d["type"]) == "create_favorite_drag") {
+	if (p_from == favorites) {
 		favorites->set_drop_mode_flags(Tree::DROP_MODE_INBETWEEN);
+		return true;
+	} else if (p_from == search_results || p_from == recent) {
+		search_results->set_drop_mode_flags(Tree::DROP_MODE_DISABLED);
 		return true;
 	}
 
@@ -668,49 +703,70 @@ bool CreateDialog::can_drop_data_fw(const Point2 &p_point, const Variant &p_data
 
 void CreateDialog::drop_data_fw(const Point2 &p_point, const Variant &p_data, Control *p_from) {
 	Dictionary d = p_data;
+	ERR_FAIL_COND(!d.has("type"));
+	ERR_FAIL_COND(!d.has("class"));
 
-	TreeItem *ti = favorites->get_item_at_position(p_point);
-	if (!ti) {
-		return;
-	}
-
-	String drop_at = ti->get_text(0);
-	int ds = favorites->get_drop_section_at_position(p_point);
-
-	int drop_idx = favorite_list.find(drop_at);
-	if (drop_idx < 0) {
-		return;
-	}
-
+	String drag_type = d["type"];
 	String type = d["class"];
 
-	int from_idx = favorite_list.find(type);
-	if (from_idx < 0) {
+	// Find the new index of the dragged item.
+	// If it is -1, we will remove it later.
+	int drop_idx;
+	if (p_from == favorites) {
+		// Dragging into favorites.
+		TreeItem *ti = favorites->get_item_at_position(p_point);
+		int drop_section = favorites->get_drop_section_at_position(p_point);
+		if (ti) {
+			// Dragging between existing favorites, use that index.
+			String drop_at = ti->get_text(0);
+			drop_idx = favorite_list.find(drop_at);
+
+			if (drop_section > 0) {
+				++drop_idx;
+			} // drop_section < 0.
+		} else if (drag_type == "favorites") {
+			// Dragging from favorites to the empty space, cancel drag.
+			return;
+		} else if (drag_type == "search_results" || drag_type == "recent") {
+			// Dragging from search results or recent to the empty space, add it to the end.
+			drop_idx = favorite_list.size();
+		} else {
+			// Dragging from somewhere else, cancel drag.
+			return;
+		}
+	} else if (p_from == search_results || p_from == recent) {
+		// Dragged back into search results or recent, remove it.
+		drop_idx = -1;
+	} else {
+		// Unknown source, cancel drag.
 		return;
 	}
 
-	if (drop_idx == from_idx) {
-		ds = -1; //cause it will be gone
-	} else if (drop_idx > from_idx) {
-		drop_idx--;
+	int from_idx = favorite_list.find(type);
+	if (from_idx >= 0) {
+		favorite_list.remove_at(from_idx);
+		if (drop_idx >= 0 && from_idx < drop_idx) {
+			// We just removed a prior item, drop the index by 1.
+			--drop_idx;
+		}
 	}
 
-	favorite_list.remove_at(from_idx);
-
-	if (ds < 0) {
+	if (drop_idx >= 0) {
 		favorite_list.insert(drop_idx, type);
-	} else {
-		if (drop_idx >= favorite_list.size() - 1) {
-			favorite_list.push_back(type);
-		} else {
-			favorite_list.insert(drop_idx + 1, type);
-		}
 	}
 
 	_save_and_update_favorite_list();
 }
 
 void CreateDialog::_save_and_update_favorite_list() {
+	String selected = get_selected_type();
+	if (!selected.is_empty()) {
+		favorite->set_disabled(false);
+		favorite->set_pressed(favorite_list.has(selected));
+	} else {
+		favorite->set_disabled(true);
+	}
+
 	favorites->clear();
 	TreeItem *root = favorites->create_item();
 
@@ -813,6 +869,7 @@ CreateDialog::CreateDialog() {
 	recent->connect("item_activated", callable_mp(this, &CreateDialog::_history_activated));
 	recent->add_theme_constant_override("draw_guides", 1);
 	recent->set_theme_type_variation("ItemListSecondary");
+	SET_DRAG_FORWARDING_GCD(recent, CreateDialog);
 
 	VBoxContainer *vbc = memnew(VBoxContainer);
 	vbc->set_custom_minimum_size(Size2(300, 0) * EDSCALE);
@@ -835,12 +892,12 @@ CreateDialog::CreateDialog() {
 	search_hb->add_child(favorite);
 	vbc->add_margin_child(TTR("Search:"), search_hb);
 
-	search_options = memnew(Tree);
-	search_options->set_auto_translate_mode(AUTO_TRANSLATE_MODE_DISABLED);
-	search_options->connect("item_activated", callable_mp(this, &CreateDialog::_confirmed));
-	search_options->connect("cell_selected", callable_mp(this, &CreateDialog::_item_selected));
-	search_options->connect("button_clicked", callable_mp(this, &CreateDialog::_script_button_clicked));
-	vbc->add_margin_child(TTR("Matches:"), search_options, true);
+	search_results = memnew(Tree);
+	search_results->connect("item_activated", callable_mp(this, &CreateDialog::_confirmed));
+	search_results->connect("cell_selected", callable_mp(this, &CreateDialog::_item_selected));
+	search_results->connect("button_clicked", callable_mp(this, &CreateDialog::_script_button_clicked));
+	SET_DRAG_FORWARDING_GCD(search_results, CreateDialog);
+	vbc->add_margin_child(TTR("Matches:"), search_results, true);
 
 	help_bit = memnew(EditorHelpBit);
 	help_bit->set_content_height_limits(80 * EDSCALE, 80 * EDSCALE);

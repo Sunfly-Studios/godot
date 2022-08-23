@@ -48,7 +48,7 @@ class CreateDialog : public ConfirmationDialog {
 	};
 
 	LineEdit *search_box = nullptr;
-	Tree *search_options = nullptr;
+	Tree *search_results = nullptr;
 
 	String base_type;
 	bool is_base_type_node = false;
@@ -61,7 +61,7 @@ class CreateDialog : public ConfirmationDialog {
 	ItemList *recent = nullptr;
 	EditorHelpBit *help_bit = nullptr;
 
-	HashMap<String, TreeItem *> search_options_types;
+	HashMap<String, TreeItem *> search_result_types;
 	HashMap<String, String> custom_type_parents;
 	HashMap<String, int> custom_type_indices;
 	List<StringName> type_list;

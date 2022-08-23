@@ -195,6 +195,10 @@ void Path3DGizmo::commit_handle(int p_id, bool p_secondary, const Variant &p_res
 		return;
 	}
 
+	if (!Path3DEditorPlugin::singleton) {
+		return;
+	}
+
 	EditorUndoRedoManager *ur = EditorUndoRedoManager::get_singleton();
 
 	// Primary handles: position.
@@ -284,7 +288,7 @@ void Path3DGizmo::redraw() {
 
 	first_pt_handle_material->set_albedo(Color(0.2, 1.0, 0.0));
 	last_pt_handle_material->set_albedo(Color(1.0, 0.2, 0.0));
-	closed_pt_handle_material->set_albedo(Color(1.0, 0.8, 0.0));
+	closed_pt_handle_material->set_albedo(Color(1.0, 0.8, 1.0));
 
 	Ref<Curve3D> c = path->get_curve();
 	if (c.is_null()) {
@@ -690,6 +694,17 @@ EditorPlugin::AfterGUIInput Path3DEditorPlugin::forward_3d_gui_input(Camera3D *p
 	return EditorPlugin::AFTER_GUI_INPUT_PASS;
 }
 
+void Path3DEditorPlugin::set_selected_point(const EditorNode3DGizmo *p_gizmo, int p_index) {
+	selected_point = p_index;
+	if (path_3d_gizmo_plugin.is_valid()) {
+		callable_mp(path_3d_gizmo_plugin.ptr(), &Path3DGizmoPlugin::redraw).call_deferred(p_gizmo);
+	}
+}
+
+int Path3DEditorPlugin::get_selected_point() const {
+	return selected_point;
+}
+
 void Path3DEditorPlugin::edit(Object *p_object) {
 	if (p_object) {
 		path = Object::cast_to<Path3D>(p_object);
@@ -707,6 +722,7 @@ void Path3DEditorPlugin::edit(Object *p_object) {
 		}
 	}
 
+	selected_point = -1;
 	update_overlays();
 	//collision_polygon_editor->edit(Object::cast_to<Node>(p_object));
 }
@@ -738,6 +754,7 @@ void Path3DEditorPlugin::_mode_changed(int p_mode) {
 	curve_edit->set_pressed_no_signal(p_mode == MODE_EDIT);
 	curve_del->set_pressed_no_signal(p_mode == MODE_DELETE);
 
+	selected_point = -1;
 	Node3DEditor::get_singleton()->clear_subgizmo_selection();
 }
 
@@ -989,10 +1006,12 @@ void Path3DGizmoPlugin::redraw(EditorNode3DGizmo *p_gizmo) {
 	Ref<StandardMaterial3D> first_pt_handle_material = get_material("first_pt_handle", p_gizmo);
 	Ref<StandardMaterial3D> last_pt_handle_material = get_material("last_pt_handle", p_gizmo);
 	Ref<StandardMaterial3D> closed_pt_handle_material = get_material("closed_pt_handle", p_gizmo);
+	Ref<StandardMaterial3D> selected_pt_handle_material = get_material("selected_pt_handle", p_gizmo);
 
 	first_pt_handle_material->set_albedo(Color(0.2, 1.0, 0.0));
 	last_pt_handle_material->set_albedo(Color(1.0, 0.2, 0.0));
 	closed_pt_handle_material->set_albedo(Color(1.0, 0.8, 0.0));
+	selected_pt_handle_material->set_albedo(Color(0.2, 0.5, 1.0));
 
 	PackedVector3Array handles;
 
@@ -1013,24 +1032,42 @@ void Path3DGizmoPlugin::redraw(EditorNode3DGizmo *p_gizmo) {
 		PackedVector3Array first_pt;
 		first_pt.append(handles[0]);
 
+		int selected_point = Path3DEditorPlugin::singleton->get_selected_point();
+		bool select_first = selected_point == 0;
+		bool select_last = selected_point == handles.size() - 1;
+		if (selected_point >= 0 && !select_first && !select_last) {
+			PackedVector3Array selected;
+			selected.append(handles[selected_point]);
+			handles.remove_at(selected_point);
+			p_gizmo->add_vertices(selected, selected_pt_handle_material, Mesh::PRIMITIVE_POINTS);
+		}
+
 		// Initialize arrays and add handle for last point if needed.
 		if (pc > 1) {
 			PackedVector3Array last_pt;
 			last_pt.append(handles[handles.size() - 1]);
 			handles.remove_at(handles.size() - 1);
-			if (curve->is_closed()) {
-				p_gizmo->add_vertices(last_pt, handle_material, Mesh::PRIMITIVE_POINTS);
+			if (select_last) {
+				p_gizmo->add_vertices(last_pt, selected_pt_handle_material, Mesh::PRIMITIVE_POINTS);
 			} else {
-				p_gizmo->add_vertices(last_pt, last_pt_handle_material, Mesh::PRIMITIVE_POINTS);
+				if (curve->is_closed()) {
+					p_gizmo->add_vertices(last_pt, handle_material, Mesh::PRIMITIVE_POINTS);
+				} else {
+					p_gizmo->add_vertices(last_pt, last_pt_handle_material, Mesh::PRIMITIVE_POINTS);
+				}
 			}
 		}
 
 		// Add handle for first point.
 		handles.remove_at(0);
-		if (curve->is_closed()) {
-			p_gizmo->add_vertices(first_pt, closed_pt_handle_material, Mesh::PRIMITIVE_POINTS);
+		if (select_first) {
+			p_gizmo->add_vertices(first_pt, selected_pt_handle_material, Mesh::PRIMITIVE_POINTS);
 		} else {
-			p_gizmo->add_vertices(first_pt, first_pt_handle_material, Mesh::PRIMITIVE_POINTS);
+			if (curve->is_closed()) {
+				p_gizmo->add_vertices(first_pt, closed_pt_handle_material, Mesh::PRIMITIVE_POINTS);
+			} else {
+				p_gizmo->add_vertices(first_pt, first_pt_handle_material, Mesh::PRIMITIVE_POINTS);
+			}
 		}
 
 		// Add handles for remaining intermediate points.
@@ -1046,15 +1083,22 @@ int Path3DGizmoPlugin::subgizmos_intersect_ray(const EditorNode3DGizmo *p_gizmo,
 	Ref<Curve3D> curve = path->get_curve();
 	ERR_FAIL_COND_V(curve.is_null(), -1);
 
+	int ret = -1;
 	if (Path3DEditorPlugin::singleton->curve_edit->is_pressed()) {
 		for (int idx = 0; idx < curve->get_point_count(); ++idx) {
 			Vector3 pos = path->get_global_transform().xform(curve->get_point_position(idx));
 			if (p_camera->unproject_position(pos).distance_to(p_point) < 20) {
-				return idx;
+				ret = idx;
+				break;
 			}
 		}
 	}
-	return -1;
+
+	if (Path3DEditorPlugin::singleton) {
+		Path3DEditorPlugin::singleton->set_selected_point(p_gizmo, ret);
+	}
+
+	return ret;
 }
 
 Vector<int> Path3DGizmoPlugin::subgizmos_intersect_frustum(const EditorNode3DGizmo *p_gizmo, const Camera3D *p_camera, const Vector<Plane> &p_frustum) const {
@@ -1153,6 +1197,7 @@ Path3DGizmoPlugin::Path3DGizmoPlugin(float p_disk_size) {
 	create_material("path_tilt_material", path_tilt_color);
 	create_material("path_tilt_muted_material", path_tilt_color * 0.7);
 	create_handle_material("handles", false, EditorNode::get_singleton()->get_editor_theme()->get_icon(SNAME("EditorPathSmoothHandle"), EditorStringName(EditorIcons)));
+	create_handle_material("selected_pt_handle", false, EditorNode::get_singleton()->get_editor_theme()->get_icon(SNAME("EditorPathSmoothHandle"), EditorStringName(EditorIcons)));
 	create_handle_material("first_pt_handle", false, EditorNode::get_singleton()->get_editor_theme()->get_icon(SNAME("EditorPathSmoothHandle"), EditorStringName(EditorIcons)));
 	create_handle_material("last_pt_handle", false, EditorNode::get_singleton()->get_editor_theme()->get_icon(SNAME("EditorPathSmoothHandle"), EditorStringName(EditorIcons)));
 	create_handle_material("closed_pt_handle", false, EditorNode::get_singleton()->get_editor_theme()->get_icon(SNAME("EditorPathSmoothHandle"), EditorStringName(EditorIcons)));
