@@ -94,6 +94,7 @@ private:
 	static Engine *singleton;
 
 	String write_movie_path;
+	int write_movie_subframes = 0;
 	String shader_cache_path;
 
 	static constexpr int SERVER_SYNC_FRAME_COUNT_WARNING = 5;
@@ -189,6 +190,9 @@ public:
 
 	void set_write_movie_path(const String &p_path);
 	String get_write_movie_path() const;
+
+	void set_write_movie_subframes(int p_subframes);
+	int get_write_movie_subframes() const;
 
 	String get_architecture_name() const;
 

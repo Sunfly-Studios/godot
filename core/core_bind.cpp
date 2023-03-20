@@ -1922,6 +1922,10 @@ bool Engine::is_printing_to_stdout() const {
 	return ::Engine::get_singleton()->is_printing_to_stdout();
 }
 
+int Engine::get_write_movie_subframes() const {
+	return ::Engine::get_singleton()->get_write_movie_subframes();
+}
+
 void Engine::set_print_error_messages(bool p_enabled) {
 	::Engine::get_singleton()->set_print_error_messages(p_enabled);
 }
@@ -1990,6 +1994,7 @@ void Engine::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("is_embedded_in_editor"), &Engine::is_embedded_in_editor);
 
 	ClassDB::bind_method(D_METHOD("get_write_movie_path"), &Engine::get_write_movie_path);
+	ClassDB::bind_method(D_METHOD("get_write_movie_subframes"), &Engine::get_write_movie_subframes);
 
 	ClassDB::bind_method(D_METHOD("set_print_to_stdout", "enabled"), &Engine::set_print_to_stdout);
 	ClassDB::bind_method(D_METHOD("is_printing_to_stdout"), &Engine::is_printing_to_stdout);
