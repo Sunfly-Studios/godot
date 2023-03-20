@@ -56,6 +56,7 @@ _complete_godot_options() {
 --headless
 --log-file
 --write-movie
+--write-movie-subframes
 --fullscreen
 --maximized
 --windowed
