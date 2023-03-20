@@ -571,18 +571,17 @@ void Main::print_help(const char *p_binary) {
 	print_help_option("--audio-output-latency <ms>", "Override audio output latency in milliseconds (default is 15 ms).\n");
 	print_help_option("", "Lower values make sound playback more reactive but increase CPU usage, and may result in audio cracking if the CPU can't keep up.\n");
 
-	print_help_option("--rendering-method <renderer>", "Renderer name. Requires driver support.\n");
-	print_help_option("--rendering-driver <driver>", "Rendering driver (depends on display driver).\n");
-	print_help_option("--gpu-index <device_index>", "Use a specific GPU (run with --verbose to get a list of available devices).\n");
-	print_help_option("--text-driver <driver>", "Text driver (used for font rendering, bidirectional support and shaping).\n");
-	print_help_option("--tablet-driver <driver>", "Pen tablet input driver.\n");
-	print_help_option("--headless", "Enable headless mode (--display-driver headless --audio-driver Dummy). Useful for servers and with --script.\n");
-	print_help_option("--log-file <file>", "Write output/error log to the specified path instead of the default location defined by the project.\n");
-	print_help_option("", "<file> path should be absolute or relative to the project directory.\n");
-	print_help_option("--write-movie <file>", "Write a video to the specified path (usually with .avi or .png extension).\n");
-	print_help_option("", "--fixed-fps is forced when enabled, but it can be used to change movie FPS.\n");
-	print_help_option("", "--disable-vsync can speed up movie writing but makes interaction more difficult.\n");
-	print_help_option("", "--quit-after can be used to specify the number of frames to write.\n");
+	OS::get_singleton()->print("  --rendering-method <renderer>     Renderer name. Requires driver support.\n");
+	OS::get_singleton()->print("  --rendering-driver <driver>       Rendering driver (depends on display driver).\n");
+	OS::get_singleton()->print("  --gpu-index <device_index>        Use a specific GPU (run with --verbose to get available device list).\n");
+	OS::get_singleton()->print("  --text-driver <driver>            Text driver (Fonts, BiDi, shaping).\n");
+	OS::get_singleton()->print("  --tablet-driver <driver>          Pen tablet input driver.\n");
+	OS::get_singleton()->print("  --headless                        Enable headless mode (--display-driver headless --audio-driver Dummy). Useful for servers and with --script.\n");
+	OS::get_singleton()->print("  --write-movie <file>              Writes a video to the specified path (usually with .avi or .png extension).\n");
+	OS::get_singleton()->print("                                    --fixed-fps is forced when enabled, but it can be used to change movie FPS.\n");
+	OS::get_singleton()->print("                                    --disable-vsync can speed up movie writing but makes interaction more difficult.\n");
+	OS::get_singleton()->print("                                    --quit-after can be used to specify the number of frames to write.\n");
+	OS::get_singleton()->print("  --write-movie-subframes <N>       Number of subframes to render for each frame recorded (requires --write-movie).\n");
 
 	print_help_title("Display options");
 	print_help_option("-f, --fullscreen", "Request fullscreen mode.\n");
@@ -1669,7 +1668,15 @@ Error Main::setup(const char *execpath, int argc, char *argv[], bool p_second_ph
 				OS::get_singleton()->print("Missing write-movie argument, aborting.\n");
 				goto error;
 			}
-		} else if (arg == "--disable-vsync") {
+		} else if (I->get() == "--write-movie-subframes") {
+			if (I->next()) {
+				Engine::get_singleton()->set_write_movie_subframes(I->next()->get().to_int());
+				N = I->next()->next();
+			} else {
+				OS::get_singleton()->print("Missing movie-subframes argument, aborting.\n");
+				goto error;
+			}
+		} else if (I->get() == "--disable-vsync") {
 			disable_vsync = true;
 		} else if (arg == "--print-fps") {
 			print_fps = true;
@@ -1748,6 +1755,11 @@ Error Main::setup(const char *execpath, int argc, char *argv[], bool p_second_ph
 		}
 
 		I = N;
+	}
+
+	if (OS::get_singleton()->_writing_movie) {
+		// Automatically adjust fixed FPS to take subframes into account, so that the *output* video FPS is the same.
+		fixed_fps *= 1 + Engine::get_singleton()->get_write_movie_subframes();
 	}
 
 #ifdef TOOLS_ENABLED
@@ -3952,7 +3964,7 @@ int Main::start() {
 	}
 
 	if (movie_writer) {
-		movie_writer->begin(DisplayServer::get_singleton()->window_get_size(), fixed_fps, Engine::get_singleton()->get_write_movie_path());
+		movie_writer->begin(DisplayServer::get_singleton()->window_get_size(), fixed_fps / (1 + Engine::get_singleton()->get_write_movie_subframes()), Engine::get_singleton()->get_write_movie_path());
 	}
 
 	if (minimum_time_msec) {
@@ -4175,7 +4187,9 @@ bool Main::iteration() {
 	iterating--;
 
 	if (movie_writer) {
-		movie_writer->add_frame();
+		if (Engine::get_singleton()->_process_frames % (1 + Engine::get_singleton()->get_write_movie_subframes()) == 0) {
+			movie_writer->add_frame();
+		}
 	}
 
 #ifdef TOOLS_ENABLED
