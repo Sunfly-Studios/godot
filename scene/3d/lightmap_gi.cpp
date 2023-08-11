@@ -207,6 +207,14 @@ float LightmapGIData::get_baked_exposure() const {
 	return baked_exposure;
 }
 
+void LightmapGIData::set_preview_bake(bool p_preview_bake) {
+	preview_bake = p_preview_bake;
+}
+
+bool LightmapGIData::is_preview_bake() const {
+	return preview_bake;
+}
+
 void LightmapGIData::_set_probe_data(const Dictionary &p_data) {
 	ERR_FAIL_COND(!p_data.has("bounds"));
 	ERR_FAIL_COND(!p_data.has("points"));
@@ -274,11 +282,15 @@ void LightmapGIData::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("_set_probe_data", "data"), &LightmapGIData::_set_probe_data);
 	ClassDB::bind_method(D_METHOD("_get_probe_data"), &LightmapGIData::_get_probe_data);
 
-	ADD_PROPERTY(PropertyInfo(Variant::ARRAY, "lightmap_textures", PROPERTY_HINT_ARRAY_TYPE, "TextureLayered", PROPERTY_USAGE_DEFAULT | PROPERTY_USAGE_READ_ONLY), "set_lightmap_textures", "get_lightmap_textures");
+	ClassDB::bind_method(D_METHOD("set_preview_bake", "preview_bake"), &LightmapGIData::set_preview_bake);
+	ClassDB::bind_method(D_METHOD("is_preview_bake"), &LightmapGIData::is_preview_bake);
+
+	ADD_PROPERTY(PropertyInfo(Variant::ARRAY, "lightmap_textures", PROPERTY_HINT_ARRAY_TYPE, "TextureLayered", PROPERTY_USAGE_NO_EDITOR | PROPERTY_USAGE_DEFAULT | PROPERTY_USAGE_READ_ONLY), "set_lightmap_textures", "get_lightmap_textures");
 	ADD_PROPERTY(PropertyInfo(Variant::BOOL, "uses_spherical_harmonics", PROPERTY_HINT_NONE, "", PROPERTY_USAGE_NO_EDITOR | PROPERTY_USAGE_INTERNAL), "set_uses_spherical_harmonics", "is_using_spherical_harmonics");
 	ADD_PROPERTY(PropertyInfo(Variant::ARRAY, "user_data", PROPERTY_HINT_NONE, "", PROPERTY_USAGE_NO_EDITOR | PROPERTY_USAGE_INTERNAL), "_set_user_data", "_get_user_data");
 	ADD_PROPERTY(PropertyInfo(Variant::DICTIONARY, "probe_data", PROPERTY_HINT_NONE, "", PROPERTY_USAGE_NO_EDITOR | PROPERTY_USAGE_INTERNAL), "_set_probe_data", "_get_probe_data");
 	ADD_PROPERTY(PropertyInfo(Variant::BOOL, "_uses_packed_directional", PROPERTY_HINT_NONE, "", PROPERTY_USAGE_NO_EDITOR | PROPERTY_USAGE_INTERNAL), "_set_uses_packed_directional", "_is_using_packed_directional");
+	ADD_PROPERTY(PropertyInfo(Variant::BOOL, "preview_bake", PROPERTY_HINT_NONE, "", PROPERTY_USAGE_NO_EDITOR | PROPERTY_USAGE_INTERNAL), "set_preview_bake", "is_preview_bake");
 
 #ifndef DISABLE_DEPRECATED
 	ClassDB::bind_method(D_METHOD("set_light_texture", "light_texture"), &LightmapGIData::set_light_texture);
@@ -808,7 +820,39 @@ LightmapGI::BakeError LightmapGI::_save_and_reimport_atlas_textures(const Ref<Li
 	return LightmapGI::BAKE_ERROR_OK;
 }
 
-LightmapGI::BakeError LightmapGI::bake(Node *p_from_node, String p_image_data_path, Lightmapper::BakeStepFunc p_bake_step, void *p_bake_userdata) {
+String LightmapGI::_get_bake_quality_string(LightmapGI::BakeQuality p_quality) const {
+	switch (p_quality) {
+		case BAKE_QUALITY_LOW:
+			return "Low";
+		case BAKE_QUALITY_MEDIUM:
+			return "Medium";
+		case BAKE_QUALITY_HIGH:
+			return "High";
+		case BAKE_QUALITY_ULTRA:
+			return "Ultra";
+		default:
+			return "Unknown";
+	}
+}
+
+String LightmapGI::_get_gen_probes_string(LightmapGI::GenerateProbes p_gen_probes) const {
+	switch (p_gen_probes) {
+		case GENERATE_PROBES_DISABLED:
+			return "Disabled";
+		case GENERATE_PROBES_SUBDIV_4:
+			return "4";
+		case GENERATE_PROBES_SUBDIV_8:
+			return "8";
+		case GENERATE_PROBES_SUBDIV_16:
+			return "16";
+		case GENERATE_PROBES_SUBDIV_32:
+			return "32";
+		default:
+			return "Unknown";
+	}
+}
+
+LightmapGI::BakeError LightmapGI::bake(Node *p_from_node, String p_image_data_path, Lightmapper::BakeStepFunc p_bake_step, void *p_bake_userdata, bool p_preview_bake) {
 	if (p_image_data_path.is_empty()) {
 		if (get_light_data().is_null()) {
 			return BAKE_ERROR_NO_SAVE_PATH;
@@ -846,6 +890,11 @@ LightmapGI::BakeError LightmapGI::bake(Node *p_from_node, String p_image_data_pa
 		}
 		// create mesh data for insert
 
+		float effective_texel_scale = texel_scale;
+		if (p_preview_bake) {
+			effective_texel_scale *= float(GLOBAL_GET("rendering/lightmapping/preview_bake/texel_scale_factor"));
+		}
+
 		//get the base material textures, help compute atlas size and bounds
 		for (int m_i = 0; m_i < meshes_found.size(); m_i++) {
 			if (p_bake_step) {
@@ -861,7 +910,7 @@ LightmapGI::BakeError LightmapGI::bake(Node *p_from_node, String p_image_data_pa
 				// For now set to basic size to avoid crash.
 				mesh_lightmap_size = Size2i(64, 64);
 			}
-			Size2i lightmap_size = Size2i(Size2(mesh_lightmap_size) * mf.lightmap_scale * texel_scale);
+			Size2i lightmap_size = Size2i(Size2(mesh_lightmap_size) * mf.lightmap_scale * effective_texel_scale);
 			ERR_FAIL_COND_V(lightmap_size.x == 0 || lightmap_size.y == 0, BAKE_ERROR_LIGHTMAP_TOO_SMALL);
 
 			TypedArray<RID> overrides;
@@ -1003,7 +1052,19 @@ LightmapGI::BakeError LightmapGI::bake(Node *p_from_node, String p_image_data_pa
 
 	bounds.grow_by(bounds.size.length() * 0.001);
 
-	if (gen_probes == GENERATE_PROBES_DISABLED) {
+	LightmapGI::BakeQuality effective_bake_quality = bake_quality;
+	int effective_bounces = bounces;
+	float effective_texel_scale = texel_scale;
+	LightmapGI::GenerateProbes effective_gen_probes = gen_probes;
+	if (p_preview_bake) {
+		// Use lower-quality settings for quick iteration.
+		effective_texel_scale *= float(GLOBAL_GET("rendering/lightmapping/preview_bake/texel_scale_factor"));
+		effective_bake_quality = MIN(bake_quality, LightmapGI::BakeQuality(int(GLOBAL_GET("rendering/lightmapping/preview_bake/max_quality"))));
+		effective_bounces = MIN(bounces, int(GLOBAL_GET("rendering/lightmapping/preview_bake/max_bounces")));
+		effective_gen_probes = MIN(gen_probes, LightmapGI::GenerateProbes(int(GLOBAL_GET("rendering/lightmapping/preview_bake/generate_probes_max_subdiv"))));
+	}
+
+	if (effective_gen_probes == GENERATE_PROBES_DISABLED) {
 		// generate 8 probes on bound endpoints
 		for (int i = 0; i < 8; i++) {
 			probes_found.push_back(bounds.get_endpoint(i));
@@ -1011,7 +1072,7 @@ LightmapGI::BakeError LightmapGI::bake(Node *p_from_node, String p_image_data_pa
 	} else {
 		// detect probes from geometry
 		static const int subdiv_values[6] = { 0, 4, 8, 16, 32 };
-		int subdiv = subdiv_values[gen_probes];
+		int subdiv = subdiv_values[effective_gen_probes];
 
 		float subdiv_cell_size;
 		Vector3i bound_limit;
@@ -1182,8 +1243,25 @@ LightmapGI::BakeError LightmapGI::bake(Node *p_from_node, String p_image_data_pa
 			exposure_normalization = camera_attributes->calculate_exposure_normalization();
 		}
 	}
-
-	Lightmapper::BakeError bake_err = lightmapper->bake(Lightmapper::BakeQuality(bake_quality), use_denoiser, denoiser_strength, denoiser_range, bounces, bounce_indirect_energy, bias, max_texture_size, directional, use_texture_for_bounces, Lightmapper::GenerateProbes(gen_probes), environment_image, environment_transform, _lightmap_bake_step_function, &bsud, exposure_normalization);
+    
+	Lightmapper::BakeError bake_err;
+	bake_err = lightmapper->bake(
+			Lightmapper::BakeQuality(effective_bake_quality),
+			use_denoiser,
+			denoiser_strength,
+            denoiser_range,
+			effective_bounces,
+			bounce_indirect_energy,
+			bias,
+			max_texture_size,
+			directional,
+			use_texture_for_bounces,
+			Lightmapper::GenerateProbes(effective_gen_probes),
+			environment_image,
+			environment_transform,
+			_lightmap_bake_step_function,
+			&bsud,
+			exposure_normalization);
 
 	if (bake_err == Lightmapper::BAKE_ERROR_TEXTURE_EXCEEDS_MAX_SIZE) {
 		return BAKE_ERROR_TEXTURE_SIZE_TOO_SMALL;
@@ -1374,7 +1452,12 @@ LightmapGI::BakeError LightmapGI::bake(Node *p_from_node, String p_image_data_pa
 		return BAKE_ERROR_CANT_CREATE_IMAGE;
 	}
 
+	// Only change the preview bake status when everything is completed.
+	// If the user cancels the bake, the preview bake status shouldn't change.
+	gi_data->set_preview_bake(p_preview_bake);
+
 	set_light_data(gi_data);
+	update_configuration_warnings();
 
 	return BAKE_ERROR_OK;
 }
@@ -1630,6 +1713,10 @@ PackedStringArray LightmapGI::get_configuration_warnings() const {
 #else
 	warnings.push_back(RTR("Lightmaps cannot be baked, as the `lightmapper_rd` module was disabled at compile-time. Rendering existing baked lightmaps will still work."));
 #endif
+
+	if (get_light_data().is_valid() && get_light_data()->is_preview_bake()) {
+		warnings.push_back(RTR("This LightmapGI's data uses a preview bake which has lower quality than a \"final\" bake.\nRemember to use the Bake Lightmaps button at the top of the 3D editor viewport (instead of Preview Bake) before distributing your project."));
+	}
 
 	return warnings;
 }
