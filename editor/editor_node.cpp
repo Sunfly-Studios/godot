@@ -61,6 +61,7 @@
 #include "scene/gui/rich_text_label.h"
 #include "scene/gui/split_container.h"
 #include "scene/gui/tab_container.h"
+#include "scene/gui/flow_container.h"
 #include "scene/main/window.h"
 #include "scene/property_utils.h"
 #include "scene/resources/image_texture.h"
@@ -7741,18 +7742,34 @@ EditorNode::EditorNode() {
 	// Spacer to center 2D / 3D / Script buttons.
 	Control *right_spacer = memnew(Control);
 	right_spacer->set_mouse_filter(Control::MOUSE_FILTER_PASS);
-	right_spacer->set_h_size_flags(Control::SIZE_EXPAND_FILL);
+	right_spacer->set_v_size_flags(Control::SIZE_EXPAND_FILL);
 	title_bar->add_child(right_spacer);
 
-	project_run_bar = memnew(EditorRunBar);
-	project_run_bar->set_mouse_filter(Control::MOUSE_FILTER_STOP);
-	title_bar->add_child(project_run_bar);
-	project_run_bar->connect("play_pressed", callable_mp(this, &EditorNode::_project_run_started));
-	project_run_bar->connect("stop_pressed", callable_mp(this, &EditorNode::_project_run_stopped));
+	// Dedicated wrapper for the entire right half
+	HFlowContainer *right_side_layout = memnew(HFlowContainer);
+	right_side_layout->set_h_size_flags(Control::SIZE_EXPAND_FILL);
+
+	// Setting the layout to RTL will reverse the wrap ordering.
+	// This allows the editor run bar to be pushed down and have the
+	// renderer label be on top when screen shrinks.
+	right_side_layout->set_layout_direction(Control::LAYOUT_DIRECTION_RTL);
+	right_side_layout->set_alignment(FlowContainer::ALIGNMENT_BEGIN);
+	title_bar->add_child(right_side_layout);
+
+	if (can_expand) {
+		// Add spacer to avoid other controls under the window minimize/maximize/close buttons (right side).
+		right_menu_spacer = memnew(Control);
+		right_menu_spacer->set_mouse_filter(Control::MOUSE_FILTER_PASS);
+		right_side_layout->add_child(right_menu_spacer);
+	}
 
 	HBoxContainer *right_menu_hb = memnew(HBoxContainer);
 	right_menu_hb->set_mouse_filter(Control::MOUSE_FILTER_STOP);
-	title_bar->add_child(right_menu_hb);
+	right_menu_hb->set_v_size_flags(Control::SIZE_EXPAND_FILL);
+
+	// Mirror our RTL shenanigans (this undos it for the inner components)
+	right_menu_hb->set_layout_direction(Control::LAYOUT_DIRECTION_LTR);
+	right_side_layout->add_child(right_menu_hb);
 
 	renderer = memnew(OptionButton);
 	renderer->set_visible(true);
@@ -7764,12 +7781,13 @@ EditorNode::EditorNode() {
 
 	right_menu_hb->add_child(renderer);
 
-	if (can_expand) {
-		// Add spacer to avoid other controls under the window minimize/maximize/close buttons (right side).
-		right_menu_spacer = memnew(Control);
-		right_menu_spacer->set_mouse_filter(Control::MOUSE_FILTER_PASS);
-		title_bar->add_child(right_menu_spacer);
-	}
+	project_run_bar = memnew(EditorRunBar);
+	project_run_bar->set_mouse_filter(Control::MOUSE_FILTER_STOP);
+	project_run_bar->set_v_size_flags(Control::SIZE_EXPAND_FILL);
+	project_run_bar->set_layout_direction(Control::LAYOUT_DIRECTION_LTR);
+	right_side_layout->add_child(project_run_bar);
+	project_run_bar->connect("play_pressed", callable_mp(this, &EditorNode::_project_run_started));
+	project_run_bar->connect("stop_pressed", callable_mp(this, &EditorNode::_project_run_stopped));
 
 	String current_renderer_ps = GLOBAL_GET("rendering/renderer/rendering_method");
 	current_renderer_ps = current_renderer_ps.to_lower();

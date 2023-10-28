@@ -38,6 +38,7 @@
 #include "editor/gui/editor_version_button.h"
 #include "editor/themes/editor_scale.h"
 #include "scene/gui/box_container.h"
+#include "scene/gui/flow_container.h"
 #include "scene/gui/button.h"
 #include "scene/gui/scroll_container.h"
 #include "scene/gui/split_container.h"
@@ -310,7 +311,7 @@ EditorBottomPanel::EditorBottomPanel() {
 	item_vbox = memnew(VBoxContainer);
 	add_child(item_vbox);
 
-	bottom_hbox = memnew(HBoxContainer);
+	bottom_hbox = memnew(HFlowContainer);
 	bottom_hbox->set_custom_minimum_size(Size2(0, 24 * EDSCALE)); // Adjust for the height of the "Expand Bottom Dock" icon.
 	item_vbox->add_child(bottom_hbox);
 

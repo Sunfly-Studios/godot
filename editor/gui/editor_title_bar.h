@@ -31,11 +31,11 @@
 #ifndef EDITOR_TITLE_BAR_H
 #define EDITOR_TITLE_BAR_H
 
-#include "scene/gui/box_container.h"
+#include "scene/gui/flow_container.h"
 #include "scene/main/window.h"
 
-class EditorTitleBar : public HBoxContainer {
-	GDCLASS(EditorTitleBar, HBoxContainer);
+class EditorTitleBar : public HFlowContainer {
+	GDCLASS(EditorTitleBar, HFlowContainer);
 
 	Point2i click_pos;
 	bool moving = false;

@@ -37,6 +37,7 @@ class Button;
 class ConfigFile;
 class EditorToaster;
 class HBoxContainer;
+class HFlowContainer;
 class VBoxContainer;
 class ScrollContainer;
 
@@ -53,7 +54,7 @@ class EditorBottomPanel : public PanelContainer {
 	bool lock_panel_switching = false;
 
 	VBoxContainer *item_vbox = nullptr;
-	HBoxContainer *bottom_hbox = nullptr;
+	HFlowContainer *bottom_hbox = nullptr;
 	Button *left_button = nullptr;
 	Button *right_button = nullptr;
 	ScrollContainer *button_scroll = nullptr;
