@@ -1242,7 +1242,8 @@ layout(location = 3) out vec4 emission_output_buffer;
 
 #else // !RENDER_MATERIAL
 // Normal color rendering.
-layout(location = 0) out vec4 frag_color;
+layout(location = 0) out vec4 frag_color_final;
+vec4 frag_color;
 
 #endif // !RENDER_MATERIAL
 
@@ -2597,4 +2598,11 @@ void main() {
 #ifdef PREMUL_ALPHA_USED
 	frag_color.rgb *= premul_alpha;
 #endif // PREMUL_ALPHA_USED
+
+	// Instead of writing directly to final frag_color,
+	// we use an intermediate, and only write
+	// to the final output ONCE at the end of the shader.
+	// This is because some hardware can have huge
+	// slowdown if you modify frag_color_final multiple times.
+	frag_color_final = frag_color;
 }
