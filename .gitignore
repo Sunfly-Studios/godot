@@ -379,3 +379,5 @@ $RECYCLE.BIN/
 *.msp
 *.lnk
 *.generated.props
+
+.cherry_pick_progress
