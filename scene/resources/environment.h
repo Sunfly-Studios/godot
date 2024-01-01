@@ -69,6 +69,7 @@ public:
 		TONE_MAPPER_ACES,
 		TONE_MAPPER_AGX,
 		TONE_MAPPER_AGX_PUNCHY,
+		TONE_MAPPER_PBR_NEUTRAL,
 	};
 
 	enum DynamicGICascadeFormat {
