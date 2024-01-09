@@ -2777,6 +2777,21 @@
 			If [code]true[/code], disables the threaded optimization feature from the NVIDIA drivers, which are known to cause stuttering in most OpenGL applications.
 			[b]Note:[/b] This setting only works on Windows, as threaded optimization is disabled by default on other platforms.
 		</member>
+		<member name="rendering/gl_compatibility/angle_backend" type="String" setter="" getter="">
+			Angle render backend.
+		</member>
+		<member name="rendering/gl_compatibility/angle_backend.ios" type="String" setter="" getter="">
+			iOS override for [member rendering/gl_compatibility/angle_backend].
+		</member>
+		<member name="rendering/gl_compatibility/angle_backend.macos" type="String" setter="" getter="">
+			macOS override for [member rendering/gl_compatibility/angle_backend].
+		</member>
+		<member name="rendering/gl_compatibility/angle_backend.windows" type="String" setter="" getter="">
+			Windows override for [member rendering/gl_compatibility/angle_backend].
+		</member>
+		<member name="rendering/gl_compatibility/driver" type="String" setter="" getter="">
+			Sets the driver to be used by the renderer when using the Compatibility renderer. This property can not be edited directly, instead, set the driver using the platform-specific overrides.
+		</member>
 		<member name="rendering/gl_legacy/driver" type="String" setter="" getter="" default="&quot;opengl2&quot;">
 			Sets the driver to be used by the renderer when using the Legacy renderer. Editing this property has no effect in the default configuration, as first-party platforms each have platform-specific overrides. Use those overrides to configure the driver for each platform.
 			This can be overridden using the [code]--rendering-driver &lt;driver&gt;[/code] command line argument.
@@ -2843,6 +2858,21 @@
 		<member name="rendering/gl_legacy/nvidia_disable_threaded_optimization" type="bool" setter="" getter="" default="true">
 			If [code]true[/code], disables the threaded optimization feature from the NVIDIA drivers, which are known to cause stuttering in most OpenGL applications.
 			[b]Note:[/b] This setting only works on Windows, as threaded optimization is disabled by default on other platforms.
+		</member>
+		<member name="rendering/gl_legacy/angle_backend" type="String" setter="" getter="">
+			Angle render backend.
+		</member>
+		<member name="rendering/gl_legacy/angle_backend.ios" type="String" setter="" getter="">
+			iOS override for [member rendering/gl_legacy/angle_backend].
+		</member>
+		<member name="rendering/gl_legacy/angle_backend.macos" type="String" setter="" getter="">
+			macOS override for [member rendering/gl_legacy/angle_backend].
+		</member>
+		<member name="rendering/gl_legacy/angle_backend.windows" type="String" setter="" getter="">
+			Windows override for [member rendering/gl_legacy/angle_backend].
+		</member>
+		<member name="rendering/gl_legacy/driver" type="String" setter="" getter="">
+			Sets the driver to be used by the renderer when using the Legacy renderer. This property can not be edited directly, instead, set the driver using the platform-specific overrides.
 		</member>
 		<member name="rendering/gl_classic/driver" type="String" setter="" getter="" default="&quot;opengl1&quot;">
 			Sets the driver to be used by the renderer when using the Classic renderer. Editing this property has no effect in the default configuration, as first-party platforms each have platform-specific overrides. Use those overrides to configure the driver for each platform.
@@ -2912,6 +2942,21 @@
 			Multiplier applied to the energy of all lights when using the [code]gl_classic[/code] rendering method.
 			Because the [code]gl_classic[/code] rendering method operates in a linear color space without hardware sRGB support, light attenuation can appear significantly dimmer than intended. By default, this boosts light output by [code]3.0[/code] to visually match the vibrancy of the [code]gl_compatibility[/code] and [code]gl_legacy[/code] rendering methods.
 			Decrease this value if you prefer the darker, raw blending, or increase it to make lights appear brighter and more saturated.
+		</member>
+		<member name="rendering/gl_classic/angle_backend" type="String" setter="" getter="">
+			Angle render backend.
+		</member>
+		<member name="rendering/gl_classic/angle_backend.ios" type="String" setter="" getter="">
+			iOS override for [member rendering/gl_classic/angle_backend].
+		</member>
+		<member name="rendering/gl_classic/angle_backend.macos" type="String" setter="" getter="">
+			macOS override for [member rendering/gl_classic/angle_backend].
+		</member>
+		<member name="rendering/gl_classic/angle_backend.windows" type="String" setter="" getter="">
+			Windows override for [member rendering/gl_classic/angle_backend].
+		</member>
+		<member name="rendering/gl_classic/driver" type="String" setter="" getter="">
+			Sets the driver to be used by the renderer when using the Classic renderer. This property can not be edited directly, instead, set the driver using the platform-specific overrides.
 		</member>
 		<member name="rendering/global_illumination/gi/use_half_resolution" type="bool" setter="" getter="" default="false">
 			If [code]true[/code], renders [VoxelGI] and SDFGI ([member Environment.sdfgi_enabled]) buffers at halved resolution (e.g. 960×540 when the viewport size is 1920×1080). This improves performance significantly when VoxelGI or SDFGI is enabled, at the cost of artifacts that may be visible on polygon edges. The loss in quality becomes less noticeable as the viewport resolution increases. [LightmapGI] rendering is not affected by this setting.

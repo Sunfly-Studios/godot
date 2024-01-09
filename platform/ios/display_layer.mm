@@ -59,12 +59,18 @@
 }
 
 - (void)layoutDisplayLayer {
+	DisplayServerIOS::get_singleton()->window_make_current();
 }
 
 - (void)startRenderDisplayLayer {
+	DisplayServerIOS::get_singleton()->window_make_current();
 }
 
 - (void)stopRenderDisplayLayer {
+}
+
+- (void)dealloc {
+	DisplayServerIOS::get_singleton()->window_release_current();
 }
 
 @end
@@ -77,6 +83,7 @@
 	EAGLContext *context;
 	GLuint viewRenderbuffer, viewFramebuffer;
 	GLuint depthRenderbuffer;
+	BOOL initialized;
 }
 
 - (void)initializeDisplayLayer {
@@ -119,11 +126,7 @@
 		NSLog(@"Godot iOS: Failed to set EAGLContext!");
 		return;
 	}
-	
-	if (![self createFramebuffer]) {
-		NSLog(@"Godot iOS: Failed to create frame buffer!");
-		return;
-	}
+	initialized = NO;
 }
 
 - (void)layoutDisplayLayer {
@@ -133,8 +136,10 @@
 	}
 	
 	[EAGLContext setCurrentContext:context];
-	[self destroyFramebuffer];
-	[self createFramebuffer];
+	if (initialized) {
+		[self destroyFramebuffer];
+		[self createFramebuffer];
+	}
 }
 
 - (void)startRenderDisplayLayer {
@@ -143,11 +148,25 @@
 	}
 	
 	[EAGLContext setCurrentContext:context];
+
+	if (
+		!initialized && (
+			RasterizerGLES3::get_singleton() != nullptr ||
+			RasterizerGLES2::get_singleton() != nullptr ||
+			RasterizerGLES1::get_singleton() != nullptr
+		)
+	) {
+		if (![self createFramebuffer]) {
+			NSLog(@"Godot iOS: Failed to create frame buffer!");
+			return;
+		}
+	}
+
 	glBindFramebufferOES(GL_FRAMEBUFFER_OES, viewFramebuffer);
 }
 
 - (void)stopRenderDisplayLayer {
-	if (!context) {
+	if (!context || !initialized) {
 		return;
 	}
 	
@@ -212,13 +231,14 @@
 #ifdef GLES1_ENABLED
 	GLES1::TextureStorage::system_fbo = viewFramebuffer;
 #endif
-
-	return YES;
+	initialized = YES;
+	
+	return initialized;
 }
 
 // Clean up any buffers we have allocated.
 - (void)destroyFramebuffer {
-	// Only delete if they actually exist to
+	// Only delete if they actually exist
 	if (viewFramebuffer) {
 		glDeleteFramebuffersOES(1, &viewFramebuffer);
 		viewFramebuffer = 0;

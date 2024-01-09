@@ -1,5 +1,5 @@
 /**************************************************************************/
-/*  gl_manager_macos_angle.h                                              */
+/*  gl_manager_ios_angle.mm                                               */
 /**************************************************************************/
 /*                         This file is part of:                          */
 /*                             GODOT ENGINE                               */
@@ -28,41 +28,60 @@
 /* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                 */
 /**************************************************************************/
 
-#ifndef GL_MANAGER_MACOS_ANGLE_H
-#define GL_MANAGER_MACOS_ANGLE_H
+#include "core/config/project_settings.h"
 
-#if defined(MACOS_ENABLED) && (defined(GLES3_ENABLED) || defined(GLES2_ENABLED) || defined(GLES1_ENABLED))
+#include "gl_manager_ios_angle.h"
 
-#include "core/error/error_list.h"
-#include "core/os/os.h"
-#include "core/templates/local_vector.h"
-#include "drivers/egl/egl_manager.h"
-#include "servers/display_server.h"
+#if defined(IOS_ENABLED) && (defined(GLES3_ENABLED) || defined(GLES2_ENABLED) || defined(GLES1_ENABLED)) && defined(EGL_ENABLED)
 
-#include <AppKit/AppKit.h>
-#include <ApplicationServices/ApplicationServices.h>
-#include <CoreVideo/CoreVideo.h>
+#include <stdio.h>
+#include <stdlib.h>
 
-class GLManagerANGLE_MacOS : public EGLManager {
-private:
-	virtual const char *_get_platform_extension_name() const override;
-	virtual EGLenum _get_platform_extension_enum() const override;
-	virtual EGLenum _get_platform_api_enum() const override;
-	virtual Vector<EGLAttrib> _get_platform_display_attributes() const override;
-	virtual Vector<EGLint> _get_platform_context_attribs() const override;
+#include <EGL/eglext_angle.h>
 
-	int gles_major, gles_minor;
+const char *GLManagerANGLE_IOS::_get_platform_extension_name() const {
+	return "EGL_ANGLE_platform_angle";
+}
 
-public:
-	void window_resize(DisplayServer::WindowID p_window_id, int p_width, int p_height) {}
+EGLenum GLManagerANGLE_IOS::_get_platform_extension_enum() const {
+	return EGL_PLATFORM_ANGLE_ANGLE;
+}
 
-	GLManagerANGLE_MacOS(int p_gles_major, int p_gles_minor) {
-		gles_major = p_gles_major;
-		gles_minor = p_gles_minor;
+Vector<EGLAttrib> GLManagerANGLE_IOS::_get_platform_display_attributes() const {
+	String render_backend;
+
+	if (gles_major == 3) {
+		render_backend = "rendering/gl_compatibility/angle_backend";
+	} else if (gles_major == 2) {
+		render_backend = "rendering/gl_legacy/angle_backend";
+	} else {
+		render_backend = "rendering/gl_classic/angle_backend";
 	}
-	~GLManagerANGLE_MacOS() {}
-};
+	const String &backend = GLOBAL_GET(render_backend);
 
-#endif // MACOS_ENABLED && (GLES3_ENABLED) || GLES2_ENABLED || GLES1_ENABLED)
+	Vector<EGLAttrib> ret;
+	ret.push_back(EGL_PLATFORM_ANGLE_TYPE_ANGLE);
+	if (backend.to_lower() == "metal" || backend.to_lower() == "default") {
+		ret.push_back(EGL_PLATFORM_ANGLE_TYPE_METAL_ANGLE);
+	} else {
+		ret.push_back(EGL_PLATFORM_ANGLE_TYPE_OPENGL_ANGLE);
+	}
+	ret.push_back(EGL_NONE);
 
-#endif // GL_MANAGER_MACOS_ANGLE_H
+	return ret;
+}
+
+EGLenum GLManagerANGLE_IOS::_get_platform_api_enum() const {
+	return EGL_OPENGL_ES_API;
+}
+
+Vector<EGLint> GLManagerANGLE_IOS::_get_platform_context_attribs() const {
+	Vector<EGLint> ret;
+	ret.push_back(EGL_CONTEXT_CLIENT_VERSION);
+	ret.push_back(gles_major);
+	ret.push_back(EGL_NONE);
+
+	return ret;
+}
+
+#endif // IOS_ENABLED && (GLES3_ENABLED || GLES2_ENABLED || GLES1_ENABLED) && EGL_ENABLED

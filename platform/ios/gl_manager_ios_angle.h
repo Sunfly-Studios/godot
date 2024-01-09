@@ -1,5 +1,5 @@
 /**************************************************************************/
-/*  gl_manager_macos_angle.h                                              */
+/*  gl_manager_ios_angle.h                                                */
 /**************************************************************************/
 /*                         This file is part of:                          */
 /*                             GODOT ENGINE                               */
@@ -28,10 +28,10 @@
 /* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                 */
 /**************************************************************************/
 
-#ifndef GL_MANAGER_MACOS_ANGLE_H
-#define GL_MANAGER_MACOS_ANGLE_H
+#ifndef GL_MANAGER_IOS_ANGLE_H
+#define GL_MANAGER_IOS_ANGLE_H
 
-#if defined(MACOS_ENABLED) && (defined(GLES3_ENABLED) || defined(GLES2_ENABLED) || defined(GLES1_ENABLED))
+#if defined(IOS_ENABLED) && (defined(GLES3_ENABLED) || defined(GLES2_ENABLED) || defined(GLES1_ENABLED)) && defined(EGL_ENABLED)
 
 #include "core/error/error_list.h"
 #include "core/os/os.h"
@@ -39,11 +39,9 @@
 #include "drivers/egl/egl_manager.h"
 #include "servers/display_server.h"
 
-#include <AppKit/AppKit.h>
-#include <ApplicationServices/ApplicationServices.h>
 #include <CoreVideo/CoreVideo.h>
 
-class GLManagerANGLE_MacOS : public EGLManager {
+class GLManagerANGLE_IOS : public EGLManager {
 private:
 	virtual const char *_get_platform_extension_name() const override;
 	virtual EGLenum _get_platform_extension_enum() const override;
@@ -56,13 +54,13 @@ private:
 public:
 	void window_resize(DisplayServer::WindowID p_window_id, int p_width, int p_height) {}
 
-	GLManagerANGLE_MacOS(int p_gles_major, int p_gles_minor) {
+	GLManagerANGLE_IOS(int p_gles_major, int p_gles_minor) {
 		gles_major = p_gles_major;
 		gles_minor = p_gles_minor;
 	}
-	~GLManagerANGLE_MacOS() {}
+	~GLManagerANGLE_IOS() {}
 };
 
-#endif // MACOS_ENABLED && (GLES3_ENABLED) || GLES2_ENABLED || GLES1_ENABLED)
+#endif // IOS_ENABLED && (GLES3_ENABLED || GLES2_ENABLED || GLES1_ENABLED) && EGL_ENABLED
 
-#endif // GL_MANAGER_MACOS_ANGLE_H
+#endif // GL_MANAGER_IOS_ANGLE_H

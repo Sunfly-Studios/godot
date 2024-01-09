@@ -65,158 +65,400 @@ DisplayServerIOS::DisplayServerIOS(const String &p_rendering_driver, WindowMode 
 	}
 	native_menu = memnew(NativeMenu);
 
+	CALayer *layer = nullptr;
+
+	bool multilayer_fallback = GLOBAL_GET("rendering/rendering_device/driver_fallback_multilayer");
+	bool fb_gl3 = GLOBAL_GET("rendering/rendering_device/fallback_to_opengl3");
+	bool fb_gl2 = GLOBAL_GET("rendering/rendering_device/fallback_to_opengl2");
+	bool fb_gl1 = GLOBAL_GET("rendering/rendering_device/fallback_to_opengl1");
+	bool fb_angle3 = GLOBAL_GET("rendering/gl_compatibility/fallback_to_angle");
+	bool fb_angle2 = GLOBAL_GET("rendering/gl_legacy/fallback_to_angle");
+	bool fb_angle1 = GLOBAL_GET("rendering/gl_classic/fallback_to_angle");
+
+	Vector driver_attempts;
+
+	if (multilayer_fallback) {
+		Vector rd_attempts;
+		Vector native_attempts;
+		Vector angle_attempts;
+		Vector forced_attempts;
+
+		if (rendering_driver == "metal" || rendering_driver == "vulkan") {
+#if defined(METAL_ENABLED)
+			rd_attempts.push_back("metal");
+#endif
+#if defined(VULKAN_ENABLED)
+			rd_attempts.push_back("vulkan");
+#endif
+#if defined(GLES3_ENABLED)
+			if (fb_gl3) {
+				native_attempts.push_back("opengl3");
+				forced_attempts.push_back("opengl3_forced");
+				if (fb_angle3) {
+					angle_attempts.push_back("opengl3_angle");
+				}
+			}
+#endif
+#if defined(GLES2_ENABLED)
+			if (fb_gl2) {
+				native_attempts.push_back("opengl2");
+				forced_attempts.push_back("opengl2_forced");
+				if (fb_angle2) {
+					angle_attempts.push_back("opengl2_angle");
+				}
+			}
+#endif
+#if defined(GLES1_ENABLED)
+			if (fb_gl1) {
+				native_attempts.push_back("opengl1");
+				forced_attempts.push_back("opengl1_forced");
+				if (fb_angle1) {
+					angle_attempts.push_back("opengl1_angle");
+				}
+			}
+#endif
+		} else if (rendering_driver.begins_with("opengl3")) {
+#if defined(GLES3_ENABLED)
+			native_attempts.push_back("opengl3");
+			forced_attempts.push_back("opengl3_forced");
+			if (fb_angle3 || rendering_driver == "opengl3_angle") {
+				angle_attempts.push_back("opengl3_angle");
+			}
+#endif
+#if defined(GLES2_ENABLED)
+			native_attempts.push_back("opengl2");
+			forced_attempts.push_back("opengl2_forced");
+			if (fb_angle2) {
+				angle_attempts.push_back("opengl2_angle");
+			}
+#endif
+#if defined(GLES1_ENABLED)
+			native_attempts.push_back("opengl1");
+			forced_attempts.push_back("opengl1_forced");
+			if (fb_angle1) {
+				angle_attempts.push_back("opengl1_angle");
+			}
+#endif
+		} else if (rendering_driver.begins_with("opengl2")) {
+#if defined(GLES2_ENABLED)
+			native_attempts.push_back("opengl2");
+			forced_attempts.push_back("opengl2_forced");
+			if (fb_angle2 || rendering_driver == "opengl2_angle") {
+				angle_attempts.push_back("opengl2_angle");
+			}
+#endif
+#if defined(GLES1_ENABLED)
+			native_attempts.push_back("opengl1");
+			forced_attempts.push_back("opengl1_forced");
+			if (fb_angle1) {
+				angle_attempts.push_back("opengl1_angle");
+			}
+#endif
+#if defined(GLES3_ENABLED)
+			native_attempts.push_back("opengl3");
+			forced_attempts.push_back("opengl3_forced");
+			if (fb_angle3) {
+				angle_attempts.push_back("opengl3_angle");
+			}
+#endif
+		} else if (rendering_driver.begins_with("opengl1")) {
+#if defined(GLES1_ENABLED)
+			native_attempts.push_back("opengl1");
+			forced_attempts.push_back("opengl1_forced");
+			if (fb_angle1 || rendering_driver == "opengl1_angle") {
+				angle_attempts.push_back("opengl1_angle");
+			}
+#endif
+#if defined(GLES2_ENABLED)
+			native_attempts.push_back("opengl2");
+			forced_attempts.push_back("opengl2_forced");
+			if (fb_angle2) {
+				angle_attempts.push_back("opengl2_angle");
+			}
+#endif
+#if defined(GLES3_ENABLED)
+			native_attempts.push_back("opengl3");
+			forced_attempts.push_back("opengl3_forced");
+			if (fb_angle3) {
+				angle_attempts.push_back("opengl3_angle");
+			}
+#endif
+		} else {
+			native_attempts.push_back(rendering_driver);
+			forced_attempts.push_back(rendering_driver + "_forced");
+		}
+
+		if (rendering_driver.ends_with("_angle")) {
+			driver_attempts.append_array(rd_attempts);
+			driver_attempts.append_array(angle_attempts);
+			driver_attempts.append_array(native_attempts);
+			driver_attempts.append_array(forced_attempts);
+		} else {
+			driver_attempts.append_array(rd_attempts);
+			driver_attempts.append_array(native_attempts);
+			driver_attempts.append_array(angle_attempts);
+			driver_attempts.append_array(forced_attempts);
+		}
+	} else {
+		driver_attempts.push_back(rendering_driver);
+#if defined(GLES3_ENABLED)
+		if (rendering_driver == "opengl3" && fb_angle3) {
+			driver_attempts.push_back("opengl3_angle");
+			driver_attempts.push_back("opengl3_forced");
+		}
+#endif
+#if defined(GLES2_ENABLED)
+		if (rendering_driver == "opengl2" && fb_angle2) {
+			driver_attempts.push_back("opengl2_angle");
+			driver_attempts.push_back("opengl2_forced");
+		}
+#endif
+#if defined(GLES1_ENABLED)
+		if (rendering_driver == "opengl1" && fb_angle1) {
+			driver_attempts.push_back("opengl1_angle");
+			driver_attempts.push_back("opengl1_forced");
+		}
+#endif
+	}
+
+	String requested_driver = rendering_driver;
+	bool driver_initialized = false;
+
 #if defined(RD_ENABLED)
 	rendering_context = nullptr;
 	rendering_device = nullptr;
+#endif
 
-	CALayer *layer = nullptr;
+	for (int attempt_idx = 0; attempt_idx < driver_attempts.size(); attempt_idx++) {
+		rendering_driver = driver_attempts[attempt_idx];
+		bool init_failed = false;
+		bool ignore_blacklist = false;
+		r_error = OK;
 
-	union {
+		if (rendering_driver.ends_with("_forced")) {
+			ignore_blacklist = true;
+			rendering_driver = rendering_driver.replace("_forced", "");
+		}
+
+		if (rendering_driver == "metal" || rendering_driver == "vulkan") {
+			OS::get_singleton()->set_current_rendering_method("forward_plus", OS::RENDERING_SOURCE_FALLBACK);
+		} else if (rendering_driver.begins_with("opengl3")) {
+			OS::get_singleton()->set_current_rendering_method("gl_compatibility", OS::RENDERING_SOURCE_FALLBACK);
+		} else if (rendering_driver.begins_with("opengl2")) {
+			OS::get_singleton()->set_current_rendering_method("gl_legacy", OS::RENDERING_SOURCE_FALLBACK);
+		} else if (rendering_driver.begins_with("opengl1")) {
+			OS::get_singleton()->set_current_rendering_method("gl_classic", OS::RENDERING_SOURCE_FALLBACK);
+		}
+		
+		OS::get_singleton()->set_current_rendering_driver_name(rendering_driver, attempt_idx > 0 ? OS::RENDERING_SOURCE_FALLBACK : OS::get_singleton()->get_current_rendering_driver_name_source());
+		layer = nullptr;
+
+#if defined(RD_ENABLED)
+		if (rendering_driver == "metal" || rendering_driver == "vulkan") {
+			union {
 #ifdef VULKAN_ENABLED
-		RenderingContextDriverVulkanIOS::WindowPlatformData vulkan;
+				RenderingContextDriverVulkanIOS::WindowPlatformData vulkan;
 #endif
 #ifdef METAL_ENABLED
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wunguarded-availability"
-		// Eliminate "RenderingContextDriverMetal is only available on iOS 14.0 or newer".
-		RenderingContextDriverMetal::WindowPlatformData metal;
+				// Eliminate "RenderingContextDriverMetal is only available on iOS 14.0 or newer".
+				RenderingContextDriverMetal::WindowPlatformData metal;
 #pragma clang diagnostic pop
 #endif
-	} wpd;
+			} wpd;
 
 #if defined(VULKAN_ENABLED)
-	if (rendering_driver == "vulkan") {
-		layer = [AppDelegate.viewController.godotView initializeRenderingForDriver:@"vulkan"];
-		if (!layer) {
-			ERR_FAIL_MSG("Failed to create iOS Vulkan rendering layer.");
-		}
-		wpd.vulkan.layer_ptr = (CAMetalLayer *const *)&layer;
-		rendering_context = memnew(RenderingContextDriverVulkanIOS);
-	}
-#endif
+			if (rendering_driver == "vulkan") {
+				layer = [AppDelegate.viewController.godotView initializeRenderingForDriver:@"vulkan"];
+				if (!layer) {
+					init_failed = true;
+				} else {
+					wpd.vulkan.layer_ptr = (CAMetalLayer *const *)&layer;
+					rendering_context = memnew(RenderingContextDriverVulkanIOS);
+				}
+			}
+#endif // VULKAN_ENABLED
 #ifdef METAL_ENABLED
-	if (rendering_driver == "metal") {
-		if (@available(iOS 14.0, *)) {
-			layer = [AppDelegate.viewController.godotView initializeRenderingForDriver:@"metal"];
-			wpd.metal.layer = (CAMetalLayer *)layer;
-			rendering_context = memnew(RenderingContextDriverMetal);
-		} else {
-			OS::get_singleton()->alert("Metal is only supported on iOS 14.0 and later.");
-			r_error = ERR_UNAVAILABLE;
-			return;
+			if (rendering_driver == "metal") {
+				if (@available(iOS 14.0, *)) {
+					layer = [AppDelegate.viewController.godotView initializeRenderingForDriver:@"metal"];
+					if (!layer) {
+						init_failed = true;
+					} else {
+						wpd.metal.layer = (CAMetalLayer *)layer;
+						rendering_context = memnew(RenderingContextDriverMetal);
+					}
+				} else {
+					WARN_PRINT("Metal is only supported on iOS 14.0 and later.");
+					init_failed = true;
+				}
+			}
+#endif // METAL_ENABLED
+			if (!init_failed && rendering_context) {
+				if (rendering_context->initialize() != OK) {
+					memdelete(rendering_context);
+					rendering_context = nullptr;
+					init_failed = true;
+				} else {
+					if (rendering_context->window_create(MAIN_WINDOW_ID, &wpd) != OK) {
+						memdelete(rendering_context);
+						rendering_context = nullptr;
+						init_failed = true;
+					} else {
+						Size2i size = Size2i(layer.bounds.size.width, layer.bounds.size.height) * screen_get_max_scale();
+						rendering_context->window_set_size(MAIN_WINDOW_ID, size.width, size.height);
+						rendering_context->window_set_vsync_mode(MAIN_WINDOW_ID, p_vsync_mode);
+
+						rendering_device = memnew_allocator(RenderingDevice, RenderingDeviceAllocator);
+						if (rendering_device->initialize(rendering_context, MAIN_WINDOW_ID) != OK) {
+							memdelete_allocator(rendering_device);
+							rendering_device = nullptr;
+							rendering_context->window_destroy(MAIN_WINDOW_ID);
+							memdelete(rendering_context);
+							rendering_context = nullptr;
+							init_failed = true;
+						} else {
+							rendering_device->screen_create(MAIN_WINDOW_ID);
+							RendererCompositorRD::make_current();
+						}
+					}
+				}
+			}
 		}
-	}
-#endif
-	if (rendering_context) {
-		if (rendering_context->initialize() != OK) {
-			memdelete(rendering_context);
-			rendering_context = nullptr;
-			
-			bool fallback_triggered = false;
-			
+#endif // RD_ENABLED
+
 #if defined(GLES3_ENABLED)
-			bool fallback_to_opengl3 = GLOBAL_GET("rendering/rendering_device/fallback_to_opengl3");
-			if (!fallback_triggered && fallback_to_opengl3 && rendering_driver != "opengl3" && rendering_driver != "opengl2") {
-				WARN_PRINT("Your device seem not to support MoltenVK or Metal, switching to OpenGL 3.");
-				rendering_driver = "opengl3";
-				OS::get_singleton()->set_current_rendering_method("gl_compatibility", OS::RENDERING_SOURCE_FALLBACK);
-				OS::get_singleton()->set_current_rendering_driver_name(rendering_driver, OS::RENDERING_SOURCE_FALLBACK);
-				fallback_triggered = true;
+		if (rendering_driver == "opengl3" || rendering_driver == "opengl3_angle") {
+			if (rendering_driver == "opengl3_angle") {
+#if defined(EGL_ENABLED)
+				layer = [AppDelegate.viewController.godotView initializeRenderingForDriver:@"opengl3_angle"];
+				if (!layer) {
+					init_failed = true;
+				} else {
+					gl_manager_angle = memnew(GLManagerANGLE_IOS(3, 3));
+					if (gl_manager_angle->initialize() != OK || gl_manager_angle->open_display(nullptr) != OK) {
+						memdelete(gl_manager_angle);
+						gl_manager_angle = nullptr;
+						init_failed = true;
+					} else {
+						Size2i size = Size2i(layer.bounds.size.width, layer.bounds.size.height) * screen_get_max_scale();
+						Error err = gl_manager_angle->window_create(MAIN_WINDOW_ID, nullptr, (__bridge void *)layer, size.width, size.height);
+						if (err != OK) {
+							memdelete(gl_manager_angle);
+							gl_manager_angle = nullptr;
+							init_failed = true;
+						} else {
+							RasterizerGLES3::make_current(false, true);
+						}
+					}
+				}
+#else
+				init_failed = true;
+#endif // EGL_ENABLED
+			} else if (rendering_driver == "opengl3") {
+				layer = [AppDelegate.viewController.godotView initializeRenderingForDriver:@"opengl3"];
+				if (!layer) {
+					init_failed = true;
+				} else {
+					RasterizerGLES3::make_current(false, false);
+				}
 			}
+		}
 #endif // GLES3_ENABLED
-			
+
 #if defined(GLES2_ENABLED)
-			bool fallback_to_opengl2 = GLOBAL_GET("rendering/rendering_device/fallback_to_opengl2");
-			if (!fallback_triggered && fallback_to_opengl2 && rendering_driver != "opengl2") {
-				WARN_PRINT("Your device seem not to support MoltenVK, Metal, or OpenGL 3, switching to OpenGL 2.");
-				rendering_driver = "opengl2";
-				OS::get_singleton()->set_current_rendering_method("gl_legacy", OS::RENDERING_SOURCE_FALLBACK);
-				OS::get_singleton()->set_current_rendering_driver_name(rendering_driver, OS::RENDERING_SOURCE_FALLBACK);
-				fallback_triggered = true;
+		if (rendering_driver == "opengl2" || rendering_driver == "opengl2_angle") {
+			if (rendering_driver == "opengl2_angle") {
+#if defined(EGL_ENABLED)
+				layer = [AppDelegate.viewController.godotView initializeRenderingForDriver:@"opengl2_angle"];
+				if (!layer) {
+					init_failed = true;
+				} else {
+					gl_manager_angle = memnew(GLManagerANGLE_IOS(2, 1));
+					if (gl_manager_angle->initialize() != OK || gl_manager_angle->open_display(nullptr) != OK) {
+						memdelete(gl_manager_angle);
+						gl_manager_angle = nullptr;
+						init_failed = true;
+					} else {
+						Size2i size = Size2i(layer.bounds.size.width, layer.bounds.size.height) * screen_get_max_scale();
+						Error err = gl_manager_angle->window_create(MAIN_WINDOW_ID, nullptr, (__bridge void *)layer, size.width, size.height);
+						if (err != OK) {
+							memdelete(gl_manager_angle);
+							gl_manager_angle = nullptr;
+							init_failed = true;
+						} else {
+							RasterizerGLES2::make_current(false, true);
+						}
+					}
+				}
+#else
+				init_failed = true;
+#endif // EGL_ENABLED
+			} else if (rendering_driver == "opengl2") {
+				layer = [AppDelegate.viewController.godotView initializeRenderingForDriver:@"opengl2"];
+				if (!layer) {
+					init_failed = true;
+				} else {
+					RasterizerGLES2::make_current(false, false);
+				}
 			}
+		}
 #endif // GLES2_ENABLED
 
 #if defined(GLES1_ENABLED)
-			bool fallback_to_opengl1 = GLOBAL_GET("rendering/rendering_device/fallback_to_opengl1");
-			if (!fallback_triggered && fallback_to_opengl1 && rendering_driver != "opengl1") {
-				WARN_PRINT("Your device seem not to support MoltenVK, Metal, OpenGL 3, or OpenGL 2, switching to OpenGL 1.");
-				rendering_driver = "opengl1";
-				OS::get_singleton()->set_current_rendering_method("gl_classic", OS::RENDERING_SOURCE_FALLBACK);
-				OS::get_singleton()->set_current_rendering_driver_name(rendering_driver, OS::RENDERING_SOURCE_FALLBACK);
-				fallback_triggered = true;
+		if (rendering_driver == "opengl1" || rendering_driver == "opengl1_angle") {
+			if (rendering_driver == "opengl1_angle") {
+#if defined(EGL_ENABLED)
+				layer = [AppDelegate.viewController.godotView initializeRenderingForDriver:@"opengl1_angle"];
+				if (!layer) {
+					init_failed = true;
+				} else {
+					gl_manager_angle = memnew(GLManagerANGLE_IOS(1, 5));
+					if (gl_manager_angle->initialize() != OK || gl_manager_angle->open_display(nullptr) != OK) {
+						memdelete(gl_manager_angle);
+						gl_manager_angle = nullptr;
+						init_failed = true;
+					} else {
+						Size2i size = Size2i(layer.bounds.size.width, layer.bounds.size.height) * screen_get_max_scale();
+						Error err = gl_manager_angle->window_create(MAIN_WINDOW_ID, nullptr, (__bridge void *)layer, size.width, size.height);
+						if (err != OK) {
+							memdelete(gl_manager_angle);
+							gl_manager_angle = nullptr;
+							init_failed = true;
+						} else {
+							RasterizerGLES1::make_current(false, true);
+						}
+					}
+				}
+#else
+				init_failed = true;
+#endif // EGL_ENABLED
+			} else if (rendering_driver == "opengl1") {
+				layer = [AppDelegate.viewController.godotView initializeRenderingForDriver:@"opengl1"];
+				if (!layer) {
+					init_failed = true;
+				} else {
+					RasterizerGLES1::make_current(false, false);
+				}
 			}
+		}
 #endif // GLES1_ENABLED
-			
-			if (!fallback_triggered) {
-				r_error = ERR_CANT_CREATE;
-				ERR_FAIL_MSG("Could not initialize " + rendering_driver);
+
+		if (!init_failed) {
+			driver_initialized = true;
+			if (driver_attempts[attempt_idx] != requested_driver) {
+				WARN_PRINT(vformat("The %s driver could not be initialized. Using the %s driver, visuals may be affected.", requested_driver, driver_attempts[attempt_idx]));
 			}
+			break;
 		}
 	}
 
-	if (rendering_context) {
-		if (rendering_context->window_create(MAIN_WINDOW_ID, &wpd) != OK) {
-			ERR_PRINT(vformat("Failed to create %s window.", rendering_driver));
-			memdelete(rendering_context);
-			rendering_context = nullptr;
-			r_error = ERR_UNAVAILABLE;
-			return;
-		}
-
-		Size2i size = Size2i(layer.bounds.size.width, layer.bounds.size.height) * screen_get_max_scale();
-		rendering_context->window_set_size(MAIN_WINDOW_ID, size.width, size.height);
-		rendering_context->window_set_vsync_mode(MAIN_WINDOW_ID, p_vsync_mode);
-
-		rendering_device = memnew_allocator(RenderingDevice, RenderingDeviceAllocator);
-		if (rendering_device->initialize(rendering_context, MAIN_WINDOW_ID) != OK) {
-			memdelete_allocator<RenderingDevice, RenderingDeviceAllocator>(rendering_device);
-			rendering_device = nullptr;
-			memdelete(rendering_context);
-			rendering_context = nullptr;
-			r_error = ERR_UNAVAILABLE;
-			return;
-		}
-		rendering_device->screen_create(MAIN_WINDOW_ID);
-
-		RendererCompositorRD::make_current();
+	if (!driver_initialized) {
+		r_error = ERR_CANT_CREATE;
+		ERR_FAIL_MSG("Could not initialize any graphics drivers.");
+		return;
 	}
-#endif
-
-#if defined(GLES3_ENABLED)
-	if (rendering_driver == "opengl3") {
-		CALayer *layer = [AppDelegate.viewController.godotView initializeRenderingForDriver:@"opengl3"];
-
-		if (!layer) {
-			ERR_FAIL_MSG("Failed to create iOS OpenGLES 3 rendering layer.");
-		}
-
-		RasterizerGLES3::make_current(false);
-	}
-#endif
-
-#if defined(GLES2_ENABLED)
-	if (rendering_driver == "opengl2") {
-		CALayer *layer = [AppDelegate.viewController.godotView initializeRenderingForDriver:@"opengl2"];
-
-		if (!layer) {
-			ERR_FAIL_MSG("Failed to create iOS OpenGLES 2 rendering layer.");
-		}
-
-		RasterizerGLES2::make_current(false);
-	}
-#endif
-
-#if defined(GLES1_ENABLED)
-	if (rendering_driver == "opengl1") {
-		CALayer *layer = [AppDelegate.viewController.godotView initializeRenderingForDriver:@"opengl1"];
-
-		if (!layer) {
-			ERR_FAIL_MSG("Failed to create iOS OpenGLES 1 rendering layer.");
-		}
-
-		RasterizerGLES1::make_current(false);
-	}
-#endif
 
 	bool keep_screen_on = bool(GLOBAL_GET("display/window/energy_saving/keep_screen_on"));
 	screen_set_keep_on(keep_screen_on);
@@ -251,6 +493,14 @@ DisplayServerIOS::~DisplayServerIOS() {
 		tts = nil;
 	}
 #endif
+
+#if (defined(GLES3_ENABLED) || defined(GLES2_ENABLED) || defined(GLES1_ENABLED)) && defined(EGL_ENABLED)
+	if (gl_manager_angle) {
+		gl_manager_angle->window_destroy(MAIN_WINDOW_ID);
+		memdelete(gl_manager_angle);
+		gl_manager_angle = nullptr;
+	}
+#endif
 }
 
 DisplayServer *DisplayServerIOS::create_func(const String &p_rendering_driver, WindowMode p_mode, DisplayServer::VSyncMode p_vsync_mode, uint32_t p_flags, const Vector2i *p_position, const Vector2i &p_resolution, int p_screen, Context p_context, int64_t p_parent_window, Error &r_error) {
@@ -270,12 +520,15 @@ Vector<String> DisplayServerIOS::get_rendering_drivers_func() {
 #endif
 #if defined(GLES3_ENABLED)
 	drivers.push_back("opengl3");
+	drivers.push_back("opengl3_angle");
 #endif
 #if defined(GLES2_ENABLED)
 	drivers.push_back("opengl2");
+	drivers.push_back("opengl2_angle");
 #endif
 #if defined(GLES1_ENABLED)
 	drivers.push_back("opengl1");
+	drivers.push_back("opengl1_angle");
 #endif
 
 	return drivers;
@@ -520,10 +773,10 @@ bool DisplayServerIOS::is_dark_mode() const {
 	__block bool is_dark = false;
 	
 	void (^check_dark)(void) = ^{
-        if (@available(iOS 13.0, *)) {
-            is_dark = [UITraitCollection currentTraitCollection].userInterfaceStyle == UIUserInterfaceStyleDark;
-        }
-    };
+		if (@available(iOS 13.0, *)) {
+			is_dark = [UITraitCollection currentTraitCollection].userInterfaceStyle == UIUserInterfaceStyleDark;
+		}
+	};
 	
 	if ([NSThread isMainThread]) {
 		check_dark();
@@ -590,7 +843,7 @@ Point2i DisplayServerIOS::screen_get_position(int p_screen) const {
 
 Size2i DisplayServerIOS::screen_get_size(int p_screen) const {
 	CGRect screenBounds = [UIScreen mainScreen].bounds;
-    return Size2i(screenBounds.size.width, screenBounds.size.height) * screen_get_scale(p_screen);
+	return Size2i(screenBounds.size.width, screenBounds.size.height) * screen_get_scale(p_screen);
 }
 
 Rect2i DisplayServerIOS::screen_get_usable_rect(int p_screen) const {
@@ -663,12 +916,12 @@ float DisplayServerIOS::screen_get_scale(int p_screen) const {
 	
 	// Force the call to be on the main thread.
 	void (^get_scale)(void) = ^{
-        if (@available(iOS 13, *)) {
-            scale = MAX([UITraitCollection currentTraitCollection].displayScale, 1);
-        } else {
-            scale = [UIScreen mainScreen].scale;
-        }
-    };
+		if (@available(iOS 13, *)) {
+			scale = MAX([UITraitCollection currentTraitCollection].displayScale, 1);
+		} else {
+			scale = [UIScreen mainScreen].scale;
+		}
+	};
 
 	if ([NSThread isMainThread]) {
 		get_scale();
@@ -701,6 +954,14 @@ int64_t DisplayServerIOS::window_get_native_handle(HandleType p_handle_type, Win
 		case WINDOW_VIEW: {
 			return (int64_t)(__bridge void *)AppDelegate.viewController.godotView;
 		}
+#if (defined(GLES3_ENABLED) || defined(GLES2_ENABLED) || defined(GLES1_ENABLED)) && defined(EGL_ENABLED)
+		case OPENGL_CONTEXT: {
+			if (gl_manager_angle) {
+				return (int64_t)gl_manager_angle->get_context(p_window);
+			}
+			return 0;
+		}
+#endif
 		default: {
 			return 0;
 		}
@@ -728,14 +989,14 @@ void DisplayServerIOS::window_set_current_screen(int p_screen, WindowID p_window
 }
 
 Point2i DisplayServerIOS::window_get_position(WindowID p_window) const {
-    // iPads (Stage Manager) and Mac Catalyst have movable, floating windows. 
-    // We must report actual OS coordinates instead of a hardcoded Point2i(0,0).
-    UIView *view = AppDelegate.viewController.godotView;
-    if (view && view.window) {
-        CGRect frame = view.window.frame;
-        return Point2i(frame.origin.x, frame.origin.y) * screen_get_max_scale();
-    }
-    return Point2i();
+	// iPads (Stage Manager) and Mac Catalyst have movable, floating windows. 
+	// We must report actual OS coordinates instead of a hardcoded Point2i(0,0).
+	UIView *view = AppDelegate.viewController.godotView;
+	if (view && view.window) {
+		CGRect frame = view.window.frame;
+		return Point2i(frame.origin.x, frame.origin.y) * screen_get_max_scale();
+	}
+	return Point2i();
 }
 
 Point2i DisplayServerIOS::window_get_position_with_decorations(WindowID p_window) const {
@@ -1008,7 +1269,11 @@ void DisplayServerIOS::resize_window(CGSize viewSize) {
 		rendering_context->window_set_size(MAIN_WINDOW_ID, size.x, size.y);
 	}
 #endif
-
+#if (defined(GLES3_ENABLED) || defined(GLES2_ENABLED) || defined(GLES1_ENABLED)) && defined(EGL_ENABLED)
+	if (gl_manager_angle) {
+		gl_manager_angle->window_resize(MAIN_WINDOW_ID, size.x, size.y);
+	}
+#endif
 	Variant resize_rect = Rect2i(Point2i(), size);
 	_window_callback(window_resize_callback, resize_rect);
 }
@@ -1020,6 +1285,11 @@ void DisplayServerIOS::window_set_vsync_mode(DisplayServer::VSyncMode p_vsync_mo
 		rendering_context->window_set_vsync_mode(p_window, p_vsync_mode);
 	}
 #endif
+#if (defined(GLES3_ENABLED) || defined(GLES2_ENABLED) || defined(GLES1_ENABLED)) && defined(EGL_ENABLED)
+	if (gl_manager_angle) {
+		gl_manager_angle->set_use_vsync(p_vsync_mode != DisplayServer::VSYNC_DISABLED);
+	}
+#endif
 }
 
 DisplayServer::VSyncMode DisplayServerIOS::window_get_vsync_mode(WindowID p_window) const {
@@ -1027,6 +1297,11 @@ DisplayServer::VSyncMode DisplayServerIOS::window_get_vsync_mode(WindowID p_wind
 #if defined(RD_ENABLED)
 	if (rendering_context) {
 		return rendering_context->window_get_vsync_mode(p_window);
+	}
+#endif
+#if (defined(GLES3_ENABLED) || defined(GLES2_ENABLED) || defined(GLES1_ENABLED)) && defined(EGL_ENABLED)
+	if (gl_manager_angle) {
+		return (gl_manager_angle->is_using_vsync() ? DisplayServer::VSyncMode::VSYNC_ENABLED : DisplayServer::VSyncMode::VSYNC_DISABLED);
 	}
 #endif
 	return DisplayServer::VSYNC_ENABLED;

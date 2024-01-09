@@ -3463,7 +3463,7 @@ static void* _glad_GLES2_loader_handle = NULL;
 static void* glad_gles2_dlopen_handle(void) {
 #if GLAD_PLATFORM_EMSCRIPTEN
 #elif GLAD_PLATFORM_APPLE
-    static const char *NAMES[] = {"libGLESv2.dylib"};
+    static const char *NAMES[] = {"/System/Library/Frameworks/OpenGLES.framework/OpenGLES", "libGLESv2.dylib"};
 #elif GLAD_PLATFORM_WIN32
     static const char *NAMES[] = {"GLESv2.dll", "libGLESv2.dll"};
 #else

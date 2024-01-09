@@ -91,7 +91,14 @@ static const float earth_gravity = 9.80665;
 	}
 
 	CALayer<DisplayLayer> *layer;
-
+	BOOL is_opengl_driver = (
+		[driverName isEqualToString:@"opengl3"] ||
+		[driverName isEqualToString:@"opengl3_angle"] ||
+		[driverName isEqualToString:@"opengl2"] ||
+		[driverName isEqualToString:@"opengl2_angle"] ||
+		[driverName isEqualToString:@"opengl1"] ||
+		[driverName isEqualToString:@"opengl1_angle"]
+	);
 	if ([driverName isEqualToString:@"vulkan"] || [driverName isEqualToString:@"metal"]) {
 #if defined(TARGET_OS_SIMULATOR) && TARGET_OS_SIMULATOR
 		if (@available(iOS 13, *)) {
@@ -102,7 +109,7 @@ static const float earth_gravity = 9.80665;
 #else
 		layer = [GodotMetalLayer layer];
 #endif
-	} else if ([driverName isEqualToString:@"opengl3"] || [driverName isEqualToString:@"opengl2"] || [driverName isEqualToString:@"opengl1"]) {
+	} else if (is_opengl_driver) {
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wdeprecated-declarations" // OpenGL is deprecated in iOS 12.0
 		layer = [GodotOpenGLLayer layer];

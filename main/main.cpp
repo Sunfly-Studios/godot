@@ -2429,6 +2429,11 @@ Error Main::setup(const char *execpath, int argc, char *argv[], bool p_second_ph
 		GLOBAL_DEF_RST("rendering/gl_compatibility/fallback_to_native", true);
 		GLOBAL_DEF_RST("rendering/gl_compatibility/fallback_to_gles", true);
 
+		GLOBAL_DEF_RST_NOVAL("rendering/gl_compatibility/angle_backend", "default");
+		GLOBAL_DEF_RST_NOVAL(PropertyInfo(Variant::STRING, "rendering/gl_compatibility/angle_backend.windows", PROPERTY_HINT_ENUM, "dx11,opengl"), "dx11");
+		GLOBAL_DEF_RST_NOVAL(PropertyInfo(Variant::STRING, "rendering/gl_compatibility/angle_backend.ios", PROPERTY_HINT_ENUM, "metal,opengl"), "metal");
+		GLOBAL_DEF_RST_NOVAL(PropertyInfo(Variant::STRING, "rendering/gl_compatibility/angle_backend.macos", PROPERTY_HINT_ENUM, "metal,opengl"), "metal");
+
 		// Map the blocklist to compatibility
 		GLOBAL_DEF_RST_NOVAL(PropertyInfo(Variant::ARRAY, "rendering/gl_compatibility/force_angle_on_devices", PROPERTY_HINT_ARRAY_TYPE, vformat("%s/%s:%s", Variant::DICTIONARY, PROPERTY_HINT_NONE, String())), device_blocklist);
 
@@ -2445,6 +2450,11 @@ Error Main::setup(const char *execpath, int argc, char *argv[], bool p_second_ph
 		GLOBAL_DEF_RST("rendering/gl_legacy/fallback_to_angle", true);
 		GLOBAL_DEF_RST("rendering/gl_legacy/fallback_to_native", true);
 		GLOBAL_DEF_RST("rendering/gl_legacy/fallback_to_gles", true);
+		
+		GLOBAL_DEF_RST_NOVAL("rendering/gl_legacy/angle_backend", "default");
+		GLOBAL_DEF_RST_NOVAL(PropertyInfo(Variant::STRING, "rendering/gl_legacy/angle_backend.windows", PROPERTY_HINT_ENUM, "dx11,dx9,opengl"), "dx9");
+		GLOBAL_DEF_RST_NOVAL(PropertyInfo(Variant::STRING, "rendering/gl_legacy/angle_backend.ios", PROPERTY_HINT_ENUM, "metal,opengl"), "metal");
+		GLOBAL_DEF_RST_NOVAL(PropertyInfo(Variant::STRING, "rendering/gl_legacy/angle_backend.macos", PROPERTY_HINT_ENUM, "metal,opengl"), "metal");
 
 		GLOBAL_DEF_RST_NOVAL(PropertyInfo(Variant::ARRAY, "rendering/gl_legacy/force_angle_on_devices", PROPERTY_HINT_ARRAY_TYPE, vformat("%s/%s:%s", Variant::DICTIONARY, PROPERTY_HINT_NONE, String())), device_blocklist);
 
@@ -2461,6 +2471,11 @@ Error Main::setup(const char *execpath, int argc, char *argv[], bool p_second_ph
 		GLOBAL_DEF_RST("rendering/gl_classic/fallback_to_angle", true);
 		GLOBAL_DEF_RST("rendering/gl_classic/fallback_to_native", true);
 		GLOBAL_DEF_RST("rendering/gl_classic/fallback_to_gles", true);
+		
+		GLOBAL_DEF_RST_NOVAL("rendering/gl_classic/angle_backend", "default");
+		GLOBAL_DEF_RST_NOVAL(PropertyInfo(Variant::STRING, "rendering/gl_classic/angle_backend.windows", PROPERTY_HINT_ENUM, "dx11,opengl"), "dx11");
+		GLOBAL_DEF_RST_NOVAL(PropertyInfo(Variant::STRING, "rendering/gl_classic/angle_backend.ios", PROPERTY_HINT_ENUM, "metal,opengl"), "metal");
+		GLOBAL_DEF_RST_NOVAL(PropertyInfo(Variant::STRING, "rendering/gl_classic/angle_backend.macos", PROPERTY_HINT_ENUM, "metal,opengl"), "metal");
 
 		GLOBAL_DEF_RST_NOVAL(PropertyInfo(Variant::ARRAY, "rendering/gl_classic/force_angle_on_devices", PROPERTY_HINT_ARRAY_TYPE, vformat("%s/%s:%s", Variant::DICTIONARY, PROPERTY_HINT_NONE, String())), device_blocklist);
 	}

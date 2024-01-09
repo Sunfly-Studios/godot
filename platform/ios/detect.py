@@ -34,6 +34,7 @@ def get_opts():
         BoolVariable("ios_simulator", "Build for iOS Simulator", False),
         ("ios_triple", "Triple for ios toolchain", ""),
         BoolVariable("generate_bundle", "Generate an APP bundle after building iOS/macOS binaries", False),
+        ("angle_libs", "Path to the ANGLE static libraries", ""),
     ]
 
 
@@ -177,11 +178,17 @@ def configure(env: "SConsEnvironment"):
 
     if env["opengl3"] or env["opengl2"] or env["opengl1"]:
         if env["opengl3"]:
-            env.Append(CPPDEFINES=["GLES3_ENABLED", "GLES_SILENCE_DEPRECATION"])
+            env.Append(CPPDEFINES=["GLES3_ENABLED"])
         if env["opengl2"]:
-            env.Append(CPPDEFINES=["GLES2_ENABLED", "GLES_SILENCE_DEPRECATION"])
+            env.Append(CPPDEFINES=["GLES2_ENABLED"])
         if env["opengl1"]:
-            env.Append(CPPDEFINES=["GLES1_ENABLED", "GLES_SILENCE_DEPRECATION"])
+            env.Append(CPPDEFINES=["GLES1_ENABLED"])
+        
+        env.Append(CPPDEFINES=["GLES_SILENCE_DEPRECATION"])
+        
+        if env["angle_libs"] != "":
+            env.AppendUnique(CPPDEFINES=["EGL_STATIC"])
+        env.Prepend(CPPPATH=["#thirdparty/angle/include"])
             
         env.Append(CCFLAGS=["-Wno-module-import-in-extern-c"])
         env.Prepend(

@@ -94,6 +94,7 @@ bool RasterizerGLES2::screen_flipped_y = false;
 #endif
 
 bool RasterizerGLES2::gles_over_gl = true;
+bool RasterizerGLES2::use_egl = true;
 
 void RasterizerGLES2::begin_frame(double frame_step) {
 	if (canvas && canvas->is_context_lost()) {
@@ -253,9 +254,9 @@ RasterizerGLES2::RasterizerGLES2() {
 	// version global to see if it loaded for now though, otherwise we fall back to
 	// the generic loader below.
 #if defined(EGL_STATIC)
-	bool has_egl = true;
+	bool has_egl = use_egl;
 #else
-	bool has_egl = (eglGetProcAddress != nullptr);
+	bool has_egl = use_egl && (eglGetProcAddress != nullptr);
 #endif
 
 	if (gles_over_gl) {
@@ -285,6 +286,7 @@ RasterizerGLES2::RasterizerGLES2() {
 		return;
 	}
 
+#ifdef CAN_DEBUG
 	if (gles_over_gl) {
 		if (OS::get_singleton()->is_stdout_verbose()) {
 			if (GLAD_GL_ARB_debug_output) {
@@ -296,6 +298,7 @@ RasterizerGLES2::RasterizerGLES2() {
 			}
 		}
 	}
+#endif // CAN_DEBUG
 #endif // GLAD_ENABLED
 
 	// For debugging

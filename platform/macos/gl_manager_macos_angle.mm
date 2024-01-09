@@ -28,6 +28,8 @@
 /* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                 */
 /**************************************************************************/
 
+#include "core/config/project_settings.h"
+
 #include "gl_manager_macos_angle.h"
 
 #if defined(MACOS_ENABLED) && (defined(GLES3_ENABLED) || defined(GLES2_ENABLED) || defined(GLES1_ENABLED))
@@ -46,9 +48,24 @@ EGLenum GLManagerANGLE_MacOS::_get_platform_extension_enum() const {
 }
 
 Vector<EGLAttrib> GLManagerANGLE_MacOS::_get_platform_display_attributes() const {
+	String render_backend;
+
+	if (gles_major == 3) {
+		render_backend = "rendering/gl_compatibility/angle_backend";
+	} else if (gles_major == 2) {
+		render_backend = "rendering/gl_legacy/angle_backend";
+	} else {
+		render_backend = "rendering/gl_classic/angle_backend";
+	}
+	const String &backend = GLOBAL_GET(render_backend);
+
 	Vector<EGLAttrib> ret;
 	ret.push_back(EGL_PLATFORM_ANGLE_TYPE_ANGLE);
-	ret.push_back(EGL_PLATFORM_ANGLE_TYPE_OPENGL_ANGLE);
+	if (backend.to_lower() == "metal" || backend.to_lower() == "default") {
+		ret.push_back(EGL_PLATFORM_ANGLE_TYPE_METAL_ANGLE);
+	} else {
+		ret.push_back(EGL_PLATFORM_ANGLE_TYPE_OPENGL_ANGLE);
+	}
 	ret.push_back(EGL_NONE);
 
 	return ret;
@@ -67,4 +84,4 @@ Vector<EGLint> GLManagerANGLE_MacOS::_get_platform_context_attribs() const {
 	return ret;
 }
 
-#endif // MACOS_ENABLED && (GLES3_ENABLED) || GLES2_ENABLED)
+#endif // MACOS_ENABLED && (GLES3_ENABLED) || GLES2_ENABLED || GLES1_ENABLED)

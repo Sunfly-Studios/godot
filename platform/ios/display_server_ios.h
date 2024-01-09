@@ -49,6 +49,10 @@
 #endif // METAL_ENABLED
 #endif // RD_ENABLED
 
+#if defined(GLES3_ENABLED) || defined(GLES2_ENABLED) || defined(GLES1_ENABLED)
+#include "gl_manager_ios_angle.h"
+#endif // GLES3_ENABLED || GLES2_ENABLED || GLES1_ENABLED
+
 #if defined(GLES3_ENABLED)
 #include "drivers/gles3/rasterizer_gles3.h"
 #endif // GLES3_ENABLED
@@ -73,6 +77,11 @@ class DisplayServerIOS : public DisplayServer {
 	RenderingContextDriver *rendering_context = nullptr;
 	RenderingDevice *rendering_device = nullptr;
 #endif
+
+#if (defined(GLES3_ENABLED) || defined(GLES2_ENABLED) || defined(GLES1_ENABLED)) && defined(EGL_ENABLED)
+	GLManagerANGLE_IOS *gl_manager_angle = nullptr;
+#endif
+
 	NativeMenu *native_menu = nullptr;
 
 	id tts = nullptr;
@@ -143,6 +152,22 @@ public:
 	void update_gyroscope(const Vector3 &p_gyroscope);
 
 	// MARK: -
+
+	void window_make_current() {
+#if (defined(GLES3_ENABLED) || defined(GLES2_ENABLED) || defined(GLES1_ENABLED)) && defined(EGL_ENABLED)
+		if (gl_manager_angle) {
+			gl_manager_angle->window_make_current(MAIN_WINDOW_ID);
+		}
+#endif
+	}
+
+	void window_release_current() {
+#if (defined(GLES3_ENABLED) || defined(GLES2_ENABLED) || defined(GLES1_ENABLED)) && defined(EGL_ENABLED)
+		if (gl_manager_angle) {
+			gl_manager_angle->release_current();
+		}
+#endif
+	}
 
 	virtual bool has_feature(Feature p_feature) const override;
 	virtual String get_name() const override;
@@ -241,7 +266,13 @@ public:
 	virtual bool screen_is_kept_on() const override;
 
 	void resize_window(CGSize size);
-	virtual void swap_buffers() override {}
+	virtual void swap_buffers() override {
+#if (defined(GLES3_ENABLED) || defined(GLES2_ENABLED) || defined(GLES1_ENABLED)) && defined(EGL_ENABLED)
+		if (gl_manager_angle) {
+			gl_manager_angle->swap_buffers();
+		}
+#endif
+	}
 };
 
 #endif // DISPLAY_SERVER_IOS_H
