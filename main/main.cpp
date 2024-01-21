@@ -705,6 +705,7 @@ Error Main::test_setup() {
 	physics_server_2d_manager = memnew(PhysicsServer2DManager);
 
 	// From `Main::setup2()`.
+	initialize_modules(MODULE_INITIALIZATION_LEVEL_EARLY_CORE);
 	register_early_core_singletons();
 	initialize_modules(MODULE_INITIALIZATION_LEVEL_CORE);
 	register_core_extensions();
@@ -851,6 +852,7 @@ void Main::test_cleanup() {
 	unregister_core_driver_types();
 	unregister_core_extensions();
 	uninitialize_modules(MODULE_INITIALIZATION_LEVEL_CORE);
+	uninitialize_modules(MODULE_INITIALIZATION_LEVEL_EARLY_CORE);
 
 	if (engine) {
 		memdelete(engine);
@@ -1847,6 +1849,8 @@ Error Main::setup(const char *execpath, int argc, char *argv[], bool p_second_ph
 			goto error;
 		}
 	}
+
+	initialize_modules(MODULE_INITIALIZATION_LEVEL_EARLY_CORE);
 
 	OS::get_singleton()->_in_editor = editor;
 	if (globals->setup(project_path, main_pack, upwards, editor) == OK) {
@@ -4790,6 +4794,7 @@ void Main::cleanup(bool p_force) {
 	unregister_core_driver_types();
 	unregister_core_extensions();
 	uninitialize_modules(MODULE_INITIALIZATION_LEVEL_CORE);
+	uninitialize_modules(MODULE_INITIALIZATION_LEVEL_EARLY_CORE);
 
 	if (engine) {
 		memdelete(engine);
