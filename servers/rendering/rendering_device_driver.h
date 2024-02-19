@@ -766,6 +766,7 @@ public:
 		DEVICE_OPENGL,
 		DEVICE_VULKAN,
 		DEVICE_DIRECTX,
+		DEVICE_METAL,
 	};
 
 	struct Capabilities {

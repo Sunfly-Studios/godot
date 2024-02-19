@@ -2058,10 +2058,10 @@ void fragment_shader(in SceneData scene_data) {
 		// Subgroup merge and store normal bits
 
 		{
-#ifdef MOLTENVK_USED
-			imageStore(geom_normal_bits, igrid_pos, uvec4(imageLoad(geom_normal_bits, igrid_pos).r | (1 << bit_ofs))); //store solid bits
+#ifdef NO_IMAGE_ATOMICS
+            imageStore(geom_facing_grid, grid_pos, uvec4(imageLoad(geom_facing_grid, grid_pos).r | facing_bits)); //store facing bits
 #else
-			imageAtomicOr(geom_normal_bits, igrid_pos, bit_normal); //store solid bits
+            imageAtomicOr(geom_facing_grid, grid_pos, facing_bits); //store facing bits
 #endif
 		}
 
