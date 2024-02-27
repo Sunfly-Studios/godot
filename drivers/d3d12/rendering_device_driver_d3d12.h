@@ -169,6 +169,7 @@ class RenderingDeviceDriverD3D12 : public RenderingDeviceDriver {
 	MiscFeaturesSupport misc_features_support;
 	MeshShaderCapabilities mesh_shader_capabilities;
 	MiscFeaturesSupport misc_features_support;
+	MeshShaderCapabilities mesh_shader_capabilities;
 	String pipeline_cache_id;
 
 	class DescriptorsHeap {
