@@ -146,9 +146,10 @@ class RenderingDeviceDriverD3D12 : public RenderingDeviceDriver {
 	struct MiscFeaturesSupport {
 		bool depth_bounds_supported = false;
 	};
-
-	struct MiscFeaturesSupport {
-		bool depth_bounds_supported = false;
+    
+	struct MeshShaderCapabilities {
+		static const uint32_t MAX_THREAD_GROUPS = 63999; // Quoting the DirectX Mesh Shader Spec: "Each of the three thread group counts must be less than 64k" so ok...
+		bool is_supported = false;
 	};
 
 	RenderingContextDriverD3D12 *context_driver = nullptr;
@@ -166,8 +167,6 @@ class RenderingDeviceDriverD3D12 : public RenderingDeviceDriver {
 	StorageBufferCapabilities storage_buffer_capabilities;
 	FormatCapabilities format_capabilities;
 	BarrierCapabilities barrier_capabilities;
-	MiscFeaturesSupport misc_features_support;
-	MeshShaderCapabilities mesh_shader_capabilities;
 	MiscFeaturesSupport misc_features_support;
 	MeshShaderCapabilities mesh_shader_capabilities;
 	String pipeline_cache_id;
@@ -208,6 +207,7 @@ class RenderingDeviceDriverD3D12 : public RenderingDeviceDriver {
 		ComPtr<ID3D12CommandSignature> draw;
 		ComPtr<ID3D12CommandSignature> draw_indexed;
 		ComPtr<ID3D12CommandSignature> dispatch;
+		ComPtr<ID3D12CommandSignature> dispatch_mesh;
 	} indirect_cmd_signatures;
 
 	static void STDMETHODCALLTYPE _debug_message_func(D3D12_MESSAGE_CATEGORY p_category, D3D12_MESSAGE_SEVERITY p_severity, D3D12_MESSAGE_ID p_id, LPCSTR p_description, void *p_context);
@@ -861,6 +861,11 @@ public:
 	virtual void command_render_draw_indexed_indirect_count(CommandBufferID p_cmd_buffer, BufferID p_indirect_buffer, uint64_t p_offset, BufferID p_count_buffer, uint64_t p_count_buffer_offset, uint32_t p_max_draw_count, uint32_t p_stride) override final;
 	virtual void command_render_draw_indirect(CommandBufferID p_cmd_buffer, BufferID p_indirect_buffer, uint64_t p_offset, uint32_t p_draw_count, uint32_t p_stride) override final;
 	virtual void command_render_draw_indirect_count(CommandBufferID p_cmd_buffer, BufferID p_indirect_buffer, uint64_t p_offset, BufferID p_count_buffer, uint64_t p_count_buffer_offset, uint32_t p_max_draw_count, uint32_t p_stride) override final;
+
+	// Mesh Shader Drawing.
+	virtual void command_render_dispatch_mesh(CommandBufferID p_cmd_buffer, uint32_t p_x_groups, uint32_t p_y_groups, uint32_t p_z_groups) override final;
+	virtual void command_render_dispatch_mesh_indirect(CommandBufferID p_cmd_buffer, BufferID p_indirect_buffer, uint64_t p_offset, uint32_t p_draw_count, uint32_t p_stride) override final;
+	virtual void command_render_dispatch_mesh_indirect_count(CommandBufferID p_cmd_buffer, BufferID p_indirect_buffer, uint64_t p_offset, BufferID p_count_buffer, uint64_t p_count_buffer_offset, uint32_t p_max_draw_count, uint32_t p_stride) override final;
 
 	// Buffer binding.
 	virtual void command_render_bind_vertex_buffers(CommandBufferID p_cmd_buffer, uint32_t p_binding_count, const BufferID *p_buffers, const uint64_t *p_offsets) override final;
