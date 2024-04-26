@@ -206,6 +206,66 @@ Vector4i Vector4i::operator*(const Vector4i &p_v) const {
 	return Vector4i(x * p_v.x, y * p_v.y, z * p_v.z, w * p_v.w);
 }
 
+Vector4i &Vector4i::operator>>=(const Vector4i &p_v) {
+	x >>= p_v.x;
+	y >>= p_v.y;
+	z >>= p_v.z;
+	w >>= p_v.w;
+	return *this;
+}
+
+Vector4i Vector4i::operator>>(const Vector4i &p_v) const {
+	return Vector4i(x >> p_v.x, y >> p_v.y, z >> p_v.z);
+}
+
+Vector4i &Vector4i::operator<<=(const Vector4i &p_v) {
+	x <<= p_v.x;
+	y <<= p_v.y;
+	z <<= p_v.z;
+	w <<= p_v.w;
+	return *this;
+}
+
+Vector4i Vector4i::operator<<(const Vector4i &p_v) const {
+	return Vector4i(x << p_v.x, y << p_v.y, z << p_v.z, w << p_v.w);
+}
+
+Vector4i &Vector4i::operator&=(const Vector4i &p_v) {
+	x &= p_v.x;
+	y &= p_v.y;
+	z &= p_v.z;
+	w &= p_v.w;
+	return *this;
+}
+
+Vector4i Vector4i::operator&(const Vector4i &p_v) const {
+	return Vector4i(x & p_v.x, y & p_v.y, z & p_v.z, w & p_v.w);
+}
+
+Vector4i &Vector4i::operator|=(const Vector4i &p_v) {
+	x |= p_v.x;
+	y |= p_v.y;
+	z |= p_v.z;
+	w |= p_v.w;
+	return *this;
+}
+
+Vector4i Vector4i::operator|(const Vector4i &p_v) const {
+	return Vector4i(x | p_v.x, y | p_v.y, z | p_v.z);
+}
+
+Vector4i &Vector4i::operator^=(const Vector4i &p_v) {
+	x ^= p_v.x;
+	y ^= p_v.y;
+	z ^= p_v.z;
+	w ^= p_v.w;
+	return *this;
+}
+
+Vector4i Vector4i::operator^(const Vector4i &p_v) const {
+	return Vector4i(x ^ p_v.x, y ^ p_v.y, z ^ p_v.z, w ^ p_v.w);
+}
+
 Vector4i &Vector4i::operator/=(const Vector4i &p_v) {
 	x /= p_v.x;
 	y /= p_v.y;

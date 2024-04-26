@@ -133,10 +133,10 @@ struct [[nodiscard]] Vector2i {
 	Vector2i operator<<(const Vector2i &p_v) const;
 	Vector2i &operator<<=(const Vector2i &p_v);
 
-	Vector2i &operator>>=(const int32_t p_scalar);
-	Vector2i operator>>(const int32_t p_scalar) const;
-	Vector2i &operator<<=(const int32_t p_scalar);
-	Vector2i operator<<(const int32_t p_scalar) const;
+	Vector2i &operator>>=(int32_t p_scalar);
+	Vector2i operator>>(int32_t p_scalar) const;
+	Vector2i &operator<<=(int32_t p_scalar);
+	Vector2i operator<<(int32_t p_scalar) const;
 
 	Vector2i operator|(const Vector2i &p_v) const;
 	Vector2i &operator|=(const Vector2i &p_v);
