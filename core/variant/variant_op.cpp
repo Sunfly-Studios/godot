@@ -530,6 +530,10 @@ void Variant::_register_variant_operators() {
 	register_op<OperatorEvaluatorBitAnd<Vector3i, Vector3i, Vector3i>>(Variant::OP_BIT_AND, Variant::VECTOR3I, Variant::VECTOR3I);
 	register_op<OperatorEvaluatorBitXor<Vector3i, Vector3i, Vector3i>>(Variant::OP_BIT_XOR, Variant::VECTOR3I, Variant::VECTOR3I);
 
+	register_op<OperatorEvaluatorBitOr<Vector4i, Vector4i, Vector4i>>(Variant::OP_BIT_OR, Variant::VECTOR4I, Variant::VECTOR4I);
+	register_op<OperatorEvaluatorBitAnd<Vector4i, Vector4i, Vector4i>>(Variant::OP_BIT_AND, Variant::VECTOR4I, Variant::VECTOR4I);
+	register_op<OperatorEvaluatorBitXor<Vector4i, Vector4i, Vector4i>>(Variant::OP_BIT_XOR, Variant::VECTOR4I, Variant::VECTOR4I);
+
 	register_op<OperatorEvaluatorShiftLeft<int64_t, int64_t, int64_t>>(Variant::OP_SHIFT_LEFT, Variant::INT, Variant::INT);
 	register_op<OperatorEvaluatorShiftRight<int64_t, int64_t, int64_t>>(Variant::OP_SHIFT_RIGHT, Variant::INT, Variant::INT);
 	register_op<OperatorEvaluatorBitOr<int64_t, int64_t, int64_t>>(Variant::OP_BIT_OR, Variant::INT, Variant::INT);
