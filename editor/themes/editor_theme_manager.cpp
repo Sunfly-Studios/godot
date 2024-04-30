@@ -1884,6 +1884,16 @@ void EditorThemeManager::_populate_editor_styles(const Ref<EditorTheme> &p_theme
 		p_theme->set_color("movie_writer_icon_pressed", EditorStringName(EditorStyles), Color(0, 0, 0, 0.84));
 		p_theme->set_color("movie_writer_icon_hover", EditorStringName(EditorStyles), Color(1, 1, 1, 0.9));
 		p_theme->set_color("movie_writer_icon_hover_pressed", EditorStringName(EditorStyles), Color(0, 0, 0, 0.84));
+        
+		Ref<StyleBoxFlat> style_safe_mode_button = p_config.button_style_pressed->duplicate();
+		style_safe_mode_button->set_bg_color(p_config.warning_color);
+		style_safe_mode_button->set_corner_radius_all(p_config.corner_radius * EDSCALE);
+		style_safe_mode_button->set_content_margin_all(0);
+		// Safe mode button is implicitly styled from the panel's background.
+		// So, remove any existing borders. (e.g. from draw_extra_borders config)
+		style_safe_mode_button->set_border_width_all(0);
+		style_safe_mode_button->set_expand_margin(SIDE_RIGHT, 2 * EDSCALE);
+		p_theme->set_stylebox("SafeModeButton", EditorStringName(EditorStyles), style_safe_mode_button);
 	}
 
 	// Standard GUI variations.
