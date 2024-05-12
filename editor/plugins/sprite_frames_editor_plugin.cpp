@@ -284,7 +284,7 @@ void SpriteFramesEditor::_sheet_add_frames() {
 	const Size2i separation = _get_separation();
 
 	EditorUndoRedoManager *undo_redo = EditorUndoRedoManager::get_singleton();
-	undo_redo->create_action(TTR("Add Frame"), UndoRedo::MERGE_DISABLE, frames.ptr());
+	undo_redo->create_action(TTR("Add Frame"), UndoRedo::MERGE_DISABLE, animated_sprite);
 	int fc = frames->get_frame_count(edited_anim);
 
 	_sheet_sort_frames();
