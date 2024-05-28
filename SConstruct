@@ -213,6 +213,9 @@ opts.Add(EnumVariable("lto", "Link-time optimization (production builds)", "none
 opts.Add(BoolVariable("production", "Set defaults to build Godot for use in production", False))
 opts.Add(BoolVariable("threads", "Enable threading support", True))
 
+opts.Add(BoolVariable("old_input_header", "Use the <linux/input.h> instead of <linux/input-event-codes.h> header (useful in older linux kernels)", False))
+opts.Add(BoolVariable("atomic_assert", "Enables `std::atomic<T>::is_always_lock_free` assertions.", True))
+
 # Components
 opts.Add(BoolVariable("deprecated", "Enable compatibility code for deprecated and removed features", True))
 opts.Add(EnumVariable("precision", "Set the floating-point precision level", "single", ("single", "double")))
@@ -606,6 +609,10 @@ if env["scu_build"]:
         max_includes_per_scu = read_scu_limit
 
     methods.set_scu_folders(scu_builders.generate_scu_files(max_includes_per_scu))
+
+if not env["atomic_assert"]:
+    print("WARNING: atomic assertions are disabled, your Godot games might run slower.");
+    env.Append(CPPDEFINES=["ATOMIC_ASSERT"])
 
 # Must happen after the flags' definition, as configure is when most flags
 # are actually handled to change compile options, etc.
