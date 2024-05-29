@@ -222,6 +222,12 @@
 				[/codeblock]
 			</description>
 		</operator>
+        <operator name="operator &amp;">
+			<return type="Vector4i" />
+			<param index="0" name="right" type="Vector4i" />
+			<description>
+			</description>
+		</operator>
 		<operator name="operator *">
 			<return type="Vector4i" />
 			<param index="0" name="right" type="Vector4i" />
@@ -230,6 +236,12 @@
 				[codeblock]
 				print(Vector4i(10, 20, 30, 40) * Vector4i(3, 4, 5, 6)) # Prints "(30, 80, 150, 240)"
 				[/codeblock]
+			</description>
+		</operator>
+        <operator name="operator ^">
+			<return type="Vector4i" />
+			<param index="0" name="right" type="Vector4i" />
+			<description>
 			</description>
 		</operator>
 		<operator name="operator *">
@@ -344,6 +356,12 @@
 			<return type="Vector4i" />
 			<description>
 				Returns the same value as if the [code]+[/code] was not there. Unary [code]+[/code] does nothing, but sometimes it can make your code more readable.
+			</description>
+		</operator>
+        <operator name="operator |">
+			<return type="Vector4i" />
+			<param index="0" name="right" type="Vector4i" />
+			<description>
 			</description>
 		</operator>
 		<operator name="operator unary-">
