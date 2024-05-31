@@ -44,6 +44,7 @@
 class AnimationTrackEditor;
 class AnimationTrackEdit;
 class CheckBox;
+class ColorPickerButton;
 class EditorSpinSlider;
 class HSlider;
 class OptionButton;
@@ -52,6 +53,7 @@ class SceneTreeDialog;
 class SpinBox;
 class TextureRect;
 class ViewPanner;
+class EditorValidationPanel;
 
 class AnimationTrackKeyEdit : public Object {
 	GDCLASS(AnimationTrackKeyEdit, Object);
@@ -216,6 +218,130 @@ public:
 	virtual CursorShape get_cursor_shape(const Point2 &p_pos) const override;
 
 	AnimationTimelineEdit();
+};
+
+class AnimationMarkerEdit : public Control {
+	GDCLASS(AnimationMarkerEdit, Control);
+	friend class AnimationTimelineEdit;
+
+	enum {
+		MENU_KEY_INSERT,
+		MENU_KEY_EDIT,
+		MENU_KEY_DELETE,
+		MENU_KEY_TOGGLE_MARKER_NAMES,
+	};
+
+	AnimationTimelineEdit *timeline = nullptr;
+	Control *play_position = nullptr; //separate control used to draw so updates for only position changed are much faster
+	float play_position_pos = 0.0f;
+
+	HashSet<StringName> selection;
+
+	Ref<Animation> animation;
+	bool read_only = false;
+
+	Ref<Texture2D> type_icon;
+	Ref<Texture2D> selected_icon;
+
+	PopupMenu *menu = nullptr;
+
+	bool hovered = false;
+	StringName hovering_marker;
+
+	void _zoom_changed();
+
+	Ref<Texture2D> icon_cache;
+
+	void _menu_selected(int p_index);
+
+	void _play_position_draw();
+	bool _try_select_at_ui_pos(const Point2 &p_pos, bool p_aggregate, bool p_deselectable);
+
+	float insert_at_pos = 0.0f;
+	bool moving_selection_attempt = false;
+	bool moving_selection_effective = false;
+	float moving_selection_offset = 0.0f;
+	float moving_selection_pivot = 0.0f;
+	float moving_selection_mouse_begin_x = 0.0f;
+	float moving_selection_mouse_begin_y = 0.0f;
+	StringName select_single_attempt;
+	bool moving_selection = false;
+	void _move_selection_begin();
+	void _move_selection(float p_offset);
+	void _move_selection_commit();
+	void _move_selection_cancel();
+
+	void _clear_selection_for_anim(const Ref<Animation> &p_anim);
+	void _select_at_anim(const Ref<Animation> &p_anim, const StringName &p_name);
+	void _select_key(const StringName &p_name, bool is_single = false);
+	void _deselect_key(const StringName &p_name);
+
+	void _stop_animation_player_section_preview();
+
+	void _start_insert_marker(float p_ofs);
+	void _delete_selected_markers();
+	void _start_edit_marker(const StringName &p_name);
+
+	ConfirmationDialog *marker_insert_confirm = nullptr;
+	LineEdit *marker_insert_new_name = nullptr;
+	ColorPickerButton *marker_insert_color = nullptr;
+	AcceptDialog *marker_insert_error_dialog = nullptr;
+	float marker_insert_ofs = 0;
+
+	ConfirmationDialog *marker_edit_confirm = nullptr;
+	LineEdit *marker_edit_new_name = nullptr;
+	ColorPickerButton *marker_edit_color = nullptr;
+	AcceptDialog *marker_edit_error_dialog = nullptr;
+	StringName marker_edit_name;
+
+	bool should_show_all_marker_names = false;
+
+	////////////// edit menu stuff
+
+	void _confirm_insert_marker();
+	void _marker_insert_new_name_changed(String p_text);
+
+	void _confirm_edit_marker();
+	void _marker_edit_new_name_changed(String p_text);
+
+	AnimationTrackEditor *editor = nullptr;
+
+	HBoxContainer *_create_hbox_labeled_control(String p_text, Control *p_control) const;
+
+protected:
+	static void _bind_methods();
+	void _notification(int p_what);
+
+	virtual void gui_input(const Ref<InputEvent> &p_event) override;
+
+public:
+	virtual String get_tooltip(const Point2 &p_pos) const override;
+
+	virtual int get_key_height() const;
+	virtual Rect2 get_key_rect(float p_pixels_sec) const;
+	virtual bool is_key_selectable_by_distance() const;
+	virtual void draw_key(const StringName &p_name, float p_pixels_sec, int p_x, bool p_selected, int p_clip_left, int p_clip_right);
+	virtual void draw_bg(int p_clip_left, int p_clip_right);
+	virtual void draw_fg(int p_clip_left, int p_clip_right);
+
+	Ref<Animation> get_animation() const;
+	AnimationTimelineEdit *get_timeline() const { return timeline; }
+	AnimationTrackEditor *get_editor() const { return editor; }
+	void set_animation(const Ref<Animation> &p_animation, bool p_read_only);
+	virtual Size2 get_minimum_size() const override;
+
+	void set_timeline(AnimationTimelineEdit *p_timeline);
+	void set_editor(AnimationTrackEditor *p_editor);
+
+	void set_play_position(float p_pos);
+	void update_play_position();
+
+	void append_to_selection(const Rect2 &p_box, bool p_deselection);
+
+	Array get_selected_section() const;
+
+	AnimationMarkerEdit();
+	~AnimationMarkerEdit();
 };
 
 class AnimationTrackEdit : public Control {
@@ -404,6 +530,7 @@ class AnimationTrackEditor : public VBoxContainer {
 	Label *info_message = nullptr;
 
 	AnimationTimelineEdit *timeline = nullptr;
+	AnimationMarkerEdit *marker_edit = nullptr;
 	HSlider *zoom = nullptr;
 	EditorSpinSlider *step = nullptr;
 	TextureRect *zoom_icon = nullptr;
@@ -732,6 +859,7 @@ public:
 	float get_moving_selection_offset() const;
 	float snap_time(float p_value, bool p_relative = false);
 	bool is_grouping_tracks();
+	Array get_selected_section() const;
 
 	/** If `p_from_mouse_event` is `true`, handle Shift key presses for precise snapping. */
 	void goto_prev_step(bool p_from_mouse_event);
