@@ -641,7 +641,9 @@ def configure_mingw(env: "SConsEnvironment"):
 
     # TODO: Re-evaluate the need for this / streamline with common config.
     if env["target"] == "template_release":
-        env.Append(CCFLAGS=["-msse2"])
+        # Only x86 architectures support the -msse2 directive.
+        if env["arch"] == "x86_64" or env["arch"] == "x86_32":
+            env.Append(CCFLAGS=["-msse2"])
     elif env.dev_build:
         # Allow big objects. It's supposed not to have drawbacks but seems to break
         # GCC LTO, so enabling for debug builds only (which are not built with LTO
