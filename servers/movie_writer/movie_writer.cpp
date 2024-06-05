@@ -175,11 +175,33 @@ void MovieWriter::add_frame() {
 			String::num(movie_time_seconds / 3600).pad_zeros(2),
 			String::num((movie_time_seconds % 3600) / 60).pad_zeros(2),
 			String::num(movie_time_seconds % 60).pad_zeros(2));
+            
+	const int real_time_seconds = Time::get_singleton()->get_ticks_msec() / 1000;
+	const String real_time = vformat("%s:%s:%s",
+			String::num(real_time_seconds / 3600).pad_zeros(2),
+			String::num((real_time_seconds % 3600) / 60).pad_zeros(2),
+			String::num(real_time_seconds % 60).pad_zeros(2));
 
 #ifdef DEBUG_ENABLED
-	DisplayServer::get_singleton()->window_set_title(vformat("MovieWriter: Frame %d (time: %s) - %s (DEBUG)", Engine::get_singleton()->get_frames_drawn(), movie_time, project_name));
+	DisplayServer::get_singleton()->window_set_title(
+        vformat(
+            "MovieWriter: Frame %d (time: %s) - %s | real time: %s (DEBUG)",
+            Engine::get_singleton()->get_frames_drawn(),
+            movie_time,
+            project_name,
+            real_time
+        )
+    );
 #else
-	DisplayServer::get_singleton()->window_set_title(vformat("MovieWriter: Frame %d (time: %s) - %s", Engine::get_singleton()->get_frames_drawn(), movie_time, project_name));
+	DisplayServer::get_singleton()->window_set_title(
+        vformat(
+            "MovieWriter: Frame %d (time: %s) - %s | real time: %s",
+            Engine::get_singleton()->get_frames_drawn(),
+            movie_time,
+            project_name,
+            real_time
+        )
+    );
 #endif
 
 	RID main_vp_rid = RenderingServer::get_singleton()->viewport_find_from_screen_attachment(DisplayServer::MAIN_WINDOW_ID);
