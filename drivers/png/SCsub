@@ -54,7 +54,7 @@ if env["builtin_libpng"]:
         env_thirdparty.Append(CPPDEFINES=["PNG_INTEL_SSE"])
         env_thirdparty.add_source_files(thirdparty_obj, thirdparty_dir + "/intel/intel_init.c")
         env_thirdparty.add_source_files(thirdparty_obj, thirdparty_dir + "/intel/filter_sse2_intrinsics.c")
-    elif env["arch"] == "ppc64":
+    elif env["arch"].startswith("ppc"):
         env_thirdparty.add_source_files(thirdparty_obj, thirdparty_dir + "/powerpc/powerpc_init.c")
         env_thirdparty.add_source_files(thirdparty_obj, thirdparty_dir + "/powerpc/filter_vsx_intrinsics.c")
 
