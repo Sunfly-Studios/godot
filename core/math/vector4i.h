@@ -114,6 +114,23 @@ struct [[nodiscard]] Vector4i {
 	_FORCE_INLINE_ Vector4i operator/(const Vector4i &p_v) const;
 	_FORCE_INLINE_ Vector4i &operator%=(const Vector4i &p_v);
 	_FORCE_INLINE_ Vector4i operator%(const Vector4i &p_v) const;
+	
+	_FORCE_INLINE_ Vector4i operator>>(const Vector4i &p_v) const;
+	_FORCE_INLINE_ Vector4i &operator>>=(const Vector4i &p_v);
+	_FORCE_INLINE_ Vector4i operator<<(const Vector4i &p_v) const;
+	_FORCE_INLINE_ Vector4i &operator<<=(const Vector4i &p_v);
+
+	_FORCE_INLINE_ Vector4i &operator>>=(int32_t p_scalar);
+	_FORCE_INLINE_ Vector4i operator>>(int32_t p_scalar) const;
+	_FORCE_INLINE_ Vector4i &operator<<=(int32_t p_scalar);
+	_FORCE_INLINE_ Vector4i operator<<(int32_t p_scalar) const;
+
+	_FORCE_INLINE_ Vector4i operator|(const Vector4i &p_v) const;
+	_FORCE_INLINE_ Vector4i &operator|=(const Vector4i &p_v);
+	_FORCE_INLINE_ Vector4i operator&(const Vector4i &p_v) const;
+	_FORCE_INLINE_ Vector4i &operator&=(const Vector4i &p_v);
+	_FORCE_INLINE_ Vector4i operator^(const Vector4i &p_v) const;
+	_FORCE_INLINE_ Vector4i &operator^=(const Vector4i &p_v);
 
 	_FORCE_INLINE_ Vector4i &operator*=(int32_t p_scalar);
 	_FORCE_INLINE_ Vector4i operator*(int32_t p_scalar) const;
