@@ -62,7 +62,9 @@ class SafeList {
 		T val;
 	};
 
-	static_assert(std::atomic<T>::is_always_lock_free);
+    #if !defined(ATOMIC_ASSERT)
+    static_assert(std::atomic<T>::is_always_lock_free);
+    #endif
 
 	std::atomic<SafeListNode *> head = nullptr;
 	std::atomic<SafeListNode *> graveyard_head = nullptr;

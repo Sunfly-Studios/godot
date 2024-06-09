@@ -13,6 +13,7 @@ architecture_aliases = {
     "x86": "x86_32",
     "x64": "x86_64",
     "amd64": "x86_64",
+    "armhf": "arm32",
     "armv7": "arm32",
     "armv8": "arm64",
     "arm64v8": "arm64",
