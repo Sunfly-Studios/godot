@@ -45,7 +45,7 @@
 #define XR_ARCH_ABI "i686"
 #elif (defined(__aarch64__) && defined(__LP64__)) || defined(_M_ARM64)
 #define XR_ARCH_ABI "aarch64"
-#elif (defined(__ARM_ARCH) && __ARM_ARCH >= 7 && (defined(__ARM_PCS_VFP) || defined(__ANDROID__))) || defined(_M_ARM)
+#elif (defined(__ARM_ARCH) && __ARM_ARCH >= 7 && (defined(__ARM_PCS_VFP) || defined(__ANDROID__))) || defined(_M_ARM) || defined(__arm__)
 #define XR_ARCH_ABI "armv7a-vfp"
 #elif defined(__ARM_ARCH_5TE__) || (defined(__ARM_ARCH) && __ARM_ARCH > 5)
 #define XR_ARCH_ABI "armv5te"
@@ -57,6 +57,10 @@
 #define XR_ARCH_ABI "ppc64"
 #elif defined(__powerpc__) && __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
 #define XR_ARCH_ABI "ppc64el"
+#elif defined(__powerpc__) || defined(__ppc__) || defined(__PPC__)
+#define XR_ARCH_ABI "ppc32"
+#elif (defined(__powerpc__) || defined(__ppc__) || defined(__PPC__)) && __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
+#define XR_ARCH_ABI "ppc32el"
 #elif defined(__s390x__) || defined(__zarch__)
 #define XR_ARCH_ABI "s390x"
 #elif defined(__hppa__)
