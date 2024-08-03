@@ -376,6 +376,21 @@ vec3 tonemap_hable(vec3 colour) {
 	return colour;
 }
 
+vec3 tonemap_cineon(vec3 colour) {
+	const float CINEON_BLACK = 0.092864125; // 95.0 / 1023.0
+	const float CINEON_WHITE = 0.669599218; // 685.0 / 1023.0
+	const float CINEON_GAMMA = 0.6;
+
+	// Convert to cineon log space.
+	vec3 log_colour = (log10(max(colour, vec3(1e-6))) + 2.048) / 2.048 * 1023.0
+
+	vec3 cineon_colour = (log_colour - CINEON_BLACK) / (CINEON_WHITE - CINEON_BLACK);
+	cineon_colour = pow(max(cineon_colour, vec3(0.0)), vec3(1.0 / CINEON_GAMMA));
+
+	// Convert back to linear space.
+	return pow(10.0, (cineon_colour * 2.048 - 2.048) * 2.048);
+}
+
 vec3 linear_to_srgb(vec3 color) {
 	//if going to srgb, clamp from 0 to 1.
 	color = clamp(color, vec3(0.0), vec3(1.0));
@@ -391,6 +406,7 @@ vec3 linear_to_srgb(vec3 color) {
 #define TONEMAPPER_AGX_PUNCHY 5
 #define TONEMAPPER_PBR_NEUTRAL 6
 #define TONEMAPPER_HABLE 7
+#define TONEMAPPER_CINEON 8
 
 vec3 apply_tonemapping(vec3 color, float white) { // inputs are LINEAR
 	// Ensure color values passed to tonemappers are positive.
@@ -409,8 +425,10 @@ vec3 apply_tonemapping(vec3 color, float white) { // inputs are LINEAR
 		return tonemap_agx(max(vec3(0.0f), color), white, true);
 	} else if (params.tonemapper == TONEMAPPER_PBR_NEUTRAL) {
 		return tonemap_pbr_neutral(max(vec3(0.0f), color));
-	} else { // TONEMAPPER_HABLE
+	} else if (params.tonemapper == TONEMAPPER_HABLE) {
 		return tonemap_hable(max(vec3(0.0f), color));
+	} else { // TONEMAPPER_CINEON
+		return tonemap_cineon(max(vec3(0.0f), color));
 	}
 }
 

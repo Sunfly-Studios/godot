@@ -440,6 +440,9 @@
 		<constant name="TONE_MAPPER_HABLE" value="7" enum="ToneMapper">
 			Use the Uncharted 2 tonemapper (also known as Hable tonemapper). Developed by John Hable for Uncharted 2, this operator provides great contrast and color preservation. It's particularly good at handling bright specular highlights while maintaining rich mid-tones. This tonemapper offers a good balance between realism and visual appeal, often producing more vibrant results than [constant TONE_MAPPER_REINHARD] while avoiding the potential over-saturation of [constant TONE_MAPPER_FILMIC].
 		</constant>
+		<constant name="TONE_MAPPER_CINEON" value="8" enum="ToneMapper">
+			Use the Cineon film response curve tonemapper. This method simulates the response of traditional film, providing a cinematic look with rich shadows and controlled highlights. It's particularly effective for preserving details in high-contrast scenes and achieving a classic film aesthetic. Cineon can produce more natural-looking results in some scenarios compared to [constant TONE_MAPPER_FILMIC], especially for scenes with a wide dynamic range.
+		</constant>
 		<constant name="GLOW_BLEND_MODE_ADDITIVE" value="0" enum="GlowBlendMode">
 			Additive glow blending mode. Mostly used for particles, glows (bloom), lens flare, bright sources.
 		</constant>
