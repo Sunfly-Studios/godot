@@ -357,6 +357,25 @@ vec3 tonemap_pbr_neutral(vec3 color) {
 	return mix(color, vec3(1.0, 1.0, 1.0), g);
 }
 
+// "Hable Tone Mapping" a.k.a Uncharted 2 tonemapping.
+// source: https://64.github.io/tonemapping/#uncharted-2
+vec3 tonemap_hable(vec3 colour) {
+	const float A = 0.15;
+	const float B = 0.50;
+	const float C = 0.10;
+	const float D = 0.20;
+	const float E = 0.02;
+	const float F = 0.30;
+	const float white_point = 11.2;
+
+	// Assume input is linear space.
+	colour = pow(colour, vec3(1.0 / 2.2));
+	colour = (colour * (A * colour + C * B) + D * E) / (colour * (A * colour + B) + D * F) - E / F;
+	colour *= white_point;
+
+	return colour;
+}
+
 vec3 linear_to_srgb(vec3 color) {
 	//if going to srgb, clamp from 0 to 1.
 	color = clamp(color, vec3(0.0), vec3(1.0));
@@ -371,6 +390,7 @@ vec3 linear_to_srgb(vec3 color) {
 #define TONEMAPPER_AGX 4
 #define TONEMAPPER_AGX_PUNCHY 5
 #define TONEMAPPER_PBR_NEUTRAL 6
+#define TONEMAPPER_HABLE 7
 
 vec3 apply_tonemapping(vec3 color, float white) { // inputs are LINEAR
 	// Ensure color values passed to tonemappers are positive.
@@ -387,8 +407,10 @@ vec3 apply_tonemapping(vec3 color, float white) { // inputs are LINEAR
 		return tonemap_agx(max(vec3(0.0f), color), white, false);
 	} else if (params.tonemapper == TONEMAPPER_AGX_PUNCHY) {
 		return tonemap_agx(max(vec3(0.0f), color), white, true);
-	} else { // TONEMAPPER_PBR_NEUTRAL
+	} else if (params.tonemapper == TONEMAPPER_PBR_NEUTRAL) {
 		return tonemap_pbr_neutral(max(vec3(0.0f), color));
+	} else { // TONEMAPPER_HABLE
+		return tonemap_hable(max(vec3(0.0f), color));
 	}
 }
 

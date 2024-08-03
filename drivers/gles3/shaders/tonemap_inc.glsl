@@ -84,6 +84,47 @@ vec3 tonemap_reinhard(vec3 color, float p_white) {
 	return (white_squared_color + color * color) / (white_squared_color + white_squared);
 }
 
+// Adapted from https://modelviewer.dev/examples/tone-mapping#commerce
+vec3 tonemap_pbr_neutral(vec3 color) {
+	const float start_compression = 0.8 - 0.04;
+	const float desaturation = 0.15;
+
+	float x = min(color.r, min(color.g, color.b));
+	float offset = x < 0.08 ? x - 6.25 * x * x : 0.04;
+	color -= offset;
+
+	float peak = max(color.r, max(color.g, color.b));
+	if (peak < start_compression) {
+		return color;
+	}
+
+	float d = 1.0 - start_compression;
+	float new_peak = 1.0 - d * d / (peak + d - start_compression);
+	color *= new_peak / peak;
+
+	float g = 1.0 - 1.0 / (desaturation * (peak - new_peak) + 1.0);
+	return mix(color, vec3(1.0, 1.0, 1.0), g);
+}
+
+// "Hable Tone Mapping" a.k.a Uncharted 2 tonemapping.
+// source: https://64.github.io/tonemapping/#uncharted-2
+vec3 tonemap_hable(vec3 colour) {
+	const float A = 0.15;
+	const float B = 0.50;
+	const float C = 0.10;
+	const float D = 0.20;
+	const float E = 0.02;
+	const float F = 0.30;
+	const float white_point = 11.2;
+
+	// Assume input is linear space.
+	colour = pow(colour, vec3(1.0 / 2.2));
+	colour = (colour * (A * colour + C * B) + D * E) / (colour * (A * colour + B) + D * F) - E / F;
+	colour *= white_point;
+
+	return colour;
+}
+
 // Mean error^2: 3.6705141e-06
 vec3 agx_default_contrast_approx(vec3 x) {
 	vec3 x2 = x * x;
@@ -155,29 +196,6 @@ vec3 tonemap_agx(vec3 color, float white, bool punchy) {
 	return color;
 }
 
-
-// Adapted from https://modelviewer.dev/examples/tone-mapping#commerce
-vec3 tonemap_pbr_neutral(vec3 color) {
-	const float start_compression = 0.8 - 0.04;
-	const float desaturation = 0.15;
-
-	float x = min(color.r, min(color.g, color.b));
-	float offset = x < 0.08 ? x - 6.25 * x * x : 0.04;
-	color -= offset;
-
-	float peak = max(color.r, max(color.g, color.b));
-	if (peak < start_compression) {
-		return color;
-	}
-
-	float d = 1.0 - start_compression;
-	float new_peak = 1.0 - d * d / (peak + d - start_compression);
-	color *= new_peak / peak;
-
-	float g = 1.0 - 1.0 / (desaturation * (peak - new_peak) + 1.0);
-	return mix(color, vec3(1.0, 1.0, 1.0), g);
-}
-
 #define TONEMAPPER_LINEAR 0
 #define TONEMAPPER_REINHARD 1
 #define TONEMAPPER_FILMIC 2
@@ -185,6 +203,7 @@ vec3 tonemap_pbr_neutral(vec3 color) {
 #define TONEMAPPER_AGX 4
 #define TONEMAPPER_AGX_PUNCHY 5
 #define TONEMAPPER_PBR_NEUTRAL 6
+#define TONEMAPPER_HABLE 7
 
 vec3 apply_tonemapping(vec3 color, float p_white) { // inputs are LINEAR
 	// Ensure color values passed to tonemappers are positive.
@@ -201,8 +220,10 @@ vec3 apply_tonemapping(vec3 color, float p_white) { // inputs are LINEAR
 		return tonemap_agx(max(vec3(0.0f), color), p_white, false);
 	} else if (tonemapper == TONEMAPPER_AGX_PUNCHY) {
 		return tonemap_agx(max(vec3(0.0f), color), p_white, true);
-	} else { // TONEMAPPER_PBR_NEUTRAL
+	} else if (tonemapper == TONEMAPPER_PBR_NEUTRAL) {
 		return tonemap_pbr_neutral(max(vec3(0.0f), color));
+	} else { // TONEMAPPER_HABLE
+		return tonemap_hable(max(vec3(0.0f), color));
 	}
 }
 
