@@ -374,28 +374,43 @@ vec3 tonemap_hable(vec3 color, float white) {
 	vec3 curr = hable_tonemap_partial(color * EXPOSURE_BIAS);
 
 	vec3 W = vec3(11.2f);
-	vec3 white_scale = vec3(white) / hable_tonemap_partial(W);
+	float white_padding = white;
+	if (white >= 1.0) {
+		white_padding = white + 1.0;
+	}
+	vec3 white_scale = vec3(white_padding) / hable_tonemap_partial(W);
 	return curr * white_scale;
 }
 
+// Optimised cineon tonemapping.
+// Adapted from Three.js (MIT)
 vec3 tonemap_cineon(vec3 color, float white) {
-	const float A = 0.22;
-	const float B = 0.30;
-	const float C = 0.10;
-	const float D = 0.20;
-	const float E = 0.01;
-	const float F = 0.30;
-
 	color *= white;
+	color = max(vec3(0.0), color - 0.004);
+	return pow(
+		(color * (6.2 * color + 0.5)) /
+		(color * (6.2 * color + 1.7) + 0.06),
+		vec3(2.2)
+	);
+}
 
-	// Cineon formula
-	vec3 x = max(vec3(0.0), color - 0.004);
-	vec3 cineon_curve = (x * (6.2 * x + 0.5)) / (x * (6.2 * x + 1.7) + 0.06);
+float luminance_drago(float L, float b) {
+	const float LMax = 1.0;
+	float Ld = b / (log(LMax + 1.0) / log(10.0));
+	Ld *= log(L + 1.0) / log(2.0 + 8.0 * pow((L / LMax), log(b) / log(0.5)));
+	return Ld;
+}
 
-	// Apply white point adjustment
-	float white_scale = 1.0 / ((white * (6.2 * white + 0.5)) / (white * (6.2 * white + 1.7) + 0.06));
-	cineon_curve *= white_scale;
-	return clamp(cineon_curve, 0.0, 1.0);
+// Based on the paper: "Adaptive Logarithmic Mapping For Displaying High Contrast Scenes"
+// https://resources.mpi-inf.mpg.de/tmo/logmap/logmap.pdf
+vec3 tonemap_drago(vec3 color, float white) {
+	const float BIAS = 0.85;
+
+	float luminance = dot(color, vec3(0.2126, 0.7152, 0.0722));
+	float Ld = luminance_drago(luminance, BIAS);
+	color = color * (Ld / luminance);
+	color *= white;
+	return clamp(color, 0.0, 1.0);
 }
 
 vec3 linear_to_srgb(vec3 color) {
@@ -414,6 +429,7 @@ vec3 linear_to_srgb(vec3 color) {
 #define TONEMAPPER_PBR_NEUTRAL 6
 #define TONEMAPPER_HABLE 7
 #define TONEMAPPER_CINEON 8
+#define TONEMAPPER_DRAGO 9
 
 vec3 apply_tonemapping(vec3 color, float white) { // inputs are LINEAR
 	// Ensure color values passed to tonemappers are positive.
@@ -434,8 +450,10 @@ vec3 apply_tonemapping(vec3 color, float white) { // inputs are LINEAR
 		return tonemap_pbr_neutral(max(vec3(0.0f), color));
 	} else if (params.tonemapper == TONEMAPPER_HABLE) {
 		return tonemap_hable(max(vec3(0.0f), color), white);
-	} else { // TONEMAPPER_CINEON
+	} else if (params.tonemapper == TONEMAPPER_CINEON) {
 		return tonemap_cineon(max(vec3(0.0f), color), white);
+	} else { // TONEMAPPER_DRAGO
+		return tonemap_drago(max(vec3(0.0f), color), white);
 	}
 }
 
