@@ -5250,6 +5250,9 @@
 		<constant name="ENV_TONE_MAPPER_CINEON" value="8" enum="EnvironmentToneMapper">
 			Use the Cineon film response curve tonemapper. This method simulates the response of traditional film, providing a cinematic look with rich shadows and controlled highlights. It's effective for preserving details in high-contrast scenes and achieving a classic film aesthetic. Cineon can produce more natural-looking results in some scenarios compared to [constant ENV_TONE_MAPPER_FILMIC], especially for scenes with a wide dynamic range.
 		</constant>
+		<constant name="ENV_TONE_MAPPER_DRAGO" value="9" enum="EnvironmentToneMapper">
+			Use Drago's adaptive logarithmic mapping tonemapper (2003). This method compresses high dynamic range images while preserving details across the luminance range. It adaptively adjusts the logarithmic basis to enhance local contrast. Drago's operator is well-suited for scenes with extreme brightness variations, often producing natural-looking results without requiring manual parameter adjustments.
+		</constant>
 		<constant name="ENV_SSR_ROUGHNESS_QUALITY_DISABLED" value="0" enum="EnvironmentSSRRoughnessQuality">
 			Lowest quality of roughness filter for screen-space reflections. Rough materials will not have blurrier screen-space reflections compared to smooth (non-rough) materials. This is the fastest option.
 		</constant>
