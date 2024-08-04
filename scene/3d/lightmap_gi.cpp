@@ -1163,7 +1163,24 @@ LightmapGI::BakeError LightmapGI::bake(Node *p_from_node, String p_image_data_pa
 		}
 	}
 
-	Lightmapper::BakeError bake_err = lightmapper->bake(Lightmapper::BakeQuality(bake_quality), use_denoiser, denoiser_strength, denoiser_range, bounces, bounce_indirect_energy, bias, max_texture_size, directional, use_texture_for_bounces, Lightmapper::GenerateProbes(gen_probes), environment_image, environment_transform, _lightmap_bake_step_function, &bsud, exposure_normalization);
+	Lightmapper::BakeError bake_err = lightmapper->bake(
+		Lightmapper::BakeQuality(effective_bake_quality),
+		use_denoiser,
+		denoiser_strength,
+		denoiser_range,
+		effective_bounces,
+		bounce_indirect_energy,
+		bias,
+		max_texture_size,
+		directional,
+		use_texture_for_bounces, 
+		Lightmapper::GenerateProbes(effective_gen_probes),
+		environment_image,
+		environment_transform,
+		_lightmap_bake_step_function,
+		&bsud,
+		exposure_normalization
+	);
 
 	if (bake_err == Lightmapper::BAKE_ERROR_TEXTURE_EXCEEDS_MAX_SIZE) {
 		return BAKE_ERROR_TEXTURE_SIZE_TOO_SMALL;
