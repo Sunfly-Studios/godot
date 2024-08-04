@@ -191,20 +191,22 @@ void MovieWriter::add_frame() {
 #ifdef DEBUG_ENABLED
 	DisplayServer::get_singleton()->window_set_title(
         vformat(
-            "MovieWriter: Frame %d (time: %s) - %s | real time: %s (DEBUG)",
+            "MovieWriter: Frame %d (time: %s) - %s (frames saved: %s) | real time: %s (DEBUG)",
             Engine::get_singleton()->get_frames_drawn(),
             movie_time,
             project_name,
+			frame_to_save,
             real_time
         )
     );
 #else
 	DisplayServer::get_singleton()->window_set_title(
         vformat(
-            "MovieWriter: Frame %d (time: %s) - %s | real time: %s",
+            "MovieWriter: Frame %d (time: %s) - %s (frames saved: %s) | real time: %s",
             Engine::get_singleton()->get_frames_drawn(),
             movie_time,
             project_name,
+			frame_to_save,
             real_time
         )
     );
