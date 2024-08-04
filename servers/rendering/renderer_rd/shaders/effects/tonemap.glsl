@@ -359,36 +359,43 @@ vec3 tonemap_pbr_neutral(vec3 color) {
 
 // "Hable Tone Mapping" a.k.a Uncharted 2 tonemapping.
 // source: https://64.github.io/tonemapping/#uncharted-2
-vec3 tonemap_hable(vec3 colour) {
-	const float A = 0.15;
-	const float B = 0.50;
-	const float C = 0.10;
-	const float D = 0.20;
-	const float E = 0.02;
-	const float F = 0.30;
-	const float white_point = 11.2;
-
-	// Assume input is linear space.
-	colour = pow(colour, vec3(1.0 / 2.2));
-	colour = (colour * (A * colour + C * B) + D * E) / (colour * (A * colour + B) + D * F) - E / F;
-	colour *= white_point;
-
-	return colour;
+vec3 hable_tonemap_partial(vec3 x) {
+	const float A = 0.15f;
+	const float B = 0.50f;
+	const float C = 0.10f;
+	const float D = 0.20f;
+	const float E = 0.02f;
+	const float F = 0.30f;
+	return ((x * (A * x + C * B) + D * E) / (x * (A * x + B) + D * F)) - E / F;
 }
 
-vec3 tonemap_cineon(vec3 colour) {
-	const float CINEON_BLACK = 0.092864125; // 95.0 / 1023.0
-	const float CINEON_WHITE = 0.669599218; // 685.0 / 1023.0
-	const float CINEON_GAMMA = 0.6;
+vec3 tonemap_hable(vec3 color, float white) {
+	const float EXPOSURE_BIAS = 2.0f;
+	vec3 curr = hable_tonemap_partial(color * EXPOSURE_BIAS);
 
-	// Convert to cineon log space.
-	vec3 log_colour = (log10(max(colour, vec3(1e-6))) + 2.048) / 2.048 * 1023.0
+	vec3 W = vec3(11.2f);
+	vec3 white_scale = vec3(white) / hable_tonemap_partial(W);
+	return curr * white_scale;
+}
 
-	vec3 cineon_colour = (log_colour - CINEON_BLACK) / (CINEON_WHITE - CINEON_BLACK);
-	cineon_colour = pow(max(cineon_colour, vec3(0.0)), vec3(1.0 / CINEON_GAMMA));
+vec3 tonemap_cineon(vec3 color, float white) {
+	const float A = 0.22;
+	const float B = 0.30;
+	const float C = 0.10;
+	const float D = 0.20;
+	const float E = 0.01;
+	const float F = 0.30;
 
-	// Convert back to linear space.
-	return pow(10.0, (cineon_colour * 2.048 - 2.048) * 2.048);
+	color *= white;
+
+	// Cineon formula
+	vec3 x = max(vec3(0.0), color - 0.004);
+	vec3 cineon_curve = (x * (6.2 * x + 0.5)) / (x * (6.2 * x + 1.7) + 0.06);
+
+	// Apply white point adjustment
+	float white_scale = 1.0 / ((white * (6.2 * white + 0.5)) / (white * (6.2 * white + 1.7) + 0.06));
+	cineon_curve *= white_scale;
+	return clamp(cineon_curve, 0.0, 1.0);
 }
 
 vec3 linear_to_srgb(vec3 color) {
@@ -426,9 +433,9 @@ vec3 apply_tonemapping(vec3 color, float white) { // inputs are LINEAR
 	} else if (params.tonemapper == TONEMAPPER_PBR_NEUTRAL) {
 		return tonemap_pbr_neutral(max(vec3(0.0f), color));
 	} else if (params.tonemapper == TONEMAPPER_HABLE) {
-		return tonemap_hable(max(vec3(0.0f), color));
+		return tonemap_hable(max(vec3(0.0f), color), white);
 	} else { // TONEMAPPER_CINEON
-		return tonemap_cineon(max(vec3(0.0f), color));
+		return tonemap_cineon(max(vec3(0.0f), color), white);
 	}
 }
 
