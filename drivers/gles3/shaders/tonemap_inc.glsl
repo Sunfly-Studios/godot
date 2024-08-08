@@ -80,6 +80,84 @@ vec3 tonemap_aces(vec3 color, float p_white) {
 	return color_tonemapped / p_white_tonemapped;
 }
 
+// Adapted from https://modelviewer.dev/examples/tone-mapping#commerce
+vec3 tonemap_pbr_neutral(vec3 color) {
+	const float start_compression = 0.8 - 0.04;
+	const float desaturation = 0.15;
+
+	float x = min(color.r, min(color.g, color.b));
+	float offset = x < 0.08 ? x - 6.25 * x * x : 0.04;
+	color -= offset;
+
+	float peak = max(color.r, max(color.g, color.b));
+	if (peak < start_compression) {
+		return color;
+	}
+
+	float d = 1.0 - start_compression;
+	float new_peak = 1.0 - d * d / (peak + d - start_compression);
+	color *= new_peak / peak;
+
+	float g = 1.0 - 1.0 / (desaturation * (peak - new_peak) + 1.0);
+	return mix(color, vec3(1.0, 1.0, 1.0), g);
+}
+
+// "Hable Tone Mapping" a.k.a Uncharted 2 tonemapping.
+// source: https://64.github.io/tonemapping/#uncharted-2
+vec3 hable_tonemap_partial(vec3 x) {
+	const float A = 0.15f;
+	const float B = 0.50f;
+	const float C = 0.10f;
+	const float D = 0.20f;
+	const float E = 0.02f;
+	const float F = 0.30f;
+	return ((x * (A * x + C * B) + D * E) / (x * (A * x + B) + D * F)) - E / F;
+}
+
+vec3 tonemap_hable(vec3 color, float white) {
+	const float EXPOSURE_BIAS = 2.0f;
+	vec3 curr = hable_tonemap_partial(color * EXPOSURE_BIAS);
+
+	vec3 W = vec3(11.2f);
+	float white_padding = white;
+	if (white >= 1.0) {
+		white_padding = white + 1.0;
+	}
+	vec3 white_scale = vec3(white_padding) / hable_tonemap_partial(W);
+	return curr * white_scale;
+}
+
+// Optimised cineon tonemapping.
+// Adapted from Three.js (MIT)
+vec3 tonemap_cineon(vec3 color, float white) {
+	color *= white;
+	color = max(vec3(0.0), color - 0.004);
+	return pow(
+		(color * (6.2 * color + 0.5)) /
+		(color * (6.2 * color + 1.7) + 0.06),
+		vec3(2.2)
+	);
+}
+
+float luminance_drago(float L, float b) {
+	const float LMax = 1.0;
+	float Ld = b / (log(LMax + 1.0) / log(10.0));
+	Ld *= log(L + 1.0) / log(2.0 + 8.0 * pow((L / LMax), log(b) / log(0.5)));
+	return Ld;
+}
+
+// Based on the paper: "Adaptive Logarithmic Mapping For Displaying High Contrast Scenes"
+// https://resources.mpi-inf.mpg.de/tmo/logmap/logmap.pdf
+vec3 tonemap_drago(vec3 color, float white) {
+	const float BIAS = 0.85;
+
+	float luminance = dot(color, vec3(0.2126, 0.7152, 0.0722));
+	float Ld = luminance_drago(luminance, BIAS);
+	color = color * (Ld / luminance);
+	color *= white;
+	return clamp(color, 0.0, 1.0);
+}
+
 // Mean error^2: 3.6705141e-06
 vec3 agx_default_contrast_approx(vec3 x) {
 	vec3 x2 = x * x;
@@ -157,6 +235,10 @@ vec3 tonemap_agx(vec3 color, float white, bool punchy) {
 #define TONEMAPPER_ACES 3
 #define TONEMAPPER_AGX 4
 #define TONEMAPPER_AGX_PUNCHY 5
+#define TONEMAPPER_PBR_NEUTRAL 6
+#define TONEMAPPER_HABLE 7
+#define TONEMAPPER_CINEON 8
+#define TONEMAPPER_DRAGO 9
 
 vec3 apply_tonemapping(vec3 color, float p_white) { // inputs are LINEAR, always outputs clamped [0;1] color
 	// Ensure color values passed to tonemappers are positive.
@@ -171,8 +253,16 @@ vec3 apply_tonemapping(vec3 color, float p_white) { // inputs are LINEAR, always
 		return tonemap_aces(max(vec3(0.0f), color), p_white);
 	} else if (tonemapper == TONEMAPPER_AGX) {
 		return tonemap_agx(max(vec3(0.0f), color), p_white, false);
-	} else { // TONEMAPPER_AGX_PUNCHY
+	} else if (tonemapper == TONEMAPPER_AGX_PUNCHY){
 		return tonemap_agx(max(vec3(0.0f), color), p_white, true);
+	} else if (tonemapper == TONEMAPPER_PBR_NEUTRAL) {
+		return tonemap_pbr_neutral(max(vec3(0.0f), color));
+	} else if (tonemapper == TONEMAPPER_HABLE) {
+		return tonemap_hable(max(vec3(0.0f), color), p_white);
+	} else if (tonemapper == TONEMAPPER_CINEON) {
+		return tonemap_cineon(max(vec3(0.0f), color), white);
+	} else { // TONEMAPPER_DRAGO
+		return tonemap_drago(max(vec3(0.0f), color), white);
 	}
 }
 

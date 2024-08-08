@@ -1169,6 +1169,10 @@ public:
 		ENV_TONE_MAPPER_ACES,
 		ENV_TONE_MAPPER_AGX,
 		ENV_TONE_MAPPER_AGX_PUNCHY,
+		ENV_TONE_MAPPER_PBR_NEUTRAL,
+		ENV_TONE_MAPPER_HABLE,
+		ENV_TONE_MAPPER_CINEON,
+		ENV_TONE_MAPPER_DRAGO,
 	};
 
 	virtual void environment_set_tonemap(RID p_env, EnvironmentToneMapper p_tone_mapper, float p_exposure, float p_white) = 0;

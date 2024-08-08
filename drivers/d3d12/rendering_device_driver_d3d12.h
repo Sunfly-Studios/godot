@@ -146,7 +146,7 @@ class RenderingDeviceDriverD3D12 : public RenderingDeviceDriver {
 	struct MeshShaderCapabilities {
 		static const uint32_t MAX_THREAD_GROUPS = 63999; // Quoting the DirectX Mesh Shader Spec: "Each of the three thread group counts must be less than 64k" so ok...
 		bool is_supported = false;
-	};
+    };
 
 	RenderingContextDriverD3D12 *context_driver = nullptr;
 	RenderingContextDriver::Device context_device;

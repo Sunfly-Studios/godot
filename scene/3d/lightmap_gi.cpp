@@ -1163,10 +1163,11 @@ LightmapGI::BakeError LightmapGI::bake(Node *p_from_node, String p_image_data_pa
 		}
 	}
 
-	Lightmapper::BakeError lightmapper->bake(
+	Lightmapper::BakeError bake_err = lightmapper->bake(
 			Lightmapper::BakeQuality(effective_bake_quality),
 			use_denoiser,
 			denoiser_strength,
+            denoiser_range,
 			effective_bounces,
 			bounce_indirect_energy,
 			bias,

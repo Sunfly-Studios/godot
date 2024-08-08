@@ -5168,6 +5168,18 @@
 		<constant name="ENV_TONE_MAPPER_AGX_PUNCHY" value="5" enum="EnvironmentToneMapper">
 			Use the AgX tonemapper with the "punchy" look. AgX is slightly more expensive than other options, but it handles bright lighting in a more realistic fashion by desaturating it as it becomes brighter. The punchy look increases contrast and saturation, bringing its visuals closer to [constant ENV_TONE_MAPPER_ACES].
 		</constant>
+		<constant name="ENV_TONE_MAPPER_PBR_NEUTRAL" value="6" enum="EnvironmentToneMapper">
+			Use the Khronos PBR Neutral tonemapper. PBR Neutral handles bright lighting in a more realistic fashion by desaturating it as it becomes brighter. PBR Neutral aims to look similar to [constant ENV_TONE_MAPPER_LINEAR] while reducing the clipping of bright highlights. Unlike [constant ENV_TONE_MAPPER_ACES], original colors are preserved as much as possible. The whitepoint value is ignored with this tonemapper, as PBR Neutral does not offer a whitepoint adjustment.
+		</constant>
+		<constant name="ENV_TONE_MAPPER_HABLE" value="7" enum="EnvironmentToneMapper">
+			Use the Uncharted 2 tonemapper (also known as Hable tonemapper). Developed by John Hable for Uncharted 2, this operator provides excellent contrast and color preservation. It's particularly good at handling bright specular highlights while maintaining rich mid-tones. This tonemapper offers a good balance between realism and visual appeal, often producing more vibrant results than [constant ENV_TONE_MAPPER_REINHARD] while avoiding the potential over-saturation of [constant ENV_TONE_MAPPER_FILMIC].
+		</constant>
+		<constant name="ENV_TONE_MAPPER_CINEON" value="8" enum="EnvironmentToneMapper">
+			Use the Cineon film response curve tonemapper. This method simulates the response of traditional film, providing a cinematic look with rich shadows and controlled highlights. It's effective for preserving details in high-contrast scenes and achieving a classic film aesthetic. Cineon can produce more natural-looking results in some scenarios compared to [constant ENV_TONE_MAPPER_FILMIC], especially for scenes with a wide dynamic range.
+		</constant>
+		<constant name="ENV_TONE_MAPPER_DRAGO" value="9" enum="EnvironmentToneMapper">
+			Use Drago's adaptive logarithmic mapping tonemapper (2003). This method compresses high dynamic range images while preserving details across the luminance range. It adaptively adjusts the logarithmic basis to enhance local contrast. Drago's operator is well-suited for scenes with extreme brightness variations, often producing natural-looking results without requiring manual parameter adjustments.
+		</constant>
 		<constant name="ENV_SSR_ROUGHNESS_QUALITY_DISABLED" value="0" enum="EnvironmentSSRRoughnessQuality">
 			Lowest quality of roughness filter for screen-space reflections. Rough materials will not have blurrier screen-space reflections compared to smooth (non-rough) materials. This is the fastest option.
 		</constant>

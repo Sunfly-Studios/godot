@@ -1322,7 +1322,7 @@ void Environment::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("get_tonemap_white"), &Environment::get_tonemap_white);
 
 	ADD_GROUP("Tonemap", "tonemap_");
-	ADD_PROPERTY(PropertyInfo(Variant::INT, "tonemap_mode", PROPERTY_HINT_ENUM, "Linear,Reinhard,Filmic,ACES,AgX,AgX Punchy"), "set_tonemapper", "get_tonemapper");
+	ADD_PROPERTY(PropertyInfo(Variant::INT, "tonemap_mode", PROPERTY_HINT_ENUM, "Linear,Reinhard,Filmic,ACES,AgX,AgX Punchy,PBR Neutral,Hable Filmic,Cineon,Drago"), "set_tonemapper", "get_tonemapper");
 	ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "tonemap_exposure", PROPERTY_HINT_RANGE, "0,16,0.01"), "set_tonemap_exposure", "get_tonemap_exposure");
 	ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "tonemap_white", PROPERTY_HINT_RANGE, "0,16,0.01"), "set_tonemap_white", "get_tonemap_white");
 
@@ -1642,11 +1642,15 @@ void Environment::_bind_methods() {
 	BIND_ENUM_CONSTANT(REFLECTION_SOURCE_SKY);
 
 	BIND_ENUM_CONSTANT(TONE_MAPPER_LINEAR);
-	BIND_ENUM_CONSTANT(TONE_MAPPER_REINHARDT);
+	BIND_ENUM_CONSTANT(TONE_MAPPER_REINHARD);
 	BIND_ENUM_CONSTANT(TONE_MAPPER_FILMIC);
 	BIND_ENUM_CONSTANT(TONE_MAPPER_ACES);
 	BIND_ENUM_CONSTANT(TONE_MAPPER_AGX);
 	BIND_ENUM_CONSTANT(TONE_MAPPER_AGX_PUNCHY);
+	BIND_ENUM_CONSTANT(TONE_MAPPER_PBR_NEUTRAL);
+	BIND_ENUM_CONSTANT(TONE_MAPPER_HABLE);
+	BIND_ENUM_CONSTANT(TONE_MAPPER_CINEON);
+	BIND_ENUM_CONSTANT(TONE_MAPPER_DRAGO);
 
 	BIND_ENUM_CONSTANT(GLOW_BLEND_MODE_ADDITIVE);
 	BIND_ENUM_CONSTANT(GLOW_BLEND_MODE_SCREEN);

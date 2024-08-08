@@ -2816,6 +2816,8 @@ RenderForwardMobile::RenderForwardMobile() {
 		// defines += "\n#define HDDAGI_OCT_SIZE " + itos(gi.hddagi_get_lightprobe_octahedron_size()) + "\n";
 		defines += "\n#define MAX_DIRECTIONAL_LIGHT_DATA_STRUCTS " + itos(MAX_DIRECTIONAL_LIGHTS) + "\n";
 	}
+	// defines += "\n#define HDDAGI_OCT_SIZE " + itos(gi.hddagi_get_lightprobe_octahedron_size()) + "\n";
+	defines += "\n#define MAX_DIRECTIONAL_LIGHT_DATA_STRUCTS " + itos(MAX_DIRECTIONAL_LIGHTS) + "\n";
 
 	{
 		//lightmaps

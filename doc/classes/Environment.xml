@@ -418,14 +418,14 @@
 		<constant name="TONE_MAPPER_LINEAR" value="0" enum="ToneMapper">
 			Linear tonemapper operator. Reads the linear data and passes it on unmodified. This can cause bright lighting to look blown out, with noticeable clipping in the output colors.
 		</constant>
-		<constant name="TONE_MAPPER_REINHARDT" value="1" enum="ToneMapper">
-			Reinhardt tonemapper operator. Performs a variation on rendered pixels' colors by this formula: [code]color = color / (1 + color)[/code]. This avoids clipping bright highlights, but the resulting image can look a bit dull.
+		<constant name="TONE_MAPPER_REINHARD" value="1" enum="ToneMapper">
+			Reinhard tonemapper operator. Performs a variation on rendered pixels' colors by this formula: [code]color = color / (1 + color)[/code]. This avoids clipping bright highlights, but the resulting image can look a bit dull.
 		</constant>
 		<constant name="TONE_MAPPER_FILMIC" value="2" enum="ToneMapper">
-			Filmic tonemapper operator. This avoids clipping bright highlights, with a resulting image that usually looks more vivid than [constant TONE_MAPPER_REINHARDT].
+			Filmic tonemapper operator. This avoids clipping bright highlights, with a resulting image that usually looks more vivid than [constant TONE_MAPPER_REINHARD].
 		</constant>
 		<constant name="TONE_MAPPER_ACES" value="3" enum="ToneMapper">
-			Use the Academy Color Encoding System tonemapper. ACES is slightly more expensive than other options, but it handles bright lighting in a more realistic fashion by desaturating it as it becomes brighter. ACES typically has a more contrasted output compared to [constant TONE_MAPPER_REINHARDT] and [constant TONE_MAPPER_FILMIC].
+			Use the Academy Color Encoding System tonemapper. ACES is slightly more expensive than other options, but it handles bright lighting in a more realistic fashion by desaturating it as it becomes brighter. ACES typically has a more contrasted output compared to [constant TONE_MAPPER_REINHARD] and [constant TONE_MAPPER_FILMIC].
 			[b]Note:[/b] This tonemapping operator is called "ACES Fitted" in Godot 3.x.
 		</constant>
 		<constant name="TONE_MAPPER_AGX" value="4" enum="ToneMapper">
@@ -433,6 +433,18 @@
 		</constant>
 		<constant name="TONE_MAPPER_AGX_PUNCHY" value="5" enum="ToneMapper">
 			Use the AgX tonemapper with the "punchy" look. AgX is slightly more expensive than other options, but it handles bright lighting in a more realistic fashion by desaturating it as it becomes brighter. The punchy look increases contrast and saturation, bringing its visuals closer to [constant TONE_MAPPER_ACES].
+		</constant>
+		<constant name="TONE_MAPPER_PBR_NEUTRAL" value="6" enum="ToneMapper">
+			Use the Khronos PBR Neutral tonemapper. PBR Neutral handles bright lighting in a more realistic fashion by desaturating it as it becomes brighter. PBR Neutral aims to look similar to [constant TONE_MAPPER_LINEAR] while reducing the clipping of bright highlights. Unlike [constant TONE_MAPPER_ACES], original colors are preserved as much as possible. The whitepoint value is ignored with this tonemapper, as PBR Neutral does not offer a whitepoint adjustment.
+		</constant>
+		<constant name="TONE_MAPPER_HABLE" value="7" enum="ToneMapper">
+			Use the Uncharted 2 tonemapper (also known as Hable tonemapper). Developed by John Hable for Uncharted 2, this operator provides great contrast and color preservation. It's particularly good at handling bright specular highlights while maintaining rich mid-tones. This tonemapper offers a good balance between realism and visual appeal, often producing more vibrant results than [constant TONE_MAPPER_REINHARD] while avoiding the potential over-saturation of [constant TONE_MAPPER_FILMIC].
+		</constant>
+		<constant name="TONE_MAPPER_CINEON" value="8" enum="ToneMapper">
+			Use the Cineon film response curve tonemapper. This method simulates the response of traditional film, providing a cinematic look with rich shadows and controlled highlights. It's particularly effective for preserving details in high-contrast scenes and achieving a classic film aesthetic. Cineon can produce more natural-looking results in some scenarios compared to [constant TONE_MAPPER_FILMIC], especially for scenes with a wide dynamic range.
+		</constant>
+		<constant name="TONE_MAPPER_DRAGO" value="9" enum="ToneMapper">
+			Use Drago's adaptive logarithmic mapping tonemapper (2003). This operator provides good compression of high dynamic range images, preserving details in both dark and bright areas. It adaptively adjusts the logarithmic basis to improve local contrast. Drago's method is particularly effective for scenes with extreme luminance variations and can produce natural-looking results without the need for manual parameter tuning.
 		</constant>
 		<constant name="GLOW_BLEND_MODE_ADDITIVE" value="0" enum="GlowBlendMode">
 			Additive glow blending mode. Mostly used for particles, glows (bloom), lens flare, bright sources.
