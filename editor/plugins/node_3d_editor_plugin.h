@@ -246,6 +246,7 @@ private:
 
 	EditorSelection *editor_selection = nullptr;
 
+	Button *translation_preview_button = nullptr;
 	CheckBox *preview_camera = nullptr;
 	SubViewportContainer *subviewport_container = nullptr;
 
