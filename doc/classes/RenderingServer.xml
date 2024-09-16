@@ -5253,6 +5253,9 @@
 		<constant name="ENV_TONE_MAPPER_DRAGO" value="9" enum="EnvironmentToneMapper">
 			Use Drago's adaptive logarithmic mapping tonemapper (2003). This method compresses high dynamic range images while preserving details across the luminance range. It adaptively adjusts the logarithmic basis to enhance local contrast. Drago's operator is well-suited for scenes with extreme brightness variations, often producing natural-looking results without requiring manual parameter adjustments.
 		</constant>
+		<constant name="ENV_TONE_MAPPER_TONY_MC_MAPFACE" value="10" enum="EnvironmentToneMapper">
+			Tony McMapface is an artist-friendly tonemapper designed to stay close to the input color in order to achieve a neutral look that does not increase contrast or saturation. It can prevent hue shift issues common with other tonemappers. It samples its own custom lookup table (LUT) to determine the output color.
+		</constant>
 		<constant name="ENV_SSR_ROUGHNESS_QUALITY_DISABLED" value="0" enum="EnvironmentSSRRoughnessQuality">
 			Lowest quality of roughness filter for screen-space reflections. Rough materials will not have blurrier screen-space reflections compared to smooth (non-rough) materials. This is the fastest option.
 		</constant>
