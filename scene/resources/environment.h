@@ -73,6 +73,7 @@ public:
 		TONE_MAPPER_HABLE,
 		TONE_MAPPER_CINEON,
 		TONE_MAPPER_DRAGO,
+		TONE_MAPPER_TONY_MC_MAPFACE,
 	};
 
 	enum DynamicGICascadeFormat {
