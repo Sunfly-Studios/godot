@@ -63,8 +63,8 @@ void EditorRunBar::_notification(int p_what) {
 				safe_mode_panel->add_theme_style_override(SceneStringName(panel), get_theme_stylebox(SNAME("SafeModeButton"), EditorStringName(EditorStyles)));
 				safe_mode_button->add_theme_style_override("hover", get_theme_stylebox(SNAME("SafeModeButton"), EditorStringName(EditorStyles)));
 
-				safe_mode_button->set_icon(get_editor_theme_icon(SNAME("NodeWarning")));
-				safe_mode_reload_button->set_icon(get_editor_theme_icon(SNAME("Reload")));
+				safe_mode_button->set_button_icon(get_editor_theme_icon(SNAME("NodeWarning")));
+				safe_mode_reload_button->set_button_icon(get_editor_theme_icon(SNAME("Reload")));
 
 				safe_mode_button->begin_bulk_theme_override();
 				safe_mode_button->add_theme_color_override("icon_normal_color", Color(0.3, 0.3, 0.3, 1));

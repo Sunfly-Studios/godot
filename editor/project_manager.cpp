@@ -629,14 +629,14 @@ void ProjectManager::_open_selected_projects_check_safe_mode(bool p_safe_mode) {
 	_open_selected_projects_check_warnings(p_safe_mode);
 }
 
-void ProjectManager::_open_selected_projects_with_migration() {
+void ProjectManager::_open_selected_projects_with_migration(bool p_safe_mode) {
 #ifndef DISABLE_DEPRECATED
 	if (project_list->get_selected_projects().size() == 1) {
 		// Only migrate if a single project is opened.
 		_minor_project_migrate();
 	}
 #endif
-	_open_selected_projects();
+	_open_selected_projects(p_safe_mode);
 }
 
 void ProjectManager::_install_project(const String &p_zip_path, const String &p_title) {

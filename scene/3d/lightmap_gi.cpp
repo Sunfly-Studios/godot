@@ -1054,11 +1054,9 @@ LightmapGI::BakeError LightmapGI::bake(Node *p_from_node, String p_image_data_pa
 
 	LightmapGI::BakeQuality effective_bake_quality = bake_quality;
 	int effective_bounces = bounces;
-	float effective_texel_scale = texel_scale;
 	LightmapGI::GenerateProbes effective_gen_probes = gen_probes;
 	if (p_preview_bake) {
 		// Use lower-quality settings for quick iteration.
-		effective_texel_scale *= float(GLOBAL_GET("rendering/lightmapping/preview_bake/texel_scale_factor"));
 		effective_bake_quality = MIN(bake_quality, LightmapGI::BakeQuality(int(GLOBAL_GET("rendering/lightmapping/preview_bake/max_quality"))));
 		effective_bounces = MIN(bounces, int(GLOBAL_GET("rendering/lightmapping/preview_bake/max_bounces")));
 		effective_gen_probes = MIN(gen_probes, LightmapGI::GenerateProbes(int(GLOBAL_GET("rendering/lightmapping/preview_bake/generate_probes_max_subdiv"))));

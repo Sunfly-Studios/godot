@@ -72,6 +72,7 @@ public:
 			TYPE_DRAW_INDIRECT,
 			TYPE_DRAW_INDEXED_INDIRECT,
 			TYPE_DISPATCH_MESH,
+			TYPE_DISPATCH_MESH_INDEXED,
 			TYPE_DISPATCH_MESH_INDIRECT,
 			TYPE_EXECUTE_COMMANDS,
 			TYPE_NEXT_SUBPASS,
@@ -488,7 +489,7 @@ private:
 		uint32_t offset = 0;
 		uint32_t draw_count = 0;
 		uint32_t stride = 0;
-	}
+	};
 	
 	struct DrawListDispatchMeshInstruction : DrawListInstruction {
 		uint32_t x_groups = 0;
@@ -715,8 +716,9 @@ public:
 	void add_draw_list_draw_indexed(uint32_t p_index_count, uint32_t p_instance_count, uint32_t p_first_index);
 	void add_draw_list_draw_indirect(RDD::BufferID p_buffer, uint32_t p_offset, uint32_t p_draw_count, uint32_t p_stride);
 	void add_draw_list_draw_indexed_indirect(RDD::BufferID p_buffer, uint32_t p_offset, uint32_t p_draw_count, uint32_t p_stride);
-	void add_draw_list_dispatch_mesh(uint32_t p_x_groups, uint32_t p_y_groups, uint32_t p_z_groups);
-	void add_draw_list_dispatch_mesh_indirect(RDD::BufferID p_buffer, uint32_t p_offset);
+	void add_draw_list_dispatch_mesh(uint32_t p_vertex_count, uint32_t p_instance_count);
+	void add_draw_list_dispatch_mesh_indexed(uint32_t p_index_count, uint32_t p_instance_count, uint32_t p_first_index);
+	void add_draw_list_dispatch_mesh_indirect(RDD::BufferID p_buffer, uint32_t p_offset, uint32_t p_draw_count, uint32_t p_stride);
 	void add_draw_list_execute_commands(RDD::CommandBufferID p_command_buffer);
 	void add_draw_list_next_subpass(RDD::CommandBufferType p_command_buffer_type);
 	void add_draw_list_set_blend_constants(const Color &p_color);

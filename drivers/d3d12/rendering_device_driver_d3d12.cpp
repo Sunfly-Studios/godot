@@ -5403,7 +5403,7 @@ void RenderingDeviceDriverD3D12::command_render_dispatch_mesh(CommandBufferID p_
 void RenderingDeviceDriverD3D12::command_render_dispatch_mesh_indirect(CommandBufferID p_cmd_buffer, BufferID p_indirect_buffer, uint64_t p_offset, uint32_t p_draw_count, uint32_t p_stride) {
 	CommandBufferInfo *cmd_buf_info = (CommandBufferInfo *)p_cmd_buffer.id;
 	BufferInfo *indirect_buf_info = (BufferInfo *)p_indirect_buffer.id;
-	_resource_transition_batch(indirect_buf_info, 0, 1, D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT);
+	_resource_transition_batch(cmd_buf_info, indirect_buf_info, 0, 1, D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT);
 	_resource_transitions_flush(cmd_buf_info->cmd_list.Get());
 	cmd_buf_info->cmd_list->ExecuteIndirect(indirect_cmd_signatures.dispatch_mesh.Get(), p_draw_count, indirect_buf_info->resource, p_offset, nullptr, 0);
 }
@@ -5412,8 +5412,8 @@ void RenderingDeviceDriverD3D12::command_render_dispatch_mesh_indirect_count(Com
 	CommandBufferInfo *cmd_buf_info = (CommandBufferInfo *)p_cmd_buffer.id;
 	BufferInfo *indirect_buf_info = (BufferInfo *)p_indirect_buffer.id;
 	BufferInfo *count_buf_info = (BufferInfo *)p_count_buffer.id;
-	_resource_transition_batch(indirect_buf_info, 0, 1, D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT);
-	_resource_transition_batch(count_buf_info, 0, 1, D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT);
+	_resource_transition_batch(cmd_buf_info, indirect_buf_info, 0, 1, D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT);
+	_resource_transition_batch(cmd_buf_info, count_buf_info, 0, 1, D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT);
 	_resource_transitions_flush(cmd_buf_info->cmd_list.Get());
 	cmd_buf_info->cmd_list->ExecuteIndirect(indirect_cmd_signatures.dispatch_mesh.Get(), p_max_draw_count, indirect_buf_info->resource, p_offset, count_buf_info->resource, p_count_buffer_offset);
 }

@@ -102,3 +102,10 @@ GH-97020
 Validate extension JSON: Error: Field 'classes/AnimationNode/methods/_process': is_const changed value in new API, from true to false.
 
 `_process` virtual method fixed to be non const instead.
+
+
+GH-87696
+--------
+Validate extension JSON: Error: Field 'classes/PCKPacker/methods/add_file/arguments': size changed value in new API, from 3 to 4.
+
+Added optional argument. Compatibility method registered.

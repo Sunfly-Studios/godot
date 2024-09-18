@@ -176,6 +176,7 @@ class ProjectManager : public Control {
 	void _open_selected_projects(bool p_safe_mode);
 	void _open_selected_projects_check_warnings(bool p_safe_mode);
 	void _open_selected_projects_check_safe_mode(bool p_safe_mode);
+    void _open_selected_projects_with_migration(bool p_safe_mode);
 
 	void _install_project(const String &p_zip_path, const String &p_title);
 	void _import_project();

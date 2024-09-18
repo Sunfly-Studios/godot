@@ -4556,6 +4556,134 @@ void RenderingDevice::draw_list_draw_indirect(DrawListID p_list, bool p_use_indi
 	_check_transfer_worker_buffer(buffer);
 }
 
+void RenderingDevice::draw_list_dispatch_mesh(DrawListID p_list, bool p_use_indices, uint32_t p_instances, uint32_t p_procedural_vertices) {
+    ERR_RENDER_THREAD_GUARD();
+
+    DrawList *dl = _get_draw_list_ptr(p_list);
+    ERR_FAIL_NULL(dl);
+#ifdef DEBUG_ENABLED
+	ERR_FAIL_COND_MSG(!has_feature(SUPPORTS_MESH_SHADER),
+			"The GPU doesn't support Mesh Shaders, its your reponsibility to check it does before calling this.");
+    ERR_FAIL_COND_MSG(!dl->validation.active, "Submitted Draw Lists can no longer be modified.");
+#endif
+
+#ifdef DEBUG_ENABLED
+    ERR_FAIL_COND_MSG(!dl->validation.pipeline_active,
+            "No render pipeline was set before attempting to draw.");
+
+    ERR_FAIL_COND_MSG(p_use_indices && p_procedural_vertices > 0,
+            "Procedural vertices can't be used together with indices.");
+
+    const Shader *shader = shader_owner.get_or_null(dl->validation.pipeline_shader);
+    ERR_FAIL_NULL(shader);
+    
+    // Validate shader stage and mesh shader capabilities
+    if (shader->stage_bits.has_flag(RDD::PIPELINE_STAGE_MESH_TASK_SHADER_BIT)) {
+        ERR_FAIL_COND_MSG(p_instances == 0, "Instance count for mesh task shader cannot be zero.");
+        ERR_FAIL_COND_MSG(p_instances > driver->limit_get(LIMIT_MAX_MESH_TASK_WORKGROUP_COUNT_X),
+                "Instance count (" + itos(p_instances) + ") is larger than device mesh task workgroup limit (" + 
+                itos(driver->limit_get(LIMIT_MAX_MESH_TASK_WORKGROUP_COUNT_X)) + ")");
+    } else if (shader->stage_bits.has_flag(RDD::PIPELINE_STAGE_MESH_SHADER_BIT)) {
+        ERR_FAIL_COND_MSG(p_instances == 0, "Instance count for mesh shader cannot be zero.");
+        ERR_FAIL_COND_MSG(p_instances > driver->limit_get(LIMIT_MAX_MESH_WORKGROUP_COUNT_X),
+                "Instance count (" + itos(p_instances) + ") is larger than device mesh workgroup limit (" + 
+                itos(driver->limit_get(LIMIT_MAX_MESH_WORKGROUP_COUNT_X)) + ")");
+    } else {
+        ERR_FAIL_MSG("Unexpected pipeline stage - mesh or task shader stage required.");
+    }
+
+    if (p_use_indices) {
+        ERR_FAIL_COND_MSG(!dl->validation.index_array_count,
+                "Draw command requested indices, but no index buffer was set.");
+    }
+
+    if (dl->validation.pipeline_push_constant_size > 0) {
+        ERR_FAIL_COND_MSG(!dl->validation.pipeline_push_constant_supplied,
+                "The shader in this pipeline requires a push constant to be set before drawing, but it's not present.");
+    }
+#endif
+
+#ifdef DEBUG_ENABLED
+    for (uint32_t i = 0; i < dl->state.set_count; i++) {
+        if (dl->state.sets[i].pipeline_expected_format == 0) {
+            // Nothing expected by this pipeline.
+            continue;
+        }
+
+        if (dl->state.sets[i].pipeline_expected_format != dl->state.sets[i].uniform_set_format) {
+            if (dl->state.sets[i].uniform_set_format == 0) {
+                ERR_FAIL_MSG("Uniforms were never supplied for set (" + itos(i) + ") at the time of drawing, which are required by the pipeline.");
+            } else if (uniform_set_owner.owns(dl->state.sets[i].uniform_set)) {
+                UniformSet *us = uniform_set_owner.get_or_null(dl->state.sets[i].uniform_set);
+                ERR_FAIL_MSG("Uniforms supplied for set (" + itos(i) + "):\n" + _shader_uniform_debug(us->shader_id, us->shader_set) + 
+                        "\nare not the same format as required by the pipeline shader. Pipeline shader requires the following bindings:\n" + 
+                        _shader_uniform_debug(dl->state.pipeline_shader));
+            } else {
+                ERR_FAIL_MSG("Uniforms supplied for set (" + itos(i) + ", which was just freed) are not the same format as required by the pipeline shader. Pipeline shader requires the following bindings:\n" + 
+                        _shader_uniform_debug(dl->state.pipeline_shader));
+            }
+        }
+    }
+#endif
+
+    // Prepare descriptor sets if the API doesn't use pipeline barriers
+    if (!driver->api_trait_get(RDD::API_TRAIT_HONORS_PIPELINE_BARRIERS)) {
+        for (uint32_t i = 0; i < dl->state.set_count; i++) {
+            if (dl->state.sets[i].pipeline_expected_format == 0) {
+                continue;
+            }
+
+            draw_graph.add_draw_list_uniform_set_prepare_for_use(dl->state.pipeline_shader_driver_id, dl->state.sets[i].uniform_set_driver_id, i);
+        }
+    }
+
+    // Bind descriptor sets
+    for (uint32_t i = 0; i < dl->state.set_count; i++) {
+        if (dl->state.sets[i].pipeline_expected_format == 0) {
+            continue;
+        }
+        if (!dl->state.sets[i].bound) {
+            draw_graph.add_draw_list_bind_uniform_set(dl->state.pipeline_shader_driver_id, dl->state.sets[i].uniform_set_driver_id, i);
+
+            UniformSet *uniform_set = uniform_set_owner.get_or_null(dl->state.sets[i].uniform_set);
+            _uniform_set_update_shared(uniform_set);
+
+            draw_graph.add_draw_list_usages(uniform_set->draw_trackers, uniform_set->draw_trackers_usage);
+
+            dl->state.sets[i].bound = true;
+        }
+    }
+
+    if (p_use_indices) {
+#ifdef DEBUG_ENABLED
+		ERR_FAIL_COND_MSG(p_procedural_vertices > 0,
+				"Procedural vertices can't be used together with indices.");
+
+		ERR_FAIL_COND_MSG(!dl->validation.index_array_count,
+				"Draw command requested indices, but no index buffer was set.");
+
+		ERR_FAIL_COND_MSG(dl->validation.pipeline_uses_restart_indices != dl->validation.index_buffer_uses_restart_indices,
+				"The usage of restart indices in index buffer does not match the render primitive in the pipeline.");
+#endif
+        uint32_t to_draw = dl->validation.index_array_count;
+#ifdef DEBUG_ENABLED
+		ERR_FAIL_COND_MSG(to_draw < dl->validation.pipeline_primitive_minimum,
+				"Too few indices (" + itos(to_draw) + ") for the render primitive set in the render pipeline (" + itos(dl->validation.pipeline_primitive_minimum) + ").");
+
+		ERR_FAIL_COND_MSG((to_draw % dl->validation.pipeline_primitive_divisor) != 0,
+				"Index amount (" + itos(to_draw) + ") must be a multiple of the amount of indices required by the render primitive (" + itos(dl->validation.pipeline_primitive_divisor) + ").");
+#endif
+        draw_graph.add_draw_list_dispatch_mesh_indexed(to_draw, p_instances, 0);
+    } else if (p_procedural_vertices > 0) {
+        draw_graph.add_draw_list_dispatch_mesh(p_procedural_vertices, p_instances);
+    } else {
+        uint32_t to_draw = dl->validation.vertex_array_size;
+        draw_graph.add_draw_list_dispatch_mesh(to_draw, p_instances);
+    }
+
+    dl->state.draw_count++;
+}
+
 void RenderingDevice::draw_list_dispatch_mesh_indirect(DrawListID p_list, bool p_use_indices, RID p_buffer, uint32_t p_offset, uint32_t p_draw_count, uint32_t p_stride) {
     ERR_RENDER_THREAD_GUARD();
 
@@ -6868,12 +6996,9 @@ void RenderingDevice::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("draw_list_set_push_constant", "draw_list", "buffer", "size_bytes"), &RenderingDevice::_draw_list_set_push_constant);
 
 	ClassDB::bind_method(D_METHOD("draw_list_draw", "draw_list", "use_indices", "instances", "procedural_vertex_count"), &RenderingDevice::draw_list_draw, DEFVAL(0));
-<<<<<<< HEAD
 	ClassDB::bind_method(D_METHOD("draw_list_draw_indirect", "draw_list", "use_indices", "buffer", "offset", "draw_count", "stride"), &RenderingDevice::draw_list_draw_indirect, DEFVAL(0), DEFVAL(1), DEFVAL(0));
-=======
-	ClassDB::bind_method(D_METHOD("draw_list_dispatch_mesh", "draw_list", "x_groups", "y_groups", "z_groups"), &RenderingDevice::draw_list_dispatch_mesh);
-	ClassDB::bind_method(D_METHOD("draw_list_dispatch_mesh_indirect", "draw_list", "buffer", "offset"), &RenderingDevice::draw_list_dispatch_mesh_indirect);
->>>>>>> 310943a2dc (Implement Mesh Shader support for Rendering Device Vulkan and DirectX12)
+	ClassDB::bind_method(D_METHOD("draw_list_dispatch_mesh", "draw_list", "use_indices", "instances", "procedural_vertex_count"), &RenderingDevice::draw_list_dispatch_mesh, DEFVAL(0));
+	ClassDB::bind_method(D_METHOD("draw_list_dispatch_mesh_indirect", "draw_list", "buffer", "offset", "draw_count", "stride"), &RenderingDevice::draw_list_dispatch_mesh_indirect, DEFVAL(0), DEFVAL(1), DEFVAL(0));
 
 	ClassDB::bind_method(D_METHOD("draw_list_enable_scissor", "draw_list", "rect"), &RenderingDevice::draw_list_enable_scissor, DEFVAL(Rect2()));
 	ClassDB::bind_method(D_METHOD("draw_list_disable_scissor", "draw_list"), &RenderingDevice::draw_list_disable_scissor);
