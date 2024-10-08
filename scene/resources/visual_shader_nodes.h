@@ -3126,6 +3126,114 @@ public:
 
 VARIANT_ENUM_CAST(VisualShaderNodeRemap::OpType)
 
+///////////////////////////////////////
+/// Swizzle
+///////////////////////////////////////
+
+class VisualShaderNodeSwizzle : public VisualShaderNode {
+	GDCLASS(VisualShaderNodeSwizzle, VisualShaderNode);
+
+protected:
+	String mask;
+	static void _bind_methods();
+
+public:
+	virtual String get_caption() const override;
+
+	virtual int get_input_port_count() const override;
+	virtual PortType get_input_port_type(int p_port) const override;
+	virtual String get_input_port_name(int p_port) const override;
+
+	virtual int get_output_port_count() const override;
+	virtual PortType get_output_port_type(int p_port) const override;
+	virtual String get_output_port_name(int p_port) const override;
+
+	void set_mask(String p_mask);
+	String get_mask() const;
+	bool _has_valid_mask() const;
+
+	virtual Vector<StringName> get_editable_properties() const override;
+
+	virtual String generate_code(Shader::Mode p_mode, VisualShader::Type p_type, int p_id, const String *p_input_vars, const String *p_output_vars, bool p_for_preview = false) const override;
+
+	virtual Category get_category() const override {
+		return CATEGORY_VECTOR;
+	}
+
+	VisualShaderNodeSwizzle();
+};
+
+///////////////////////////////////////
+/// Swizzle Alternate
+///////////////////////////////////////
+
+class VisualShaderNodeSwizzleAlt : public VisualShaderNode {
+	GDCLASS(VisualShaderNodeSwizzleAlt, VisualShaderNode);
+
+public:
+	enum Output {
+		OUTPUT_SCALAR,
+		OUTPUT_VECTOR_2D,
+		OUTPUT_VECTOR_3D,
+		OUTPUT_VECTOR_4D,
+		OUTPUT_MAX,
+	};
+
+	enum Channel {
+		CHANNEL_RED,
+		CHANNEL_GREEN,
+		CHANNEL_BLUE,
+		CHANNEL_ALPHA,
+		CHANNEL_MAX,
+	};
+
+protected:
+	Output output_type = OUTPUT_VECTOR_4D;
+	Channel red_channel = CHANNEL_RED;
+	Channel green_channel = CHANNEL_GREEN;
+	Channel blue_channel = CHANNEL_BLUE;
+	Channel alpha_channel = CHANNEL_ALPHA;
+
+	static void _bind_methods();
+
+public:
+	virtual String get_caption() const override;
+
+	virtual int get_input_port_count() const override;
+	virtual PortType get_input_port_type(int p_port) const override;
+	virtual String get_input_port_name(int p_port) const override;
+
+	virtual int get_output_port_count() const override;
+	virtual PortType get_output_port_type(int p_port) const override;
+	virtual String get_output_port_name(int p_port) const override;
+
+	void set_output(Output p_output);
+	Output get_output() const;
+	void set_red_channel(Channel p_red_channel);
+	Channel get_red_channel() const;
+	void set_green_channel(Channel p_green_channel);
+	Channel get_green_channel() const;
+	void set_blue_channel(Channel p_blue_channel);
+	Channel get_blue_channel() const;
+	void set_alpha_channel(Channel p_alpha_channel);
+	Channel get_alpha_channel() const;
+
+	virtual Vector<StringName> get_editable_properties() const override;
+	virtual HashMap<StringName, String> get_editable_properties_names() const override;
+	virtual bool is_show_prop_names() const override;
+
+	virtual String generate_code(Shader::Mode p_mode, VisualShader::Type p_type, int p_id, const String *p_input_vars, const String *p_output_vars, bool p_for_preview = false) const override;
+
+	virtual Category get_category() const override {
+		return CATEGORY_VECTOR;
+	}
+
+	VisualShaderNodeSwizzleAlt();
+};
+
+VARIANT_ENUM_CAST(VisualShaderNodeSwizzleAlt::Output)
+VARIANT_ENUM_CAST(VisualShaderNodeSwizzleAlt::Channel)
+
 class VisualShaderNodeRotationByAxis : public VisualShaderNode {
 	GDCLASS(VisualShaderNodeRotationByAxis, VisualShaderNode);
 

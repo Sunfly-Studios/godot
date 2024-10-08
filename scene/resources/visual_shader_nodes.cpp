@@ -8343,6 +8343,313 @@ VisualShaderNodeRemap::VisualShaderNodeRemap() {
 	simple_decl = false;
 }
 
+////////////// Swizzle
+
+String VisualShaderNodeSwizzle::get_caption() const {
+	return "Swizzle";
+}
+
+int VisualShaderNodeSwizzle::get_input_port_count() const {
+	return 1;
+}
+
+VisualShaderNodeSwizzle::PortType VisualShaderNodeSwizzle::get_input_port_type(int p_port) const {
+	return PORT_TYPE_VECTOR_4D;
+}
+
+String VisualShaderNodeSwizzle::get_input_port_name(int p_port) const {
+	return "input";
+}
+
+int VisualShaderNodeSwizzle::get_output_port_count() const {
+	return 1;
+}
+
+VisualShaderNodeSwizzle::PortType VisualShaderNodeSwizzle::get_output_port_type(int p_port) const {
+	int length = mask.length();
+	switch (length) {
+		case 0: {
+			return PORT_TYPE_SCALAR;
+		} break;
+		case 1: {
+			return PORT_TYPE_SCALAR;
+		} break;
+		case 2: {
+			return PORT_TYPE_VECTOR_2D;
+		} break;
+		case 3: {
+			return PORT_TYPE_VECTOR_3D;
+		} break;
+		case 4: {
+			return PORT_TYPE_VECTOR_4D;
+		} break;
+		default: {
+			return PORT_TYPE_SCALAR;
+		} break;
+	}
+}
+
+String VisualShaderNodeSwizzle::get_output_port_name(int p_port) const {
+	return "output";
+}
+
+void VisualShaderNodeSwizzle::set_mask(String p_mask) {
+	if (p_mask == mask) {
+		return;
+	}
+
+	mask = p_mask;
+}
+
+bool VisualShaderNodeSwizzle::_has_valid_mask() const {
+	// RGBA, XYZW, STPQ are aliases for the four indices of a vec4.
+	const String valid_chars = "rgbaxyzwstpq";
+
+	bool valid = true;
+	for (int i = 0; i < mask.length(); ++i) {
+		if (!valid_chars.contains(mask.substr(i, 1))) {
+			valid = false;
+		}
+	}
+	return valid;
+}
+
+String VisualShaderNodeSwizzle::get_mask() const {
+	return mask;
+}
+
+String VisualShaderNodeSwizzle::generate_code(Shader::Mode p_mode, VisualShader::Type p_type, int p_id, const String *p_input_vars, const String *p_output_vars, bool p_for_preview) const {
+	String code;
+	int len = mask.length();
+
+	// Fallback to zero if the mask is empty, too long, or contains invalid characters
+	if (len == 0 || len > 4 || !_has_valid_mask()) {
+		if (len == 2) {
+			code += vformat("		%s = vec2(0.0);\n", p_output_vars[0]);
+		} else if (len == 3) {
+			code += vformat("		%s = vec3(0.0);\n", p_output_vars[0]);
+		} else if (len == 4) {
+			code += vformat("		%s = vec4(0.0);\n", p_output_vars[0]);
+		} else {
+			code += vformat("		%s = 0.0;\n", p_output_vars[0]);
+		}
+	} else {
+		// Generate the swizzle
+		code += vformat("		%s = %s.%s;\n", p_output_vars[0], p_input_vars[0], mask);
+	}
+
+	return code;
+}
+
+Vector<StringName> VisualShaderNodeSwizzle::get_editable_properties() const {
+	Vector<StringName> props;
+	props.push_back("mask");
+	return props;
+}
+
+void VisualShaderNodeSwizzle::_bind_methods() {
+	ClassDB::bind_method(D_METHOD("set_mask", "mask"), &VisualShaderNodeSwizzle::set_mask);
+	ClassDB::bind_method(D_METHOD("get_mask"), &VisualShaderNodeSwizzle::get_mask);
+
+	ADD_PROPERTY(PropertyInfo(Variant::STRING, "mask", PROPERTY_HINT_PLACEHOLDER_TEXT, "rgba"), "set_mask", "get_mask");
+}
+
+VisualShaderNodeSwizzle::VisualShaderNodeSwizzle() {
+	set_input_port_default_value(1, 0.0);
+	simple_decl = false;
+}
+
+////////////// Swizzle Alternate
+
+String VisualShaderNodeSwizzleAlt::get_caption() const {
+	return "Swizzle";
+}
+
+int VisualShaderNodeSwizzleAlt::get_input_port_count() const {
+	return 1;
+}
+
+VisualShaderNodeSwizzleAlt::PortType VisualShaderNodeSwizzleAlt::get_input_port_type(int p_port) const {
+	return PORT_TYPE_VECTOR_4D;
+}
+
+String VisualShaderNodeSwizzleAlt::get_input_port_name(int p_port) const {
+	return "input";
+}
+
+int VisualShaderNodeSwizzleAlt::get_output_port_count() const {
+	return 1;
+}
+
+VisualShaderNodeSwizzleAlt::PortType VisualShaderNodeSwizzleAlt::get_output_port_type(int p_port) const {
+	switch (output_type) {
+		case OUTPUT_SCALAR:
+			return PORT_TYPE_SCALAR;
+		case OUTPUT_VECTOR_2D:
+			return PORT_TYPE_VECTOR_2D;
+		case OUTPUT_VECTOR_3D:
+			return PORT_TYPE_VECTOR_3D;
+		case OUTPUT_VECTOR_4D:
+			return PORT_TYPE_VECTOR_4D;
+		default:
+			return PORT_TYPE_SCALAR;
+	}
+}
+
+String VisualShaderNodeSwizzleAlt::get_output_port_name(int p_port) const {
+	return "output";
+}
+
+void VisualShaderNodeSwizzleAlt::set_output(Output p_output) {
+	ERR_FAIL_INDEX(int(p_output), int(OUTPUT_MAX));
+	if (output_type == p_output) {
+		return;
+	}
+	output_type = p_output;
+	emit_changed();
+}
+
+VisualShaderNodeSwizzleAlt::Output VisualShaderNodeSwizzleAlt::get_output() const {
+	return output_type;
+}
+
+void VisualShaderNodeSwizzleAlt::set_red_channel(Channel p_red_channel) {
+	ERR_FAIL_INDEX(int(p_red_channel), int(CHANNEL_MAX));
+	if (red_channel == p_red_channel) {
+		return;
+	}
+	red_channel = p_red_channel;
+	emit_changed();
+}
+
+VisualShaderNodeSwizzleAlt::Channel VisualShaderNodeSwizzleAlt::get_red_channel() const {
+	return red_channel;
+}
+
+void VisualShaderNodeSwizzleAlt::set_green_channel(Channel p_green_channel) {
+	ERR_FAIL_INDEX(int(p_green_channel), int(CHANNEL_MAX));
+	if (green_channel == p_green_channel) {
+		return;
+	}
+	green_channel = p_green_channel;
+	emit_changed();
+}
+
+VisualShaderNodeSwizzleAlt::Channel VisualShaderNodeSwizzleAlt::get_green_channel() const {
+	return green_channel;
+}
+
+void VisualShaderNodeSwizzleAlt::set_blue_channel(Channel p_blue_channel) {
+	ERR_FAIL_INDEX(int(p_blue_channel), int(CHANNEL_MAX));
+	if (blue_channel == p_blue_channel) {
+		return;
+	}
+	blue_channel = p_blue_channel;
+	emit_changed();
+}
+
+VisualShaderNodeSwizzleAlt::Channel VisualShaderNodeSwizzleAlt::get_blue_channel() const {
+	return blue_channel;
+}
+
+void VisualShaderNodeSwizzleAlt::set_alpha_channel(Channel p_alpha_channel) {
+	ERR_FAIL_INDEX(int(p_alpha_channel), int(CHANNEL_MAX));
+	if (alpha_channel == p_alpha_channel) {
+		return;
+	}
+	alpha_channel = p_alpha_channel;
+	emit_changed();
+}
+
+VisualShaderNodeSwizzleAlt::Channel VisualShaderNodeSwizzleAlt::get_alpha_channel() const {
+	return alpha_channel;
+}
+
+String VisualShaderNodeSwizzleAlt::generate_code(Shader::Mode p_mode, VisualShader::Type p_type, int p_id, const String *p_input_vars, const String *p_output_vars, bool p_for_preview) const {
+	String code;
+	String m = "";
+	const String c = "xyzw";
+
+	// Append based on the output type
+	if (output_type >= OUTPUT_SCALAR) {
+		m += c[red_channel];
+	}
+	if (output_type >= OUTPUT_VECTOR_2D) {
+		m += c[green_channel];
+	}
+	if (output_type >= OUTPUT_VECTOR_3D) {
+		m += c[blue_channel];
+	}
+	if (output_type >= OUTPUT_VECTOR_4D) {
+		m += c[alpha_channel];
+	}
+
+	// Swizzle string
+	code += vformat("		%s = %s.%s;\n", p_output_vars[0], p_input_vars[0], m);
+
+	return code;
+}
+
+Vector<StringName> VisualShaderNodeSwizzleAlt::get_editable_properties() const {
+	Vector<StringName> props;
+	props.push_back("output_type");
+	props.push_back("red_channel");
+	props.push_back("green_channel");
+	props.push_back("blue_channel");
+	props.push_back("alpha_channel");
+	return props;
+}
+
+HashMap<StringName, String> VisualShaderNodeSwizzleAlt::get_editable_properties_names() const {
+	HashMap<StringName, String> names;
+	names.insert("output_type", RTR("Output Type"));
+	names.insert("red_channel", RTR("Red out"));
+	names.insert("green_channel", RTR("Blue out"));
+	names.insert("blue_channel", RTR("Green out"));
+	names.insert("alpha_channel", RTR("Alpha out"));
+	return names;
+}
+
+bool VisualShaderNodeSwizzleAlt::is_show_prop_names() const {
+	return true;
+}
+
+void VisualShaderNodeSwizzleAlt::_bind_methods() {
+	ClassDB::bind_method(D_METHOD("set_output", "output_type"), &VisualShaderNodeSwizzleAlt::set_output);
+	ClassDB::bind_method(D_METHOD("get_output"), &VisualShaderNodeSwizzleAlt::get_output);
+	ClassDB::bind_method(D_METHOD("set_red_channel", "red_channel"), &VisualShaderNodeSwizzleAlt::set_red_channel);
+	ClassDB::bind_method(D_METHOD("get_red_channel"), &VisualShaderNodeSwizzleAlt::get_red_channel);
+	ClassDB::bind_method(D_METHOD("set_green_channel", "green_channel"), &VisualShaderNodeSwizzleAlt::set_green_channel);
+	ClassDB::bind_method(D_METHOD("get_green_channel"), &VisualShaderNodeSwizzleAlt::get_green_channel);
+	ClassDB::bind_method(D_METHOD("set_blue_channel", "blue_channel"), &VisualShaderNodeSwizzleAlt::set_blue_channel);
+	ClassDB::bind_method(D_METHOD("get_blue_channel"), &VisualShaderNodeSwizzleAlt::get_blue_channel);
+	ClassDB::bind_method(D_METHOD("set_alpha_channel", "alpha_channel"), &VisualShaderNodeSwizzleAlt::set_alpha_channel);
+	ClassDB::bind_method(D_METHOD("get_alpha_channel"), &VisualShaderNodeSwizzleAlt::get_alpha_channel);
+
+	ADD_PROPERTY(PropertyInfo(Variant::INT, "output_type", PROPERTY_HINT_ENUM, "Scalar, Vector2, Vector3, Vector4"), "set_output", "get_output");
+	ADD_PROPERTY(PropertyInfo(Variant::INT, "red_channel", PROPERTY_HINT_ENUM, "Red, Green, Blue, Alpha"), "set_red_channel", "get_red_channel");
+	ADD_PROPERTY(PropertyInfo(Variant::INT, "green_channel", PROPERTY_HINT_ENUM, "Red, Green, Blue, Alpha"), "set_green_channel", "get_green_channel");
+	ADD_PROPERTY(PropertyInfo(Variant::INT, "blue_channel", PROPERTY_HINT_ENUM, "Red, Green, Blue, Alpha"), "set_blue_channel", "get_blue_channel");
+	ADD_PROPERTY(PropertyInfo(Variant::INT, "alpha_channel", PROPERTY_HINT_ENUM, "Red, Green, Blue, Alpha"), "set_alpha_channel", "get_alpha_channel");
+
+	BIND_ENUM_CONSTANT(OUTPUT_SCALAR);
+	BIND_ENUM_CONSTANT(OUTPUT_VECTOR_2D);
+	BIND_ENUM_CONSTANT(OUTPUT_VECTOR_3D);
+	BIND_ENUM_CONSTANT(OUTPUT_VECTOR_4D);
+	BIND_ENUM_CONSTANT(OUTPUT_MAX);
+
+	BIND_ENUM_CONSTANT(CHANNEL_RED);
+	BIND_ENUM_CONSTANT(CHANNEL_GREEN);
+	BIND_ENUM_CONSTANT(CHANNEL_BLUE);
+	BIND_ENUM_CONSTANT(CHANNEL_ALPHA);
+	BIND_ENUM_CONSTANT(CHANNEL_MAX);
+}
+
+VisualShaderNodeSwizzleAlt::VisualShaderNodeSwizzleAlt() {
+	set_input_port_default_value(1, 0.0);
+	simple_decl = false;
+}
+
 ////////////// RotationByAxis
 
 String VisualShaderNodeRotationByAxis::get_caption() const {
