@@ -2425,6 +2425,7 @@ void Node3DEditorViewport::_sinput(const Ref<InputEvent> &p_event) {
 		}
 		if (ED_IS_SHORTCUT("spatial_editor/focus_selection", p_event)) {
 			_menu_option(VIEW_CENTER_TO_SELECTION);
+			times_focused_consecutively += 1;
 		}
 		if (ED_IS_SHORTCUT("spatial_editor/align_transform_with_view", p_event)) {
 			_menu_option(VIEW_ALIGN_TRANSFORM_WITH_VIEW);
@@ -2580,6 +2581,8 @@ void Node3DEditorViewport::_nav_pan(Ref<InputEventWithModifiers> p_event, const 
 	translation *= cursor.distance / DISTANCE_DEFAULT;
 	camera_transform.translate_local(translation);
 	cursor.pos = camera_transform.origin;
+
+	_disable_follow_mode();
 }
 
 void Node3DEditorViewport::_nav_zoom(Ref<InputEventWithModifiers> p_event, const Vector2 &p_relative) {
@@ -2842,6 +2845,8 @@ void Node3DEditorViewport::_update_freelook(real_t delta) {
 	const Vector3 motion = direction * speed * delta;
 	cursor.pos += motion;
 	cursor.eye_pos += motion;
+
+	_disable_follow_mode();
 }
 
 void Node3DEditorViewport::set_message(const String &p_message, float p_time) {
@@ -2990,6 +2995,20 @@ void Node3DEditorViewport::_notification(int p_what) {
 
 			_update_navigation_controls_visibility();
 			_update_freelook(delta);
+
+			if (focused_node_id.is_valid() && get_selected_count() > 0 && times_focused_consecutively >= 2 && times_focused_consecutively % 2 == 0) {
+				Node *focused_node = Object::cast_to<Node>(ObjectDB::get_instance(focused_node_id));
+				if (focused_node) {
+					follow_mode->set_text(vformat(TTR("Following %s"), focused_node->get_name()));
+					follow_mode->set_button_icon(get_editor_theme_icon(focused_node->get_class()));
+					follow_mode->show();
+					focus_selection();
+				} else {
+					_disable_follow_mode();
+				}
+			} else {
+				follow_mode->hide();
+			}
 
 			Node *scene_root = SceneTreeDock::get_singleton()->get_editor_data()->get_edited_scene_root();
 			if (previewing_cinema && scene_root != nullptr) {
@@ -3273,6 +3292,7 @@ void Node3DEditorViewport::_notification(int p_what) {
 
 			override_button_stylebox(view_menu, information_3d_stylebox);
 			override_button_stylebox(translation_preview_button, information_3d_stylebox);
+			override_button_stylebox(follow_mode, information_3d_stylebox);
 			override_button_stylebox(preview_camera, information_3d_stylebox);
 
 			frame_time_gradient->set_color(0, get_theme_color(SNAME("success_color"), EditorStringName(Editor)));
@@ -3553,6 +3573,7 @@ void Node3DEditorViewport::_menu_option(int p_option) {
 		} break;
 		case VIEW_CENTER_TO_ORIGIN: {
 			cursor.pos = Vector3(0, 0, 0);
+			_disable_follow_mode();
 
 		} break;
 		case VIEW_CENTER_TO_SELECTION: {
@@ -3981,6 +4002,11 @@ void Node3DEditorViewport::_finish_gizmo_instances() {
 	RS::get_singleton()->free(rotate_gizmo_instance[3]);
 }
 
+void Node3DEditorViewport::_disable_follow_mode() {
+	// Exit follow mode by resetting the number of times the follow shortcut was used consecutively.
+	times_focused_consecutively = 0;
+}
+
 void Node3DEditorViewport::_toggle_camera_preview(bool p_activate) {
 	ERR_FAIL_COND(p_activate && !preview);
 	ERR_FAIL_COND(!p_activate && !previewing);
@@ -4351,6 +4377,10 @@ void Node3DEditorViewport::focus_selection() {
 	int count = 0;
 
 	const List<Node *> &selection = editor_selection->get_selected_node_list();
+	focused_node_id = ObjectID();
+	if (!selection.is_empty()) {
+		focused_node_id = selection.front()->get()->get_instance_id();
+	}
 
 	for (Node *E : selection) {
 		Node3D *sp = Object::cast_to<Node3D>(E);
@@ -5636,9 +5666,11 @@ Node3DEditorViewport::Node3DEditorViewport(Node3DEditor *p_spatial_editor, int p
 	view_menu->get_popup()->add_separator();
 	view_menu->get_popup()->add_shortcut(ED_GET_SHORTCUT("spatial_editor/focus_origin"), VIEW_CENTER_TO_ORIGIN);
 	view_menu->get_popup()->add_shortcut(ED_GET_SHORTCUT("spatial_editor/focus_selection"), VIEW_CENTER_TO_SELECTION);
+	view_menu->get_popup()->set_item_tooltip(-1, TTR("Press Focus Selection twice to start following the selection as it moves. Press it yet another time to stop following the selection."));
 	view_menu->get_popup()->add_shortcut(ED_GET_SHORTCUT("spatial_editor/align_transform_with_view"), VIEW_ALIGN_TRANSFORM_WITH_VIEW);
 	view_menu->get_popup()->add_shortcut(ED_GET_SHORTCUT("spatial_editor/align_rotation_with_view"), VIEW_ALIGN_ROTATION_WITH_VIEW);
 	view_menu->get_popup()->connect(SceneStringName(id_pressed), callable_mp(this, &Node3DEditorViewport::_menu_option));
+
 	display_submenu->connect(SceneStringName(id_pressed), callable_mp(this, &Node3DEditorViewport::_menu_option));
 	view_menu->set_disable_shortcuts(true);
 
@@ -5693,6 +5725,12 @@ Node3DEditorViewport::Node3DEditorViewport(Node3DEditor *p_spatial_editor, int p
 
 	translation_preview_button = memnew(EditorTranslationPreviewButton);
 	hbox->add_child(translation_preview_button);
+
+	follow_mode = memnew(Button);
+	follow_mode->set_tooltip_text(TTR("Click to stop following this node as it moves."));
+	follow_mode->hide();
+	vbox->add_child(follow_mode);
+	follow_mode->connect(SceneStringName(pressed), callable_mp(this, &Node3DEditorViewport::_disable_follow_mode));
 
 	preview_camera = memnew(CheckBox);
 	preview_camera->set_text(TTR("Preview"));
