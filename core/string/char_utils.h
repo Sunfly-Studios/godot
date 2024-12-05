@@ -137,4 +137,12 @@ constexpr bool is_underscore(char32_t p_char) {
 	return (p_char == '_');
 }
 
+constexpr bool is_hyphen(char32_t p_char) {
+	return (p_char == '-') || (p_char == 0x2010) || (p_char == 0x2011);
+}
+
+constexpr bool is_path_seperator(char32_t p_char) {
+	return p_char == '/' || p_char == '\\';
+}
+
 #endif // CHAR_UTILS_H
