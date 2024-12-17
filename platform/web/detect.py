@@ -177,9 +177,6 @@ def configure(env: "SConsEnvironment"):
     # Add method for creating the final zip file
     env.AddMethod(create_template_zip, "CreateTemplateZip")
 
-    # See `emscripten_helpers.py`
-    env["ENV"]["EMCC_CLOSURE_ARGS"] = "--language_in ECMASCRIPT_NEXT --language_out ECMASCRIPT_2015"
-
     env["CC"] = "emcc"
     env["CXX"] = "em++"
 

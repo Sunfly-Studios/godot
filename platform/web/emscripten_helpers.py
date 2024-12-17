@@ -18,10 +18,6 @@ def run_closure_compiler(target, source, env, for_signature):
     cmd.extend(["--compilation_level", "SIMPLE"])
     cmd.extend(["--assume_function_wrapper", "false"])
 
-    # Always assume use of modern features for Godot's
-    # JS bridge code.
-    cmd.extend(["--language_in", "ECMASCRIPT_NEXT"])
-
     for f in env["JSEXTERNS"]:
         cmd.extend(["--externs", f.get_abspath()])
     for f in source:
