@@ -338,13 +338,9 @@ vec3 tonemap_agx(vec3 color) {
 }
 
 float luminance_drago(float L, float b) {
-	const float LOG_10 = 2.302585092994046;
-	const float LOG_2_10 = 3.321928094887362;
-	const float LOG_05 = -0.693147180559945;
 	const float LMax = 1.0;
-
-	float Ld = b / LOG_10;
-	Ld *= log(L + 1.0) / log(LOG_2_10 + (log(b) / LOG_05) * log(L));
+	float Ld = b / (log(LMax + 1.0) / log(10.0));
+	Ld *= log(L + 1.0) / log(2.0 + 8.0 * pow((L / LMax), log(b) / log(0.5)));
 	return Ld;
 }
 
@@ -354,10 +350,10 @@ vec3 tonemap_drago(vec3 color, float white) {
 	const float BIAS = 0.85;
 
 	float luminance = dot(color, vec3(0.2126, 0.7152, 0.0722));
-	luminance *= white;
-
 	float Ld = luminance_drago(luminance, BIAS);
-	return clamp(color * (Ld / luminance), 0.0, 1.0);
+	color = color * (Ld / luminance);
+	color *= white;
+	return clamp(color, 0.0, 1.0);
 }
 
 vec3 linear_to_srgb(vec3 color) {
@@ -372,7 +368,7 @@ vec3 linear_to_srgb(vec3 color) {
 #define TONEMAPPER_FILMIC 2
 #define TONEMAPPER_ACES 3
 #define TONEMAPPER_AGX 4
-#define TONEMAPPER_AGX 5
+#define TONEMAPPER_DRAGO 5
 
 vec3 apply_tonemapping(vec3 color, float white) { // inputs are LINEAR
 	// Ensure color values passed to tonemappers are positive.
