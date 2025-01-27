@@ -130,7 +130,7 @@
 #define SLJIT_CONFIG_RISCV_32 1
 #elif defined (__riscv_xlen) && (__riscv_xlen == 64)
 #define SLJIT_CONFIG_RISCV_64 1
-#elif defined (__loongarch_lp64)
+#elif defined (__loongarch_lp64) || defined(__loongarch64__)
 #define SLJIT_CONFIG_LOONGARCH_64 1
 #elif defined(__s390x__)
 #define SLJIT_CONFIG_S390X 1

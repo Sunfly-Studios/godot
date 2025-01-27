@@ -57,7 +57,7 @@ if env["builtin_libpng"]:
     elif env["arch"] == "loongarch64":
         env_thirdparty.add_source_files(thirdparty_obj, thirdparty_dir + "loongarch/loongarch_lsx_init.c")
         env_thirdparty.add_source_files(thirdparty_obj, thirdparty_dir + "loongarch/filter_lsx_intrinsics.c")
-    elif env["arch"] == "ppc64":
+    elif env["arch"].startswith("ppc"):
         env_thirdparty.add_source_files(thirdparty_obj, thirdparty_dir + "powerpc/powerpc_init.c")
         env_thirdparty.add_source_files(thirdparty_obj, thirdparty_dir + "powerpc/filter_vsx_intrinsics.c")
 

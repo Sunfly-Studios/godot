@@ -55,6 +55,8 @@
 #define XR_ARCH_ABI "mips"
 #elif defined(__powerpc64__) && __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
 #define XR_ARCH_ABI "ppc64"
+#elif defined(__powerpc__) && !defined(__powerpc64__)
+#define XR_ARCH_ABI "ppc32"
 #elif defined(__powerpc__) && __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
 #define XR_ARCH_ABI "ppc64el"
 #elif defined(__s390x__) || defined(__zarch__)
@@ -71,6 +73,8 @@
 #define XR_ARCH_ABI "riscv64"
 #elif defined(__sparc__) && defined(__arch64__)
 #define XR_ARCH_ABI "sparc64"
+#elif defined(__loongarch64__) || defined(__loongarch64)
+#define XR_ARCH_ABI "loong64"
 #else
 #error "No architecture string known!"
 #endif
