@@ -63,7 +63,9 @@ class SafeList {
 		T val;
 	};
 
+#if !defined(__powerpc__) || defined(__powerpc64__)
 	static_assert(std::atomic<T>::is_always_lock_free);
+#endif
 
 	std::atomic<SafeListNode *> head = nullptr;
 	std::atomic<SafeListNode *> graveyard_head = nullptr;
