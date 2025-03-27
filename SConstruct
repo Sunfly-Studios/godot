@@ -877,7 +877,12 @@ if env.msvc and not methods.using_clang(env):  # MSVC
 else:  # GCC, Clang
     common_warnings = []
     if methods.using_gcc(env):
-        common_warnings += ["-Wshadow", "-Wno-misleading-indentation"]
+        common_warnings += [
+            "-Wshadow",
+            "-Wno-misleading-indentation",
+            # For optimized Object::cast_to / object.inherits_from()
+            "-Wvirtual-inheritance",
+        ]
         if cc_version_major < 11:
             # Regression in GCC 9/10, spams so much in our variadic templates
             # that we need to outright disable it.
