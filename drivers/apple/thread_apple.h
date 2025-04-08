@@ -1,5 +1,5 @@
 /**************************************************************************/
-/*  metal_utils.h                                                         */
+/*  thread_apple.h                                                        */
 /**************************************************************************/
 /*                         This file is part of:                          */
 /*                             GODOT ENGINE                               */
@@ -28,80 +28,83 @@
 /* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                 */
 /**************************************************************************/
 
-#ifndef METAL_UTILS_H
-#define METAL_UTILS_H
+#pragma once
 
-#import <os/log.h>
+#include "core/templates/safe_refcount.h"
+#include "core/typedefs.h"
 
-#import <functional>
+#include <pthread.h>
+#include <new> // For hardware interference size
 
-#pragma mark - Boolean flags
+class String;
 
-namespace flags {
-
-/*! Sets the flags within the value parameter specified by the mask parameter. */
-template <typename Tv, typename Tm>
-void set(Tv &p_value, Tm p_mask) {
-	using T = std::underlying_type_t<Tv>;
-	p_value = static_cast<Tv>(static_cast<T>(p_value) | static_cast<T>(p_mask));
-}
-
-/*! Clears the flags within the value parameter specified by the mask parameter. */
-template <typename Tv, typename Tm>
-void clear(Tv &p_value, Tm p_mask) {
-	using T = std::underlying_type_t<Tv>;
-	p_value = static_cast<Tv>(static_cast<T>(p_value) & ~static_cast<T>(p_mask));
-}
-
-/*! Returns whether the specified value has any of the bits specified in mask set to 1. */
-template <typename Tv, typename Tm>
-static constexpr bool any(Tv p_value, const Tm p_mask) {
-	return ((p_value & p_mask) != 0);
-}
-
-/*! Returns whether the specified value has all of the bits specified in mask set to 1. */
-template <typename Tv, typename Tm>
-static constexpr bool all(Tv p_value, const Tm p_mask) {
-	return ((p_value & p_mask) == p_mask);
-}
-
-} //namespace flags
-
-#pragma mark - Alignment and Offsets
-
-static constexpr bool is_power_of_two(uint64_t p_value) {
-	return p_value && ((p_value & (p_value - 1)) == 0);
-}
-
-static constexpr uint64_t round_up_to_alignment(uint64_t p_value, uint64_t p_alignment) {
-	DEV_ASSERT(is_power_of_two(p_alignment));
-
-	if (p_alignment == 0) {
-		return p_value;
-	}
-
-	uint64_t mask = p_alignment - 1;
-	uint64_t aligned_value = (p_value + mask) & ~mask;
-
-	return aligned_value;
-}
-
-class Defer {
+class Thread {
 public:
-	Defer(std::function<void()> func) :
-			func_(func) {}
-	~Defer() { func_(); }
+	typedef void (*Callback)(void *p_userdata);
+
+	typedef uint64_t ID;
+
+	enum : ID {
+		UNASSIGNED_ID = 0,
+		MAIN_ID = 1
+	};
+
+	enum Priority {
+		PRIORITY_LOW,
+		PRIORITY_NORMAL,
+		PRIORITY_HIGH
+	};
+
+	struct Settings {
+		Priority priority;
+		/// Override the default stack size (0 means default)
+		uint64_t stack_size = 0;
+		Settings() { priority = PRIORITY_NORMAL; }
+	};
+
+#if defined(__cpp_lib_hardware_interference_size)
+	GODOT_GCC_WARNING_PUSH_AND_IGNORE("-Winterference-size")
+	static constexpr size_t CACHE_LINE_BYTES = std::hardware_destructive_interference_size;
+	GODOT_GCC_WARNING_POP
+#else
+	// At a negligible memory cost, we use a conservatively high value.
+	static constexpr size_t CACHE_LINE_BYTES = 128;
+#endif
 
 private:
-	std::function<void()> func_;
+	friend class Main;
+
+	ID id = UNASSIGNED_ID;
+	pthread_t pthread;
+
+	static SafeNumeric<uint64_t> id_counter;
+	static thread_local ID caller_id;
+
+	static void *thread_callback(void *p_data);
+
+	static void make_main_thread() { caller_id = MAIN_ID; }
+	static void release_main_thread() { caller_id = id_counter.increment(); }
+
+public:
+	_FORCE_INLINE_ static void yield() { pthread_yield_np(); }
+
+	_FORCE_INLINE_ ID get_id() const { return id; }
+	// get the ID of the caller thread
+	_FORCE_INLINE_ static ID get_caller_id() {
+		return caller_id;
+	}
+	// get the ID of the main thread
+	_FORCE_INLINE_ static ID get_main_id() { return MAIN_ID; }
+
+	_FORCE_INLINE_ static bool is_main_thread() { return caller_id == MAIN_ID; }
+
+	static Error set_name(const String &p_name);
+
+	ID start(Thread::Callback p_callback, void *p_user, const Settings &p_settings = Settings());
+	bool is_started() const { return id != UNASSIGNED_ID; }
+	/// Waits until thread is finished, and deallocates it.
+	void wait_to_finish();
+
+	Thread() = default;
+	~Thread();
 };
-
-#define CONCAT_INTERNAL(x, y) x##y
-#define CONCAT(x, y) CONCAT_INTERNAL(x, y)
-#define DEFER const Defer &CONCAT(defer__, __LINE__) = Defer
-
-extern os_log_t LOG_DRIVER;
-// Used for dynamic tracing.
-extern os_log_t LOG_INTERVALS;
-
-#endif // METAL_UTILS_H
