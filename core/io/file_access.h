@@ -87,9 +87,6 @@ public:
 	typedef void (*FileCloseFailNotify)(const String &);
 
 	typedef Ref<FileAccess> (*CreateFunc)();
-
-	// Set default on build time for
-	// MSB architectures
 #ifdef BIG_ENDIAN_ENABLED
 	bool big_endian = true;
 #else
