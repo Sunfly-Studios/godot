@@ -519,7 +519,7 @@
 			<param index="2" name="flags" type="int" default="0" />
 			<description>
 				Connects a [param signal] by name to a [param callable]. Optional [param flags] can be also added to configure the connection's behavior (see [enum ConnectFlags] constants).
-				A signal can only be connected once to the same [Callable]. If the signal is already connected, this method returns [constant ERR_INVALID_PARAMETER] and pushes an error message, unless the signal is connected with [constant CONNECT_REFERENCE_COUNTED]. To prevent this, use [method is_connected] first to check for existing connections.
+				A signal can only be connected once to the same [Callable]. If the signal is already connected, this method returns [constant ERR_INVALID_PARAMETER] and generates an error, unless the signal is connected with [constant CONNECT_REFERENCE_COUNTED]. To prevent this, use [method is_connected] first to check for existing connections.
 				If the [param callable]'s object is freed, the connection will be lost.
 				[b]Examples with recommended syntax:[/b]
 				Connecting signals is one of the most common operations in Godot and the API gives many options to do so, which are described further down. The code block below shows the recommended approach.
@@ -644,6 +644,9 @@
 				}
 				[/csharp]
 				[/codeblocks]
+				[b]Note:[/b] If the [param callable]'s object is freed, the connection will be lost.
+				[b]Note:[/b] In GDScript, it is generally recommended to connect signals with [method Signal.connect] instead.
+				[b]Note:[/b] This operation (and all other signal related operations) is thread-safe.
 			</description>
 		</method>
 		<method name="disconnect">

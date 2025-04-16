@@ -625,7 +625,8 @@ private:
 		HashMap<Callable, Slot, HashableHasher<Callable>> slot_map;
 		bool removable = false;
 	};
-
+	friend struct _ObjectSignalLock;
+	mutable Mutex *signal_mutex = nullptr;
 	HashMap<StringName, SignalData> signal_map;
 	List<Connection> connections;
 #ifdef DEBUG_ENABLED
@@ -771,6 +772,8 @@ protected:
 	friend class PlaceholderExtensionInstance;
 
 	bool _disconnect(const StringName &p_signal, const Callable &p_callable, bool p_force = false);
+
+	virtual bool _uses_signal_mutex() const;
 
 #ifdef TOOLS_ENABLED
 	struct VirtualMethodTracker {
