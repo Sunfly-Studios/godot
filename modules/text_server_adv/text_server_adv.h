@@ -532,8 +532,8 @@ class TextServerAdvanced : public TextServerExtension {
 
 		/* Intermediate data */
 		Char16String utf16;
-		Vector<UBiDi *> bidi_iter;
-		Vector<Vector3i> bidi_override;
+		LocalVector<UBiDi *> bidi_iter;
+		LocalVector<Vector3i> bidi_override;
 		ScriptIterator *script_iter = nullptr;
 		hb_buffer_t *hb_buffer = nullptr;
 
@@ -551,7 +551,7 @@ class TextServerAdvanced : public TextServerExtension {
 		UBreakIterator *_get_break_iterator_for_locale(const String &p_language, UErrorCode *r_err);
 
 		~ShapedTextDataAdvanced() {
-			for (int i = 0; i < bidi_iter.size(); i++) {
+			for (unsigned int i = 0; i < bidi_iter.size(); i++) {
 				if (bidi_iter[i]) {
 					ubidi_close(bidi_iter[i]);
 				}
