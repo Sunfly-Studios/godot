@@ -131,7 +131,7 @@ if lib_arch_dir != "":
         print_warning("Checked both old and new NDK directory structures")
         print_warning("Build may fail - please verify your NDK installation")
 
-    def generate_apk(target, source, env):
+    def generate_android_binaries(target, source, env):
         gradle_process = []
 
         if sys.platform.startswith("win"):
@@ -148,15 +148,15 @@ if lib_arch_dir != "":
             "--quiet",
         ]
 
-        if env["debug_symbols"]:
+        if env["gradle_do_not_strip"]:
             gradle_process += ["-PdoNotStrip=true"]
 
         subprocess.run(
             gradle_process,
             cwd="platform/android/java",
         )
-
-    if env["generate_apk"]:
-        generate_apk_command = env_android.Command("generate_apk", [], generate_apk)
-        command = env_android.AlwaysBuild(generate_apk_command)
+    
+    if env["generate_android_binaries"]:
+        generate_binaries_command = env_android.Command("generate_android_binaries", [], generate_android_binaries)
+        command = env_android.AlwaysBuild(generate_binaries_command)
         env_android.Depends(command, [lib])
