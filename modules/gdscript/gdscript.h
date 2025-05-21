@@ -445,7 +445,7 @@ class GDScriptLanguage : public ScriptLanguage {
 
 		void free() {
 			if (levels) {
-				memdelete(levels);
+				memdelete_arr(levels);
 				levels = nullptr;
 			}
 		}
