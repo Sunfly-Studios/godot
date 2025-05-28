@@ -34,11 +34,12 @@
 #include "crash_handler_macos.h"
 
 #include "core/input/input.h"
-#import "drivers/apple/joypad_apple.h"
 #import "drivers/coreaudio/audio_driver_coreaudio.h"
 #import "drivers/coremidi/midi_driver_coremidi.h"
 #include "drivers/unix/os_unix.h"
 #include "servers/audio_server.h"
+
+class JoypadSDL;
 
 class OS_MacOS : public OS_Unix {
 	JoypadApple *joypad_apple = nullptr;
@@ -54,8 +55,6 @@ class OS_MacOS : public OS_Unix {
 
 	CFRunLoopObserverRef pre_wait_observer;
 
-	MainLoop *main_loop = nullptr;
-
 	List<String> launch_service_args;
 
 	CGFloat _weight_to_ct(int p_weight) const;
@@ -66,6 +65,16 @@ class OS_MacOS : public OS_Unix {
 	static void pre_wait_observer_cb(CFRunLoopObserverRef p_observer, CFRunLoopActivity p_activiy, void *p_context);
 
 protected:
+	const char *execpath = nullptr;
+	int argc = 0;
+	char **argv = nullptr;
+
+#ifdef SDL_ENABLED
+	JoypadSDL *joypad_sdl = nullptr;
+#endif
+	MainLoop *main_loop = nullptr;
+	CFRunLoopTimerRef wait_timer = nil;
+
 	virtual void initialize_core() override;
 	virtual void initialize() override;
 	virtual void finalize() override;

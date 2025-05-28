@@ -40,6 +40,10 @@
 #include "core/version_generated.gen.h"
 #include "main/main.h"
 
+#ifdef SDL_ENABLED
+#include "drivers/sdl/joypad_sdl.h"
+#endif
+
 #include <dlfcn.h>
 #include <libproc.h>
 #include <mach-o/dyld.h>
@@ -142,13 +146,22 @@ void OS_MacOS::finalize() {
 
 	delete_main_loop();
 
-	if (joypad_apple) {
-		memdelete(joypad_apple);
+#ifdef SDL_ENABLED
+	if (joypad_sdl) {
+		memdelete(joypad_sdl);
 	}
+#endif
 }
 
 void OS_MacOS::initialize_joypads() {
-	joypad_apple = memnew(JoypadApple());
+#ifdef SDL_ENABLED
+	joypad_sdl = memnew(JoypadSDL());
+	if (joypad_sdl->initialize() != OK) {
+		ERR_PRINT("Couldn't initialize SDL joypad input driver.");
+		memdelete(joypad_sdl);
+		joypad_sdl = nullptr;
+	}
+#endif
 }
 
 void OS_MacOS::set_main_loop(MainLoop *p_main_loop) {
@@ -896,6 +909,105 @@ OS_MacOS::OS_MacOS() {
 
 	DisplayServerMacOS::register_macos_driver();
 
+// MARK: - OS_MacOS_NSApp
+
+void OS_MacOS_NSApp::run() {
+	[NSApp run];
+}
+
+static bool sig_received = false;
+
+static void handle_interrupt(int sig) {
+	if (sig == SIGINT) {
+		sig_received = true;
+	}
+}
+
+void OS_MacOS_NSApp::start_main() {
+	Error err;
+	@autoreleasepool {
+		err = Main::setup(execpath, argc, argv);
+	}
+
+	if (err == OK) {
+		main_started = true;
+
+		int ret;
+		@autoreleasepool {
+			ret = Main::start();
+		}
+		if (ret == EXIT_SUCCESS) {
+			if (main_loop) {
+				@autoreleasepool {
+					main_loop->initialize();
+				}
+				DisplayServer *ds = DisplayServer::get_singleton();
+				DisplayServerMacOS *ds_mac = Object::cast_to<DisplayServerMacOS>(ds);
+
+				pre_wait_observer = CFRunLoopObserverCreateWithHandler(kCFAllocatorDefault, kCFRunLoopBeforeWaiting, true, 0, ^(CFRunLoopObserverRef observer, CFRunLoopActivity activity) {
+					@autoreleasepool {
+						@try {
+							if (ds_mac) {
+								ds_mac->_process_events(false);
+							} else if (ds) {
+								ds->process_events();
+							}
+#ifdef SDL_ENABLED
+							if (joypad_sdl) {
+								joypad_sdl->process_events();
+							}
+#endif
+
+							if (Main::iteration() || sig_received) {
+								terminate();
+							}
+						} @catch (NSException *exception) {
+							ERR_PRINT("NSException: " + String::utf8([exception reason].UTF8String));
+						}
+					}
+					if (wait_timer == nil) {
+						CFRunLoopWakeUp(CFRunLoopGetCurrent()); // Prevent main loop from sleeping.
+					}
+				});
+				CFRunLoopAddObserver(CFRunLoopGetCurrent(), pre_wait_observer, kCFRunLoopCommonModes);
+				return;
+			}
+		} else {
+			set_exit_code(EXIT_FAILURE);
+		}
+	} else if (err == ERR_HELP) { // Returned by --help and --version, so success.
+		set_exit_code(EXIT_SUCCESS);
+	} else {
+		set_exit_code(EXIT_FAILURE);
+	}
+
+	terminate();
+}
+
+void OS_MacOS_NSApp::terminate() {
+	if (pre_wait_observer) {
+		CFRunLoopRemoveObserver(CFRunLoopGetCurrent(), pre_wait_observer, kCFRunLoopCommonModes);
+		CFRelease(pre_wait_observer);
+		pre_wait_observer = nil;
+	}
+
+	should_terminate = true;
+	[NSApp terminate:nil];
+}
+
+void OS_MacOS_NSApp::cleanup() {
+	if (main_loop) {
+		main_loop->finalize();
+	}
+	if (main_started) {
+		@autoreleasepool {
+			Main::cleanup();
+		}
+	}
+}
+
+OS_MacOS_NSApp::OS_MacOS_NSApp(const char *p_execpath, int p_argc, char **p_argv) :
+		OS_MacOS(p_execpath, p_argc, p_argv) {
 	// Implicitly create shared NSApplication instance.
 	[GodotApplication sharedApplication];
 
