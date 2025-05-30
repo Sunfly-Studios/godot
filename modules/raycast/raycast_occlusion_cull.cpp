@@ -175,7 +175,7 @@ void RaycastOcclusionCull::RaycastHZBuffer::sort_rays(const Vector3 &p_camera_di
 					int tile_index = i * tile_grid_size.x + j;
 
 					Vector3 ray_dir(camera_rays[tile_index].ray.dir_x[k], camera_rays[tile_index].ray.dir_y[k], camera_rays[tile_index].ray.dir_z[k]);
-					mips[0][y * buffer_size.x + x] = camera_rays[tile_index].ray.tfar[k] * p_camera_dir.dot(ray_dir); // Store z-depth in view space.
+					mips_levels[0][y * buffer_size.x + x] = camera_rays[tile_index].ray.tfar[k] * p_camera_dir.dot(ray_dir); // Store z-depth in view space.
 				}
 			}
 		}
