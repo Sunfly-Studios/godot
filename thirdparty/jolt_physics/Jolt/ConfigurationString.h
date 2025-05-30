@@ -29,6 +29,20 @@ inline const char *GetConfigurationString()
 		"E2K "
 #elif defined(JPH_CPU_WASM)
 		"WASM "
+#elif defined(JPH_CPU_SPARC)
+		"SPARC "
+	#ifdef JPH_CPU_BIG_ENDIAN
+		"(Big Endian) "
+	#else
+		"(Little Endian) "
+	#endif
+#elif defined(JPH_CPU_MIPS)
+		"MIPS "
+	#ifdef JPH_CPU_BIG_ENDIAN
+		"(Big Endian) "
+	#else
+		"(Little Endian) "
+	#endif
 #else
 	#error Unknown CPU architecture
 #endif

@@ -575,6 +575,14 @@ bool OS::has_feature(const String &p_feature) {
 	if (p_feature == "loongarch64") {
 		return true;
 	}
+#elif defined(__mips64)
+	if (p_feature == "mips64") {
+		return true;
+	}
+#elif defined(__sparcv9) || defined(__sparc64__)
+	if (p_feature == "sparc64") {
+		return true;
+	}
 #endif
 
 #if defined(IOS_SIMULATOR)

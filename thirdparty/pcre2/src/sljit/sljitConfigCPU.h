@@ -134,6 +134,8 @@
 #define SLJIT_CONFIG_LOONGARCH_64 1
 #elif defined(__s390x__)
 #define SLJIT_CONFIG_S390X 1
+#elif defined(__sparc64__) || defined(__sparc__)
+#define SLJIT_CONFIG_UNSUPPORTED 1
 #else
 /* Unsupported architecture */
 #define SLJIT_CONFIG_UNSUPPORTED 1

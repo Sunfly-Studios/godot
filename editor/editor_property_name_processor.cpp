@@ -245,6 +245,7 @@ EditorPropertyNameProcessor::EditorPropertyNameProcessor() {
 	capitalize_string_remaps["ms"] = "(ms)"; // Unit
 	capitalize_string_remaps["msaa"] = "MSAA";
 	capitalize_string_remaps["msdf"] = "MSDF";
+	capitalize_string_remaps["mips64"] = "MIPS64";
 	// Not used for now as AudioEffectReverb has a `msec` property.
 	//capitalize_string_remaps["msec"] = "(msec)"; // Unit.
 	capitalize_string_remaps["navmesh"] = "NavMesh";
@@ -286,6 +287,7 @@ EditorPropertyNameProcessor::EditorPropertyNameProcessor() {
 	capitalize_string_remaps["sss"] = "SSS";
 	capitalize_string_remaps["stderr"] = "stderr";
 	capitalize_string_remaps["stdout"] = "stdout";
+	capitalize_string_remaps["sparc64"] = "SPARC64";
 	capitalize_string_remaps["sv"] = "SV";
 	capitalize_string_remaps["svg"] = "SVG";
 	capitalize_string_remaps["taa"] = "TAA";

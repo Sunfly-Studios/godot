@@ -56,7 +56,7 @@ void RendererSceneOcclusionCull::HZBuffer::clear() {
 
 	data.clear();
 	sizes.clear();
-	mips.clear();
+	mips_levels.clear();
 
 	debug_data.clear();
 	if (debug_image.is_valid()) {
@@ -100,7 +100,7 @@ void RendererSceneOcclusionCull::HZBuffer::resize(const Size2i &p_size) {
 	}
 
 	data.resize(data_size);
-	mips.resize(mip_count);
+	mips_levels.resize(mip_count);
 	sizes.resize(mip_count);
 
 	w = p_size.x;
@@ -109,7 +109,7 @@ void RendererSceneOcclusionCull::HZBuffer::resize(const Size2i &p_size) {
 
 	for (int i = 0; i < mip_count; i++) {
 		sizes[i] = Size2i(w, h);
-		mips[i] = ptr;
+		mips_levels[i] = ptr;
 
 		ptr = &ptr[w * h];
 		w = MAX(1, w >> 1);
@@ -135,7 +135,7 @@ void RendererSceneOcclusionCull::HZBuffer::update_mips() {
 		return;
 	}
 
-	for (uint32_t mip = 1; mip < mips.size(); mip++) {
+	for (uint32_t mip = 1; mip < mips_levels.size(); mip++) {
 		for (int y = 0; y < sizes[mip].y; y++) {
 			for (int x = 0; x < sizes[mip].x; x++) {
 				int prev_x = x * 2;
@@ -147,9 +147,9 @@ void RendererSceneOcclusionCull::HZBuffer::update_mips() {
 				bool odd_w = (prev_w % 2) != 0;
 				bool odd_h = (prev_h % 2) != 0;
 
-#define CHECK_OFFSET(xx, yy) max_depth = MAX(max_depth, mips[mip - 1][MIN(prev_h - 1, prev_y + (yy)) * prev_w + MIN(prev_w - 1, prev_x + (xx))])
+#define CHECK_OFFSET(xx, yy) max_depth = MAX(max_depth, mips_levels[mip - 1][MIN(prev_h - 1, prev_y + (yy)) * prev_w + MIN(prev_w - 1, prev_x + (xx))])
 
-				float max_depth = mips[mip - 1][prev_y * sizes[mip - 1].x + prev_x];
+				float max_depth = mips_levels[mip - 1][prev_y * sizes[mip - 1].x + prev_x];
 				CHECK_OFFSET(0, 1);
 				CHECK_OFFSET(1, 0);
 				CHECK_OFFSET(1, 1);
@@ -168,7 +168,7 @@ void RendererSceneOcclusionCull::HZBuffer::update_mips() {
 					CHECK_OFFSET(2, 2);
 				}
 
-				mips[mip][y * sizes[mip].x + x] = max_depth;
+				mips_levels[mip][y * sizes[mip].x + x] = max_depth;
 #undef CHECK_OFFSET
 			}
 		}
@@ -186,7 +186,7 @@ RID RendererSceneOcclusionCull::HZBuffer::get_debug_texture() {
 
 	unsigned char *ptrw = debug_data.ptrw();
 	for (int i = 0; i < debug_data.size(); i++) {
-		ptrw[i] = MIN(mips[0][i] / debug_tex_range, 1.0) * 255;
+		ptrw[i] = MIN(mips_levels[0][i] / debug_tex_range, 1.0) * 255;
 	}
 
 	debug_image->set_data(sizes[0].x, sizes[0].y, false, Image::FORMAT_L8, debug_data);

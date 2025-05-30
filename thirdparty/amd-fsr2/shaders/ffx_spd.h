@@ -24,7 +24,7 @@ FFX_STATIC void SpdSetup(FfxUInt32x2    dispatchThreadGroupCountXY,  // CPU side
                          FfxUInt32x2    workGroupOffset,             // GPU side: pass in as constant
                          FfxUInt32x2    numWorkGroupsAndMips,        // GPU side: pass in as constant
                          FfxUInt32x4     rectInfo,                    // left, top, width, height
-                         FfxInt32 mips)                        // optional: if -1, calculate based on rect width and height
+                         FfxInt32 mipsffx)                        // optional: if -1, calculate based on rect width and height
 {
     workGroupOffset[0] = rectInfo[0] / 64;  // rectInfo[0] = left
     workGroupOffset[1] = rectInfo[1] / 64;  // rectInfo[1] = top
@@ -37,9 +37,9 @@ FFX_STATIC void SpdSetup(FfxUInt32x2    dispatchThreadGroupCountXY,  // CPU side
 
     numWorkGroupsAndMips[0] = (dispatchThreadGroupCountXY[0]) * (dispatchThreadGroupCountXY[1]);
 
-    if (mips >= 0)
+    if (mipsffx >= 0)
     {
-        numWorkGroupsAndMips[1] = FfxUInt32(mips);
+        numWorkGroupsAndMips[1] = FfxUInt32(mipsffx);
     }
     else
     {  

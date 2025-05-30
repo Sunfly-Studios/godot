@@ -136,7 +136,7 @@ typedef struct Fsr2RcasConstants {
 
 typedef struct Fsr2SpdConstants {
 
-    uint32_t                    mips;
+    uint32_t                    mipsSpd;
     uint32_t                    numworkGroups;
     uint32_t                    workGroupOffset[2];
     uint32_t                    renderSize[2];
@@ -1004,7 +1004,7 @@ static FfxErrorCode fsr2Dispatch(FfxFsr2Context_Private* context, const FfxFsr2D
     // downsample
     Fsr2SpdConstants luminancePyramidConstants;
     luminancePyramidConstants.numworkGroups = numWorkGroupsAndMips[0];
-    luminancePyramidConstants.mips = numWorkGroupsAndMips[1];
+    luminancePyramidConstants.mipsSpd = numWorkGroupsAndMips[1];
     luminancePyramidConstants.workGroupOffset[0] = workGroupOffset[0];
     luminancePyramidConstants.workGroupOffset[1] = workGroupOffset[1];
     luminancePyramidConstants.renderSize[0] = params->renderSize.width;

@@ -70,14 +70,14 @@ public:
 
 _ALWAYS_INLINE_ static void _cpu_pause() {
 #if defined(_MSC_VER)
-// ----- MSVC.
+	// ----- MSVC.
 #if defined(_M_ARM) || defined(_M_ARM64) // ARM.
 	__yield();
 #elif defined(_M_IX86) || defined(_M_X64) // x86.
 	_mm_pause();
 #endif
 #elif defined(__GNUC__) || defined(__clang__)
-// ----- GCC/Clang.
+	// ----- GCC/Clang.
 #if defined(__i386__) || defined(__x86_64__) // x86.
 	__builtin_ia32_pause();
 #elif defined(__arm__) || defined(__aarch64__) // ARM.
@@ -86,7 +86,16 @@ _ALWAYS_INLINE_ static void _cpu_pause() {
 	asm volatile("or 27,27,27");
 #elif defined(__riscv) // RISC-V.
 	asm volatile(".insn i 0x0F, 0, x0, x0, 0x010");
-#endif
+#elif defined(__sparc64__) // SPARC/SPARC64.
+	asm volatile("membar #LoadLoad");
+#elif defined(__mips__) || defined(__mips64__) || defined(__mips64) // MIPS/MIPS64.
+	#if defined(__mips32r2) || defined(__mips64r2) || defined(__mips32r6) || defined(__mips64r6)
+		asm volatile("pause");
+	#else
+		// Fallback for older MIPS processors. Use a short delay loop
+		asm volatile("sll $0, $0, 1");
+	#endif
+#endif // defined(__GNUC__) || defined(__clang__)
 #endif
 }
 

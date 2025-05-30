@@ -46,8 +46,11 @@ public:
 
 		LocalVector<float> data;
 		LocalVector<Size2i> sizes;
-		LocalVector<float *> mips;
-
+		// Rename "mips" to mips_levels to
+		// avoid name collisions with the automatically
+		// defined macro of the same name when compiling
+		// to mips64
+		LocalVector<float *> mips_levels;
 		RID debug_texture;
 		Ref<Image> debug_image;
 		PackedByteArray debug_data;
@@ -105,7 +108,7 @@ public:
 			rect_max = rect_max.minf(1);
 			rect_min = rect_min.maxf(0);
 
-			int mip_count = mips.size();
+			int mip_count = mips_levels.size();
 
 			Vector2 screen_diagonal = (rect_max - rect_min) * sizes[0];
 			float size = MAX(screen_diagonal.x, screen_diagonal.y);
@@ -135,7 +138,7 @@ public:
 				visible = false;
 				for (int y = miny; y <= maxy; y++) {
 					for (int x = minx; x <= maxx; x++) {
-						float depth = mips[lod][y * w + x];
+						float depth = mips_levels[lod][y * w + x];
 						if (depth > min_depth) {
 							visible = true;
 							break;

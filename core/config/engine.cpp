@@ -251,6 +251,12 @@ String Engine::get_architecture_name() const {
 #elif defined(__loongarch64)
 	return "loongarch64";
 
+#elif defined(__mips64)
+	return "mips64";
+
+#elif defined(__sparcv9) || defined(__sparc64__)
+	return "sparc64";
+
 #elif defined(__wasm__)
 #if defined(__wasm64__)
 	return "wasm64";

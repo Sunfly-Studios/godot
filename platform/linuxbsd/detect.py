@@ -73,7 +73,7 @@ def get_flags():
 
 def configure(env: "SConsEnvironment"):
     # Validate arch.
-    supported_arches = ["x86_32", "x86_64", "arm32", "arm64", "rv64", "ppc32", "ppc64", "loongarch64"]
+    supported_arches = ["x86_32", "x86_64", "arm32", "arm64", "rv64", "ppc32", "ppc64", "loongarch64", "sparc64", "mips64"]
     validate_arch(env["arch"], get_name(), supported_arches)
 
     ## Build type
@@ -97,6 +97,20 @@ def configure(env: "SConsEnvironment"):
     if env["arch"] == "rv64":
         # G = General-purpose extensions, C = Compression extension (very common).
         env.Append(CCFLAGS=["-march=rv64gc"])
+    elif env["arch"] == "sparc64":
+        # These options should provide wide compatibility
+        env.Append(CCFLAGS=["-mcpu=v9", "-m64"])
+        env.Append(LINKFLAGS=["-m64"])
+
+        # Disable JIT for pcre2. It is not supported for this arch.
+        if env["builtin_pcre2_with_jit"]:
+            env["builtin_pcre2_with_jit"] = False
+    elif env["arch"] == "mips64":
+        # Target MIPS64 little-endian with reasonable baseline
+        # Uses MIPS64r2 as it's widely supported on modern MIPS64 systems
+        # Add function sections to help with large compilation units
+        env.Append(CCFLAGS=["-march=mips64r2", "-mabi=64", "-EL", "-mlong-calls", "-mxgot", "-ffunction-sections", "-fdata-sections", "-fPIC"])
+        env.Append(LINKFLAGS=["-mabi=64", "-EL", "-Wl,--gc-sections"])
 
     ## Compiler configuration
 
