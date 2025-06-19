@@ -106,11 +106,13 @@ def configure(env: "SConsEnvironment"):
         if env["builtin_pcre2_with_jit"]:
             env["builtin_pcre2_with_jit"] = False
     elif env["arch"] == "mips64":
-        # Target MIPS64 little-endian with reasonable baseline
-        # Uses MIPS64r2 as it's widely supported on modern MIPS64 systems
-        # Add function sections to help with large compilation units
-        env.Append(CCFLAGS=["-march=mips64r2", "-mabi=64", "-EL", "-mlong-calls", "-mxgot", "-ffunction-sections", "-fdata-sections", "-fPIC"])
-        env.Append(LINKFLAGS=["-mabi=64", "-EL", "-Wl,--gc-sections"])
+        env.Append(CCFLAGS=["-march=mips64r2", "-mabi=64", "-mlong-calls", "-mxgot",
+                            "-ffunction-sections", "-fdata-sections", "-fPIC"])
+
+        # These flags are necessary for MIPS to prevent
+        # assembler errors about "branch out of range"
+        # for large compilation units.
+        env.Append(CCFLAGS=["-fno-inline", "-fno-inline-functions"])
 
     ## Compiler configuration
 

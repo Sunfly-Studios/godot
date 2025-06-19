@@ -285,9 +285,7 @@ String EditorExportPlatformLinuxBSD::_get_exe_arch(const String &p_path) const {
 			return "loongarch64";
 		case 0x002b:
 			return "sparc64";
-		// This is actually little endian mips64 (mips64_le),
-		// which is the only one we care about.
-		case 0x00b9:
+		case 0x0008:
 			return "mips64";
 		default:
 			return "unknown";

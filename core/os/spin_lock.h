@@ -99,7 +99,9 @@ _ALWAYS_INLINE_ static void _cpu_pause() {
 #endif
 }
 
+#if !defined(__powerpc__) || defined(__powerpc64__)
 static_assert(std::atomic_bool::is_always_lock_free);
+#endif
 
 class SpinLock {
 	union {
