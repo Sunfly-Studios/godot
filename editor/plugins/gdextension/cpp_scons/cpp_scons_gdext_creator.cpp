@@ -40,7 +40,9 @@
 
 void CppSconsGDExtensionCreator::_git_clone_godot_cpp(const String &p_parent_path, bool p_compile) {
 	EditorProgress ep("Preparing GDExtension C++ plugin", "Preparing GDExtension C++ plugin", 3);
-	List<String> args = { "clone", "--single-branch", "--branch", VERSION_BRANCH, "https://github.com/godotengine/godot-cpp" };
+	// Change from official URL since this has the patches required for building
+	// exoteric architectures (SPARC64, Loongarch64, MIPS64).
+	List<String> args = { "clone", "--single-branch", "--branch", VERSION_BRANCH, "https://github.com/Sunfly-Studios/godot-cpp" };
 	const String godot_cpp_path = p_parent_path.trim_prefix("res://").path_join("godot-cpp");
 	args.push_back(godot_cpp_path);
 	ep.step(TTR("Cloning godot-cpp..."), 1);
