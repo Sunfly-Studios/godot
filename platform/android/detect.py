@@ -35,12 +35,11 @@ def get_opts():
         ),
         BoolVariable("store_release", "Editor build for Google Play Store (for official builds only)", False),
         BoolVariable(
-            "generate_android_binaries",
+            ("generate_android_binaries", "generate_apk"),
             "Generate APK, AAB & AAR binaries after building Android library by calling Gradle",
             False,
         ),
         BoolVariable("swappy", "Use Swappy Frame Pacing library", False),
-        BoolVariable("gradle_do_not_strip", "Whether Gradle should strip the Android *.so libraries or not", False),
     ]
 
 

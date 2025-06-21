@@ -112,10 +112,9 @@ if lib_arch_dir != "":
     else:
         lib_tools_dir = ""
 
-    out_dir = "#platform/android/java/lib/libs/" + lib_tools_dir + lib_type_dir + "/" + lib_arch_dir
-    env_android.Command(
-        out_dir + "/libgodot_android.so", "#bin/libgodot" + env["SHLIBSUFFIX"], Move("$TARGET", "$SOURCE")
-    )
+    jni_libs_dir = "#platform/android/java/lib/libs/" + lib_tools_dir + lib_type_dir + "/"
+    out_dir = jni_libs_dir + lib_arch_dir
+    env_android.CommandNoCache(out_dir + "/libgodot_android.so", lib, Move("$TARGET", "$SOURCE"))
 
     stl_lib_path = find_stl_lib_path(
         str(env["ANDROID_NDK_ROOT"]), 
@@ -130,6 +129,14 @@ if lib_arch_dir != "":
         print_warning(f"Could not find libc++_shared.so for architecture {lib_arch_dir}")
         print_warning("Checked both old and new NDK directory structures")
         print_warning("Build may fail - please verify your NDK installation")
+    
+    if env["debug_symbols"] and env["separate_debug_symbols"]:
+        debug_symbols_zip_file = (
+            ("#bin/android-editor-" if env.editor_build else "#bin/android-template-")
+            + lib_type_dir
+            + "-native-symbols.zip"
+        )
+        env_android.NoCache(Zip(debug_symbols_zip_file, jni_libs_dir, ZIPROOT=Dir(jni_libs_dir)))
 
     def generate_android_binaries(target, source, env):
         gradle_process = []
@@ -148,7 +155,7 @@ if lib_arch_dir != "":
             "--quiet",
         ]
 
-        if env["gradle_do_not_strip"]:
+        if env["debug_symbols"] and not env["separate_debug_symbols"]:
             gradle_process += ["-PdoNotStrip=true"]
 
         subprocess.run(
