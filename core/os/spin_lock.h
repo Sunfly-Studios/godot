@@ -87,14 +87,16 @@ _ALWAYS_INLINE_ static void _cpu_pause() {
 #elif defined(__riscv) // RISC-V.
 	asm volatile(".insn i 0x0F, 0, x0, x0, 0x010");
 #elif defined(__sparc64__) // SPARC/SPARC64.
-	asm volatile("membar #LoadLoad");
-#elif defined(__mips__) || defined(__mips64__) || defined(__mips64) // MIPS/MIPS64.
-	#if defined(__mips32r2) || defined(__mips64r2) || defined(__mips32r6) || defined(__mips64r6)
-		asm volatile("pause");
-	#else
-		// Fallback for older MIPS processors. Use a short delay loop
-		asm volatile("sll $0, $0, 1");
-	#endif
+	// Read condition code register to %g0,
+	// which has no side effects and takes at least
+	// a cycle to execute.
+
+	// Also use memory clobber to prevent
+	// reordering by the compiler.
+	asm volatile("rd %%ccr, %%g0" ::: "memory");
+#elif defined(__mips__) // MIPS/MIPS64.
+	// nop.
+	asm volatile("sll $0, $0, 0" ::: "memory");
 #endif // defined(__GNUC__) || defined(__clang__)
 #endif
 }

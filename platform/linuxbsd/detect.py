@@ -106,8 +106,17 @@ def configure(env: "SConsEnvironment"):
         if env["builtin_pcre2_with_jit"]:
             env["builtin_pcre2_with_jit"] = False
     elif env["arch"] == "mips64":
-        env.Append(CCFLAGS=["-march=mips64r2", "-mabi=64", "-mlong-calls", "-mxgot",
-                            "-ffunction-sections", "-fdata-sections", "-fPIC"])
+        env.Append(
+            CCFLAGS=[
+                "-march=mips64",
+                "-mabi=64",
+                "-mlong-calls",
+                "-mxgot",
+                "-ffunction-sections",
+                "-fdata-sections",
+                "-fPIC",
+            ]
+        )
 
         # These flags are necessary for MIPS to prevent
         # assembler errors about "branch out of range"

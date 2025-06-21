@@ -61,12 +61,11 @@
 
 template <typename T>
 class SafeNumeric {
-#if defined(__powerpc__) && !defined(__powerpc64__)
-	// Use non-lock-free atomics for PPC32
-	std::atomic<T> value;
-#else
+#if !defined(__powerpc__) || defined(__powerpc64__)
 	std::atomic<T> value;
 	static_assert(std::atomic<T>::is_always_lock_free);
+#else
+	std::atomic<T> value;
 #endif
 
 public:
@@ -156,11 +155,11 @@ public:
 };
 
 class SafeFlag {
-#if defined(__powerpc__) && !defined(__powerpc64__)
-	std::atomic_bool flag;
-#else
+#if !defined(__powerpc__) || defined(__powerpc64__)
 	std::atomic_bool flag;
 	static_assert(std::atomic_bool::is_always_lock_free);
+#else
+	std::atomic_bool flag;
 #endif
 
 public:
