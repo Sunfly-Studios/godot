@@ -978,7 +978,7 @@ Patches:
 ## ufbx
 
 - Upstream: https://github.com/ufbx/ufbx
-- Version: 0.15.0 (24eea6f40929fe0f679b7950def378edb003afdb, 2024)
+- Version: 0.20.0 (a63ff0a47485328880b3300e7bcdf01413343a45, 2025)
 - License: MIT
 
 Files extracted from upstream source:
