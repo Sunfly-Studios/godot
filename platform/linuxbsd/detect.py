@@ -98,11 +98,10 @@ def configure(env: "SConsEnvironment"):
         # G = General-purpose extensions, C = Compression extension (very common).
         env.Append(CCFLAGS=["-march=rv64gc"])
     elif env["arch"] == "sparc64":
-        # These options should provide wide compatibility
         env.Append(CCFLAGS=["-mcpu=v9", "-m64"])
         env.Append(LINKFLAGS=["-m64"])
 
-        # Disable JIT for pcre2. It is not supported for this arch.
+        # Disable JIT for pcre2. It is not supported for this arch
         if env["builtin_pcre2_with_jit"]:
             env["builtin_pcre2_with_jit"] = False
     elif env["arch"] == "mips64":
@@ -120,13 +119,35 @@ def configure(env: "SConsEnvironment"):
 
         # These flags are necessary for MIPS to prevent
         # assembler errors about "branch out of range"
-        # for large compilation units.
+        # for large compilation units
         env.Append(CCFLAGS=["-fno-inline", "-fno-inline-functions"])
     elif env["arch"] == "alpha":
-        # First option enables baseline with useful (BWX)
-        # extensions, second flag forces IEEE754 compliance
-        # for floating point numbers
-        env.Append(CCFLAGS=["-mcpu=ev56", "-mieee"])
+        env.Append(
+            CCFLAGS=[
+                # Baseline with useful (BWX) extensions,
+                # and best middle ground for compatibility
+                "-mcpu=ev56",
+
+                # Force IEEE-754 compliance
+                # for floating point numbers
+                "-mieee",
+
+                # All constants will be built with instructions
+                # rather than loaded from memory
+                "-mbuild-constants",
+
+                # Limits data to 64KB sections
+                # while using more efficient 16-bit realocations.
+                # Which helps for resource loading by changing
+                # how data is accessed
+                "-mlarge-data",
+
+                # Primarly for FP, but still useful for
+                # the rest of Godot's systems
+                "-mtrap-precision=i"
+            ]
+        )
+        env.Append(LINKFLAGS=["-Wl,--no-relax", "-mlarge-data"])
 
         if env["builtin_pcre2_with_jit"]:
             env["builtin_pcre2_with_jit"] = False
