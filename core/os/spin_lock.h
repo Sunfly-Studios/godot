@@ -97,6 +97,11 @@ _ALWAYS_INLINE_ static void _cpu_pause() {
 #elif defined(__mips__) // MIPS/MIPS64.
 	// nop.
 	asm volatile("sll $0, $0, 0" ::: "memory");
+#elif defined(__alpha__) // DEC Alpha.
+	// Memory barrier, forces memory
+	// operations to complete and may
+	// not be optimised away by the compiler.
+	asm volatile("mb" ::: "memory");
 #endif // defined(__GNUC__) || defined(__clang__)
 #endif
 }

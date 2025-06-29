@@ -268,6 +268,13 @@
 
 	#define JPH_VECTOR_ALIGNMENT 16
 	#define JPH_DVECTOR_ALIGNMENT 16
+#elif defined(__alpha__)
+	// ALPHA CPU architecture
+	// Always is 64-bit
+	#define JPH_CPU_ALPHA
+	#define JPH_CPU_ADDRESS_BITS 64
+	#define JPH_VECTOR_ALIGNMENT 16
+	#define JPH_DVECTOR_ALIGNMENT 16
 #else
 	#error Unsupported CPU architecture
 #endif
@@ -424,7 +431,7 @@
 #elif defined(JPH_PLATFORM_LINUX) || defined(JPH_PLATFORM_ANDROID) || defined(JPH_PLATFORM_MACOS) || defined(JPH_PLATFORM_IOS) || defined(JPH_PLATFORM_FREEBSD)
 	#if defined(JPH_CPU_X86)
 		#define JPH_BREAKPOINT	__asm volatile ("int $0x3")
-	#elif defined(JPH_CPU_ARM) || defined(JPH_CPU_RISCV) || defined(JPH_CPU_E2K) || defined(JPH_CPU_PPC) || defined(JPH_CPU_LOONGARCH) || defined(JPH_CPU_SPARC) || defined(JPH_CPU_MIPS)
+	#elif defined(JPH_CPU_ARM) || defined(JPH_CPU_RISCV) || defined(JPH_CPU_E2K) || defined(JPH_CPU_PPC) || defined(JPH_CPU_LOONGARCH) || defined(JPH_CPU_SPARC) || defined(JPH_CPU_MIPS) || defined(JPH_CPU_ALPHA)
 		#define JPH_BREAKPOINT	__builtin_trap()
 	#else
 		#error Unknown CPU architecture

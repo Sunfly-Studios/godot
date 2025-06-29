@@ -73,7 +73,7 @@ def get_flags():
 
 def configure(env: "SConsEnvironment"):
     # Validate arch.
-    supported_arches = ["x86_32", "x86_64", "arm32", "arm64", "rv64", "ppc32", "ppc64", "loongarch64", "sparc64", "mips64"]
+    supported_arches = ["x86_32", "x86_64", "arm32", "arm64", "rv64", "ppc32", "ppc64", "loongarch64", "sparc64", "mips64", "alpha"]
     validate_arch(env["arch"], get_name(), supported_arches)
 
     ## Build type
@@ -122,6 +122,14 @@ def configure(env: "SConsEnvironment"):
         # assembler errors about "branch out of range"
         # for large compilation units.
         env.Append(CCFLAGS=["-fno-inline", "-fno-inline-functions"])
+    elif env["arch"] == "alpha":
+        # First option enables baseline with useful (BWX)
+        # extensions, second flag forces IEEE754 compliance
+        # for floating point numbers
+        env.Append(CCFLAGS=["-mcpu=ev56", "-mieee"])
+
+        if env["builtin_pcre2_with_jit"]:
+            env["builtin_pcre2_with_jit"] = False
 
     ## Compiler configuration
 

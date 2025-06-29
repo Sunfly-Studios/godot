@@ -583,6 +583,10 @@ bool OS::has_feature(const String &p_feature) {
 	if (p_feature == "sparc64") {
 		return true;
 	}
+#elif defined(__alpha__) || defined(__alpha)
+	if (p_feature == "alpha") {
+		return true;
+	}
 #endif
 
 #if defined(IOS_SIMULATOR)
