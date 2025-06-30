@@ -138,13 +138,12 @@ def configure(env: "SConsEnvironment"):
                 # rather than loaded from memory
                 "-mbuild-constants",
 
-                # Limits data to 64KB sections
-                # while using more efficient 16-bit realocations.
-                # Which helps for resource loading by changing
+                # Limits data to 2GB sections,
+                # which helps for resource loading by changing
                 # how data is accessed
                 "-mlarge-data",
 
-                # Primarly for FP, but still useful for
+                # Primarily for FP, but still useful for
                 # the rest of Godot's systems
                 "-mtrap-precision=i"
             ]
@@ -163,7 +162,7 @@ def configure(env: "SConsEnvironment"):
         if is_big_endian:
             env.Append(CCFLAGS=["-DBIG_ENDIAN_ENABLED"])
 
-            # Let user know about the endianess.
+            # Let user know about the endianness.
             # We don't say about SPARC because it is always
             # big endian.
             if env["arch"] == "ppc32":

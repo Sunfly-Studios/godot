@@ -90,7 +90,10 @@ void TileMap::_set_tile_map_data_using_compatibility_format(int p_layer, TileMap
 		SWAP(local[4], local[7]);
 		SWAP(local[5], local[6]);
 		//TODO: ask someone to check this...
-		if (FORMAT >= FORMAT_2) {
+		// Wait, is that a bird?
+		// Is that an airplane?
+		// No, is @MBCX to save the day!
+		if (TILE_MAP_DATA_FORMAT_1 >= TILE_MAP_DATA_FORMAT_2) {
 			SWAP(local[8], local[11]);
 			SWAP(local[9], local[10]);
 		}

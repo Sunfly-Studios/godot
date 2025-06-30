@@ -527,7 +527,10 @@ Error ResourceLoaderBinary::parse_variant(Variant &r_v) {
 			f->get_buffer((uint8_t *)w, len * sizeof(int32_t));
 #ifdef BIG_ENDIAN_ENABLED
 			{
-				uint32_t *ptr = (uint32_t *)w.ptr();
+				// We do not need the ptr method
+				// because in big endian these are
+				// already pointers
+				uint32_t *ptr = (uint32_t *)w;
 				for (int i = 0; i < len; i++) {
 					ptr[i] = BSWAP32(ptr[i]);
 				}
@@ -546,7 +549,8 @@ Error ResourceLoaderBinary::parse_variant(Variant &r_v) {
 			f->get_buffer((uint8_t *)w, len * sizeof(int64_t));
 #ifdef BIG_ENDIAN_ENABLED
 			{
-				uint64_t *ptr = (uint64_t *)w.ptr();
+				// Same here.
+				uint64_t *ptr = (uint64_t *)w;
 				for (int i = 0; i < len; i++) {
 					ptr[i] = BSWAP64(ptr[i]);
 				}
@@ -565,7 +569,8 @@ Error ResourceLoaderBinary::parse_variant(Variant &r_v) {
 			f->get_buffer((uint8_t *)w, len * sizeof(float));
 #ifdef BIG_ENDIAN_ENABLED
 			{
-				uint32_t *ptr = (uint32_t *)w.ptr();
+				// The pattern is very clear by now!
+				uint32_t *ptr = (uint32_t *)w;
 				for (int i = 0; i < len; i++) {
 					ptr[i] = BSWAP32(ptr[i]);
 				}
@@ -584,7 +589,8 @@ Error ResourceLoaderBinary::parse_variant(Variant &r_v) {
 			f->get_buffer((uint8_t *)w, len * sizeof(double));
 #ifdef BIG_ENDIAN_ENABLED
 			{
-				uint64_t *ptr = (uint64_t *)w.ptr();
+				// Just a bit more..
+				uint64_t *ptr = (uint64_t *)w;
 				for (int i = 0; i < len; i++) {
 					ptr[i] = BSWAP64(ptr[i]);
 				}
@@ -643,7 +649,8 @@ Error ResourceLoaderBinary::parse_variant(Variant &r_v) {
 			f->get_buffer((uint8_t *)w, len * sizeof(float) * 4);
 #ifdef BIG_ENDIAN_ENABLED
 			{
-				uint32_t *ptr = (uint32_t *)w.ptr();
+				// And, done!
+				uint32_t *ptr = (uint32_t *)w;
 				for (int i = 0; i < len * 4; i++) {
 					ptr[i] = BSWAP32(ptr[i]);
 				}
