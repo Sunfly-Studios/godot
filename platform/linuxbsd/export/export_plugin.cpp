@@ -272,8 +272,10 @@ String EditorExportPlatformLinuxBSD::_get_exe_arch(const String &p_path) const {
 		case 0x003e:
 			return "x86_64";
 		case 0x0014:
+		case 0x1400:
 			return "ppc32";
 		case 0x0015:
+		case 0x1500: // Byte-swapped (ppc64v1, ppc64v2)
 			return "ppc64";
 		case 0x0028:
 			return "arm32";
@@ -284,8 +286,10 @@ String EditorExportPlatformLinuxBSD::_get_exe_arch(const String &p_path) const {
 		case 0x0102:
 			return "loongarch64";
 		case 0x002b:
+		case 0x2b00:
 			return "sparc64";
 		case 0x0008:
+		case 0x8000:
 			return "mips64";
 		case 0x9026:
 			return "alpha";
