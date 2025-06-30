@@ -4,7 +4,7 @@ import sys
 from typing import TYPE_CHECKING
 
 from methods import get_compiler_version, print_error, print_info, print_warning, using_gcc
-from platform_methods import detect_arch, validate_arch
+from platform_methods import detect_arch, validate_arch, detect_endianness
 
 if TYPE_CHECKING:
     from SCons.Script.SConscript import SConsEnvironment
@@ -97,6 +97,8 @@ def configure(env: "SConsEnvironment"):
     if env["arch"] == "rv64":
         # G = General-purpose extensions, C = Compression extension (very common).
         env.Append(CCFLAGS=["-march=rv64gc"])
+    elif env["arch"] == "ppc32":
+        env.Append(LINKFLAGS=["-latomic"])
     elif env["arch"] == "sparc64":
         env.Append(CCFLAGS=["-mcpu=v9", "-m64"])
         env.Append(LINKFLAGS=["-m64"])
@@ -106,8 +108,8 @@ def configure(env: "SConsEnvironment"):
             env["builtin_pcre2_with_jit"] = False
     elif env["arch"] == "mips64":
         env.Append(
+            # Default flags before appending -march
             CCFLAGS=[
-                "-march=mips64",
                 "-mabi=64",
                 "-mlong-calls",
                 "-mxgot",
@@ -151,6 +153,37 @@ def configure(env: "SConsEnvironment"):
 
         if env["builtin_pcre2_with_jit"]:
             env["builtin_pcre2_with_jit"] = False
+
+    # These architectures are MSB (Most Significant Bit) first,
+    # or in other words Big Endian. So we need to set this
+    # flag so that other components (like FileAccess) can
+    # actually work without getting confused.
+    is_big_endian = detect_endianness(env)
+    if env["arch"] == "sparc64" or env["arch"] == "ppc64" or env["arch"] == "ppc32" or env["arch"] == "mips64":
+        if is_big_endian:
+            env.Append(CCFLAGS=["-DBIG_ENDIAN_ENABLED"])
+
+            # Let user know about the endianess.
+            # We don't say about SPARC because it is always
+            # big endian.
+            if env["arch"] == "ppc32":
+                print("Building PowerPC 32 Big Endian")
+            elif env["arch"] == "ppc64":
+                print("Building PowerPC 64 Big Endian (ELFv1/v2 compatible)")
+            elif env["arch"] == "mips64":
+                # I think this is already a default depending
+                # on the toolchain, but is not bad being explicit.
+                env.Append(CCFLAGS=["-EB", "-march=mips64"])
+                print("Building MIPS64 Big Endian")
+        else:
+            if env["arch"] == "ppc32":
+                print("Building PowerPC 32 Little Endian")
+            elif env["arch"] == "ppc64":
+                print("Building PowerPC 64 Little Endian (ELFv2)")
+            elif env["arch"] == "mips64":
+                env.Append(CCFLAGS=["-EL", "-march=mips64r2"])
+                print("Building MIPS64 Little Endian")
+
 
     ## Compiler configuration
 

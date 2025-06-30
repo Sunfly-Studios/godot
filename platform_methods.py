@@ -144,6 +144,45 @@ def get_mvk_sdk_path(osname):
     return lib_name_out
 
 
+def detect_endianness(env):
+    import subprocess
+    import tempfile
+    import os
+
+    test_code = """
+#if __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
+BIG_ENDIAN_DETECTED
+#elif __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
+LITTLE_ENDIAN_DETECTED
+#else
+UNKNOWN_ENDIAN
+#endif
+    """
+
+    try:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".c", delete=False) as f:
+            f.write(test_code)
+            test_file = f.name
+
+        # Simply use preprocessor
+        cpp_cmd = [env.get("CC", "gcc"), "-E", test_file]
+        result = subprocess.run(cpp_cmd, capture_output=True, text=True, check=True)
+        output = result.stdout
+        os.unlink(test_file)
+
+        if "BIG_ENDIAN_DETECTED" in output:
+            return True
+        elif "LITTLE_ENDIAN_DETECTED" in output:
+            return False
+        else:
+            print("Warning: Could not detect endianness from preprocessor")
+            return False
+
+    except Exception as e:
+        print(f"Warning: Endianness detection failed: {e}")
+        return False
+
+
 def detect_mvk(env, osname):
     mvk_list = [
         get_mvk_sdk_path(osname),
