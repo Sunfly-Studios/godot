@@ -41,6 +41,7 @@
 
 // Godot's packed file magic header ("GDPC" in ASCII).
 #define PACK_HEADER_MAGIC 0x43504447
+#define PACK_HEADER_MAGIC_BIG_ENDIAN 0x47445043
 
 // The current packed file format version number.
 #define PACK_FORMAT_VERSION 3

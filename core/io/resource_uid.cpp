@@ -233,6 +233,9 @@ Error ResourceUID::load_from_cache(bool p_reset) {
 	if (f.is_null()) {
 		return ERR_CANT_OPEN;
 	}
+#ifdef BIG_ENDIAN_ENABLED
+	f->set_big_endian(false);
+#endif
 
 	MutexLock l(mutex);
 	if (p_reset) {

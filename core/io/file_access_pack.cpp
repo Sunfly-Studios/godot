@@ -34,6 +34,7 @@
 #include "core/os/os.h"
 #include "core/script_encryption_key.gen.h"
 #include "core/version.h"
+#include "core/io/marshalls.h"
 
 HashSet<String> PackedData::require_encryption;
 
@@ -208,12 +209,17 @@ bool PackedSourcePCK::try_open_pack(const String &p_path, bool p_replace_files, 
 	}
 
 	bool pck_header_found = false;
+	bool is_big_endian_pck = false;
 
 	// Search for the header at the start offset - standalone PCK file.
 	f->seek(p_offset);
 	uint32_t magic = f->get_32();
 	if (magic == PACK_HEADER_MAGIC) {
 		pck_header_found = true;
+		is_big_endian_pck = false;
+	} else if (magic == PACK_HEADER_MAGIC_BIG_ENDIAN) {
+		pck_header_found = true;
+		is_big_endian_pck = true;
 	}
 
 	// Search for the header in the executable "pck" section - self contained executable.
@@ -233,6 +239,14 @@ bool PackedSourcePCK::try_open_pack(const String &p_path, bool p_replace_files, 
 #ifdef DEBUG_ENABLED
 					print_verbose("PCK header found in executable pck section, loading from offset 0x" + String::num_int64(pck_off - 4, 16));
 #endif
+					is_big_endian_pck = false;
+					pck_header_found = true;
+					break;
+				} else if (magic == PACK_HEADER_MAGIC_BIG_ENDIAN) {
+#ifdef DEBUG_ENABLED
+					print_verbose("PCK header found in executable pck section, loading from offset 0x" + String::num_int64(pck_off - 4, 16));
+#endif
+					is_big_endian_pck = true;
 					pck_header_found = true;
 					break;
 				}
@@ -252,12 +266,20 @@ bool PackedSourcePCK::try_open_pack(const String &p_path, bool p_replace_files, 
 		f->seek(f->get_position() - 4);
 		magic = f->get_32();
 
-		if (magic == PACK_HEADER_MAGIC) {
+		if (magic == PACK_HEADER_MAGIC || magic == PACK_HEADER_MAGIC_BIG_ENDIAN) {
+			is_big_endian_pck = (magic == PACK_HEADER_MAGIC_BIG_ENDIAN);
+
 			f->seek(f->get_position() - 12);
 			uint64_t ds = f->get_64();
 			f->seek(f->get_position() - ds - 8);
 			magic = f->get_32();
-			if (magic == PACK_HEADER_MAGIC) {
+
+			// Check if the second magic matches the endianness of the first
+			bool second_is_big_endian = (magic == PACK_HEADER_MAGIC_BIG_ENDIAN);
+			if (
+				(magic == PACK_HEADER_MAGIC || magic == PACK_HEADER_MAGIC_BIG_ENDIAN) &&
+				(second_is_big_endian == is_big_endian_pck)
+			) {
 #ifdef DEBUG_ENABLED
 				print_verbose("PCK header found at the end of executable, loading from offset 0x" + String::num_int64(f->get_position() - 4, 16));
 #endif
@@ -270,12 +292,46 @@ bool PackedSourcePCK::try_open_pack(const String &p_path, bool p_replace_files, 
 		return false;
 	}
 
-	int64_t pck_start_pos = f->get_position() - 4;
+	// Handle mixed endianness PCK files:
+	// - Magic number is in one endianness
+	// - But data might be in the opposite endianness
 
-	uint32_t version = f->get_32();
-	uint32_t ver_major = f->get_32();
-	uint32_t ver_minor = f->get_32();
-	f->get_32(); // patch number, not used for validation.
+	int64_t pck_start_pos = f->get_position() - 4;
+	uint32_t version, ver_major, ver_minor;
+	bool data_endianness_is_big = is_big_endian_pck;
+
+	// First try: keep current endianness (based on magic detection)
+	f->set_big_endian(is_big_endian_pck);
+	version = f->get_32();
+	ver_major = f->get_32();
+	ver_minor = f->get_32();
+	f->get_32(); // patch number
+
+	bool version_makes_sense = (
+		version == PACK_FORMAT_VERSION &&
+		ver_major <= VERSION_MAJOR + 10 &&
+		ver_minor <= VERSION_MINOR + 100
+	);
+
+	if (!version_makes_sense) {
+		// Try opposite endianness for the data
+		f->seek(pck_start_pos + 4); // Reset to start of version data
+		data_endianness_is_big = !is_big_endian_pck;
+		f->set_big_endian(data_endianness_is_big);
+
+		version = f->get_32();
+		ver_major = f->get_32();
+		ver_minor = f->get_32();
+		f->get_32(); // patch number
+
+#ifdef DEBUG_ENABLED
+		print_verbose("Switched to opposite endianness for data");
+		print_verbose("Version: " + itos(version) + " Major: " + itos(ver_major) + " Minor: " + itos(ver_minor));
+#endif
+	}
+
+	// From here on, use whatever data_endianness_is_big is for all reads.
+	f->set_big_endian(data_endianness_is_big);
 
 	ERR_FAIL_COND_V_MSG(version != PACK_FORMAT_VERSION, false, vformat("Pack version unsupported: %d.", version));
 	ERR_FAIL_COND_V_MSG(ver_major > VERSION_MAJOR || (ver_major == VERSION_MAJOR && ver_minor > VERSION_MINOR), false, vformat("Pack created with a newer version of the engine: %d.%d.", ver_major, ver_minor));
@@ -322,6 +378,9 @@ bool PackedSourcePCK::try_open_pack(const String &p_path, bool p_replace_files, 
 		Error err = fae->open_and_parse(f, key, FileAccessEncrypted::MODE_READ, false);
 		ERR_FAIL_COND_V_MSG(err, false, "Can't open encrypted pack directory.");
 		f = fae;
+		// FileAccessEncrypted wraps the original file, so ensure
+		// it inherits the correct endianness setting
+		f->set_big_endian(data_endianness_is_big);
 	}
 
 	// Compute directory hash.
@@ -331,16 +390,34 @@ bool PackedSourcePCK::try_open_pack(const String &p_path, bool p_replace_files, 
 		CryptoCore::SHA256Context sha_ctx;
 		sha_ctx.start();
 		dir_start_pos = f->get_position();
+#ifdef DEBUG_ENABLED
+		print_verbose("File is using big endian: " + String(f->is_big_endian() ? "true" : "false"));
+#endif
 		for (int i = 0; i < file_count; i++) {
 			uint32_t sl = f->get_32();
+
+#ifdef DEBUG_ENABLED
+			if (i == 0) {
+				print_verbose("First entry string length: " + itos(sl));
+			}
+#endif
+			// Hash the string length as it appears in the file's endianness
 			sha_ctx.update((const unsigned char *)&sl, 4);
+
 			CharString cs;
 			cs.resize(sl);
 			f->get_buffer((uint8_t *)cs.ptr(), sl);
 			sha_ctx.update((const unsigned char *)cs.ptr(), sl);
-
+#ifdef DEBUG_ENABLED
+			if (i == 0) {
+				String path;
+				path.parse_utf8(cs.ptr(), sl);
+				print_verbose("First entry path: " + path);
+			}
+#endif
 			uint64_t ofs = f->get_64();
 			sha_ctx.update((const unsigned char *)&ofs, 8);
+
 			uint64_t size = f->get_64();
 			sha_ctx.update((const unsigned char *)&size, 8);
 
@@ -350,11 +427,89 @@ bool PackedSourcePCK::try_open_pack(const String &p_path, bool p_replace_files, 
 
 			uint32_t flags = f->get_32();
 			sha_ctx.update((const unsigned char *)&flags, 4);
+#ifdef DEBUG_ENABLED
+			if (i == 0) {
+				print_verbose("First entry offset: " + itos(ofs));
+				print_verbose("First entry size: " + itos(size));
+				print_verbose("First entry flags: " + itos(flags));
+			}
+#endif
 		}
 		sha_ctx.finish((unsigned char *)directory_hash.ptrw());
 
+#ifdef DEBUG_ENABLED
+		String hash_str = "";
+		for (int i = 0; i < 32; i++) {
+			hash_str += String::num_int64(directory_hash[i], 16).pad_zeros(2);
+		}
+		print_verbose("Computed hash: " + hash_str);
+#endif
 		Ref<Crypto> tls_ctx = Crypto::create();
-		ERR_FAIL_COND_V_MSG(!tls_ctx->verify(HashingContext::HASH_SHA256, directory_hash, signature, p_key), false, "Pack directory integrity verification failed, invalid signature.");
+		bool verify_result = tls_ctx->verify(HashingContext::HASH_SHA256, directory_hash, signature, p_key);
+
+#ifdef DEBUG_ENABLED
+		print_verbose("Verification result: " + String(verify_result ? "SUCCESS" : "FAILED"));
+#endif
+		if (!verify_result) {
+			// Alternative 1: Hash with data converted to little-endian
+			f->seek(dir_start_pos);
+			sha_ctx.start();
+
+			for (int i = 0; i < file_count; i++) {
+				uint32_t sl = f->get_32();
+
+				// Convert to little-endian for hashing
+				uint8_t sl_bytes[4];
+				encode_uint32(sl, sl_bytes);
+				sha_ctx.update(sl_bytes, 4);
+
+				CharString cs;
+				cs.resize(sl);
+				f->get_buffer((uint8_t *)cs.ptr(), sl);
+				sha_ctx.update((const unsigned char *)cs.ptr(), sl);
+
+				uint64_t ofs = f->get_64();
+				uint8_t ofs_bytes[8];
+				encode_uint64(ofs, ofs_bytes);
+				sha_ctx.update(ofs_bytes, 8);
+
+				uint64_t size = f->get_64();
+				uint8_t size_bytes[8];
+				encode_uint64(size, size_bytes);
+				sha_ctx.update(size_bytes, 8);
+
+				uint8_t sha256[32];
+				f->get_buffer(sha256, 32);
+				sha_ctx.update((const unsigned char *)sha256, 32);
+
+				uint32_t flags = f->get_32();
+				uint8_t flags_bytes[4];
+				encode_uint32(flags, flags_bytes);
+				sha_ctx.update(flags_bytes, 4);
+			}
+
+			Vector<uint8_t> alt_hash;
+			alt_hash.resize(32);
+			sha_ctx.finish((unsigned char *)alt_hash.ptrw());
+
+#ifdef DEBUG_ENABLED
+			hash_str = "";
+			for (int i = 0; i < 32; i++) {
+				hash_str += String::num_int64(alt_hash[i], 16).pad_zeros(2);
+			}
+			print_verbose("Alternative hash (little-endian conversion): " + hash_str);
+#endif
+			bool alt_verify = tls_ctx->verify(HashingContext::HASH_SHA256, alt_hash, signature, p_key);
+
+#ifdef DEBUG_ENABLED
+			print_verbose("Alternative verification result: " + String(alt_verify ? "SUCCESS" : "FAILED"));
+#endif
+			if (alt_verify) {
+				directory_hash = alt_hash;
+			}
+		}
+
+		ERR_FAIL_COND_V_MSG(!verify_result && !tls_ctx->verify(HashingContext::HASH_SHA256, directory_hash, signature, p_key), false, "Pack directory integrity verification failed, invalid signature.");
 		f->seek(dir_start_pos);
 	}
 
@@ -532,6 +687,9 @@ FileAccessPack::FileAccessPack(const String &p_path, PackedData::PackedFile *p_f
 		f(FileAccess::open(pf.pack, FileAccess::READ)) {
 	ERR_FAIL_COND_MSG(f.is_null(), vformat("Can't open pack-referenced file '%s'.", String(pf.pack)));
 
+#ifdef BIG_ENDIAN_ENABLED
+	f->set_big_endian(false);
+#endif
 	f->seek(pf.offset);
 	off = pf.offset;
 
@@ -549,6 +707,9 @@ FileAccessPack::FileAccessPack(const String &p_path, PackedData::PackedFile *p_f
 		Error err = fae->open_and_parse(f, key, FileAccessEncrypted::MODE_READ, false);
 		ERR_FAIL_COND_MSG(err, vformat("Can't open encrypted pack-referenced file '%s'.", String(pf.pack)));
 		f = fae;
+#ifdef BIG_ENDIAN_ENABLED
+		f->set_big_endian(true);
+#endif
 		off = 0;
 	}
 	pos = 0;

@@ -774,6 +774,10 @@ Error ProjectSettings::_load_settings_binary(const String &p_path) {
 		return err;
 	}
 
+#ifdef BIG_ENDIAN_ENABLED
+	f->set_big_endian(false);
+#endif
+
 	uint8_t hdr[4];
 	f->get_buffer(hdr, 4);
 	ERR_FAIL_COND_V_MSG((hdr[0] != 'E' || hdr[1] != 'C' || hdr[2] != 'F' || hdr[3] != 'G'), ERR_FILE_CORRUPT, "Corrupted header in binary project.binary (not ECFG).");
@@ -811,6 +815,10 @@ Error ProjectSettings::_load_settings_text(const String &p_path) {
 		// This needs to be streamlined if we want decent error reporting
 		return ERR_FILE_NOT_FOUND;
 	}
+
+#ifdef BIG_ENDIAN_ENABLED
+	f->set_big_endian(false);
+#endif
 
 	VariantParser::StreamFile stream;
 	stream.f = f;
@@ -925,6 +933,9 @@ Error ProjectSettings::_save_settings_binary(const String &p_file, const RBMap<S
 	Ref<FileAccess> file = FileAccess::open(p_file, FileAccess::WRITE, &err);
 	ERR_FAIL_COND_V_MSG(err != OK, err, vformat("Couldn't save project.binary at '%s'.", p_file));
 
+#ifdef BIG_ENDIAN_ENABLED
+	file->set_big_endian(false);
+#endif
 	uint8_t hdr[4] = { 'E', 'C', 'F', 'G' };
 	file->store_buffer(hdr, 4);
 
@@ -994,6 +1005,9 @@ Error ProjectSettings::_save_settings_text(const String &p_file, const RBMap<Str
 	Ref<FileAccess> file = FileAccess::open(p_file, FileAccess::WRITE, &err);
 
 	ERR_FAIL_COND_V_MSG(err != OK, err, vformat("Couldn't save project.godot - %s.", p_file));
+#ifdef BIG_ENDIAN_ENABLED
+	file->set_big_endian(false);
+#endif
 
 	file->store_line("; Engine configuration file.");
 	file->store_line("; It's best edited using the editor UI and not directly,");

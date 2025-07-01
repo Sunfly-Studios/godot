@@ -2191,7 +2191,7 @@ Error ResourceFormatSaverBinaryInstance::save(const String &p_path, const Ref<Re
 	f->set_big_endian(big_endian);
 
 	f->store_32(VERSION_MAJOR);
-	f->store_32(VERSION_MAJOR);
+	f->store_32(VERSION_MINOR);
 	f->store_32(FORMAT_VERSION);
 
 	if (f->get_error() != OK && f->get_error() != ERR_FILE_EOF) {

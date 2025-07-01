@@ -40,6 +40,10 @@ Error CompressedTexture2D::_load_data(const String &p_path, int &r_width, int &r
 	Ref<FileAccess> f = FileAccess::open(p_path, FileAccess::READ);
 	ERR_FAIL_COND_V_MSG(f.is_null(), ERR_CANT_OPEN, vformat("Unable to open file: %s.", p_path));
 
+#ifdef BIG_ENDIAN_ENABLED
+	f->set_big_endian(false);
+#endif
+
 	uint8_t header[4];
 	f->get_buffer(header, 4);
 	if (header[0] != 'G' || header[1] != 'S' || header[2] != 'T' || header[3] != '2') {
@@ -510,6 +514,9 @@ Image::Format CompressedTexture3D::get_format() const {
 Error CompressedTexture3D::_load_data(const String &p_path, Vector<Ref<Image>> &r_data, Image::Format &r_format, int &r_width, int &r_height, int &r_depth, bool &r_mipmaps) {
 	Ref<FileAccess> f = FileAccess::open(p_path, FileAccess::READ);
 	ERR_FAIL_COND_V_MSG(f.is_null(), ERR_CANT_OPEN, vformat("Unable to open file: %s.", p_path));
+#ifdef BIG_ENDIAN_ENABLED
+	f->set_big_endian(false);
+#endif
 
 	uint8_t header[4];
 	f->get_buffer(header, 4);
@@ -701,6 +708,9 @@ Error CompressedTextureLayered::_load_data(const String &p_path, Vector<Ref<Imag
 
 	Ref<FileAccess> f = FileAccess::open(p_path, FileAccess::READ);
 	ERR_FAIL_COND_V_MSG(f.is_null(), ERR_CANT_OPEN, vformat("Unable to open file: %s.", p_path));
+#ifdef BIG_ENDIAN_ENABLED
+	f->set_big_endian(false);
+#endif
 
 	uint8_t header[4];
 	f->get_buffer(header, 4);
