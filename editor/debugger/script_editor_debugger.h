@@ -115,6 +115,7 @@ private:
 	int warning_count;
 
 	bool skip_breakpoints_value = false;
+	bool ignore_error_breaks_value = false;
 	Ref<Script> stack_script;
 
 	TabContainer *tabs = nullptr;
@@ -122,9 +123,11 @@ private:
 	Label *reason = nullptr;
 
 	Button *skip_breakpoints = nullptr;
+	Button *ignore_error_breaks = nullptr;
 	Button *copy = nullptr;
 	Button *step = nullptr;
 	Button *next = nullptr;
+	Button *out = nullptr;
 	Button *dobreak = nullptr;
 	Button *docontinue = nullptr;
 	// Reference to "Remote" tab in scene tree. Needed by _live_edit_set and buttons state.
@@ -262,8 +265,10 @@ public:
 	void stop();
 
 	void debug_skip_breakpoints();
+	void debug_ignore_error_breaks();
 	void debug_copy();
 
+	void debug_out();
 	void debug_next();
 	void debug_step();
 	void debug_break();

@@ -102,6 +102,26 @@ void ScriptEditorDebugger::debug_skip_breakpoints() {
 	_put_msg("set_skip_breakpoints", msg, debugging_thread_id != Thread::UNASSIGNED_ID ? debugging_thread_id : Thread::MAIN_ID);
 }
 
+void ScriptEditorDebugger::debug_ignore_error_breaks() {
+	ignore_error_breaks_value = !ignore_error_breaks_value;
+	if (ignore_error_breaks_value) {
+		ignore_error_breaks->set_button_icon(get_editor_theme_icon(SNAME("NotificationDisabled")));
+	} else {
+		ignore_error_breaks->set_button_icon(get_editor_theme_icon(SNAME("Notification")));
+	}
+
+	Array msg;
+	msg.push_back(ignore_error_breaks_value);
+	_put_msg("set_ignore_error_breaks", msg);
+}
+
+void ScriptEditorDebugger::debug_out() {
+	ERR_FAIL_COND(!is_breaked());
+
+	_put_msg("out", Array(), debugging_thread_id);
+	_clear_execution();
+}
+
 void ScriptEditorDebugger::debug_next() {
 	ERR_FAIL_COND(!is_breaked());
 
@@ -882,6 +902,7 @@ void ScriptEditorDebugger::_notification(int p_what) {
 			copy->set_button_icon(get_editor_theme_icon(SNAME("ActionCopy")));
 			step->set_button_icon(get_editor_theme_icon(SNAME("DebugStep")));
 			next->set_button_icon(get_editor_theme_icon(SNAME("DebugNext")));
+			out->set_button_icon(get_editor_theme_icon(SNAME("DebugOut")));
 			dobreak->set_button_icon(get_editor_theme_icon(SNAME("Pause")));
 			docontinue->set_button_icon(get_editor_theme_icon(SNAME("DebugContinue")));
 			vmem_refresh->set_button_icon(get_editor_theme_icon(SNAME("Reload")));
@@ -1055,6 +1076,7 @@ void ScriptEditorDebugger::_update_buttons_state() {
 	vmem_refresh->set_disabled(!active);
 	step->set_disabled(!active || !is_breaked() || !is_debuggable());
 	next->set_disabled(!active || !is_breaked() || !is_debuggable());
+	out->set_disabled(!active || !is_breaked() || !is_debuggable());
 	copy->set_disabled(!active || !is_breaked());
 	docontinue->set_disabled(!active || !is_breaked());
 	dobreak->set_disabled(!active || is_breaked());
@@ -1859,6 +1881,12 @@ ScriptEditorDebugger::ScriptEditorDebugger() {
 		skip_breakpoints->set_tooltip_text(TTR("Skip Breakpoints"));
 		skip_breakpoints->connect(SceneStringName(pressed), callable_mp(this, &ScriptEditorDebugger::debug_skip_breakpoints));
 
+		ignore_error_breaks = memnew(Button);
+		ignore_error_breaks->set_theme_type_variation(SceneStringName(FlatButton));
+		ignore_error_breaks->set_tooltip_text(TTRC("Ignore Error Breaks"));
+		hbc->add_child(ignore_error_breaks);
+		ignore_error_breaks->connect(SceneStringName(pressed), callable_mp(this, &ScriptEditorDebugger::debug_ignore_error_breaks));
+
 		hbc->add_child(memnew(VSeparator));
 
 		copy = memnew(Button);
@@ -1882,6 +1910,13 @@ ScriptEditorDebugger::ScriptEditorDebugger() {
 		next->set_tooltip_text(TTR("Step Over"));
 		next->set_shortcut(ED_GET_SHORTCUT("debugger/step_over"));
 		next->connect(SceneStringName(pressed), callable_mp(this, &ScriptEditorDebugger::debug_next));
+
+		out = memnew(Button);
+		out->set_theme_type_variation(SceneStringName(FlatButton));
+		hbc->add_child(out);
+		out->set_tooltip_text(TTRC("Step Out"));
+		out->set_shortcut(ED_GET_SHORTCUT("debugger/step_out"));
+		out->connect(SceneStringName(pressed), callable_mp(this, &ScriptEditorDebugger::debug_out));
 
 		hbc->add_child(memnew(VSeparator));
 
