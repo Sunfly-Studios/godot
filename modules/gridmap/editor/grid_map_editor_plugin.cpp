@@ -605,6 +605,9 @@ void GridMapEditor::_set_clipboard_data() {
 	_clear_clipboard_data();
 
 	Ref<MeshLibrary> meshLibrary = node->get_mesh_library();
+	if (meshLibrary.is_null()) {
+		return;
+	}
 
 	for (int i = selection.begin.x; i <= selection.end.x; i++) {
 		for (int j = selection.begin.y; j <= selection.end.y; j++) {
@@ -1070,6 +1073,7 @@ void GridMapEditor::_update_mesh_library() {
 	} else {
 		return;
 	}
+	_set_selection(false);
 
 	if (mesh_library.is_valid()) {
 		mesh_library->connect_changed(callable_mp(this, &GridMapEditor::update_palette));
@@ -1080,6 +1084,8 @@ void GridMapEditor::_update_mesh_library() {
 	if (mesh_library_palette->get_current() == -1 && mesh_library_palette->get_item_count() > 0) {
 		mesh_library_palette->set_current(0);
 		selected_palette = mesh_library_palette->get_item_metadata(0);
+	} else if (mesh_library_palette->get_item_count() == 0) {
+		selected_palette = -1;
 	}
 	// Update the cursor and grid in case the library is changed or removed.
 	_update_cursor_instance();
@@ -1340,6 +1346,7 @@ void GridMapEditor::_update_cursor_instance() {
 		// Make the cursor translucent so that it can be distinguished from already-placed tiles.
 		RenderingServer::get_singleton()->instance_geometry_set_transparency(cursor_instance, 0.5);
 	}
+	
 	_update_cursor_transform();
 }
 
