@@ -126,9 +126,9 @@ def configure(env: "SConsEnvironment"):
     elif env["arch"] == "alpha":
         env.Append(
             CCFLAGS=[
-                # Baseline with useful (BWX) extensions,
-                # and best middle ground for compatibility
-                "-mcpu=ev56",
+                # Baseline, best middle ground for all Alpha systems.
+                # Targets 433a or better
+                "-mcpu=ev5",
 
                 # Force IEEE-754 compliance
                 # for floating point numbers
@@ -160,10 +160,14 @@ def configure(env: "SConsEnvironment"):
     is_big_endian = detect_endianness(env)
     if env["arch"] == "sparc64" or env["arch"] == "ppc64" or env["arch"] == "ppc32" or env["arch"] == "mips64":
         if is_big_endian:
+            # Godot technically supports compiling for big endian,
+            # but nowhere in the build system did it
+            # defined this macro to tell its systems to swap
+            # their byte readings. Actually define the macro.
             env.Append(CCFLAGS=["-DBIG_ENDIAN_ENABLED"])
 
             # Let user know about the endianness.
-            # We don't say about SPARC because it is always
+            # We don't talk about SPARC because is always
             # big endian.
             if env["arch"] == "ppc32":
                 print("Building PowerPC 32 Big Endian")
