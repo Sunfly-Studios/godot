@@ -932,6 +932,24 @@ void ProjectManager::_set_new_tag_name(const String p_name) {
 		return;
 	}
 
+	if (p_name[0] == '_' || p_name[p_name.length() - 1] == '_') {
+		tag_error->set_text(TTRC("Tag name can't begin or end with underscore."));
+		return;
+	}
+
+	bool was_underscore = false;
+	for (const char32_t &c : p_name.span()) {
+		if (c == '_') {
+			if (was_underscore) {
+				tag_error->set_text(TTRC("Tag name can't contain consecutive underscores."));
+				return;
+			}
+			was_underscore = true;
+		} else {
+			was_underscore = false;
+		}
+	}
+
 	for (const String &c : forbidden_tag_characters) {
 		if (p_name.contains(c)) {
 			tag_error->set_text(vformat(TTR("These characters are not allowed in tags: %s."), String(" ").join(forbidden_tag_characters)));
@@ -1706,6 +1724,8 @@ ProjectManager::ProjectManager(bool p_custom_res) {
 		create_tag_btn = memnew(Button);
 		all_tags->add_child(create_tag_btn);
 		create_tag_btn->connect(SceneStringName(pressed), callable_mp((Window *)create_tag_dialog, &Window::popup_centered).bind(Vector2i(500, 0) * EDSCALE));
+
+		_set_new_tag_name("");
 	}
 
 	// Initialize project list.
