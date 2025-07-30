@@ -939,8 +939,14 @@ Patches:
 
 - `0001-remove-unnecessary-subsystems.patch` ([GH-106218](https://github.com/godotengine/godot/pull/106218))
 - `0002-msvc-constants-fpstrict.patch` (GH-106218)
+<<<<<<< HEAD
 - `0003-fix-builds-older-linux.patch`
 - `0004-shield-duplicate-macos.patch` ([GH-115510](https://github.com/godotengine/godot/pull/115510))
+=======
+- `0003-std-include.patch` (GH-108144)
+- `0004-errno-include.patch` (GH-108354)
+- `0005-fix-libudev-dbus.patch` (GH-108373)
+>>>>>>> 0e19ad507e (Fix the usage of libudev and dbus with SDL)
 
 The SDL source code folder includes `hidapi` library inside of folder `thirdparty/sdl/hidapi/`.
 Its version and license is described in this file under `hidapi`.
