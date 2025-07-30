@@ -777,6 +777,8 @@ Collection of single-file libraries used in Godot components.
   * Version: git (a2d927f8ce78a85e903676a33e0f956e53b89f7d, 2024)
   * License: MIT
   * Modifications: Added implementation through `qoa.c`.
+  * Patches:
+    - `qoa-0001-div-safe-int.patch` (GH-109099)
 - `qoi.h`
   * Upstream: https://github.com/phoboslab/qoi
   * Version: git (d4fc9d1edf44e5d7e76a9ee64ef08ae4c5c2efda, 2004)
