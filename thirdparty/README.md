@@ -954,6 +954,10 @@ Patches:
 - `0005-fix-libudev-dbus.patch` (GH-108373)
 - `0006-shield-duplicate-macos.patch` ([GH-115510](https://github.com/godotengine/godot/pull/115510))
 - `0007-errno-include.patch` (GH-108354)
+- `0008-fix-missing-env-std-include.patch`
+- `0009-fix-openbsd-undefined-method.patch`
+- `0010-update-device-blocklist.patch`
+- `0011-fix-cs-environ.patch` (GH-109283)
 
 The SDL source code folder includes `hidapi` library inside of folder `thirdparty/sdl/hidapi/`.
 Its version and license is described in this file under `hidapi`.
