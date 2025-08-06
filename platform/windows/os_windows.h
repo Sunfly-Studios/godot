@@ -137,6 +137,12 @@ class OS_Windows : public OS {
 
 	bool is_using_con_wrapper() const;
 
+	HashMap<String, int> encodings;
+	void _init_encodings();
+
+	Vector<String> _get_video_adapter_driver_info_reg(const String &p_name) const;
+	Vector<String> _get_video_adapter_driver_info_wmi(const String &p_name) const;
+
 	// functions used by main to initialize/deinitialize the OS
 protected:
 	virtual void initialize() override;
