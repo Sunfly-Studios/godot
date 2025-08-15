@@ -85,7 +85,16 @@ _ALWAYS_INLINE_ static void _cpu_pause() {
 #elif defined(__powerpc__) || defined(__ppc__) || defined(__PPC__) // PowerPC.
 	asm volatile("or 27,27,27");
 #elif defined(__riscv) // RISC-V.
-	asm volatile(".insn i 0x0F, 0, x0, x0, 0x010");
+	#if defined(__linux__)
+		asm volatile(".insn i 0x0F, 0, x0, x0, 0x010");
+	#elif defined(__FreeBSD__)
+		// Implementation depends on the compiler used too.
+		#if defined(__riscv_zihintpause)
+			asm volatile("pause" ::: "memory");
+		#else
+			asm volatile("nop" ::: "memory");
+		#endif
+	#endif // __linux__
 #elif defined(__sparc64__) // SPARC/SPARC64.
 	// Read condition code register to %g0,
 	// which has no side effects and takes at least
