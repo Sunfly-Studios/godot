@@ -81,14 +81,17 @@ _ALWAYS_INLINE_ static void _cpu_pause() {
 #if defined(__i386__) || defined(__x86_64__) // x86.
 	__builtin_ia32_pause();
 #elif defined(__arm__) || defined(__aarch64__) // ARM.
-	asm volatile("yield");
+	// Use memory clobber to prevent
+	// reordering by the compiler.
+	asm volatile("yield" ::: "memory");
 #elif defined(__powerpc__) || defined(__ppc__) || defined(__PPC__) // PowerPC.
-	asm volatile("or 27,27,27");
+	asm volatile("or 27,27,27" ::: "memory");
 #elif defined(__riscv) // RISC-V.
 	#if defined(__linux__)
-		asm volatile(".insn i 0x0F, 0, x0, x0, 0x010");
+		asm volatile(".insn i 0x0F, 0, x0, x0, 0x010" ::: "memory");
 	#elif defined(__FreeBSD__)
-		// Implementation depends on the compiler used too.
+		// Implementation depends on the compiler used
+		// and FreeBSD version.
 		#if defined(__riscv_zihintpause)
 			asm volatile("pause" ::: "memory");
 		#else
@@ -99,9 +102,6 @@ _ALWAYS_INLINE_ static void _cpu_pause() {
 	// Read condition code register to %g0,
 	// which has no side effects and takes at least
 	// a cycle to execute.
-
-	// Also use memory clobber to prevent
-	// reordering by the compiler.
 	asm volatile("rd %%ccr, %%g0" ::: "memory");
 #elif defined(__mips__) // MIPS/MIPS64.
 	// nop.
