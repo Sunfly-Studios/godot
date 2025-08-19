@@ -82,7 +82,7 @@ _ALWAYS_INLINE_ static void _cpu_pause() {
 	__builtin_ia32_pause();
 #elif defined(__arm__) || defined(__aarch64__) // ARM.
 	// Use memory clobber to prevent
-	// reordering by the compiler.
+	// reordering/optimisation by the compiler.
 	asm volatile("yield" ::: "memory");
 #elif defined(__powerpc__) || defined(__ppc__) || defined(__PPC__) // PowerPC.
 	asm volatile("or 27,27,27" ::: "memory");
@@ -111,6 +111,13 @@ _ALWAYS_INLINE_ static void _cpu_pause() {
 	// operations to complete and may
 	// not be optimised away by the compiler.
 	asm volatile("mb" ::: "memory");
+#elif defined(__loongarch__) || defined(__loongarch64)
+	// This is a generic instruction, so
+	// we can afford not being specific
+	// with __loongarch64.
+	// Though still include it in case
+	// a compiler doesn't support the former.
+	asm volatile("nop" ::: "memory");
 #endif // defined(__GNUC__) || defined(__clang__)
 #endif
 }
