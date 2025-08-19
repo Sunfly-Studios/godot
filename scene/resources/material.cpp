@@ -1524,8 +1524,9 @@ void fragment() {)";
 		float px_size = max(0.5 * dot(msdf_size, dest_size), 1.0);
 		float d = msdf_median(albedo_tex.r, albedo_tex.g, albedo_tex.b, albedo_tex.a) - 0.5;
 		if (msdf_outline_size > 0.0) {
-			float cr = clamp(msdf_outline_size, 0.0, msdf_pixel_range / 2.0) / msdf_pixel_range;
-			albedo_tex.a = clamp((d + cr) * px_size, 0.0, 1.0);
+			float cr = clamp(msdf_outline_size, 0.0, (msdf_pixel_range / 2.0) - 1.0) / msdf_pixel_range;
+			d = min(d, albedo_tex.a);
+			albedo_tex.a = clamp((d - 0.5 + cr) * px_size + 0.5, 0.0, 1.0);
 		} else {
 			albedo_tex.a = clamp(d * px_size + 0.5, 0.0, 1.0);
 		}
