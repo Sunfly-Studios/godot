@@ -421,8 +421,15 @@ private:
 	// 122 bytes up to here (64-bit mode, single precision, 16-bit ObjectLayer)
 };
 
-static_assert(JPH_CPU_ADDRESS_BITS != 64 || sizeof(Body) == JPH_IF_SINGLE_PRECISION_ELSE(128, 160), "Body size is incorrect");
-static_assert(alignof(Body) == JPH_RVECTOR_ALIGNMENT, "Body should properly align");
+#if defined(REAL_T_IS_DOUBLE) && defined(JPH_CPU_BIG_ENDIAN)
+	// Big-endian architectures pack double precision structs more efficiently
+	static_assert(JPH_CPU_ADDRESS_BITS != 64 || sizeof(Body) == JPH_IF_SINGLE_PRECISION_ELSE(128, 144), "Body size is incorrect");
+	static_assert(alignof(Body) == JPH_RVECTOR_ALIGNMENT, "Body should properly align");
+#else
+	// Little-endian expectations (x86, ARM, little-endian RISC-V, etc.)
+	static_assert(JPH_CPU_ADDRESS_BITS != 64 || sizeof(Body) == JPH_IF_SINGLE_PRECISION_ELSE(128, 160), "Body size is incorrect");
+	static_assert(alignof(Body) == JPH_RVECTOR_ALIGNMENT, "Body should properly align");
+#endif
 
 JPH_NAMESPACE_END
 

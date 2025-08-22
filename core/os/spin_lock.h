@@ -98,7 +98,7 @@ _ALWAYS_INLINE_ static void _cpu_pause() {
 			asm volatile("nop" ::: "memory");
 		#endif
 	#endif // __linux__
-#elif defined(__sparc64__) // SPARC/SPARC64.
+#elif defined(__sparc__) // SPARC/SPARC64.
 	// Read condition code register to %g0,
 	// which has no side effects and takes at least
 	// a cycle to execute.
@@ -108,8 +108,7 @@ _ALWAYS_INLINE_ static void _cpu_pause() {
 	asm volatile("sll $0, $0, 0" ::: "memory");
 #elif defined(__alpha__) // DEC Alpha.
 	// Memory barrier, forces memory
-	// operations to complete and may
-	// not be optimised away by the compiler.
+	// operations to complete.
 	asm volatile("mb" ::: "memory");
 #elif defined(__loongarch__) || defined(__loongarch64)
 	// This is a generic instruction, so

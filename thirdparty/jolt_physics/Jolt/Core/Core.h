@@ -213,11 +213,17 @@
 	#else
 		#define JPH_CPU_ADDRESS_BITS 32
 	#endif
-	#ifdef _BIG_ENDIAN
+	#ifdef BIG_ENDIAN_ENABLED
 		#define JPH_CPU_BIG_ENDIAN
 	#endif
-	#define JPH_VECTOR_ALIGNMENT 16
-	#define JPH_DVECTOR_ALIGNMENT 8
+
+	#ifdef REAL_T_IS_DOUBLE
+		#define JPH_VECTOR_ALIGNMENT 16
+		#define JPH_DVECTOR_ALIGNMENT 16
+	#else
+		#define JPH_VECTOR_ALIGNMENT 16
+		#define JPH_DVECTOR_ALIGNMENT 8
+	#endif
 #elif defined(__loongarch__)
 	// LoongArch CPU architecture
 	#define JPH_CPU_LOONGARCH
@@ -247,14 +253,14 @@
 	#else
 		#define JPH_CPU_ADDRESS_BITS 32
 	#endif
-	#ifdef _BIG_ENDIAN
+	#ifdef BIG_ENDIAN_ENABLED
 		#define JPH_CPU_BIG_ENDIAN
 	#endif
 
 	// SPARC has strict alignment requirements
 	#define JPH_VECTOR_ALIGNMENT 16
 	#define JPH_DVECTOR_ALIGNMENT 16
-#elif defined(__mips__) || defined(__mips64__) || defined(__mips64)
+#elif defined(__mips__) || defined(__mips64)
 	// MIPS CPU architecture
 	#define JPH_CPU_MIPS
 	#if defined(__mips64__) || defined(__mips64)
@@ -262,9 +268,7 @@
 	#else
 		#define JPH_CPU_ADDRESS_BITS 32
 	#endif
-	#if defined(__MIPSEL__) || defined(__ARMEL__)
-		// Little-endian MIPS
-	#else
+	#if BIG_ENDIAN_ENABLED
 		#define JPH_CPU_BIG_ENDIAN
 	#endif
 

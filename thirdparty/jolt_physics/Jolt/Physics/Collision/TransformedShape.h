@@ -188,7 +188,14 @@ public:
 	SubShapeIDCreator			mSubShapeIDCreator;							///< Optional sub shape ID creator for the shape (can be used when expanding compound shapes into multiple transformed shapes)
 };
 
-static_assert(JPH_CPU_ADDRESS_BITS != 64 || sizeof(TransformedShape) == JPH_IF_SINGLE_PRECISION_ELSE(64, 96), "Not properly packed");
-static_assert(alignof(TransformedShape) == JPH_RVECTOR_ALIGNMENT, "Not properly aligned");
+#if defined(REAL_T_IS_DOUBLE) && defined(JPH_CPU_BIG_ENDIAN)
+	// Big-endian architectures pack double precision structs more efficiently
+	static_assert(JPH_CPU_ADDRESS_BITS != 64 || sizeof(TransformedShape) == JPH_IF_SINGLE_PRECISION_ELSE(64, 80), "Not properly packed");
+	static_assert(alignof(TransformedShape) == JPH_RVECTOR_ALIGNMENT, "Not properly aligned");
+#else
+	// Little-endian expectations (x86, ARM, little-endian RISC-V, etc.)
+	static_assert(JPH_CPU_ADDRESS_BITS != 64 || sizeof(TransformedShape) == JPH_IF_SINGLE_PRECISION_ELSE(64, 96), "Not properly packed");
+	static_assert(alignof(TransformedShape) == JPH_RVECTOR_ALIGNMENT, "Not properly aligned");
+#endif
 
 JPH_NAMESPACE_END
