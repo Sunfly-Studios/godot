@@ -232,8 +232,14 @@
 	#else
 		#define JPH_CPU_ADDRESS_BITS 32
 	#endif
-	#define JPH_VECTOR_ALIGNMENT 16
-	#define JPH_DVECTOR_ALIGNMENT 8
+
+	#ifdef REAL_T_IS_DOUBLE
+		#define JPH_VECTOR_ALIGNMENT 16
+		#define JPH_DVECTOR_ALIGNMENT 16
+	#else
+		#define JPH_VECTOR_ALIGNMENT 16
+		#define JPH_DVECTOR_ALIGNMENT 8
+	#endif
 #elif defined(__e2k__)
 	// E2K CPU architecture (MCST Elbrus 2000)
 	#define JPH_CPU_E2K
