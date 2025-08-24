@@ -292,3 +292,16 @@ def configure(env: "SConsEnvironment"):
     # This workaround creates a closure that prevents the garbage collector from freeing the WebGL context.
     # We also only use WebGL2, and changing context version is not widely supported anyway.
     env.Append(LINKFLAGS=["-sGL_WORKAROUND_SAFARI_GETCONTEXT_BUG=0"])
+
+    # Add polyfill for older browsers.
+    env.Append(CCFLAGS=["-sPOLYFILL_OLD_MATH_FUNCTIONS=1"])
+    env.Append(LINKFLAGS=["-sPOLYFILL_OLD_MATH_FUNCTIONS=1"])
+
+    # "Adds support for all browser versions" according
+    # to Emscripten.
+    env.Append(CCFLAGS=["-sMIN_FIREFOX_VERSION=0"])
+    env.Append(LINKFLAGS=["-sMIN_FIREFOX_VERSION=0"])
+    env.Append(CCFLAGS=["-sMIN_CHROME_VERSION=0"])
+    env.Append(LINKFLAGS=["-sMIN_CHROME_VERSION=0"])
+    env.Append(CCFLAGS=["-sMIN_SAFARI_VERSION=0"])
+    env.Append(LINKFLAGS=["-sMIN_SAFARI_VERSION=0"])
