@@ -171,8 +171,8 @@ def configure(env: "SConsEnvironment"):
     # Add method for creating the final zip file
     env.AddMethod(create_template_zip, "CreateTemplateZip")
 
-    # Closure compiler extern and support for ecmascript specs (const, let, etc).
-    env["ENV"]["EMCC_CLOSURE_ARGS"] = "--language_in ECMASCRIPT_2021"
+    # See `emscripten_helpers.py`
+    env["ENV"]["EMCC_CLOSURE_ARGS"] = "--language_in ECMASCRIPT_NEXT --language_out ECMASCRIPT_2015"
 
     env["CC"] = "emcc"
     env["CXX"] = "em++"
@@ -255,7 +255,9 @@ def configure(env: "SConsEnvironment"):
         env.Append(LINKFLAGS=["-fvisibility=hidden"])
         env.extra_suffix = ".dlink" + env.extra_suffix
 
-    env.Append(LINKFLAGS=["-sWASM_BIGINT"])
+    # Disable BigInt integration. Is a nice to have
+    # optimisation feature but breaks older browsers.
+    env.Append(LINKFLAGS=["-sWASM_BIGINT=0"])
 
     # Run the main application in a web worker
     if env["proxy_to_pthread"]:
@@ -268,12 +270,13 @@ def configure(env: "SConsEnvironment"):
     # Reduce code size by generating less support code (e.g. skip NodeJS support).
     env.Append(LINKFLAGS=["-sENVIRONMENT=web,worker"])
 
-    # Wrap the JavaScript support code around a closure named Godot.
+    # Wrap the JavaScript support code around a closure named Godot,
+    # without modularization.
     env.Append(LINKFLAGS=["-sMODULARIZE=1", "-sEXPORT_NAME='Godot'"])
 
-    # Force long jump mode to 'wasm'
-    env.Append(CCFLAGS=["-sSUPPORT_LONGJMP='wasm'"])
-    env.Append(LINKFLAGS=["-sSUPPORT_LONGJMP='wasm'"])
+    # Force long jump mode to 'emscripten' for compatibility.
+    env.Append(CCFLAGS=["-sSUPPORT_LONGJMP='emscripten'"])
+    env.Append(LINKFLAGS=["-sSUPPORT_LONGJMP='emscripten'"])
 
     # Allow increasing memory buffer size during runtime. This is efficient
     # when using WebAssembly (in comparison to asm.js) and works well for
@@ -293,18 +296,21 @@ def configure(env: "SConsEnvironment"):
     # We also only use WebGL2, and changing context version is not widely supported anyway.
     env.Append(LINKFLAGS=["-sGL_WORKAROUND_SAFARI_GETCONTEXT_BUG=0"])
 
+    # Enable LEGACY_VM_SUPPORT for widest compatibility,
+    # but still keep WASM enabled because it is a hard requirement
+    # for Godot.
+    env.Append(LINKFLAGS=["-sLEGACY_VM_SUPPORT=1"])
+    env.Append(LINKFLAGS=["-sWASM=1"])
+
     # Add polyfill for older browsers.
-    env.Append(CCFLAGS=["-sPOLYFILL_OLD_MATH_FUNCTIONS=1"])
     env.Append(LINKFLAGS=["-sPOLYFILL_OLD_MATH_FUNCTIONS=1"])
 
-    # Lowers support for browsers for low as, according to Emscripten:
+    # Lowers support for browsers for low as, according to modern Emscripten:
     # 1. Chromium/Google Chrome 70 (2018-10-16)
     # 2. Firefox 55 (2017-08-08)
     # 3. Safari 12.2 (2019-03-25)
-    # https://github.com/emscripten-core/emscripten/blob/main/tools/feature_matrix.py#L26
-    env.Append(CCFLAGS=["-sMIN_FIREFOX_VERSION=0"])
-    env.Append(LINKFLAGS=["-sMIN_FIREFOX_VERSION=0"])
-    env.Append(CCFLAGS=["-sMIN_CHROME_VERSION=0"])
-    env.Append(LINKFLAGS=["-sMIN_CHROME_VERSION=0"])
-    env.Append(CCFLAGS=["-sMIN_SAFARI_VERSION=0"])
-    env.Append(LINKFLAGS=["-sMIN_SAFARI_VERSION=0"])
+    # While lower browsers can be targeted, those came
+    # long before WASM became a standard, which was in 2017.
+    env.Append(LINKFLAGS=["-sMIN_FIREFOX_VERSION=55"])
+    env.Append(LINKFLAGS=["-sMIN_CHROME_VERSION=70"])
+    env.Append(LINKFLAGS=["-sMIN_SAFARI_VERSION=120200"])

@@ -38,7 +38,8 @@ class GodotPositionReportingProcessor extends AudioWorkletProcessor {
 		this.ended = false;
 
 		this.port.onmessage = (event) => {
-			if (event?.data?.type === 'ended') {
+			// ES2015 compatible syntax.
+			if (event && event.data && event.data.type === 'ended') {
 				this.ended = true;
 			}
 		};

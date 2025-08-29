@@ -14,12 +14,25 @@ def run_closure_compiler(target, source, env, for_signature):
         "google-closure-compiler",
     )
     cmd = [WhereIs("node"), closure_bin]
-    cmd.extend(["--compilation_level", "ADVANCED_OPTIMIZATIONS"])
+    cmd.extend(["--compilation_level", "SIMPLE"])
+    cmd.extend(["--assume_function_wrapper", "false"])
+
     for f in env["JSEXTERNS"]:
         cmd.extend(["--externs", f.get_abspath()])
     for f in source:
         cmd.extend(["--js", f.get_abspath()])
     cmd.extend(["--js_output_file", target[0].get_abspath()])
+
+    # `--language_out` wasn't specified, which meant that the Closure compiler
+    # would generate modern JS by default (ECMASCRIPT_NEXT).
+    # This would break compatibility regardless of flags like -sLEGACY_VM_SUPPORT or
+    # -sMIN_X_VERSION flags.
+    # By specifying `--language_out,` this tells Closure:
+    # "Transpile the output down to ES2015 compatibility"
+    # which is what is needed for the targets
+    # Chrome 70, Firefox 55, and/or Safari 12.2.
+    cmd.extend(["--language_in", "ECMASCRIPT_NEXT"])
+    cmd.extend(["--language_out", "ECMASCRIPT_2015"])
     return " ".join(cmd)
 
 

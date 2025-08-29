@@ -64,7 +64,7 @@ const GodotFetch = {
 			// See godotengine/godot#76825 for more information.
 			// See Chromium revert (of the change to follow the spec):
 			// https://chromium.googlesource.com/chromium/src/+/135354b7bdb554cd03c913af7c90aceead03c4d4
-			obj.reader = response.body?.getReader();
+			obj.reader = response.body && response.body.getReader();
 			obj.chunked = chunked;
 		},
 
