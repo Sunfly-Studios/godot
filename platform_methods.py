@@ -31,15 +31,22 @@ architecture_aliases = {
     "ppcle": "ppc32",
     "ppc": "ppc32",
     "ppc64le": "ppc64",
+    "ppc64v1": "ppc64",
+    "ppc64v2": "ppc64",
     "loong64": "loongarch64",
+    "v9": "sparc64",
     "sparc": "sparc64",
     "sparcv9": "sparc64",
     "sun4v": "sparc64",
     "mips64": "mips64",
     "mips64le": "mips64",
     "mipsel64": "mips64",
+    "mips3": "mips64",
+    "mips3le": "mips64",
+    "mipsel3": "mips64",
     "alpha64": "alpha",
     "alpha64el": "alpha",
+    "decalpha": "alpha",
 }
 
 

@@ -297,8 +297,11 @@ def configure(env: "SConsEnvironment"):
     env.Append(CCFLAGS=["-sPOLYFILL_OLD_MATH_FUNCTIONS=1"])
     env.Append(LINKFLAGS=["-sPOLYFILL_OLD_MATH_FUNCTIONS=1"])
 
-    # "Adds support for all browser versions" according
-    # to Emscripten.
+    # Lowers support for browsers for low as, according to Emscripten:
+    # 1. Chromium/Google Chrome 70 (2018-10-16)
+    # 2. Firefox 55 (2017-08-08)
+    # 3. Safari 12.2 (2019-03-25)
+    # https://github.com/emscripten-core/emscripten/blob/main/tools/feature_matrix.py#L26
     env.Append(CCFLAGS=["-sMIN_FIREFOX_VERSION=0"])
     env.Append(LINKFLAGS=["-sMIN_FIREFOX_VERSION=0"])
     env.Append(CCFLAGS=["-sMIN_CHROME_VERSION=0"])

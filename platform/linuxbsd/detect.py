@@ -98,21 +98,36 @@ def configure(env: "SConsEnvironment"):
         # G = General-purpose extensions, C = Compression extension (very common).
         env.Append(CCFLAGS=["-march=rv64gc"])
     elif env["arch"] == "ppc32":
+        # By default the toolchain won't append
+        # atomic functions at link time.
         env.Append(LINKFLAGS=["-latomic"])
     elif env["arch"] == "sparc64":
-        env.Append(CCFLAGS=["-mcpu=v9", "-m64"])
+        # "v9" is the baseline for all of SPARC but
+        # it's missing required extensions.
+        # "ultrasparc" base should make it run on a
+        # Sun Ultra 1 _in theory_ (or probably with max memory upgrades).
+        # But I target a Sun Ultra 10 or better.
+        env.Append(CCFLAGS=["-mcpu=ultrasparc", "-m64"])
         env.Append(LINKFLAGS=["-m64"])
-
-        # Disable JIT for pcre2. It is not supported for this arch
-        if env["builtin_pcre2_with_jit"]:
-            env["builtin_pcre2_with_jit"] = False
     elif env["arch"] == "mips64":
         env.Append(
             # Default flags before appending -march
             CCFLAGS=[
+                # Exclusively 64-bit MIPS.
                 "-mabi=64",
+
+                # Enable slower calls to prevent 256MiB
+                # segment build crashes when units
+                # overpass it.
                 "-mlong-calls",
+
+                # Extends the Global Offset Table for
+                # long functions and compilation units.
                 "-mxgot",
+
+                # -ffunction-sections and -fdata-sections are related.
+                # Put each function in its own section within
+                # the object files. Compensate for no inlining.
                 "-ffunction-sections",
                 "-fdata-sections",
                 "-fPIC",
@@ -121,37 +136,38 @@ def configure(env: "SConsEnvironment"):
 
         # These flags are necessary for MIPS to prevent
         # assembler errors about "branch out of range"
-        # for large compilation units
+        # for large compilation units.
         env.Append(CCFLAGS=["-fno-inline", "-fno-inline-functions"])
     elif env["arch"] == "alpha":
         env.Append(
             CCFLAGS=[
                 # Baseline, best middle ground for all Alpha systems.
-                # Targets 433a or better
+                # Targets 433a or better.
                 "-mcpu=ev5",
 
                 # Force IEEE-754 compliance
-                # for floating point numbers
+                # for floating point numbers.
                 "-mieee",
 
                 # All constants will be built with instructions
-                # rather than loaded from memory
+                # rather than loaded from memory.
                 "-mbuild-constants",
 
                 # Limits data to 2GB sections,
                 # which helps for resource loading by changing
-                # how data is accessed
+                # how data is accessed.
                 "-mlarge-data",
 
                 # Primarily for FP, but still useful for
-                # the rest of Godot's systems
+                # the rest of Godot's systems.
                 "-mtrap-precision=i"
             ]
         )
         env.Append(LINKFLAGS=["-Wl,--no-relax", "-mlarge-data"])
 
-        if env["builtin_pcre2_with_jit"]:
-            env["builtin_pcre2_with_jit"] = False
+    if env["arch"] == "sparc64" or env["arch"] == "alpha":
+        # Disable JIT for pcre2. Not supported.
+        env["builtin_pcre2_with_jit"] = False
 
     # These architectures are MSB (Most Significant Bit) first,
     # or in other words Big Endian. So we need to set this
@@ -163,7 +179,7 @@ def configure(env: "SConsEnvironment"):
             # Godot technically supports compiling for big endian,
             # but nowhere in the build system did it
             # defined this macro to tell its systems to swap
-            # their byte readings. Actually define the macro.
+            # their byte readings.
             env.Append(CCFLAGS=["-DBIG_ENDIAN_ENABLED"])
 
             # Let user know about the endianness.
