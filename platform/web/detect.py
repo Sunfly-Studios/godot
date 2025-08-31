@@ -51,7 +51,10 @@ def get_opts():
         BoolVariable(
             "dlink_enabled", "Enable WebAssembly dynamic linking (GDExtension support). Produces bigger binaries", False
         ),
-        BoolVariable("use_closure_compiler", "Use closure compiler to minimize JavaScript code", False),
+
+        # Changed from "False" to "True" for wider compatible
+        # JS code generation with the changes done below.
+        BoolVariable("use_closure_compiler", "Use closure compiler to minimize JavaScript code", True),
         BoolVariable(
             "proxy_to_pthread",
             "Use Emscripten PROXY_TO_PTHREAD option to run the main application code to a separate thread",
@@ -270,8 +273,7 @@ def configure(env: "SConsEnvironment"):
     # Reduce code size by generating less support code (e.g. skip NodeJS support).
     env.Append(LINKFLAGS=["-sENVIRONMENT=web,worker"])
 
-    # Wrap the JavaScript support code around a closure named Godot,
-    # without modularization.
+    # Wrap the JavaScript support code around a closure named Godot.
     env.Append(LINKFLAGS=["-sMODULARIZE=1", "-sEXPORT_NAME='Godot'"])
 
     # Force long jump mode to 'emscripten' for compatibility.
@@ -296,7 +298,7 @@ def configure(env: "SConsEnvironment"):
     # We also only use WebGL2, and changing context version is not widely supported anyway.
     env.Append(LINKFLAGS=["-sGL_WORKAROUND_SAFARI_GETCONTEXT_BUG=0"])
 
-    # Enable LEGACY_VM_SUPPORT for widest compatibility,
+    # Enable LEGACY_VM_SUPPORT for older JS engines,
     # but still keep WASM enabled because it is a hard requirement
     # for Godot.
     env.Append(LINKFLAGS=["-sLEGACY_VM_SUPPORT=1"])
@@ -305,12 +307,21 @@ def configure(env: "SConsEnvironment"):
     # Add polyfill for older browsers.
     env.Append(LINKFLAGS=["-sPOLYFILL_OLD_MATH_FUNCTIONS=1"])
 
-    # Lowers support for browsers for low as, according to modern Emscripten:
-    # 1. Chromium/Google Chrome 70 (2018-10-16)
-    # 2. Firefox 55 (2017-08-08)
-    # 3. Safari 12.2 (2019-03-25)
-    # While lower browsers can be targeted, those came
-    # long before WASM became a standard, which was in 2017.
-    env.Append(LINKFLAGS=["-sMIN_FIREFOX_VERSION=55"])
-    env.Append(LINKFLAGS=["-sMIN_CHROME_VERSION=70"])
-    env.Append(LINKFLAGS=["-sMIN_SAFARI_VERSION=120200"])
+    # Forces emscripten to generate code that is compatible
+    # with older browsers.
+
+    if env["threads"]:
+        # Lowest browsers that can be targeted because these have
+        # DedicatedWorkerGlobalScope.name parameter for threading support
+        env.Append(LINKFLAGS=["-sMIN_FIREFOX_VERSION=79"])
+        env.Append(LINKFLAGS=["-sMIN_CHROME_VERSION=75"])
+        env.Append(LINKFLAGS=["-sMIN_SAFARI_VERSION=150000"])
+    else:
+        # These are the browsers that provide enough
+        # _practical_ support. As in, what can Emscripten
+        # realistically support.
+        # While lower browsers could be targeted, those came
+        # long before WASM became a standard, which was in 2017.
+        env.Append(LINKFLAGS=["-sMIN_FIREFOX_VERSION=55"])
+        env.Append(LINKFLAGS=["-sMIN_CHROME_VERSION=70"])
+        env.Append(LINKFLAGS=["-sMIN_SAFARI_VERSION=120200"])
