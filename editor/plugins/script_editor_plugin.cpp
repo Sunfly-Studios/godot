@@ -2585,7 +2585,7 @@ bool ScriptEditor::edit(const Ref<Resource> &p_resource, int p_line, int p_col, 
 				}
 
 				if (p_line > 0) {
-					se->goto_line(p_line);
+					se->goto_line(p_line, p_col);
 				}
 			}
 			_update_script_names();
@@ -2695,7 +2695,7 @@ bool ScriptEditor::edit(const Ref<Resource> &p_resource, int p_line, int p_col, 
 	_update_modified_scripts_for_external_editor(p_resource);
 
 	if (p_line >= 0) {
-		se->goto_line(p_line);
+		se->goto_line(p_line, p_col);
 	}
 
 	notify_script_changed(p_resource);
