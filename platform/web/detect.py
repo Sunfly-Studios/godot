@@ -322,6 +322,8 @@ def configure(env: "SConsEnvironment"):
         # realistically support.
         # While lower browsers could be targeted, those came
         # long before WASM became a standard, which was in 2017.
-        env.Append(LINKFLAGS=["-sMIN_FIREFOX_VERSION=55"])
+        # Except for Firefox. I set 55 (2017) but it didn't support
+        # ReadableStreaming until 65 from 2019.
+        env.Append(LINKFLAGS=["-sMIN_FIREFOX_VERSION=65"])
         env.Append(LINKFLAGS=["-sMIN_CHROME_VERSION=70"])
         env.Append(LINKFLAGS=["-sMIN_SAFARI_VERSION=120200"])
