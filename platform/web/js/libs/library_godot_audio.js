@@ -617,11 +617,17 @@ class SampleNode {
 	 * If the worklet module is not loaded in, it will be added
 	 */
 	async connectPositionWorklet(start) {
-		await GodotAudio.audioPositionWorkletPromise;
+		if (GodotAudio.audioPositionWorkletPromise != null) {
+			await GodotAudio.audioPositionWorkletPromise;
+		}
+
 		if (this.isCanceled) {
 			return;
 		}
-		this._source.connect(this.getPositionWorklet());
+		const worklet = this.getPositionWorklet();
+		if (worklet) {
+			this._source.connect(worklet);
+		}
 		if (start) {
 			this.start();
 		}
@@ -635,6 +641,12 @@ class SampleNode {
 		if (this._positionWorklet != null) {
 			return this._positionWorklet;
 		}
+
+		// Only create if worklet is available
+		if (GodotAudio.audioPositionWorkletPromise == null) {
+			return null;
+		}
+
 		this._positionWorklet = new AudioWorkletNode(
 			GodotAudio.ctx,
 			'godot-position-reporting-processor'
@@ -1266,8 +1278,10 @@ const _GodotAudio = {
 			}, 1000);
 			GodotOS.atexit(GodotAudio.close_async);
 
-			const path = GodotConfig.locate_file('godot.audio.position.worklet.js');
-			GodotAudio.audioPositionWorkletPromise = ctx.audioWorklet.addModule(path);
+			if (ctx.audioWorklet) {
+				const path = GodotConfig.locate_file('godot.audio.position.worklet.js');
+				GodotAudio.audioPositionWorkletPromise = ctx.audioWorklet.addModule(path);
+			}
 
 			return ctx.destination.channelCount;
 		},
