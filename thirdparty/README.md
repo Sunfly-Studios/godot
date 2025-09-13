@@ -958,6 +958,7 @@ Patches:
 - `0009-fix-openbsd-undefined-method.patch`
 - `0010-update-device-blocklist.patch`
 - `0011-fix-cs-environ.patch` (GH-109283)
+- `0012-macos-joypad-name.patch` (GH-110500)
 
 The SDL source code folder includes `hidapi` library inside of folder `thirdparty/sdl/hidapi/`.
 Its version and license is described in this file under `hidapi`.
