@@ -59,6 +59,8 @@ def get_min_sdk_version(platform):
 
 
 def get_android_ndk_root(env: "SConsEnvironment"):
+    if env["arch"] == "rv64":
+        return env["ANDROID_HOME"] + "/ndk/" + "29.0.14033849"
     return env["ANDROID_HOME"] + "/ndk/" + get_ndk_version()
 
 
@@ -112,15 +114,26 @@ def detect_swappy():
 
 def configure(env: "SConsEnvironment"):
     # Validate arch.
-    supported_arches = ["x86_32", "x86_64", "arm32", "arm64"]
+    supported_arches = ["x86_32", "x86_64", "arm32", "arm64", "rv64"]
     validate_arch(env["arch"], get_name(), supported_arches)
 
-    if get_min_sdk_version(env["ndk_platform"]) < get_min_target_api():
-        print_warning(
-            "Minimum supported Android target api is %d. Forcing target api %d."
-            % (get_min_target_api(), get_min_target_api())
-        )
-        env["ndk_platform"] = "android-" + str(get_min_target_api())
+    # Specific changes for correctly targeting RISC-V
+    if env["arch"] == "rv64":
+        riscv_min_api_version = 35
+        if get_min_sdk_version(env["ndk_platform"]) < riscv_min_api_version:
+            print_warning(
+                "Minimum supported Android target api for RISC-V is %d. Forcing target api %d."
+                % (riscv_min_api_version, riscv_min_api_version)
+            )
+            env["ndk_platform"] = "android-" + str(riscv_min_api_version)
+    else:
+        if get_min_sdk_version(env["ndk_platform"]) < get_min_target_api():
+            print_warning(
+                "Minimum supported Android target api is %d. Forcing target api %d."
+                % (get_min_target_api(), get_min_target_api())
+            )
+            env["ndk_platform"] = "android-" + str(get_min_target_api())
+        
 
     install_ndk_if_needed(env)
     ndk_root = env["ANDROID_NDK_ROOT"]
@@ -135,6 +148,8 @@ def configure(env: "SConsEnvironment"):
         target_triple = "i686-linux-android"
     elif env["arch"] == "x86_64":
         target_triple = "x86_64-linux-android"
+    elif env["arch"] == "rv64":
+        target_triple = "riscv64-linux-android"
 
     target_option = ["-target", target_triple + str(get_min_sdk_version(env["ndk_platform"]))]
     env.Append(ASFLAGS=[target_option, "-c"])
@@ -184,7 +199,8 @@ def configure(env: "SConsEnvironment"):
         CCFLAGS=(["-fpic", "-ffunction-sections", "-funwind-tables", "-fstack-protector-strong", "-fvisibility=hidden"])
     )
 
-    has_swappy = detect_swappy()
+    # No Swappy support for RISC-V
+    has_swappy = env["arch"] != "rv64" and detect_swappy()
     if not has_swappy:
         print_warning(
             "Swappy Frame Pacing not detected! It is strongly recommended you download it from https://github.com/darksylinc/godot-swappy/releases and extract it so that the following files can be found:\n"
@@ -220,6 +236,9 @@ def configure(env: "SConsEnvironment"):
         env.Append(CPPDEFINES=["__ARM_ARCH_8A__"])
         if has_swappy:
             env.Append(LIBPATH=["#thirdparty/swappy-frame-pacing/arm64-v8a"])
+    elif env["arch"] == "rv64":
+        # G = General-purpose extensions, C = Compression extension (very common).
+        env.Append(CCFLAGS=["-march=rv64gc"])
 
     env.Append(CCFLAGS=["-ffp-contract=off"])
 

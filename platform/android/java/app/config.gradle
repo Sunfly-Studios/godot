@@ -1,3 +1,41 @@
+ext.detectArchitecture = { ->
+    String osArch = System.getProperty("os.arch").toLowerCase()
+    String osName = System.getProperty("os.name").toLowerCase()
+    
+    // Normalize architecture names
+    if (osArch.contains("aarch64") || osArch.contains("arm64")) {
+        return "arm64"
+    } else if (osArch.contains("arm")) {
+        return "arm"
+    } else if (osArch.contains("x86_64") || osArch.contains("amd64")) {
+        return "x86_64"
+    } else if (osArch.contains("x86") || osArch.contains("i386") || osArch.contains("i686")) {
+        return "x86"
+    } else if (osArch.contains("riscv64") || osArch.contains("risc-v")) {
+        return "riscv64"
+    } else {
+        return "unknown"
+    }
+}
+
+ext.getNdkVersionForArch = { ->
+    String arch = detectArchitecture()
+    String defaultNdkVersion = '28.1.13356709'
+    
+    // You can customize NDK versions per architecture if needed
+    switch(arch) {
+        case "riscv64":
+            return '29.0.14033849'
+        case "arm64":
+        case "x86_64":
+        case "x86":
+        case "arm":
+            return defaultNdkVersion
+        default:
+            return defaultNdkVersion
+    }
+}
+
 ext.versions = [
     androidGradlePlugin: '8.6.1',
     compileSdk         : 35,
@@ -11,7 +49,7 @@ ext.versions = [
     nexusPublishVersion: '1.3.0',
     javaVersion        : JavaVersion.VERSION_17,
     // Also update 'platform/android/detect.py#get_ndk_version()' when this is updated.
-    ndkVersion         : '28.1.13356709',
+    ndkVersion         : getNdkVersionForArch(),
     splashscreenVersion: '1.0.1',
     openxrVendorsVersion: '4.0.0-stable'
 
@@ -203,7 +241,7 @@ final String VALUE_SEPARATOR_REGEX = "\\|"
 ext.getExportEnabledABIs = { ->
     String enabledABIs = project.hasProperty("export_enabled_abis") ? project.property("export_enabled_abis") : ""
     if (enabledABIs == null || enabledABIs.isEmpty()) {
-        enabledABIs = "armeabi-v7a|arm64-v8a|x86|x86_64|"
+        enabledABIs = "armeabi-v7a|arm64-v8a|x86|x86_64|riscv64|"
     }
     Set<String> exportAbiFilter = []
     for (String abi_name : enabledABIs.split(VALUE_SEPARATOR_REGEX)) {
