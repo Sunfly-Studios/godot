@@ -494,11 +494,8 @@ class Godot(private val context: Context) {
 				GodotGLRenderView(host, this, godotInputHandler, xrMode, useDebugOpengl)
 			}
 
-			if (host == primaryHost) {
-				renderView?.startRenderer()
-			}
-
 			renderView?.let {
+				it.startRenderer()
 				containerLayout?.addView(
 					it.view,
 					ViewGroup.LayoutParams(
@@ -546,26 +543,31 @@ class Godot(private val context: Context) {
 					return windowInsets
 				}
 
-				override fun onEnd(animation: WindowInsetsAnimationCompat) {}
+				override fun onEnd(animation: WindowInsetsAnimationCompat) {
+					// Fixes an issue on Android 10 and older where immersive mode gets auto disabled after the keyboard is hidden on some devices.
+					if (useImmersive.get() && Build.VERSION.SDK_INT < Build.VERSION_CODES.R) {
+						runOnUiThread {
+							enableImmersiveMode(true, true)
+						}
+					}
+				}
 			})
 
-			if (host == primaryHost) {
-				renderView?.queueOnRenderThread {
-					for (plugin in pluginRegistry.allPlugins) {
-						plugin.onRegisterPluginWithGodotNative()
-					}
-					setKeepScreenOn(java.lang.Boolean.parseBoolean(GodotLib.getGlobal("display/window/energy_saving/keep_screen_on")))
-				}
-
-				// Include the returned non-null views in the Godot view hierarchy.
+			renderView?.queueOnRenderThread {
 				for (plugin in pluginRegistry.allPlugins) {
-					val pluginView = plugin.onMainCreate(activity)
-					if (pluginView != null) {
-						if (plugin.shouldBeOnTop()) {
-							containerLayout?.addView(pluginView)
-						} else {
-							containerLayout?.addView(pluginView, 0)
-						}
+					plugin.onRegisterPluginWithGodotNative()
+				}
+				setKeepScreenOn(java.lang.Boolean.parseBoolean(GodotLib.getGlobal("display/window/energy_saving/keep_screen_on")))
+			}
+
+			// Include the returned non-null views in the Godot view hierarchy.
+			for (plugin in pluginRegistry.allPlugins) {
+				val pluginView = plugin.onMainCreate(activity)
+				if (pluginView != null) {
+					if (plugin.shouldBeOnTop()) {
+						containerLayout?.addView(pluginView)
+					} else {
+						containerLayout?.addView(pluginView, 0)
 					}
 				}
 			}
