@@ -59,14 +59,12 @@ def get_min_sdk_version(platform):
 
 
 def get_android_ndk_root(env: "SConsEnvironment"):
-    if env["arch"] == "rv64":
-        return env["ANDROID_HOME"] + "/ndk/" + "29.0.14033849"
     return env["ANDROID_HOME"] + "/ndk/" + get_ndk_version()
 
 
 # This is kept in sync with the value in 'platform/android/java/app/config.gradle'.
 def get_ndk_version():
-    return "28.1.13356709"
+    return "29.0.14033849"
 
 
 # This is kept in sync with the value in 'platform/android/java/app/config.gradle'.
@@ -88,11 +86,20 @@ def install_ndk_if_needed(env: "SConsEnvironment"):
     sdk_root = env["ANDROID_HOME"]
     if not os.path.exists(get_android_ndk_root(env)):
         extension = ".bat" if os.name == "nt" else ""
-        sdkmanager = sdk_root + "/cmdline-tools/latest/bin/sdkmanager" + extension
+        sdkmanager = os.path.join(sdk_root, "cmdline-tools", "latest", "bin", "sdkmanager" + extension)
         if os.path.exists(sdkmanager):
-            # Install the Android NDK
-            print("Installing Android NDK...")
+            # Format NDK version.
             ndk_download_args = "ndk;" + get_ndk_version()
+
+            # Accept licenses. `sdkmanager` expects it to be done as a separate command.
+            # Fixes issues with GitHub's CI not accepting by default.
+            print("Accepting Android SDK licenses...")
+            yessir_process = subprocess.Popen(["yes"], stdout=subprocess.PIPE)
+            subprocess.check_call([sdkmanager, "--licenses"], stdin=yessir_process.stdout)
+            yessir_process.kill()
+
+            # Install the Android NDK.
+            print("Installing Android NDK...")
             subprocess.check_call([sdkmanager, ndk_download_args])
         else:
             print_error(
@@ -200,8 +207,8 @@ def configure(env: "SConsEnvironment"):
     )
 
     # No Swappy support for RISC-V
-    has_swappy = env["arch"] != "rv64" and detect_swappy()
-    if not has_swappy:
+    has_swappy = detect_swappy()
+    if env["arch"] != "rv64" and not has_swappy:
         print_warning(
             "Swappy Frame Pacing not detected! It is strongly recommended you download it from https://github.com/darksylinc/godot-swappy/releases and extract it so that the following files can be found:\n"
             + " thirdparty/swappy-frame-pacing/arm64-v8a/libswappy_static.a\n"
@@ -253,7 +260,7 @@ def configure(env: "SConsEnvironment"):
 
     if env["vulkan"]:
         env.Append(CPPDEFINES=["VULKAN_ENABLED", "RD_ENABLED"])
-        if has_swappy:
+        if env["arch"] != "rv64" and has_swappy:
             env.Append(CPPDEFINES=["SWAPPY_FRAME_PACING_ENABLED"])
             env.Append(LIBS=["swappy_static"])
         if not env["use_volk"]:
