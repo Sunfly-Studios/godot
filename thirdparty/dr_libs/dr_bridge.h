@@ -1,5 +1,5 @@
 /**************************************************************************/
-/*  register_types.h                                                      */
+/*  dr_bridge.h                                                           */
 /**************************************************************************/
 /*                         This file is part of:                          */
 /*                             GODOT ENGINE                               */
@@ -28,12 +28,34 @@
 /* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                 */
 /**************************************************************************/
 
-#ifndef MINIMP3_REGISTER_TYPES_H
-#define MINIMP3_REGISTER_TYPES_H
+#include "core/io/file_access.h"
+#include "core/os/memory.h"
+#include "core/typedefs.h"
 
-#include "modules/register_module_types.h"
+typedef struct {
+	void *user_data;
+	void *(*malloc_func)(size_t size, void *user_data);
+	void *(*realloc_func)(void *ptr, size_t size, void *user_data);
+	void (*free_func)(void *ptr, void *user_data);
+} dr_allocation_callbacks;
 
-void initialize_minimp3_module(ModuleInitializationLevel p_level);
-void uninitialize_minimp3_module(ModuleInitializationLevel p_level);
+static void *dr_memalloc(size_t size, void *user_data) {
+	return memalloc(size);
+}
 
-#endif // MINIMP3_REGISTER_TYPES_H
+static void *dr_memrealloc(void *ptr, size_t size, void *user_data) {
+	return memrealloc(ptr, size);
+}
+
+static void dr_memfree(void *ptr, void *user_data) {
+	if (ptr) {
+		memfree(ptr);
+	}
+}
+
+const dr_allocation_callbacks dr_alloc_calls = {
+	nullptr,
+	dr_memalloc,
+	dr_memrealloc,
+	dr_memfree
+};
