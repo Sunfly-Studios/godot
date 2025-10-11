@@ -55,6 +55,7 @@ class ProjectListItemControl : public HBoxContainer {
 	Label *last_edited_info = nullptr;
 	Label *project_version = nullptr;
 	TextureRect *project_unsupported_features = nullptr;
+	TextureRect *project_different_version = nullptr;
 	HBoxContainer *tag_container = nullptr;
 
 	bool project_is_missing = false;
@@ -62,6 +63,17 @@ class ProjectListItemControl : public HBoxContainer {
 	bool is_selected = false;
 	bool is_hovering = false;
 
+	enum class VersionMatchType {
+		PROJECT_USES_SAME,
+		PROJECT_USES_OLDER_MAJOR,
+		PROJECT_USES_OLDER_MINOR,
+		PROJECT_USES_NEWER_MAJOR,
+		PROJECT_USES_NEWER_MINOR,
+	};
+
+	VersionMatchType version_match_type = VersionMatchType::PROJECT_USES_SAME;
+
+	void _update_favorite_button_focus_color();
 	void _favorite_button_pressed();
 	void _explore_button_pressed();
 
