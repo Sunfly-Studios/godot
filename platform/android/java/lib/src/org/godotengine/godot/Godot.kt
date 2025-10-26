@@ -608,6 +608,7 @@ class Godot(private val context: Context) {
 
 			// Listeners for keyboard height.
 			val decorView = activity.window.decorView
+			val topView = activity?.window?.decorView ?: providedContainerLayout
 			// Report the height of virtual keyboard as it changes during the animation.
 			ViewCompat.setWindowInsetsAnimationCallback(decorView, object : WindowInsetsAnimationCompat.Callback(DISPATCH_MODE_STOP) {
 				var startBottom = 0

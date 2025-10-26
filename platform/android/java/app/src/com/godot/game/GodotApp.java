@@ -65,7 +65,7 @@ public class GodotApp extends GodotActivity {
 			godot.enableEdgeToEdge(godot.isInEdgeToEdgeMode(), true);
 			godot.setSystemBarsAppearance();
 		}
-	}
+	};
 
 	@Override
 	public void onCreate(Bundle savedInstanceState) {
