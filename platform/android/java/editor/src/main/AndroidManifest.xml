@@ -66,8 +66,7 @@
             android:launchMode="singleTask"
             android:process=":GodotGame"
             android:autoRemoveFromRecents="true"
-            android:supportsPictureInPicture="true"
-            android:screenOrientation="userLandscape">
+            android:supportsPictureInPicture="true">
             <layout
                 android:defaultWidth="@dimen/editor_default_window_width"
                 android:defaultHeight="@dimen/editor_default_window_height" />

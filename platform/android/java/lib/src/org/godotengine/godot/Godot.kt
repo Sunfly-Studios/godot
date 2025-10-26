@@ -184,6 +184,7 @@ class Godot(private val context: Context) {
 	private var expansionPackPath: String = ""
 	private var useApkExpansion = false
 	private val useImmersive = AtomicBoolean(false)
+	private val isEdgeToEdge = AtomicBoolean(false)
 	private var useDebugOpengl = false
 	private var darkMode = false
 
@@ -254,6 +255,8 @@ class Godot(private val context: Context) {
 					xrMode = XRMode.OPENXR
 				} else if (commandLine[i] == "--debug_opengl") {
 					useDebugOpengl = true
+				} else if (commandLine[i] == "--edge_to_edge") {
+					isEdgeToEdge.set(true)
 				} else if (commandLine[i] == "--fullscreen") {
 					useImmersive.set(true)
 					newArgs.add(commandLine[i])
@@ -333,6 +336,7 @@ class Godot(private val context: Context) {
 	 * Toggle immersive mode.
 	 * Must be called from the UI thread.
 	 */
+	@JvmOverloads
 	fun enableImmersiveMode(enabled: Boolean, override: Boolean = false) {
 		val activity = getActivity() ?: return
 		val window = activity.window ?: return
@@ -341,7 +345,7 @@ class Godot(private val context: Context) {
 			return
 		}
 
-		WindowCompat.setDecorFitsSystemWindows(window, !enabled)
+		WindowCompat.setDecorFitsSystemWindows(window, !(isEdgeToEdge.get() || useImmersive.get()))
 		val controller = WindowInsetsControllerCompat(window, window.decorView)
 		if (enabled) {
 			controller.hide(WindowInsetsCompat.Type.systemBars())
@@ -435,6 +439,40 @@ class Godot(private val context: Context) {
 			endBenchmarkMeasure("Startup", "Godot::onInitNativeLayer")
 		}
 		return isNativeInitialized()
+	}
+
+	/**
+	 * Enable edge-to-edge.
+	 *
+	 * Must be called from the UI thread.
+	 */
+	@JvmOverloads
+	fun enableEdgeToEdge(enabled: Boolean, override: Boolean = false) {
+		val window = getActivity()?.window ?: return
+
+		if (!isEdgeToEdge.compareAndSet(!enabled, enabled) && !override) {
+			return
+		}
+		val rootView = window.decorView
+		WindowCompat.setDecorFitsSystemWindows(window, !(isEdgeToEdge.get() || useImmersive.get()))
+
+		if (enabled) {
+			ViewCompat.setOnApplyWindowInsetsListener(rootView, null)
+			rootView.setPadding(0, 0, 0, 0)
+		} else {
+			val insetType = WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.displayCutout()
+			if (rootView.rootWindowInsets != null) {
+				val windowInsets = WindowInsetsCompat.toWindowInsetsCompat(rootView.rootWindowInsets)
+				val insets = windowInsets.getInsets(insetType)
+				rootView.setPadding(insets.left, insets.top, insets.right, insets.bottom)
+			}
+
+			ViewCompat.setOnApplyWindowInsetsListener(rootView) { v: View, insets: WindowInsetsCompat ->
+				val windowInsets = insets.getInsets(insetType)
+				v.setPadding(windowInsets.left, windowInsets.top, windowInsets.right, windowInsets.bottom)
+				WindowInsetsCompat.CONSUMED
+			}
+		}
 	}
 
 	/**
@@ -599,7 +637,6 @@ class Godot(private val context: Context) {
 
 		renderView?.onActivityResumed()
 		registerSensorsIfNeeded()
-		enableImmersiveMode(useImmersive.get(), true)
 		for (plugin in pluginRegistry.allPlugins) {
 			plugin.onMainResume()
 		}
@@ -747,7 +784,6 @@ class Godot(private val context: Context) {
 
 		runOnUiThread {
 			registerSensorsIfNeeded()
-			enableImmersiveMode(useImmersive.get(), true)
 		}
 
 		for (plugin in pluginRegistry.allPlugins) {
