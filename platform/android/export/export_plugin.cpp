@@ -1011,6 +1011,10 @@ void EditorExportPlatformAndroid::_write_tmp_manifest(const Ref<EditorExportPres
 	store_string_at_path(manifest_path, manifest_text);
 }
 
+bool EditorExportPlatformAndroid::_is_transparency_allowed(const Ref<EditorExportPreset> &p_preset) const {
+	return (bool)p_preset->get("display/window/per_pixel_transparency/allowed");
+}
+
 void EditorExportPlatformAndroid::_fix_themes_xml(const Ref<EditorExportPreset> &p_preset) {
 	const String themes_xml_path = ExportTemplateManager::get_android_build_directory(p_preset).path_join("res/values/themes.xml");
 
@@ -1019,13 +1023,12 @@ void EditorExportPlatformAndroid::_fix_themes_xml(const Ref<EditorExportPreset> 
 		return;
 	}
 
-	// TODO: No transparency for 4.4 for now...
-	bool transparency_allowed = false;
+	bool transparency_allowed = _is_transparency_allowed(p_preset);
 
 	// Default/Reserved theme attributes.
 	Dictionary main_theme_attributes;
 	main_theme_attributes["android:windowSwipeToDismiss"] = bool_to_string(p_preset->get("gesture/swipe_to_dismiss"));
-	
+	main_theme_attributes["android:windowIsTranslucent"] = bool_to_string(transparency_allowed);
 	if (transparency_allowed) {
 		main_theme_attributes["android:windowBackground"] = "@android:color/transparent";
 	} else {
@@ -1036,6 +1039,7 @@ void EditorExportPlatformAndroid::_fix_themes_xml(const Ref<EditorExportPreset> 
 	splash_theme_attributes["android:windowSplashScreenBackground"] = "@mipmap/icon_background";
 	splash_theme_attributes["windowSplashScreenAnimatedIcon"] = "@mipmap/icon_foreground";
 	splash_theme_attributes["postSplashScreenTheme"] = "@style/GodotAppMainTheme";
+	splash_theme_attributes["android:windowIsTranslucent"] = bool_to_string(transparency_allowed);
 
 	PackedStringArray reserved_splash_keys;
 	reserved_splash_keys.append("postSplashScreenTheme");
@@ -2856,7 +2860,8 @@ bool EditorExportPlatformAndroid::has_valid_project_configuration(const Ref<Edit
 		valid = false;
 	}
 
-	if (p_preset->get("gradle_build/use_gradle_build")) {
+	bool gradle_build_enabled = p_preset->get("gradle_build/use_gradle_build");
+	if (gradle_build_enabled) {
 		String build_version_path = ExportTemplateManager::get_android_build_directory(p_preset).get_base_dir().path_join(".build_version");
 		Ref<FileAccess> f = FileAccess::open(build_version_path, FileAccess::READ);
 		if (f.is_valid()) {
@@ -2866,6 +2871,12 @@ bool EditorExportPlatformAndroid::has_valid_project_configuration(const Ref<Edit
 				err += vformat(TTR(MISMATCHED_VERSIONS_MESSAGE), installed_version, current_version);
 				err += "\n";
 			}
+		}
+	} else {
+		if (_is_transparency_allowed(p_preset)) {
+			// Warning only, so don't override `valid`.
+			err += vformat(TTR("\"Use Gradle Build\" is required for transparent background on Android"));
+			err += "\n";
 		}
 	}
 
@@ -2984,6 +2995,12 @@ void EditorExportPlatformAndroid::get_command_line_flags(const Ref<EditorExportP
 	}
 
 	String background_color = "#" + p_preset->get("screen/background_color").operator Color().to_html(false);
+
+	// For Gradle build, _fix_themes_xml() sets background to transparent if _is_transparency_allowed().
+	// Overriding to transparent here too as it's used as fallback for system bar appearance.
+	if (_is_transparency_allowed(p_preset) && p_preset->get("gradle_build/use_gradle_build")) {
+		background_color = "#00000000";
+	}
 	command_line_strings.push_back("--background_color");
 	command_line_strings.push_back(background_color);
 

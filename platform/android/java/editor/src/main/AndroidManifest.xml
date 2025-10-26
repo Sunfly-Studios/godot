@@ -66,6 +66,7 @@
             android:launchMode="singleTask"
             android:process=":GodotGame"
             android:autoRemoveFromRecents="true"
+            android:theme="@style/GodotGameTheme"
             android:supportsPictureInPicture="true">
             <layout
                 android:defaultWidth="@dimen/editor_default_window_width"
