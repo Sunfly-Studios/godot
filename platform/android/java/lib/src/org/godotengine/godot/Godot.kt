@@ -38,6 +38,7 @@ import android.content.pm.PackageManager
 import android.content.res.Configuration
 import android.content.res.Resources
 import android.graphics.Color
+import android.graphics.drawable.ColorDrawable
 import android.graphics.Rect
 import android.hardware.Sensor
 import android.hardware.SensorManager
@@ -48,6 +49,8 @@ import android.view.*
 import android.widget.FrameLayout
 import androidx.annotation.Keep
 import androidx.annotation.StringRes
+import androidx.core.graphics.ColorUtils
+import androidx.core.graphics.toColorInt
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsAnimationCompat
@@ -188,6 +191,7 @@ class Godot(private val context: Context) {
 	private val isEdgeToEdge = AtomicBoolean(false)
 	private var useDebugOpengl = false
 	private var darkMode = false
+	private var backgroundColor: Int = Color.BLACK
 
 	private var containerLayout: FrameLayout? = null
 	var renderView: GodotRenderView? = null
@@ -261,6 +265,17 @@ class Godot(private val context: Context) {
 				} else if (commandLine[i] == "--fullscreen") {
 					useImmersive.set(true)
 					newArgs.add(commandLine[i])
+				} else if (commandLine[i] == "--background_color") {
+					val colorStr = commandLine[i + 1]
+					try {
+						backgroundColor = colorStr.toColorInt()
+						Log.d(TAG, "background color = $backgroundColor")
+					} catch (e: java.lang.IllegalArgumentException) {
+						Log.d(TAG, "Failed to parse background color: $colorStr")
+					}
+					runOnUiThread {
+						getActivity()?.window?.decorView?.setBackgroundColor(backgroundColor)
+					}
 				} else if (commandLine[i] == "--use_apk_expansion") {
 					useApkExpansion = true
 				} else if (hasExtra && commandLine[i] == "--apk_expansion_md5") {
@@ -382,6 +397,27 @@ class Godot(private val context: Context) {
 	@Keep
 	fun isInImmersiveMode() = useImmersive.get()
 
+	@Keep
+	fun isInEdgeToEdgeMode() = isEdgeToEdge.get()
+
+	fun setSystemBarsAppearance() {
+		val window = getActivity()?.window ?: return
+		val isLight = ColorUtils.calculateLuminance(getWindowBackgroundColor(window)) > 0.5
+
+		val controller = WindowInsetsControllerCompat(window, window.decorView)
+		controller.isAppearanceLightNavigationBars = isLight
+		controller.isAppearanceLightStatusBars = isLight
+	}
+
+	private fun getWindowBackgroundColor(window: Window): Int {
+		val background = window.decorView.background
+		return if (background is ColorDrawable) {
+			background.color
+		} else {
+			backgroundColor
+		}
+	}
+	
 	/**
 	 * Initializes the native layer of the Godot engine.
 	 *

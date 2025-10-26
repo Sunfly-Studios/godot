@@ -2984,9 +2984,6 @@ void EditorExportPlatformAndroid::get_command_line_flags(const Ref<EditorExportP
 	}
 
 	String background_color = "#" + p_preset->get("screen/background_color").operator Color().to_html(false);
-	if (p_preset->get("gradle_build/use_gradle_build")) {
-		background_color = "#00000000";
-	}
 	command_line_strings.push_back("--background_color");
 	command_line_strings.push_back(background_color);
 

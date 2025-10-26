@@ -255,12 +255,13 @@ abstract class BaseGodotEditor : GodotActivity(), GameMenuFragment.GameMenuListe
 		}
 	}
 
-	private fun updateImmersiveAndEdgeToEdgeModes() {
+	private fun updateWindowAppearance() {
 		val editorWindowInfo = getEditorWindowInfo()
 		if (editorWindowInfo == EDITOR_MAIN_INFO || editorWindowInfo == RUN_GAME_INFO) {
 			godot?.apply {
 				enableImmersiveMode(isInImmersiveMode(), true)
 				enableEdgeToEdge(isInEdgeToEdgeMode(), true)
+				setSystemBarsAppearance()
 			}
 		}
 	}
@@ -284,13 +285,13 @@ abstract class BaseGodotEditor : GodotActivity(), GameMenuFragment.GameMenuListe
 		runOnUiThread {
 			// Hide the loading indicator
 			editorLoadingIndicator?.visibility = View.GONE
-			updateImmersiveAndEdgeToEdgeModes()
+			updateWindowAppearance()
 		}
 	}
 
 	override fun onResume() {
 		super.onResume()
-		updateImmersiveAndEdgeToEdgeModes()
+		updateWindowAppearance()
 
 		if (getEditorWindowInfo() == EDITOR_MAIN_INFO &&
 			godot?.isEditorHint() == true &&
