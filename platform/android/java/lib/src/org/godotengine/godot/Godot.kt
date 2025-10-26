@@ -38,6 +38,7 @@ import android.content.pm.PackageManager
 import android.content.res.Configuration
 import android.content.res.Resources
 import android.graphics.Color
+import android.graphics.Rect
 import android.hardware.Sensor
 import android.hardware.SensorManager
 import android.os.*
@@ -459,19 +460,39 @@ class Godot(private val context: Context) {
 		if (enabled) {
 			ViewCompat.setOnApplyWindowInsetsListener(rootView, null)
 			rootView.setPadding(0, 0, 0, 0)
+			if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) {
+				window.addFlags(WindowManager.LayoutParams.FLAG_TRANSLUCENT_STATUS)
+				window.addFlags(WindowManager.LayoutParams.FLAG_TRANSLUCENT_NAVIGATION)
+			}
 		} else {
-			val insetType = WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.displayCutout()
 			if (rootView.rootWindowInsets != null) {
-				val windowInsets = WindowInsetsCompat.toWindowInsetsCompat(rootView.rootWindowInsets)
-				val insets = windowInsets.getInsets(insetType)
-				rootView.setPadding(insets.left, insets.top, insets.right, insets.bottom)
+				if (!useImmersive.get() || (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R)) {
+					val windowInsets = WindowInsetsCompat.toWindowInsetsCompat(rootView.rootWindowInsets)
+					val insets = windowInsets.getInsets(getInsetType())
+					rootView.setPadding(insets.left, insets.top, insets.right, insets.bottom)
+				}
 			}
 
 			ViewCompat.setOnApplyWindowInsetsListener(rootView) { v: View, insets: WindowInsetsCompat ->
-				val windowInsets = insets.getInsets(insetType)
-				v.setPadding(windowInsets.left, windowInsets.top, windowInsets.right, windowInsets.bottom)
+				v.post {
+					if (useImmersive.get() && Build.VERSION.SDK_INT < Build.VERSION_CODES.R) {
+						// Fixes issue where padding remained visible in immersive mode on some devices.
+						v.setPadding(0, 0, 0, 0)
+					} else {
+						val windowInsets = insets.getInsets(getInsetType())
+						v.setPadding(windowInsets.left, windowInsets.top, windowInsets.right, windowInsets.bottom)
+					}
+				}
 				WindowInsetsCompat.CONSUMED
 			}
+		}
+	}
+
+	private fun getInsetType(): Int {
+		return if (!useImmersive.get() || isEditorBuild()) {
+			WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.displayCutout()
+		} else {
+			WindowInsetsCompat.Type.systemBars()
 		}
 	}
 
@@ -579,12 +600,20 @@ class Godot(private val context: Context) {
 						val interpolatedFraction = imeAnimation.interpolatedFraction
 						// Linear interpolation between start and end values.
 						val keyboardHeight = startBottom * (1.0f - interpolatedFraction) + endBottom * interpolatedFraction
-						GodotLib.setVirtualKeyboardHeight(keyboardHeight.toInt())
+						val finalHeight = maxOf(keyboardHeight.toInt() - topView.rootView.paddingBottom, 0)
+						GodotLib.setVirtualKeyboardHeight(finalHeight)
 					}
 					return windowInsets
 				}
 
-				override fun onEnd(animation: WindowInsetsAnimationCompat) {}
+				override fun onEnd(animation: WindowInsetsAnimationCompat) {
+					// Fixes issue on Android 7 and 8 where immersive mode gets auto disabled after the keyboard is hidden.
+					if (useImmersive.get() && Build.VERSION.SDK_INT < Build.VERSION_CODES.P) {
+						runOnUiThread {
+							enableImmersiveMode(true, true)
+						}
+					}
+				}
 			})
 
 			if (host == primaryHost) {
