@@ -4664,7 +4664,9 @@ Error GLTFDocument::_serialize_materials(Ref<GLTFState> p_state) {
 			extensions["KHR_materials_emissive_strength"] = mat_emissive_strength;
 			p_state->add_used_extension("KHR_materials_emissive_strength");
 		}
-		d["extensions"] = extensions;
+		if (!extensions.is_empty()) {
+			d["extensions"] = extensions;
+		}
 
 		_attach_meta_to_extras(material, d);
 		materials.push_back(d);
