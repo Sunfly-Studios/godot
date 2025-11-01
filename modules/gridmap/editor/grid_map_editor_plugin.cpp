@@ -1294,9 +1294,10 @@ void GridMapEditor::_update_cursor_instance() {
 		cursor_instance = RenderingServer::get_singleton()->instance_create2(cursor_mesh, get_tree()->get_root()->get_world_3d()->get_scenario());
 	}
 
-	// Make the cursor translucent so that it can be distinguished from already-placed tiles.
-	RenderingServer::get_singleton()->instance_geometry_set_transparency(cursor_instance, 0.5);
-
+	if (cursor_instance.is_valid()) {
+		// Make the cursor translucent so that it can be distinguished from already-placed tiles.
+		RenderingServer::get_singleton()->instance_geometry_set_transparency(cursor_instance, 0.5);
+	}
 	_update_cursor_transform();
 }
 
