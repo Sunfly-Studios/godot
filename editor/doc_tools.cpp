@@ -649,8 +649,13 @@ void DocTools::generate(BitField<GenerateFlags> p_flags) {
 
 			if (signal_list.size()) {
 				for (List<MethodInfo>::Element *EV = signal_list.front(); EV; EV = EV->next()) {
+					String signal_name = EV->get().name;
+					if (signal_name.is_empty() || signal_name[0] == '_') {
+						continue; // Hidden, don't count.
+					}
+
 					DocData::MethodDoc signal;
-					signal.name = EV->get().name;
+					signal.name = signal_name;
 					for (List<PropertyInfo>::Element *EA = EV->get().arguments.front(); EA; EA = EA->next()) {
 						const PropertyInfo &arginfo = EA->get();
 						DocData::ArgumentDoc argument;
