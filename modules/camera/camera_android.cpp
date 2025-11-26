@@ -385,15 +385,26 @@ void CameraFeedAndroid::onSessionClosed(void *context, ACameraCaptureSession *se
 }
 
 void CameraFeedAndroid::deactivate_feed() {
+	// First, remove image listener to prevent new callbacks.
+	if (reader != nullptr) {
+		AImageReader_setImageListener(reader, nullptr);
+	}
+
+	// Stop and close capture session.
+	// These calls may wait for pending callbacks to complete.
 	if (session != nullptr) {
 		ACameraCaptureSession_stopRepeating(session);
 		ACameraCaptureSession_close(session);
 		session = nullptr;
 	}
 
-	if (request != nullptr) {
-		ACaptureRequest_free(request);
-		request = nullptr;
+	// Now safe to acquire lock and clean up resources.
+	// No new callbacks will be triggered after this point.
+	MutexLock lock(callback_mutex);
+
+	if (device != nullptr) {
+		ACameraDevice_close(device);
+		device = nullptr;
 	}
 
 	if (reader != nullptr) {
@@ -401,9 +412,9 @@ void CameraFeedAndroid::deactivate_feed() {
 		reader = nullptr;
 	}
 
-	if (device != nullptr) {
-		ACameraDevice_close(device);
-		device = nullptr;
+	if (request != nullptr) {
+		ACaptureRequest_free(request);
+		request = nullptr;
 	}
 }
 
