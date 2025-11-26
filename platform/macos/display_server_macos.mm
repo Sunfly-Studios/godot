@@ -33,6 +33,7 @@
 #include "godot_button_view.h"
 #include "godot_content_view.h"
 #include "godot_menu_delegate.h"
+#include "godot_core_cursor.h"
 #include "godot_menu_item.h"
 #include "godot_open_save_delegate.h"
 #include "godot_status_item.h"
@@ -2978,7 +2979,7 @@ void DisplayServerMacOS::cursor_update_shape() {
 				[_cursor_from_selector(@selector(_windowResizeNorthWestSouthEastCursor)) set];
 				break;
 			case CURSOR_MOVE:
-				[[NSCursor arrowCursor] set];
+				[[[GodotCoreCursor alloc] initWithType:GDCoreCursorWindowMove] set];
 				break;
 			case CURSOR_VSPLIT:
 				[[NSCursor resizeUpDownCursor] set];
