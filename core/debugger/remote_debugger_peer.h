@@ -75,6 +75,7 @@ private:
 	void _poll();
 	void _write_out();
 	void _read_in();
+	void _disconnect_with_error(const String &p_reason);
 
 public:
 	static RemoteDebuggerPeer *create(const String &p_uri);
