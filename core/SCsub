@@ -314,11 +314,11 @@ env.add_source_files(env.core_sources, gen_encrypt_cpp)
 # Certificates
 env.Depends(
     "#core/io/certs_compressed.gen.h",
-    ["#thirdparty/certs/ca-certificates.crt", env.Value(env["builtin_certs"]), env.Value(env["system_certs_path"])],
+    ["#thirdparty/certs/ca-bundle.crt", env.Value(env["builtin_certs"]), env.Value(env["system_certs_path"])],
 )
 env.CommandNoCache(
     "#core/io/certs_compressed.gen.h",
-    "#thirdparty/certs/ca-certificates.crt",
+    "#thirdparty/certs/ca-bundle.crt",
     env.Run(core_builders.make_certs_header),
 )
 
