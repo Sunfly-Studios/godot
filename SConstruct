@@ -694,13 +694,16 @@ if env["arch"] == "x86_32":
         if env.msvc:
             env.Append(CCFLAGS=["/arch:SSE2"])
         else:
-            env.Append(CCFLAGS=["-msse2"])
+            env.Append(CCFLAGS=["-msse2", "-mfpmath=sse", "-mstackrealign"])
     else:
         if env.msvc:
-            # Use x87 floating point
-            pass
+            # /arch:SSE enables XMM for "float", but falls back to x87 for "double"
+            env.Append(CCFLAGS=["/arch:SSE"])
         else:
-            env.Append(CCFLAGS=["-mno-sse", "-mfpmath=387"])
+            # -mfpmath=sse allows GCC to use XMM registers for scalar floats.
+            # It will automatically fallback to 387 for doubles (since SSE1 can't handle them).
+            # But be explicit never hurts anyway.
+            env.Append(CCFLAGS=["-msse", "-mno-sse2", "-mfpmath=sse,387"])
         env.Append(CPPDEFINES=["NO_SSE2"])
 
 # Explicitly specify colored output.
