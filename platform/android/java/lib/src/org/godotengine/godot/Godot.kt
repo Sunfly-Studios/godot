@@ -763,11 +763,14 @@ class Godot(private val context: Context) {
 			return
 		}
 
+		// Wait for the thread to exit (ensure GodotLib.step() is no longer running).
+		renderView?.onActivityDestroyed()
+
+		// Now we can safely destroy the plugins.
 		for (plugin in pluginRegistry.allPlugins) {
 			plugin.onMainDestroy()
 		}
-
-		renderView?.onActivityDestroyed()
+		this.primaryHost = null
 	}
 
 	/**
@@ -779,7 +782,9 @@ class Godot(private val context: Context) {
 		val newDarkMode = newConfig.uiMode.and(Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES
 		if (darkMode != newDarkMode) {
 			darkMode = newDarkMode
-			GodotLib.onNightModeChanged()
+			runOnRenderThread {
+				GodotLib.onNightModeChanged()
+			}
 		}
 	}
 
@@ -791,7 +796,9 @@ class Godot(private val context: Context) {
 			plugin.onMainActivityResult(requestCode, resultCode, data)
 		}
 		if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-			FilePicker.handleActivityResult(context, requestCode, resultCode, data)
+			runOnRenderThread {
+				FilePicker.handleActivityResult(context, requestCode, resultCode, data)
+			}
 		}
 	}
 
@@ -806,11 +813,13 @@ class Godot(private val context: Context) {
 		for (plugin in pluginRegistry.allPlugins) {
 			plugin.onMainRequestPermissionsResult(requestCode, permissions, grantResults)
 		}
-		for (i in permissions.indices) {
-			GodotLib.requestPermissionResult(
-				permissions[i],
-				grantResults[i] == PackageManager.PERMISSION_GRANTED
-			)
+		runOnRenderThread {
+			for (i in permissions.indices) {
+				GodotLib.requestPermissionResult(
+					permissions[i],
+					grantResults[i] == PackageManager.PERMISSION_GRANTED
+				)
+			}
 		}
 	}
 
@@ -1109,7 +1118,7 @@ class Godot(private val context: Context) {
 		for (plugin in pluginRegistry.allPlugins) {
 			plugin.onMainBackPressed()
 		}
-		renderView?.queueOnRenderThread { GodotLib.back() }
+		runOnRenderThread { GodotLib.back() }
 	}
 
 	/**
