@@ -68,6 +68,11 @@ public:
 
 #include <atomic>
 
+#if defined(__loongarch64)
+// For __ibar C intrinsic.
+#include <larchintrin.h>
+#endif
+
 _ALWAYS_INLINE_ static void _cpu_pause() {
 #if defined(_MSC_VER)
 	// ----- MSVC.
@@ -104,19 +109,28 @@ _ALWAYS_INLINE_ static void _cpu_pause() {
 	// a cycle to execute.
 	asm volatile("rd %%ccr, %%g0" ::: "memory");
 #elif defined(__mips__) // MIPS/MIPS64.
-	// nop.
-	asm volatile("sll $0, $0, 0" ::: "memory");
+    // MIPS32r2 and MIPS64r2 introduced the PAUSE instruction.
+    #if defined(_MIPS_ARCH_MIPS32R2) || defined(_MIPS_ARCH_MIPS64R2) || \
+        (defined(__mips_isa_rev) && __mips_isa_rev >= 2)
+        asm volatile("pause" ::: "memory");
+    #else
+        // Fallback for older MIPS (R1).
+        asm volatile("sll $0, $0, 0" ::: "memory");
+    #endif
 #elif defined(__alpha__) // DEC Alpha.
 	// Memory barrier, forces memory
 	// operations to complete.
 	asm volatile("mb" ::: "memory");
 #elif defined(__loongarch__) || defined(__loongarch64)
-	// This is a generic instruction, so
-	// we can afford not being specific
-	// with __loongarch64.
-	// Though still include it in case
-	// a compiler doesn't support the former.
-	asm volatile("nop" ::: "memory");
+	// Use "ibar 0" repeated 32 times to
+	// simulate the delay of the x86 pause instruction (approx 140 cycles).
+	// See PR #110639#issuecomment-3675019388
+	for (int i = 0; i < 32; i++) {
+		__ibar(0);
+	}
+#else
+	// Generic fallback
+	asm volatile("" ::: "memory");
 #endif // defined(__GNUC__) || defined(__clang__)
 #endif
 }
