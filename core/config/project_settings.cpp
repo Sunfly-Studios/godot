@@ -1331,6 +1331,12 @@ void ProjectSettings::add_autoload(const AutoloadInfo &p_autoload) {
 	autoloads[p_autoload.name] = p_autoload;
 }
 
+void ProjectSettings::fix_autoload_paths() {
+	for (KeyValue<StringName, AutoloadInfo> &kv : autoloads) {
+		kv.value.path = ResourceUID::ensure_path(kv.value.path);
+	}
+}
+
 void ProjectSettings::remove_autoload(const StringName &p_autoload) {
 	ERR_FAIL_COND_MSG(!autoloads.has(p_autoload), "Trying to remove non-existent autoload.");
 	autoloads.erase(p_autoload);

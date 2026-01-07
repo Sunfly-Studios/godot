@@ -413,8 +413,8 @@ void RasterizerGLES3::_blit_render_target_to_screen(RID p_render_target, Display
 
 	Vector2 screen_rect_end = p_screen_rect.get_end();
 
-	Vector2 p1 = Vector2(p_blit.dst_rect.position.x, flip_y ? screen_rect_end.y : p_blit.dst_rect.position.y);
-	Vector2 p2 = Vector2(screen_rect_end.x, flip_y ? p_blit.dst_rect.position.y : screen_rect_end.y);
+	Vector2 p1 = Vector2(p_screen_rect.position.x, flip_y ? screen_rect_end.y : p_screen_rect.position.y);
+	Vector2 p2 = Vector2(screen_rect_end.x, flip_y ? p_screen_rect.position.y : screen_rect_end.y);
 	Vector2 size = p2 - p1;
 
 	Rect2 screenrect = Rect2(Vector2(0.0, flip_y ? 1.0 : 0.0), Vector2(1.0, flip_y ? -1.0 : 1.0));

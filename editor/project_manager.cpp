@@ -938,8 +938,8 @@ void ProjectManager::_set_new_tag_name(const String p_name) {
 	}
 
 	bool was_underscore = false;
-	for (const char32_t &c : p_name.span()) {
-		if (c == '_') {
+	for (const String &c : p_name.split("")) {
+		if (c == "_") {
 			if (was_underscore) {
 				tag_error->set_text(TTRC("Tag name can't contain consecutive underscores."));
 				return;
