@@ -277,7 +277,7 @@ bool EditorExportPlatformIOS::get_export_option_visibility(const EditorExportPre
 	}
 
 	if (p_option == "capabilities/performance_a12") {
-		String rendering_method = get_project_setting(Ref<EditorExportPreset>(p_preset), "rendering/renderer/rendering_method.mobile");
+		String rendering_method = GLOBAL_GET("rendering/renderer/rendering_method");
 		return !(rendering_method == "forward_plus" || rendering_method == "mobile");
 	}
 	return true;
@@ -570,7 +570,7 @@ void EditorExportPlatformIOS::_fix_config_file(const Ref<EditorExportPreset> &p_
 			// Note that capabilities listed here are requirements for the app to be installed.
 			// They don't enable anything.
 			Vector<String> capabilities_list = p_config.capabilities;
-			String rendering_method = get_project_setting(p_preset, "rendering/renderer/rendering_method.mobile");
+			String rendering_method = GLOBAL_GET("rendering/renderer/rendering_method");
 
 			if ((bool)p_preset->get("capabilities/access_wifi") && !capabilities_list.has("wifi")) {
 				capabilities_list.push_back("wifi");
