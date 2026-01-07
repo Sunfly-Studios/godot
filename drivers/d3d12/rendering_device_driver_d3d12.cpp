@@ -334,221 +334,7 @@ const RenderingDeviceDriverD3D12::D3D12Format RenderingDeviceDriverD3D12::RD_TO_
 	/* DATA_FORMAT_G16_B16_R16_3PLANE_444_UNORM */ {},
 };
 
-Error RenderingDeviceDriverD3D12::CPUDescriptorsHeapPools::allocate(ID3D12Device *p_device, const D3D12_DESCRIPTOR_HEAP_DESC &p_desc, CPUDescriptorsHeapHandle &r_result) {
-	ERR_FAIL_COND_V(p_desc.NodeMask != 0 || p_desc.Flags != 0 || p_desc.Type >= D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES, ERR_INVALID_PARAMETER);
-
-	CPUDescriptorsHeapPool &pool = pools[p_desc.Type];
-	return pool.allocate(p_device, p_desc, r_result);
-}
-
-void RenderingDeviceDriverD3D12::CPUDescriptorsHeapPool::verify() {
-#if D3D12_DESCRIPTOR_HEAP_VERIFICATION
-	uint32_t last_size = std::numeric_limits<uint32_t>::max();
-	int block_count = 0;
-	for (SizeTableType::ValueType &index : free_blocks_by_size) {
-		DEV_ASSERT(!index.value.is_empty());
-		DEV_ASSERT(index.key <= last_size);
-
-		last_size = index.key;
-		for (uint32_t block_index : index.value) {
-			block_count++;
-			OffsetTableType::Iterator block = free_blocks_by_offset.find(block_index);
-			DEV_ASSERT(block != free_blocks_by_offset.end());
-			DEV_ASSERT(block->value.size == index.key && block->value.global_offset == block_index);
-		}
-	}
-
-	DEV_ASSERT(block_count == free_blocks_by_offset.size());
-#endif
-}
-
-Error RenderingDeviceDriverD3D12::CPUDescriptorsHeapPool::allocate(ID3D12Device *p_device, const D3D12_DESCRIPTOR_HEAP_DESC &p_desc, CPUDescriptorsHeapHandle &r_result) {
-	MutexLock lock(mutex);
-	verify();
-
-	SizeTableType::Iterator smallest_free_block = free_blocks_by_size.find_closest(p_desc.NumDescriptors);
-	OffsetTableType::Iterator block = free_blocks_by_offset.end();
-
-	if (smallest_free_block == free_blocks_by_size.end()) {
-		D3D12_DESCRIPTOR_HEAP_DESC descr_copy = p_desc;
-
-		// Allow for more than 1024 descriptor.
-		descr_copy.NumDescriptors = MAX(p_desc.NumDescriptors, 1024u);
-
-		ComPtr<ID3D12DescriptorHeap> heap;
-		HRESULT res = p_device->CreateDescriptorHeap(&descr_copy, IID_PPV_ARGS(heap.GetAddressOf()));
-		if (!SUCCEEDED(res)) {
-			ERR_FAIL_V_MSG(ERR_CANT_CREATE, "CreateDescriptorHeap failed with error " + vformat("0x%08ux", (uint64_t)res) + ".");
-		}
-
-		FreeBlockInfo new_block = { heap, current_offset, current_offset, descr_copy.NumDescriptors, current_nonce++ };
-		block = free_blocks_by_offset.insert(new_block.global_offset, new_block);
-
-		// Duplicate the size to prevent this block from being joined with the next one.
-		current_offset += descr_copy.NumDescriptors << 1;
-	} else {
-		uint32_t offset = smallest_free_block->value.front()->get();
-		block = free_blocks_by_offset.find(offset);
-		ERR_FAIL_COND_V_MSG(block == free_blocks_by_offset.end(), ERR_CANT_CREATE, "CreateDescriptorHeap failed to find free block.");
-
-		remove_from_size_map(block->value);
-	}
-
-	r_result = { block->value.heap, this, block->value.global_offset - block->value.base_offset, block->value.base_offset, p_desc.NumDescriptors, current_nonce++ };
-
-	ERR_FAIL_COND_V_MSG(block->value.size < p_desc.NumDescriptors, ERR_CANT_CREATE, "CreateDescriptorHeap failed to find a block with enough descriptors.");
-
-	if (block->value.size > p_desc.NumDescriptors) {
-		// Block is too big, split into two chunks. Use the end of the block.
-		r_result.offset += block->value.size - p_desc.NumDescriptors;
-
-		// Cut the end of the block.
-		block->value.size -= p_desc.NumDescriptors;
-		add_to_size_map(block->value);
-	} else {
-		// Block fits, remove from block list.
-		free_blocks_by_offset.erase(block->value.global_offset);
-	}
-
-	DEV_ASSERT(!free_blocks_by_offset.has(r_result.global_offset()));
-	verify();
-
-#if D3D12_DESCRIPTOR_HEAP_VERBOSE
-	print_line(vformat("PoolAlloc: 0x%08ux.0x%08ux.0x%08ux.0x%08ux.0x%08ux", (uint64_t)(r_result.pool), (uint64_t)(r_result.heap), r_result.global_offset(), r_result.count, r_result.nonce));
-#endif
-
-	return OK;
-}
-
-void RenderingDeviceDriverD3D12::CPUDescriptorsHeapPool::remove_from_size_map(const FreeBlockInfo &p_block) {
-	SizeTableType::Iterator smallest_free_block = free_blocks_by_size.find(p_block.size);
-	if (smallest_free_block == free_blocks_by_size.end()) {
-		return;
-	}
-
-	// Remove from free list if no block of this size is left.
-	smallest_free_block->value.erase(p_block.global_offset);
-	if (smallest_free_block->value.is_empty()) {
-		free_blocks_by_size.erase(p_block.size);
-	}
-}
-
-void RenderingDeviceDriverD3D12::CPUDescriptorsHeapPool::add_to_size_map(const FreeBlockInfo &p_block) {
-	SizeTableType::Iterator free_block = free_blocks_by_size.find(p_block.size);
-	if (free_block == free_blocks_by_size.end()) {
-		free_blocks_by_size.insert(p_block.size, { p_block.global_offset });
-	} else {
-		free_block->value.push_back(p_block.global_offset);
-	}
-}
-
-Error RenderingDeviceDriverD3D12::CPUDescriptorsHeapPool::release(const CPUDescriptorsHeapHandle &p_result) {
-	MutexLock lock(mutex);
-
-#if D3D12_DESCRIPTOR_HEAP_VERBOSE
-	print_line(vformat("PoolFree: 0x%08ux.0x%08ux.0x%08ux.0x%08ux.0x%08ux", (uint64_t)(result.pool), (uint64_t)(result.heap), result.global_offset(), result.count, result.nonce));
-#endif
-
-	verify();
-
-	uint32_t global_offset = p_result.global_offset();
-	OffsetTableType::Iterator previous = free_blocks_by_offset.find_closest(global_offset);
-	OffsetTableType::Iterator next = free_blocks_by_offset.find(global_offset + p_result.count);
-
-	if (previous != free_blocks_by_offset.end() && (previous->value.size + previous->key) != global_offset) {
-		// Make sure the previous block is contiguous to this one.
-		previous = free_blocks_by_offset.end();
-	}
-
-	// Fail if the offset has already been released.
-	ERR_FAIL_COND_V(free_blocks_by_offset.has(global_offset), ERR_INVALID_PARAMETER);
-
-	OffsetTableType::Iterator new_block = free_blocks_by_offset.end();
-	if (previous != free_blocks_by_offset.end() && next != free_blocks_by_offset.end()) {
-		// The released block connects two existing blocks.
-		remove_from_size_map(previous->value);
-		remove_from_size_map(next->value);
-
-		previous->value.size += next->value.size + p_result.count;
-		free_blocks_by_offset.erase(next->value.global_offset);
-		new_block = previous;
-	} else if (previous != free_blocks_by_offset.end()) {
-		// Connects to the previous block.
-		remove_from_size_map(previous->value);
-		previous->value.size += p_result.count;
-		new_block = previous;
-	} else if (next != free_blocks_by_offset.end()) {
-		// Connects to the next block.
-		remove_from_size_map(next->value);
-
-		FreeBlockInfo merged_block = next->value;
-		merged_block.global_offset -= p_result.count;
-		merged_block.size += p_result.count;
-
-		// Replace with the merged block.
-		free_blocks_by_offset.erase(next->value.global_offset);
-		DEV_ASSERT(!free_blocks_by_offset.has(merged_block.global_offset));
-		new_block = free_blocks_by_offset.insert(merged_block.global_offset, merged_block);
-	} else {
-		// Connects to no block.
-		new_block = free_blocks_by_offset.insert(global_offset, FreeBlockInfo{ p_result.heap, global_offset, p_result.base_offset, p_result.count });
-	}
-
-	new_block->value.nonce = p_result.nonce;
-
-	add_to_size_map(new_block->value);
-	verify();
-
-	return OK;
-}
-
-RenderingDeviceDriverD3D12::CPUDescriptorsHeap::~CPUDescriptorsHeap() {
-	if (handle.pool) {
-		handle.pool->release(handle);
-	}
-}
-
-RenderingDeviceDriverD3D12::CPUDescriptorsHeapWalker RenderingDeviceDriverD3D12::CPUDescriptorsHeap::make_walker() const {
-	RenderingDeviceDriverD3D12::CPUDescriptorsHeapWalker walker;
-	walker.handle_size = handle_size;
-	walker.handle_count = desc.NumDescriptors;
-	if (handle.heap) {
-#if defined(_MSC_VER) || !defined(_WIN32)
-		walker.first_cpu_handle = handle.heap->GetCPUDescriptorHandleForHeapStart();
-#else
-		handle.heap->GetCPUDescriptorHandleForHeapStart(&walker.first_cpu_handle);
-#endif
-	}
-
-	walker.first_cpu_handle.ptr += handle.offset * handle_size;
-	return walker;
-}
-
-D3D12_CPU_DESCRIPTOR_HANDLE RenderingDeviceDriverD3D12::CPUDescriptorsHeapWalker::get_curr_cpu_handle() {
-	ERR_FAIL_COND_V_MSG(is_at_eof(), D3D12_CPU_DESCRIPTOR_HANDLE(), "Heap walker is at EOF.");
-	return D3D12_CPU_DESCRIPTOR_HANDLE{ first_cpu_handle.ptr + handle_index * handle_size };
-}
-
-void RenderingDeviceDriverD3D12::CPUDescriptorsHeapWalker::advance(uint32_t p_count) {
-	ERR_FAIL_COND_MSG(handle_index + p_count > handle_count, "Would advance past EOF.");
-	handle_index += p_count;
-}
-
-Error RenderingDeviceDriverD3D12::CPUDescriptorsHeap::allocate(RenderingDeviceDriverD3D12 *p_driver, D3D12_DESCRIPTOR_HEAP_TYPE p_type, uint32_t p_descriptor_count) {
-	ERR_FAIL_COND_V(handle.heap, ERR_ALREADY_EXISTS);
-	ERR_FAIL_COND_V(p_descriptor_count == 0, ERR_INVALID_PARAMETER);
-
-	ID3D12Device *p_device = p_driver->device.Get();
-	handle_size = p_device->GetDescriptorHandleIncrementSize(p_type);
-
-	desc.Type = p_type;
-	desc.NumDescriptors = p_descriptor_count;
-	desc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE;
-
-	return p_driver->cpu_descriptor_pool.allocate(p_device, desc, handle);
-}
-
-Error RenderingDeviceDriverD3D12::GPUDescriptorsHeap::allocate(RenderingDeviceDriverD3D12 *p_driver, D3D12_DESCRIPTOR_HEAP_TYPE p_type, uint32_t p_descriptor_count) {
+Error RenderingDeviceDriverD3D12::DescriptorsHeap::allocate(ID3D12Device *p_device, D3D12_DESCRIPTOR_HEAP_TYPE p_type, uint32_t p_descriptor_count, bool p_for_gpu) {
 	ERR_FAIL_COND_V(heap, ERR_ALREADY_EXISTS);
 	ERR_FAIL_COND_V(p_descriptor_count == 0, ERR_INVALID_PARAMETER);
 
@@ -2540,21 +2326,21 @@ RDD::CommandBufferID RenderingDeviceDriverD3D12::command_buffer_create(CommandPo
 		list_type = D3D12_COMMAND_LIST_TYPE(command_pool->queue_family.id - 1);
 	}
 
-	ComPtr<ID3D12CommandAllocator> cmd_allocator;
+	ID3D12CommandAllocator *cmd_allocator = nullptr;
 	{
-		HRESULT res = device->CreateCommandAllocator(list_type, IID_PPV_ARGS(cmd_allocator.GetAddressOf()));
+		HRESULT res = device->CreateCommandAllocator(list_type, IID_PPV_ARGS(&cmd_allocator));
 		ERR_FAIL_COND_V_MSG(!SUCCEEDED(res), CommandBufferID(), "CreateCommandAllocator failed with error " + vformat("0x%08ux", (uint64_t)res) + ".");
 	}
 
-	ComPtr<ID3D12GraphicsCommandList> cmd_list;
+	ID3D12GraphicsCommandList *cmd_list = nullptr;
 	{
 		ComPtr<ID3D12Device4> device_4;
 		device->QueryInterface(device_4.GetAddressOf());
 		HRESULT res = E_FAIL;
 		if (device_4) {
-			res = device_4->CreateCommandList1(0, list_type, D3D12_COMMAND_LIST_FLAG_NONE, IID_PPV_ARGS(cmd_list.GetAddressOf()));
+			res = device_4->CreateCommandList1(0, list_type, D3D12_COMMAND_LIST_FLAG_NONE, IID_PPV_ARGS(&cmd_list));
 		} else {
-			res = device->CreateCommandList(0, list_type, cmd_allocator.Get(), nullptr, IID_PPV_ARGS(cmd_list.GetAddressOf()));
+			res = device->CreateCommandList(0, list_type, cmd_allocator, nullptr, IID_PPV_ARGS(&cmd_list));
 		}
 		ERR_FAIL_COND_V_MSG(!SUCCEEDED(res), CommandBufferID(), "CreateCommandList failed with error " + vformat("0x%08ux", (uint64_t)res) + ".");
 		if (!device_4) {
@@ -5119,6 +4905,7 @@ void RenderingDeviceDriverD3D12::command_copy_texture_to_buffer(CommandBufferID 
 
 void RenderingDeviceDriverD3D12::pipeline_free(PipelineID p_pipeline) {
 	PipelineInfo *pipeline_info = (PipelineInfo *)(p_pipeline.id);
+	pipeline_info->pso->Release();
 	memdelete(pipeline_info);
 }
 
@@ -5559,14 +5346,14 @@ void RenderingDeviceDriverD3D12::command_bind_render_pipeline(CommandBufferID p_
 	CommandBufferInfo *cmd_buf_info = (CommandBufferInfo *)p_cmd_buffer.id;
 	const PipelineInfo *pipeline_info = (const PipelineInfo *)p_pipeline.id;
 
-	if (cmd_buf_info->graphics_pso == pipeline_info->pso.Get()) {
+	if (cmd_buf_info->graphics_pso == pipeline_info->pso) {
 		return;
 	}
 
 	const ShaderInfo *shader_info_in = pipeline_info->shader_info;
 	const RenderPipelineInfo &render_info = pipeline_info->render_info;
 
-	cmd_buf_info->cmd_list->SetPipelineState(pipeline_info->pso.Get());
+	cmd_buf_info->cmd_list->SetPipelineState(pipeline_info->pso);
 	if (cmd_buf_info->graphics_root_signature_crc != shader_info_in->root_signature_crc) {
 		cmd_buf_info->cmd_list->SetGraphicsRootSignature(shader_info_in->root_signature.Get());
 		cmd_buf_info->graphics_root_signature_crc = shader_info_in->root_signature_crc;
@@ -5586,7 +5373,7 @@ void RenderingDeviceDriverD3D12::command_bind_render_pipeline(CommandBufferID p_
 
 	cmd_buf_info->render_pass_state.vf_info = render_info.vf_info;
 
-	cmd_buf_info->graphics_pso = pipeline_info->pso.Get();
+	cmd_buf_info->graphics_pso = pipeline_info->pso;
 	cmd_buf_info->compute_pso = nullptr;
 }
 
@@ -6055,16 +5842,16 @@ RDD::PipelineID RenderingDeviceDriverD3D12::render_pipeline_create(
 
 	ComPtr<ID3D12Device2> device_2;
 	device->QueryInterface(device_2.GetAddressOf());
-	ComPtr<ID3D12PipelineState> pso;
+	ID3D12PipelineState *pso = nullptr;
 	HRESULT res = E_FAIL;
 	if (device_2) {
 		D3D12_PIPELINE_STATE_STREAM_DESC pssd = {};
 		pssd.pPipelineStateSubobjectStream = &pipeline_desc;
 		pssd.SizeInBytes = sizeof(pipeline_desc);
-		res = device_2->CreatePipelineState(&pssd, IID_PPV_ARGS(pso.GetAddressOf()));
+		res = device_2->CreatePipelineState(&pssd, IID_PPV_ARGS(&pso));
 	} else {
 		D3D12_GRAPHICS_PIPELINE_STATE_DESC desc = pipeline_desc.GraphicsDescV0();
-		res = device->CreateGraphicsPipelineState(&desc, IID_PPV_ARGS(pso.GetAddressOf()));
+		res = device->CreateGraphicsPipelineState(&desc, IID_PPV_ARGS(&pso));
 	}
 	ERR_FAIL_COND_V_MSG(!SUCCEEDED(res), PipelineID(), "Create(Graphics)PipelineState failed with error " + vformat("0x%08ux", (uint64_t)res) + ".");
 
@@ -6086,18 +5873,18 @@ void RenderingDeviceDriverD3D12::command_bind_compute_pipeline(CommandBufferID p
 	CommandBufferInfo *cmd_buf_info = (CommandBufferInfo *)p_cmd_buffer.id;
 	const PipelineInfo *pipeline_info = (const PipelineInfo *)p_pipeline.id;
 
-	if (cmd_buf_info->compute_pso == pipeline_info->pso.Get()) {
+	if (cmd_buf_info->compute_pso == pipeline_info->pso) {
 		return;
 	}
 
 	const ShaderInfo *shader_info_in = pipeline_info->shader_info;
-	cmd_buf_info->cmd_list->SetPipelineState(pipeline_info->pso.Get());
+	cmd_buf_info->cmd_list->SetPipelineState(pipeline_info->pso);
 	if (cmd_buf_info->compute_root_signature_crc != shader_info_in->root_signature_crc) {
 		cmd_buf_info->cmd_list->SetComputeRootSignature(shader_info_in->root_signature.Get());
 		cmd_buf_info->compute_root_signature_crc = shader_info_in->root_signature_crc;
 	}
 
-	cmd_buf_info->compute_pso = pipeline_info->pso.Get();
+	cmd_buf_info->compute_pso = pipeline_info->pso;
 	cmd_buf_info->graphics_pso = nullptr;
 }
 
@@ -6154,16 +5941,16 @@ RDD::PipelineID RenderingDeviceDriverD3D12::compute_pipeline_create(ShaderID p_s
 
 	ComPtr<ID3D12Device2> device_2;
 	device->QueryInterface(device_2.GetAddressOf());
-	ComPtr<ID3D12PipelineState> pso;
+	ID3D12PipelineState *pso = nullptr;
 	HRESULT res = E_FAIL;
 	if (device_2) {
 		D3D12_PIPELINE_STATE_STREAM_DESC pssd = {};
 		pssd.pPipelineStateSubobjectStream = &pipeline_desc;
 		pssd.SizeInBytes = sizeof(pipeline_desc);
-		res = device_2->CreatePipelineState(&pssd, IID_PPV_ARGS(pso.GetAddressOf()));
+		res = device_2->CreatePipelineState(&pssd, IID_PPV_ARGS(&pso));
 	} else {
 		D3D12_COMPUTE_PIPELINE_STATE_DESC desc = pipeline_desc.ComputeDescV0();
-		res = device->CreateComputePipelineState(&desc, IID_PPV_ARGS(pso.GetAddressOf()));
+		res = device->CreateComputePipelineState(&desc, IID_PPV_ARGS(&pso));
 	}
 	ERR_FAIL_COND_V_MSG(!SUCCEEDED(res), PipelineID(), "Create(Compute)PipelineState failed with error " + vformat("0x%08ux", (uint64_t)res) + ".");
 
@@ -6335,7 +6122,7 @@ void RenderingDeviceDriverD3D12::set_object_name(ObjectType p_type, ID p_driver_
 		} break;
 		case OBJECT_TYPE_PIPELINE: {
 			const PipelineInfo *pipeline_info = (const PipelineInfo *)p_driver_id.id;
-			_set_object_name(pipeline_info->pso.Get(), p_name);
+			_set_object_name(pipeline_info->pso, p_name);
 		} break;
 		default: {
 			DEV_ASSERT(false);
@@ -6934,7 +6721,7 @@ Error RenderingDeviceDriverD3D12::_initialize_command_signatures() {
 
 Error RenderingDeviceDriverD3D12::initialize(uint32_t p_device_index, uint32_t p_frame_count) {
 	context_device = context_driver->device_get(p_device_index);
-	adapter.Attach(context_driver->create_adapter(p_device_index));
+	adapter = context_driver->create_adapter(p_device_index);
 	ERR_FAIL_NULL_V(adapter, ERR_CANT_CREATE);
 
 	HRESULT res = adapter->GetDesc(&adapter_desc);
