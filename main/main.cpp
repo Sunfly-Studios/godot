@@ -2302,7 +2302,7 @@ Error Main::setup(const char *execpath, int argc, char *argv[], bool p_second_ph
 
 #undef BLOCK_DEVICE
 
-		GLOBAL_DEF_RST_NOVAL(PropertyInfo(Variant::ARRAY, "rendering/gl_compatibility/BLOCK_DEVICE_on_devices", PROPERTY_HINT_ARRAY_TYPE, vformat("%s/%s:%s", Variant::DICTIONARY, PROPERTY_HINT_NONE, String())), device_blocklist);
+		GLOBAL_DEF_RST_NOVAL(PropertyInfo(Variant::ARRAY, "rendering/gl_compatibility/force_angle_on_devices", PROPERTY_HINT_ARRAY_TYPE, vformat("%s/%s:%s", Variant::DICTIONARY, PROPERTY_HINT_NONE, String())), device_blocklist);
 	}
 
 	// Start with RenderingDevice-based backends.
