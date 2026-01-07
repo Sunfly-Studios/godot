@@ -185,6 +185,7 @@ def get_opts():
 
     return [
         ("mingw_prefix", "MinGW prefix", mingw),
+        ("llvm_win_prefix", "Path to custom LLVM on Windows installation prefix", ""),
         # Targeted Windows version: 7 (and later), minimum supported version
         # XP support dropped after EOL due to missing API for IPv6 and other issues
         # Vista support dropped after EOL due to GH-10243
@@ -252,6 +253,26 @@ def get_flags():
     }
 
 
+def get_clang_version(env):
+    if env["llvm_win_prefix"]:
+        clang_cl = env["llvm_win_prefix"] + "/bin/clang-cl"
+    else:
+        clang_cl = "clang-cl"
+
+    try:
+        # shell=True required for Windows to find executables in PATH if not full path,
+        # and to handle potentially complex environment setups.
+        # If passing a string, quoting is important.
+        cmd = f'"{clang_cl}" --version'
+        output = subprocess.check_output(cmd, shell=(os.name == "nt")).decode("utf-8").strip()
+        match = re.search(r"clang version ([^\s]+)", output)
+        if match:
+            return match.group(1)
+        return "Unknown"
+    except (subprocess.CalledProcessError, OSError):
+        return "Unknown"
+
+
 def setup_msvc_manual(env: "SConsEnvironment"):
     """Running from VCVARS environment"""
 
@@ -264,7 +285,10 @@ def setup_msvc_manual(env: "SConsEnvironment"):
         )
         sys.exit(255)
 
-    print("Using VCVARS-determined MSVC, arch %s" % (env_arch))
+    if env["use_llvm"]:
+        print("Using LLVM/Clang for Windows version %s, arch %s" % (get_clang_version(env), env_arch))
+    else:
+        print("Using VCVARS-determined MSVC, arch %s" % (env_arch))
 
 
 def setup_msvc_auto(env: "SConsEnvironment"):
@@ -306,7 +330,10 @@ def setup_msvc_auto(env: "SConsEnvironment"):
     env.AppendUnique(RCFLAGS=env.get("rcflags", "").split())
 
     # Note: actual compiler version can be found in env['MSVC_VERSION'], e.g. "14.1" for VS2015
-    print("Using SCons-detected MSVC version %s, arch %s" % (env["MSVC_VERSION"], env["arch"]))
+    if env["use_llvm"]:
+        print("Using LLVM/Clang for Windows version %s, arch %s" % (get_clang_version(env), env["arch"]))
+    else:
+        print("Using SCons-detected MSVC version %s, arch %s" % (env["MSVC_VERSION"], env["arch"]))
 
 
 def setup_mingw(env: "SConsEnvironment"):
@@ -354,10 +381,16 @@ def configure_msvc(env: "SConsEnvironment", vcvars_msvc_config):
     ## Compile/link flags
 
     if env["use_llvm"]:
-        env["CC"] = "clang-cl"
-        env["CXX"] = "clang-cl"
-        env["LINK"] = "lld-link"
-        env["AR"] = "llvm-lib"
+        if env["llvm_win_prefix"]:
+            env["CC"] = env["llvm_win_prefix"] + "/bin/clang-cl"
+            env["CXX"] = env["llvm_win_prefix"] + "/bin/clang-cl"
+            env["LINK"] = env["llvm_win_prefix"] + "/bin/lld-link"
+            env["AR"] = env["llvm_win_prefix"] + "/bin/llvm-lib"
+        else:
+            env["CC"] = "clang-cl"
+            env["CXX"] = "clang-cl"
+            env["LINK"] = "lld-link"
+            env["AR"] = "llvm-lib"
 
         env.AppendUnique(CPPDEFINES=["R128_STDC_ONLY"])
         env.extra_suffix = ".llvm" + env.extra_suffix
