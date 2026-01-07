@@ -467,6 +467,7 @@ class DisplayServerWindows : public DisplayServer {
 
 	struct WindowData {
 		HWND hWnd;
+		WindowID id;
 
 		Vector<Vector2> mpath;
 
@@ -480,6 +481,8 @@ class DisplayServerWindows : public DisplayServer {
 		bool multiwindow_fs = false;
 		bool borderless = false;
 		bool resizable = true;
+		bool no_min_btn = false;
+		bool no_max_btn = false;
 		bool window_focused = false;
 		int activate_state = 0;
 		bool was_maximized_pre_fs = false;
@@ -520,6 +523,7 @@ class DisplayServerWindows : public DisplayServer {
 		Size2 min_size;
 		Size2 max_size;
 		int width = 0, height = 0;
+		int width_with_decorations = 0, height_with_decorations = 0;
 
 		Size2 window_rect;
 		Point2 last_pos;

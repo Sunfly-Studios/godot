@@ -42,6 +42,8 @@
 #include "main/main.h"
 #include "scene/resources/texture.h"
 
+#include "servers/rendering/dummy/rasterizer_dummy.h"
+
 #if defined(VULKAN_ENABLED)
 #include "rendering_context_driver_vulkan_windows.h"
 #endif
@@ -6094,8 +6096,10 @@ Error DisplayServerWindows::_create_window(WindowID p_window_id, WindowMode p_mo
 	if (rq_screen < 0) {
 		rq_screen = get_primary_screen(); // Requested window rect is outside any screen bounds.
 	}
-
+	
 	Point2i offset = _get_screens_origin();
+
+	RECT WindowRect;
 
 	if (!p_parent_hwnd) {
 		if (p_mode == WINDOW_MODE_FULLSCREEN || p_mode == WINDOW_MODE_EXCLUSIVE_FULLSCREEN) {
