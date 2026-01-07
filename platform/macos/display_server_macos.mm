@@ -1532,6 +1532,9 @@ String DisplayServerMacOS::clipboard_get() const {
 	}
 
 	NSArray *objectsToPaste = [pasteboard readObjectsForClasses:classArray options:options];
+	if (!objectsToPaste || [objectsToPaste count] < 1) {
+		return "";
+	}
 	NSString *string = [objectsToPaste objectAtIndex:0];
 
 	String ret;
