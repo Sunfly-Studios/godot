@@ -44,8 +44,10 @@
 #include "servers/rendering/renderer_rd/shaders/effects/ssil_importance_map.glsl.gen.h"
 #include "servers/rendering/renderer_rd/shaders/effects/ssil_interleave.glsl.gen.h"
 #include "servers/rendering/renderer_rd/shaders/effects/subsurface_scattering.glsl.gen.h"
+#include "servers/rendering/renderer_rd/effects/copy_effects.h"
 #include "servers/rendering_server.h"
 
+#define RB_SCOPE_SSLF SNAME("rb_sslf")
 #define RB_SCOPE_SSDS SNAME("rb_ssds")
 #define RB_SCOPE_SSIL SNAME("rb_ssil")
 #define RB_SCOPE_SSAO SNAME("rb_ssao")
@@ -79,6 +81,11 @@ public:
 
 	SSEffects();
 	~SSEffects();
+
+	/* Last Frame */
+
+	void allocate_last_frame_buffer(Ref<RenderSceneBuffersRD> p_render_buffers, bool p_use_ssil, bool p_use_ssr);
+	void copy_internal_texture_to_last_frame(Ref<RenderSceneBuffersRD> p_render_buffers, CopyEffects &p_copy_effects);
 
 	/* SS Downsampler */
 
@@ -166,6 +173,8 @@ private:
 	int ssil_blur_passes = 4;
 	float ssil_fadeout_from = 50.0;
 	float ssil_fadeout_to = 300.0;
+
+	bool ssr_half_size = false;
 
 	RS::EnvironmentSSRRoughnessQuality ssr_roughness_quality = RS::ENV_SSR_ROUGHNESS_QUALITY_LOW;
 
