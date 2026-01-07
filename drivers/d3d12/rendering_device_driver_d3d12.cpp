@@ -36,6 +36,8 @@
 #include "thirdparty/zlib/zlib.h"
 
 #include "d3d12_godot_nir_bridge.h"
+// This defines "struct spirv_capabilities" so we can stack-allocate it.
+#include "src/compiler/spirv/spirv_info.h"
 #include "dxil_hash.h"
 #include "rendering_context_driver_d3d12.h"
 
@@ -3093,6 +3095,12 @@ Vector<uint8_t> RenderingDeviceDriverD3D12::shader_compile_binary_from_spirv(Vec
 		nir_shader_compiler_options nir_options = *dxil_get_base_nir_compiler_options();
 		nir_options.lower_base_vertex = false;
 
+		const spirv_to_nir_options *default_spirv_options = dxil_spirv_nir_get_spirv_options();
+		spirv_to_nir_options spirv_options = *default_spirv_options;
+		spirv_capabilities caps = *default_spirv_options->capabilities;
+		caps.SampledCubeArray = true;
+		spirv_options.capabilities = &caps;
+
 		dxil_spirv_runtime_conf dxil_runtime_conf = {};
 		dxil_runtime_conf.runtime_data_cbv.base_shader_register = RUNTIME_DATA_REGISTER;
 		dxil_runtime_conf.push_constant_cbv.base_shader_register = ROOT_CONSTANT_REGISTER;
@@ -3137,7 +3145,8 @@ Vector<uint8_t> RenderingDeviceDriverD3D12::shader_compile_binary_from_spirv(Vec
 						0,
 						SPIRV_TO_MESA_STAGES[stage],
 						entry_point,
-						dxil_spirv_nir_get_spirv_options(), &nir_options);
+						&spirv_options,
+						&nir_options);
 				if (!shader) {
 					free_nir_shaders();
 					ERR_FAIL_V_MSG(Vector<uint8_t>(), "Shader translation (step 1) at stage " + String(SHADER_STAGE_NAMES[stage]) + " failed.");
