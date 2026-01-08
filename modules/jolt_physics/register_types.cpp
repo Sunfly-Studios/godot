@@ -50,7 +50,8 @@ PhysicsServer3D *create_jolt_physics_server() {
 
 void initialize_jolt_physics_module(ModuleInitializationLevel p_level) {
 	switch (p_level) {
-		case MODULE_INITIALIZATION_LEVEL_CORE: {
+		case MODULE_INITIALIZATION_LEVEL_CORE:
+		case MODULE_INITIALIZATION_LEVEL_EARLY_CORE: {
 		} break;
 		case MODULE_INITIALIZATION_LEVEL_SERVERS: {
 			jolt_initialize();
@@ -66,7 +67,8 @@ void initialize_jolt_physics_module(ModuleInitializationLevel p_level) {
 
 void uninitialize_jolt_physics_module(ModuleInitializationLevel p_level) {
 	switch (p_level) {
-		case MODULE_INITIALIZATION_LEVEL_CORE: {
+		case MODULE_INITIALIZATION_LEVEL_CORE:
+		case MODULE_INITIALIZATION_LEVEL_EARLY_CORE: {
 		} break;
 		case MODULE_INITIALIZATION_LEVEL_SERVERS: {
 			jolt_deinitialize();
