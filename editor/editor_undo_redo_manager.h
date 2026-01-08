@@ -54,6 +54,7 @@ public:
 		String action_name;
 		UndoRedo::MergeMode merge_mode = UndoRedo::MERGE_DISABLE;
 		bool backward_undo_ops = false;
+		bool mark_unsaved = true;
 	};
 
 	struct History {
