@@ -282,10 +282,22 @@ opts.Add("linkflags", "Custom flags for the linker")
 opts.Add("asflags", "Custom flags for the assembler")
 opts.Add("arflags", "Custom flags for the archive tool")
 opts.Add("rcflags", "Custom flags for Windows resource compiler")
+opts.Add(
+    EnumVariable(
+        "build_timestamp_timezone",
+        "Determines which timezone to use to print build timestamps in SCons terminal output. Defaults to `utc`",
+        "utc",
+        ["utc", "system"],
+        {"local": "system"},
+    )
+)
 
 # Update the environment to have all above options defined
 # in following code (especially platform and custom_modules).
 opts.Update(env)
+
+if not env.GetOption("clean") and not env.GetOption("help"):
+    methods.print_started_at(methods.get_build_timezone(env))
 
 # Setup caching logic early to catch everything.
 methods.prepare_cache(env)
@@ -1109,4 +1121,4 @@ methods.show_progress(env)
 # once we start requiring SCons 4.0 as min version.
 methods.dump(env)
 methods.prepare_purge(env)
-methods.prepare_timer()
+methods.prepare_timer(methods.get_build_timezone(env))
