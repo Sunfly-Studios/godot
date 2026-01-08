@@ -99,9 +99,9 @@ void MovieWriter::begin(const Size2i &p_movie_size, uint32_t p_fps, const String
 	movie_size = p_movie_size;
 
 	if (Engine::get_singleton()->get_write_movie_subframes() >= 1) {
-		print_line(vformat("Movie Maker mode enabled, recording movie %d×%d at %d FPS (x%d subframes)...", movie_size.width, movie_size.height, p_fps, 1 + Engine::get_singleton()->get_write_movie_subframes()));
+		print_line(vformat("Movie Maker mode enabled, recording movie %dx%d at %d FPS (x%d subframes)...", movie_size.width, movie_size.height, p_fps, 1 + Engine::get_singleton()->get_write_movie_subframes()));
 	} else {
-		print_line(vformat("Movie Maker mode enabled, recording movie %d×%d at %d FPS...", movie_size.width, movie_size.height, p_fps));
+		print_line(vformat("Movie Maker mode enabled, recording movie %dx%d at %d FPS...", movie_size.width, movie_size.height, p_fps));
 	}
 
 	// Check for available disk space and warn the user if needed.
