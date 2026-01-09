@@ -1056,7 +1056,7 @@ String OS_Unix::get_cwd() const {
 	String dir;
 	char real_current_dir_name[2048];
 	ERR_FAIL_NULL_V(getcwd(real_current_dir_name, 2048), ".");
-	if (dir.append_utf8(real_current_dir_name) != OK) {
+	if (dir.parse_utf8(real_current_dir_name) != OK) {
 		dir = real_current_dir_name;
 	}
 	return dir;

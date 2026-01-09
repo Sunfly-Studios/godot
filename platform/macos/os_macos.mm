@@ -349,7 +349,7 @@ String OS_MacOS::get_bundle_icon_name() const {
 	if (main) {
 		NSString *icon_name = [[main infoDictionary] objectForKey:@"CFBundleIconName"];
 		if (icon_name) {
-			ret.append_utf8([icon_name UTF8String]);
+			ret.parse_utf8([icon_name UTF8String]);
 		}
 	}
 	return ret;
