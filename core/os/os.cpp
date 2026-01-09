@@ -592,11 +592,11 @@ bool OS::has_feature(const String &p_feature) {
 	if (p_feature == "loongarch64") {
 		return true;
 	}
-#elif defined(__mips64)
+#elif defined(__mips64) || defined(__mips64__)
 	if (p_feature == "mips64") {
 		return true;
 	}
-#elif defined(__sparcv9) || defined(__sparc64__)
+#elif defined(__sparc64__) || defined(__sparc_v9__) || defined(__sparcv9) || (defined(__sparc__) && defined(__arch64__))
 	if (p_feature == "sparc64") {
 		return true;
 	}
@@ -626,6 +626,25 @@ bool OS::has_feature(const String &p_feature) {
 		return true;
 #endif
 	}
+
+#if defined(__x86_64__) || defined(__amd64__) || defined(__i386__) || defined(_M_X64) || defined(_M_IX86)
+    #if defined(__x86_64__) || defined(__amd64__) || defined(_M_X64)
+        if (p_feature == "sse" || p_feature == "sse2") {
+            return true;
+        }
+    #else 
+        #if defined(NO_SSE2)
+            if (p_feature == "sse") {
+                return true;
+            }
+        #else
+            // (Checking for "sse2" implies "sse" is also supported).
+            if (p_feature == "sse" || p_feature == "sse2") {
+                return true;
+            }
+        #endif
+    #endif
+#endif
 
 	if (_check_internal_feature_support(p_feature)) {
 		return true;
