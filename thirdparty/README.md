@@ -551,7 +551,7 @@ Files extracted from upstream source:
 
 - All `.c` and `.h` files of the main directory, apart from `example.c` and
   `pngtest.c`
-- `arm/` (minus `filter_neon.S`), `intel/`, `loongarch/`, and `powerpc/` (minus `.editorconfig`) folders
+- `arm/` (minus `filter_neon.S`), `intel/`, `loongarch/`, `powerpc/` and `mips/` (minus `.editorconfig`) folders
 - `scripts/pnglibconf.h.prebuilt` as `pnglibconf.h`
 - `LICENSE`
 
