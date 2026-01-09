@@ -355,6 +355,7 @@ void EditorExportPlatformWeb::get_preset_features(const Ref<EditorExportPreset> 
 		r_features->push_back("web_noextensions");
 	}
 	r_features->push_back("wasm32");
+	r_features->push_back("wasm64");
 }
 
 void EditorExportPlatformWeb::get_export_options(List<ExportOption> *r_options) const {
