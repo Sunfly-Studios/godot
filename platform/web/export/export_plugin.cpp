@@ -358,6 +358,7 @@ void EditorExportPlatformWeb::get_preset_features(const Ref<EditorExportPreset> 
 }
 
 void EditorExportPlatformWeb::get_export_options(List<ExportOption> *r_options) const {
+	r_options->push_back(ExportOption(PropertyInfo(Variant::STRING, "binary_format/architecture", PROPERTY_HINT_ENUM, "wasm32,wasm64"), "wasm32"));
 	r_options->push_back(ExportOption(PropertyInfo(Variant::STRING, "custom_template/debug", PROPERTY_HINT_GLOBAL_FILE, "*.zip"), ""));
 	r_options->push_back(ExportOption(PropertyInfo(Variant::STRING, "custom_template/release", PROPERTY_HINT_GLOBAL_FILE, "*.zip"), ""));
 
@@ -417,10 +418,11 @@ bool EditorExportPlatformWeb::has_valid_export_configuration(const Ref<EditorExp
 	bool valid = false;
 	bool extensions = (bool)p_preset->get("variant/extensions_support");
 	bool thread_support = (bool)p_preset->get("variant/thread_support");
+	bool is_wasm_64 = p_preset->get("binary_format/architecture") == "wasm64";
 
 	// Look for export templates (first official, and if defined custom templates).
-	bool dvalid = exists_export_template(_get_template_name(extensions, thread_support, true), &err);
-	bool rvalid = exists_export_template(_get_template_name(extensions, thread_support, false), &err);
+	bool dvalid = exists_export_template(_get_template_name(extensions, thread_support, true, is_wasm_64), &err);
+	bool rvalid = exists_export_template(_get_template_name(extensions, thread_support, false, is_wasm_64), &err);
 
 	if (p_preset->get("custom_template/debug") != "") {
 		dvalid = FileAccess::exists(p_preset->get("custom_template/debug"));
@@ -495,7 +497,8 @@ Error EditorExportPlatformWeb::export_project(const Ref<EditorExportPreset> &p_p
 	if (template_path.is_empty()) {
 		bool extensions = (bool)p_preset->get("variant/extensions_support");
 		bool thread_support = (bool)p_preset->get("variant/thread_support");
-		template_path = find_export_template(_get_template_name(extensions, thread_support, p_debug));
+		bool is_wasm_64 = p_preset->get("binary_format/architecture") == "wasm64";
+		template_path = find_export_template(_get_template_name(extensions, thread_support, p_debug, is_wasm_64));
 	}
 
 	if (!template_path.is_empty() && !FileAccess::exists(template_path)) {
