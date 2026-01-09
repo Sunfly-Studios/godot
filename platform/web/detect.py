@@ -95,7 +95,7 @@ def get_flags():
 
 def configure(env: "SConsEnvironment"):
     # Validate arch.
-    supported_arches = ["wasm32"]
+    supported_arches = ["wasm32", "wasm64"]
     validate_arch(env["arch"], get_name(), supported_arches)
 
     try:
@@ -204,8 +204,8 @@ def configure(env: "SConsEnvironment"):
     cc_semver = (cc_version["major"], cc_version["minor"], cc_version["patch"])
 
     # Minimum emscripten requirements.
-    if cc_semver < (3, 1, 62):
-        print_error("The minimum emscripten version to build Godot is 3.1.62, detected: %s.%s.%s" % cc_semver)
+    if cc_semver < (3, 1, 72):
+        print_error("The minimum emscripten version to build Godot is 3.1.72, detected: %s.%s.%s" % cc_semver)
         sys.exit(255)
 
     env.Prepend(CPPPATH=["#platform/web"])
@@ -259,9 +259,13 @@ def configure(env: "SConsEnvironment"):
         env.Append(LINKFLAGS=["-fvisibility=hidden"])
         env.extra_suffix = ".dlink" + env.extra_suffix
 
-    # Disable BigInt integration. Is a nice to have
-    # optimisation feature but breaks older browsers.
-    env.Append(LINKFLAGS=["-sWASM_BIGINT=0"])
+    flip_wasm64_requirement = 1 if env["arch"] == "wasm64" else 0
+
+    # Enable or Disable BigInt integration. Is a nice to have
+    # optimisation feature but breaks older browsers if targeting wasm32.
+    env.Append(LINKFLAGS=[f"-sWASM_BIGINT={flip_wasm64_requirement}"])
+    env.Append(CCFLAGS=[f"-sMEMORY64={flip_wasm64_requirement}"])
+    env.Append(LINKFLAGS=[f"-sMEMORY64={flip_wasm64_requirement}"])
 
     # Run the main application in a web worker
     if env["proxy_to_pthread"]:
@@ -276,10 +280,6 @@ def configure(env: "SConsEnvironment"):
 
     # Wrap the JavaScript support code around a closure named Godot.
     env.Append(LINKFLAGS=["-sMODULARIZE=1", "-sEXPORT_NAME='Godot'"])
-
-    # Force long jump mode to 'emscripten' for compatibility.
-    env.Append(CCFLAGS=["-sSUPPORT_LONGJMP='emscripten'"])
-    env.Append(LINKFLAGS=["-sSUPPORT_LONGJMP='emscripten'"])
 
     # Allow increasing memory buffer size during runtime. This is efficient
     # when using WebAssembly (in comparison to asm.js) and works well for
@@ -298,33 +298,49 @@ def configure(env: "SConsEnvironment"):
     # This workaround creates a closure that prevents the garbage collector from freeing the WebGL context.
     # We also only use WebGL2, and changing context version is not widely supported anyway.
     env.Append(LINKFLAGS=["-sGL_WORKAROUND_SAFARI_GETCONTEXT_BUG=0"])
-
-    # Enable LEGACY_VM_SUPPORT for older JS engines,
-    # but still keep WASM enabled because it is a hard requirement
+    
+    # Still keep WASM enabled because it is a hard requirement
     # for Godot.
-    env.Append(LINKFLAGS=["-sLEGACY_VM_SUPPORT=1"])
     env.Append(LINKFLAGS=["-sWASM=1"])
 
-    # Add polyfill for older browsers.
-    env.Append(LINKFLAGS=["-sPOLYFILL_OLD_MATH_FUNCTIONS=1"])
+    if env["arch"] == "wasm32":
+        # Enable LEGACY_VM_SUPPORT for older JS engines.
+        # Though only for wasm32 since we cannot have wasm64
+        # and "legacy support"
+        env.Append(LINKFLAGS=["-sLEGACY_VM_SUPPORT=1"])
+    
+        # Add polyfill for older browsers.
+        env.Append(LINKFLAGS=["-sPOLYFILL_OLD_MATH_FUNCTIONS=1"])
 
-    # Forces emscripten to generate code that is compatible
-    # with older browsers.
+        # Force long jump mode to 'emscripten' for compatibility.
+        # Moved to here to only have a single `if` check.
+        env.Append(CCFLAGS=["-sSUPPORT_LONGJMP='emscripten'"])
+        env.Append(LINKFLAGS=["-sSUPPORT_LONGJMP='emscripten'"])
 
-    if env["threads"]:
-        # Lowest browsers that can be targeted because these have
-        # DedicatedWorkerGlobalScope.name parameter for threading support
-        env.Append(LINKFLAGS=["-sMIN_FIREFOX_VERSION=79"])
-        env.Append(LINKFLAGS=["-sMIN_CHROME_VERSION=75"])
-        env.Append(LINKFLAGS=["-sMIN_SAFARI_VERSION=150000"])
-    else:
-        # These are the browsers that provide enough
-        # _practical_ support. As in, what can Emscripten
-        # realistically support.
-        # While lower browsers could be targeted, those came
-        # long before WASM became a standard, which was in 2017.
-        # Except for Firefox. I set 55 (2017) but it didn't support
-        # ReadableStreaming until 65 from 2019.
-        env.Append(LINKFLAGS=["-sMIN_FIREFOX_VERSION=65"])
-        env.Append(LINKFLAGS=["-sMIN_CHROME_VERSION=70"])
-        env.Append(LINKFLAGS=["-sMIN_SAFARI_VERSION=120200"])
+        # Forces emscripten to generate code that is compatible
+        # with older browsers.
+        if env["threads"]:
+            # Lowest browsers that can be targeted because these have
+            # DedicatedWorkerGlobalScope.name parameter for threading support
+            env.Append(LINKFLAGS=["-sMIN_FIREFOX_VERSION=79"])
+            env.Append(LINKFLAGS=["-sMIN_CHROME_VERSION=75"])
+            env.Append(LINKFLAGS=["-sMIN_SAFARI_VERSION=150000"])
+        else:
+            # These are the browsers that provide enough
+            # _practical_ support. As in, what can Emscripten
+            # realistically support.
+            # While lower browsers could be targeted, those came
+            # long before WASM became a standard, which was in 2017.
+            # Except for Firefox. I set 55 (2017) but it didn't support
+            # ReadableStreaming until 65 from 2019.
+            env.Append(LINKFLAGS=["-sMIN_FIREFOX_VERSION=65"])
+            env.Append(LINKFLAGS=["-sMIN_CHROME_VERSION=70"])
+            env.Append(LINKFLAGS=["-sMIN_SAFARI_VERSION=120200"])
+    else: # wasm64
+        env.Append(CCFLAGS=["-sSUPPORT_LONGJMP='wasm'"])
+        env.Append(LINKFLAGS=["-sSUPPORT_LONGJMP='wasm'"])
+
+        env.Append(LINKFLAGS=["-sMIN_FIREFOX_VERSION=134"])
+        env.Append(LINKFLAGS=["-sMIN_CHROME_VERSION=133"])
+        print_warning("`wasm64` is experimental. Is only supported on Firefox 134 and Chrome 133 and later. Here be dragons.")
+        # Leave Safari to Emscripten defaults

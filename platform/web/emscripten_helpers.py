@@ -30,7 +30,10 @@ def run_closure_compiler(target, source, env, for_signature):
     # -sMIN_X_VERSION flags.
     # By specifying `--language_out,` this tells Closure:
     # "Transpile the output down to ES2015 compatibility"
-    cmd.extend(["--language_out", "ECMASCRIPT_2015"])
+    if env["arch"] == "wasm32":
+        cmd.extend(["--language_out", "ECMASCRIPT_2015"])
+    else:
+        cmd.extend(["--language_out", "ECMASCRIPT_2020"])
     return " ".join(cmd)
 
 
@@ -164,9 +167,11 @@ def create_template_zip(env, js, wasm, side):
 
     zip_files = env.InstallAs(out_files, in_files)
 
-    # Apply the optional chaining fix to the JS file before zipping
-    # zip_files[0] is the JS file
-    env.AddPostAction(zip_files[0], fix_optional_chaining)
+    if env["arch"] == "wasm32":
+        # Apply the optional chaining fix to the JS file before zipping
+        # zip_files[0] is the JS file.
+        # And we only do this for "wasm32" to support older browsers.
+        env.AddPostAction(zip_files[0], fix_optional_chaining)
 
     env.Zip(
         "#bin/godot",
