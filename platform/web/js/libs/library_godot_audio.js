@@ -34,22 +34,22 @@
 
 /**
  * @typedef {{
- *   id: string
- *   audioBuffer: AudioBuffer
- * }} SampleParams
- * @typedef {{
- *   numberOfChannels?: number
- *   sampleRate?: number
- *   loopMode?: LoopMode
- *   loopBegin?: number
- *   loopEnd?: number
- * }} SampleOptions
- */
+*   id: string
+*   audioBuffer: AudioBuffer
+* }} SampleParams
+* @typedef {{
+*   numberOfChannels?: number
+*   sampleRate?: number
+*   loopMode?: LoopMode
+*   loopBegin?: number
+*   loopEnd?: number
+* }} SampleOptions
+*/
 
 /**
- * Represents a sample, memory-wise.
- * @class
- */
+* Represents a sample, memory-wise.
+* @class
+*/
 class Sample {
 	/**
 	 * Returns a `Sample`.
@@ -172,9 +172,9 @@ class Sample {
 }
 
 /**
- * Represents a `SampleNode` linked to a `Bus`.
- * @class
- */
+* Represents a `SampleNode` linked to a `Bus`.
+* @class
+*/
 class SampleNodeBus {
 	/**
 	 * Creates a new `SampleNodeBus`.
@@ -319,26 +319,26 @@ class SampleNodeBus {
 }
 
 /**
- * @typedef {{
- *   id: string
- *   streamObjectId: string
- *   busIndex: number
- * }} SampleNodeParams
- * @typedef {{
- *   offset?: number
- *   playbackRate?: number
- *   startTime?: number
- *   pitchScale?: number
- *   loopMode?: LoopMode
- *   volume?: Float32Array
- *   start?: boolean
- * }} SampleNodeOptions
- */
+* @typedef {{
+*   id: string
+*   streamObjectId: string
+*   busIndex: number
+* }} SampleNodeParams
+* @typedef {{
+*   offset?: number
+*   playbackRate?: number
+*   startTime?: number
+*   pitchScale?: number
+*   loopMode?: LoopMode
+*   volume?: Float32Array
+*   start?: boolean
+* }} SampleNodeOptions
+*/
 
 /**
- * Represents an `AudioNode` of a `Sample`.
- * @class
- */
+* Represents an `AudioNode` of a `Sample`.
+* @class
+*/
 class SampleNode {
 	/**
 	 * Returns a `SampleNode`.
@@ -653,10 +653,10 @@ class SampleNode {
 		);
 		this._positionWorklet.port.onmessage = (event) => {
 			switch (event.data['type']) {
-			case 'position':
-				this._playbackPosition = (parseInt(event.data.data, 10) / this.getSample().sampleRate) + this.offset;
-				break;
-			default:
+				case 'position':
+					this._playbackPosition = (parseInt(event.data.data, 10) / this.getSample().sampleRate) + this.offset;
+					break;
+				default:
 				// Do nothing.
 			}
 		};
@@ -783,20 +783,22 @@ class SampleNode {
 			}
 
 			switch (self.getSample().loopMode) {
-			case 'disabled': {
-				const id = this.id;
-				self.stop();
-				if (GodotAudio.sampleFinishedCallback != null) {
-					const idCharPtr = GodotRuntime.allocString(id);
-					GodotAudio.sampleFinishedCallback(idCharPtr);
-					GodotRuntime.free(idCharPtr);
-				}
-			} break;
-			case 'forward':
-			case 'backward':
-				self.restart();
-				break;
-			default:
+				case 'disabled': {
+					const id = this.id;
+					self.stop();
+					if (GodotAudio.sampleFinishedCallback != null) {
+						const idCharPtr = GodotRuntime.allocString(id);
+
+						// Sometimes the runtime may cast it back to Number internally.
+						GodotAudio.sampleFinishedCallback(BigInt(idCharPtr));
+						GodotRuntime.free(BigInt(idCharPtr));
+					}
+				} break;
+				case 'forward':
+				case 'backward':
+					self.restart();
+					break;
+				default:
 				// do nothing
 			}
 		};
@@ -805,9 +807,9 @@ class SampleNode {
 }
 
 /**
- * Collection of nodes to represents a Godot Engine audio bus.
- * @class
- */
+* Collection of nodes to represents a Godot Engine audio bus.
+* @class
+*/
 class Bus {
 	/**
 	 * Returns the number of registered buses.
@@ -1250,16 +1252,16 @@ const _GodotAudio = {
 			ctx.onstatechange = function () {
 				let state = 0;
 				switch (ctx.state) {
-				case 'suspended':
-					state = 0;
-					break;
-				case 'running':
-					state = 1;
-					break;
-				case 'closed':
-					state = 2;
-					break;
-				default:
+					case 'suspended':
+						state = 0;
+						break;
+					case 'running':
+						state = 1;
+						break;
+					case 'closed':
+						state = 2;
+						break;
+					default:
 					// Do nothing.
 				}
 				onstatechange(state);
@@ -1648,7 +1650,7 @@ const _GodotAudio = {
 		/** @type {Float32Array} */
 		const subRight = GodotRuntime.heapSub(
 			HEAPF32,
-			framesPtr + framesTotal * BYTES_PER_FLOAT32,
+			Number(framesPtr) + framesTotal * BYTES_PER_FLOAT32,
 			framesTotal
 		);
 
@@ -1942,8 +1944,8 @@ autoAddDeps(_GodotAudio, '$GodotAudio');
 mergeInto(LibraryManager.library, _GodotAudio);
 
 /**
- * The AudioWorklet API driver, used when threads are available.
- */
+* The AudioWorklet API driver, used when threads are available.
+*/
 const GodotAudioWorklet = {
 	$GodotAudioWorklet__deps: ['$GodotAudio', '$GodotConfig'],
 	$GodotAudioWorklet: {
@@ -2178,8 +2180,8 @@ autoAddDeps(GodotAudioWorklet, '$GodotAudioWorklet');
 mergeInto(LibraryManager.library, GodotAudioWorklet);
 
 /*
- * The ScriptProcessorNode API, used as a fallback if AudioWorklet is not available.
- */
+* The ScriptProcessorNode API, used as a fallback if AudioWorklet is not available.
+*/
 const GodotAudioScript = {
 	$GodotAudioScript__deps: ['$GodotAudio'],
 	$GodotAudioScript: {
