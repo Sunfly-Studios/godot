@@ -789,9 +789,14 @@ class SampleNode {
 					if (GodotAudio.sampleFinishedCallback != null) {
 						const idCharPtr = GodotRuntime.allocString(id);
 
+#if MEMORY64
 						// Sometimes the runtime may cast it back to Number internally.
 						GodotAudio.sampleFinishedCallback(BigInt(idCharPtr));
 						GodotRuntime.free(BigInt(idCharPtr));
+#else
+						GodotAudio.sampleFinishedCallback(idCharPtr);
+						GodotRuntime.free(idCharPtr);
+#endif
 					}
 				} break;
 				case 'forward':

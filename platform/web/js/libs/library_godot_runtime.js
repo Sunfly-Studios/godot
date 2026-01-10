@@ -52,12 +52,20 @@ const GodotRuntime = {
 		 * Memory
 		 */
 		malloc: function (p_size) {
+#if MEMORY64
 			return _malloc(BigInt(p_size));
+#else
+			return _malloc(p_size);
+#endif
 		},
 
 		free: function (p_ptr) {
+#if MEMORY64
 			// Ensure _free recieves a BigInt in wasm64 mode.
 			_free(p_ptr);
+#else
+			_free(Number(p_ptr));
+#endif
 		},
 
 		getHeapValue: function (p_ptr, p_type) {
@@ -92,7 +100,11 @@ const GodotRuntime = {
 		 * Strings
 		 */
 		parseString: function (p_ptr) {
+#if MEMORY64
 			return UTF8ToString(Number(p_ptr));
+#else
+			return UTF8ToString(p_ptr);
+#endif
 		},
 
 		parseStringArray: function (p_ptr, p_size) {
