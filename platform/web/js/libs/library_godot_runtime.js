@@ -52,41 +52,46 @@ const GodotRuntime = {
 		 * Memory
 		 */
 		malloc: function (p_size) {
-			return _malloc(p_size);
+			return _malloc(Number(p_size));
 		},
 
 		free: function (p_ptr) {
-			_free(p_ptr);
+			_free(Number(p_ptr));
 		},
 
 		getHeapValue: function (p_ptr, p_type) {
-			return getValue(p_ptr, p_type);
+			return getValue(Number(p_ptr), p_type);
 		},
 
 		setHeapValue: function (p_ptr, p_value, p_type) {
-			setValue(p_ptr, p_value, p_type);
+			setValue(Number(p_ptr), p_value, p_type);
 		},
 
 		heapSub: function (p_heap, p_ptr, p_len) {
 			const bytes = p_heap.BYTES_PER_ELEMENT;
-			return p_heap.subarray(p_ptr / bytes, p_ptr / bytes + p_len);
+			const ptr = Number(p_ptr);
+			const len = Number(p_len);
+			return p_heap.subarray(ptr / bytes, ptr / bytes + len);
 		},
 
 		heapSlice: function (p_heap, p_ptr, p_len) {
 			const bytes = p_heap.BYTES_PER_ELEMENT;
-			return p_heap.slice(p_ptr / bytes, p_ptr / bytes + p_len);
+			const ptr = Number(p_ptr);
+			const len = Number(p_len);
+			return p_heap.slice(ptr / bytes, ptr / bytes + len);
 		},
 
 		heapCopy: function (p_dst, p_src, p_ptr) {
 			const bytes = p_src.BYTES_PER_ELEMENT;
-			return p_dst.set(p_src, p_ptr / bytes);
+			const ptr = Number(p_ptr);
+			return p_dst.set(p_src, ptr / bytes);
 		},
 
 		/*
 		 * Strings
 		 */
 		parseString: function (p_ptr) {
-			return UTF8ToString(p_ptr);
+			return UTF8ToString(Number(p_ptr));
 		},
 
 		parseStringArray: function (p_ptr, p_size) {
@@ -105,7 +110,8 @@ const GodotRuntime = {
 		allocString: function (p_str) {
 			const length = GodotRuntime.strlen(p_str) + 1;
 			const c_str = GodotRuntime.malloc(length);
-			stringToUTF8(p_str, c_str, length);
+			// Cast c_str to Number here just in case stringToUTF8 expects it
+			stringToUTF8(p_str, Number(c_str), length);
 			return c_str;
 		},
 
@@ -126,7 +132,7 @@ const GodotRuntime = {
 		},
 
 		stringToHeap: function (p_str, p_ptr, p_len) {
-			return stringToUTF8Array(p_str, HEAP8, p_ptr, p_len);
+			return stringToUTF8Array(p_str, HEAP8, Number(p_ptr), Number(p_len));
 		},
 	},
 };
