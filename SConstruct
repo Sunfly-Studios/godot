@@ -697,6 +697,11 @@ if env["arch"] == "x86_32":
             env.Append(CCFLAGS=["-msse2", "-mfpmath=sse", "-mstackrealign"])
     else:
         if env.msvc:
+            if env["use_llvm"]:
+                # Force clang-cl to 32-bit mode
+                env.Append(CCFLAGS=["-m32"])
+                env.Append(LINKFLAGS=["-m32"])
+            
             # /arch:SSE enables XMM for "float", but falls back to x87 for "double"
             env.Append(CCFLAGS=["/arch:SSE"])
         else:
@@ -921,6 +926,9 @@ if env["precision"] == "double":
     suffix += ".double"
 
 suffix += "." + env["arch"]
+
+if not env["sse2"]:
+    suffix += ".sse1"
 
 if not env["threads"]:
     suffix += ".nothreads"
