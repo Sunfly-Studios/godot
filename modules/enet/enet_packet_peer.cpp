@@ -185,6 +185,9 @@ int ENetPacketPeer::get_packet_flags() const {
 
 void ENetPacketPeer::_on_disconnect() {
 	if (peer) {
+#ifdef GODOT_ENET
+		enet_peer_socket_destroy(peer);
+#endif
 		peer->data = nullptr;
 	}
 	peer = nullptr;
@@ -259,6 +262,9 @@ void ENetPacketPeer::_bind_methods() {
 ENetPacketPeer::ENetPacketPeer(ENetPeer *p_peer) {
 	peer = p_peer;
 	peer->data = this;
+#ifdef GODOT_ENET
+	enet_peer_socket_bind(peer);
+#endif
 }
 
 ENetPacketPeer::~ENetPacketPeer() {
