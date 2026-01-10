@@ -58,6 +58,7 @@ MEM_STATIC ZSTD_cpuid_t ZSTD_cpuid(void) {
      * ourselves. Clang supports inline assembly anyway.
      */
     U32 n;
+#if defined(_M_X64) /* 64-bit Check */
     __asm__(
         "pushq %%rbx\n\t"
         "cpuid\n\t"
@@ -85,7 +86,36 @@ MEM_STATIC ZSTD_cpuid_t ZSTD_cpuid(void) {
           : "a"(7), "c"(0)
           : "rdx");
     }
-#endif
+#else /* 32-bit Fallback */
+    __asm__(
+        "pushl %%ebx\n\t"
+        "cpuid\n\t"
+        "popl %%ebx\n\t"
+        : "=a"(n)
+        : "a"(0)
+        : "ecx", "edx");
+    if (n >= 1) {
+      U32 f1a;
+      __asm__(
+          "pushl %%ebx\n\t"
+          "cpuid\n\t"
+          "popl %%ebx\n\t"
+          : "=a"(f1a), "=c"(f1c), "=d"(f1d)
+          : "a"(1)
+          :);
+    }
+    if (n >= 7) {
+      __asm__(
+          "pushl %%ebx\n\t"
+          "cpuid\n\t"
+          "movl %%ebx, %%eax\n\t"
+          "popl %%ebx"
+          : "=a"(f7b), "=c"(f7c)
+          : "a"(7), "c"(0)
+          : "edx");
+    }
+#endif /* defined(_M_X64) */
+#endif /* defined(_MSC_VER) && (defined(_M_X64) || defined(_M_IX86)) */
 #elif defined(__i386__) && defined(__PIC__) && !defined(__clang__) && defined(__GNUC__)
     /* The following block like the normal cpuid branch below, but gcc
      * reserves ebx for use of its pic register so we must specially
