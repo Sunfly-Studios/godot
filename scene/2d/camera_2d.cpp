@@ -212,7 +212,12 @@ Transform2D Camera2D::get_camera_transform() {
 
 	if (!ignore_rotation) {
 		if (rotation_smoothing_enabled && !_is_editing_in_editor()) {
-			real_t step = rotation_smoothing_speed * (process_callback == CAMERA2D_PROCESS_PHYSICS ? get_physics_process_delta_time() : get_process_delta_time());
+			real_t step_delta = (process_callback == CAMERA2D_PROCESS_PHYSICS ? get_physics_process_delta_time() : get_process_delta_time());
+			real_t time_scale = Engine::get_singleton()->get_time_scale();
+			if (time_scale > 0) {
+				step_delta /= time_scale;
+			}
+			real_t step = rotation_smoothing_speed * step_delta;
 			camera_angle = Math::lerp_angle(camera_angle, get_global_rotation(), step);
 		} else {
 			camera_angle = get_global_rotation();
