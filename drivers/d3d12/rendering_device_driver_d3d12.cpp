@@ -3099,6 +3099,8 @@ Vector<uint8_t> RenderingDeviceDriverD3D12::shader_compile_binary_from_spirv(Vec
 		spirv_to_nir_options spirv_options = *default_spirv_options;
 		spirv_capabilities caps = *default_spirv_options->capabilities;
 		caps.SampledCubeArray = true;
+		caps.StorageImageExtendedFormats = true;
+		caps.InputAttachment = true;
 		spirv_options.capabilities = &caps;
 
 		dxil_spirv_runtime_conf dxil_runtime_conf = {};
