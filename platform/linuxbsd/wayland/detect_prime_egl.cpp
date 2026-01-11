@@ -44,6 +44,11 @@
 #include <sys/wait.h>
 #include <unistd.h>
 
+#ifdef __OpenBSD__
+// quick_exit not available
+#define quick_exit _exit
+#endif
+
 // To prevent shadowing warnings.
 #undef glGetString
 

@@ -1268,7 +1268,7 @@ def generate_vs_project(env, original_args, project_name="godot"):
             "--clean",
         ] + common_build_postfix
 
-        commands = "scons"
+        commands = ".\\venv\\Scripts\\scons"
         if len(common_build_prefix) == 0:
             commands = "echo Starting SCons &amp;&amp; cmd /V /C " + commands
         else:
