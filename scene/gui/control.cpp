@@ -782,7 +782,7 @@ void Control::set_anchor_and_offset(Side p_side, real_t p_anchor, real_t p_pos, 
 
 void Control::set_begin(const Point2 &p_point) {
 	ERR_MAIN_THREAD_GUARD;
-	ERR_FAIL_COND(!isfinite(p_point.x) || !isfinite(p_point.y));
+	ERR_FAIL_COND(!std::isfinite(p_point.x) || !std::isfinite(p_point.y));
 	if (data.offset[0] == p_point.x && data.offset[1] == p_point.y) {
 		return;
 	}
@@ -1448,7 +1448,7 @@ void Control::_set_size(const Size2 &p_size) {
 
 void Control::set_size(const Size2 &p_size, bool p_keep_offsets) {
 	ERR_MAIN_THREAD_GUARD;
-	ERR_FAIL_COND(!isfinite(p_size.x) || !isfinite(p_size.y));
+	ERR_FAIL_COND(!std::isfinite(p_size.x) || !std::isfinite(p_size.y));
 	Size2 new_size = p_size;
 	Size2 min = get_combined_minimum_size();
 	if (new_size.x < min.x) {
@@ -1657,7 +1657,7 @@ void Control::set_custom_minimum_size(const Size2 &p_custom) {
 		return;
 	}
 
-	if (!isfinite(p_custom.x) || !isfinite(p_custom.y)) {
+	if (!std::isfinite(p_custom.x) || !std::isfinite(p_custom.y)) {
 		// Prevent infinite loop.
 		return;
 	}

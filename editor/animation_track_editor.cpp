@@ -3150,7 +3150,7 @@ void AnimationTrackEdit::gui_input(const Ref<InputEvent> &p_event) {
 		if (!mb->is_pressed() && mb->get_button_index() == MouseButton::LEFT) {
 			moving_selection_attempt = false;
 			if (moving_selection && moving_selection_effective) {
-				if (abs(editor->get_moving_selection_offset()) > CMP_EPSILON) {
+				if (std::abs(editor->get_moving_selection_offset()) > CMP_EPSILON) {
 					emit_signal(SNAME("move_selection_commit"));
 				}
 			} else if (select_single_attempt != -1) {
@@ -3231,7 +3231,7 @@ void AnimationTrackEdit::gui_input(const Ref<InputEvent> &p_event) {
 		float snapped_time = editor->snap_time(moving_selection_pivot + delta);
 
 		float offset = 0.0;
-		if (abs(editor->get_moving_selection_offset()) > CMP_EPSILON || (snapped_time > moving_selection_pivot && delta > CMP_EPSILON) || (snapped_time < moving_selection_pivot && delta < -CMP_EPSILON)) {
+		if (std::abs(editor->get_moving_selection_offset()) > CMP_EPSILON || (snapped_time > moving_selection_pivot && delta > CMP_EPSILON) || (snapped_time < moving_selection_pivot && delta < -CMP_EPSILON)) {
 			offset = snapped_time - moving_selection_pivot;
 			moving_selection_effective = true;
 		}

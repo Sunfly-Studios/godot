@@ -608,14 +608,14 @@ def configure(env: "SConsEnvironment"):
 
     # Link those statically for portability
     if env["use_static_cpp"]:
-        # TODO Test NetBSD clang, guessing that it also does not support -static-libstdc++? Does its libc++ have other deps?
-        if env["use_llvm"] and platform.system() in ["FreeBSD", "OpenBSD", "NetBSD"]:
+        if env["use_llvm"] and platform.system() in ["FreeBSD", "OpenBSD"]:
             env.Append(LINKFLAGS=["-nostdlib++"])
             env["LINKCOM"] += " -l:libc++.a"
             if platform.system() == "OpenBSD":
                 env["LINKCOM"] += " -l:libc++abi.a"
         else:
-            env.Append(LINKFLAGS=["-static-libgcc", "-static-libstdc++"])
+            if env["use_llvm"] and not platform.system() in ["NetBSD"]:
+                env.Append(LINKFLAGS=["-static-libgcc", "-static-libstdc++"])
 
         if env["use_llvm"] and platform.system() not in ["FreeBSD", "OpenBSD", "NetBSD"]:
             env["LINKCOM"] += " -l:libatomic.a"

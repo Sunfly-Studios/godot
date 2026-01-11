@@ -174,7 +174,7 @@ void SkeletonModification2DTwoBoneIK::_execute(float p_delta) {
 			angle_1 = -angle_1;
 		}
 
-		if (isnan(angle_0) || isnan(angle_1)) {
+		if (std::isnan(angle_0) || std::isnan(angle_1)) {
 			// We cannot solve for this angle! Do nothing to avoid setting the rotation (and scale) to NaN.
 		} else {
 			joint_one_bone->set_global_rotation(angle_atan - angle_0 - joint_one_bone->get_bone_angle());

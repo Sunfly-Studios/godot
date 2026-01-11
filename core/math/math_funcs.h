@@ -217,8 +217,13 @@ public:
 		return (p_num + p_den - 1) / p_den;
 	}
 
+#if defined(__NetBSD__)
+	static _ALWAYS_INLINE_ bool is_finite(double p_val) { return __builtin_isfinite(p_val); }
+	static _ALWAYS_INLINE_ bool is_finite(float p_val) { return __builtin_isfinite(p_val); }
+#else
 	static _ALWAYS_INLINE_ bool is_finite(double p_val) { return isfinite(p_val); }
 	static _ALWAYS_INLINE_ bool is_finite(float p_val) { return isfinite(p_val); }
+#endif
 
 	static _ALWAYS_INLINE_ double abs(double g) { return absd(g); }
 	static _ALWAYS_INLINE_ float abs(float g) { return absf(g); }
