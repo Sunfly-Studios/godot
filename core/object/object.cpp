@@ -2398,7 +2398,8 @@ void ObjectDB::cleanup() {
 
 					uint64_t id = uint64_t(i) | (uint64_t(object_slots[i].validator) << OBJECTDB_SLOT_MAX_COUNT_BITS) | (object_slots[i].is_ref_counted ? OBJECTDB_REFERENCE_BIT : 0);
 					DEV_ASSERT(id == (uint64_t)obj->get_instance_id()); // We could just use the id from the object, but this check may help catching memory corruption catastrophes.
-					print_line("Leaked instance: " + String(obj->get_class()) + ":" + uitos(id) + extra_info);
+					String object_name = String(obj->get_class());
+					print_line("Leaked instance: " + object_name + ":" + uitos(id) + extra_info);
 
 					count--;
 				}

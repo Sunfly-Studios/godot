@@ -182,13 +182,10 @@ void LightmapGIEditorPlugin::_bind_methods() {
 }
 
 LightmapGIEditorPlugin::LightmapGIEditorPlugin() {
-	bake = memnew(Button);
-	bake->set_theme_type_variation(SceneStringName(FlatButton));
-
 	// TODO: Rework this as a dedicated toolbar control so we can hook into theme changes and update it
 	// when the editor theme updates.
 	bake_preview = memnew(Button);
-	bake_preview->set_theme_type_variation("FlatButton");
+	bake_preview->set_theme_type_variation(SceneStringName(FlatButton));
 	bake_preview->set_button_icon(EditorNode::get_singleton()->get_editor_theme()->get_icon(SNAME("BakePreview"), EditorStringName(EditorIcons)));
 	bake_preview->set_tooltip_text(TTR("Bakes lightmaps with low-quality settings for quick iteration.\nPreview bake quality can be changed in the Rendering > Lightmapping > Preview Bake section of the Project Settings."));
 	bake_preview->set_text(TTR("Preview Bake"));
@@ -197,7 +194,7 @@ LightmapGIEditorPlugin::LightmapGIEditorPlugin() {
 	add_control_to_container(CONTAINER_SPATIAL_EDITOR_MENU, bake_preview);
 
 	bake = memnew(Button);
-	bake->set_theme_type_variation("FlatButton");
+	bake->set_theme_type_variation(SceneStringName(FlatButton));
 	bake->set_button_icon(EditorNode::get_singleton()->get_editor_theme()->get_icon(SNAME("Bake"), EditorStringName(EditorIcons)));
 	bake->set_tooltip_text(TTR("Bakes lightmaps with the settings specified in the LightmapGI node."));
 	bake->set_text(TTR("Bake Lightmaps"));
