@@ -38,17 +38,30 @@ if env["platform"] == "macos":
         source=sources,
     )
 else:
-    library = env.SharedLibrary(
-        "{}/{}{}.{}.{}.{}{}".format(
-            bin_path,
-            env.subst('$SHLIBPREFIX'),
-            extension_name,
-            env["platform"],
-            debug_or_release,
-            env["arch_suffix"],
-            env["SHLIBSUFFIX"],
-        ),
-        source=sources,
-    )
+    if env.subst("$SHLIBPREFIX") == "":
+        library = env.SharedLibrary(
+            "{}/lib{}.{}.{}.{}{}".format(
+                bin_path,
+                extension_name,
+                env["platform"],
+                debug_or_release,
+                env["arch_suffix"],
+                env["SHLIBSUFFIX"],
+            ),
+            source=sources,
+        )
+    else:
+        library = env.SharedLibrary(
+            "{}/{}{}.{}.{}.{}{}".format(
+                bin_path,
+                env.subst("$SHLIBPREFIX"),
+                extension_name,
+                env["platform"],
+                debug_or_release,
+                env["arch_suffix"],
+                env["SHLIBSUFFIX"],
+            ),
+            source=sources,
+        )
 
 Default(library)
