@@ -1849,7 +1849,7 @@ Error Main::setup(const char *execpath, int argc, char *argv[], bool p_second_ph
 
 	if (OS::get_singleton()->_writing_movie) {
 		// Automatically adjust fixed FPS to take subframes into account, so that the *output* video FPS is the same.
-		fixed_fps *= 1 + Engine::get_singleton()->get_write_movie_subframes();
+		Engine::get_singleton()->set_fixed_fps(Engine::get_singleton()->get_fixed_fps() * 1 + Engine::get_singleton()->get_write_movie_subframes());
 	}
 
 #ifdef TOOLS_ENABLED
@@ -4447,7 +4447,7 @@ int Main::start() {
 				movie_size.height = window_height_override;
 			}
 		}
-		movie_writer->begin(movie_size, fixed_fps / (1 + Engine::get_singleton()->get_write_movie_subframes()), Engine::get_singleton()->get_write_movie_path());
+		movie_writer->begin(movie_size, Engine::get_singleton()->get_fixed_fps() / (1 + Engine::get_singleton()->get_write_movie_subframes()), Engine::get_singleton()->get_write_movie_path());
 	}
 
 	if (minimum_time_msec) {
