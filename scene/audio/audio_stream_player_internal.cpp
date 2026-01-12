@@ -139,6 +139,9 @@ Ref<AudioStreamPlayback> AudioStreamPlayerInternal::play_basic() {
 		return stream_playback;
 	}
 	ERR_FAIL_COND_V_MSG(!node->is_inside_tree(), stream_playback, "Playback can only happen when a node is inside the scene tree");
+	if (!node->can_process()) {
+		return stream_playback;
+	}
 	if (stream->is_monophonic() && is_playing()) {
 		stop_callable.call();
 	}
