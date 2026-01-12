@@ -340,12 +340,15 @@ vec3 tonemap_agx(vec3 color) {
 // Based on the paper: "Adaptive Logarithmic Mapping For Displaying High Contrast Scenes"
 // https://resources.mpi-inf.mpg.de/tmo/logmap/logmap.pdf
 float luminance_drago(float L, float L_max, float b) {
+	const float LOG_05 = -0.6931471805599453;
+	const float LOG_10 = 2.302585092994046;
+
     // Safety clamp to avoid division by zero or log(1) issues.
     float safe_L_max = max(L_max, 0.01); 
     
     // The bias function interpolates the logarithmic base based on the pixel's relative luminance.
     // The exponent is constant for a given 'b'.
-    float bias_exp = log(b) / log(0.5);
+    float bias_exp = log(b) / LOG_05;
     
     // Clamp the input fraction to [0, 1] because the bias function expects normalized input.
     // Values > safe_L_max will be clamped to the white point behavior.
@@ -360,7 +363,7 @@ float luminance_drago(float L, float L_max, float b) {
     // This ensures that when L == L_max, the output equals 1.0.
     // At L_max, the adaptive base is 10.0. Thus log_mapped becomes log10(L_max + 1).
     // We multiply by 1 / log10(L_max + 1) to normalize.
-    float normalization = log(10.0) / log(safe_L_max + 1.0); 
+    float normalization = LOG_10 / log(safe_L_max + 1.0); 
     
     return log_mapped * normalization;
 }
@@ -373,7 +376,7 @@ vec3 tonemap_drago(vec3 color, float white) {
     float luminance = dot(color, vec3(0.2126, 0.7152, 0.0722));
     
     // Apply Drago Tone Mapping
-	
+
     // We pass 'white' as L_max. This means any pixel with luminance == white
     // will be mapped exactly to 1.0.
     float Ld = luminance_drago(luminance, white, BIAS);
