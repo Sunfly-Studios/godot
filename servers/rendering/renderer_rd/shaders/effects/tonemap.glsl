@@ -337,23 +337,51 @@ vec3 tonemap_agx(vec3 color) {
 	return color;
 }
 
-float luminance_drago(float L, float b) {
-	const float LMax = 1.0;
-	float Ld = b / (log(LMax + 1.0) / log(10.0));
-	Ld *= log(L + 1.0) / log(2.0 + 8.0 * pow((L / LMax), log(b) / log(0.5)));
-	return Ld;
-}
-
 // Based on the paper: "Adaptive Logarithmic Mapping For Displaying High Contrast Scenes"
 // https://resources.mpi-inf.mpg.de/tmo/logmap/logmap.pdf
-vec3 tonemap_drago(vec3 color, float white) {
-	const float BIAS = 0.85;
+float luminance_drago(float L, float L_max, float b) {
+    // Safety clamp to avoid division by zero or log(1) issues.
+    float safe_L_max = max(L_max, 0.01); 
+    
+    // The bias function interpolates the logarithmic base based on the pixel's relative luminance.
+    // The exponent is constant for a given 'b'.
+    float bias_exp = log(b) / log(0.5);
+    
+    // Clamp the input fraction to [0, 1] because the bias function expects normalized input.
+    // Values > safe_L_max will be clamped to the white point behavior.
+    float bias_val = pow(clamp(L / safe_L_max, 0.0, 1.0), bias_exp);
+    
+    float adaptive_base = 2.0 + 8.0 * bias_val;
+    
+    // L_d = L_dmax * (log(L + 1) / log(base)) / log10(L_max + 1)
+    float log_mapped = log(L + 1.0) / log(adaptive_base);
+    
+    // Calculate the Normalization Factor
+    // This ensures that when L == L_max, the output equals 1.0.
+    // At L_max, the adaptive base is 10.0. Thus log_mapped becomes log10(L_max + 1).
+    // We multiply by 1 / log10(L_max + 1) to normalize.
+    float normalization = log(10.0) / log(safe_L_max + 1.0); 
+    
+    return log_mapped * normalization;
+}
 
-	float luminance = dot(color, vec3(0.2126, 0.7152, 0.0722));
-	float Ld = luminance_drago(luminance, BIAS);
-	color = color * (Ld / luminance);
-	color *= white;
-	return clamp(color, 0.0, 1.0);
+vec3 tonemap_drago(vec3 color, float white) {
+	// The paper proposes this value as default.
+    const float BIAS = 0.85;
+    
+    // Calculate Luminance (Rec. 709 coefficients)
+    float luminance = dot(color, vec3(0.2126, 0.7152, 0.0722));
+    
+    // Apply Drago Tone Mapping
+	
+    // We pass 'white' as L_max. This means any pixel with luminance == white
+    // will be mapped exactly to 1.0.
+    float Ld = luminance_drago(luminance, white, BIAS);
+    
+    // Color Reconstruction
+    // Re-apply color ratios: Color_out = Color_in * (L_out / L_in)
+    // Added a small epsilon to 'luminance' to prevent division by zero artifacts.
+    return color * (Ld / max(luminance, 1e-5));
 }
 
 vec3 linear_to_srgb(vec3 color) {
