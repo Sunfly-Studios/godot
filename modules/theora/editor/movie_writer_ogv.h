@@ -28,7 +28,8 @@
 /* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                 */
 /**************************************************************************/
 
-#pragma once
+#ifndef MOVIE_WRITER_OGV_H
+#define MOVIE_WRITER_OGV_H
 
 #include "servers/audio_server.h"
 #include "servers/movie_writer/movie_writer.h"
@@ -137,3 +138,5 @@ protected:
 public:
 	MovieWriterOGV();
 };
+
+#endif // MOVIE_WRITER_OGV_H

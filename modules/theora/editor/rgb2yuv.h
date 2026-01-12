@@ -28,7 +28,8 @@
 /* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                 */
 /**************************************************************************/
 
-#pragma once
+#ifndef RGB2YUV_H
+#define RGB2YUV_H
 
 #include "core/typedefs.h"
 
@@ -74,3 +75,5 @@ static void rgb2yuv420(uint8_t *y, uint8_t *u, uint8_t *v, uint8_t *rgb, size_t 
 static void rgba2yuv420(uint8_t *y, uint8_t *u, uint8_t *v, uint8_t *rgba, size_t width, size_t height) {
 	_rgb2yuv420(y, u, v, rgba, width, height, 4);
 }
+
+#endif // RGB2YUV_H

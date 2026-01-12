@@ -28,7 +28,8 @@
 /* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                 */
 /**************************************************************************/
 
-#pragma once
+#ifndef CAMERA_ANDROID_H
+#define CAMERA_ANDROID_H
 
 #include "servers/camera/camera_feed.h"
 #include "servers/camera_server.h"
@@ -94,3 +95,5 @@ public:
 
 	~CameraAndroid();
 };
+
+#endif // CAMERA_ANDROID_H
