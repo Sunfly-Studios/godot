@@ -97,6 +97,8 @@ def configure(env: "SConsEnvironment"):
     if env["arch"] == "rv64":
         # G = General-purpose extensions, C = Compression extension (very common).
         env.Append(CCFLAGS=["-march=rv64gc"])
+    elif env["arch"] == "arm32":
+        env.Append(CCFLAGS=["-march=armv7-a", "-mthumb", "-mfpu=neon-vfpv4", "-mfloat-abi=hard"])
     elif env["arch"] == "ppc32":
         # By default the toolchain won't append
         # atomic functions at link time.
@@ -141,7 +143,7 @@ def configure(env: "SConsEnvironment"):
     elif env["arch"] == "alpha":
         env.Append(
             CCFLAGS=[
-                # Baseline, best middle ground for all Alpha systems.
+                # Baseline, best middle ground for all _capable_ Alpha systems.
                 # Targets 433a or better.
                 "-mcpu=ev5",
 
