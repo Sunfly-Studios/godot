@@ -109,17 +109,11 @@ void EditorSpinSlider::gui_input(const Ref<InputEvent> &p_event) {
 					pre_grab_value = get_max();
 				}
 
-				if (mm->is_command_or_control_pressed()) {
-					// If control was just pressed, don't make the value do a huge jump in magnitude.
-					if (grabbing_spinner_dist_cache != 0) {
-						pre_grab_value += grabbing_spinner_dist_cache * get_step();
-						grabbing_spinner_dist_cache = 0;
-					}
+				// Prevent dragging properties with very precise steps from being agonizingly slow.
+				const double drag_step = MAX(get_step(), 0.001);
+				const double new_value = pre_grab_value + drag_step * grabbing_spinner_dist_cache;
 
-					set_value(Math::round(pre_grab_value + get_step() * grabbing_spinner_dist_cache * 10));
-				} else {
-					set_value(pre_grab_value + get_step() * grabbing_spinner_dist_cache);
-				}
+				set_value((mm->is_command_or_control_pressed() && !editing_integer) ? Math::round(new_value) : new_value);
 			}
 		} else if (updown_offset != -1) {
 			bool new_hover = (!is_layout_rtl() && mm->get_position().x > updown_offset) || (is_layout_rtl() && mm->get_position().x < updown_offset);
