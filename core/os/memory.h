@@ -38,36 +38,50 @@
 #include <new>
 #include <type_traits>
 
-class Memory {
-constexpr size_t get_aligned_address(size_t p_address, size_t p_alignment) {
+// Helper defined outside the class to ensure it is visible for constexpr usage
+// inside the class static member initialization.
+static inline constexpr size_t _memory_get_aligned_address(size_t p_address, size_t p_alignment) {
 	const size_t n_bytes_unaligned = p_address % p_alignment;
 	return (n_bytes_unaligned == 0) ? p_address : (p_address + p_alignment - n_bytes_unaligned);
 }
 
+class Memory {
+public:
+	// Forwarder to the helper for external usage (e.g. cowdata.h)
+	static constexpr size_t get_aligned_address(size_t p_address, size_t p_alignment) {
+		return _memory_get_aligned_address(p_address, p_alignment);
+	}
+
+private:
 #ifdef DEBUG_ENABLED
 	static SafeNumeric<uint64_t> mem_usage;
 	static SafeNumeric<uint64_t> max_usage;
 #endif
+	static SafeNumeric<uint64_t> alloc_count;
 
+public:
 #if defined(__MINGW32__) && !defined(__MINGW64__)
-// Note: Using hardcoded value, since the value can end up different in different compile units on 32-bit windows
-// due to a compiler bug (see GH-113145)
-static constexpr size_t MAX_ALIGN = 16;
-static_assert(MAX_ALIGN % alignof(max_align_t) == 0);
+	// Note: Using hardcoded value, since the value can end up different in different compile units on 32-bit windows
+	// due to a compiler bug (see GH-113145)
+	static constexpr size_t MAX_ALIGN = 16;
+	static_assert(MAX_ALIGN % alignof(max_align_t) == 0);
 #else
-static constexpr size_t MAX_ALIGN = alignof(max_align_t);
+	static constexpr size_t MAX_ALIGN = alignof(max_align_t);
 #endif
 
-// Alignment:  ↓ max_align_t        ↓ uint64_t          ↓ MAX_ALIGN
-//             ┌─────────────────┬──┬────────────────┬──┬───────────...
-//             │ uint64_t        │░░│ uint64_t       │░░│ T[]
-//             │ alloc size      │░░│ element count  │░░│ data
-//             └─────────────────┴──┴────────────────┴──┴───────────...
-// Offset:     ↑ SIZE_OFFSET        ↑ ELEMENT_OFFSET    ↑ DATA_OFFSET
+	// Alignment:  ↓ max_align_t        ↓ uint64_t          ↓ MAX_ALIGN
+	//             ┌─────────────────┬──┬────────────────┬──┬───────────...
+	//             │ uint64_t        │░░│ uint64_t       │░░│ T[]
+	//             │ alloc size      │░░│ element count  │░░│ data
+	//             └─────────────────┴──┴────────────────┴──┴───────────...
+	// Offset:     ↑ SIZE_OFFSET        ↑ ELEMENT_OFFSET    ↑ DATA_OFFSET
 
-	inline constexpr size_t SIZE_OFFSET = 0;
-	inline constexpr size_t ELEMENT_OFFSET = get_aligned_address(SIZE_OFFSET + sizeof(uint64_t), alignof(uint64_t));
-	inline constexpr size_t DATA_OFFSET = get_aligned_address(ELEMENT_OFFSET + sizeof(uint64_t), MAX_ALIGN);
+	static inline constexpr size_t SIZE_OFFSET = 0;
+
+	// Use the private function defined outside instead of the internal
+	// class one.
+	static inline constexpr size_t ELEMENT_OFFSET = _memory_get_aligned_address(SIZE_OFFSET + sizeof(uint64_t), alignof(uint64_t));
+	static inline constexpr size_t DATA_OFFSET = _memory_get_aligned_address(ELEMENT_OFFSET + sizeof(uint64_t), MAX_ALIGN);
 
 	static void *alloc_static(size_t p_bytes, bool p_pad_align = false);
 	static void *realloc_static(void *p_memory, size_t p_bytes, bool p_pad_align = false);
