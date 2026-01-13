@@ -87,8 +87,8 @@ BVec16 BVec16::sEquals(BVec16Arg inV1, BVec16Arg inV2)
 #elif defined(JPH_USE_NEON)
 	return vceqq_u8(inV1.mValue, inV2.mValue);
 #else
-	auto equals = [](uint64 inV1, uint64 inV2) {
-		uint64 r = inV1 ^ ~inV2; // Bits that are equal are 1
+	auto equals = [](uint64 innerV1, uint64 innerV2) {
+		uint64 r = innerV1 ^ ~innerV2; // Bits that are equal are 1
 		r &= r << 1; // Combine bit 0 through 1
 		r &= r << 2; // Combine bit 0 through 3
 		r &= r << 4; // Combine bit 0 through 7
