@@ -263,7 +263,7 @@ String Engine::get_architecture_name() const {
 #elif defined(__mips64) || defined(__mips64__)
 	return "mips64";
 
-#elif defined(__sparc64__) || defined(__sparc_v9__)
+#elif defined(__sparc64__) || defined(__sparc_v9__) || defined(__sparcv9) || (defined(__sparc__) && defined(__arch64__))
 	return "sparc64";
 
 #elif defined(__alpha__) || defined(__alpha)

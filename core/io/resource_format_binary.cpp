@@ -114,9 +114,9 @@ static Error read_reals(real_t *dst, Ref<FileAccess> &f, size_t count) {
 			f->get_buffer((uint8_t *)dst, count * sizeof(double));
 #ifdef BIG_ENDIAN_ENABLED
 			{
-				uint64_t *dst = (uint64_t *)dst;
+				uint64_t *bytedst = (uint64_t *)dst;
 				for (size_t i = 0; i < count; i++) {
-					dst[i] = BSWAP64(dst[i]);
+					bytedst[i] = BSWAP64(dst[i]);
 				}
 			}
 #endif
@@ -134,9 +134,9 @@ static Error read_reals(real_t *dst, Ref<FileAccess> &f, size_t count) {
 			f->get_buffer((uint8_t *)dst, count * sizeof(float));
 #ifdef BIG_ENDIAN_ENABLED
 			{
-				uint32_t *dst = (uint32_t *)dst;
+				uint32_t *bytedst = (uint32_t *)dst;
 				for (size_t i = 0; i < count; i++) {
-					dst[i] = BSWAP32(dst[i]);
+					bytedst[i] = BSWAP32(dst[i]);
 				}
 			}
 #endif
@@ -531,7 +531,7 @@ Error ResourceLoaderBinary::parse_variant(Variant &r_v) {
 				// because in big endian these are
 				// already pointers
 				uint32_t *ptr = (uint32_t *)w;
-				for (int i = 0; i < len; i++) {
+				for (uint32_t i = 0; i < len; i++) {
 					ptr[i] = BSWAP32(ptr[i]);
 				}
 			}
@@ -551,7 +551,7 @@ Error ResourceLoaderBinary::parse_variant(Variant &r_v) {
 			{
 				// Same here.
 				uint64_t *ptr = (uint64_t *)w;
-				for (int i = 0; i < len; i++) {
+				for (uint32_t i = 0; i < len; i++) {
 					ptr[i] = BSWAP64(ptr[i]);
 				}
 			}
@@ -571,7 +571,7 @@ Error ResourceLoaderBinary::parse_variant(Variant &r_v) {
 			{
 				// The pattern is very clear by now!
 				uint32_t *ptr = (uint32_t *)w;
-				for (int i = 0; i < len; i++) {
+				for (uint32_t i = 0; i < len; i++) {
 					ptr[i] = BSWAP32(ptr[i]);
 				}
 			}
@@ -591,7 +591,7 @@ Error ResourceLoaderBinary::parse_variant(Variant &r_v) {
 			{
 				// Just a bit more..
 				uint64_t *ptr = (uint64_t *)w;
-				for (int i = 0; i < len; i++) {
+				for (uint32_t i = 0; i < len; i++) {
 					ptr[i] = BSWAP64(ptr[i]);
 				}
 			}
@@ -651,7 +651,7 @@ Error ResourceLoaderBinary::parse_variant(Variant &r_v) {
 			{
 				// And, done!
 				uint32_t *ptr = (uint32_t *)w;
-				for (int i = 0; i < len * 4; i++) {
+				for (uint32_t i = 0; i < len * 4; i++) {
 					ptr[i] = BSWAP32(ptr[i]);
 				}
 			}

@@ -104,13 +104,27 @@ def configure(env: "SConsEnvironment"):
         # atomic functions at link time.
         env.Append(LINKFLAGS=["-latomic"])
     elif env["arch"] == "sparc64":
-        # "v9" is the baseline for all of SPARC but
-        # it's missing required extensions.
-        # "ultrasparc" base should make it run on a
-        # Sun Ultra 1 _in theory_ (or probably with max memory upgrades).
-        # But I target a Sun Ultra 10 or better.
-        env.Append(CCFLAGS=["-mcpu=ultrasparc", "-m64"])
-        env.Append(LINKFLAGS=["-m64"])
+        env.Append(CCFLAGS=[
+            # MVP baseline for all capable SPARC systems.
+            "-mcpu=ultrasparc",
+            "-m64",
+
+            # On SPARC, the compiler usually assumes a perfect world
+            # were everything is aligned correctly. However, reality
+            # is of course not perfect.
+            # This flag tells GCC to NOT cheat and generate edge-cases
+            # for unaligned memory patterns that may be triggered by
+            # Godot's codebase.
+            # We're trading speed for stability.
+            "-fno-strict-aliasing"
+        ])
+        env.Append(LINKFLAGS=[
+            "-m64",
+
+            # Link the atomic library statically for better
+            # hardware atomic operations.
+            "-latomic"
+        ])
     elif env["arch"] == "mips64":
         env.Append(
             # Default flags before appending -march
@@ -622,7 +636,7 @@ def configure(env: "SConsEnvironment"):
             if platform.system() == "OpenBSD":
                 env["LINKCOM"] += " -l:libc++abi.a"
         else:
-            if env["use_llvm"] and not platform.system() in ["NetBSD"]:
+            if not platform.system() in ["NetBSD"]:
                 env.Append(LINKFLAGS=["-static-libgcc", "-static-libstdc++"])
 
         if env["use_llvm"] and platform.system() not in ["FreeBSD", "OpenBSD", "NetBSD"]:
