@@ -38,7 +38,7 @@
 #include <new>
 #include <type_traits>
 
-#ifdef _MSC_VER
+#ifdef _WIN32
 #include <malloc.h>
 #else
 #include <alloca.h>

@@ -141,7 +141,7 @@ struct ReflectionAtlas {
 	int size = 0;
 
 	int mipmap_count = 1; // number of mips, including original
-	int mipmap_size[8];
+	int mipmap_size[8] = {};
 	GLuint depth = 0;
 
 	struct Reflection {

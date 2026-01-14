@@ -864,7 +864,12 @@ Vector<Vector3> Geometry3D::compute_convex_mesh_points(const Plane *p_planes, in
 
 /* dt of 1d function using squared distance */
 static void edt(float *f, int stride, int n) {
-	float *d = (float *)alloca(sizeof(float) * n + sizeof(int) * n + sizeof(float) * (n + 1));
+	// NEW (Total count = n + n + n + 1)
+	// The original code manually calculated a mixed size of floats
+	// and ints.
+	// But since usually sizeof(int) == sizeof(float) (4 bytes) on
+	// all Godot platforms, we can simplify the count.
+	float *d = SAFE_ALLOCA_ARRAY(float, 3 * n + 1);
 	int *v = reinterpret_cast<int *>(&(d[n]));
 	float *z = reinterpret_cast<float *>(&v[n]);
 

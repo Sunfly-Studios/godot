@@ -109,7 +109,8 @@ void refit_branch(uint32_t p_node_id) {
 
 	// alloca must allocate the stack from this function, it cannot be allocated in the
 	// helper class
-	ii.stack = (RefitParams *)alloca(ii.get_alloca_stacksize());
+	// We divide by sizeof(RefitParams) because the macro will multiply it back.
+	ii.stack = SAFE_ALLOCA_ARRAY(RefitParams, ii.get_alloca_stacksize() / sizeof(RefitParams));
 
 	// seed the stack
 	ii.get_first()->node_id = p_node_id;

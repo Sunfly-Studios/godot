@@ -212,7 +212,8 @@ bool _cull_segment_iterative(uint32_t p_node_id, CullParams &r_params) {
 
 	// alloca must allocate the stack from this function, it cannot be allocated in the
 	// helper class
-	ii.stack = (CullSegParams *)alloca(ii.get_alloca_stacksize());
+	// We divide by sizeof(CullSegParams) because the macro will multiply it back.
+	ii.stack = SAFE_ALLOCA_ARRAY(CullSegParams, ii.get_alloca_stacksize() / sizeof(CullSegParams));
 
 	// seed the stack
 	ii.get_first()->node_id = p_node_id;
@@ -273,7 +274,7 @@ bool _cull_point_iterative(uint32_t p_node_id, CullParams &r_params) {
 
 	// alloca must allocate the stack from this function, it cannot be allocated in the
 	// helper class
-	ii.stack = (CullPointParams *)alloca(ii.get_alloca_stacksize());
+	ii.stack = SAFE_ALLOCA_ARRAY(CullPointParams, ii.get_alloca_stacksize() / sizeof(CullPointParams));
 
 	// seed the stack
 	ii.get_first()->node_id = p_node_id;
@@ -335,7 +336,7 @@ bool _cull_aabb_iterative(uint32_t p_node_id, CullParams &r_params, bool p_fully
 
 	// alloca must allocate the stack from this function, it cannot be allocated in the
 	// helper class
-	ii.stack = (CullAABBParams *)alloca(ii.get_alloca_stacksize());
+	ii.stack = SAFE_ALLOCA_ARRAY(CullAABBParams, ii.get_alloca_stacksize() / sizeof(CullAABBParams));
 
 	// seed the stack
 	ii.get_first()->node_id = p_node_id;
@@ -438,7 +439,7 @@ bool _cull_convex_iterative(uint32_t p_node_id, CullParams &r_params, bool p_ful
 
 	// alloca must allocate the stack from this function, it cannot be allocated in the
 	// helper class
-	ii.stack = (CullConvexParams *)alloca(ii.get_alloca_stacksize());
+	ii.stack = SAFE_ALLOCA_ARRAY(CullConvexParams, ii.get_alloca_stacksize() / sizeof(CullConvexParams));
 
 	// seed the stack
 	ii.get_first()->node_id = p_node_id;
@@ -446,7 +447,7 @@ bool _cull_convex_iterative(uint32_t p_node_id, CullParams &r_params, bool p_ful
 
 	// preallocate these as a once off to be reused
 	uint32_t max_planes = r_params.hull.num_planes;
-	uint32_t *plane_ids = (uint32_t *)alloca(sizeof(uint32_t) * max_planes);
+	uint32_t *plane_ids = SAFE_ALLOCA_ARRAY(uint32_t, max_planes);
 
 	CullConvexParams ccp;
 
