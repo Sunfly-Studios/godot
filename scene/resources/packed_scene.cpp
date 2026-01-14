@@ -598,7 +598,7 @@ Node *SceneState::instantiate(GenEditState p_edit_state) const {
 				}
 			}
 
-			const Variant **argptrs = (const Variant **)alloca(sizeof(Variant *) * binds.size());
+			const Variant **argptrs = SAFE_ALLOCA_ARRAY(const Variant *, binds.size());
 			for (int j = 0; j < binds.size(); j++) {
 				argptrs[j] = &binds[j];
 			}

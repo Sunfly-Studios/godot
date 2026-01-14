@@ -777,7 +777,7 @@ Variant Object::callv(const StringName &p_method, const Array &p_args) {
 	const Variant **argptrs = nullptr;
 
 	if (p_args.size() > 0) {
-		argptrs = (const Variant **)alloca(sizeof(Variant *) * p_args.size());
+		argptrs = SAFE_ALLOCA_ARRAY(const Variant *, p_args.size());
 		for (int i = 0; i < p_args.size(); i++) {
 			argptrs[i] = &p_args[i];
 		}

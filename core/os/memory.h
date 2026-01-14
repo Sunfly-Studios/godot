@@ -38,6 +38,21 @@
 #include <new>
 #include <type_traits>
 
+#ifdef _MSC_VER
+#include <malloc.h>
+#else
+#include <alloca.h>
+#endif
+
+// Safe Stack Allocation Macro. This macro:
+// - Allocates requested size + alignment padding.
+// - Shifts the pointer to match the type's alignment requirement (alignof).
+//
+// Should futher prevent crashes on strict RISC architectures
+// and improve SIMD safety on x86.
+#define SAFE_ALLOCA_ARRAY(m_type, m_count) \
+	((m_type *)((((uintptr_t)alloca(sizeof(m_type) * (m_count) + alignof(m_type))) + (alignof(m_type) - 1)) & ~((uintptr_t)(alignof(m_type) - 1))))
+
 // Helper defined outside the class to ensure it is visible for constexpr usage
 // inside the class static member initialization.
 static inline constexpr size_t _memory_get_aligned_address(size_t p_address, size_t p_alignment) {
