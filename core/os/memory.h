@@ -65,6 +65,12 @@ public:
 	// due to a compiler bug (see GH-113145)
 	static constexpr size_t MAX_ALIGN = 16;
 	static_assert(MAX_ALIGN % alignof(max_align_t) == 0);
+#elif defined(__sparc__) || defined(__sparc64__)
+	// SPARC64 requires strict alignment.
+	// Force 16-byte alignment to ensure CowData headers (uint64_t size)
+	// are strictly aligned to 8-byte boundaries and prevent SIGBUS.
+	static constexpr size_t MAX_ALIGN = 16;
+	static_assert(MAX_ALIGN % alignof(max_align_t) == 0);
 #else
 	static constexpr size_t MAX_ALIGN = alignof(max_align_t);
 #endif

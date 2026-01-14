@@ -35,51 +35,84 @@
 #include "core/typedefs.h"
 #include "core/variant/variant.h"
 
+#include <string.h>
+
 template <typename T>
 struct PtrToArg {};
 
-#define MAKE_PTRARG(m_type)                                              \
+// These reimplementations make less assumptions about the environment.
+// They use local aligned buffers and memcpy to avoid SIGBUS on
+// strict-alignment architectures (like SPARC64) while ensuring
+// proper object construction for complex types.
+#define MAKE_PTRARG(m_type)                                                \
+	template <>                                                            \
+	struct PtrToArg<m_type> {                                              \
+		_FORCE_INLINE_ static m_type convert(const void *p_ptr) {          \
+			/* Create an aligned stack buffer */                           \
+			alignas(alignof(m_type)) uint8_t buf[sizeof(m_type)];          \
+			/* Copy unaligned memory to the buffer */                      \
+			memcpy(buf, p_ptr, sizeof(m_type));                            \
+			/* Cast the buffer and return a copy */                        \
+			/* This invokes the copy constructor, fixing the ref-count */  \
+			return *reinterpret_cast<const m_type *>(buf);                 \
+		}                                                                  \
+		typedef m_type EncodeT;                                            \
+		_FORCE_INLINE_ static void encode(m_type p_val, void *p_ptr) {     \
+			/* For encoding, we must respect assignment logic too */       \
+			alignas(alignof(m_type)) uint8_t buf[sizeof(m_type)];          \
+			memcpy(buf, p_ptr, sizeof(m_type));                            \
+			m_type *dst = reinterpret_cast<m_type*>(buf);                  \
+			*dst = p_val; /* invoke operator= */                           \
+			memcpy(p_ptr, buf, sizeof(m_type));                            \
+		}                                                                  \
+	};                                                                     \
+	template <>                                                            \
+	struct PtrToArg<const m_type &> {                                      \
+		_FORCE_INLINE_ static m_type convert(const void *p_ptr) {          \
+			alignas(alignof(m_type)) uint8_t buf[sizeof(m_type)];          \
+			memcpy(buf, p_ptr, sizeof(m_type));                            \
+			return *reinterpret_cast<const m_type *>(buf);                 \
+		}                                                                  \
+		typedef m_type EncodeT;                                            \
+		_FORCE_INLINE_ static void encode(m_type p_val, void *p_ptr) {     \
+			alignas(alignof(m_type)) uint8_t buf[sizeof(m_type)];          \
+			memcpy(buf, p_ptr, sizeof(m_type));                            \
+			m_type *dst = reinterpret_cast<m_type*>(buf);                  \
+			*dst = p_val;                                                  \
+			memcpy(p_ptr, buf, sizeof(m_type));                            \
+		}                                                                  \
+	}
+
+// These reimplementations make less assumptions about the environment.
+// They use local aligned buffers and memcpy to avoid SIGBUS on
+// strict-alignment architectures (like SPARC64) while ensuring
+// proper object construction for complex types.
+#define MAKE_PTRARGCONV(m_type, m_conv)                                  \
 	template <>                                                          \
 	struct PtrToArg<m_type> {                                            \
-		_FORCE_INLINE_ static const m_type &convert(const void *p_ptr) { \
-			return *reinterpret_cast<const m_type *>(p_ptr);             \
+		_FORCE_INLINE_ static m_type convert(const void *p_ptr) {        \
+			m_conv c;                                                    \
+			memcpy(&c, p_ptr, sizeof(m_conv));                           \
+			return static_cast<m_type>(c);                               \
 		}                                                                \
-		typedef m_type EncodeT;                                          \
+		typedef m_conv EncodeT;                                          \
 		_FORCE_INLINE_ static void encode(m_type p_val, void *p_ptr) {   \
-			*((m_type *)p_ptr) = p_val;                                  \
+			m_conv c = static_cast<m_conv>(p_val);                       \
+			memcpy(p_ptr, &c, sizeof(m_conv));                           \
 		}                                                                \
 	};                                                                   \
 	template <>                                                          \
 	struct PtrToArg<const m_type &> {                                    \
-		_FORCE_INLINE_ static const m_type &convert(const void *p_ptr) { \
-			return *reinterpret_cast<const m_type *>(p_ptr);             \
+		_FORCE_INLINE_ static m_type convert(const void *p_ptr) {        \
+			m_conv c;                                                    \
+			memcpy(&c, p_ptr, sizeof(m_conv));                           \
+			return static_cast<m_type>(c);                               \
 		}                                                                \
-		typedef m_type EncodeT;                                          \
+		typedef m_conv EncodeT;                                          \
 		_FORCE_INLINE_ static void encode(m_type p_val, void *p_ptr) {   \
-			*((m_type *)p_ptr) = p_val;                                  \
+			m_conv c = static_cast<m_conv>(p_val);                       \
+			memcpy(p_ptr, &c, sizeof(m_conv));                           \
 		}                                                                \
-	}
-
-#define MAKE_PTRARGCONV(m_type, m_conv)                                           \
-	template <>                                                                   \
-	struct PtrToArg<m_type> {                                                     \
-		_FORCE_INLINE_ static m_type convert(const void *p_ptr) {                 \
-			return static_cast<m_type>(*reinterpret_cast<const m_conv *>(p_ptr)); \
-		}                                                                         \
-		typedef m_conv EncodeT;                                                   \
-		_FORCE_INLINE_ static void encode(m_type p_val, void *p_ptr) {            \
-			*((m_conv *)p_ptr) = static_cast<m_conv>(p_val);                      \
-		}                                                                         \
-	};                                                                            \
-	template <>                                                                   \
-	struct PtrToArg<const m_type &> {                                             \
-		_FORCE_INLINE_ static m_type convert(const void *p_ptr) {                 \
-			return static_cast<m_type>(*reinterpret_cast<const m_conv *>(p_ptr)); \
-		}                                                                         \
-		typedef m_conv EncodeT;                                                   \
-		_FORCE_INLINE_ static void encode(m_type p_val, void *p_ptr) {            \
-			*((m_conv *)p_ptr) = static_cast<m_conv>(p_val);                      \
-		}                                                                         \
 	}
 
 #define MAKE_PTRARG_BY_REFERENCE(m_type)                                      \
