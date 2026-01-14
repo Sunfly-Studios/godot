@@ -289,7 +289,7 @@ String EditorExportPlatformLinuxBSD::_get_exe_arch(const String &p_path) const {
 		case 0x2b00:
 			return "sparc64";
 		case 0x0008:
-		case 0x8000:
+		case 0x0800:
 			return "mips64";
 		case 0x9026:
 			return "alpha";
