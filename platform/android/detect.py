@@ -202,7 +202,9 @@ def configure(env: "SConsEnvironment"):
         env.Append(CPPDEFINES=[("_FILE_OFFSET_BITS", 64)])
 
     if env["arch"] == "x86_32":
-        # The NDK adds this if targeting API < 24, so we can drop it when Godot targets it at least
+        if not env["sse2"]:
+            # 32-bit Android builds require SSE2.
+            env["sse2"] = True
         env.Append(CCFLAGS=["-mstackrealign"])
         if has_swappy:
             env.Append(LIBPATH=["#thirdparty/swappy-frame-pacing/x86"])
