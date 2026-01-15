@@ -1,0 +1,13 @@
+diff --git a/thirdparty/basis_universal/transcoder/basisu.h b/thirdparty/basis_universal/transcoder/basisu.h
+index 939ee79e62..c1cc0fbe42 100644
+--- a/thirdparty/basis_universal/transcoder/basisu.h
++++ b/thirdparty/basis_universal/transcoder/basisu.h
+@@ -129,7 +129,7 @@ namespace basisu
+ #endif                  
+ #endif
+ 		
+-	template <typename T> inline void clear_obj(T& obj) { memset(&obj, 0, sizeof(obj)); }
++	template <typename T> inline void clear_obj(T& obj) { memset((void*)&obj, 0, sizeof(obj)); }
+ 
+ #ifndef __EMSCRIPTEN__
+ #ifdef __GNUC__
