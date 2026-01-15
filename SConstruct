@@ -57,7 +57,7 @@ import gles3_builders
 import glsl_builders
 import methods
 import scu_builders
-from misc.utility.color import STDERR_COLOR, print_error, print_info, print_warning
+from misc.utility.color import is_stderr_color, print_error, print_info, print_warning
 from platform_methods import architecture_aliases, architectures, compatibility_platform_aliases
 
 if ARGUMENTS.get("target", "editor") == "editor":
@@ -726,9 +726,9 @@ if env["arch"] == "x86_32":
 
 # Explicitly specify colored output.
 if methods.using_gcc(env):
-    env.AppendUnique(CCFLAGS=["-fdiagnostics-color" if STDERR_COLOR else "-fno-diagnostics-color"])
+    env.AppendUnique(CCFLAGS=["-fdiagnostics-color" if is_stderr_color() else "-fno-diagnostics-color"])
 elif methods.using_clang(env) or methods.using_emcc(env):
-    env.AppendUnique(CCFLAGS=["-fcolor-diagnostics" if STDERR_COLOR else "-fno-color-diagnostics"])
+    env.AppendUnique(CCFLAGS=["-fcolor-diagnostics" if is_stderr_color() else "-fno-color-diagnostics"])
     if sys.platform == "win32":
         env.AppendUnique(CCFLAGS=["-fansi-escape-codes"])
 
@@ -876,20 +876,23 @@ if env.msvc and not methods.using_clang(env):  # MSVC
 
 else:  # GCC, Clang
     common_warnings = []
-
     if methods.using_gcc(env):
         common_warnings += ["-Wshadow", "-Wno-misleading-indentation"]
         if cc_version_major < 11:
             # Regression in GCC 9/10, spams so much in our variadic templates
             # that we need to outright disable it.
             common_warnings += ["-Wno-type-limits"]
-        if cc_version_major >= 12:  # False positives in our error macros, see GH-58747.
+        if cc_version_major == 12:
+            # Regression in GCC 12, false positives in our error macros, see GH-58747.
             common_warnings += ["-Wno-return-type"]
+        if cc_version_major >= 11:
+            common_warnings += ["-Wenum-conversion"]
     elif methods.using_clang(env) or methods.using_emcc(env):
         common_warnings += ["-Wshadow-field-in-constructor", "-Wshadow-uncaptured-local"]
         # We often implement `operator<` for structs of pointers as a requirement
         # for putting them in `Set` or `Map`. We don't mind about unreliable ordering.
         common_warnings += ["-Wno-ordered-compare-function-pointers"]
+        common_warnings += ["-Wenum-conversion"]
 
     # clang-cl will interpret `-Wall` as `-Weverything`, workaround with compatibility cast
     W_ALL = "-Wall" if not env.msvc else "-W3"
