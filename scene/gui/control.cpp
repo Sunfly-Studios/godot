@@ -1010,56 +1010,56 @@ int Control::_get_anchors_layout_preset() const {
 	float top = get_anchor(SIDE_TOP);
 	float bottom = get_anchor(SIDE_BOTTOM);
 
-	if (left == ANCHOR_BEGIN && right == ANCHOR_BEGIN && top == ANCHOR_BEGIN && bottom == ANCHOR_BEGIN) {
+	if (left == (real_t)ANCHOR_BEGIN && right == (real_t)ANCHOR_BEGIN && top == (real_t)ANCHOR_BEGIN && bottom == (real_t)ANCHOR_BEGIN) {
 		return (int)LayoutPreset::PRESET_TOP_LEFT;
 	}
-	if (left == ANCHOR_END && right == ANCHOR_END && top == ANCHOR_BEGIN && bottom == ANCHOR_BEGIN) {
+	if (left == (real_t)ANCHOR_END && right == (real_t)ANCHOR_END && top == (real_t)ANCHOR_BEGIN && bottom == (real_t)ANCHOR_BEGIN) {
 		return (int)LayoutPreset::PRESET_TOP_RIGHT;
 	}
-	if (left == ANCHOR_BEGIN && right == ANCHOR_BEGIN && top == ANCHOR_END && bottom == ANCHOR_END) {
+	if (left == (real_t)ANCHOR_BEGIN && right == (real_t)ANCHOR_BEGIN && top == (real_t)ANCHOR_END && bottom == (real_t)ANCHOR_END) {
 		return (int)LayoutPreset::PRESET_BOTTOM_LEFT;
 	}
-	if (left == ANCHOR_END && right == ANCHOR_END && top == ANCHOR_END && bottom == ANCHOR_END) {
+	if (left == (real_t)ANCHOR_END && right == (real_t)ANCHOR_END && top == (real_t)ANCHOR_END && bottom == (real_t)ANCHOR_END) {
 		return (int)LayoutPreset::PRESET_BOTTOM_RIGHT;
 	}
 
-	if (left == ANCHOR_BEGIN && right == ANCHOR_BEGIN && top == 0.5 && bottom == 0.5) {
+	if (left == (real_t)ANCHOR_BEGIN && right == (real_t)ANCHOR_BEGIN && top == 0.5 && bottom == 0.5) {
 		return (int)LayoutPreset::PRESET_CENTER_LEFT;
 	}
-	if (left == ANCHOR_END && right == ANCHOR_END && top == 0.5 && bottom == 0.5) {
+	if (left == (real_t)ANCHOR_END && right == (real_t)ANCHOR_END && top == 0.5 && bottom == 0.5) {
 		return (int)LayoutPreset::PRESET_CENTER_RIGHT;
 	}
-	if (left == 0.5 && right == 0.5 && top == ANCHOR_BEGIN && bottom == ANCHOR_BEGIN) {
+	if (left == 0.5 && right == 0.5 && top == (real_t)ANCHOR_BEGIN && bottom == (real_t)ANCHOR_BEGIN) {
 		return (int)LayoutPreset::PRESET_CENTER_TOP;
 	}
-	if (left == 0.5 && right == 0.5 && top == ANCHOR_END && bottom == ANCHOR_END) {
+	if (left == 0.5 && right == 0.5 && top == (real_t)ANCHOR_END && bottom == (real_t)ANCHOR_END) {
 		return (int)LayoutPreset::PRESET_CENTER_BOTTOM;
 	}
 	if (left == 0.5 && right == 0.5 && top == 0.5 && bottom == 0.5) {
 		return (int)LayoutPreset::PRESET_CENTER;
 	}
 
-	if (left == ANCHOR_BEGIN && right == ANCHOR_BEGIN && top == ANCHOR_BEGIN && bottom == ANCHOR_END) {
+	if (left == (real_t)ANCHOR_BEGIN && right == (real_t)ANCHOR_BEGIN && top == (real_t)ANCHOR_BEGIN && bottom == (real_t)ANCHOR_END) {
 		return (int)LayoutPreset::PRESET_LEFT_WIDE;
 	}
-	if (left == ANCHOR_END && right == ANCHOR_END && top == ANCHOR_BEGIN && bottom == ANCHOR_END) {
+	if (left == (real_t)ANCHOR_END && right == (real_t)ANCHOR_END && top == (real_t)ANCHOR_BEGIN && bottom == (real_t)ANCHOR_END) {
 		return (int)LayoutPreset::PRESET_RIGHT_WIDE;
 	}
-	if (left == ANCHOR_BEGIN && right == ANCHOR_END && top == ANCHOR_BEGIN && bottom == ANCHOR_BEGIN) {
+	if (left == (real_t)ANCHOR_BEGIN && right == (real_t)ANCHOR_END && top == (real_t)ANCHOR_BEGIN && bottom == (real_t)ANCHOR_BEGIN) {
 		return (int)LayoutPreset::PRESET_TOP_WIDE;
 	}
-	if (left == ANCHOR_BEGIN && right == ANCHOR_END && top == ANCHOR_END && bottom == ANCHOR_END) {
+	if (left == (real_t)ANCHOR_BEGIN && right == (real_t)ANCHOR_END && top == (real_t)ANCHOR_END && bottom == (real_t)ANCHOR_END) {
 		return (int)LayoutPreset::PRESET_BOTTOM_WIDE;
 	}
 
-	if (left == 0.5 && right == 0.5 && top == ANCHOR_BEGIN && bottom == ANCHOR_END) {
+	if (left == 0.5 && right == 0.5 && top == (real_t)ANCHOR_BEGIN && bottom == (real_t)ANCHOR_END) {
 		return (int)LayoutPreset::PRESET_VCENTER_WIDE;
 	}
-	if (left == ANCHOR_BEGIN && right == ANCHOR_END && top == 0.5 && bottom == 0.5) {
+	if (left == (real_t)ANCHOR_BEGIN && right == (real_t)ANCHOR_END && top == 0.5 && bottom == 0.5) {
 		return (int)LayoutPreset::PRESET_HCENTER_WIDE;
 	}
 
-	if (left == ANCHOR_BEGIN && right == ANCHOR_END && top == ANCHOR_BEGIN && bottom == ANCHOR_END) {
+	if (left == (real_t)ANCHOR_BEGIN && right == (real_t)ANCHOR_END && top == (real_t)ANCHOR_BEGIN && bottom == (real_t)ANCHOR_END) {
 		return (int)LayoutPreset::PRESET_FULL_RECT;
 	}
 
