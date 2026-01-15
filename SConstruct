@@ -237,6 +237,7 @@ opts.Add(BoolVariable("steamapi", "Enable minimal SteamAPI integration for usage
 opts.Add("cache_path", "Path to a directory where SCons cache files will be stored. No value disables the cache.", "")
 opts.Add("cache_limit", "Max size (in GiB) for the SCons cache. 0 means no limit.", "0")
 opts.Add(BoolVariable("sse2", "Compile with SSE2 support", True))
+opts.Add(BoolVariable("older_linux", "Enable some codepaths for older Linux (GLIBC < 2.11)", False))
 
 # Thirdparty libraries
 opts.Add(BoolVariable("builtin_brotli", "Use the built-in Brotli library", True))

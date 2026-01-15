@@ -37,7 +37,7 @@ elif env["platform"] == "linuxbsd":
         or sys.platform.startswith("freebsd")
         or sys.platform.startswith("netbsd")
         or sys.platform.startswith("openbsd")
-    ):
+    ) and not env["older_linux"]:
         env_openxr.AppendUnique(CPPDEFINES=["HAVE_SECURE_GETENV"])
 elif env["platform"] == "windows":
     env_openxr.AppendUnique(CPPDEFINES=["XR_OS_WINDOWS", "NOMINMAX", "XR_USE_PLATFORM_WIN32"])

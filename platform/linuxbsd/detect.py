@@ -618,8 +618,10 @@ def configure(env: "SConsEnvironment"):
 
     if platform.system() == "Linux":
         env.Append(LIBS=["dl"])
-
-    if platform.libc_ver()[0] != "glibc":
+    
+    libc_info = platform.libc_ver()
+    is_glibc = libc_info[0] == "glibc"
+    if not is_glibc:
         if env["execinfo"]:
             env.Append(LIBS=["execinfo"])
             env.Append(CPPDEFINES=["CRASH_HANDLER_ENABLED"])
@@ -629,6 +631,16 @@ def configure(env: "SConsEnvironment"):
             print_info("Using `execinfo=no` disables the crash handler on platforms where glibc is missing.")
     else:
         env.Append(CPPDEFINES=["CRASH_HANDLER_ENABLED"])
+        
+    # Use LIBC version to determine compatibility levels
+    libc_ver_parts = [int(x) for x in libc_info[1].split(".")[:2]]
+    
+    if is_glibc and libc_ver_parts < [2, 12]:
+        print_warning("Detected GLIBC < 2.12. Enabling older Linux paths.")
+        env["older_linux"] = True
+
+    if env["older_linux"]:
+        env.Append(CPPDEFINES=["OLDER_UNIX_ENABLED"])
 
     if platform.system() == "FreeBSD":
         env.Append(LINKFLAGS=["-lkvm"])

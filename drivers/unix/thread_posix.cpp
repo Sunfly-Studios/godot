@@ -52,14 +52,21 @@ static Error set_name(const String &p_name) {
 
 #else
 
-	pthread_t running_thread = pthread_self();
 #ifdef PTHREAD_BSD_SET_NAME
+	pthread_t running_thread = pthread_self();
 	pthread_set_name_np(running_thread, p_name.utf8().get_data());
 	int err = 0; // Open/FreeBSD ignore errors in this function
 #elif defined(PTHREAD_NETBSD_SET_NAME)
+	pthread_t running_thread = pthread_self();
 	int err = pthread_setname_np(running_thread, "%s", const_cast<char *>(p_name.utf8().get_data()));
 #else
-	int err = pthread_setname_np(running_thread, p_name.utf8().get_data());
+	#ifdef OLDER_UNIX_ENABLED	
+		// Not available in GLIBC < 2.12
+		int err = 0;
+	#else
+		pthread_t running_thread = pthread_self();
+		int err = pthread_setname_np(running_thread, p_name.utf8().get_data());
+	#endif
 #endif // PTHREAD_BSD_SET_NAME
 
 #endif // PTHREAD_RENAME_SELF
