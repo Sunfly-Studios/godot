@@ -38,18 +38,20 @@ class SparseIndices {
   // sparse indices where {p1: q1, p2: q2, ...} are laid out as
   // p1 q1 p2 q2 or q1 p1 q2 p2, depending on endianness
   // such that the indices are sorted by (p << 32) | q
- public:
-#if defined(__BYTE_ORDER) && __BYTE_ORDER == __BIG_ENDIAN ||                 \
+  public:
+#if (defined(__BYTE_ORDER__) && __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__) ||   \
+    (defined(__BYTE_ORDER) && __BYTE_ORDER == __BIG_ENDIAN) ||               \
     defined(__BIG_ENDIAN__) || defined(__ARMEB__) || defined(__THUMBEB__) || \
     defined(__AARCH64EB__) || defined(_MIBSEB) || defined(__MIBSEB) ||       \
     defined(__MIBSEB__)
-  static constexpr size_t pOffset = 0;
-#elif defined(__BYTE_ORDER) && __BYTE_ORDER == __LITTLE_ENDIAN ||          \
-    defined(__LITTLE_ENDIAN__) || defined(__ARMEL__) ||                    \
-    defined(__THUMBEL__) || defined(__AARCH64EL__) || defined(_MIPSEL) ||  \
-    defined(__MIPSEL) || defined(__MIPSEL__) || defined(__EMSCRIPTEN__) || \
-    defined(_WIN32)
-  static constexpr size_t pOffset = 1;
+    static constexpr size_t pOffset = 0;
+#elif (defined(__BYTE_ORDER__) && __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__) || \
+    (defined(__BYTE_ORDER) && __BYTE_ORDER == __LITTLE_ENDIAN) ||               \
+    defined(__LITTLE_ENDIAN__) || defined(__ARMEL__) ||                         \
+    defined(__THUMBEL__) || defined(__AARCH64EL__) || defined(_MIPSEL) ||       \
+    defined(__MIPSEL) || defined(__MIPSEL__) || defined(__EMSCRIPTEN__) ||      \
+    defined(_WIN32) || defined(__NetBSD__)
+    static constexpr size_t pOffset = 1;
 #else
 #error "unknown architecture"
 #endif

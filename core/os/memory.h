@@ -41,8 +41,13 @@
 #ifdef _WIN32
 #include <malloc.h>
 #else
+
+#ifdef __NetBSD__
+#include <stdlib.h>
+#else
 #include <alloca.h>
-#endif
+#endif // __NetBSD__
+#endif // _WIN32
 
 // Safe Stack Allocation Macro. This macro:
 // - Allocates requested size + alignment padding.
