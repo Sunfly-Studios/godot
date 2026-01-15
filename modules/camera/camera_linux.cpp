@@ -157,7 +157,7 @@ bool CameraLinux::_is_video_capture_device(int p_file_descriptor) {
 bool CameraLinux::_can_query_format(int p_file_descriptor, int p_type) {
 	struct v4l2_format format;
 	memset(&format, 0, sizeof(format));
-	format.type = p_type;
+	format.type = (v4l2_buf_type)p_type;
 
 	return ioctl(p_file_descriptor, VIDIOC_G_FMT, &format) != -1;
 }
