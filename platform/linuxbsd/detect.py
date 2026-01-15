@@ -147,6 +147,11 @@ def configure(env: "SConsEnvironment"):
                 "-ffunction-sections",
                 "-fdata-sections",
                 "-fPIC",
+
+                # Silence warnings about the change in the
+                # Processor Specific ABI that changed in
+                # GCC 12.1 and later.
+                "-Wno-psabi"
             ]
         )
 
