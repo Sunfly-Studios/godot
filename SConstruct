@@ -724,6 +724,11 @@ if env["arch"] == "x86_32":
             env.Append(CCFLAGS=["-msse", "-mno-sse2", "-mfpmath=sse,387"])
         env.Append(CPPDEFINES=["NO_SSE2"])
 
+# Catches x86_32, arm32, and ppc32.
+# Some Godot system's need it.
+if env["arch"].endswith("32"):
+    env.Append(CPPDEFINES=["IS_32_BIT"])
+
 # Explicitly specify colored output.
 if methods.using_gcc(env):
     env.AppendUnique(CCFLAGS=["-fdiagnostics-color" if is_stderr_color() else "-fno-diagnostics-color"])

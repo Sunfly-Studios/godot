@@ -100,6 +100,11 @@ def configure(env: "SConsEnvironment"):
     elif env["arch"] == "arm32":
         env.Append(CCFLAGS=["-march=armv7-a", "-mthumb", "-mfpu=neon-vfpv4", "-mfloat-abi=hard"])
     elif env["arch"] == "ppc32":
+        env.Append(CCFLAGS=[
+            # PPC GCC optimisation often breaks the refcounting logic
+            # just like in sparc64.
+            "-fno-strict-aliasing"
+        ])
         # By default the toolchain won't append
         # atomic functions at link time.
         env.Append(LINKFLAGS=["-latomic"])
@@ -225,7 +230,6 @@ def configure(env: "SConsEnvironment"):
             elif env["arch"] == "mips64":
                 env.Append(CCFLAGS=["-EL", "-march=mips3"])
                 print("Building MIPS64 Little Endian")
-
 
     ## Compiler configuration
 

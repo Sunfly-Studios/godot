@@ -67,30 +67,18 @@ class CowData {
 	friend class VMap;
 
 public:
+#if defined(IS_32_BIT)
+	typedef int32_t Size;
+	typedef uint32_t USize;
+	static constexpr USize MAX_INT = INT32_MAX;
+#else
 	typedef int64_t Size;
 	typedef uint64_t USize;
 	static constexpr USize MAX_INT = INT64_MAX;
+#endif
 
 private:
-	// Function to find the next power of 2 to an integer.
-	static _FORCE_INLINE_ USize next_po2(USize x) {
-		if (x == 0) {
-			return 0;
-		}
 
-		--x;
-		x |= x >> 1;
-		x |= x >> 2;
-		x |= x >> 4;
-		x |= x >> 8;
-		x |= x >> 16;
-		if (sizeof(USize) == 8) {
-			x |= x >> 32;
-		}
-
-		return ++x;
-	}
-	
 	// Alignment:  ↓ max_align_t           ↓ USize          ↓ USize            ↓ MAX_ALIGN
 	//             ┌────────────────────┬──┬───────────────┬──┬─────────────┬──┬───────────...
 	//             │ SafeNumeric<USize> │░░│ USize         │░░│ USize       │░░│ T[]
@@ -136,7 +124,7 @@ private:
 	}
 
 	_FORCE_INLINE_ USize _get_alloc_size(USize p_elements) const {
-		return next_po2(p_elements * sizeof(T));
+		return next_power_of_2(p_elements * sizeof(T));
 	}
 
 	_FORCE_INLINE_ bool _get_alloc_size_checked(USize p_elements, USize *out) const {
@@ -151,7 +139,7 @@ private:
 			*out = 0;
 			return false;
 		}
-		*out = next_po2(o);
+		*out = next_power_of_2(o);
 		if (__builtin_add_overflow(o, static_cast<USize>(32), &p)) {
 			return false; // No longer allocated here.
 		}
