@@ -882,7 +882,9 @@ else:  # GCC, Clang
             "-Wno-misleading-indentation",
         ]
 
-        if not sys.platform.startswith("netbsd"):
+        # Other architectures trigger warnings about this for obj/c.
+        # For some reason, x86 doesn't.
+        if not sys.platform.startswith("netbsd") and env["arch"] in "86":
             common_warnings += [
                 # For optimized Object::cast_to / object.inherits_from()
                 "-Wvirtual-inheritance",
