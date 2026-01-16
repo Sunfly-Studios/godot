@@ -1476,7 +1476,7 @@ Vector<Vector3> GodotNavigationServer3D::simplify_path(const Vector<Vector3> &p_
 	{
 		source_path.resize(p_path.size());
 		const Vector3 *r = p_path.ptr();
-		for (uint32_t i = 0; i < p_path.size(); i++) {
+		for (int i = 0; i < p_path.size(); i++) {
 			source_path[i] = r[i];
 		}
 	}

@@ -202,7 +202,7 @@ void MultiMesh::set_buffer(const Vector<float> &p_buffer) {
 	uint32_t stride = transform_format == TRANSFORM_2D ? 8 : 12;
 	stride += use_colors ? 4 : 0;
 	stride += use_custom_data ? 4 : 0;
-	ERR_FAIL_COND_MSG(stride * instance_count != p_buffer.size(), "Cannot set a buffer on a Multimesh that is a different size from the Multimesh's existing buffer.");
+	ERR_FAIL_COND_MSG((int)(stride * instance_count) != p_buffer.size(), "Cannot set a buffer on a Multimesh that is a different size from the Multimesh's existing buffer.");
 
 	RS::get_singleton()->multimesh_set_buffer(multimesh, p_buffer);
 }

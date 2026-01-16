@@ -4318,7 +4318,7 @@ RenderingDevice::DrawListID RenderingDevice::draw_list_begin(RID p_framebuffer, 
 		RDD::RenderPassClearValue clear_value;
 		if (texture->usage_flags & TEXTURE_USAGE_COLOR_ATTACHMENT_BIT) {
 			if (p_draw_flags.has_flag(DrawFlags(DRAW_CLEAR_COLOR_0 << color_index))) {
-				ERR_FAIL_COND_V_MSG(color_index >= p_clear_color_values.size(), INVALID_ID, vformat("Color texture (%d) was specified to be cleared but no color value was provided.", color_index));
+				ERR_FAIL_COND_V_MSG(color_index >= (uint32_t)p_clear_color_values.size(), INVALID_ID, vformat("Color texture (%d) was specified to be cleared but no color value was provided.", color_index));
 				operation = RDG::ATTACHMENT_OPERATION_CLEAR;
 				clear_value.color = p_clear_color_values[color_index];
 			} else if (p_draw_flags.has_flag(DrawFlags(DRAW_IGNORE_COLOR_0 << color_index))) {

@@ -246,7 +246,7 @@ void OpenXRVisibilityMaskExtension::_update_mesh() {
 
 		for (uint32_t i = 0; i < mesh_count; i++) {
 			const XrVector2f *v_in = mesh_data[i].vertices.ptr();
-			for (uint32_t j = 0; j < mesh_data[i].vertices.size(); j++) {
+			for (int j = 0; j < mesh_data[i].vertices.size(); j++) {
 				v_out->x = v_in->x;
 				v_out->y = v_in->y;
 				v_out->z = float(i); // We store our view in our Z component, our shader will filter the right faces out.
@@ -254,7 +254,7 @@ void OpenXRVisibilityMaskExtension::_update_mesh() {
 				v_in++;
 			}
 			const uint32_t *i_in = mesh_data[i].indices.ptr();
-			for (uint32_t j = 0; j < mesh_data[i].indices.size(); j++) {
+			for (int j = 0; j < mesh_data[i].indices.size(); j++) {
 				*i_out = offset + *i_in;
 				i_out++;
 				i_in++;

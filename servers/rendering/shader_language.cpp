@@ -2303,7 +2303,7 @@ Vector<ShaderLanguage::Scalar> ShaderLanguage::_eval_vector(const Vector<Scalar>
 	uint32_t left_size = get_datatype_component_count(p_left_type);
 	uint32_t right_size = get_datatype_component_count(p_right_type);
 
-	if (p_va.size() != left_size || p_vb.size() != right_size) {
+	if ((uint32_t)p_va.size() != left_size || (uint32_t)p_vb.size() != right_size) {
 		return Vector<Scalar>(); // Non-evaluable values should not be parsed further.
 	}
 
@@ -2325,7 +2325,7 @@ Vector<ShaderLanguage::Scalar> ShaderLanguage::_eval_vector_transform(const Vect
 	uint32_t left_size = get_datatype_component_count(p_left_type);
 	uint32_t right_size = get_datatype_component_count(p_right_type);
 
-	if (p_va.size() != left_size || p_vb.size() != right_size) {
+	if ((uint32_t)p_va.size() != left_size || (uint32_t)p_vb.size() != right_size) {
 		return Vector<Scalar>(); // Non-evaluable values should not be parsed further.
 	}
 
