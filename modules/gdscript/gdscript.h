@@ -456,8 +456,6 @@ class GDScriptLanguage : public ScriptLanguage {
 
 	static thread_local CallStack _call_stack;
 	int _debug_max_call_stack = 0;
-	bool track_call_stack = false;
-	bool track_locals = false;
 
 	void _add_global(const StringName &p_name, const Variant &p_value);
 	void _remove_global(const StringName &p_name);
@@ -490,63 +488,37 @@ public:
 	bool debug_break_parse(const String &p_file, int p_line, const String &p_error);
 
 	_FORCE_INLINE_ void enter_function(GDScriptInstance *p_instance, GDScriptFunction *p_function, Variant *p_stack, int *p_ip, int *p_line) {
-		if (!track_call_stack) {
-			return;
-		}
-
 		if (unlikely(_call_stack.levels == nullptr)) {
 			_call_stack.levels = memnew_arr(CallLevel, _debug_max_call_stack + 1);
 		}
 
-#ifdef DEBUG_ENABLED
-		ScriptDebugger *script_debugger = EngineDebugger::get_script_debugger();
-		if (script_debugger != nullptr && script_debugger->get_lines_left() > 0 && script_debugger->get_depth() >= 0) {
-			script_debugger->set_depth(script_debugger->get_depth() + 1);
+		if (EngineDebugger::get_script_debugger()->get_lines_left() > 0 && EngineDebugger::get_script_debugger()->get_depth() >= 0) {
+			EngineDebugger::get_script_debugger()->set_depth(EngineDebugger::get_script_debugger()->get_depth() + 1);
 		}
-#endif
 
-		if (unlikely(_call_stack.stack_pos >= _debug_max_call_stack)) {
+		if (_call_stack.stack_pos >= _debug_max_call_stack) {
+			//stack overflow
 			_debug_error = vformat("Stack overflow (stack size: %s). Check for infinite recursion in your script.", _debug_max_call_stack);
-
-#ifdef DEBUG_ENABLED
-			if (script_debugger != nullptr) {
-				script_debugger->debug(this);
-			}
-#endif
-
+			EngineDebugger::get_script_debugger()->debug(this);
 			return;
 		}
 
-		CallLevel &call_level = _call_stack.levels[_call_stack.stack_pos];
-		call_level.stack = p_stack;
-		call_level.instance = p_instance;
-		call_level.function = p_function;
-		call_level.ip = p_ip;
-		call_level.line = p_line;
+		_call_stack.levels[_call_stack.stack_pos].stack = p_stack;
+		_call_stack.levels[_call_stack.stack_pos].instance = p_instance;
+		_call_stack.levels[_call_stack.stack_pos].function = p_function;
+		_call_stack.levels[_call_stack.stack_pos].ip = p_ip;
+		_call_stack.levels[_call_stack.stack_pos].line = p_line;
 		_call_stack.stack_pos++;
 	}
 
 	_FORCE_INLINE_ void exit_function() {
-		if (!track_call_stack) {
-			return;
+		if (EngineDebugger::get_script_debugger()->get_lines_left() > 0 && EngineDebugger::get_script_debugger()->get_depth() >= 0) {
+			EngineDebugger::get_script_debugger()->set_depth(EngineDebugger::get_script_debugger()->get_depth() - 1);
 		}
 
-#ifdef DEBUG_ENABLED
-		ScriptDebugger *script_debugger = EngineDebugger::get_script_debugger();
-		if (script_debugger != nullptr && script_debugger->get_lines_left() > 0 && script_debugger->get_depth() >= 0) {
-			script_debugger->set_depth(script_debugger->get_depth() - 1);
-		}
-#endif
-
-		if (unlikely(_call_stack.stack_pos == 0)) {
+		if (_call_stack.stack_pos == 0) {
 			_debug_error = "Stack Underflow (Engine Bug)";
-
-#ifdef DEBUG_ENABLED
-			if (script_debugger != nullptr) {
-				script_debugger->debug(this);
-			}
-#endif
-
+			EngineDebugger::get_script_debugger()->debug(this);
 			return;
 		}
 
@@ -580,7 +552,6 @@ public:
 
 	} strings;
 
-	_FORCE_INLINE_ bool should_track_locals() const { return track_locals; }
 	_FORCE_INLINE_ int get_global_array_size() const { return global_array.size(); }
 	_FORCE_INLINE_ Variant *get_global_array() { return _global_array; }
 	_FORCE_INLINE_ const HashMap<StringName, int> &get_global_map() const { return globals; }
