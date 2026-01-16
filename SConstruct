@@ -880,9 +880,14 @@ else:  # GCC, Clang
         common_warnings += [
             "-Wshadow",
             "-Wno-misleading-indentation",
-            # For optimized Object::cast_to / object.inherits_from()
-            "-Wvirtual-inheritance",
         ]
+
+        if not sys.platform.startswith("netbsd"):
+            common_warnings += [
+                # For optimized Object::cast_to / object.inherits_from()
+                "-Wvirtual-inheritance",
+            ]
+
         if cc_version_major < 11:
             # Regression in GCC 9/10, spams so much in our variadic templates
             # that we need to outright disable it.
