@@ -251,8 +251,8 @@ void OS::LoggerBind::logv(const char *p_format, va_list p_list, bool p_err) {
 	va_end(list_copy);
 
 	String str;
-	str.append_utf8(buf, len);
-	for (Ref<CoreBind::Logger> &logger : loggers) {
+	str.parse_utf8(buf, len);
+	for (Ref<core_bind::Logger> &logger : loggers) {
 		logger->log_message(str, p_err);
 	}
 
@@ -276,8 +276,8 @@ void OS::LoggerBind::log_error(const char *p_function, const char *p_file, int p
 
 	is_logging = true;
 
-	for (Ref<CoreBind::Logger> &logger : loggers) {
-		logger->log_error(p_function, p_file, p_line, p_code, p_rationale, p_editor_notify, CoreBind::Logger::ErrorType(p_type), backtraces);
+	for (Ref<core_bind::Logger> &logger : loggers) {
+		logger->log_error(p_function, p_file, p_line, p_code, p_rationale, p_editor_notify, core_bind::Logger::ErrorType(p_type), backtraces);
 	}
 
 	is_logging = false;
