@@ -236,7 +236,8 @@ uint32_t split_leaf_complex(uint32_t p_node_id, const BVHABB_CLASS &p_added_item
 	uint16_t *group_b = SAFE_ALLOCA_ARRAY(uint16_t, max_children);
 
 	// we are copying the ABBs. This is ugly, but we need one extra for the inserted item...
-	BVHABB_CLASS *temp_bounds = SAFE_ALLOCA_ARRAY(BVHABB_CLASS, max_children);
+	using TempBVHABB = BVHABB_CLASS; // for the hardened SAFE_ALLOCA_ARRAY
+	BVHABB_CLASS *temp_bounds = SAFE_ALLOCA_ARRAY(TempBVHABB, max_children);
 
 	int num_a = max_children;
 	int num_b = 0;

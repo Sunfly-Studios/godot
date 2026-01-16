@@ -37,26 +37,36 @@
 #include <stddef.h>
 #include <new>
 #include <type_traits>
+#include <cstdint> // for uintptr_t
 
 #ifdef _WIN32
-#include <malloc.h>
+    #include <malloc.h>
+#elif defined(__NetBSD__) || defined(__FreeBSD__) || defined(__OpenBSD__) || defined(__APPLE__)
+    #include <stdlib.h>
 #else
+    #include <alloca.h>
+#endif
 
-#ifdef __NetBSD__
-#include <stdlib.h>
-#else
-#include <alloca.h>
-#endif // __NetBSD__
-#endif // _WIN32
+// Define a safe minimum alignment.
+// "16" is perfect for SSE/NEON/128-bit SIMD,
+// as well as having a mathematical guarantee
+// to be divisble by 8 (or 4, or 2).
+#define GODOT_MIN_STACK_ALIGN 16
+
+// Calculate the required alignment:
+// The larger of the type's requirement or GODOT_MIN_STACK_ALIGN.
+#define SAFE_ALIGN_SIZE(m_type) \
+    ((alignof(m_type) > GODOT_MIN_STACK_ALIGN) ? alignof(m_type) : GODOT_MIN_STACK_ALIGN)
 
 // Safe Stack Allocation Macro. This macro:
 // - Allocates requested size + alignment padding.
 // - Shifts the pointer to match the type's alignment requirement (alignof).
-//
+// - Always guarantees GODOT_MIN_STACK_ALIGN.
+// 
 // Should futher prevent crashes on strict RISC architectures
 // and improve SIMD safety on x86.
 #define SAFE_ALLOCA_ARRAY(m_type, m_count) \
-	((m_type *)((((uintptr_t)alloca(sizeof(m_type) * (m_count) + alignof(m_type))) + (alignof(m_type) - 1)) & ~((uintptr_t)(alignof(m_type) - 1))))
+    ((m_type *)((((uintptr_t)alloca(sizeof(m_type) * (m_count) + SAFE_ALIGN_SIZE(m_type))) + (SAFE_ALIGN_SIZE(m_type) - 1)) & ~((uintptr_t)(SAFE_ALIGN_SIZE(m_type) - 1))))
 
 // Helper defined outside the class to ensure it is visible for constexpr usage
 // inside the class static member initialization.
