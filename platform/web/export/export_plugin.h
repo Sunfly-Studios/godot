@@ -60,9 +60,9 @@ class EditorExportPlatformWeb : public EditorExportPlatform {
 
 	Ref<EditorHTTPServer> server;
 
-	String _get_template_name(bool p_extension, bool p_thread_support, bool p_debug, bool is_wasm_64) const {
+	String _get_template_name(bool p_extension, bool p_thread_support, bool p_debug, bool p_is_wasm_64) const {
 		String name = "web";
-		if (is_wasm_64) {
+		if (p_is_wasm_64) {
 			name += "_wasm64";
 		} else {
 			name += "_wasm32";
