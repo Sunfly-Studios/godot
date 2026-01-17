@@ -154,6 +154,11 @@ if env.editor_build:
 
 if env["precision"] == "double":
     env_jolt.Append(CPPDEFINES=["JPH_DOUBLE_PRECISION"])
+    
+    # This is needed to actually support building on
+    # older macOS (12.x) while still targeting
+    # macOS 10.13.
+    env_jolt.Append(CXXFLAGS=["-faligned-allocation"])
 
 env_thirdparty = env_jolt.Clone()
 env_thirdparty.disable_warnings()
