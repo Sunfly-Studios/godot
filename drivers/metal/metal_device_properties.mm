@@ -84,12 +84,16 @@ void MetalDeviceProperties::init_features(id<MTLDevice> p_device) {
 		}
 	}
 
+#ifdef TARGET_OS_IOS
+    features.supportsBCTextureCompression = false;
+#else
 	if (@available(macOS 11, iOS 16.4, tvOS 16.4, *)) {
 		features.supportsBCTextureCompression = p_device.supportsBCTextureCompression;
 	} else {
 		features.supportsBCTextureCompression = false;
 	}
-
+#endif
+    
 #if TARGET_OS_OSX
 	features.supportsDepth24Stencil8 = p_device.isDepth24Stencil8PixelFormatSupported;
 #endif
@@ -320,15 +324,16 @@ void MetalDeviceProperties::init_limits(id<MTLDevice> p_device) {
 #endif
 
 	limits.maxDrawIndexedIndexValue = std::numeric_limits<uint32_t>::max() - 1;
-
+    
+    /*
 	if (@available(macOS 14.0, iOS 17.0, tvOS 17.0, *)) {
 		limits.temporalScalerInputContentMinScale = (double)[MTLFXTemporalScalerDescriptor supportedInputContentMinScaleForDevice:p_device];
 		limits.temporalScalerInputContentMaxScale = (double)[MTLFXTemporalScalerDescriptor supportedInputContentMaxScaleForDevice:p_device];
 	} else {
-		// Defaults taken from macOS 14+
-		limits.temporalScalerInputContentMinScale = 1.0;
-		limits.temporalScalerInputContentMaxScale = 3.0;
-	}
+	}*/
+    // Defaults taken from macOS 14+
+    limits.temporalScalerInputContentMinScale = 1.0;
+    limits.temporalScalerInputContentMaxScale = 3.0;
 }
 
 MetalDeviceProperties::MetalDeviceProperties(id<MTLDevice> p_device) {

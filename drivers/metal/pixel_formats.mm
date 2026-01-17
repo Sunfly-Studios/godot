@@ -882,6 +882,10 @@ MTLFmtCaps &PixelFormats::getMTLPixelFormatCapsIf(MTLPixelFormat mtlPixFmt, bool
 
 #define disableMTLPixFmtCapsIf(cond, mtlFmt, caps) flags::clear(getMTLPixelFormatCapsIf(MTLPixelFormat##mtlFmt, cond), kMTLFmtCaps##caps);
 
+#if (TARGET_OS_OSX && __MAC_OS_X_VERSION_MAX_ALLOWED < 140000) || (TARGET_OS_IPHONE && __IPHONE_OS_VERSION_MAX_ALLOWED < 170000)
+#define MTLGPUFamilyApple9 (MTLGPUFamily)1009
+#endif
+
 // Modifies the format capability tables based on the capabilities of the specific MTLDevice.
 void PixelFormats::modifyMTLFormatCapabilities(const MetalFeatures &p_feat) {
 	bool noVulkanSupport = false; // Indicated supported in Metal but not Vulkan or SPIR-V.
@@ -889,7 +893,7 @@ void PixelFormats::modifyMTLFormatCapabilities(const MetalFeatures &p_feat) {
 	bool iosOnly1 = notMac && p_feat.highestFamily < MTLGPUFamilyApple2;
 	bool iosOnly2 = notMac && p_feat.highestFamily < MTLGPUFamilyApple3;
 	bool iosOnly6 = notMac && p_feat.highestFamily < MTLGPUFamilyApple7;
-	bool iosOnly8 = notMac && p_feat.highestFamily < MTLGPUFamilyApple9;
+    bool iosOnly8 = notMac && p_feat.highestFamily < MTLGPUFamilyApple9;
 
 	setMTLPixFmtCapsIf(iosOnly2, A8Unorm, RF);
 	setMTLPixFmtCapsIf(iosOnly1, R8Unorm_sRGB, RFCMRB);

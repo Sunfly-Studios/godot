@@ -311,12 +311,14 @@ RDD::TextureID RenderingDeviceDriverMetal::texture_create(const TextureFormat &p
 	if (p_format.usage_bits & TEXTURE_USAGE_STORAGE_BIT) {
 		desc.usage |= MTLTextureUsageShaderWrite;
 	}
-
+    
+#ifdef MTLTextureUsageShaderAtomic
 	if (@available(macOS 14.0, iOS 17.0, tvOS 17.0, *)) {
 		if (format_caps & kMTLFmtCapsAtomic) {
 			desc.usage |= MTLTextureUsageShaderAtomic;
 		}
 	}
+#endif
 
 	bool can_be_attachment = flags::any(format_caps, (kMTLFmtCapsColorAtt | kMTLFmtCapsDSAtt));
 
