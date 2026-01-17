@@ -28,8 +28,15 @@ def generate_bundle(target, source, env):
     # Lipo template libraries.
     rel_target_bin = lipo(bin_dir + "/" + rel_prefix, env.extra_suffix + ".a")
     dbg_target_bin = lipo(bin_dir + "/" + dbg_prefix, env.extra_suffix + ".a")
-    rel_target_bin_sim = lipo(bin_dir + "/" + rel_prefix, ".simulator" + env.extra_suffix + ".a")
-    dbg_target_bin_sim = lipo(bin_dir + "/" + dbg_prefix, ".simulator" + env.extra_suffix + ".a")
+    
+    # Account for being run in a context where
+    # this was already ".simulator"
+    if env.extra_suffix == ".simulator":
+        rel_target_bin_sim = lipo(bin_dir + "/" + rel_prefix, env.extra_suffix + ".a")
+        dbg_target_bin_sim = lipo(bin_dir + "/" + dbg_prefix, env.extra_suffix + ".a")
+    else:
+        rel_target_bin_sim = lipo(bin_dir + "/" + rel_prefix, ".simulator" + env.extra_suffix + ".a")
+        dbg_target_bin_sim = lipo(bin_dir + "/" + dbg_prefix, ".simulator" + env.extra_suffix + ".a")
 
     # Assemble Xcode project bundle.
     app_dir = Dir("#bin/ios_xcode").abspath
