@@ -167,9 +167,9 @@ def configure(env: "SConsEnvironment"):
     elif env["arch"] == "alpha":
         env.Append(
             CCFLAGS=[
-                # Baseline, best middle ground for all _capable_ Alpha systems.
-                # Targets 433a or better.
-                "-mcpu=ev5",
+                # Practical baseline, for _capable_ DEC Alpha systems.
+                # (Actually) Targets 433a or better.
+                "-mcpu=ev56",
 
                 # Force IEEE-754 compliance
                 # for floating point numbers.
