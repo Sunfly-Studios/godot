@@ -98,7 +98,7 @@ def configure(env: "SConsEnvironment"):
         # G = General-purpose extensions, C = Compression extension (very common).
         env.Append(CCFLAGS=["-march=rv64gc"])
     elif env["arch"] == "arm32":
-        env.Append(CCFLAGS=["-march=armv7-a", "-mthumb", "-mfpu=neon-vfpv4", "-mfloat-abi=hard"])
+        env.Append(CCFLAGS=["-march=armv7-a", "-mthumb", "-mfpu=vfpv3-d16", "-mfloat-abi=hard"])
     elif env["arch"] == "ppc32":
         env.Append(CCFLAGS=[
             # PPC GCC optimisation often breaks the refcounting logic
