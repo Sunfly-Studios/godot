@@ -2702,6 +2702,12 @@ void WaylandThread::_wp_text_input_on_enter(void *data, struct zwp_text_input_v3
 		return;
 	}
 
+	WindowState *ws = wl_surface_get_window_state(surface);
+	if (!ws) {
+		return;
+	}
+
+	ss->ime_window_id = ws->id;
 	ss->ime_enabled = true;
 }
 
