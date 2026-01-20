@@ -140,21 +140,28 @@ struct GetTypeInfo<GDExtensionPtr<T>> {
 template <typename T>
 struct PtrToArg<GDExtensionConstPtr<T>> {
 	_FORCE_INLINE_ static GDExtensionConstPtr<T> convert(const void *p_ptr) {
-		return GDExtensionConstPtr<T>(reinterpret_cast<const T *>(p_ptr));
+		const T *ptr_val;
+		memcpy(&ptr_val, p_ptr, sizeof(const T *));
+		return GDExtensionConstPtr<T>(ptr_val);
 	}
 	typedef const T *EncodeT;
 	_FORCE_INLINE_ static void encode(GDExtensionConstPtr<T> p_val, void *p_ptr) {
-		*((const T **)p_ptr) = p_val.data;
+		const T *ptr_val = p_val.data;
+		memcpy(p_ptr, &ptr_val, sizeof(const T *));
 	}
 };
+
 template <typename T>
 struct PtrToArg<GDExtensionPtr<T>> {
 	_FORCE_INLINE_ static GDExtensionPtr<T> convert(const void *p_ptr) {
-		return GDExtensionPtr<T>(reinterpret_cast<const T *>(p_ptr));
+		T *ptr_val;
+		memcpy(&ptr_val, p_ptr, sizeof(T *));
+		return GDExtensionPtr<T>(ptr_val);
 	}
 	typedef T *EncodeT;
 	_FORCE_INLINE_ static void encode(GDExtensionPtr<T> p_val, void *p_ptr) {
-		*((T **)p_ptr) = p_val.data;
+		T *ptr_val = p_val.data;
+		memcpy(p_ptr, &ptr_val, sizeof(T *));
 	}
 };
 
