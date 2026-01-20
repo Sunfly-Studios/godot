@@ -215,6 +215,7 @@ EditorPropertyNameProcessor::EditorPropertyNameProcessor() {
 	capitalize_string_remaps["hsv"] = "HSV";
 	capitalize_string_remaps["html"] = "HTML";
 	capitalize_string_remaps["http"] = "HTTP";
+	capitalize_string_remaps["hppa"] = "HPPA";
 	capitalize_string_remaps["id"] = "ID";
 	capitalize_string_remaps["ids"] = "IDs";
 	capitalize_string_remaps["igd"] = "IGD";
