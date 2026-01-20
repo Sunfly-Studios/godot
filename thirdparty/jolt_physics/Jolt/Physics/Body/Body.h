@@ -428,7 +428,7 @@ show_size<sizeof(Body)> debug_body_size;
 show_size<alignof(Body)> debug_body_alignof;
 #endif
 
-#if defined(REAL_T_IS_DOUBLE) && (defined(JPH_CPU_PPC) || defined(JPH_CPU_SPARC) || defined(JPH_CPU_MIPS) || defined(JPH_CPU_LOONGARCH) || defined(JPH_CPU_ALPHA))
+#if defined(REAL_T_IS_DOUBLE) && (defined(JPH_CPU_PPC) || defined(JPH_CPU_SPARC) || defined(JPH_CPU_MIPS) || defined(JPH_CPU_LOONGARCH) || defined(JPH_CPU_ALPHA) || defined(JPH_CPU_HPPA))
 	// Most RISC architectures pack double precision structs efficiently
 	static_assert(JPH_CPU_ADDRESS_BITS != 64 || sizeof(Body) == JPH_IF_SINGLE_PRECISION_ELSE(128, 144), "Body size is incorrect");
 	static_assert(alignof(Body) == JPH_RVECTOR_ALIGNMENT, "Body should properly align");

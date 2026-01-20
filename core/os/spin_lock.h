@@ -128,6 +128,9 @@ _ALWAYS_INLINE_ static void _cpu_pause() {
 	for (int i = 0; i < 32; i++) {
 		__ibar(0);
 	}
+#elif defined(__hppa__)
+	// PA-RISC
+	asm volatile("or %%r31, %%r31, %%r31" ::: "memory");
 #else
 	// Generic fallback
 	asm volatile("" ::: "memory");

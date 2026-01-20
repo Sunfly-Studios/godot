@@ -120,7 +120,7 @@ inline uint CountTrailingZeros(uint32 inValue)
 			return 32;
 		return __builtin_ctz(inValue);
 	#endif
-#elif defined(JPH_CPU_E2K) || defined(JPH_CPU_RISCV) || defined(JPH_CPU_PPC) || defined(JPH_CPU_LOONGARCH) || defined(JPH_CPU_SPARC) || defined(JPH_CPU_MIPS) || defined(JPH_CPU_ALPHA)
+#elif defined(JPH_CPU_E2K) || defined(JPH_CPU_RISCV) || defined(JPH_CPU_PPC) || defined(JPH_CPU_LOONGARCH) || defined(JPH_CPU_SPARC) || defined(JPH_CPU_MIPS) || defined(JPH_CPU_ALPHA) || defined(JPH_CPU_HPPA)
 	return inValue ? __builtin_ctz(inValue) : 32;
 #else
 	#error Undefined
@@ -150,7 +150,7 @@ inline uint CountLeadingZeros(uint32 inValue)
 	#else
 		return __builtin_clz(inValue);
 	#endif
-#elif defined(JPH_CPU_E2K) || defined(JPH_CPU_RISCV) || defined(JPH_CPU_PPC) || defined(JPH_CPU_LOONGARCH) || defined(JPH_CPU_SPARC) || defined(JPH_CPU_MIPS) || defined(JPH_CPU_ALPHA)
+#elif defined(JPH_CPU_E2K) || defined(JPH_CPU_RISCV) || defined(JPH_CPU_PPC) || defined(JPH_CPU_LOONGARCH) || defined(JPH_CPU_SPARC) || defined(JPH_CPU_MIPS) || defined(JPH_CPU_ALPHA) || defined(JPH_CPU_HPPA)
 	return inValue ? __builtin_clz(inValue) : 32;
 #else
 	#error Undefined

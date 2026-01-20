@@ -50,6 +50,13 @@ inline const char *GetConfigurationString()
 	#else
 		"(Little Endian) "
 	#endif
+#elif defined(JPH_CPU_HPPA)
+		"HPPA "
+	#ifdef JPH_CPU_BIG_ENDIAN
+		"(Big Endian) "
+	#else
+		"(Little Endian) "
+	#endif
 #else
 	#error Unknown CPU architecture
 #endif

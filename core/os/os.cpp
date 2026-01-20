@@ -604,6 +604,10 @@ bool OS::has_feature(const String &p_feature) {
 	if (p_feature == "alpha") {
 		return true;
 	}
+#elif defined(__hppa__)
+	if (p_feature == "hppa") {
+		return true;
+	}
 #endif
 
 #if defined(IOS_SIMULATOR)
@@ -628,22 +632,22 @@ bool OS::has_feature(const String &p_feature) {
 	}
 
 #if defined(__x86_64__) || defined(__amd64__) || defined(__i386__) || defined(_M_X64) || defined(_M_IX86)
-    #if defined(__x86_64__) || defined(__amd64__) || defined(_M_X64)
-        if (p_feature == "sse" || p_feature == "sse2") {
-            return true;
-        }
-    #else 
-        #if defined(NO_SSE2)
-            if (p_feature == "sse") {
-                return true;
-            }
-        #else
-            // (Checking for "sse2" implies "sse" is also supported).
-            if (p_feature == "sse" || p_feature == "sse2") {
-                return true;
-            }
-        #endif
-    #endif
+	#if defined(__x86_64__) || defined(__amd64__) || defined(_M_X64)
+		if (p_feature == "sse" || p_feature == "sse2") {
+			return true;
+		}
+	#else
+		#if defined(NO_SSE2)
+			if (p_feature == "sse") {
+				return true;
+			}
+		#else
+			// (Checking for "sse2" implies "sse" is also supported).
+			if (p_feature == "sse" || p_feature == "sse2") {
+				return true;
+			}
+		#endif
+	#endif
 #endif
 
 	if (_check_internal_feature_support(p_feature)) {

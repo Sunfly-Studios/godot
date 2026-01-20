@@ -130,7 +130,7 @@ private:
 
 // RISC-V only implements manually checking if exceptions occurred by reading the fcsr register. It doesn't generate exceptions.
 
-#elif defined(JPH_CPU_PPC) || defined(JPH_CPU_LOONGARCH) || defined(JPH_CPU_SPARC) || defined(JPH_CPU_MIPS) || defined(JPH_CPU_ALPHA)
+#elif defined(JPH_CPU_PPC) || defined(JPH_CPU_LOONGARCH) || defined(JPH_CPU_SPARC) || defined(JPH_CPU_MIPS) || defined(JPH_CPU_ALPHA) || defined(JPH_CPU_HPPA)
 // Not implemented right now
 
 #else

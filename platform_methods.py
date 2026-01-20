@@ -16,7 +16,7 @@ compatibility_platform_aliases = {
 }
 
 # CPU architecture options.
-architectures = ["x86_32", "x86_64", "arm32", "arm64", "rv64", "ppc32", "ppc64", "wasm32", "wasm64", "loongarch64", "sparc64", "mips64", "alpha"]
+architectures = ["x86_32", "x86_64", "arm32", "arm64", "rv64", "ppc32", "ppc64", "wasm32", "wasm64", "loongarch64", "sparc64", "mips64", "alpha", "hppa"]
 architecture_aliases = {
     "x86": "x86_32",
     "x64": "x86_64",
@@ -47,6 +47,9 @@ architecture_aliases = {
     "alpha64": "alpha",
     "alpha64el": "alpha",
     "decalpha": "alpha",
+    "parisc": "hppa",
+    "pa-risc": "hppa",
+    "hppa64": "hppa"
 }
 
 

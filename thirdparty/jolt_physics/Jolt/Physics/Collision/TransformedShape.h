@@ -195,7 +195,7 @@ show_size<sizeof(TransformedShape)> debug_transformed_shape_size;
 show_size<alignof(TransformedShape)> debug_transformed_shape_alignof;
 #endif
 
-#if defined(REAL_T_IS_DOUBLE) && (defined(JPH_CPU_PPC) || defined(JPH_CPU_SPARC) || defined(JPH_CPU_MIPS) || defined(JPH_CPU_LOONGARCH) || defined(JPH_CPU_ALPHA))
+#if defined(REAL_T_IS_DOUBLE) && (defined(JPH_CPU_PPC) || defined(JPH_CPU_SPARC) || defined(JPH_CPU_MIPS) || defined(JPH_CPU_LOONGARCH) || defined(JPH_CPU_ALPHA) || defined(JPH_CPU_HPPA))
 	// Most RISC architectures pack double precision structs efficiently
 	static_assert(JPH_CPU_ADDRESS_BITS != 64 || sizeof(TransformedShape) == JPH_IF_SINGLE_PRECISION_ELSE(64, 80), "Not properly packed");
 	static_assert(alignof(TransformedShape) == JPH_RVECTOR_ALIGNMENT, "Not properly aligned");

@@ -73,7 +73,7 @@ def get_flags():
 
 def configure(env: "SConsEnvironment"):
     # Validate arch.
-    supported_arches = ["x86_32", "x86_64", "arm32", "arm64", "rv64", "ppc32", "ppc64", "loongarch64", "sparc64", "mips64", "alpha"]
+    supported_arches = ["x86_32", "x86_64", "arm32", "arm64", "rv64", "ppc32", "ppc64", "loongarch64", "sparc64", "mips64", "alpha", "hppa"]
     validate_arch(env["arch"], get_name(), supported_arches)
 
     ## Build type
@@ -190,8 +190,24 @@ def configure(env: "SConsEnvironment"):
             ]
         )
         env.Append(LINKFLAGS=["-Wl,--no-relax", "-mlarge-data"])
+    elif env["arch"] == "hppa":
+        env.Append(
+            CCFLAGS=[
+                "-march=2.0",
+                "-mlong-calls",
+            ]
+        )
 
-    if env["arch"] == "sparc64" or env["arch"] == "alpha":
+        # Fix issue with modern toolchains under PA-RISC that
+        # may mark some parts of the binary as read-only but
+        # try to read into it.
+        env.Append(LINKFLAGS=["-Wl,-z,norelro"])
+
+    if (
+        env["arch"] == "sparc64" or
+        env["arch"] == "alpha" or
+        env["arch"] == "hppa"
+    ):
         # Disable JIT for pcre2. Not supported.
         env["builtin_pcre2_with_jit"] = False
 
@@ -200,7 +216,13 @@ def configure(env: "SConsEnvironment"):
     # flag so that other components (like FileAccess) can
     # actually work without getting confused.
     is_big_endian = detect_endianness(env)
-    if env["arch"] == "sparc64" or env["arch"] == "ppc64" or env["arch"] == "ppc32" or env["arch"] == "mips64":
+    if (
+        env["arch"] == "sparc64" or
+        env["arch"] == "ppc64" or
+        env["arch"] == "ppc32" or
+        env["arch"] == "mips64" or
+        env["arch"] == "hppa"
+    ):
         if is_big_endian:
             # Godot technically supports compiling for big endian,
             # but nowhere in the build system did it
@@ -209,8 +231,8 @@ def configure(env: "SConsEnvironment"):
             env.Append(CCFLAGS=["-DBIG_ENDIAN_ENABLED"])
 
             # Let user know about the endianness.
-            # We don't talk about SPARC because is always
-            # big endian.
+            # We don't talk about SPARC or HPPA because
+            # they're always big endian.
             if env["arch"] == "ppc32":
                 print("Building PowerPC 32 Big Endian")
             elif env["arch"] == "ppc64":

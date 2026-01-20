@@ -293,6 +293,18 @@
 	#define JPH_CPU_ADDRESS_BITS 64
 	#define JPH_VECTOR_ALIGNMENT 16
 	#define JPH_DVECTOR_ALIGNMENT 16
+#elif defined(__hppa__)
+	// HP PA-RISC architecture
+	// This architecture is 64-bit, but the userland
+	// is 32-bit because the ABI for 64 was never
+	// finalised.
+	#define JPH_CPU_HPPA
+	#define JPH_CPU_ADDRESS_BITS 32
+	#define JPH_CPU_BIG_ENDIAN
+
+	// PA-RISC requires strict alignment.
+	#define JPH_VECTOR_ALIGNMENT 16
+	#define JPH_DVECTOR_ALIGNMENT 16
 #else
 	#error Unsupported CPU architecture
 #endif
@@ -449,7 +461,7 @@
 #elif defined(JPH_PLATFORM_LINUX) || defined(JPH_PLATFORM_ANDROID) || defined(JPH_PLATFORM_MACOS) || defined(JPH_PLATFORM_IOS) || defined(JPH_PLATFORM_FREEBSD) || defined(JPH_PLATFORM_NETBSD)
 	#if defined(JPH_CPU_X86)
 		#define JPH_BREAKPOINT	__asm volatile ("int $0x3")
-	#elif defined(JPH_CPU_ARM) || defined(JPH_CPU_RISCV) || defined(JPH_CPU_E2K) || defined(JPH_CPU_PPC) || defined(JPH_CPU_LOONGARCH) || defined(JPH_CPU_SPARC) || defined(JPH_CPU_MIPS) || defined(JPH_CPU_ALPHA)
+	#elif defined(JPH_CPU_ARM) || defined(JPH_CPU_RISCV) || defined(JPH_CPU_E2K) || defined(JPH_CPU_PPC) || defined(JPH_CPU_LOONGARCH) || defined(JPH_CPU_SPARC) || defined(JPH_CPU_MIPS) || defined(JPH_CPU_ALPHA) || defined(JPH_CPU_HPPA)
 		#define JPH_BREAKPOINT	__builtin_trap()
 	#else
 		#error Unknown CPU architecture
