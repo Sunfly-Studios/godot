@@ -476,6 +476,7 @@ public:
 
 		// IME.
 		struct zwp_text_input_v3 *wp_text_input = nullptr;
+		DisplayServer::WindowID ime_window_id = DisplayServer::INVALID_WINDOW_ID;
 		bool ime_enabled = false;
 		bool ime_active = false;
 		String ime_text;
