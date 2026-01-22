@@ -367,7 +367,13 @@ bool PackedSourcePCK::try_open_pack(const String &p_path, bool p_replace_files, 
 	if (enc_directory) {
 		Ref<FileAccessEncrypted> fae;
 		fae.instantiate();
-		ERR_FAIL_COND_V_MSG(fae.is_null(), false, "Can't open encrypted pack directory.");
+		#ifdef DEBUG_ENABLED
+			ERR_FAIL_COND_V_MSG(fae.is_null(), false, "Can't open encrypted pack directory.");
+		#else
+			if (fae.is_null()) {
+				return false;
+			}
+		#endif
 
 		Vector<uint8_t> key;
 		key.resize(32);
@@ -376,8 +382,15 @@ bool PackedSourcePCK::try_open_pack(const String &p_path, bool p_replace_files, 
 		}
 
 		Error err = fae->open_and_parse(f, key, FileAccessEncrypted::MODE_READ, false);
-		ERR_FAIL_COND_V_MSG(err, false, "Can't open encrypted pack directory.");
+		#ifdef DEBUG_ENABLED
+			ERR_FAIL_COND_V_MSG(err, false, "Can't open encrypted pack directory.");
+		#else
+			if (err) {
+				return false;
+			}
+		#endif
 		f = fae;
+		
 		// FileAccessEncrypted wraps the original file, so ensure
 		// it inherits the correct endianness setting
 		f->set_big_endian(data_endianness_is_big);
@@ -451,7 +464,7 @@ bool PackedSourcePCK::try_open_pack(const String &p_path, bool p_replace_files, 
 		print_verbose("Verification result: " + String(verify_result ? "SUCCESS" : "FAILED"));
 #endif
 		if (!verify_result) {
-			// Alternative 1: Hash with data converted to little-endian
+			// Alternative path: Hash with data converted to little-endian
 			f->seek(dir_start_pos);
 			sha_ctx.start();
 
@@ -509,7 +522,14 @@ bool PackedSourcePCK::try_open_pack(const String &p_path, bool p_replace_files, 
 			}
 		}
 
-		ERR_FAIL_COND_V_MSG(!verify_result && !tls_ctx->verify(HashingContext::HASH_SHA256, directory_hash, signature, p_key), false, "Pack directory integrity verification failed, invalid signature.");
+		bool signature_verified = !verify_result && !tls_ctx->verify(HashingContext::HASH_SHA256, directory_hash, signature, p_key)
+		if (!signature_verified) {
+#ifdef DEBUG_ENABLED
+			ERR_FAIL_COND_V_MSG(signature_verified, false, "Pack directory integrity verification failed, invalid signature.");
+#else
+			return false;
+#endif
+		}
 		f->seek(dir_start_pos);
 	}
 
