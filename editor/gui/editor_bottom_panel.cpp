@@ -101,7 +101,7 @@ void EditorBottomPanel::_update_disabled_buttons() {
 }
 
 void EditorBottomPanel::_ensure_control_visible(ObjectID p_id) {
-	Control *c = ObjectDB::get_instance<Control>(p_id);
+	Control *c = Object::cast_to<Control>(ObjectDB::get_instance(p_id));
 	if (!c) {
 		return;
 	}

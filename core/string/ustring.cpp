@@ -5397,7 +5397,7 @@ String String::sprintf(const Array &values, bool *error) const {
 						if (value == INT64_MIN) { // INT64_MIN can't be represented as positive value.
 							str = String::num_int64(value, base, capitalize).trim_prefix("-");
 						} else {
-							str = String::num_int64(Math::abs(value), base, capitalize);
+							str = String::num_int64(ABS(value), base, capitalize);
 						}
 					} else {
 						uint64_t uvalue = *((uint64_t *)&value);
