@@ -295,7 +295,7 @@ String EditorExportPlatformLinuxBSD::_get_exe_arch(const String &p_path) const {
 			return "alpha";
 		case 0x000f:
 		case 0x0f00:
-			return "parisc";
+			return "hppa";
 		default:
 			return "unknown";
 	}
