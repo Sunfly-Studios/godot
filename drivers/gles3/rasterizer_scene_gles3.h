@@ -336,7 +336,8 @@ private:
 		SelfList<GeometryInstanceGLES3> dirty_list_element;
 
 		GeometryInstanceGLES3() :
-				dirty_list_element(this) {}
+				dirty_list_element(this),
+				lightmap_slice_index(0) {}
 
 		virtual void _mark_dirty() override;
 		virtual void set_use_lightmap(RID p_lightmap_instance, const Rect2 &p_lightmap_uv_scale, int p_lightmap_slice_index) override;

@@ -47,7 +47,7 @@ class ShaderGLES3 {
 public:
 	struct TextureUniformData {
 		StringName name;
-		int array_size;
+		int array_size = 0;
 	};
 
 protected:

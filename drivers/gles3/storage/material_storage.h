@@ -381,7 +381,12 @@ struct ParticlesShaderData : public ShaderData {
 	virtual bool casts_shadows() const;
 	virtual RS::ShaderNativeSourceCode get_native_source_code() const;
 
-	ParticlesShaderData() {}
+	ParticlesShaderData() :
+		ubo_size(0),
+		userdata_count(0),
+		uses_collision(false),
+		uses_time(false),
+		valid(false) {}
 	virtual ~ParticlesShaderData();
 };
 

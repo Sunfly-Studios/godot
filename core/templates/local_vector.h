@@ -333,7 +333,7 @@ public:
 			data[i] = p_from.data[i];
 		}
 	}
-	_FORCE_INLINE_ LocalVector(LocalVector &&p_from) {
+	_FORCE_INLINE_ LocalVector(LocalVector &&p_from) noexcept {
 		data = p_from.data;
 		count = p_from.count;
 		capacity = p_from.capacity;
@@ -355,7 +355,7 @@ public:
 			data[i] = p_from[i];
 		}
 	}
-	inline void operator=(LocalVector &&p_from) {
+	inline void operator=(LocalVector &&p_from) noexcept {
 		if (unlikely(this == &p_from)) {
 			return;
 		}

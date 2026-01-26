@@ -125,6 +125,7 @@ public:
 			shadow_smooth = 0.0;
 			render_index_cache = -1;
 			directional_distance = 10000.0;
+			radius_cache = 0.0;
 		}
 	};
 
@@ -190,7 +191,7 @@ public:
 			};
 
 			Command *next = nullptr;
-			Type type;
+			Type type = TYPE_RECT;
 			virtual ~Command() {}
 		};
 
@@ -215,7 +216,7 @@ public:
 		struct CommandNinePatch : public Command {
 			Rect2 rect;
 			Rect2 source;
-			float margin[4];
+			float margin[4] = { 0.0 };
 			bool draw_center;
 			Color color;
 			RS::NinePatchAxisMode axis_x;
@@ -226,6 +227,8 @@ public:
 			CommandNinePatch() {
 				draw_center = true;
 				type = TYPE_NINEPATCH;
+				axis_x = RS::NinePatchAxisMode::NINE_PATCH_STRETCH;
+				axis_y = RS::NinePatchAxisMode::NINE_PATCH_STRETCH;
 			}
 		};
 
@@ -237,11 +240,12 @@ public:
 
 			CommandPolygon() {
 				type = TYPE_POLYGON;
+				primitive = RS::PrimitiveType::PRIMITIVE_LINES;
 			}
 		};
 
 		struct CommandPrimitive : public Command {
-			uint32_t point_count;
+			uint32_t point_count = 0;
 			Vector2 points[4];
 			Vector2 uvs[4];
 			Color colors[4];
