@@ -38,6 +38,25 @@
 #include <initializer_list>
 #include <type_traits>
 
+#ifdef BIG_ENDIAN_ENABLED
+static inline float _bswap_f(float x) {
+	uint32_t i = *(uint32_t *)&x;
+	i = BSWAP32(i);
+	return *(float *)&i;
+}
+static inline uint32_t _bswap_u32(uint32_t x) {
+	return BSWAP32(x);
+}
+static inline int32_t _bswap_i32(int32_t x) {
+	return (int32_t)BSWAP32((uint32_t)x);
+}
+#else
+// No-op for Little Endian
+#define _bswap_f(x) (x)
+#define _bswap_u32(x) (x)
+#define _bswap_i32(x) (x)
+#endif
+
 template <typename T>
 struct VariantConverterStd140 {
 	// Generic base template for all Vector2/3/4(i) classes.
@@ -46,7 +65,16 @@ struct VariantConverterStd140 {
 	template <typename P>
 	static void convert(const T &p_v, P *p_write, bool p_compact) {
 		for (int i = 0; i < Elements; i++) {
-			p_write[i] = p_v[i];
+			// Swap elements (float/ints) in vectors
+			if constexpr (std::is_same_v<P, float>) {
+				p_write[i] = _bswap_f(p_v[i]);
+			} else if constexpr (std::is_same_v<P, int32_t>) {
+				p_write[i] = _bswap_i32(p_v[i]);
+			} else if constexpr (std::is_same_v<P, uint32_t>) {
+				p_write[i] = _bswap_u32(p_v[i]);
+			} else {
+				p_write[i] = p_v[i]; // Fallback
+			}
 		}
 	}
 };
@@ -57,7 +85,7 @@ struct VariantConverterStd140<float> {
 
 	template <typename P>
 	static void convert(float p_v, P *p_write, bool p_compact) {
-		p_write[0] = p_v;
+		p_write[0] = _bswap_f(p_v);
 	}
 };
 
@@ -67,7 +95,7 @@ struct VariantConverterStd140<int32_t> {
 
 	template <typename P>
 	static void convert(int32_t p_v, P *p_write, bool p_compact) {
-		p_write[0] = p_v;
+		p_write[0] = _bswap_i32(p_v);
 	}
 };
 
@@ -77,7 +105,7 @@ struct VariantConverterStd140<uint32_t> {
 
 	template <typename P>
 	static void convert(uint32_t p_v, P *p_write, bool p_compact) {
-		p_write[0] = p_v;
+		p_write[0] = _bswap_u32(p_v);
 	}
 };
 
@@ -90,23 +118,23 @@ struct VariantConverterStd140<Basis> {
 		// Basis can have compact 9 floats or std140 layout 12 floats.
 		int i = 0;
 
-		p_write[i++] = p_v.rows[0][0];
-		p_write[i++] = p_v.rows[1][0];
-		p_write[i++] = p_v.rows[2][0];
+		p_write[i++] = _bswap_f(p_v.rows[0][0]);
+		p_write[i++] = _bswap_f(p_v.rows[1][0]);
+		p_write[i++] = _bswap_f(p_v.rows[2][0]);
 		if (!p_compact) {
 			p_write[i++] = 0;
 		}
 
-		p_write[i++] = p_v.rows[0][1];
-		p_write[i++] = p_v.rows[1][1];
-		p_write[i++] = p_v.rows[2][1];
+		p_write[i++] = _bswap_f(p_v.rows[0][1]);
+		p_write[i++] = _bswap_f(p_v.rows[1][1]);
+		p_write[i++] = _bswap_f(p_v.rows[2][1]);
 		if (!p_compact) {
 			p_write[i++] = 0;
 		}
 
-		p_write[i++] = p_v.rows[0][2];
-		p_write[i++] = p_v.rows[1][2];
-		p_write[i++] = p_v.rows[2][2];
+		p_write[i++] = _bswap_f(p_v.rows[0][2]);
+		p_write[i++] = _bswap_f(p_v.rows[1][2]);
+		p_write[i++] = _bswap_f(p_v.rows[2][2]);
 		if (!p_compact) {
 			p_write[i++] = 0;
 		}
@@ -119,19 +147,21 @@ struct VariantConverterStd140<Transform2D> {
 
 	template <typename P>
 	static void convert(const Transform2D &p_v, P *p_write, bool p_compact) {
-		p_write[0] = p_v.columns[0][0];
-		p_write[1] = p_v.columns[0][1];
+		p_write[0] = _bswap_f(p_v.columns[0][0]);
+		p_write[1] = _bswap_f(p_v.columns[0][1]);
 		p_write[2] = 0;
 		p_write[3] = 0;
 
-		p_write[4] = p_v.columns[1][0];
-		p_write[5] = p_v.columns[1][1];
+		p_write[4] = _bswap_f(p_v.columns[1][0]);
+		p_write[5] = _bswap_f(p_v.columns[1][1]);
 		p_write[6] = 0;
 		p_write[7] = 0;
 
-		p_write[8] = p_v.columns[2][0];
-		p_write[9] = p_v.columns[2][1];
-		p_write[10] = 1;
+		p_write[8] = _bswap_f(p_v.columns[2][0]);
+		p_write[9] = _bswap_f(p_v.columns[2][1]);
+		// Note: 1.0 needs to be swapped too, 1.0 (0x3F800000) 
+		// swapped is (0x0000803F) which is tiny. It matters.
+		p_write[10] = _bswap_f(1.0f); 
 		p_write[11] = 0;
 	}
 };
@@ -142,25 +172,25 @@ struct VariantConverterStd140<Transform3D> {
 
 	template <typename P>
 	static void convert(const Transform3D &p_v, P *p_write, bool p_compact) {
-		p_write[0] = p_v.basis.rows[0][0];
-		p_write[1] = p_v.basis.rows[1][0];
-		p_write[2] = p_v.basis.rows[2][0];
+		p_write[0] = _bswap_f(p_v.basis.rows[0][0]);
+		p_write[1] = _bswap_f(p_v.basis.rows[1][0]);
+		p_write[2] = _bswap_f(p_v.basis.rows[2][0]);
 		p_write[3] = 0;
 
-		p_write[4] = p_v.basis.rows[0][1];
-		p_write[5] = p_v.basis.rows[1][1];
-		p_write[6] = p_v.basis.rows[2][1];
+		p_write[4] = _bswap_f(p_v.basis.rows[0][1]);
+		p_write[5] = _bswap_f(p_v.basis.rows[1][1]);
+		p_write[6] = _bswap_f(p_v.basis.rows[2][1]);
 		p_write[7] = 0;
 
-		p_write[8] = p_v.basis.rows[0][2];
-		p_write[9] = p_v.basis.rows[1][2];
-		p_write[10] = p_v.basis.rows[2][2];
+		p_write[8] = _bswap_f(p_v.basis.rows[0][2]);
+		p_write[9] = _bswap_f(p_v.basis.rows[1][2]);
+		p_write[10] = _bswap_f(p_v.basis.rows[2][2]);
 		p_write[11] = 0;
 
-		p_write[12] = p_v.origin.x;
-		p_write[13] = p_v.origin.y;
-		p_write[14] = p_v.origin.z;
-		p_write[15] = 1;
+		p_write[12] = _bswap_f(p_v.origin.x);
+		p_write[13] = _bswap_f(p_v.origin.y);
+		p_write[14] = _bswap_f(p_v.origin.z);
+		p_write[15] = _bswap_f(1.0f);
 	}
 };
 
@@ -172,7 +202,7 @@ struct VariantConverterStd140<Projection> {
 	static void convert(const Projection &p_v, P *p_write, bool p_compact) {
 		for (int i = 0; i < 4; i++) {
 			for (int j = 0; j < 4; j++) {
-				p_write[i * 4 + j] = p_v.columns[i][j];
+				p_write[i * 4 + j] = _bswap_f(p_v.columns[i][j]);
 			}
 		}
 	}
@@ -260,8 +290,25 @@ Vector<P> convert_array_std140(const Variant &p_variant, [[maybe_unused]] bool p
 		// Slow path, convert Variant arrays and some packed arrays manually into primitive types.
 		const Array &array = p_variant;
 		if (is_number_array(array)) {
+#ifdef BIG_ENDIAN_ENABLED
+			Vector<P> result = p_variant;
+			P *ptr = result.ptrw();
+			for (int i = 0; i < result.size(); i++) {
+				if constexpr (std::is_same_v<P, float>) {
+					ptr[i] = _bswap_f(ptr[i]);
+				}
+				else if constexpr (std::is_same_v<P, int32_t>) {
+					ptr[i] = _bswap_i32(ptr[i]);
+				}
+				else if constexpr (std::is_same_v<P, uint32_t>) {
+					ptr[i] = _bswap_u32(ptr[i]);
+				}
+			}
+			return result;
+#else
 			// Already flattened and converted (or empty) array, usually coming from saved resources.
 			return p_variant;
+#endif
 		}
 
 		const int items = array.size();
@@ -311,7 +358,16 @@ void write_array_std140(const Vector<From> &p_values, To *p_write, int p_array_s
 			// Only copy full items with all elements, no partial or missing data.
 			for (int e = 0; e < elements; e++) {
 				DEV_ASSERT(j + e < stride_count && i + e < src_count);
-				p_write[j + e] = read[i + e];
+
+				if constexpr (std::is_same_v<To, float>) {
+					p_write[j + e] = _bswap_f((float)read[i + e]);
+				} else if constexpr (std::is_same_v<To, int32_t>) {
+					p_write[j + e] = _bswap_i32((int32_t)read[i + e]);
+				} else if constexpr (std::is_same_v<To, uint32_t>) {
+					p_write[j + e] = _bswap_u32((uint32_t)read[i + e]);
+				} else {
+					p_write[j + e] = read[i + e];
+				}
 			}
 		} else {
 			// If not enough source data was passed in, write default values.
