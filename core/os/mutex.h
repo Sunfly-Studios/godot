@@ -42,6 +42,11 @@
 #define THREADING_NAMESPACE std
 #endif
 
+// For MSVC analysis
+#if defined(_MSC_VER)
+#include <concurrencysal.h>
+#endif
+
 #ifdef THREADS_ENABLED
 
 template <typename MutexT>
@@ -56,14 +61,23 @@ class MutexImpl {
 	mutable StdMutexT mutex;
 
 public:
+#if defined(_MSC_VER)
+	_Acquires_lock_(mutex)
+#endif
 	_ALWAYS_INLINE_ void lock() const {
 		mutex.lock();
 	}
 
+#if defined(_MSC_VER)
+	_Releases_lock_(mutex)
+#endif
 	_ALWAYS_INLINE_ void unlock() const {
 		mutex.unlock();
 	}
 
+#if defined(_MSC_VER)
+	_Success_(return) _Acquires_lock_(mutex)
+#endif
 	_ALWAYS_INLINE_ bool try_lock() const {
 		return mutex.try_lock();
 	}
