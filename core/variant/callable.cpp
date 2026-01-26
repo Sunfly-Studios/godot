@@ -305,7 +305,7 @@ bool Callable::operator<(const Callable &p_callable) const {
 			if (less_a == less_b) {
 				return less_a(custom, p_callable.custom);
 			} else {
-				return less_a < less_b; //it's something..
+				return std::less<>{}(less_a, less_b); //it's something..
 			}
 
 		} else {

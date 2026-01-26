@@ -79,9 +79,10 @@ class CallableCustomExtension : public CallableCustom {
 		const CallableCustomExtension *b = static_cast<const CallableCustomExtension *>(p_b);
 
 		if (a->call_func != b->call_func) {
-			return a->call_func < b->call_func;
+			// Standard's way to compare function pointers.
+			return std::less<>{}(a->call_func, b->call_func);
 		}
-		return a->userdata < b->userdata;
+		return std::less<>{}(a->userdata, b->userdata);
 	}
 
 	static bool custom_compare_equal(const CallableCustom *p_a, const CallableCustom *p_b) {
