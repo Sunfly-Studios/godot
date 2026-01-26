@@ -63,7 +63,7 @@ class Delaunay3D {
 		LocalVector<GridPos> grid_positions;
 		List<Simplex *>::Element *SE = nullptr;
 
-		_FORCE_INLINE_ Simplex() {}
+		_FORCE_INLINE_ Simplex() : points() {}
 		_FORCE_INLINE_ Simplex(uint32_t p_a, uint32_t p_b, uint32_t p_c, uint32_t p_d) {
 			points[0] = p_a;
 			points[1] = p_b;
@@ -79,7 +79,7 @@ class Delaunay3D {
 			return triangle[0] == p_triangle.triangle[0] && triangle[1] == p_triangle.triangle[1] && triangle[2] == p_triangle.triangle[2];
 		}
 
-		_FORCE_INLINE_ Triangle() {}
+		_FORCE_INLINE_ Triangle() : triangle() {}
 		_FORCE_INLINE_ Triangle(uint32_t p_a, uint32_t p_b, uint32_t p_c) {
 			if (p_a > p_b) {
 				SWAP(p_a, p_b);
@@ -240,7 +240,14 @@ public:
 			points[point_count + 3] = center + Vector3(-1, -1, -1) * delta_max;
 		}
 
-		List<Simplex *> acceleration_grid[ACCEL_GRID_SIZE][ACCEL_GRID_SIZE][ACCEL_GRID_SIZE];
+		// Flatten the list from the 3D array
+		// to prevent stack overflow bombs.
+		const uint32_t GRID_DIM = ACCEL_GRID_SIZE;
+		const uint32_t GRID_STRIDE_Y = GRID_DIM;
+		const uint32_t GRID_STRIDE_X = GRID_DIM * GRID_DIM;
+
+		LocalVector<List<Simplex *>> acceleration_grid;
+		acceleration_grid.resize(GRID_DIM * GRID_DIM * GRID_DIM);
 
 		List<Simplex *> simplex_list;
 		{
@@ -252,7 +259,10 @@ public:
 				for (uint32_t j = 0; j < ACCEL_GRID_SIZE; j++) {
 					for (uint32_t k = 0; k < ACCEL_GRID_SIZE; k++) {
 						GridPos gp;
-						gp.E = acceleration_grid[i][j][k].push_back(root);
+
+						// Flattened Access
+						uint32_t index = i * GRID_STRIDE_X + j * GRID_STRIDE_Y + k;
+						gp.E = acceleration_grid[index].push_back(root);
 						gp.pos = Vector3i(i, j, k);
 						root->grid_positions.push_back(gp);
 					}
@@ -280,7 +290,9 @@ public:
 			Vector3i grid_pos = Vector3i(points[i] * proportions * ACCEL_GRID_SIZE);
 			grid_pos = grid_pos.clampi(0, ACCEL_GRID_SIZE - 1);
 
-			for (List<Simplex *>::Element *E = acceleration_grid[grid_pos.x][grid_pos.y][grid_pos.z].front(); E;) {
+			uint32_t loop_index = grid_pos.x * GRID_STRIDE_X + grid_pos.y * GRID_STRIDE_Y + grid_pos.z;
+
+			for (List<Simplex *>::Element *E = acceleration_grid[loop_index].front(); E;) {
 				List<Simplex *>::Element *N = E->next(); //may be deleted
 
 				Simplex *simplex = E->get();
@@ -311,7 +323,9 @@ public:
 
 					for (const GridPos &gp : simplex->grid_positions) {
 						Vector3i p = gp.pos;
-						acceleration_grid[p.x][p.y][p.z].erase(gp.E);
+						// Flattened Access
+						uint32_t grid_index = p.x * GRID_STRIDE_X + p.y * GRID_STRIDE_Y + p.z;
+						acceleration_grid[grid_index].erase(gp.E);
 					}
 					memdelete(simplex);
 				}
@@ -343,7 +357,11 @@ public:
 							for (int32_t z = from.z; z <= to.z; z++) {
 								GridPos gp;
 								gp.pos = Vector3(x, y, z);
-								gp.E = acceleration_grid[x][y][z].push_back(new_simplex);
+
+								// Flattened Access
+								uint32_t index = x * GRID_STRIDE_X + y * GRID_STRIDE_Y + z;
+								gp.E = acceleration_grid[index].push_back(new_simplex);
+
 								new_simplex->grid_positions.push_back(gp);
 							}
 						}
