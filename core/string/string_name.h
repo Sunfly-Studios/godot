@@ -188,7 +188,7 @@ public:
 	};
 
 	StringName &operator=(const StringName &p_name);
-	StringName &operator=(StringName &&p_name) {
+	StringName &operator=(StringName &&p_name) noexcept {
 		if (_data == p_name._data) {
 			return *this;
 		}
@@ -200,7 +200,7 @@ public:
 	}
 	StringName(const char *p_name, bool p_static = false);
 	StringName(const StringName &p_name);
-	StringName(StringName &&p_name) {
+	StringName(StringName &&p_name) noexcept {
 		_data = p_name._data;
 		p_name._data = nullptr;
 	}

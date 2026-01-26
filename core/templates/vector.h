@@ -152,7 +152,7 @@ public:
 	}
 
 	void operator=(const Vector &p_from) { _cowdata._ref(p_from._cowdata); }
-	void operator=(Vector &&p_from) { _cowdata = std::move(p_from._cowdata); }
+	void operator=(Vector &&p_from) noexcept { _cowdata = std::move(p_from._cowdata); }
 
 	Vector<uint8_t> to_byte_array() const {
 		Vector<uint8_t> ret;
@@ -289,7 +289,7 @@ public:
 	_FORCE_INLINE_ Vector(std::initializer_list<T> p_init) :
 			_cowdata(p_init) {}
 	_FORCE_INLINE_ Vector(const Vector &p_from) { _cowdata._ref(p_from._cowdata); }
-	_FORCE_INLINE_ Vector(Vector &&p_from) :
+	_FORCE_INLINE_ Vector(Vector &&p_from) noexcept :
 			_cowdata(std::move(p_from._cowdata)) {}
 
 	_FORCE_INLINE_ ~Vector() {}

@@ -771,7 +771,7 @@ public:
 			it = it->next();
 		}
 	}
-	List(List &&p_list) {
+	List(List &&p_list) noexcept {
 		_data = p_list._data;
 		p_list._data = nullptr;
 	}

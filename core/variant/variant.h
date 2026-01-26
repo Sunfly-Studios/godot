@@ -145,19 +145,19 @@ public:
 private:
 	struct Pools {
 		union BucketSmall {
-			BucketSmall() {}
+			BucketSmall() : _aabb() {}
 			~BucketSmall() {}
 			Transform2D _transform2d;
 			::AABB _aabb;
 		};
 		union BucketMedium {
-			BucketMedium() {}
+			BucketMedium() : _basis() {}
 			~BucketMedium() {}
 			Basis _basis;
 			Transform3D _transform3d;
 		};
 		union BucketLarge {
-			BucketLarge() {}
+			BucketLarge() : _projection() {}
 			~BucketLarge() {}
 			Projection _projection;
 		};
@@ -849,7 +849,7 @@ public:
 	static void construct_from_string(const String &p_string, Variant &r_value, ObjectConstruct p_obj_construct = nullptr, void *p_construct_ud = nullptr);
 
 	void operator=(const Variant &p_variant); // only this is enough for all the other types
-	void operator=(Variant &&p_variant) {
+	void operator=(Variant &&p_variant) noexcept {
 		if (unlikely(this == &p_variant)) {
 			return;
 		}
@@ -863,7 +863,7 @@ public:
 	static void unregister_types();
 
 	Variant(const Variant &p_variant);
-	Variant(Variant &&p_variant) {
+	Variant(Variant &&p_variant) noexcept {
 		type = p_variant.type;
 		_data = p_variant._data;
 		p_variant.type = NIL;

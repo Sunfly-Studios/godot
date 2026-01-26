@@ -161,7 +161,7 @@ private:
 
 public:
 	void operator=(const CowData<T> &p_from) { _ref(p_from); }
-	void operator=(CowData<T> &&p_from) {
+	void operator=(CowData<T> &&p_from) noexcept {
 		if (_ptr == p_from._ptr) {
 			return;
 		}
@@ -246,7 +246,7 @@ public:
 	_FORCE_INLINE_ ~CowData() { _unref(); }
 	_FORCE_INLINE_ CowData(std::initializer_list<T> p_init);
 	_FORCE_INLINE_ CowData(const CowData<T> &p_from) { _ref(p_from); }
-	_FORCE_INLINE_ CowData(CowData<T> &&p_from) {
+	_FORCE_INLINE_ CowData(CowData<T> &&p_from) noexcept {
 		_ptr = p_from._ptr;
 		p_from._ptr = nullptr;
 	}
