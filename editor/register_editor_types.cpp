@@ -83,6 +83,7 @@
 #include "editor/plugins/editor_debugger_plugin.h"
 #include "editor/plugins/editor_resource_tooltip_plugins.h"
 #include "editor/plugins/font_config_plugin.h"
+#include "editor/plugins/margin_container_editor_plugin.h"
 #include "editor/plugins/gpu_particles_collision_sdf_editor_plugin.h"
 #include "editor/plugins/gradient_editor_plugin.h"
 #include "editor/plugins/gradient_texture_2d_editor_plugin.h"
@@ -224,6 +225,7 @@ void register_editor_types() {
 	EditorPlugins::add_by_type<GradientTexture2DEditorPlugin>();
 	EditorPlugins::add_by_type<InputEventEditorPlugin>();
 	EditorPlugins::add_by_type<LightmapGIEditorPlugin>();
+	EditorPlugins::add_by_type<MarginContainerEditorPlugin>();
 	EditorPlugins::add_by_type<MaterialEditorPlugin>();
 	EditorPlugins::add_by_type<MeshEditorPlugin>();
 	EditorPlugins::add_by_type<MeshInstance3DEditorPlugin>();
