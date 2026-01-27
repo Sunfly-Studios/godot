@@ -8,7 +8,7 @@ def can_build(env, platform):
         or sys.platform.startswith("netbsd")
     ):
         return False
-    return platform == "macos" or platform == "windows" or platform == "linuxbsd" or platform == "android"
+    return platform == "macos" or platform == "windows" or platform == "linuxbsd"
 
 
 def configure(env):
