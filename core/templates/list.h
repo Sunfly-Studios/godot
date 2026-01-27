@@ -524,7 +524,7 @@ public:
 			it = it->next();
 		}
 	}
-	void operator=(List &&p_list) {
+	void operator=(List &&p_list) noexcept {
 		if (unlikely(this == &p_list)) {
 			return;
 		}
