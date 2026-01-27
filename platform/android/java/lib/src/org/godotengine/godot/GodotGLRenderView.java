@@ -135,6 +135,11 @@ class GodotGLRenderView extends GLSurfaceView implements GodotRenderView {
 	}
 
 	@Override
+	public void onActivityDestroyed() {
+		requestRenderThreadExitAndWait();
+	}
+
+	@Override
 	public boolean blockingExitRenderer(long blockingTimeInMs) {
 		return requestRenderThreadExitAndWait(blockingTimeInMs);
 	}

@@ -771,8 +771,6 @@ class Godot(private val context: Context) {
 		for (plugin in pluginRegistry.allPlugins) {
 			plugin.onMainDestroy()
 		}
-<<<<<<< HEAD:platform/android/java/lib/src/org/godotengine/godot/Godot.kt
-=======
 
 		if (renderView?.blockingExitRenderer(EXIT_RENDERER_TIMEOUT_IN_MS) != true) {
 			Log.w(TAG, "Unable to exit the renderer within $EXIT_RENDERER_TIMEOUT_IN_MS ms... Force quitting the process.")
@@ -780,7 +778,6 @@ class Godot(private val context: Context) {
 			forceQuit(0)
 		}
 
->>>>>>> 422cc7b91b (Fix ANRs when shutting down the engine):platform/android/java/lib/src/main/java/org/godotengine/godot/Godot.kt
 		this.primaryHost = null
 	}
 
