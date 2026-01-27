@@ -60,8 +60,6 @@ void initialize_mp3_module(ModuleInitializationLevel p_level) {
 
 	ClassDB::set_current_api(prev_api);
 #endif
-
-	GDREGISTER_CLASS(AudioStreamMP3);
 }
 
 void uninitialize_mp3_module(ModuleInitializationLevel p_level) {
