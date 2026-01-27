@@ -76,7 +76,17 @@ class Font : public Resource {
 			uint32_t hash = p_a.text.hash();
 			hash = hash_murmur3_one_32(p_a.font_size, hash);
 			hash = hash_murmur3_one_float(p_a.width, hash);
-			hash = hash_murmur3_one_32(p_a.brk_flags | (p_a.jst_flags << 6) | (p_a.direction << 12) | (p_a.orientation << 15), hash);
+
+			// Cast members to uin32_t before shifting to prevent
+			// signed promotion.
+			uint32_t flags_hash = (
+				(uint32_t)p_a.brk_flags |
+				((uint32_t)p_a.jst_flags << 6) |
+				((uint32_t)p_a.direction << 12) |
+				((uint32_t)p_a.orientation << 15)
+			);
+
+			hash = hash_murmur3_one_32(flags_hash, hash);
 			return hash_fmix32(hash);
 		}
 	};
