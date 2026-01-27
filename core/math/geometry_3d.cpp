@@ -864,42 +864,52 @@ Vector<Vector3> Geometry3D::compute_convex_mesh_points(const Plane *p_planes, in
 
 /* dt of 1d function using squared distance */
 static void edt(float *f, int stride, int n) {
-	// NEW (Total count = n + n + n + 1)
-	// The original code manually calculated a mixed size of floats
-	// and ints.
-	// But since usually sizeof(int) == sizeof(float) (4 bytes) on
-	// all Godot platforms, we can simplify the count.
-	float *d = SAFE_ALLOCA_ARRAY(float, 3 * n + 1);
-	int *v = reinterpret_cast<int *>(&(d[n]));
-	float *z = reinterpret_cast<float *>(&v[n]);
+	// Instead of raw pointer arithmetic,
+	// we now use `LocalVector`s. This guarantees:
+	//  - Safety: Using LocalVector moves this off the stack (preventing potencial overflow).
+	//  - Alignment since the vector allocation is guaranteed to be aligned.
+	//  - Strict Aliasing: The compiler should know 'v' is ints and 'd' is floats. No UB.
+	LocalVector<float> d;
+	LocalVector<int> v;
+	LocalVector<float> z;
+
+	// Aligned Start all vectors.
+	d.resize(n);
+	v.resize(n + 1);
+	z.resize(n + 1);
+
+	// Pointers for raw access speed.
+	float *d_ptr = d.ptr();
+	int *v_ptr = v.ptr();
+	float *z_ptr = z.ptr();
 
 	int k = 0;
-	v[0] = 0;
-	z[0] = -INF;
-	z[1] = +INF;
+	v_ptr[0] = 0;
+	z_ptr[0] = -INF;
+	z_ptr[1] = +INF;
+
 	for (int q = 1; q <= n - 1; q++) {
-		float s = ((f[q * stride] + square(q)) - (f[v[k] * stride] + square(v[k]))) / (2 * q - 2 * v[k]);
-		while (s <= z[k]) {
+		float s = ((f[q * stride] + square(q)) - (f[v_ptr[k] * stride] + square(v_ptr[k]))) / (2 * q - 2 * v_ptr[k]);
+		while (s <= z_ptr[k]) {
 			k--;
-			s = ((f[q * stride] + square(q)) - (f[v[k] * stride] + square(v[k]))) / (2 * q - 2 * v[k]);
+			s = ((f[q * stride] + square(q)) - (f[v_ptr[k] * stride] + square(v_ptr[k]))) / (2 * q - 2 * v_ptr[k]);
 		}
 		k++;
-		v[k] = q;
-
-		z[k] = s;
-		z[k + 1] = +INF;
+		v_ptr[k] = q;
+		z_ptr[k] = s;
+		z_ptr[k + 1] = +INF;
 	}
 
 	k = 0;
 	for (int q = 0; q <= n - 1; q++) {
-		while (z[k + 1] < q) {
+		while (z_ptr[k + 1] < q) {
 			k++;
 		}
-		d[q] = square(q - v[k]) + f[v[k] * stride];
+		d_ptr[q] = square(q - v_ptr[k]) + f[v_ptr[k] * stride];
 	}
 
 	for (int i = 0; i < n; i++) {
-		f[i * stride] = d[i];
+		f[i * stride] = d_ptr[i];
 	}
 }
 

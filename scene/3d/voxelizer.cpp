@@ -475,7 +475,7 @@ Voxelizer::MaterialCache Voxelizer::_get_shader_material_cache(Ref<ShaderMateria
 
 	float emission_energy = exposure_normalization;
 
-	if (GLOBAL_GET_CACHED(bool, "rendering/lights_and_shadows/use_physical_light_units")) {
+	if ((bool)GLOBAL_GET("rendering/lights_and_shadows/use_physical_light_units")) {
 		Variant v_intensity = p_material->get_shader_parameter("emission_intensity");
 		if (v_intensity.get_type() == Variant::NIL && shader_rid.is_valid()) {
 			v_intensity = RS::get_singleton()->shader_get_parameter_default(shader_rid, "emission_intensity");
@@ -1002,37 +1002,47 @@ Vector<int> Voxelizer::get_voxel_gi_level_cell_count() const {
 /* dt of 1d function using squared distance */
 static void edt(float *f, int stride, int n) {
 	// See core/math/geometry_3d.cpp @ static void edt(float *f, int stride, int n).
-	float *d = ALLOCA_ARRAY(float, 3 * n + 1);
-	int *v = reinterpret_cast<int *>(&(d[n]));
-	float *z = reinterpret_cast<float *>(&v[n]);
+	LocalVector<float> d;
+	LocalVector<int> v;
+	LocalVector<float> z;
+
+	// Aligned Start all vectors.
+	d.resize(n);
+	v.resize(n + 1);
+	z.resize(n + 1);
+
+	// Pointers for raw access speed.
+	float *d_ptr = d.ptr();
+	int *v_ptr = v.ptr();
+	float *z_ptr = z.ptr();
 
 	int k = 0;
-	v[0] = 0;
-	z[0] = -INF;
-	z[1] = +INF;
+	v_ptr[0] = 0;
+	z_ptr[0] = -INF;
+	z_ptr[1] = +INF;
+
 	for (int q = 1; q <= n - 1; q++) {
-		float s = ((f[q * stride] + square(q)) - (f[v[k] * stride] + square(v[k]))) / (2 * q - 2 * v[k]);
-		while (s <= z[k]) {
+		float s = ((f[q * stride] + square(q)) - (f[v_ptr[k] * stride] + square(v_ptr[k]))) / (2 * q - 2 * v_ptr[k]);
+		while (s <= z_ptr[k]) {
 			k--;
-			s = ((f[q * stride] + square(q)) - (f[v[k] * stride] + square(v[k]))) / (2 * q - 2 * v[k]);
+			s = ((f[q * stride] + square(q)) - (f[v_ptr[k] * stride] + square(v_ptr[k]))) / (2 * q - 2 * v_ptr[k]);
 		}
 		k++;
-		v[k] = q;
-
-		z[k] = s;
-		z[k + 1] = +INF;
+		v_ptr[k] = q;
+		z_ptr[k] = s;
+		z_ptr[k + 1] = +INF;
 	}
 
 	k = 0;
 	for (int q = 0; q <= n - 1; q++) {
-		while (z[k + 1] < q) {
+		while (z_ptr[k + 1] < q) {
 			k++;
 		}
-		d[q] = square(q - v[k]) + f[v[k] * stride];
+		d_ptr[q] = square(q - v_ptr[k]) + f[v_ptr[k] * stride];
 	}
 
 	for (int i = 0; i < n; i++) {
-		f[i * stride] = d[i];
+		f[i * stride] = d_ptr[i];
 	}
 }
 

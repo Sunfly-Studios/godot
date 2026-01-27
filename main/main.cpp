@@ -3121,7 +3121,7 @@ Error Main::setup2(bool p_show_boot_logo) {
 		}
 
 		// rendering_driver now held in static global String in main and initialized in setup()
-		String rendering_driver = OS::get_singleton()->get_current_rendering_driver_name();
+		rendering_driver = OS::get_singleton()->get_current_rendering_driver_name();
 		Error err;
 		display_server = DisplayServer::create(display_driver_idx, rendering_driver, window_mode, window_vsync_mode, window_flags, window_position, window_size, init_screen, context, init_embed_parent_window_id, err);
 		if (err != OK || display_server == nullptr) {
