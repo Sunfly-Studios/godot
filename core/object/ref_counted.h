@@ -222,7 +222,7 @@ struct PtrToArg<Ref<T>> {
 			return Ref<T>();
 		}
 
-		alignas(alignof(Ref<T>)) uint8_t buf[sizeof(Ref<T>)] = { 0 };
+		alignas(alignof(Ref<T>)) uint8_t buf[sizeof(Ref<T>)] = {};
 
 		// p_ptr points to a RefCounted object
 		memcpy(buf, p_ptr, sizeof(Ref<T>));
@@ -232,7 +232,7 @@ struct PtrToArg<Ref<T>> {
 	typedef Ref<T> EncodeT;
 
 	_FORCE_INLINE_ static void encode(Ref<T> p_val, const void *p_ptr) {
-		alignas(alignof(Ref<T>)) uint8_t buf[sizeof(Ref<T>)] = { 0 };
+		alignas(alignof(Ref<T>)) uint8_t buf[sizeof(Ref<T>)] = {};
 
 		// p_ptr points to an EncodeT object which is a Ref<T> object.
 		memcpy(buf, p_ptr, sizeof(Ref<T>));
@@ -254,7 +254,7 @@ struct PtrToArg<const Ref<T> &> {
 			return Ref<T>();
 		}
 
-		alignas(alignof(Ref<T>)) uint8_t buf[sizeof(Ref<T>)] = { 0 };
+		alignas(alignof(Ref<T>)) uint8_t buf[sizeof(Ref<T>)] = {};
 
 		// p_ptr points to a RefCounted object
 		memcpy(buf, p_ptr, sizeof(Ref<T>));

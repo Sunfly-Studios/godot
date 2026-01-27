@@ -90,6 +90,8 @@ private:
 
 		SceneTileProxyObject(TileSetScenesCollectionSourceEditor *p_tiles_set_scenes_collection_source_editor) {
 			tile_set_scenes_collection_source_editor = p_tiles_set_scenes_collection_source_editor;
+			source_id = -1;
+			scene_id = -1;
 		}
 	};
 

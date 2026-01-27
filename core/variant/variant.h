@@ -648,9 +648,12 @@ public:
 	template <typename... VarArgs>
 	Variant call(const StringName &p_method, VarArgs... p_args) {
 		Variant args[sizeof...(p_args) + 1] = { p_args..., Variant() }; // +1 makes sure zero sized arrays are also supported.
-		const Variant *argptrs[sizeof...(p_args) + 1];
-		for (uint32_t i = 0; i < sizeof...(p_args); i++) {
-			argptrs[i] = &args[i];
+		const Variant *argptrs[sizeof...(p_args) + 1] = {};
+
+		if constexpr (sizeof...(p_args) > 0) {
+			for (uint32_t i = 0; i < sizeof...(p_args); i++) {
+				argptrs[i] = &args[i];
+			}
 		}
 		Callable::CallError cerr;
 		Variant ret;
@@ -950,7 +953,7 @@ String vformat(const String &p_text, const VarArgs... p_args) {
 template <typename... VarArgs>
 Variant Callable::call(VarArgs... p_args) const {
 	Variant args[sizeof...(p_args) + 1] = { p_args..., 0 }; // +1 makes sure zero sized arrays are also supported.
-	const Variant *argptrs[sizeof...(p_args) + 1];
+	const Variant *argptrs[sizeof...(p_args) + 1] = {};
 
 	// Compile-out the loop when there are no args.
 	if constexpr (sizeof...(p_args) > 0) {
@@ -968,7 +971,7 @@ Variant Callable::call(VarArgs... p_args) const {
 template <typename... VarArgs>
 Callable Callable::bind(VarArgs... p_args) const {
 	Variant args[sizeof...(p_args) + 1] = { p_args..., Variant() }; // +1 makes sure zero sized arrays are also supported.
-	const Variant *argptrs[sizeof...(p_args) + 1];
+	const Variant *argptrs[sizeof...(p_args) + 1] = {};
 	if constexpr (sizeof...(p_args) > 0) {
 		for (uint32_t i = 0; i < sizeof...(p_args); i++) {
 			argptrs[i] = &args[i];

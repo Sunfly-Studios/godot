@@ -109,7 +109,7 @@ public:
 	template <typename... VarArgs>
 	Error push_call(ObjectID p_id, const StringName &p_method, VarArgs... p_args) {
 		Variant args[sizeof...(p_args) + 1] = { p_args..., Variant() }; // +1 makes sure zero sized arrays are also supported.
-		const Variant *argptrs[sizeof...(p_args) + 1];
+		const Variant *argptrs[sizeof...(p_args) + 1] = {};
 
 		// Compile-out the loop when there are no args.
 		if constexpr (sizeof...(p_args) > 0) {
@@ -127,7 +127,7 @@ public:
 	template <typename... VarArgs>
 	Error push_callable(const Callable &p_callable, VarArgs... p_args) {
 		Variant args[sizeof...(p_args) + 1] = { p_args..., Variant() }; // +1 makes sure zero sized arrays are also supported.
-		const Variant *argptrs[sizeof...(p_args) + 1];
+		const Variant *argptrs[sizeof...(p_args) + 1] = {};
 
 		// Compile-out the loop when there are no args.
 		if constexpr (sizeof...(p_args) > 0) {
@@ -142,7 +142,7 @@ public:
 	template <typename... VarArgs>
 	Error push_call(Object *p_object, const StringName &p_method, VarArgs... p_args) {
 		Variant args[sizeof...(p_args) + 1] = { p_args..., Variant() }; // +1 makes sure zero sized arrays are also supported.
-		const Variant *argptrs[sizeof...(p_args) + 1];
+		const Variant *argptrs[sizeof...(p_args) + 1] = {};
 
 		// Compile-out the loop when there are no args.
 		if constexpr (sizeof...(p_args) > 0) {

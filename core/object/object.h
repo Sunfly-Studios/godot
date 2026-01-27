@@ -896,9 +896,12 @@ public:
 	template <typename... VarArgs>
 	Variant call(const StringName &p_method, VarArgs... p_args) {
 		Variant args[sizeof...(p_args) + 1] = { p_args..., Variant() }; // +1 makes sure zero sized arrays are also supported.
-		const Variant *argptrs[sizeof...(p_args) + 1];
-		for (uint32_t i = 0; i < sizeof...(p_args); i++) {
-			argptrs[i] = &args[i];
+		const Variant *argptrs[sizeof...(p_args) + 1] = {};
+
+		if constexpr (sizeof...(p_args) > 0) {
+			for (uint32_t i = 0; i < sizeof...(p_args); i++) {
+				argptrs[i] = &args[i];
+			}
 		}
 		Callable::CallError cerr;
 		const Variant ret = callp(p_method, sizeof...(p_args) == 0 ? nullptr : (const Variant **)argptrs, sizeof...(p_args), cerr);
@@ -949,9 +952,12 @@ public:
 	template <typename... VarArgs>
 	Error emit_signal(const StringName &p_name, VarArgs... p_args) {
 		Variant args[sizeof...(p_args) + 1] = { p_args..., Variant() }; // +1 makes sure zero sized arrays are also supported.
-		const Variant *argptrs[sizeof...(p_args) + 1];
-		for (uint32_t i = 0; i < sizeof...(p_args); i++) {
-			argptrs[i] = &args[i];
+		const Variant *argptrs[sizeof...(p_args) + 1] = {};
+
+		if constexpr (sizeof...(p_args) > 0) {
+			for (uint32_t i = 0; i < sizeof...(p_args); i++) {
+				argptrs[i] = &args[i];
+			}
 		}
 		return emit_signalp(p_name, sizeof...(p_args) == 0 ? nullptr : (const Variant **)argptrs, sizeof...(p_args));
 	}

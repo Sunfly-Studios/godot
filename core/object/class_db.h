@@ -62,9 +62,12 @@ MethodDefinition D_METHODP(const char *p_name, const char *const **p_args, uint3
 template <typename... VarArgs>
 MethodDefinition D_METHOD(const char *p_name, const VarArgs... p_args) {
 	const char *args[sizeof...(p_args) + 1] = { p_args..., nullptr }; // +1 makes sure zero sized arrays are also supported.
-	const char *const *argptrs[sizeof...(p_args) + 1];
-	for (uint32_t i = 0; i < sizeof...(p_args); i++) {
-		argptrs[i] = &args[i];
+	const char *const *argptrs[sizeof...(p_args) + 1] = {};
+
+	if constexpr (sizeof...(p_args) > 0) {
+		for (uint32_t i = 0; i < sizeof...(p_args); i++) {
+			argptrs[i] = &args[i];
+		}
 	}
 
 	return D_METHODP(p_name, sizeof...(p_args) == 0 ? nullptr : (const char *const **)argptrs, sizeof...(p_args));
@@ -334,9 +337,12 @@ public:
 	template <typename N, typename M, typename... VarArgs>
 	static MethodBind *bind_method(N p_method_name, M p_method, VarArgs... p_args) {
 		Variant args[sizeof...(p_args) + 1] = { p_args..., Variant() }; // +1 makes sure zero sized arrays are also supported.
-		const Variant *argptrs[sizeof...(p_args) + 1];
-		for (uint32_t i = 0; i < sizeof...(p_args); i++) {
-			argptrs[i] = &args[i];
+		const Variant *argptrs[sizeof...(p_args) + 1] = {};
+
+		if constexpr (sizeof...(p_args) > 0) {
+			for (uint32_t i = 0; i < sizeof...(p_args); i++) {
+				argptrs[i] = &args[i];
+			}
 		}
 		MethodBind *bind = create_method_bind(p_method);
 		if constexpr (std::is_same_v<typename member_function_traits<M>::return_type, Object *>) {
@@ -348,9 +354,11 @@ public:
 	template <typename N, typename M, typename... VarArgs>
 	static MethodBind *bind_static_method(const StringName &p_class, N p_method_name, M p_method, VarArgs... p_args) {
 		Variant args[sizeof...(p_args) + 1] = { p_args..., Variant() }; // +1 makes sure zero sized arrays are also supported.
-		const Variant *argptrs[sizeof...(p_args) + 1];
-		for (uint32_t i = 0; i < sizeof...(p_args); i++) {
-			argptrs[i] = &args[i];
+		const Variant *argptrs[sizeof...(p_args) + 1] = {};
+		if constexpr (sizeof...(p_args) > 0) {
+			for (uint32_t i = 0; i < sizeof...(p_args); i++) {
+				argptrs[i] = &args[i];
+			}
 		}
 		MethodBind *bind = create_static_method_bind(p_method);
 		bind->set_instance_class(p_class);
@@ -363,9 +371,11 @@ public:
 	template <typename N, typename M, typename... VarArgs>
 	static MethodBind *bind_compatibility_method(N p_method_name, M p_method, VarArgs... p_args) {
 		Variant args[sizeof...(p_args) + 1] = { p_args..., Variant() }; // +1 makes sure zero sized arrays are also supported.
-		const Variant *argptrs[sizeof...(p_args) + 1];
-		for (uint32_t i = 0; i < sizeof...(p_args); i++) {
-			argptrs[i] = &args[i];
+		const Variant *argptrs[sizeof...(p_args) + 1] = {};
+		if constexpr (sizeof...(p_args) > 0) {
+			for (uint32_t i = 0; i < sizeof...(p_args); i++) {
+				argptrs[i] = &args[i];
+			}
 		}
 		MethodBind *bind = create_method_bind(p_method);
 		if constexpr (std::is_same_v<typename member_function_traits<M>::return_type, Object *>) {
@@ -377,9 +387,11 @@ public:
 	template <typename N, typename M, typename... VarArgs>
 	static MethodBind *bind_compatibility_static_method(const StringName &p_class, N p_method_name, M p_method, VarArgs... p_args) {
 		Variant args[sizeof...(p_args) + 1] = { p_args..., Variant() }; // +1 makes sure zero sized arrays are also supported.
-		const Variant *argptrs[sizeof...(p_args) + 1];
-		for (uint32_t i = 0; i < sizeof...(p_args); i++) {
-			argptrs[i] = &args[i];
+		const Variant *argptrs[sizeof...(p_args) + 1] = {};
+		if constexpr (sizeof...(p_args) > 0) {
+			for (uint32_t i = 0; i < sizeof...(p_args); i++) {
+				argptrs[i] = &args[i];
+			}
 		}
 		MethodBind *bind = create_static_method_bind(p_method);
 		bind->set_instance_class(p_class);
