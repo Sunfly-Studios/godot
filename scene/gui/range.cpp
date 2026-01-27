@@ -88,13 +88,13 @@ void Range::set_value(double p_val) {
 	double prev_val = shared->val;
 	_set_value_no_signal(p_val);
 
-	if (shared->val != prev_val) {
+	if (shared->val != prev_val && !(Math::is_nan(shared->val) && Math::is_nan(prev_val))) {
 		shared->emit_value_changed();
 	}
 }
 
 void Range::_set_value_no_signal(double p_val) {
-	if (!Math::is_finite(p_val)) {
+	if (!Math::is_finite(p_val) || Math::is_nan(p_val)) {
 		return;
 	}
 
