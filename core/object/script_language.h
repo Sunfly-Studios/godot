@@ -403,7 +403,7 @@ public:
 	struct StackInfo {
 		String file;
 		String func;
-		int line;
+		int line = 0;
 	};
 
 	virtual String debug_get_error() const = 0;

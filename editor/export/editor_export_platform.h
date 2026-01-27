@@ -90,7 +90,7 @@ public:
 	};
 
 	struct ExportMessage {
-		ExportMessageType msg_type;
+		ExportMessageType msg_type = EXPORT_MESSAGE_NONE;
 		String category;
 		String text;
 	};
