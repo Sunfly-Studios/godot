@@ -221,15 +221,27 @@ struct PtrToArg<Ref<T>> {
 		if (p_ptr == nullptr) {
 			return Ref<T>();
 		}
+
+		alignas(alignof(Ref<T>)) uint8_t buf[sizeof(Ref<T>)] = { 0 };
+
 		// p_ptr points to a RefCounted object
-		return Ref<T>(*reinterpret_cast<T *const *>(p_ptr));
+		memcpy(buf, p_ptr, sizeof(Ref<T>));
+		return *reinterpret_cast<const Ref<T> *>(buf);
 	}
 
 	typedef Ref<T> EncodeT;
 
 	_FORCE_INLINE_ static void encode(Ref<T> p_val, const void *p_ptr) {
+		alignas(alignof(Ref<T>)) uint8_t buf[sizeof(Ref<T>)] = { 0 };
+
 		// p_ptr points to an EncodeT object which is a Ref<T> object.
-		*(const_cast<Ref<RefCounted> *>(reinterpret_cast<const Ref<RefCounted> *>(p_ptr))) = p_val;
+		memcpy(buf, p_ptr, sizeof(Ref<T>));
+		Ref<T> *dst = reinterpret_cast<Ref<T> *>(buf);
+		*dst = p_val; // Invokes Ref<T>::operator=
+
+		// We use const_cast p_ptr because the function signature
+		// claims p_ptr is const, but "encode" is inherently a write operation.
+		memcpy(const_cast<void *>(p_ptr), buf, sizeof(Ref<T>));
 	}
 };
 
@@ -241,8 +253,12 @@ struct PtrToArg<const Ref<T> &> {
 		if (p_ptr == nullptr) {
 			return Ref<T>();
 		}
+
+		alignas(alignof(Ref<T>)) uint8_t buf[sizeof(Ref<T>)] = { 0 };
+
 		// p_ptr points to a RefCounted object
-		return Ref<T>(*((T *const *)p_ptr));
+		memcpy(buf, p_ptr, sizeof(Ref<T>));
+		return *reinterpret_cast<const Ref<T> *>(buf);
 	}
 };
 

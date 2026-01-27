@@ -150,13 +150,13 @@ MAKE_TYPED_ARRAY(IPAddress, Variant::STRING)
 template <typename T>
 struct PtrToArg<TypedArray<T>> {
     _FORCE_INLINE_ static TypedArray<T> convert(const void *p_ptr) {
-        alignas(alignof(Array)) uint8_t buf[sizeof(Array)];
+		alignas(alignof(Array)) uint8_t buf[sizeof(Array)] = { 0 };
         memcpy(buf, p_ptr, sizeof(Array));
         return TypedArray<T>(*reinterpret_cast<const Array *>(buf));
     }
     typedef Array EncodeT;
     _FORCE_INLINE_ static void encode(TypedArray<T> p_val, void *p_ptr) {
-        alignas(alignof(Array)) uint8_t buf[sizeof(Array)];
+		alignas(alignof(Array)) uint8_t buf[sizeof(Array)] = { 0 };
         memcpy(buf, p_ptr, sizeof(Array));
         Array *dst = reinterpret_cast<Array *>(buf);
         *dst = p_val;
@@ -168,7 +168,7 @@ template <typename T>
 struct PtrToArg<const TypedArray<T> &> {
     typedef Array EncodeT;
     _FORCE_INLINE_ static TypedArray<T> convert(const void *p_ptr) {
-        alignas(alignof(Array)) uint8_t buf[sizeof(Array)];
+		alignas(alignof(Array)) uint8_t buf[sizeof(Array)] = { 0 };
         memcpy(buf, p_ptr, sizeof(Array));
         return TypedArray<T>(*reinterpret_cast<const Array *>(buf));
     }

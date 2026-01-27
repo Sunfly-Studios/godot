@@ -84,13 +84,13 @@ struct VariantInternalAccessor<const TypedDictionary<K, V> &> {
 template <typename K, typename V>
 struct PtrToArg<TypedDictionary<K, V>> {
     _FORCE_INLINE_ static TypedDictionary<K, V> convert(const void *p_ptr) {
-        alignas(alignof(Dictionary)) uint8_t buf[sizeof(Dictionary)];
+		alignas(alignof(Dictionary)) uint8_t buf[sizeof(Dictionary)] = { 0 };
         memcpy(buf, p_ptr, sizeof(Dictionary));
         return TypedDictionary<K, V>(*reinterpret_cast<const Dictionary *>(buf));
     }
     typedef Dictionary EncodeT;
     _FORCE_INLINE_ static void encode(TypedDictionary<K, V> p_val, void *p_ptr) {
-        alignas(alignof(Dictionary)) uint8_t buf[sizeof(Dictionary)];
+		alignas(alignof(Dictionary)) uint8_t buf[sizeof(Dictionary)] = { 0 };
         memcpy(buf, p_ptr, sizeof(Dictionary));
         Dictionary *dst = reinterpret_cast<Dictionary *>(buf);
         *dst = p_val;
@@ -102,7 +102,7 @@ template <typename K, typename V>
 struct PtrToArg<const TypedDictionary<K, V> &> {
     typedef Dictionary EncodeT;
     _FORCE_INLINE_ static TypedDictionary<K, V> convert(const void *p_ptr) {
-        alignas(alignof(Dictionary)) uint8_t buf[sizeof(Dictionary)];
+		alignas(alignof(Dictionary)) uint8_t buf[sizeof(Dictionary)] = { 0 };
         memcpy(buf, p_ptr, sizeof(Dictionary));
         return TypedDictionary<K, V>(*reinterpret_cast<const Dictionary *>(buf));
     }

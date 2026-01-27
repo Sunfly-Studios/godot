@@ -1589,12 +1589,31 @@ template <typename T>
 struct VariantTypeConstructor {
 	_FORCE_INLINE_ static void variant_from_type(void *r_variant, void *p_value) {
 		// r_variant is provided by caller as uninitialized memory
-		memnew_placement(r_variant, Variant(*((T *)p_value)));
+		alignas(alignof(T)) uint8_t val_buf[sizeof(T)] = { 0 };
+		memcpy(val_buf, p_value, sizeof(T));
+		const T &val = *reinterpret_cast<const T *>(val_buf);
+
+		// We cannot construct directly into r_variant because r_variant
+		// might be unaligned, and placement new requires aligned storage.
+		alignas(alignof(Variant)) uint8_t var_buf[sizeof(Variant)] = { 0 };
+
+		memnew_placement(var_buf, Variant(val));
+
+		// Copy the constructed Variant bytes to destination
+		memcpy(r_variant, var_buf, sizeof(Variant));
 	}
 
 	_FORCE_INLINE_ static void type_from_variant(void *r_value, void *p_variant) {
 		// r_value is provided by caller as uninitialized memory
-		memnew_placement(r_value, T(*reinterpret_cast<Variant *>(p_variant)));
+		alignas(alignof(Variant)) uint8_t var_buf[sizeof(Variant)] = { 0 };
+
+		memcpy(var_buf, p_variant, sizeof(Variant));
+		const Variant &var = *reinterpret_cast<const Variant *>(var_buf);
+
+		alignas(alignof(T)) uint8_t val_buf[sizeof(T)] = { 0 };
+		memnew_placement(val_buf, T(var));
+
+		memcpy(r_value, val_buf, sizeof(T));
 	}
 };
 

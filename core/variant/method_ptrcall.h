@@ -49,7 +49,7 @@ struct PtrToArg {};
 	struct PtrToArg<m_type> {                                              \
 		_FORCE_INLINE_ static m_type convert(const void *p_ptr) {          \
 			/* Create an aligned stack buffer */                           \
-			alignas(alignof(m_type)) uint8_t buf[sizeof(m_type)];          \
+			alignas(alignof(m_type)) uint8_t buf[sizeof(m_type)] = { 0 };  \
 			/* Copy unaligned memory to the buffer */                      \
 			memcpy(buf, p_ptr, sizeof(m_type));                            \
 			/* Cast the buffer and return a copy */                        \
@@ -59,7 +59,7 @@ struct PtrToArg {};
 		typedef m_type EncodeT;                                            \
 		_FORCE_INLINE_ static void encode(m_type p_val, void *p_ptr) {     \
 			/* For encoding, we must respect assignment logic too */       \
-			alignas(alignof(m_type)) uint8_t buf[sizeof(m_type)];          \
+			alignas(alignof(m_type)) uint8_t buf[sizeof(m_type)] = { 0 };  \
 			memcpy(buf, p_ptr, sizeof(m_type));                            \
 			m_type *dst = reinterpret_cast<m_type*>(buf);                  \
 			*dst = p_val; /* invoke operator= */                           \
@@ -69,13 +69,13 @@ struct PtrToArg {};
 	template <>                                                            \
 	struct PtrToArg<const m_type &> {                                      \
 		_FORCE_INLINE_ static m_type convert(const void *p_ptr) {          \
-			alignas(alignof(m_type)) uint8_t buf[sizeof(m_type)];          \
+			alignas(alignof(m_type)) uint8_t buf[sizeof(m_type)] = { 0 };  \
 			memcpy(buf, p_ptr, sizeof(m_type));                            \
 			return *reinterpret_cast<const m_type *>(buf);                 \
 		}                                                                  \
 		typedef m_type EncodeT;                                            \
 		_FORCE_INLINE_ static void encode(m_type p_val, void *p_ptr) {     \
-			alignas(alignof(m_type)) uint8_t buf[sizeof(m_type)];          \
+			alignas(alignof(m_type)) uint8_t buf[sizeof(m_type)] = { 0 };  \
 			memcpy(buf, p_ptr, sizeof(m_type));                            \
 			m_type *dst = reinterpret_cast<m_type*>(buf);                  \
 			*dst = p_val;                                                  \
@@ -119,13 +119,13 @@ struct PtrToArg {};
 	template <>                                                                \
 	struct PtrToArg<m_type> {                                                  \
 		_FORCE_INLINE_ static m_type convert(const void *p_ptr) {              \
-			alignas(alignof(m_type)) uint8_t buf[sizeof(m_type)];              \
+			alignas(alignof(m_type)) uint8_t buf[sizeof(m_type)] = { 0 };      \
 			memcpy(buf, p_ptr, sizeof(m_type));                                \
 			return *reinterpret_cast<const m_type *>(buf);                     \
 		}                                                                      \
 		typedef m_type EncodeT;                                                \
 		_FORCE_INLINE_ static void encode(const m_type &p_val, void *p_ptr) {  \
-			alignas(alignof(m_type)) uint8_t buf[sizeof(m_type)];              \
+			alignas(alignof(m_type)) uint8_t buf[sizeof(m_type)] = { 0 };      \
 			memcpy(buf, p_ptr, sizeof(m_type));                                \
 			m_type *dst = reinterpret_cast<m_type *>(buf);                     \
 			*dst = p_val;                                                      \
@@ -135,13 +135,13 @@ struct PtrToArg {};
 	template <>                                                                \
 	struct PtrToArg<const m_type &> {                                          \
 		_FORCE_INLINE_ static m_type convert(const void *p_ptr) {              \
-			alignas(alignof(m_type)) uint8_t buf[sizeof(m_type)];              \
+			alignas(alignof(m_type)) uint8_t buf[sizeof(m_type)] = { 0 };      \
 			memcpy(buf, p_ptr, sizeof(m_type));                                \
 			return *reinterpret_cast<const m_type *>(buf);                     \
 		}                                                                      \
 		typedef m_type EncodeT;                                                \
 		_FORCE_INLINE_ static void encode(const m_type &p_val, void *p_ptr) {  \
-			alignas(alignof(m_type)) uint8_t buf[sizeof(m_type)];              \
+			alignas(alignof(m_type)) uint8_t buf[sizeof(m_type)] = { 0 };      \
 			memcpy(buf, p_ptr, sizeof(m_type));                                \
 			m_type *dst = reinterpret_cast<m_type *>(buf);                     \
 			*dst = p_val;                                                      \
@@ -208,7 +208,7 @@ struct PtrToArg<T *> {
 		if (unlikely(!p_ptr)) {
 			return nullptr;
 		}
-		T *ptr;
+		T *ptr = nullptr;
 		memcpy(&ptr, p_ptr, sizeof(T *));
 		return ptr;
 	}
@@ -224,7 +224,7 @@ struct PtrToArg<const T *> {
 		if (unlikely(!p_ptr)) {
 			return nullptr;
 		}
-		T *ptr;
+		T *ptr = nullptr;
 		memcpy(&ptr, p_ptr, sizeof(T *));
 		return ptr;
 	}
@@ -257,7 +257,7 @@ struct PtrToArg<ObjectID> {
 	template <>                                                                          \
 	struct PtrToArg<Vector<m_type>> {                                                    \
 		_FORCE_INLINE_ static Vector<m_type> convert(const void *p_ptr) {                \
-			alignas(alignof(Vector<m_type>)) uint8_t buf[sizeof(Vector<m_type>)];        \
+			alignas(alignof(Vector<m_type>)) uint8_t buf[sizeof(Vector<m_type>)] = { 0 };\
 			memcpy(buf, p_ptr, sizeof(Vector<m_type>));                                  \
 			const Vector<m_type> *dvs = reinterpret_cast<const Vector<m_type> *>(buf);   \
 			Vector<m_type> ret;                                                          \
@@ -272,7 +272,7 @@ struct PtrToArg<ObjectID> {
 			return ret;                                                                  \
 		}                                                                                \
 		_FORCE_INLINE_ static void encode(const Vector<m_type> &p_vec, void *p_ptr) {    \
-			alignas(alignof(Vector<m_type>)) uint8_t buf[sizeof(Vector<m_type>)];        \
+			alignas(alignof(Vector<m_type>)) uint8_t buf[sizeof(Vector<m_type>)] = { 0 };\
 			memcpy(buf, p_ptr, sizeof(Vector<m_type>));                                  \
 			Vector<m_type> *dv = reinterpret_cast<Vector<m_type> *>(buf);                \
 			int len = p_vec.size();                                                      \
@@ -289,7 +289,7 @@ struct PtrToArg<ObjectID> {
 	template <>                                                                          \
 	struct PtrToArg<const Vector<m_type> &> {                                            \
 		_FORCE_INLINE_ static Vector<m_type> convert(const void *p_ptr) {                \
-			alignas(alignof(Vector<m_type>)) uint8_t buf[sizeof(Vector<m_type>)];        \
+			alignas(alignof(Vector<m_type>)) uint8_t buf[sizeof(Vector<m_type>)] = { 0 };\
 			memcpy(buf, p_ptr, sizeof(Vector<m_type>));                                  \
 			const Vector<m_type> *dvs = reinterpret_cast<const Vector<m_type> *>(buf);   \
 			Vector<m_type> ret;                                                          \
@@ -310,7 +310,7 @@ struct PtrToArg<ObjectID> {
 	template <>                                                                           \
 	struct PtrToArg<Vector<m_type_alt>> {                                                 \
 		_FORCE_INLINE_ static Vector<m_type_alt> convert(const void *p_ptr) {             \
-			alignas(alignof(Vector<m_type>)) uint8_t buf[sizeof(Vector<m_type>)];         \
+			alignas(alignof(Vector<m_type>)) uint8_t buf[sizeof(Vector<m_type>)] = { 0 }; \
 			memcpy(buf, p_ptr, sizeof(Vector<m_type>));                                   \
 			const Vector<m_type> *dvs = reinterpret_cast<const Vector<m_type> *>(buf);    \
 			Vector<m_type_alt> ret;                                                       \
@@ -325,7 +325,7 @@ struct PtrToArg<ObjectID> {
 			return ret;                                                                   \
 		}                                                                                 \
 		_FORCE_INLINE_ static void encode(const Vector<m_type_alt> &p_vec, void *p_ptr) { \
-			alignas(alignof(Vector<m_type>)) uint8_t buf[sizeof(Vector<m_type>)];         \
+			alignas(alignof(Vector<m_type>)) uint8_t buf[sizeof(Vector<m_type>)] = { 0 }; \
 			memcpy(buf, p_ptr, sizeof(Vector<m_type>));                                   \
 			Vector<m_type> *dv = reinterpret_cast<Vector<m_type> *>(buf);                 \
 			int len = p_vec.size();                                                       \
@@ -342,7 +342,7 @@ struct PtrToArg<ObjectID> {
 	template <>                                                                           \
 	struct PtrToArg<const Vector<m_type_alt> &> {                                         \
 		_FORCE_INLINE_ static Vector<m_type_alt> convert(const void *p_ptr) {             \
-			alignas(alignof(Vector<m_type>)) uint8_t buf[sizeof(Vector<m_type>)];         \
+			alignas(alignof(Vector<m_type>)) uint8_t buf[sizeof(Vector<m_type>)] = { 0 }; \
 			memcpy(buf, p_ptr, sizeof(Vector<m_type>));                                   \
 			const Vector<m_type> *dvs = reinterpret_cast<const Vector<m_type> *>(buf);    \
 			Vector<m_type_alt> ret;                                                       \
@@ -367,7 +367,7 @@ MAKE_VECARG_ALT(String, StringName);
 	template <>                                                                       \
 	struct PtrToArg<Vector<m_type>> {                                                 \
 		_FORCE_INLINE_ static Vector<m_type> convert(const void *p_ptr) {             \
-			alignas(alignof(Array)) uint8_t buf[sizeof(Array)];                       \
+			alignas(alignof(Array)) uint8_t buf[sizeof(Array)] = { 0 };               \
 			memcpy(buf, p_ptr, sizeof(Array));                                        \
 			const Array *arr = reinterpret_cast<const Array *>(buf);                  \
 			Vector<m_type> ret;                                                       \
@@ -379,7 +379,7 @@ MAKE_VECARG_ALT(String, StringName);
 			return ret;                                                               \
 		}                                                                             \
 		_FORCE_INLINE_ static void encode(const Vector<m_type> &p_vec, void *p_ptr) { \
-			alignas(alignof(Array)) uint8_t buf[sizeof(Array)];                       \
+			alignas(alignof(Array)) uint8_t buf[sizeof(Array)] = { 0 };               \
 			memcpy(buf, p_ptr, sizeof(Array));                                        \
 			Array *arr = reinterpret_cast<Array *>(buf);                              \
 			int len = p_vec.size();                                                   \
@@ -393,7 +393,7 @@ MAKE_VECARG_ALT(String, StringName);
 	template <>                                                                       \
 	struct PtrToArg<const Vector<m_type> &> {                                         \
 		_FORCE_INLINE_ static Vector<m_type> convert(const void *p_ptr) {             \
-			alignas(alignof(Array)) uint8_t buf[sizeof(Array)];                       \
+			alignas(alignof(Array)) uint8_t buf[sizeof(Array)] = { 0 };               \
 			memcpy(buf, p_ptr, sizeof(Array));                                        \
 			const Array *arr = reinterpret_cast<const Array *>(buf);                  \
 			Vector<m_type> ret;                                                       \
@@ -415,7 +415,7 @@ MAKE_VECARR(Plane);
 	template <>                                                                       \
 	struct PtrToArg<Vector<m_type>> {                                                 \
 		_FORCE_INLINE_ static Vector<m_type> convert(const void *p_ptr) {             \
-			alignas(alignof(Array)) uint8_t buf[sizeof(Array)];                       \
+			alignas(alignof(Array)) uint8_t buf[sizeof(Array)] = { 0 };               \
 			memcpy(buf, p_ptr, sizeof(Array));                                        \
 			const Array *arr = reinterpret_cast<const Array *>(buf);                  \
 			Vector<m_type> ret;                                                       \
@@ -430,7 +430,7 @@ MAKE_VECARR(Plane);
 			return ret;                                                               \
 		}                                                                             \
 		_FORCE_INLINE_ static void encode(const Vector<m_type> &p_vec, void *p_ptr) { \
-			alignas(alignof(Array)) uint8_t buf[sizeof(Array)];                       \
+			alignas(alignof(Array)) uint8_t buf[sizeof(Array)] = { 0 };               \
 			memcpy(buf, p_ptr, sizeof(Array));                                        \
 			Array *arr = reinterpret_cast<Array *>(buf);                              \
 			int len = p_vec.size();                                                   \
@@ -447,7 +447,7 @@ MAKE_VECARR(Plane);
 	template <>                                                                       \
 	struct PtrToArg<const Vector<m_type> &> {                                         \
 		_FORCE_INLINE_ static Vector<m_type> convert(const void *p_ptr) {             \
-			alignas(alignof(Array)) uint8_t buf[sizeof(Array)];                       \
+			alignas(alignof(Array)) uint8_t buf[sizeof(Array)] = { 0 };               \
 			memcpy(buf, p_ptr, sizeof(Array));                                        \
 			const Array *arr = reinterpret_cast<const Array *>(buf);                  \
 			Vector<m_type> ret;                                                       \
@@ -470,13 +470,13 @@ MAKE_VECARR(Plane);
 	template <>                                                               \
 	struct PtrToArg<m_type> {                                                 \
 		_FORCE_INLINE_ static m_type convert(const void *p_ptr) {             \
-			alignas(alignof(String)) uint8_t buf[sizeof(String)];             \
+			alignas(alignof(String)) uint8_t buf[sizeof(String)] = { 0 };     \
 			memcpy(buf, p_ptr, sizeof(String));                               \
 			m_type s = *reinterpret_cast<const String *>(buf);                \
 			return s;                                                         \
 		}                                                                     \
 		_FORCE_INLINE_ static void encode(const m_type &p_vec, void *p_ptr) { \
-			alignas(alignof(String)) uint8_t buf[sizeof(String)];             \
+			alignas(alignof(String)) uint8_t buf[sizeof(String)] = { 0 };     \
 			memcpy(buf, p_ptr, sizeof(String));                               \
 			String *arr = reinterpret_cast<String *>(buf);                    \
 			*arr = p_vec;                                                     \
@@ -486,7 +486,7 @@ MAKE_VECARR(Plane);
 	template <>                                                               \
 	struct PtrToArg<const m_type &> {                                         \
 		_FORCE_INLINE_ static m_type convert(const void *p_ptr) {             \
-			alignas(alignof(String)) uint8_t buf[sizeof(String)];             \
+			alignas(alignof(String)) uint8_t buf[sizeof(String)] = { 0 };     \
 			memcpy(buf, p_ptr, sizeof(String));                               \
 			m_type s = *reinterpret_cast<const String *>(buf);                \
 			return s;                                                         \
@@ -499,7 +499,7 @@ MAKE_STRINGCONV_BY_REFERENCE(IPAddress);
 template <>
 struct PtrToArg<Vector<Face3>> {
 	_FORCE_INLINE_ static Vector<Face3> convert(const void *p_ptr) {
-		alignas(alignof(Vector<Vector3>)) uint8_t buf[sizeof(Vector<Vector3>)];
+		alignas(alignof(Vector<Vector3>)) uint8_t buf[sizeof(Vector<Vector3>)] = { 0 };
 		memcpy(buf, p_ptr, sizeof(Vector<Vector3>));
 		const Vector<Vector3> *dvs = reinterpret_cast<const Vector<Vector3> *>(buf);
 
@@ -518,7 +518,7 @@ struct PtrToArg<Vector<Face3>> {
 		return ret;
 	}
 	_FORCE_INLINE_ static void encode(const Vector<Face3> &p_vec, void *p_ptr) {
-		alignas(alignof(Vector<Vector3>)) uint8_t buf[sizeof(Vector<Vector3>)];
+		alignas(alignof(Vector<Vector3>)) uint8_t buf[sizeof(Vector<Vector3>)] = { 0 };
 		memcpy(buf, p_ptr, sizeof(Vector<Vector3>));
 		Vector<Vector3> *arr = reinterpret_cast<Vector<Vector3> *>(buf);
 
@@ -541,7 +541,7 @@ struct PtrToArg<Vector<Face3>> {
 template <>
 struct PtrToArg<const Vector<Face3> &> {
 	_FORCE_INLINE_ static Vector<Face3> convert(const void *p_ptr) {
-		alignas(alignof(Vector<Vector3>)) uint8_t buf[sizeof(Vector<Vector3>)];
+		alignas(alignof(Vector<Vector3>)) uint8_t buf[sizeof(Vector<Vector3>)] = { 0 };
 		memcpy(buf, p_ptr, sizeof(Vector<Vector3>));
 		const Vector<Vector3> *dvs = reinterpret_cast<const Vector<Vector3> *>(buf);
 
