@@ -800,7 +800,7 @@ public:
 	};
 
 	struct PipelineInfo {
-		ID3D12PipelineState *pso = nullptr;
+		ComPtr<ID3D12PipelineState> pso;
 		const ShaderInfo *shader_info = nullptr;
 		RenderPipelineInfo render_info;
 	};
