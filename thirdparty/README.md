@@ -937,8 +937,10 @@ Files extracted from upstream source:
 
 Patches:
 
-- `0001-remove-unnecessary-subsystems.patch` (GH-106218)
+- `0001-remove-unnecessary-subsystems.patch` ([GH-106218](https://github.com/godotengine/godot/pull/106218))
 - `0002-msvc-constants-fpstrict.patch` (GH-106218)
+- `0003-fix-builds-older-linux.patch`
+- `0004-shield-duplicate-macos.patch` ([GH-115510](https://github.com/godotengine/godot/pull/115510))
 
 The SDL source code folder includes `hidapi` library inside of folder `thirdparty/sdl/hidapi/`.
 Its version and license is described in this file under `hidapi`.
