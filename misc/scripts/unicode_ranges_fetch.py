@@ -8,14 +8,14 @@
 import os
 import sys
 from typing import Final, List, Set, Tuple
-from urllib.request import urlopen
+from urllib.request import urlopen, Request
 
 if __name__ == "__main__":
     sys.path.insert(1, os.path.join(os.path.dirname(__file__), "../../"))
 
 from methods import generate_copyright_header
 
-URL: Final[str] = "https://www.unicode.org/Public/16.0.0/ucd/Blocks.txt"
+URL: Final[str] = "https://www.unicode.org/Public/17.0.0/ucd/Blocks.txt"
 
 
 ranges: List[Tuple[str, str, str]] = []
@@ -33,7 +33,11 @@ exclude_blocks: Set[str] = {
 
 
 def parse_unicode_data() -> None:
-    lines: List[str] = [line.decode("utf-8") for line in urlopen(URL)]
+    req = Request(
+        URL, 
+        headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
+    )
+    lines: List[str] = [line.decode("utf-8") for line in urlopen(req)]
 
     for line in lines:
         if line.startswith("#") or not line.strip():
