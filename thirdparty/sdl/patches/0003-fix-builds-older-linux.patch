@@ -1,0 +1,28 @@
+diff --git a/thirdparty/sdl/core/linux/SDL_evdev_capabilities.c b/thirdparty/sdl/core/linux/SDL_evdev_capabilities.c
+index 61e240e7e1..9a342ada5c 100644
+--- a/thirdparty/sdl/core/linux/SDL_evdev_capabilities.c
++++ b/thirdparty/sdl/core/linux/SDL_evdev_capabilities.c
+@@ -35,6 +35,9 @@
+ #ifndef KEY_ALS_TOGGLE
+ #define KEY_ALS_TOGGLE 0x230
+ #endif
++#ifndef INPUT_PROP_BUTTONPAD
++#define INPUT_PROP_BUTTONPAD 0x02
++#endif
+ 
+ extern int
+ SDL_EVDEV_GuessDeviceClass(const unsigned long bitmask_props[NBITS(INPUT_PROP_MAX)],
+diff --git a/thirdparty/sdl/joystick/linux/SDL_sysjoystick.c b/thirdparty/sdl/joystick/linux/SDL_sysjoystick.c
+index ea73821c06..bd7e81aad0 100644
+--- a/thirdparty/sdl/joystick/linux/SDL_sysjoystick.c
++++ b/thirdparty/sdl/joystick/linux/SDL_sysjoystick.c
+@@ -120,6 +120,9 @@
+ #define BTN_TRIGGER_HAPPY40     0x2e7
+ #endif
+ 
++#ifndef EVIOCGPROP
++#define EVIOCGPROP(len) _IOC(_IOC_READ, 'E', 0x09, len)
++#endif
+ 
+ #include "../../core/linux/SDL_evdev_capabilities.h"
+ #include "../../core/linux/SDL_udev.h"

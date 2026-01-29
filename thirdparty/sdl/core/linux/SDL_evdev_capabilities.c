@@ -35,6 +35,9 @@
 #ifndef KEY_ALS_TOGGLE
 #define KEY_ALS_TOGGLE 0x230
 #endif
+#ifndef INPUT_PROP_BUTTONPAD
+#define INPUT_PROP_BUTTONPAD 0x02
+#endif
 
 extern int
 SDL_EVDEV_GuessDeviceClass(const unsigned long bitmask_props[NBITS(INPUT_PROP_MAX)],

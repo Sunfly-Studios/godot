@@ -120,6 +120,9 @@
 #define BTN_TRIGGER_HAPPY40     0x2e7
 #endif
 
+#ifndef EVIOCGPROP
+#define EVIOCGPROP(len) _IOC(_IOC_READ, 'E', 0x09, len)
+#endif
 
 #include "../../core/linux/SDL_evdev_capabilities.h"
 #include "../../core/linux/SDL_udev.h"
