@@ -178,6 +178,9 @@ def include_file_in_gles3_header(filename: str, header_data: GLES3HeaderStruct, 
             line = line.replace("\r", "")
             line = line.replace("\n", "")
 
+            if line.strip() == "invariant gl_Position;":
+                line = "#ifndef MESA_INVARIANT_GL_POSITION_BUG\n" + line + "\n#endif"
+
             if header_data.reading == "vertex":
                 header_data.vertex_lines += [line]
             if header_data.reading == "fragment":

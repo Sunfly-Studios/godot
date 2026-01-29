@@ -167,6 +167,26 @@ void ShaderGLES3::_build_variant_code(StringBuilder &builder, uint32_t p_variant
 		builder.append("#version 300 es\n");
 	}
 
+	// Detect Mesa 18.x or 19.x to workaround the invariant gl_Position bug.
+    // We use static bools to perform this check only once per engine run.
+    static bool mesa_bug_checked = false;
+    static bool mesa_bug_detected = false;
+
+	if (!mesa_bug_checked) {
+        const char *version_str = (const char *)glGetString(GL_VERSION);
+        if (version_str) {
+            String version = String::utf8(version_str);
+            if (version.contains("Mesa 18.") || version.contains("Mesa 19.")) {
+                mesa_bug_detected = true;
+            }
+        }
+        mesa_bug_checked = true;
+    }
+
+	if (mesa_bug_detected) {
+        builder.append("#define MESA_INVARIANT_GL_POSITION_BUG\n");
+    }
+
 	if (GLES3::Config::get_singleton()->polyfill_half2float) {
 		builder.append("#define USE_HALF2FLOAT\n");
 	}
