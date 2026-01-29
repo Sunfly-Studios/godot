@@ -29,6 +29,7 @@
 #else
 	#define BASISD_IS_BIG_ENDIAN (0)
 #endif
+#endif // BASISD_IS_BIG_ENDIAN
 
 #ifndef BASISD_USE_UNALIGNED_WORD_READS
 	#ifdef __EMSCRIPTEN__
