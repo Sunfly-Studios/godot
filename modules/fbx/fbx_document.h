@@ -36,7 +36,7 @@
 #include "modules/gltf/gltf_defines.h"
 #include "modules/gltf/gltf_document.h"
 
-#include <ufbx.h>
+#include "thirdparty/ufbx/ufbx.h"
 
 class FBXDocument : public GLTFDocument {
 	GDCLASS(FBXDocument, GLTFDocument);
