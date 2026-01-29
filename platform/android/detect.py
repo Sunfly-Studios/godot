@@ -212,7 +212,7 @@ def configure(env: "SConsEnvironment"):
         if has_swappy:
             env.Append(LIBPATH=["#thirdparty/swappy-frame-pacing/x86_64"])
     elif env["arch"] == "arm32":
-        env.Append(CCFLAGS=["-march=armv7-a", "-mfloat-abi=softfp"])
+        env.Append(CCFLAGS=["-march=armv7-a", "-mfloat-abi=softfp", "-mfpu=vfpv3-d16"])
         env.Append(CPPDEFINES=["__ARM_ARCH_7__", "__ARM_ARCH_7A__"])
         env.Append(CPPDEFINES=["__ARM_NEON__"])
         if has_swappy:
