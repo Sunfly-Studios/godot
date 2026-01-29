@@ -42,8 +42,6 @@
 class JoypadSDL;
 
 class OS_MacOS : public OS_Unix {
-	JoypadApple *joypad_apple = nullptr;
-
 #ifdef COREAUDIO_ENABLED
 	AudioDriverCoreAudio audio_driver;
 #endif

@@ -67,7 +67,7 @@ void OS_MacOS::pre_wait_observer_cb(CFRunLoopObserverRef p_observer, CFRunLoopAc
 
 void OS_MacOS::initialize() {
 	crash_handler.initialize();
-
+    initialize_joypads();
 	initialize_core();
 }
 
@@ -865,8 +865,11 @@ void OS_MacOS::run() {
 				if (DisplayServer::get_singleton()) {
 					DisplayServer::get_singleton()->process_events(); // Get rid of pending events.
 				}
-				joypad_apple->process_joypads();
-
+#ifdef SDL_ENABLED
+                if (joypad_sdl) {
+                    joypad_sdl->process_events();
+                }
+#endif
 				if (Main::iteration()) {
 					quit = true;
 				}
@@ -880,172 +883,34 @@ void OS_MacOS::run() {
 }
 
 OS_MacOS::OS_MacOS() {
-	if (is_sandboxed()) {
-		// Load security-scoped bookmarks, request access, remove stale or invalid bookmarks.
-		NSArray *bookmarks = [[NSUserDefaults standardUserDefaults] arrayForKey:@"sec_bookmarks"];
-		NSMutableArray *new_bookmarks = [[NSMutableArray alloc] init];
-		for (id bookmark in bookmarks) {
-			NSError *error = nil;
-			BOOL isStale = NO;
-			NSURL *url = [NSURL URLByResolvingBookmarkData:bookmark options:NSURLBookmarkResolutionWithSecurityScope relativeToURL:nil bookmarkDataIsStale:&isStale error:&error];
-			if (!error && !isStale) {
-				if ([url startAccessingSecurityScopedResource]) {
-					[new_bookmarks addObject:bookmark];
-				}
-			}
-		}
-		[[NSUserDefaults standardUserDefaults] setObject:new_bookmarks forKey:@"sec_bookmarks"];
-	}
-
-	main_loop = nullptr;
-
-	Vector<Logger *> loggers;
-	loggers.push_back(memnew(MacOSTerminalLogger));
-	_set_logger(memnew(CompositeLogger(loggers)));
-
+    if (is_sandboxed()) {
+        // Load security-scoped bookmarks, request access, remove stale or invalid bookmarks.
+        NSArray *bookmarks = [[NSUserDefaults standardUserDefaults] arrayForKey:@"sec_bookmarks"];
+        NSMutableArray *new_bookmarks = [[NSMutableArray alloc] init];
+        for (id bookmark in bookmarks) {
+            NSError *error = nil;
+            BOOL isStale = NO;
+            NSURL *url = [NSURL URLByResolvingBookmarkData:bookmark options:NSURLBookmarkResolutionWithSecurityScope relativeToURL:nil bookmarkDataIsStale:&isStale error:&error];
+            if (!error && !isStale) {
+                if ([url startAccessingSecurityScopedResource]) {
+                    [new_bookmarks addObject:bookmark];
+                }
+            }
+        }
+        [[NSUserDefaults standardUserDefaults] setObject:new_bookmarks forKey:@"sec_bookmarks"];
+    }
+    
+    main_loop = nullptr;
+    
+    Vector<Logger *> loggers;
+    loggers.push_back(memnew(MacOSTerminalLogger));
+    _set_logger(memnew(CompositeLogger(loggers)));
+    
 #ifdef COREAUDIO_ENABLED
-	AudioDriverManager::add_driver(&audio_driver);
+    AudioDriverManager::add_driver(&audio_driver);
 #endif
-
-	DisplayServerMacOS::register_macos_driver();
-
-// MARK: - OS_MacOS_NSApp
-
-void OS_MacOS_NSApp::run() {
-	[NSApp run];
-}
-
-static bool sig_received = false;
-
-static void handle_interrupt(int sig) {
-	if (sig == SIGINT) {
-		sig_received = true;
-	}
-}
-
-void OS_MacOS_NSApp::start_main() {
-	Error err;
-	@autoreleasepool {
-		err = Main::setup(execpath, argc, argv);
-	}
-
-	if (err == OK) {
-		main_started = true;
-
-		int ret;
-		@autoreleasepool {
-			ret = Main::start();
-		}
-		if (ret == EXIT_SUCCESS) {
-			if (main_loop) {
-				@autoreleasepool {
-					main_loop->initialize();
-				}
-				DisplayServer *ds = DisplayServer::get_singleton();
-				DisplayServerMacOS *ds_mac = Object::cast_to<DisplayServerMacOS>(ds);
-
-				pre_wait_observer = CFRunLoopObserverCreateWithHandler(kCFAllocatorDefault, kCFRunLoopBeforeWaiting, true, 0, ^(CFRunLoopObserverRef observer, CFRunLoopActivity activity) {
-					@autoreleasepool {
-						@try {
-							if (ds_mac) {
-								ds_mac->_process_events(false);
-							} else if (ds) {
-								ds->process_events();
-							}
-#ifdef SDL_ENABLED
-							if (joypad_sdl) {
-								joypad_sdl->process_events();
-							}
-#endif
-
-							if (Main::iteration() || sig_received) {
-								terminate();
-							}
-						} @catch (NSException *exception) {
-							ERR_PRINT("NSException: " + String::utf8([exception reason].UTF8String));
-						}
-					}
-					if (wait_timer == nil) {
-						CFRunLoopWakeUp(CFRunLoopGetCurrent()); // Prevent main loop from sleeping.
-					}
-				});
-				CFRunLoopAddObserver(CFRunLoopGetCurrent(), pre_wait_observer, kCFRunLoopCommonModes);
-				return;
-			}
-		} else {
-			set_exit_code(EXIT_FAILURE);
-		}
-	} else if (err == ERR_HELP) { // Returned by --help and --version, so success.
-		set_exit_code(EXIT_SUCCESS);
-	} else {
-		set_exit_code(EXIT_FAILURE);
-	}
-
-	terminate();
-}
-
-void OS_MacOS_NSApp::terminate() {
-	if (pre_wait_observer) {
-		CFRunLoopRemoveObserver(CFRunLoopGetCurrent(), pre_wait_observer, kCFRunLoopCommonModes);
-		CFRelease(pre_wait_observer);
-		pre_wait_observer = nil;
-	}
-
-	should_terminate = true;
-	[NSApp terminate:nil];
-}
-
-void OS_MacOS_NSApp::cleanup() {
-	if (main_loop) {
-		main_loop->finalize();
-	}
-	if (main_started) {
-		@autoreleasepool {
-			Main::cleanup();
-		}
-	}
-}
-
-OS_MacOS_NSApp::OS_MacOS_NSApp(const char *p_execpath, int p_argc, char **p_argv) :
-		OS_MacOS(p_execpath, p_argc, p_argv) {
-	// Implicitly create shared NSApplication instance.
-	[GodotApplication sharedApplication];
-
-	// In case we are unbundled, make us a proper UI application.
-	[NSApp setActivationPolicy:NSApplicationActivationPolicyRegular];
-
-	// Menu bar setup must go between sharedApplication above and
-	// finishLaunching below, in order to properly emulate the behavior
-	// of NSApplicationMain.
-
-	NSMenu *main_menu = [[NSMenu alloc] initWithTitle:@""];
-	[NSApp setMainMenu:main_menu];
-	[NSApp finishLaunching];
-
-	id delegate = [[GodotApplicationDelegate alloc] init];
-	ERR_FAIL_NULL(delegate);
-	[NSApp setDelegate:delegate];
-	[NSApp registerUserInterfaceItemSearchHandler:delegate];
-
-	pre_wait_observer = CFRunLoopObserverCreate(kCFAllocatorDefault, kCFRunLoopBeforeWaiting, true, 0, &pre_wait_observer_cb, nullptr);
-	CFRunLoopAddObserver(CFRunLoopGetCurrent(), pre_wait_observer, kCFRunLoopCommonModes);
-
-	// Process application:openFile: event.
-	while (true) {
-		NSEvent *event = [NSApp
-				nextEventMatchingMask:NSEventMaskAny
-							untilDate:[NSDate distantPast]
-							   inMode:NSDefaultRunLoopMode
-							  dequeue:YES];
-
-		if (event == nil) {
-			break;
-		}
-
-		[NSApp sendEvent:event];
-	}
-
-	[NSApp activateIgnoringOtherApps:YES];
+    
+    DisplayServerMacOS::register_macos_driver();
 }
 
 OS_MacOS::~OS_MacOS() {
