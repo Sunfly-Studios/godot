@@ -1,0 +1,26 @@
+diff --git a/thirdparty/msdfgen/core/save-bmp.cpp b/thirdparty/msdfgen/core/save-bmp.cpp
+index bf8e8e478d..37af10ebe9 100644
+--- a/thirdparty/msdfgen/core/save-bmp.cpp
++++ b/thirdparty/msdfgen/core/save-bmp.cpp
+@@ -22,7 +22,7 @@ namespace msdfgen {
+ 
+ template <typename T>
+ static bool writeValue(FILE *file, T value) {
+-    #ifdef __BIG_ENDIAN__
++    #if defined(__BIG_ENDIAN__) || defined(BIG_ENDIAN_ENABLED)
+         T reverse = 0;
+         for (int i = 0; i < sizeof(T); ++i) {
+             reverse <<= 8;
+diff --git a/thirdparty/msdfgen/core/save-tiff.cpp b/thirdparty/msdfgen/core/save-tiff.cpp
+index 62c379c6f5..909f48e857 100644
+--- a/thirdparty/msdfgen/core/save-tiff.cpp
++++ b/thirdparty/msdfgen/core/save-tiff.cpp
+@@ -29,7 +29,7 @@ static void writeValueRepeated(FILE *file, T value, int times) {
+ }
+ 
+ static bool writeTiffHeader(FILE *file, int width, int height, int channels) {
+-    #ifdef __BIG_ENDIAN__
++    #if defined(__BIG_ENDIAN__) || defined(BIG_ENDIAN_ENABLED)
+         writeValue<uint16_t>(file, 0x4d4du);
+     #else
+         writeValue<uint16_t>(file, 0x4949u);

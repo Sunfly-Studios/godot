@@ -23,12 +23,11 @@
 #include "basisu_astc_hdr_core.h"
 
 #ifndef BASISD_IS_BIG_ENDIAN
-// TODO: This doesn't work on OSX. How can this be so difficult?
-//#if defined(__BIG_ENDIAN__) || defined(_BIG_ENDIAN) || defined(BIG_ENDIAN)
-//	#define BASISD_IS_BIG_ENDIAN (1)
-//#else
+// Only enable for Linux.
+#if defined(__linux__) && (defined(BIG_ENDIAN_ENABLED) || defined(__BIG_ENDIAN__) || defined(_BIG_ENDIAN) || defined(BIG_ENDIAN))
+	#define BASISD_IS_BIG_ENDIAN (1)
+#else
 	#define BASISD_IS_BIG_ENDIAN (0)
-//#endif
 #endif
 
 #ifndef BASISD_USE_UNALIGNED_WORD_READS

@@ -22,7 +22,7 @@ namespace msdfgen {
 
 template <typename T>
 static bool writeValue(FILE *file, T value) {
-    #ifdef __BIG_ENDIAN__
+    #if defined(__BIG_ENDIAN__) || defined(BIG_ENDIAN_ENABLED)
         T reverse = 0;
         for (int i = 0; i < sizeof(T); ++i) {
             reverse <<= 8;

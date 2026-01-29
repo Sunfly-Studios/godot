@@ -36,9 +36,11 @@
 #include "texture2.h"
 #include "unused.h"
 
-// FIXME: Test this #define and put it in a header somewhere.
-//#define IS_BIG_ENDIAN (1 == *(unsigned char *)&(const int){0x01000000ul})
+#ifdef BIG_ENDIAN_ENABLED
+#define IS_BIG_ENDIAN 1
+#else
 #define IS_BIG_ENDIAN 0
+#endif
 
 extern uint32_t vkFormatTypeSize(VkFormat format);
 

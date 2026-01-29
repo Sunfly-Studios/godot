@@ -29,7 +29,7 @@ static void writeValueRepeated(FILE *file, T value, int times) {
 }
 
 static bool writeTiffHeader(FILE *file, int width, int height, int channels) {
-    #ifdef __BIG_ENDIAN__
+    #if defined(__BIG_ENDIAN__) || defined(BIG_ENDIAN_ENABLED)
         writeValue<uint16_t>(file, 0x4d4du);
     #else
         writeValue<uint16_t>(file, 0x4949u);
