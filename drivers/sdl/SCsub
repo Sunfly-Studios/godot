@@ -2,6 +2,7 @@
 from misc.utility.scons_hints import *
 
 Import("env")
+import sys
 
 env_sdl = env.Clone()
 
