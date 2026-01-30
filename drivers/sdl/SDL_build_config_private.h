@@ -142,6 +142,8 @@
 #define SDL_JOYSTICK_DUMMY 1
 
 #ifdef __FreeBSD__
+#define HAVE_USBHID_H 1
+#define SDL_PLATFORM_FREEBSD 1
 #define SDL_JOYSTICK_USBHID 1
 #endif
 

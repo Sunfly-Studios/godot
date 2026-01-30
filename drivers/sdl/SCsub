@@ -127,12 +127,18 @@ if env["builtin_sdl"]:
             or sys.platform.startswith("openbsd")
         ):
             env_sdl.Append(CPPDEFINES=["SDL_PLATFORM_BSD"])
+
+            if sys.platform.startswith("freebsd"):
+                # FreeBSD has these libraries
+                env.Append(LIBS=["usbhid", "kvm", "procstat"])
+
             thirdparty_sources += [
                 "core/unix/SDL_appid.c",
                 "core/unix/SDL_poll.c",
                 "filesystem/unix/SDL_sysfilesystem.c",
                 "haptic/dummy/SDL_syshaptic.c",
                 "joystick/bsd/SDL_bsdjoystick.c",
+                "joystick/dummy/SDL_sysjoystick.c",
                 "loadso/dlopen/SDL_sysloadso.c",
                 "thread/pthread/SDL_syscond.c",
                 "thread/pthread/SDL_sysmutex.c",
