@@ -80,9 +80,9 @@ class CallableCustomExtension : public CallableCustom {
 
 		if (a->call_func != b->call_func) {
 			// Standard's way to compare function pointers.
-			return std::less<>{}(a->call_func, b->call_func);
+			return std::less<GDExtensionCallableCustomCall>{}(a->call_func, b->call_func);
 		}
-		return std::less<>{}(a->userdata, b->userdata);
+		return std::less<void>{}(a->userdata, b->userdata);
 	}
 
 	static bool custom_compare_equal(const CallableCustom *p_a, const CallableCustom *p_b) {
