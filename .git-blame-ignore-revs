@@ -66,3 +66,80 @@ bb5f390fb9b466be35a5df7651323d7e66afca31
 
 # Style: Enforce `AllowShortFunctionsOnASingleLine`
 e06d83860d798b6766b23d6eae48557387a7db85
+
+# Revert "optimisations" to ambient light computation
+# that actually broke the entire renderer for Forward+/Mobile
+55a3c71e967110a43057f68b2ec4989a774e1123
+
+# Original commit
+150015f5103b4c171ec8ad241ad0790920e0f7b4
+
+# Revert "Ability to print and log script backtraces"
+# because it is too unstable for alternative
+# strict architectures like SPARC, PowerPC, etc
+2d9a131b5eb9b0cec90df535ff14d336c131a778
+
+# Original commit
+4e80ca40f4ea0440d009c6717ab57d69ca746ccc
+
+# And its friends
+508d2a60e5d4e007b7b4d9633ba0baf74ebc4bd0
+62c0a68fc126c173dc85e6c3968c6c4686b3f32b
+f02901129dc589409d1b8a0443d895efeb410c7c
+
+# Here I restore everything back to normal after
+# the backtraces
+3b6adf820131314ea6ad26bf24811814d23c20a9
+
+# Forgot to `import sys` when testing on FreeBSD and NetBSD
+d739cfa5a0b476f6fb834430bf5e85e49b08f469
+00888851511ece450cc101b73c61430a2906a16a
+
+# Fix some unresolved conflicts
+3f5b45ea6edd7ede2fac9d06c103114a80f200bb
+
+# Missed some #endif
+d20dfc2db7ee853569a23a3a3e2ed07518e403af
+
+# Revert CameraFeed for android because it cannot be compiled
+# for API < 24 devices
+c22eef4857811212224daf5949fe1d9bc1203de2
+d699e4fd7b0d93423b32c83c3b60a6ab08a635e5
+
+# Double registration of the MP3 module
+906e1077abda95ee15c2e473bd62e0c5d8305aef
+
+# Some build issues
+82a7ece30653f3966bb08ba089e1ff1c08babdd7
+2141858bd7b17ffdd7d35b9fa9746303fb3747c0
+
+# Incorrect string for HPPA
+42ab71a80115a06a526429f3c81523a6b4e34c92
+
+# UB patches and fixes
+67856f870aa16f3800e4c279106521418a849489
+ae1fceea516841630353550dfc54a0547e08417f
+239c49fbff1bf493cecb94c4ad5ad79510ebd7d0
+dcabd822085f20c3b9aeb17e311b61b71245c13e
+
+# Not important code hygene
+30ddbb14ebadb0bea899ffea5033e7737c5a2e54
+
+# Unrelated fixes
+ff310cd568417a773d3a80e402e2b91bc4807ea4
+f19203d6ddce317df9d5ce4ccbfbb22c0ecc5a91
+da125151a330227481eb53ba392466f99984bf59
+76393582fd35ef02e540bd4af4f44c4fad4823c6
+dfa5cfcf9141e19008f6ef307ada9dc66ccf7871
+140b8831bb22d7065eea999f02bea07d17890fa1
+7d9aabe1b1569ecc875f39174adf686a3051316e
+ee8a1fe67b438c4bf43ebad93451d71b0479518a
+3830e6de176229f88e1cfdeb1b83296c27bca89b
+2b4150aae23e0fc2a1eec6ca1b478683759c0f57
+cfcda5a63984e72d1ccd5b6e06fc2b1cb43c58f8
+ba760793b1b60cab281ca4d6d262e24aba623255
+
+# "Reverts" D3D12 object memory leaks but then I
+# eventually figure out how to integrate it to our
+# 4.4 version
+1373401dfbdacfb9e2ceebc4ae33348e86c4c08a
