@@ -36,7 +36,6 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <sys/ioctl.h>
-#include <linux/input.h>
 
 #include "../../events/SDL_events_c.h"
 #include "../../core/linux/SDL_evdev_capabilities.h"

@@ -119,33 +119,56 @@ if env["builtin_sdl"]:
     # Platform specific sources.
 
     if env["platform"] == "linuxbsd":
-        # TODO: Check support for BSD systems.
-        env_sdl.Append(CPPDEFINES=["SDL_PLATFORM_LINUX"])
-        thirdparty_sources += [
-            "core/linux/SDL_dbus.c",
-            "core/linux/SDL_evdev.c",
-            "core/linux/SDL_evdev_capabilities.c",
-            "core/linux/SDL_evdev_kbd.c",
-            "core/linux/SDL_fcitx.c",
-            "core/linux/SDL_ibus.c",
-            "core/linux/SDL_ime.c",
-            "core/linux/SDL_system_theme.c",
-            "core/linux/SDL_threadprio.c",
-            "core/linux/SDL_udev.c",
-            "core/unix/SDL_appid.c",
-            "core/unix/SDL_poll.c",
-            "haptic/linux/SDL_syshaptic.c",
-            "joystick/linux/SDL_sysjoystick.c",
-            "loadso/dlopen/SDL_sysloadso.c",
-            "thread/pthread/SDL_syscond.c",
-            "thread/pthread/SDL_sysmutex.c",
-            "thread/pthread/SDL_sysrwlock.c",
-            "thread/pthread/SDL_syssem.c",
-            "thread/pthread/SDL_systhread.c",
-            "thread/pthread/SDL_systls.c",
-            "timer/unix/SDL_systimer.c",
-        ]
-        env_sdl.Prepend(CPPPATH=[thirdparty_dir + "core/linux"])
+        if (
+            sys.platform.startswith("dragonfly")
+            or sys.platform.startswith("freebsd")
+            or sys.platform.startswith("netbsd")
+            or sys.platform.startswith("openbsd")
+        ):
+            env_sdl.Append(CPPDEFINES=["SDL_PLATFORM_BSD"])
+            thirdparty_sources += [
+                "core/unix/SDL_appid.c",
+                "core/unix/SDL_poll.c",
+                "filesystem/unix/SDL_sysfilesystem.c",
+                "haptic/dummy/SDL_syshaptic.c",
+                "joystick/bsd/SDL_bsdjoystick.c",
+                "loadso/dlopen/SDL_sysloadso.c",
+                "thread/pthread/SDL_syscond.c",
+                "thread/pthread/SDL_sysmutex.c",
+                "thread/pthread/SDL_sysrwlock.c",
+                "thread/pthread/SDL_syssem.c",
+                "thread/pthread/SDL_systhread.c",
+                "thread/pthread/SDL_systls.c",
+                "timer/unix/SDL_systimer.c",
+            ]
+            env_sdl.Prepend(CPPPATH=[thirdparty_dir + "core/unix"])
+        else:
+            env_sdl.Append(CPPDEFINES=["SDL_PLATFORM_LINUX"])
+            thirdparty_sources += [
+                "core/linux/SDL_dbus.c",
+                "core/linux/SDL_evdev.c",
+                "core/linux/SDL_evdev_capabilities.c",
+                "core/linux/SDL_evdev_kbd.c",
+                "core/linux/SDL_fcitx.c",
+                "core/linux/SDL_ibus.c",
+                "core/linux/SDL_ime.c",
+                "core/linux/SDL_system_theme.c",
+                "core/linux/SDL_threadprio.c",
+                "core/linux/SDL_udev.c",
+                "core/unix/SDL_appid.c",
+                "core/unix/SDL_poll.c",
+                "haptic/linux/SDL_syshaptic.c",
+                "joystick/linux/SDL_sysjoystick.c",
+                "loadso/dlopen/SDL_sysloadso.c",
+                "thread/pthread/SDL_syscond.c",
+                "thread/pthread/SDL_sysmutex.c",
+                "thread/pthread/SDL_sysrwlock.c",
+                "thread/pthread/SDL_syssem.c",
+                "thread/pthread/SDL_systhread.c",
+                "thread/pthread/SDL_systls.c",
+                "timer/unix/SDL_systimer.c",
+            ]
+            env_sdl.Prepend(CPPPATH=[thirdparty_dir + "core/linux"])
 
     elif env["platform"] == "macos":
         env_sdl.Append(CPPDEFINES=["SDL_PLATFORM_MACOS"])
