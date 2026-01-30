@@ -459,12 +459,15 @@ void call_with_variant_args_dv(T *p_instance, void (T::*p_method)(P...), const V
 	}
 #endif
 
-	const Variant *args[sizeof...(P) == 0 ? 1 : sizeof...(P)]; //avoid zero sized array
-	for (int32_t i = 0; i < (int32_t)sizeof...(P); i++) {
-		if (i < p_argcount) {
-			args[i] = p_args[i];
-		} else {
-			args[i] = &default_values[i - p_argcount + (dvs - missing)];
+	const Variant *args[sizeof...(P) == 0 ? 1 : sizeof...(P)] = {}; //avoid zero sized array
+
+	if constexpr ((int32_t)sizeof...(P) > 0) {
+		for (int32_t i = 0; i < (int32_t)sizeof...(P); i++) {
+			if (i < p_argcount) {
+				args[i] = p_args[i];
+			} else {
+				args[i] = &default_values[i - p_argcount + (dvs - missing)];
+			}
 		}
 	}
 
@@ -510,12 +513,15 @@ void call_with_variant_argsc_dv(T *p_instance, void (T::*p_method)(P...) const, 
 	}
 #endif
 
-	const Variant *args[sizeof...(P) == 0 ? 1 : sizeof...(P)]; //avoid zero sized array
-	for (int32_t i = 0; i < (int32_t)sizeof...(P); i++) {
-		if (i < p_argcount) {
-			args[i] = p_args[i];
-		} else {
-			args[i] = &default_values[i - p_argcount + (dvs - missing)];
+	const Variant *args[sizeof...(P) == 0 ? 1 : sizeof...(P)] = {}; //avoid zero sized array
+
+	if constexpr ((int32_t)sizeof...(P) > 0) {
+		for (int32_t i = 0; i < (int32_t)sizeof...(P); i++) {
+			if (i < p_argcount) {
+				args[i] = p_args[i];
+			} else {
+				args[i] = &default_values[i - p_argcount + (dvs - missing)];
+			}
 		}
 	}
 
@@ -543,12 +549,15 @@ void call_with_variant_args_ret_dv(T *p_instance, R (T::*p_method)(P...), const 
 	}
 #endif
 
-	const Variant *args[sizeof...(P) == 0 ? 1 : sizeof...(P)]; //avoid zero sized array
-	for (int32_t i = 0; i < (int32_t)sizeof...(P); i++) {
-		if (i < p_argcount) {
-			args[i] = p_args[i];
-		} else {
-			args[i] = &default_values[i - p_argcount + (dvs - missing)];
+	const Variant *args[sizeof...(P) == 0 ? 1 : sizeof...(P)] = {}; //avoid zero sized array
+
+	if constexpr ((int32_t)sizeof...(P) > 0) {
+		for (int32_t i = 0; i < (int32_t)sizeof...(P); i++) {
+			if (i < p_argcount) {
+				args[i] = p_args[i];
+			} else {
+				args[i] = &default_values[i - p_argcount + (dvs - missing)];
+			}
 		}
 	}
 
@@ -576,12 +585,15 @@ void call_with_variant_args_retc_dv(T *p_instance, R (T::*p_method)(P...) const,
 	}
 #endif
 
-	const Variant *args[sizeof...(P) == 0 ? 1 : sizeof...(P)]; //avoid zero sized array
-	for (int32_t i = 0; i < (int32_t)sizeof...(P); i++) {
-		if (i < p_argcount) {
-			args[i] = p_args[i];
-		} else {
-			args[i] = &default_values[i - p_argcount + (dvs - missing)];
+	const Variant *args[sizeof...(P) == 0 ? 1 : sizeof...(P)] = {}; //avoid zero sized array
+
+	if constexpr ((int32_t)sizeof...(P) > 0) {
+		for (int32_t i = 0; i < (int32_t)sizeof...(P); i++) {
+			if (i < p_argcount) {
+				args[i] = p_args[i];
+			} else {
+				args[i] = &default_values[i - p_argcount + (dvs - missing)];
+			}
 		}
 	}
 
@@ -919,12 +931,15 @@ void call_with_variant_args_retc_static_helper_dv(T *p_instance, R (*p_method)(T
 	}
 #endif
 
-	const Variant *args[sizeof...(P) == 0 ? 1 : sizeof...(P)]; //avoid zero sized array
-	for (int32_t i = 0; i < (int32_t)sizeof...(P); i++) {
-		if (i < p_argcount) {
-			args[i] = p_args[i];
-		} else {
-			args[i] = &default_values[i - p_argcount + (dvs - missing)];
+	const Variant *args[sizeof...(P) == 0 ? 1 : sizeof...(P)] = {}; //avoid zero sized array
+
+	if constexpr ((int32_t)sizeof...(P) > 0) {
+		for (int32_t i = 0; i < (int32_t)sizeof...(P); i++) {
+			if (i < p_argcount) {
+				args[i] = p_args[i];
+			} else {
+				args[i] = &default_values[i - p_argcount + (dvs - missing)];
+			}
 		}
 	}
 
@@ -965,12 +980,15 @@ void call_with_variant_args_static_helper_dv(T *p_instance, void (*p_method)(T *
 	}
 #endif
 
-	const Variant *args[sizeof...(P) == 0 ? 1 : sizeof...(P)]; //avoid zero sized array
-	for (int32_t i = 0; i < (int32_t)sizeof...(P); i++) {
-		if (i < p_argcount) {
-			args[i] = p_args[i];
-		} else {
-			args[i] = &default_values[i - p_argcount + (dvs - missing)];
+	const Variant *args[sizeof...(P) == 0 ? 1 : sizeof...(P)] = {}; //avoid zero sized array
+
+	if constexpr ((int32_t)sizeof...(P) > 0) {
+		for (int32_t i = 0; i < (int32_t)sizeof...(P); i++) {
+			if (i < p_argcount) {
+				args[i] = p_args[i];
+			} else {
+				args[i] = &default_values[i - p_argcount + (dvs - missing)];
+			}
 		}
 	}
 
@@ -998,12 +1016,15 @@ void call_with_variant_args_static_ret_dv(R (*p_method)(P...), const Variant **p
 	}
 #endif
 
-	const Variant *args[sizeof...(P) == 0 ? 1 : sizeof...(P)]; //avoid zero sized array
-	for (int32_t i = 0; i < (int32_t)sizeof...(P); i++) {
-		if (i < p_argcount) {
-			args[i] = p_args[i];
-		} else {
-			args[i] = &default_values[i - p_argcount + (dvs - missing)];
+	const Variant *args[sizeof...(P) == 0 ? 1 : sizeof...(P)] = {}; //avoid zero sized array
+
+	if constexpr ((int32_t)sizeof...(P) > 0) {
+		for (int32_t i = 0; i < (int32_t)sizeof...(P); i++) {
+			if (i < p_argcount) {
+				args[i] = p_args[i];
+			} else {
+				args[i] = &default_values[i - p_argcount + (dvs - missing)];
+			}
 		}
 	}
 
@@ -1031,12 +1052,15 @@ void call_with_variant_args_static_dv(void (*p_method)(P...), const Variant **p_
 	}
 #endif
 
-	const Variant *args[sizeof...(P) == 0 ? 1 : sizeof...(P)]; //avoid zero sized array
-	for (int32_t i = 0; i < (int32_t)sizeof...(P); i++) {
-		if (i < p_argcount) {
-			args[i] = p_args[i];
-		} else {
-			args[i] = &default_values[i - p_argcount + (dvs - missing)];
+	const Variant *args[sizeof...(P) == 0 ? 1 : sizeof...(P)] = {}; //avoid zero sized array
+
+	if constexpr ((int32_t)sizeof...(P) > 0) {
+		for (int32_t i = 0; i < (int32_t)sizeof...(P); i++) {
+			if (i < p_argcount) {
+				args[i] = p_args[i];
+			} else {
+				args[i] = &default_values[i - p_argcount + (dvs - missing)];
+			}
 		}
 	}
 
