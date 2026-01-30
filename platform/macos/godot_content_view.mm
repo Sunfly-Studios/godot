@@ -71,6 +71,10 @@
 	DisplayServerMacOS *ds = (DisplayServerMacOS *)DisplayServer::get_singleton();
 	if (ds && ds->has_window(window_id)) {
 		DisplayServerMacOS::WindowData &wd = ds->get_window(window_id);
+		if (!wd.im_active) {
+			return NSMakeRect(0, 0, 0, 0);
+		}
+
 		NSRect frameRect = [wd.window_object frame];
 		if (wd.fs_transition || wd.initial_size) {
 			self.layerContentsPlacement = NSViewLayerContentsPlacementScaleAxesIndependently;
