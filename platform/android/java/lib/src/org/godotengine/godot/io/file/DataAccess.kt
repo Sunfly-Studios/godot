@@ -172,7 +172,7 @@ internal abstract class DataAccess {
 	abstract fun write(buffer: ByteBuffer): Boolean
 
 	fun seekFromEnd(positionFromEnd: Long) {
-		val positionFromBeginning = max(0, size() - positionFromEnd)
+		val positionFromBeginning = max(0, size() + positionFromEnd)
 		seek(positionFromBeginning)
 	}
 
