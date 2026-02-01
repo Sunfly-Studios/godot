@@ -92,6 +92,9 @@ class EditorExportPlatformIOS : public EditorExportPlatform {
 	typedef Error (*FileHandler)(String p_file, void *p_userdata);
 	static Error _walk_dir_recursive(Ref<DirAccess> &p_da, FileHandler p_handler, void *p_userdata);
 	static Error _codesign(String p_file, void *p_userdata);
+	
+	String launch_screen_image_file_name;
+
 	void _blend_and_rotate(Ref<Image> &p_dst, Ref<Image> &p_src, bool p_rot);
 
 	struct IOSConfigData {
