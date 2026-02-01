@@ -80,7 +80,7 @@ void ProjectZIPPacker::_zip_file(const String &p_path, const String &p_base_path
 	time += tz["bias"].operator int() * 60;
 	Dictionary dt = Time::get_singleton()->get_datetime_dict_from_unix_time(time);
 
-	zip_fileinfo zipfi;
+	zip_fileinfo zipfi = {};
 	zipfi.tmz_date.tm_year = dt["year"];
 	zipfi.tmz_date.tm_mon = dt["month"].operator int() - 1; // Note: "tm" month range - 0..11, Godot month range - 1..12, https://www.cplusplus.com/reference/ctime/tm/
 	zipfi.tmz_date.tm_mday = dt["day"];
