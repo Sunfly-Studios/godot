@@ -4889,6 +4889,11 @@ RenderForwardClustered::RenderForwardClustered() {
 			defines += "\n#define USE_VERTEX_LIGHTING\n";
 		}
 
+		bool multi_bounce_occlusion = GLOBAL_GET("rendering/lights_and_shadows/multi_bounce_occlusion/enabled");
+		if (!multi_bounce_occlusion) {
+			defines += "\n#define MULTI_BOUNCE_OCCLUSION_DISABLED\n";
+		}
+		
 		{
 			//lightmaps
 			scene_state.max_lightmaps = MAX_LIGHTMAPS;
