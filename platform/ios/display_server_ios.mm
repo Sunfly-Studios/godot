@@ -540,7 +540,15 @@ float DisplayServerIOS::screen_get_refresh_rate(int p_screen) const {
 }
 
 float DisplayServerIOS::screen_get_scale(int p_screen) const {
-	return [UIScreen mainScreen].scale;
+	p_screen = _get_screen_index(p_screen);
+	int screen_count = get_screen_count();
+	ERR_FAIL_INDEX_V(p_screen, screen_count, 1.0f);
+
+	if (@available(iOS 13, *)) {
+		return MAX([UITraitCollection currentTraitCollection].displayScale, 1);
+	} else {
+		return [UIScreen mainScreen].scale;
+	}
 }
 
 Vector<DisplayServer::WindowID> DisplayServerIOS::get_window_list() const {
