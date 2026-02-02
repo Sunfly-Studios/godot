@@ -709,9 +709,9 @@ void EditorExportPlatformIOS::_fix_config_file(const Ref<EditorExportPreset> &p_
 				}
 			}
 
-			sstrnew += p_line.replace("$launch_screen_image_mode", value).replace("$launch_screen_image_file_name", launch_screen_image_file_name) + "\n";
-		} else if (p_line.contains("$launch_screen_image_file_name")) {
-			strnew += p_line.replace("$launch_screen_image_file_name", launch_screen_image_file_name) + "\n";
+			strnew += lines[i].replace("$launch_screen_image_mode", value).replace("$launch_screen_image_file_name", launch_screen_image_file_name) + "\n";
+		} else if (lines[i].contains("$launch_screen_image_file_name")) {
+			strnew += lines[i].replace("$launch_screen_image_file_name", launch_screen_image_file_name) + "\n";
 		} else if (lines[i].contains("$launch_screen_background_color")) {
 			bool use_custom = p_preset->get("storyboard/use_custom_bg_color");
 			Color color = use_custom ? p_preset->get("storyboard/custom_bg_color") : GLOBAL_GET("application/boot_splash/bg_color");

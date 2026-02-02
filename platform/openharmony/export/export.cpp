@@ -34,7 +34,7 @@
 
 #include "core/os/os.h"
 #include "editor/export/editor_export.h"
-#include "editor/settings/editor_settings.h"
+#include "editor/editor_settings.h"
 
 void register_openharmony_exporter_types() {
 	GDREGISTER_VIRTUAL_CLASS(EditorExportPlatformOpenHarmony);
