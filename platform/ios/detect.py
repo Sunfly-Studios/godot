@@ -113,6 +113,8 @@ def configure(env: "SConsEnvironment"):
         env.Append(ASFLAGS=["-miphoneos-version-min=12.0"])
         env.Append(CCFLAGS=["-miphoneos-version-min=12.0"])
 
+    env.Append(CCFLAGS=["-ffp-contract=off"])
+
     if env["arch"] == "x86_64":
         if not env["ios_simulator"]:
             print_error("Building for iOS with 'arch=x86_64' requires 'ios_simulator=yes'.")
