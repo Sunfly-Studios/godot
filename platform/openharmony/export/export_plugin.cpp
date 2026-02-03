@@ -76,14 +76,12 @@ static const char *OPENHARMONY_ORIENTATION_ENUMS = "landscape,landscape_inverted
 void EditorExportPlatformOpenHarmony::get_preset_features(const Ref<EditorExportPreset> &p_preset, List<String> *r_features) const {
 	r_features->push_back("etc2");
 	r_features->push_back("astc");
-	if (p_preset->get("architectures/arm64-v8a")) {
-		r_features->push_back("arm64");
-	} else if (p_preset->get("architectures/x86_64")) {
-		r_features->push_back("x86_64");
-	}
+	r_features->push_back("arm64");
+	r_features->push_back("x86_64");
 }
 
 void EditorExportPlatformOpenHarmony::get_export_options(List<ExportOption> *r_options) const {
+	r_options->push_back(ExportOption(PropertyInfo(Variant::STRING, "binary_format/architecture", PROPERTY_HINT_ENUM, "arm64,x86_64"), "arm64"));
 	r_options->push_back(ExportOption(PropertyInfo(Variant::STRING, "custom_template/debug", PROPERTY_HINT_GLOBAL_FILE, "*.zip"), ""));
 	r_options->push_back(ExportOption(PropertyInfo(Variant::STRING, "custom_template/release", PROPERTY_HINT_GLOBAL_FILE, "*.zip"), ""));
 
@@ -143,26 +141,6 @@ bool EditorExportPlatformOpenHarmony::get_export_option_visibility(const EditorE
 String EditorExportPlatformOpenHarmony::get_export_option_warning(const EditorExportPreset *p_preset, const StringName &p_name) const {
 	if (p_preset == nullptr) {
 		return String();
-	}
-
-	// Check architecture selection - only one should be selected
-	if (String(p_name).begins_with("architectures/")) {
-		bool arm64_selected = p_preset->get("architectures/arm64");
-		bool x86_64_selected = p_preset->get("architectures/x86_64");
-
-		int selected_count = 0;
-		if (arm64_selected) {
-			selected_count++;
-		}
-		if (x86_64_selected) {
-			selected_count++;
-		}
-
-		if (selected_count == 0) {
-			return TTR("At least one architecture must be selected.");
-		} else if (selected_count > 1) {
-			return TTR("Only one architecture can be selected at a time.");
-		}
 	}
 
 	// Check sign options when build/sign is enabled
@@ -270,10 +248,25 @@ Error EditorExportPlatformOpenHarmony::export_project_helper(const Ref<EditorExp
 	String custom_debug = p_preset->get("custom_template/debug");
 	String custom_release = p_preset->get("custom_template/release");
 	String template_path = p_debug ? custom_debug : custom_release;
+	bool is_arm64 = p_preset->get("binary_format/architecture") == "arm64";
 	template_path = template_path.strip_edges();
 
 	if (template_path.is_empty()) {
-		String template_file_name = p_debug ? "openharmony_debug_arm64-v8a.zip" : "openharmony_release_arm64-v8a.zip";
+		String template_file_name = "openharmony";
+
+		if (p_debug) {
+			template_file_name += "_debug";
+		} else {
+			template_file_name += "_release";
+		}
+
+		if (is_arm64) {
+			template_file_name += "_arm64-v8a";
+		} else {
+			template_file_name += "_x86_64";
+		}
+		template_file_name += ".zip";
+
 		String err;
 		template_path = find_export_template(template_file_name, &err);
 		if (template_path.is_empty()) {
@@ -616,14 +609,7 @@ Error EditorExportPlatformOpenHarmony::export_project_helper(const Ref<EditorExp
 		if (entry_build_file.is_valid()) {
 			String content = entry_build_file->get_as_text();
 
-			String selected_arch;
-			if (p_preset->get("architectures/arm64")) {
-				selected_arch = "arm64-v8a";
-			} else if (p_preset->get("architectures/x86_64")) {
-				selected_arch = "x86_64";
-			} else {
-				selected_arch = "arm64-v8a";
-			}
+			String selected_arch = p_preset->get("binary_format/architecture");
 
 #ifdef MODULE_REGEX_ENABLED
 			RegEx regex;
@@ -1047,17 +1033,15 @@ bool EditorExportPlatformOpenHarmony::has_valid_export_configuration(const Ref<E
 	String err;
 	bool valid = false;
 
-	bool dvalid = false;
-	bool rvalid = false;
-	bool has_export_templates = false;
+	bool is_arm64 = p_preset->get("binary_format/architecture") == "arm64";
+	bool dvalid = exists_export_template(_get_template_name(true, is_arm64), &err);
+	bool rvalid = exists_export_template(_get_template_name(false, is_arm64), &err);
 
 	if (p_preset->get("custom_template/debug") != "") {
 		dvalid = FileAccess::exists(p_preset->get("custom_template/debug"));
 		if (!dvalid) {
 			err += TTR("Custom debug template not found.") + "\n";
 		}
-	} else {
-		has_export_templates |= exists_export_template("openharmony_debug_arm64-v8a.zip", &err);
 	}
 
 	if (p_preset->get("custom_template/release") != "") {
@@ -1065,12 +1049,10 @@ bool EditorExportPlatformOpenHarmony::has_valid_export_configuration(const Ref<E
 		if (!rvalid) {
 			err += TTR("Custom release template not found.") + "\n";
 		}
-	} else {
-		has_export_templates |= exists_export_template("openharmony_release_arm64-v8a.zip", &err);
 	}
 
-	r_missing_templates = !(dvalid || rvalid || has_export_templates);
-	valid = dvalid || rvalid || has_export_templates;
+	valid = dvalid || rvalid;
+	r_missing_templates = !valid;
 
 	bool sign_enabled = p_preset->get("build/sign");
 	if (sign_enabled) {
