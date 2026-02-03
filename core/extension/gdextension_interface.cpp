@@ -44,6 +44,7 @@
 #include "core/version.h"
 
 #include <string.h>
+#include <functional> // for std::less
 
 class CallableCustomExtension : public CallableCustom {
 	void *userdata;
