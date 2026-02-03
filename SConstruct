@@ -729,8 +729,10 @@ if env["arch"] == "x86_32":
             env.Append(CCFLAGS=["-msse", "-mno-sse2", "-mfpmath=sse,387"])
         env.Append(CPPDEFINES=["NO_SSE2"])
 
-# Catches x86_32, arm32, and ppc32.
-# Some Godot system's need it.
+# Catches x86_32, arm32, ppc32, and wasm32.
+# The most common ones.
+# Other architectures like HPPA must set this manually.
+# TODO: Maybe automate this.
 if env["arch"].endswith("32"):
     env.Append(CPPDEFINES=["IS_32_BIT"])
 

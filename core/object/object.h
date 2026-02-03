@@ -158,6 +158,13 @@ struct PropertyInfo {
 	PropertyHint hint = PROPERTY_HINT_NONE;
 	uint32_t usage = PROPERTY_USAGE_DEFAULT;
 
+	template <typename T>
+	static _FORCE_INLINE_ T _get_from_extension_ptr(const void *p_ptr) {
+		alignas(alignof(T)) uint8_t buf[sizeof(T)] = {};
+		memcpy(buf, p_ptr, sizeof(T));
+		return *reinterpret_cast<T *>(buf);
+	}
+
 	// If you are thinking about adding another member to this class, ask the maintainer (Juan) first.
 
 	_FORCE_INLINE_ PropertyInfo added_usage(uint32_t p_fl) const {
@@ -191,21 +198,9 @@ struct PropertyInfo {
 
 	explicit PropertyInfo(const GDExtensionPropertyInfo &pinfo) :
 			type((Variant::Type)pinfo.type),
-			name([&]() {
-				alignas(alignof(StringName)) uint8_t buf[sizeof(StringName)];
-				memcpy(buf, pinfo.name, sizeof(StringName));
-				return *reinterpret_cast<StringName *>(buf);
-			}()),
-			class_name([&]() {
-				alignas(alignof(StringName)) uint8_t buf[sizeof(StringName)];
-				memcpy(buf, pinfo.class_name, sizeof(StringName));
-				return *reinterpret_cast<StringName *>(buf);
-			}()),
-			hint_string([&]() {
-				alignas(alignof(String)) uint8_t buf[sizeof(String)];
-				memcpy(buf, pinfo.hint_string, sizeof(String));
-				return *reinterpret_cast<String *>(buf);
-			}()),
+			name(_get_from_extension_ptr<StringName>(pinfo.name)),
+			class_name(_get_from_extension_ptr<StringName>(pinfo.class_name)),
+			hint_string(_get_from_extension_ptr<String>(pinfo.hint_string)),
 			hint((PropertyHint)pinfo.hint),
 			usage(pinfo.usage) {}
 
@@ -267,11 +262,7 @@ struct MethodInfo {
 	MethodInfo() {}
 
 	explicit MethodInfo(const GDExtensionMethodInfo &pinfo) :
-			name([&]() {
-				alignas(alignof(StringName)) uint8_t buf[sizeof(StringName)];
-				memcpy(buf, pinfo.name, sizeof(StringName));
-				return *reinterpret_cast<StringName *>(buf);
-			}()),
+			name(PropertyInfo::_get_from_extension_ptr<StringName>(pinfo.name)),
 			return_val(PropertyInfo(pinfo.return_value)),
 			flags(pinfo.flags),
 			id(pinfo.id) {

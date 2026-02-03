@@ -73,7 +73,13 @@ def get_flags():
 
 def configure(env: "SConsEnvironment"):
     # Validate arch.
-    supported_arches = ["x86_32", "x86_64", "arm32", "arm64", "rv64", "ppc32", "ppc64", "loongarch64", "sparc64", "mips64", "alpha", "hppa"]
+    supported_arches = [
+        "x86_32", "x86_64", "arm32",
+        "arm64", "rv64", "ppc32",
+        "ppc64", "loongarch64",
+        "sparc64", "mips64", "alpha",
+        "hppa"
+    ]
     validate_arch(env["arch"], get_name(), supported_arches)
 
     ## Build type
@@ -197,6 +203,11 @@ def configure(env: "SConsEnvironment"):
                 "-mlong-calls",
             ]
         )
+
+        # This is required because programs compiled for HPPA
+        # are usually 32-bit (because the 64-bit userland was
+        # never finalised).
+        env.Append(CPPDEFINES=["IS_32_BIT"])
 
         # Fix issue with modern toolchains under PA-RISC that
         # may mark some parts of the binary as read-only but
