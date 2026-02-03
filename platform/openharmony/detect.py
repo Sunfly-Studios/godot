@@ -29,7 +29,7 @@ def get_opts():
         BoolVariable(
             "generate_bundle",
             "Generate an APP bundle after building OpenHarmony binaries",
-            True,
+            False,
         ),
     ]
 
@@ -54,18 +54,11 @@ def get_flags():
 
 
 def get_default_sdk_path():
-    return ""
-
-
-def get_sdk_path(env: "SConsEnvironment"):
-    sdk_root = env["OPENHARMONY_SDK_PATH"]
-    if sdk_root == "":
-        sdk_root = get_default_sdk_path()
-    return sdk_root
+    return os.environ.get("OPENHARMONY_SDK_PATH")
 
 
 def configure(env: "SConsEnvironment"):
-    sdk_root = get_sdk_path(env)
+    sdk_root = get_default_sdk_path()
     if (sdk_root == "") or (not os.path.exists(sdk_root)):
         print_error("OpenHarmony SDK not found. Please set OPENHARMONY_SDK_PATH to the SDK path.")
         sys.exit(255)
@@ -152,7 +145,7 @@ def configure(env: "SConsEnvironment"):
             env.Append(LIBS=["vulkan"])
 
     if env["opengl3"]:
-        print_error("opengl3 is not support on OpenHarmony")
+        print_error("OpenGL 3 is not supported on OpenHarmony")
         sys.exit(255)
 
     env["ARGMAX"] = 8000
