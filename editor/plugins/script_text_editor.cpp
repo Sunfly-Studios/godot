@@ -2587,6 +2587,8 @@ ScriptTextEditor::ScriptTextEditor() {
 	breakpoints_menu = memnew(PopupMenu);
 
 	connection_info_dialog = memnew(ConnectionInfoDialog);
+	
+	update_settings();
 
 	SET_DRAG_FORWARDING_GCD(code_editor->get_text_editor(), ScriptTextEditor);
 }
