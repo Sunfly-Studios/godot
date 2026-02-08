@@ -296,6 +296,7 @@ protected:
 
 		TrackCacheAudio() {
 			type = Animation::TYPE_AUDIO;
+			playback_type = AudioServer::PlaybackType::PLAYBACK_TYPE_DEFAULT;
 		}
 		~TrackCacheAudio() {}
 	};

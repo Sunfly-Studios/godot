@@ -741,7 +741,7 @@ void AudioDriverWASAPI::write_sample(WORD format_tag, int bits_per_sample, BYTE 
 }
 
 void AudioDriverWASAPI::thread_func(void *p_udata) {
-	CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
+	(void)CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
 
 	AudioDriverWASAPI *ad = static_cast<AudioDriverWASAPI *>(p_udata);
 	uint32_t avail_frames = 0;
@@ -993,6 +993,13 @@ void AudioDriverWASAPI::start() {
 	}
 }
 
+#ifdef _MSC_VER
+#pragma warning(push)
+#pragma warning(disable : 26115) // Failing to Release lock.
+#pragma warning(disable : 26110) // Caller failing to hold lock.
+#pragma warning(disable : 26117) // Releasing unheld lock.
+#endif
+
 void AudioDriverWASAPI::lock() {
 	mutex.lock();
 }
@@ -1000,6 +1007,10 @@ void AudioDriverWASAPI::lock() {
 void AudioDriverWASAPI::unlock() {
 	mutex.unlock();
 }
+
+#ifdef _MSC_VER
+#pragma warning(pop)
+#endif
 
 void AudioDriverWASAPI::finish() {
 	exit_thread.set();

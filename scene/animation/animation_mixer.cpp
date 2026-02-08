@@ -2491,6 +2491,7 @@ void AnimationMixer::_bind_methods() {
 
 AnimationMixer::AnimationMixer() {
 	root_node = SceneStringName(path_pp);
+	playback_type = AudioServer::PlaybackType::PLAYBACK_TYPE_DEFAULT;
 }
 
 AnimationMixer::~AnimationMixer() {
