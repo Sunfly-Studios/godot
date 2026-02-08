@@ -168,8 +168,8 @@ protected:
 	String _quote_command_line_argument(const String &p_text) const;
 
 	struct ProcessInfo {
-		STARTUPINFOEX si;
-		PROCESS_INFORMATION pi;
+		STARTUPINFOEX si = {};
+		PROCESS_INFORMATION pi = {};
 		mutable bool is_running = true;
 		mutable int exit_code = -1;
 	};

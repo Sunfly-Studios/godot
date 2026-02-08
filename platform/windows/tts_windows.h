@@ -51,8 +51,8 @@ class TTS_Windows {
 	bool paused = false;
 	struct UTData {
 		Char16String string;
-		int offset;
-		int id;
+		int offset = 0;
+		int id = 0;
 	};
 	HashMap<uint32_t, UTData> ids;
 	bool update_requested = false;

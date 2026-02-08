@@ -32,9 +32,13 @@
 
 TTS_Windows *TTS_Windows::singleton = nullptr;
 
-void __stdcall TTS_Windows::speech_event_callback(WPARAM wParam, LPARAM lParam) {
+void WINAPI TTS_Windows::speech_event_callback(WPARAM wParam, LPARAM lParam) {
 	TTS_Windows *tts = TTS_Windows::get_singleton();
-	SPEVENT event;
+	if (!tts || !tts->synth) {
+		return;
+	}
+
+	SPEVENT event = {};
 	while (tts->synth->GetEvents(1, &event, nullptr) == S_OK) {
 		uint32_t stream_num = (uint32_t)event.ulStreamNum;
 		if (tts->ids.has(stream_num)) {
@@ -47,7 +51,7 @@ void __stdcall TTS_Windows::speech_event_callback(WPARAM wParam, LPARAM lParam) 
 			} else if (event.eEventId == SPEI_WORD_BOUNDARY) {
 				const Char16String &string = tts->ids[stream_num].string;
 				int pos = 0;
-				for (int i = 0; i < MIN(event.lParam, string.length()); i++) {
+				for (int i = 0; i < MIN((int)event.lParam, string.length()); i++) {
 					char16_t c = string[i];
 					if ((c & 0xfffffc00) == 0xd800) {
 						i++;
@@ -69,11 +73,12 @@ void TTS_Windows::process_events() {
 		String pitch_tag = String("<pitch absmiddle=\"") + String::num_int64(message.pitch * 10 - 10, 10) + String("\">");
 		text = pitch_tag + message.text + String("</pitch>");
 
-		IEnumSpObjectTokens *cpEnum;
-		ISpObjectToken *cpVoiceToken;
+		IEnumSpObjectTokens *cpEnum = nullptr;
+		ISpObjectToken *cpVoiceToken = nullptr;
 		ULONG ulCount = 0;
 		ULONG stream_number = 0;
-		ISpObjectTokenCategory *cpCategory;
+		ISpObjectTokenCategory *cpCategory = nullptr;
+
 		HRESULT hr = CoCreateInstance(CLSID_SpObjectTokenCategory, nullptr, CLSCTX_INPROC_SERVER, IID_ISpObjectTokenCategory, (void **)&cpCategory);
 		if (SUCCEEDED(hr)) {
 			hr = cpCategory->SetId(SPCAT_VOICES, false);
@@ -81,16 +86,25 @@ void TTS_Windows::process_events() {
 				hr = cpCategory->EnumTokens(nullptr, nullptr, &cpEnum);
 				if (SUCCEEDED(hr)) {
 					hr = cpEnum->GetCount(&ulCount);
-					while (SUCCEEDED(hr) && ulCount--) {
+					// Use hr == S_OK to ensure we stop if Next returns S_FALSE (end of enum)
+					while (hr == S_OK && ulCount--) {
 						wchar_t *w_id = nullptr;
 						hr = cpEnum->Next(1, &cpVoiceToken, nullptr);
-						cpVoiceToken->GetId(&w_id);
-						if (String::utf16((const char16_t *)w_id) == message.voice) {
-							synth->SetVoice(cpVoiceToken);
+
+						if (hr == S_OK) {
+							cpVoiceToken->GetId(&w_id);
+							if (w_id) {
+								if (String::utf16((const char16_t *)w_id) == message.voice) {
+									synth->SetVoice(cpVoiceToken);
+									// Must free the memory allocated by GetId
+									CoTaskMemFree(w_id);
+									cpVoiceToken->Release();
+									break;
+								}
+								CoTaskMemFree(w_id);
+							}
 							cpVoiceToken->Release();
-							break;
 						}
-						cpVoiceToken->Release();
 					}
 					cpEnum->Release();
 				}
@@ -98,7 +112,7 @@ void TTS_Windows::process_events() {
 			cpCategory->Release();
 		}
 
-		UTData ut;
+		UTData ut = {};
 		ut.string = text.utf16();
 		ut.offset = pitch_tag.length(); // Subtract injected <pitch> tag offset.
 		ut.id = message.id;
@@ -118,8 +132,16 @@ void TTS_Windows::process_events() {
 bool TTS_Windows::is_speaking() const {
 	ERR_FAIL_NULL_V(synth, false);
 
-	SPVOICESTATUS status;
-	synth->GetStatus(&status, nullptr);
+	SPVOICESTATUS status = {};
+
+	// Pass a valid pointer for the second argument to satisfy static analysis/spec,
+	// even if we don't need the bookmark.
+	LPWSTR last_bookmark = nullptr;
+	synth->GetStatus(&status, &last_bookmark);
+	if (last_bookmark) {
+		CoTaskMemFree(last_bookmark);
+	}
+
 	return (status.dwRunningState == SPRS_IS_SPEAKING || status.dwRunningState == 0 /* Waiting To Speak */);
 }
 
@@ -130,11 +152,12 @@ bool TTS_Windows::is_paused() const {
 
 Array TTS_Windows::get_voices() const {
 	Array list;
-	IEnumSpObjectTokens *cpEnum;
-	ISpObjectToken *cpVoiceToken;
-	ISpDataKey *cpDataKeyAttribs;
+	IEnumSpObjectTokens *cpEnum = nullptr;
+	ISpObjectToken *cpVoiceToken = nullptr;
+	ISpDataKey *cpDataKeyAttribs = nullptr;
 	ULONG ulCount = 0;
-	ISpObjectTokenCategory *cpCategory;
+	ISpObjectTokenCategory *cpCategory = nullptr;
+
 	HRESULT hr = CoCreateInstance(CLSID_SpObjectTokenCategory, nullptr, CLSCTX_INPROC_SERVER, IID_ISpObjectTokenCategory, (void **)&cpCategory);
 	if (SUCCEEDED(hr)) {
 		hr = cpCategory->SetId(SPCAT_VOICES, false);
@@ -142,41 +165,62 @@ Array TTS_Windows::get_voices() const {
 			hr = cpCategory->EnumTokens(nullptr, nullptr, &cpEnum);
 			if (SUCCEEDED(hr)) {
 				hr = cpEnum->GetCount(&ulCount);
-				while (SUCCEEDED(hr) && ulCount--) {
+				while (hr == S_OK && ulCount--) {
 					hr = cpEnum->Next(1, &cpVoiceToken, nullptr);
-					HRESULT hr_attr = cpVoiceToken->OpenKey(SPTOKENKEY_ATTRIBUTES, &cpDataKeyAttribs);
-					if (SUCCEEDED(hr_attr)) {
-						wchar_t *w_id = nullptr;
-						wchar_t *w_lang = nullptr;
-						wchar_t *w_name = nullptr;
-						cpVoiceToken->GetId(&w_id);
-						cpDataKeyAttribs->GetStringValue(L"Language", &w_lang);
-						cpDataKeyAttribs->GetStringValue(nullptr, &w_name);
-						LCID locale = wcstol(w_lang, nullptr, 16);
+					if (hr == S_OK) {
+						HRESULT hr_attr = cpVoiceToken->OpenKey(SPTOKENKEY_ATTRIBUTES, &cpDataKeyAttribs);
+						if (SUCCEEDED(hr_attr)) {
+							wchar_t *w_id = nullptr;
+							wchar_t *w_lang = nullptr;
+							wchar_t *w_name = nullptr;
 
-						int locale_chars = GetLocaleInfoW(locale, LOCALE_SISO639LANGNAME, nullptr, 0);
-						int region_chars = GetLocaleInfoW(locale, LOCALE_SISO3166CTRYNAME, nullptr, 0);
-						wchar_t *w_lang_code = new wchar_t[locale_chars];
-						wchar_t *w_reg_code = new wchar_t[region_chars];
-						GetLocaleInfoW(locale, LOCALE_SISO639LANGNAME, w_lang_code, locale_chars);
-						GetLocaleInfoW(locale, LOCALE_SISO3166CTRYNAME, w_reg_code, region_chars);
+							cpVoiceToken->GetId(&w_id);
+							cpDataKeyAttribs->GetStringValue(L"Language", &w_lang);
+							cpDataKeyAttribs->GetStringValue(nullptr, &w_name);
 
-						Dictionary voice_d;
-						voice_d["id"] = String::utf16((const char16_t *)w_id);
-						if (w_name) {
-							voice_d["name"] = String::utf16((const char16_t *)w_name);
-						} else {
-							voice_d["name"] = voice_d["id"].operator String().replace("HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\Speech\\Voices\\Tokens\\", "");
+							if (w_lang) {
+								LCID locale = wcstol(w_lang, nullptr, 16);
+
+								int locale_chars = GetLocaleInfoW(locale, LOCALE_SISO639LANGNAME, nullptr, 0);
+								int region_chars = GetLocaleInfoW(locale, LOCALE_SISO3166CTRYNAME, nullptr, 0);
+
+								// Use Vector instead of new/delete to ensure cleanup
+								Vector<wchar_t> w_lang_code;
+								w_lang_code.resize(locale_chars);
+								Vector<wchar_t> w_reg_code;
+								w_reg_code.resize(region_chars);
+
+								GetLocaleInfoW(locale, LOCALE_SISO639LANGNAME, w_lang_code.ptrw(), locale_chars);
+								GetLocaleInfoW(locale, LOCALE_SISO3166CTRYNAME, w_reg_code.ptrw(), region_chars);
+
+								Dictionary voice_d;
+								if (w_id) {
+									voice_d["id"] = String::utf16((const char16_t *)w_id);
+								}
+								if (w_name) {
+									voice_d["name"] = String::utf16((const char16_t *)w_name);
+								} else if (w_id) {
+									voice_d["name"] = voice_d["id"].operator String().replace("HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\Speech\\Voices\\Tokens\\", "");
+								}
+								voice_d["language"] = String::utf16((const char16_t *)w_lang_code.ptr()) + "_" + String::utf16((const char16_t *)w_reg_code.ptr());
+								list.push_back(voice_d);
+							}
+
+							// Free memory allocated by SAPI
+							if (w_id) {
+								CoTaskMemFree(w_id);
+							}
+							if (w_lang) {
+								CoTaskMemFree(w_lang);
+							}
+							if (w_name) {
+								CoTaskMemFree(w_name);
+							}
+
+							cpDataKeyAttribs->Release();
 						}
-						voice_d["language"] = String::utf16((const char16_t *)w_lang_code) + "_" + String::utf16((const char16_t *)w_reg_code);
-						list.push_back(voice_d);
-
-						delete[] w_lang_code;
-						delete[] w_reg_code;
-
-						cpDataKeyAttribs->Release();
+						cpVoiceToken->Release();
 					}
-					cpVoiceToken->Release();
 				}
 				cpEnum->Release();
 			}
@@ -231,8 +275,13 @@ void TTS_Windows::resume() {
 void TTS_Windows::stop() {
 	ERR_FAIL_NULL(synth);
 
-	SPVOICESTATUS status;
-	synth->GetStatus(&status, nullptr);
+	SPVOICESTATUS status = {};
+	LPWSTR last_bookmark = nullptr;
+	synth->GetStatus(&status, &last_bookmark);
+	if (last_bookmark) {
+		CoTaskMemFree(last_bookmark);
+	}
+
 	uint32_t current_stream = (uint32_t)status.ulCurrentStream;
 	if (ids.has(current_stream)) {
 		DisplayServer::get_singleton()->tts_post_utterance_event(DisplayServer::TTS_UTTERANCE_CANCELED, ids[current_stream].id);

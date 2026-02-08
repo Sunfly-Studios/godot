@@ -144,7 +144,7 @@ int main(int argc, char **argv) {
 
 HINSTANCE godot_hinstance = nullptr;
 
-int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdShow) {
+int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _In_ LPSTR lpCmdLine, _In_ int nCmdShow) {
 	godot_hinstance = hInstance;
 	return main(0, nullptr);
 }

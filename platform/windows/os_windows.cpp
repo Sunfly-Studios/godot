@@ -411,11 +411,13 @@ void debug_dynamic_library_check_dependencies(const String &p_path, HashSet<Stri
 	}
 	r_checked.insert(p_path);
 
-	LOADED_IMAGE loaded_image;
+	LOADED_IMAGE loaded_image = {};
 	HANDLE file = CreateFileW((LPCWSTR)p_path.utf16().get_data(), GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING, 0, nullptr);
 	if (file != INVALID_HANDLE_VALUE) {
+		// CreateFileMapping returns NULL (0) on failure, not INVALID_HANDLE_VALUE (-1).
 		HANDLE file_mapping = CreateFileMappingW(file, nullptr, PAGE_READONLY | SEC_COMMIT, 0, 0, nullptr);
-		if (file_mapping != INVALID_HANDLE_VALUE) {
+
+		if (file_mapping) {
 			PVOID mapping = MapViewOfFile(file_mapping, FILE_MAP_READ, 0, 0, 0);
 			if (mapping) {
 				PIMAGE_DOS_HEADER dos_header = (PIMAGE_DOS_HEADER)mapping;
@@ -446,22 +448,29 @@ void debug_dynamic_library_check_dependencies(const String &p_path, HashSet<Stri
 					ULONG size = 0;
 					const IMAGE_IMPORT_DESCRIPTOR *import_desc = (const IMAGE_IMPORT_DESCRIPTOR *)ImageDirectoryEntryToData((HMODULE)loaded_image.MappedAddress, false, IMAGE_DIRECTORY_ENTRY_IMPORT, &size);
 					if (import_desc) {
+						// Move 64KB stack allocation to Heap using Vector.
+						// This is critical because this function is recursive; keeping it on the stack causes Stack Overflow.
+						Vector<char16_t> full_name_wc;
+						full_name_wc.resize(32767);
+
 						for (; import_desc->Name && import_desc->FirstThunk; import_desc++) {
-							char16_t full_name_wc[32767];
 							const char *name_cs = (const char *)ImageRvaToVa(loaded_image.FileHeader, loaded_image.MappedAddress, import_desc->Name, nullptr);
 							String name = String(name_cs);
+
+							// Use .ptrw() to get a writable pointer for the Windows API
 							if (name.begins_with("api-ms-win-")) {
 								r_checked.insert(name);
-							} else if (SearchPathW(nullptr, (LPCWSTR)name.utf16().get_data(), nullptr, 32767, (LPWSTR)full_name_wc, nullptr)) {
-								debug_dynamic_library_check_dependencies(String::utf16(full_name_wc), r_checked, r_missing);
-							} else if (SearchPathW((LPCWSTR)(p_path.get_base_dir().utf16().get_data()), (LPCWSTR)name.utf16().get_data(), nullptr, 32767, (LPWSTR)full_name_wc, nullptr)) {
-								debug_dynamic_library_check_dependencies(String::utf16(full_name_wc), r_checked, r_missing);
+							} else if (SearchPathW(nullptr, (LPCWSTR)name.utf16().get_data(), nullptr, 32767, (LPWSTR)full_name_wc.ptrw(), nullptr)) {
+								debug_dynamic_library_check_dependencies(String::utf16(full_name_wc.ptr()), r_checked, r_missing);
+							} else if (SearchPathW((LPCWSTR)(p_path.get_base_dir().utf16().get_data()), (LPCWSTR)name.utf16().get_data(), nullptr, 32767, (LPWSTR)full_name_wc.ptrw(), nullptr)) {
+								debug_dynamic_library_check_dependencies(String::utf16(full_name_wc.ptr()), r_checked, r_missing);
 							} else {
 								r_missing.insert(name);
 							}
 						}
 					}
 				}
+				//UnmapViewOfFile should only be called if MapViewOfFile succeeded (inside this block).
 				UnmapViewOfFile(mapping);
 			}
 			CloseHandle(file_mapping);
@@ -512,8 +521,15 @@ Error OS_Windows::open_dynamic_library(const String &p_path, void *&p_library_ha
 	typedef DLL_DIRECTORY_COOKIE(WINAPI * PAddDllDirectory)(PCWSTR);
 	typedef BOOL(WINAPI * PRemoveDllDirectory)(DLL_DIRECTORY_COOKIE);
 
-	PAddDllDirectory add_dll_directory = (PAddDllDirectory)GetProcAddress(GetModuleHandle("kernel32.dll"), "AddDllDirectory");
-	PRemoveDllDirectory remove_dll_directory = (PRemoveDllDirectory)GetProcAddress(GetModuleHandle("kernel32.dll"), "RemoveDllDirectory");
+	PAddDllDirectory add_dll_directory = nullptr;
+	PRemoveDllDirectory remove_dll_directory = nullptr;
+
+	// Check if GetModuleHandle returns a valid handle before calling GetProcAddress
+	HMODULE kernel32 = GetModuleHandleW(L"kernel32.dll");
+	if (kernel32) {
+		add_dll_directory = (PAddDllDirectory)GetProcAddress(kernel32, "AddDllDirectory");
+		remove_dll_directory = (PRemoveDllDirectory)GetProcAddress(kernel32, "RemoveDllDirectory");
+	}
 
 	bool has_dll_directory_api = ((add_dll_directory != nullptr) && (remove_dll_directory != nullptr));
 	DLL_DIRECTORY_COOKIE cookie = nullptr;
@@ -612,70 +628,76 @@ String OS_Windows::get_distribution_name() const {
 }
 
 String OS_Windows::get_version() const {
-	RtlGetVersionPtr version_ptr = (RtlGetVersionPtr)GetProcAddress(GetModuleHandle("ntdll.dll"), "RtlGetVersion");
-	if (version_ptr != nullptr) {
-		RTL_OSVERSIONINFOEXW fow;
-		ZeroMemory(&fow, sizeof(fow));
-		fow.dwOSVersionInfoSize = sizeof(fow);
-		if (version_ptr(&fow) == 0x00000000) {
-			return vformat("%d.%d.%d", (int64_t)fow.dwMajorVersion, (int64_t)fow.dwMinorVersion, (int64_t)fow.dwBuildNumber);
+	HMODULE ntdll = GetModuleHandleW(L"ntdll.dll");
+	if (ntdll) {
+		RtlGetVersionPtr version_ptr = (RtlGetVersionPtr)GetProcAddress(ntdll, "RtlGetVersion");
+		if (version_ptr != nullptr) {
+			RTL_OSVERSIONINFOEXW fow;
+			ZeroMemory(&fow, sizeof(fow));
+			fow.dwOSVersionInfoSize = sizeof(fow);
+			if (version_ptr(&fow) == 0x00000000) {
+				return vformat("%d.%d.%d", (int64_t)fow.dwMajorVersion, (int64_t)fow.dwMinorVersion, (int64_t)fow.dwBuildNumber);
+			}
 		}
 	}
 	return "";
 }
 
 String OS_Windows::get_version_alias() const {
-	RtlGetVersionPtr version_ptr = (RtlGetVersionPtr)GetProcAddress(GetModuleHandle("ntdll.dll"), "RtlGetVersion");
-	if (version_ptr != nullptr) {
-		RTL_OSVERSIONINFOEXW fow;
-		ZeroMemory(&fow, sizeof(fow));
-		fow.dwOSVersionInfoSize = sizeof(fow);
-		if (version_ptr(&fow) == 0x00000000) {
-			String windows_string;
-			if (fow.wProductType != VER_NT_WORKSTATION && fow.dwMajorVersion == 10 && fow.dwBuildNumber >= 26100) {
-				windows_string = "Server 2025";
-			} else if (fow.dwMajorVersion == 10 && fow.dwBuildNumber >= 20348) {
-				// Builds above 20348 correspond to Windows 11 / Windows Server 2022.
-				// Their major version numbers are still 10 though, not 11.
-				if (fow.wProductType != VER_NT_WORKSTATION) {
-					windows_string += "Server 2022";
-				} else {
-					windows_string += "11";
-				}
-			} else if (fow.dwMajorVersion == 10) {
-				if (fow.wProductType != VER_NT_WORKSTATION && fow.dwBuildNumber >= 17763) {
-					windows_string += "Server 2019";
-				} else {
+	HMODULE ntdll = GetModuleHandleW(L"ntdll.dll");
+	if (ntdll) {
+		RtlGetVersionPtr version_ptr = (RtlGetVersionPtr)GetProcAddress(ntdll, "RtlGetVersion");
+		if (version_ptr != nullptr) {
+			RTL_OSVERSIONINFOEXW fow;
+			ZeroMemory(&fow, sizeof(fow));
+			fow.dwOSVersionInfoSize = sizeof(fow);
+			if (version_ptr(&fow) == 0x00000000) {
+				String windows_string;
+				if (fow.wProductType != VER_NT_WORKSTATION && fow.dwMajorVersion == 10 && fow.dwBuildNumber >= 26100) {
+					windows_string = "Server 2025";
+				} else if (fow.dwMajorVersion == 10 && fow.dwBuildNumber >= 20348) {
+					// Builds above 20348 correspond to Windows 11 / Windows Server 2022.
+					// Their major version numbers are still 10 though, not 11.
 					if (fow.wProductType != VER_NT_WORKSTATION) {
-						windows_string += "Server 2016";
+						windows_string += "Server 2022";
 					} else {
-						windows_string += "10";
+						windows_string += "11";
 					}
-				}
-			} else if (fow.dwMajorVersion == 6 && fow.dwMinorVersion == 3) {
-				if (fow.wProductType != VER_NT_WORKSTATION) {
-					windows_string = "Server 2012 R2";
+				} else if (fow.dwMajorVersion == 10) {
+					if (fow.wProductType != VER_NT_WORKSTATION && fow.dwBuildNumber >= 17763) {
+						windows_string += "Server 2019";
+					} else {
+						if (fow.wProductType != VER_NT_WORKSTATION) {
+							windows_string += "Server 2016";
+						} else {
+							windows_string += "10";
+						}
+					}
+				} else if (fow.dwMajorVersion == 6 && fow.dwMinorVersion == 3) {
+					if (fow.wProductType != VER_NT_WORKSTATION) {
+						windows_string = "Server 2012 R2";
+					} else {
+						windows_string += "8.1";
+					}
+				} else if (fow.dwMajorVersion == 6 && fow.dwMinorVersion == 2) {
+					if (fow.wProductType != VER_NT_WORKSTATION) {
+						windows_string += "Server 2012";
+					} else {
+						windows_string += "8";
+					}
+				} else if (fow.dwMajorVersion == 6 && fow.dwMinorVersion == 1) {
+					if (fow.wProductType != VER_NT_WORKSTATION) {
+						windows_string = "Server 2008 R2";
+					} else {
+						windows_string += "7";
+					}
 				} else {
-					windows_string += "8.1";
+					windows_string += "Unknown";
 				}
-			} else if (fow.dwMajorVersion == 6 && fow.dwMinorVersion == 2) {
-				if (fow.wProductType != VER_NT_WORKSTATION) {
-					windows_string += "Server 2012";
-				} else {
-					windows_string += "8";
-				}
-			} else if (fow.dwMajorVersion == 6 && fow.dwMinorVersion == 1) {
-				if (fow.wProductType != VER_NT_WORKSTATION) {
-					windows_string = "Server 2008 R2";
-				} else {
-					windows_string += "7";
-				}
-			} else {
-				windows_string += "Unknown";
-			}
-			// Windows versions older than 7 cannot run Godot.
+				// Windows versions older than 7 cannot run Godot.
 
-			return vformat("%s (build %d)", windows_string, (int64_t)fow.dwBuildNumber);
+				return vformat("%s (build %d)", windows_string, (int64_t)fow.dwBuildNumber);
+			}
 		}
 	}
 
@@ -760,7 +782,10 @@ Vector<String> OS_Windows::_get_video_adapter_driver_info_wmi(const String &p_na
 	IWbemLocator *wbemLocator = nullptr; // to get the services
 	IWbemServices *wbemServices = nullptr; // to get the class
 	IEnumWbemClassObject *iter = nullptr;
-	IWbemClassObject *pnpSDriverObject[1]; // contains driver name, version, etc.
+
+	// Use a single pointer, not an array of size 1.
+	IWbemClassObject *pnpSDriverObject = nullptr;
+
 	String driver_name;
 	String driver_version;
 
@@ -784,49 +809,56 @@ Vector<String> OS_Windows::_get_video_adapter_driver_info_wmi(const String &p_na
 	hr = wbemServices->ExecQuery(query_lang, query, WBEM_FLAG_RETURN_IMMEDIATELY | WBEM_FLAG_FORWARD_ONLY, nullptr, &iter);
 	SysFreeString(query_lang);
 	SysFreeString(query);
+
 	if (hr == S_OK) {
 		ULONG resultCount;
-		hr = iter->Next(5000, 1, pnpSDriverObject, &resultCount); // Get exactly 1. Wait max 5 seconds.
+		// Pass address of single pointer.
+		hr = iter->Next(5000, 1, &pnpSDriverObject, &resultCount);
 
 		if (hr == S_OK && resultCount > 0) {
 			VARIANT dn;
 			VariantInit(&dn);
 
 			BSTR object_name = SysAllocString(L"DriverName");
-			hr = pnpSDriverObject[0]->Get(object_name, 0, &dn, nullptr, nullptr);
+			hr = pnpSDriverObject->Get(object_name, 0, &dn, nullptr, nullptr);
 			SysFreeString(object_name);
+
 			if (hr == S_OK) {
 				String d_name = String(V_BSTR(&dn));
+				// Clear variant to prevent BSTR leak.
+				VariantClear(&dn);
+
 				if (d_name.is_empty()) {
 					object_name = SysAllocString(L"DriverProviderName");
-					hr = pnpSDriverObject[0]->Get(object_name, 0, &dn, nullptr, nullptr);
+					hr = pnpSDriverObject->Get(object_name, 0, &dn, nullptr, nullptr);
 					SysFreeString(object_name);
 					if (hr == S_OK) {
 						driver_name = String(V_BSTR(&dn));
+						VariantClear(&dn);
 					}
 				} else {
 					driver_name = d_name;
 				}
 			} else {
 				object_name = SysAllocString(L"DriverProviderName");
-				hr = pnpSDriverObject[0]->Get(object_name, 0, &dn, nullptr, nullptr);
+				hr = pnpSDriverObject->Get(object_name, 0, &dn, nullptr, nullptr);
 				SysFreeString(object_name);
 				if (hr == S_OK) {
 					driver_name = String(V_BSTR(&dn));
+					VariantClear(&dn);
 				}
 			}
 
 			VARIANT dv;
 			VariantInit(&dv);
 			object_name = SysAllocString(L"DriverVersion");
-			hr = pnpSDriverObject[0]->Get(object_name, 0, &dv, nullptr, nullptr);
+			hr = pnpSDriverObject->Get(object_name, 0, &dv, nullptr, nullptr);
 			SysFreeString(object_name);
 			if (hr == S_OK) {
 				driver_version = String(V_BSTR(&dv));
+				VariantClear(&dv);
 			}
-			for (ULONG i = 0; i < resultCount; i++) {
-				SAFE_RELEASE(pnpSDriverObject[i])
-			}
+			SAFE_RELEASE(pnpSDriverObject);
 		}
 	}
 
@@ -872,7 +904,11 @@ bool OS_Windows::get_user_prefers_integrated_gpu() const {
 
 	// If this is a packaged app, use the "application user model ID".
 	// Otherwise, use the EXE path.
-	WCHAR value_name[32768];
+
+	// Move 64KB buffer from stack to heap.
+	Vector<WCHAR> value_name;
+	value_name.resize(32768);
+
 	bool is_packaged = false;
 	{
 		HMODULE kernel32 = GetModuleHandleW(L"kernel32.dll");
@@ -881,15 +917,15 @@ bool OS_Windows::get_user_prefers_integrated_gpu() const {
 			GetCurrentApplicationUserModelIdPtr GetCurrentApplicationUserModelId = (GetCurrentApplicationUserModelIdPtr)GetProcAddress(kernel32, "GetCurrentApplicationUserModelId");
 
 			if (GetCurrentApplicationUserModelId) {
-				UINT32 length = sizeof(value_name) / sizeof(value_name[0]);
-				LONG result = GetCurrentApplicationUserModelId(&length, value_name);
+				UINT32 length = value_name.size();
+				LONG result = GetCurrentApplicationUserModelId(&length, value_name.ptrw());
 				if (result == ERROR_SUCCESS) {
 					is_packaged = true;
 				}
 			}
 		}
 	}
-	if (!is_packaged && GetModuleFileNameW(nullptr, value_name, sizeof(value_name) / sizeof(value_name[0])) >= sizeof(value_name) / sizeof(value_name[0])) {
+	if (!is_packaged && GetModuleFileNameW(nullptr, value_name.ptrw(), value_name.size()) >= value_name.size()) {
 		// Paths should never be longer than 32767, but just in case.
 		return false;
 	}
@@ -902,7 +938,8 @@ bool OS_Windows::get_user_prefers_integrated_gpu() const {
 	}
 
 	DWORD size = 0;
-	result = RegGetValueW(hkey, nullptr, value_name, RRF_RT_REG_SZ, nullptr, nullptr, &size);
+	// Use .ptr() for read-only access to the WCHAR buffer
+	result = RegGetValueW(hkey, nullptr, value_name.ptr(), RRF_RT_REG_SZ, nullptr, nullptr, &size);
 	if (result != ERROR_SUCCESS || size == 0) {
 		RegCloseKey(hkey);
 		return false;
@@ -910,7 +947,7 @@ bool OS_Windows::get_user_prefers_integrated_gpu() const {
 
 	Vector<WCHAR> buffer;
 	buffer.resize(size / sizeof(WCHAR));
-	result = RegGetValueW(hkey, nullptr, value_name, RRF_RT_REG_SZ, nullptr, (LPBYTE)buffer.ptrw(), &size);
+	result = RegGetValueW(hkey, nullptr, value_name.ptr(), RRF_RT_REG_SZ, nullptr, (LPBYTE)buffer.ptrw(), &size);
 	if (result != ERROR_SUCCESS) {
 		RegCloseKey(hkey);
 		return false;
@@ -1273,12 +1310,17 @@ Dictionary OS_Windows::get_memory_info() const {
 	meminfo["available"] = -1;
 	meminfo["stack"] = -1;
 
-	PERFORMANCE_INFORMATION pref_info;
+	PERFORMANCE_INFORMATION pref_info = {};
 	pref_info.cb = sizeof(pref_info);
 	GetPerformanceInfo(&pref_info, sizeof(pref_info));
 
 	typedef void(WINAPI * PGetCurrentThreadStackLimits)(PULONG_PTR, PULONG_PTR);
-	PGetCurrentThreadStackLimits GetCurrentThreadStackLimits = (PGetCurrentThreadStackLimits)GetProcAddress(GetModuleHandleA("kernel32.dll"), "GetCurrentThreadStackLimits");
+	PGetCurrentThreadStackLimits GetCurrentThreadStackLimits = nullptr;
+
+	HMODULE kernel32 = GetModuleHandleW(L"kernel32.dll");
+	if (kernel32) {
+		GetCurrentThreadStackLimits = (PGetCurrentThreadStackLimits)GetProcAddress(kernel32, "GetCurrentThreadStackLimits");
+	}
 
 	ULONG_PTR LowLimit = 0;
 	ULONG_PTR HighLimit = 0;
@@ -1304,22 +1346,22 @@ Dictionary OS_Windows::get_memory_info() const {
 
 Dictionary OS_Windows::execute_with_pipe(const String &p_path, const List<String> &p_arguments, bool p_blocking) {
 #define CLEAN_PIPES               \
-	if (pipe_in[0] != 0) {        \
+	if (pipe_in[0] != nullptr) {  \
 		CloseHandle(pipe_in[0]);  \
 	}                             \
-	if (pipe_in[1] != 0) {        \
+	if (pipe_in[1] != nullptr) {  \
 		CloseHandle(pipe_in[1]);  \
 	}                             \
-	if (pipe_out[0] != 0) {       \
+	if (pipe_out[0] != nullptr) { \
 		CloseHandle(pipe_out[0]); \
 	}                             \
-	if (pipe_out[1] != 0) {       \
+	if (pipe_out[1] != nullptr) { \
 		CloseHandle(pipe_out[1]); \
 	}                             \
-	if (pipe_err[0] != 0) {       \
+	if (pipe_err[0] != nullptr) { \
 		CloseHandle(pipe_err[0]); \
 	}                             \
-	if (pipe_err[1] != 0) {       \
+	if (pipe_err[1] != nullptr) { \
 		CloseHandle(pipe_err[1]); \
 	}
 
@@ -1336,53 +1378,74 @@ Dictionary OS_Windows::execute_with_pipe(const String &p_path, const List<String
 	HANDLE pipe_out[2] = { nullptr, nullptr };
 	HANDLE pipe_err[2] = { nullptr, nullptr };
 
-	SECURITY_ATTRIBUTES sa;
+	SECURITY_ATTRIBUTES sa = {};
 	sa.nLength = sizeof(SECURITY_ATTRIBUTES);
 	sa.bInheritHandle = true;
 	sa.lpSecurityDescriptor = nullptr;
 
-	ERR_FAIL_COND_V(!CreatePipe(&pipe_in[0], &pipe_in[1], &sa, 0), ret);
+	// Use if checks rather than macros to ensure we only clean up what was created on failure
+	if (!CreatePipe(&pipe_in[0], &pipe_in[1], &sa, 0)) {
+		return ret;
+	}
+	if (!SetHandleInformation(pipe_in[1], HANDLE_FLAG_INHERIT, 0)) {
+		CLEAN_PIPES
+		return ret;
+	}
+
 	if (!CreatePipe(&pipe_out[0], &pipe_out[1], &sa, 0)) {
 		CLEAN_PIPES
-		ERR_FAIL_V(ret);
+		return ret;
 	}
+	if (!SetHandleInformation(pipe_out[0], HANDLE_FLAG_INHERIT, 0)) {
+		CLEAN_PIPES
+		return ret;
+	}
+
 	if (!CreatePipe(&pipe_err[0], &pipe_err[1], &sa, 0)) {
 		CLEAN_PIPES
-		ERR_FAIL_V(ret);
+		return ret;
 	}
-	ERR_FAIL_COND_V(!SetHandleInformation(pipe_err[0], HANDLE_FLAG_INHERIT, 0), ret);
+	// Check return value or ensure pipe_err[0] is valid before calling SetHandleInformation
+	if (!SetHandleInformation(pipe_err[0], HANDLE_FLAG_INHERIT, 0)) {
+		CLEAN_PIPES
+		return ret;
+	}
 
 	// Create process.
 	ProcessInfo pi;
 	ZeroMemory(&pi.si, sizeof(pi.si));
 	pi.si.StartupInfo.cb = sizeof(pi.si);
 	ZeroMemory(&pi.pi, sizeof(pi.pi));
-	LPSTARTUPINFOW si_w = (LPSTARTUPINFOW)&pi.si.StartupInfo;
 
-	pi.si.StartupInfo.dwFlags |= STARTF_USESTDHANDLES;
-	pi.si.StartupInfo.hStdInput = pipe_in[0];
-	pi.si.StartupInfo.hStdOutput = pipe_out[1];
-	pi.si.StartupInfo.hStdError = pipe_err[1];
+	// Initialize STARTUPINFOEX properly
+	STARTUPINFOEXW si_ex = {};
+	si_ex.StartupInfo.cb = sizeof(STARTUPINFOEXW);
+	si_ex.StartupInfo.dwFlags = STARTF_USESTDHANDLES | EXTENDED_STARTUPINFO_PRESENT;
+	si_ex.StartupInfo.hStdInput = pipe_in[0];
+	si_ex.StartupInfo.hStdOutput = pipe_out[1];
+	si_ex.StartupInfo.hStdError = pipe_err[1];
 
 	SIZE_T attr_list_size = 0;
 	InitializeProcThreadAttributeList(nullptr, 1, 0, &attr_list_size);
-	pi.si.lpAttributeList = (LPPROC_THREAD_ATTRIBUTE_LIST)alloca(attr_list_size);
-	if (!InitializeProcThreadAttributeList(pi.si.lpAttributeList, 1, 0, &attr_list_size)) {
+	si_ex.lpAttributeList = (LPPROC_THREAD_ATTRIBUTE_LIST)alloca(attr_list_size);
+
+	if (!InitializeProcThreadAttributeList(si_ex.lpAttributeList, 1, 0, &attr_list_size)) {
 		CLEAN_PIPES
-		ERR_FAIL_V(ret);
+		return ret;
 	}
+
 	HANDLE handles_to_inherit[] = { pipe_in[0], pipe_out[1], pipe_err[1] };
 	if (!UpdateProcThreadAttribute(
-				pi.si.lpAttributeList,
+				si_ex.lpAttributeList,
 				0,
 				PROC_THREAD_ATTRIBUTE_HANDLE_LIST,
 				handles_to_inherit,
 				sizeof(handles_to_inherit),
 				nullptr,
 				nullptr)) {
+		DeleteProcThreadAttributeList(si_ex.lpAttributeList);
 		CLEAN_PIPES
-		DeleteProcThreadAttributeList(pi.si.lpAttributeList);
-		ERR_FAIL_V(ret);
+		return ret;
 	}
 
 	DWORD creation_flags = NORMAL_PRIORITY_CLASS | CREATE_NO_WINDOW | EXTENDED_STARTUPINFO_PRESENT;
@@ -1399,15 +1462,28 @@ Dictionary OS_Windows::execute_with_pipe(const String &p_path, const List<String
 		current_dir_name = current_short_dir_name;
 	}
 
-	if (!CreateProcessW(nullptr, (LPWSTR)(command.utf16().ptrw()), nullptr, nullptr, true, creation_flags, nullptr, (LPWSTR)current_dir_name.ptr(), si_w, &pi.pi)) {
+	if (!CreateProcessW(nullptr, (LPWSTR)(command.utf16().ptrw()), nullptr, nullptr, true, creation_flags, nullptr, (LPWSTR)current_dir_name.ptr(), &si_ex.StartupInfo, &pi.pi)) {
+		DeleteProcThreadAttributeList(si_ex.lpAttributeList);
 		CLEAN_PIPES
-		DeleteProcThreadAttributeList(pi.si.lpAttributeList);
 		ERR_FAIL_V_MSG(ret, "Could not create child process: " + command);
 	}
-	CloseHandle(pipe_in[0]);
-	CloseHandle(pipe_out[1]);
-	CloseHandle(pipe_err[1]);
-	DeleteProcThreadAttributeList(pi.si.lpAttributeList);
+
+	// Close the thread handle immediately as we don't need it.
+	CloseHandle(pi.pi.hThread);
+
+	// Close the ends of the pipes that the child process inherited.
+	// We check for NULL here just to be strictly safe.
+	if (pipe_in[0]) {
+		CloseHandle(pipe_in[0]);
+	}
+	if (pipe_out[1]) {
+		CloseHandle(pipe_out[1]);
+	}
+	if (pipe_err[1]) {
+		CloseHandle(pipe_err[1]);
+	}
+
+	DeleteProcThreadAttributeList(si_ex.lpAttributeList);
 
 	ProcessID pid = pi.pi.dwProcessId;
 	process_map_mutex.lock();
@@ -1447,7 +1523,7 @@ Error OS_Windows::execute(const String &p_path, const List<String> &p_arguments,
 	HANDLE pipe[2] = { nullptr, nullptr };
 	if (r_pipe) {
 		// Create pipe for StdOut and StdErr.
-		SECURITY_ATTRIBUTES sa;
+		SECURITY_ATTRIBUTES sa = {};
 		sa.nLength = sizeof(SECURITY_ATTRIBUTES);
 		sa.bInheritHandle = true;
 		sa.lpSecurityDescriptor = nullptr;
@@ -1606,6 +1682,13 @@ Error OS_Windows::create_process(const String &p_path, const List<String> &p_arg
 
 	int ret = CreateProcessW(nullptr, (LPWSTR)(command.utf16().ptrw()), nullptr, nullptr, false, creation_flags, nullptr, (LPWSTR)current_dir_name.ptr(), si_w, &pi.pi);
 	ERR_FAIL_COND_V_MSG(ret == 0, ERR_CANT_FORK, "Could not create child process: " + command);
+
+	// Close the thread handle immediately. We don't need it, and keeping it open is a leak.
+	CloseHandle(pi.pi.hThread);
+	pi.pi.hThread = 0; // Zero it out so the structure in the map is clean.
+
+	// Note: We intentionally do not close pi.pi.hProcess here.
+	// It is transferred to the process_map below so the OS class can manage the process (wait/kill) later.
 
 	ProcessID pid = pi.pi.dwProcessId;
 	if (r_child_id) {
@@ -1967,6 +2050,9 @@ Vector<String> OS_Windows::get_system_font_path_for_text(const String &p_font_na
 	}
 
 	Vector<String> ret;
+	Vector<WCHAR> file_path;
+	file_path.resize(32767);
+
 	for (UINT32 i = 0; i < number_of_files; i++) {
 		void const *reference_key = nullptr;
 		UINT32 reference_key_size = 0;
@@ -1981,15 +2067,14 @@ Vector<String> OS_Windows::get_system_font_path_for_text(const String &p_font_na
 			continue;
 		}
 
-		WCHAR file_path[32767];
-		hr = loader->GetFilePathFromKey(reference_key, reference_key_size, &file_path[0], 32767);
+		hr = loader->GetFilePathFromKey(reference_key, reference_key_size, file_path.ptrw(), file_path.size());
 		if (FAILED(hr)) {
 			continue;
 		}
-		String fpath = String::utf16((const char16_t *)&file_path[0]).replace("\\", "/");
+		String fpath = String::utf16((const char16_t *)file_path.ptr()).replace("\\", "/");
 
 		WIN32_FIND_DATAW d;
-		HANDLE fnd = FindFirstFileW((LPCWSTR)&file_path[0], &d);
+		HANDLE fnd = FindFirstFileW((LPCWSTR)file_path.ptr(), &d);
 		if (fnd != INVALID_HANDLE_VALUE) {
 			String fname = String::utf16((const char16_t *)d.cFileName);
 			if (!fname.is_empty()) {
@@ -2046,6 +2131,10 @@ String OS_Windows::get_system_font_path(const String &p_font_name, int p_weight,
 		return String();
 	}
 
+	// Allocate file_path buffer on the heap.
+	Vector<WCHAR> file_path;
+	file_path.resize(32767);
+
 	for (UINT32 i = 0; i < number_of_files; i++) {
 		void const *reference_key = nullptr;
 		UINT32 reference_key_size = 0;
@@ -2060,15 +2149,14 @@ String OS_Windows::get_system_font_path(const String &p_font_name, int p_weight,
 			continue;
 		}
 
-		WCHAR file_path[32767];
-		hr = loader->GetFilePathFromKey(reference_key, reference_key_size, &file_path[0], 32767);
+		hr = loader->GetFilePathFromKey(reference_key, reference_key_size, file_path.ptrw(), file_path.size());
 		if (FAILED(hr)) {
 			continue;
 		}
-		String fpath = String::utf16((const char16_t *)&file_path[0]).replace("\\", "/");
+		String fpath = String::utf16((const char16_t *)file_path.ptr()).replace("\\", "/");
 
 		WIN32_FIND_DATAW d;
-		HANDLE fnd = FindFirstFileW((LPCWSTR)&file_path[0], &d);
+		HANDLE fnd = FindFirstFileW((LPCWSTR)file_path.ptr(), &d);
 		if (fnd != INVALID_HANDLE_VALUE) {
 			String fname = String::utf16((const char16_t *)d.cFileName);
 			if (!fname.is_empty()) {
@@ -2094,10 +2182,12 @@ bool OS_Windows::has_environment(const String &p_var) const {
 }
 
 String OS_Windows::get_environment(const String &p_var) const {
-	WCHAR wval[0x7fff]; // MSDN says 32767 char is the maximum
-	int wlen = GetEnvironmentVariableW((LPCWSTR)(p_var.utf16().get_data()), wval, 0x7fff);
+	Vector<WCHAR> wval;
+	wval.resize(0x7fff); // 32767
+
+	int wlen = GetEnvironmentVariableW((LPCWSTR)(p_var.utf16().get_data()), wval.ptrw(), wval.size());
 	if (wlen > 0) {
-		return String::utf16((const char16_t *)wval);
+		return String::utf16((const char16_t *)wval.ptr());
 	}
 	return "";
 }
@@ -2490,7 +2580,7 @@ String OS_Windows::get_godot_dir_name() const {
 }
 
 String OS_Windows::get_system_dir(SystemDir p_dir, bool p_shared_storage) const {
-	KNOWNFOLDERID id;
+	KNOWNFOLDERID id = {};
 
 	switch (p_dir) {
 		case SYSTEM_DIR_DESKTOP: {
@@ -2834,6 +2924,7 @@ LPVOID install_iat_hook(const String &p_target, const String &p_module, const St
 	if (image_base) {
 		PIMAGE_NT_HEADERS nt_headers = (PIMAGE_NT_HEADERS)((DWORD_PTR)image_base + ((PIMAGE_DOS_HEADER)image_base)->e_lfanew);
 		PIMAGE_IMPORT_DESCRIPTOR import_descriptor = (PIMAGE_IMPORT_DESCRIPTOR)((DWORD_PTR)image_base + nt_headers->OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_IMPORT].VirtualAddress);
+
 		while (import_descriptor->Name != 0) {
 			LPCSTR library_name = (LPCSTR)((DWORD_PTR)image_base + import_descriptor->Name);
 			if (String(library_name).to_lower() == p_module) {
@@ -2841,16 +2932,31 @@ LPVOID install_iat_hook(const String &p_target, const String &p_module, const St
 				PIMAGE_THUNK_DATA first_thunk = (PIMAGE_THUNK_DATA)((DWORD_PTR)image_base + import_descriptor->FirstThunk);
 
 				while ((LPVOID)original_first_thunk->u1.AddressOfData != nullptr) {
+					// Skip Ordinal imports.
+					// Attempting to cast an ordinal value to PIMAGE_IMPORT_BY_NAME
+					// results in a crash (access violation).
+					if (original_first_thunk->u1.Ordinal & IMAGE_ORDINAL_FLAG) {
+						original_first_thunk++;
+						first_thunk++;
+						continue;
+					}
+
 					PIMAGE_IMPORT_BY_NAME function_import = (PIMAGE_IMPORT_BY_NAME)((DWORD_PTR)image_base + original_first_thunk->u1.AddressOfData);
 					if (String(function_import->Name).to_lower() == p_symbol.to_lower()) {
 						DWORD old_protect = 0;
-						VirtualProtect((LPVOID)(&first_thunk->u1.Function), 8, PAGE_READWRITE, &old_protect);
 
-						LPVOID old_func = (LPVOID)first_thunk->u1.Function;
-						first_thunk->u1.Function = (DWORD_PTR)p_hook_func;
+						// Use sizeof(DWORD_PTR) instead of hardcoded '8'.
+						// This ensures safety on both 32-bit (4 bytes) and 64-bit (8 bytes) builds.
+						if (VirtualProtect((LPVOID)(&first_thunk->u1.Function), sizeof(DWORD_PTR), PAGE_READWRITE, &old_protect)) {
+							LPVOID old_func = (LPVOID)first_thunk->u1.Function;
+							first_thunk->u1.Function = (DWORD_PTR)p_hook_func;
 
-						VirtualProtect((LPVOID)(&first_thunk->u1.Function), 8, old_protect, nullptr);
-						return old_func;
+							// VirtualProtect requires a valid pointer for the 4th argument.
+							DWORD restore_protect_dummy = 0;
+							VirtualProtect((LPVOID)(&first_thunk->u1.Function), sizeof(DWORD_PTR), old_protect, &restore_protect_dummy);
+
+							return old_func;
+						}
 					}
 					original_first_thunk++;
 					first_thunk++;
@@ -2890,7 +2996,7 @@ OS_Windows::OS_Windows(HINSTANCE _hInstance) {
 	SetConsoleOutputCP(CP_UTF8);
 	SetConsoleCP(CP_UTF8);
 
-	CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
+	(void)CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
 
 #ifdef WASAPI_ENABLED
 	AudioDriverManager::add_driver(&driver_wasapi);
