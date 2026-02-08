@@ -167,6 +167,7 @@ public:
 			viewport_to_screen = DisplayServer::INVALID_WINDOW_ID;
 			shadow_atlas_size = 0;
 			measure_render_time = false;
+			viewport_render_direct_to_screen = false;
 
 			debug_draw = RS::VIEWPORT_DEBUG_DRAW_DISABLED;
 			screen_space_aa = RS::VIEWPORT_SCREEN_SPACE_AA_DISABLED;

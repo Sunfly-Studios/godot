@@ -136,7 +136,7 @@ public:
 
 		void transfer_to_back(List<T, A> *p_dst_list);
 
-		_FORCE_INLINE_ Element() {}
+		_FORCE_INLINE_ Element() : value() {}
 	};
 
 	typedef T ValueType;

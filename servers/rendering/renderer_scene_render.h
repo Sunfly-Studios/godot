@@ -297,11 +297,11 @@ public:
 
 	struct CameraData {
 		// flags
-		uint32_t view_count;
-		bool is_orthogonal;
-		bool is_frustum;
-		uint32_t visible_layers;
-		bool vaspect;
+		uint32_t view_count = 0;
+		bool is_orthogonal = false;
+		bool is_frustum = false;
+		uint32_t visible_layers = 0;
+		bool vaspect = false;
 
 		// Main/center projection
 		Transform3D main_transform;
