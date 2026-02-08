@@ -94,9 +94,14 @@ void Range::set_value(double p_val) {
 }
 
 void Range::_set_value_no_signal(double p_val) {
-	if (!Math::is_finite(p_val) || Math::is_nan(p_val)) {
-		return;
-	}
+	if (Math::is_nan(p_val)) {
+		shared->val = p_val;
+        return; 
+    }
+
+	if (!Math::is_finite(p_val)) {
+        return;
+    }
 
 	if (shared->step > 0) {
 		p_val = Math::round((p_val - shared->min) / shared->step) * shared->step + shared->min;
