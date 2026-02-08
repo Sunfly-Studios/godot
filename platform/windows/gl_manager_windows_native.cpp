@@ -129,6 +129,7 @@ void GLManagerNative_Windows::_nvapi_setup_profile() {
 
 	if (NvAPI_QueryInterface == nullptr) {
 		print_verbose("Error getting NVAPI NvAPI_QueryInterface");
+		FreeLibrary(nvapi); // Clean up library if we fail here.
 		return;
 	}
 
@@ -146,8 +147,10 @@ void GLManagerNative_Windows::_nvapi_setup_profile() {
 	NvAPI_DRS_FindProfileByName_t NvAPI_DRS_FindProfileByName = (NvAPI_DRS_FindProfileByName_t)NvAPI_QueryInterface(0x7E4A9A0B);
 	NvAPI_DRS_GetApplicationInfo_t NvAPI_DRS_GetApplicationInfo = (NvAPI_DRS_GetApplicationInfo_t)NvAPI_QueryInterface(0xED1F8C69);
 	NvAPI_DRS_DeleteProfile_t NvAPI_DRS_DeleteProfile = (NvAPI_DRS_DeleteProfile_t)NvAPI_QueryInterface(0x17093206);
+	typedef int (*NvAPI_DRS_CreateProfile_t)(NvDRSSessionHandle hSession, NVDRS_PROFILE *pProfileInfo, NvDRSProfileHandle *phProfile);
 
 	if (!nvapi_err_check("NVAPI: Init failed", NvAPI_Initialize())) {
+		FreeLibrary(nvapi);
 		return;
 	}
 
@@ -156,17 +159,21 @@ void GLManagerNative_Windows::_nvapi_setup_profile() {
 	NvDRSSessionHandle session_handle;
 
 	if (NvAPI_DRS_CreateSession == nullptr) {
+		NvAPI_Unload();
+		FreeLibrary(nvapi);
 		return;
 	}
 
 	if (!nvapi_err_check("NVAPI: Error creating DRS session", NvAPI_DRS_CreateSession(&session_handle))) {
 		NvAPI_Unload();
+		FreeLibrary(nvapi);
 		return;
 	}
 
 	if (!nvapi_err_check("NVAPI: Error loading DRS settings", NvAPI_DRS_LoadSettings(session_handle))) {
 		NvAPI_DRS_DestroySession(session_handle);
 		NvAPI_Unload();
+		FreeLibrary(nvapi);
 		return;
 	}
 
@@ -194,12 +201,14 @@ void GLManagerNative_Windows::_nvapi_setup_profile() {
 		if (!nvapi_err_check("NVAPI: Error deleting old profile", NvAPI_DRS_DeleteProfile(session_handle, old_profile_handle))) {
 			NvAPI_DRS_DestroySession(session_handle);
 			NvAPI_Unload();
+			FreeLibrary(nvapi);
 			return;
 		}
 
 		if (!nvapi_err_check("NVAPI: Error deleting old profile", NvAPI_DRS_SaveSettings(session_handle))) {
 			NvAPI_DRS_DestroySession(session_handle);
 			NvAPI_Unload();
+			FreeLibrary(nvapi);
 			return;
 		}
 	}
@@ -211,69 +220,112 @@ void GLManagerNative_Windows::_nvapi_setup_profile() {
 	if (profile_status != 0) {
 		print_verbose("NVAPI: Profile not found, creating...");
 
-		NVDRS_PROFILE profile_info;
-		profile_info.version = NVDRS_PROFILE_VER;
-		profile_info.isPredefined = 0;
-		memcpy(profile_info.profileName, app_profile_name_u16.get_data(), sizeof(char16_t) * app_profile_name_u16.size());
-
-		if (!nvapi_err_check("NVAPI: Error creating profile", NvAPI_DRS_CreateProfile(session_handle, &profile_info, &profile_handle))) {
+		// Allocate large struct on heap
+		NVDRS_PROFILE *profile_info = (NVDRS_PROFILE *)malloc(sizeof(NVDRS_PROFILE));
+		if (!profile_info) {
 			NvAPI_DRS_DestroySession(session_handle);
 			NvAPI_Unload();
+			FreeLibrary(nvapi);
+			return;
+		}
+		ZeroMemory(profile_info, sizeof(NVDRS_PROFILE));
+
+		profile_info->version = NVDRS_PROFILE_VER;
+		profile_info->isPredefined = 0;
+		memcpy(profile_info->profileName, app_profile_name_u16.get_data(), sizeof(char16_t) * app_profile_name_u16.size());
+
+		int status = NvAPI_DRS_CreateProfile(session_handle, profile_info, &profile_handle);
+		free(profile_info); // Free immediately
+
+		if (!nvapi_err_check("NVAPI: Error creating profile", status)) {
+			NvAPI_DRS_DestroySession(session_handle);
+			NvAPI_Unload();
+			FreeLibrary(nvapi);
 			return;
 		}
 	}
 
-	NVDRS_APPLICATION_V4 app;
-	app.version = NVDRS_APPLICATION_VER_V4;
+	// Allocate large struct on heap
+	NVDRS_APPLICATION_V4 *app = (NVDRS_APPLICATION_V4 *)malloc(sizeof(NVDRS_APPLICATION_V4));
+	if (!app) {
+		NvAPI_DRS_DestroySession(session_handle);
+		NvAPI_Unload();
+		FreeLibrary(nvapi);
+		return;
+	}
+	ZeroMemory(app, sizeof(NVDRS_APPLICATION_V4));
+	app->version = NVDRS_APPLICATION_VER_V4;
 
-	int app_status = NvAPI_DRS_GetApplicationInfo(session_handle, profile_handle, (NvU16 *)(app_executable_name_u16.ptrw()), &app);
+	int app_status = NvAPI_DRS_GetApplicationInfo(session_handle, profile_handle, (NvU16 *)(app_executable_name_u16.ptrw()), app);
 
 	if (app_status != 0) {
 		print_verbose("NVAPI: Application not found in profile, creating...");
 
-		app.isPredefined = 0;
-		memcpy(app.appName, app_executable_name_u16.get_data(), sizeof(char16_t) * app_executable_name_u16.size());
-		memcpy(app.launcher, L"", sizeof(wchar_t));
-		memcpy(app.fileInFolder, L"", sizeof(wchar_t));
+		app->isPredefined = 0;
+		memcpy(app->appName, app_executable_name_u16.get_data(), sizeof(char16_t) * app_executable_name_u16.size());
+		memcpy(app->launcher, L"", sizeof(wchar_t));
+		memcpy(app->fileInFolder, L"", sizeof(wchar_t));
 
-		if (!nvapi_err_check("NVAPI: Error creating application", NvAPI_DRS_CreateApplication(session_handle, profile_handle, &app))) {
+		int status = NvAPI_DRS_CreateApplication(session_handle, profile_handle, app);
+		if (!nvapi_err_check("NVAPI: Error creating application", status)) {
+			free(app); // Free on error
 			NvAPI_DRS_DestroySession(session_handle);
 			NvAPI_Unload();
+			FreeLibrary(nvapi);
 			return;
 		}
 	}
+	free(app); // Free on success
 
-	NVDRS_SETTING ogl_thread_control_setting = {};
-	ogl_thread_control_setting.version = NVDRS_SETTING_VER;
-	ogl_thread_control_setting.settingId = OGL_THREAD_CONTROL_ID;
-	ogl_thread_control_setting.settingType = NVDRS_DWORD_TYPE;
+	// We allocate one struct and reuse it for both settings.
+	NVDRS_SETTING *setting = (NVDRS_SETTING *)malloc(sizeof(NVDRS_SETTING));
+	if (!setting) {
+		NvAPI_DRS_DestroySession(session_handle);
+		NvAPI_Unload();
+		FreeLibrary(nvapi);
+		return;
+	}
+
+	// First setting: Threaded Optimization
+	ZeroMemory(setting, sizeof(NVDRS_SETTING));
+	setting->version = NVDRS_SETTING_VER;
+	setting->settingId = OGL_THREAD_CONTROL_ID;
+	setting->settingType = NVDRS_DWORD_TYPE;
 	int thread_control_val = OGL_THREAD_CONTROL_DISABLE;
 	if (!GLOBAL_GET("rendering/gl_compatibility/nvidia_disable_threaded_optimization")) {
 		thread_control_val = OGL_THREAD_CONTROL_ENABLE;
 	}
-	ogl_thread_control_setting.u32CurrentValue = thread_control_val;
+	setting->u32CurrentValue = thread_control_val;
 
-	if (!nvapi_err_check("NVAPI: Error calling NvAPI_DRS_SetSetting", NvAPI_DRS_SetSetting(session_handle, profile_handle, &ogl_thread_control_setting))) {
+	if (!nvapi_err_check("NVAPI: Error calling NvAPI_DRS_SetSetting", NvAPI_DRS_SetSetting(session_handle, profile_handle, setting))) {
+		free(setting);
 		NvAPI_DRS_DestroySession(session_handle);
 		NvAPI_Unload();
+		FreeLibrary(nvapi);
 		return;
 	}
 
-	NVDRS_SETTING vrr_mode_setting = {};
-	vrr_mode_setting.version = NVDRS_SETTING_VER;
-	vrr_mode_setting.settingId = VRR_MODE_ID;
-	vrr_mode_setting.settingType = NVDRS_DWORD_TYPE;
-	vrr_mode_setting.u32CurrentValue = VRR_MODE_FULLSCREEN_ONLY;
+	// Second setting: VRR Mode
+	ZeroMemory(setting, sizeof(NVDRS_SETTING)); // Reset for next setting
+	setting->version = NVDRS_SETTING_VER;
+	setting->settingId = VRR_MODE_ID;
+	setting->settingType = NVDRS_DWORD_TYPE;
+	setting->u32CurrentValue = VRR_MODE_FULLSCREEN_ONLY;
 
-	if (!nvapi_err_check("NVAPI: Error calling NvAPI_DRS_SetSetting", NvAPI_DRS_SetSetting(session_handle, profile_handle, &vrr_mode_setting))) {
+	if (!nvapi_err_check("NVAPI: Error calling NvAPI_DRS_SetSetting", NvAPI_DRS_SetSetting(session_handle, profile_handle, setting))) {
+		free(setting);
 		NvAPI_DRS_DestroySession(session_handle);
 		NvAPI_Unload();
+		FreeLibrary(nvapi);
 		return;
 	}
+
+	free(setting); // Cleanup settings struct
 
 	if (!nvapi_err_check("NVAPI: Error saving settings", NvAPI_DRS_SaveSettings(session_handle))) {
 		NvAPI_DRS_DestroySession(session_handle);
 		NvAPI_Unload();
+		FreeLibrary(nvapi);
 		return;
 	}
 
@@ -285,6 +337,10 @@ void GLManagerNative_Windows::_nvapi_setup_profile() {
 	print_verbose("NVAPI: Disabled G-SYNC for windowed mode successfully");
 
 	NvAPI_DRS_DestroySession(session_handle);
+	NvAPI_Unload();
+
+	// We can free the library now that we are done with the session.
+	FreeLibrary(nvapi);
 }
 
 int GLManagerNative_Windows::_find_or_create_display(GLWindow &win) {

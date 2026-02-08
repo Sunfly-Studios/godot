@@ -201,12 +201,12 @@ bool OS_Windows::is_using_con_wrapper() const {
 	String exe_dir = exe_name.get_base_dir();
 	String exe_fname = exe_name.get_file().get_basename();
 
-	DWORD pids[256];
+	DWORD pids[256] = {};
 	DWORD count = GetConsoleProcessList(&pids[0], 256);
 	for (DWORD i = 0; i < count; i++) {
 		HANDLE process = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, pids[i]);
 		if (process != NULL) {
-			WCHAR proc_name[MAX_PATH];
+			WCHAR proc_name[MAX_PATH] = {};
 			DWORD len = MAX_PATH;
 			if (QueryFullProcessImageNameW(process, 0, &proc_name[0], &len)) {
 				String name = String::utf16((const char16_t *)&proc_name[0], len).replace("\\", "/").to_lower();
@@ -297,7 +297,7 @@ void OS_Windows::initialize() {
 
 	// set minimum resolution for periodic timers, otherwise Sleep(n) may wait at least as
 	//  long as the windows scheduler resolution (~16-30ms) even for calls like Sleep(1)
-	TIMECAPS time_caps;
+	TIMECAPS time_caps = {};
 	if (timeGetDevCaps(&time_caps, sizeof(time_caps)) == MMSYSERR_NOERROR) {
 		delay_resolution = time_caps.wPeriodMin * 1000;
 		timeBeginPeriod(time_caps.wPeriodMin);
@@ -735,7 +735,7 @@ Vector<String> OS_Windows::_get_video_adapter_driver_info_reg(const String &p_na
 				continue;
 			}
 
-			WCHAR buffer[4096];
+			WCHAR buffer[4096] = {};
 			DWORD buffer_len = 4096;
 			DWORD vtype = REG_SZ;
 			if (RegQueryValueExW(sub_hkey, L"DriverDesc", nullptr, &vtype, (LPBYTE)buffer, &buffer_len) != ERROR_SUCCESS || buffer_len == 0) {
@@ -965,7 +965,7 @@ bool OS_Windows::get_user_prefers_integrated_gpu() const {
 }
 
 OS::DateTime OS_Windows::get_datetime(bool p_utc) const {
-	SYSTEMTIME systemtime;
+	SYSTEMTIME systemtime = {};
 	if (p_utc) {
 		GetSystemTime(&systemtime);
 	} else {
@@ -973,13 +973,13 @@ OS::DateTime OS_Windows::get_datetime(bool p_utc) const {
 	}
 
 	//Get DST information from Windows, but only if p_utc is false.
-	TIME_ZONE_INFORMATION info;
+	TIME_ZONE_INFORMATION info = {};
 	bool is_daylight = false;
 	if (!p_utc && GetTimeZoneInformation(&info) == TIME_ZONE_ID_DAYLIGHT) {
 		is_daylight = true;
 	}
 
-	DateTime dt;
+	DateTime dt = {};
 	dt.year = systemtime.wYear;
 	dt.month = Month(systemtime.wMonth);
 	dt.day = systemtime.wDay;
@@ -992,14 +992,14 @@ OS::DateTime OS_Windows::get_datetime(bool p_utc) const {
 }
 
 OS::TimeZoneInfo OS_Windows::get_time_zone_info() const {
-	TIME_ZONE_INFORMATION info;
+	TIME_ZONE_INFORMATION info = {};
 	bool is_daylight = false;
 	if (GetTimeZoneInformation(&info) == TIME_ZONE_ID_DAYLIGHT) {
 		is_daylight = true;
 	}
 
 	// Daylight Bias needs to be added to the bias if DST is in effect, or else it will not properly update.
-	TimeZoneInfo ret;
+	TimeZoneInfo ret = {};
 	if (is_daylight) {
 		ret.name = info.DaylightName;
 		ret.bias = info.Bias + info.DaylightBias;
@@ -1040,7 +1040,7 @@ void OS_Windows::delay_usec(uint32_t p_usec) const {
 }
 
 uint64_t OS_Windows::get_ticks_usec() const {
-	uint64_t ticks;
+	uint64_t ticks = 0;
 
 	// This is the number of clock ticks since start
 	QueryPerformanceCounter((LARGE_INTEGER *)&ticks);
@@ -1303,7 +1303,7 @@ PackedByteArray OS_Windows::string_to_multibyte(const String &p_encoding, const 
 }
 
 Dictionary OS_Windows::get_memory_info() const {
-	Dictionary meminfo;
+	Dictionary meminfo = {};
 
 	meminfo["physical"] = -1;
 	meminfo["free"] = -1;
@@ -1365,7 +1365,7 @@ Dictionary OS_Windows::execute_with_pipe(const String &p_path, const List<String
 		CloseHandle(pipe_err[1]); \
 	}
 
-	Dictionary ret;
+	Dictionary ret = {};
 
 	String path = p_path.is_absolute_path() ? fix_path(p_path) : p_path;
 	String command = _quote_command_line_argument(path);
@@ -1513,14 +1513,14 @@ Error OS_Windows::execute(const String &p_path, const List<String> &p_arguments,
 		command += " " + _quote_command_line_argument(E);
 	}
 
-	ProcessInfo pi;
-	ZeroMemory(&pi.si, sizeof(pi.si));
-	pi.si.StartupInfo.cb = sizeof(pi.si);
-	ZeroMemory(&pi.pi, sizeof(pi.pi));
-	LPSTARTUPINFOW si_w = (LPSTARTUPINFOW)&pi.si.StartupInfo;
+	// Use standard Win32 structures to avoid ambiguity with 'ProcessInfo' wrapper size.
+	STARTUPINFOEXW si_ex = {};
+	si_ex.StartupInfo.cb = sizeof(STARTUPINFOEXW);
+	PROCESS_INFORMATION pi = {};
 
 	bool inherit_handles = false;
 	HANDLE pipe[2] = { nullptr, nullptr };
+
 	if (r_pipe) {
 		// Create pipe for StdOut and StdErr.
 		SECURITY_ATTRIBUTES sa = {};
@@ -1530,35 +1530,38 @@ Error OS_Windows::execute(const String &p_path, const List<String> &p_arguments,
 
 		ERR_FAIL_COND_V(!CreatePipe(&pipe[0], &pipe[1], &sa, 0), ERR_CANT_FORK);
 
-		pi.si.StartupInfo.dwFlags |= STARTF_USESTDHANDLES;
-		pi.si.StartupInfo.hStdOutput = pipe[1];
+		si_ex.StartupInfo.dwFlags |= STARTF_USESTDHANDLES;
+		si_ex.StartupInfo.hStdOutput = pipe[1];
 		if (read_stderr) {
-			pi.si.StartupInfo.hStdError = pipe[1];
+			si_ex.StartupInfo.hStdError = pipe[1];
 		}
 
 		SIZE_T attr_list_size = 0;
 		InitializeProcThreadAttributeList(nullptr, 1, 0, &attr_list_size);
-		pi.si.lpAttributeList = (LPPROC_THREAD_ATTRIBUTE_LIST)alloca(attr_list_size);
-		if (!InitializeProcThreadAttributeList(pi.si.lpAttributeList, 1, 0, &attr_list_size)) {
-			CloseHandle(pipe[0]); // Cleanup pipe handles.
+		si_ex.lpAttributeList = (LPPROC_THREAD_ATTRIBUTE_LIST)alloca(attr_list_size);
+
+		if (!InitializeProcThreadAttributeList(si_ex.lpAttributeList, 1, 0, &attr_list_size)) {
+			CloseHandle(pipe[0]);
 			CloseHandle(pipe[1]);
 			ERR_FAIL_V(ERR_CANT_FORK);
 		}
+
 		if (!UpdateProcThreadAttribute(
-					pi.si.lpAttributeList,
+					si_ex.lpAttributeList,
 					0,
 					PROC_THREAD_ATTRIBUTE_HANDLE_LIST,
 					&pipe[1],
 					sizeof(HANDLE),
 					nullptr,
 					nullptr)) {
-			CloseHandle(pipe[0]); // Cleanup pipe handles.
+			CloseHandle(pipe[0]);
 			CloseHandle(pipe[1]);
-			DeleteProcThreadAttributeList(pi.si.lpAttributeList);
+			DeleteProcThreadAttributeList(si_ex.lpAttributeList);
 			ERR_FAIL_V(ERR_CANT_FORK);
 		}
 		inherit_handles = true;
 	}
+
 	DWORD creation_flags = NORMAL_PRIORITY_CLASS;
 	if (inherit_handles) {
 		creation_flags |= EXTENDED_STARTUPINFO_PRESENT;
@@ -1581,31 +1584,34 @@ Error OS_Windows::execute(const String &p_path, const List<String> &p_arguments,
 		current_dir_name = current_short_dir_name;
 	}
 
-	int ret = CreateProcessW(nullptr, (LPWSTR)(command.utf16().ptrw()), nullptr, nullptr, inherit_handles, creation_flags, nullptr, (LPWSTR)current_dir_name.ptr(), si_w, &pi.pi);
-	if (!ret && r_pipe) {
-		CloseHandle(pipe[0]); // Cleanup pipe handles.
-		CloseHandle(pipe[1]);
-		DeleteProcThreadAttributeList(pi.si.lpAttributeList);
-	}
-	ERR_FAIL_COND_V_MSG(ret == 0, ERR_CANT_FORK, "Could not create child process: " + command);
+	int ret = CreateProcessW(nullptr, (LPWSTR)(command.utf16().ptrw()), nullptr, nullptr, inherit_handles, creation_flags, nullptr, (LPWSTR)current_dir_name.ptr(), &si_ex.StartupInfo, &pi);
 
+	if (ret == 0) {
+		// Cleanup resources on failure
+		if (r_pipe) {
+			CloseHandle(pipe[0]);
+			CloseHandle(pipe[1]);
+			DeleteProcThreadAttributeList(si_ex.lpAttributeList);
+		}
+		ERR_FAIL_V_MSG(ERR_CANT_FORK, "Could not create child process: " + command);
+	}
+
+	// Process created successfully
 	if (r_pipe) {
-		CloseHandle(pipe[1]); // Close pipe write handle (only child process is writing).
+		CloseHandle(pipe[1]); // Close write end of pipe in parent.
 
 		LocalVector<char> bytes;
 		int bytes_in_buffer = 0;
 
 		const int CHUNK_SIZE = 4096;
 		DWORD read = 0;
-		for (;;) { // Read StdOut and StdErr from pipe.
+		for (;;) {
 			bytes.resize(bytes_in_buffer + CHUNK_SIZE);
 			const bool success = ReadFile(pipe[0], bytes.ptr() + bytes_in_buffer, CHUNK_SIZE, &read, nullptr);
 			if (!success || read == 0) {
 				break;
 			}
 
-			// Assume that all possible encodings are ASCII-compatible.
-			// Break at newline to allow receiving long output in portions.
 			int newline_index = -1;
 			for (int i = read - 1; i >= 0; i--) {
 				if (bytes[bytes_in_buffer + i] == '\n') {
@@ -1629,20 +1635,24 @@ Error OS_Windows::execute(const String &p_path, const List<String> &p_arguments,
 			_append_to_pipe(bytes.ptr(), bytes_in_buffer, r_pipe, p_pipe_mutex);
 		}
 
-		CloseHandle(pipe[0]); // Close pipe read handle.
-	}
-	WaitForSingleObject(pi.pi.hProcess, INFINITE);
-
-	if (r_exitcode) {
-		DWORD ret2;
-		GetExitCodeProcess(pi.pi.hProcess, &ret2);
-		*r_exitcode = ret2;
+		CloseHandle(pipe[0]); // Close read end of pipe.
+		DeleteProcThreadAttributeList(si_ex.lpAttributeList);
 	}
 
-	CloseHandle(pi.pi.hProcess);
-	CloseHandle(pi.pi.hThread);
-	if (r_pipe) {
-		DeleteProcThreadAttributeList(pi.si.lpAttributeList);
+	// Only wait on valid handles (guaranteed valid due to check on 'ret' above)
+	if (pi.hProcess) {
+		WaitForSingleObject(pi.hProcess, INFINITE);
+
+		if (r_exitcode) {
+			DWORD ret2;
+			GetExitCodeProcess(pi.hProcess, &ret2);
+			*r_exitcode = ret2;
+		}
+		CloseHandle(pi.hProcess);
+	}
+
+	if (pi.hThread) {
+		CloseHandle(pi.hThread);
 	}
 
 	return OK;
@@ -1655,7 +1665,7 @@ Error OS_Windows::create_process(const String &p_path, const List<String> &p_arg
 		command += " " + _quote_command_line_argument(E);
 	}
 
-	ProcessInfo pi;
+	ProcessInfo pi = {};
 	ZeroMemory(&pi.si, sizeof(pi.si));
 	pi.si.StartupInfo.cb = sizeof(pi.si.StartupInfo);
 	ZeroMemory(&pi.pi, sizeof(pi.pi));
@@ -2073,7 +2083,7 @@ Vector<String> OS_Windows::get_system_font_path_for_text(const String &p_font_na
 		}
 		String fpath = String::utf16((const char16_t *)file_path.ptr()).replace("\\", "/");
 
-		WIN32_FIND_DATAW d;
+		WIN32_FIND_DATAW d = {};
 		HANDLE fnd = FindFirstFileW((LPCWSTR)file_path.ptr(), &d);
 		if (fnd != INVALID_HANDLE_VALUE) {
 			String fname = String::utf16((const char16_t *)d.cFileName);
@@ -2171,7 +2181,7 @@ String OS_Windows::get_system_font_path(const String &p_font_name, int p_weight,
 }
 
 String OS_Windows::get_executable_path() const {
-	WCHAR bufname[4096];
+	WCHAR bufname[4096] = {};
 	GetModuleFileNameW(nullptr, bufname, 4096);
 	String s = String::utf16((const char16_t *)bufname).replace("\\", "/");
 	return s;
@@ -2406,14 +2416,14 @@ String OS_Windows::get_locale() const {
 }
 
 String OS_Windows::get_model_name() const {
-	HKEY hkey;
+	HKEY hkey = {};
 	if (RegOpenKeyExW(HKEY_LOCAL_MACHINE, L"Hardware\\Description\\System\\BIOS", 0, KEY_QUERY_VALUE, &hkey) != ERROR_SUCCESS) {
 		return OS::get_model_name();
 	}
 
 	String sys_name;
 	String board_name;
-	WCHAR buffer[256];
+	WCHAR buffer[256] = {};
 	DWORD buffer_len = 256;
 	DWORD vtype = REG_SZ;
 	if (RegQueryValueExW(hkey, L"SystemProductName", nullptr, &vtype, (LPBYTE)buffer, &buffer_len) == ERROR_SUCCESS && buffer_len != 0) {
@@ -2436,12 +2446,12 @@ String OS_Windows::get_model_name() const {
 String OS_Windows::get_processor_name() const {
 	const String id = "Hardware\\Description\\System\\CentralProcessor\\0";
 
-	HKEY hkey;
+	HKEY hkey = {};
 	if (RegOpenKeyExW(HKEY_LOCAL_MACHINE, (LPCWSTR)(id.utf16().get_data()), 0, KEY_QUERY_VALUE, &hkey) != ERROR_SUCCESS) {
 		ERR_FAIL_V_MSG("", String("Couldn't get the CPU model name. Returning an empty string."));
 	}
 
-	WCHAR buffer[256];
+	WCHAR buffer[256] = {};
 	DWORD buffer_len = 256;
 	DWORD vtype = REG_SZ;
 	if (RegQueryValueExW(hkey, L"ProcessorNameString", nullptr, &vtype, (LPBYTE)buffer, &buffer_len) == ERROR_SUCCESS) {
@@ -2647,7 +2657,7 @@ bool OS_Windows::is_disable_crash_handler() const {
 }
 
 Error OS_Windows::move_to_trash(const String &p_path) {
-	SHFILEOPSTRUCTW sf;
+	SHFILEOPSTRUCTW sf = {};
 
 	Char16String utf16 = p_path.utf16();
 	WCHAR *from = new WCHAR[utf16.length() + 2];
@@ -2678,13 +2688,13 @@ String OS_Windows::get_system_ca_certificates() {
 	HCERTSTORE cert_store = CertOpenSystemStoreA(0, "ROOT");
 	ERR_FAIL_NULL_V_MSG(cert_store, "", "Failed to read the root certificate store.");
 
-	FILETIME curr_time;
+	FILETIME curr_time = {};
 	GetSystemTimeAsFileTime(&curr_time);
 
 	String certs;
 	PCCERT_CONTEXT curr = CertEnumCertificatesInStore(cert_store, nullptr);
 	while (curr) {
-		FILETIME ft;
+		FILETIME ft = {};
 		DWORD size = sizeof(ft);
 		// Check if the certificate is disallowed.
 		if (CertGetCertificateContextProperty(curr, CERT_DISALLOWED_FILETIME_PROP_ID, &ft, &size) && CompareFileTime(&curr_time, &ft) != -1) {
@@ -2795,7 +2805,7 @@ bool OS_Windows::_test_create_rendering_device(const String &p_display_driver) c
 bool OS_Windows::_test_create_rendering_device_and_gl(const String &p_display_driver) const {
 	// Tests OpenGL context and Rendering Device simultaneous creation. This function is expected to crash on some NVIDIA drivers.
 
-	WNDCLASSEXW wc_probe;
+	WNDCLASSEXW wc_probe = {};
 	memset(&wc_probe, 0, sizeof(WNDCLASSEXW));
 	wc_probe.cbSize = sizeof(WNDCLASSEXW);
 	wc_probe.style = CS_OWNDC | CS_DBLCLKS;

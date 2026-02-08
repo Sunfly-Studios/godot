@@ -257,7 +257,7 @@ public:
 	};
 
 	struct TimeZoneInfo {
-		int bias;
+		int bias = 0;
 		String name;
 	};
 

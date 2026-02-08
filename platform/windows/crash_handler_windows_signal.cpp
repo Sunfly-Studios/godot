@@ -62,7 +62,7 @@ int symbol_callback(void *data, uintptr_t pc, const char *filename, int lineno, 
 		return 0;
 	}
 
-	char fname[1024];
+	char fname[1024] = {};
 	snprintf(fname, 1024, "%s", function);
 
 	if (function[0] == '_') {
@@ -163,7 +163,7 @@ extern void CrashHandlerException(int signal) {
 	String _execpath = OS::get_singleton()->get_executable_path();
 
 	// Load process and image info to determine ASLR addresses offset.
-	MODULEINFO mi;
+	MODULEINFO mi = {};
 	GetModuleInformation(GetCurrentProcess(), GetModuleHandle(nullptr), &mi, sizeof(mi));
 	int64_t image_mem_base = reinterpret_cast<int64_t>(mi.lpBaseOfDll);
 	int64_t image_file_base = get_image_base(_execpath);

@@ -39,10 +39,15 @@
 #endif
 
 int main(int argc, char *argv[]) {
-	// Get executable name.
-	WCHAR exe_name[32767] = {};
+	WCHAR *exe_name = (WCHAR *)malloc(32767 * sizeof(WCHAR)); // Get executable name.
+	if (!exe_name) {
+		return -1;
+	}
+	ZeroMemory(exe_name, 32767 * sizeof(WCHAR));
+
 	if (!GetModuleFileNameW(nullptr, exe_name, 32767)) {
 		wprintf(L"GetModuleFileName failed, error %d\n", GetLastError());
+		free(exe_name);
 		return -1;
 	}
 
@@ -52,9 +57,13 @@ int main(int argc, char *argv[]) {
 	if (ver_info_size > 0) {
 		LPBYTE ver_info = (LPBYTE)malloc(ver_info_size);
 		if (ver_info) {
-			if (GetFileVersionInfoW(exe_name, ver_info_handle, ver_info_size, ver_info)) {
+			// The second parameter (handle) must be 0, according to spec.
+			// Although GetFileVersionInfoSizeW sets ver_info_handle to 0,
+			// passing explicit 0 is safer and satisfies analysis.
+			if (GetFileVersionInfoW(exe_name, 0, ver_info_size, ver_info)) {
 				LPCWSTR text_ptr = nullptr;
 				UINT text_size = 0;
+				// Note: This hardcodes the language to English US (040904b0).
 				if (VerQueryValueW(ver_info, L"\\StringFileInfo\\040904b0\\ProductName", (void **)&text_ptr, &text_size) && (text_size > 0)) {
 					SetConsoleTitleW(text_ptr);
 				}
@@ -76,6 +85,7 @@ int main(int argc, char *argv[]) {
 		L"_console.exe",
 		L" console.exe",
 		L"console.exe",
+		L"console.exe",
 		nullptr,
 	};
 
@@ -90,12 +100,14 @@ int main(int argc, char *argv[]) {
 	}
 	if (!rename_found) {
 		wprintf(L"Invalid wrapper executable name.\n");
+		free(exe_name);
 		return -1;
 	}
 
 	DWORD file_attrib = GetFileAttributesW(exe_name);
 	if (file_attrib == INVALID_FILE_ATTRIBUTES || (file_attrib & FILE_ATTRIBUTE_DIRECTORY)) {
 		wprintf(L"Main executable %ls not found.\n", exe_name);
+		free(exe_name);
 		return -1;
 	}
 
@@ -103,12 +115,15 @@ int main(int argc, char *argv[]) {
 	HANDLE job_handle = CreateJobObjectW(nullptr, nullptr);
 	if (!job_handle) {
 		wprintf(L"CreateJobObject failed, error %d\n", GetLastError());
+		free(exe_name);
 		return -1;
 	}
 
 	HANDLE io_port_handle = CreateIoCompletionPort(INVALID_HANDLE_VALUE, nullptr, 0, 1);
 	if (!io_port_handle) {
 		wprintf(L"CreateIoCompletionPort failed, error %d\n", GetLastError());
+		CloseHandle(job_handle);
+		free(exe_name);
 		return -1;
 	}
 
@@ -119,6 +134,9 @@ int main(int argc, char *argv[]) {
 
 	if (!SetInformationJobObject(job_handle, JobObjectAssociateCompletionPortInformation, &compl_port, sizeof(compl_port))) {
 		wprintf(L"SetInformationJobObject(AssociateCompletionPortInformation) failed, error %d\n", GetLastError());
+		CloseHandle(io_port_handle);
+		CloseHandle(job_handle);
+		free(exe_name);
 		return -1;
 	}
 
@@ -128,6 +146,9 @@ int main(int argc, char *argv[]) {
 
 	if (!SetInformationJobObject(job_handle, JobObjectExtendedLimitInformation, &jeli, sizeof(jeli))) {
 		wprintf(L"SetInformationJobObject(ExtendedLimitInformation) failed, error %d\n", GetLastError());
+		CloseHandle(io_port_handle);
+		CloseHandle(job_handle);
+		free(exe_name);
 		return -1;
 	}
 
@@ -143,16 +164,38 @@ int main(int argc, char *argv[]) {
 	si.hStdOutput = GetStdHandle(STD_OUTPUT_HANDLE);
 	si.hStdError = GetStdHandle(STD_ERROR_HANDLE);
 
-	WCHAR new_command_line[32767];
-	_snwprintf_s(new_command_line, 32767, _TRUNCATE, L"%ls %ls", exe_name, PathGetArgsW(GetCommandLineW()));
+	// Move second 64KB buffer from stack to heap.
+	WCHAR *new_command_line = (WCHAR *)malloc(32767 * sizeof(WCHAR));
+	if (new_command_line) {
+		_snwprintf_s(new_command_line, 32767, _TRUNCATE, L"%ls %ls", exe_name, PathGetArgsW(GetCommandLineW()));
 
-	if (!CreateProcessW(nullptr, new_command_line, nullptr, nullptr, true, CREATE_SUSPENDED, nullptr, nullptr, &si, &pi)) {
-		wprintf(L"CreateProcess failed, error %d\n", GetLastError());
+		if (!CreateProcessW(nullptr, new_command_line, nullptr, nullptr, true, CREATE_SUSPENDED, nullptr, nullptr, &si, &pi)) {
+			wprintf(L"CreateProcess failed, error %d\n", GetLastError());
+			free(new_command_line);
+			CloseHandle(io_port_handle);
+			CloseHandle(job_handle);
+			free(exe_name);
+			return -1;
+		}
+		free(new_command_line);
+	} else {
+		wprintf(L"Memory allocation failed.\n");
+		CloseHandle(io_port_handle);
+		CloseHandle(job_handle);
+		free(exe_name);
 		return -1;
 	}
 
+	// exe_name is no longer needed
+	free(exe_name);
+
 	if (!AssignProcessToJobObject(job_handle, pi.hProcess)) {
 		wprintf(L"AssignProcessToJobObject failed, error %d\n", GetLastError());
+		TerminateProcess(pi.hProcess, -1);
+		CloseHandle(pi.hThread);
+		CloseHandle(pi.hProcess);
+		CloseHandle(io_port_handle);
+		CloseHandle(job_handle);
 		return -1;
 	}
 
@@ -182,6 +225,6 @@ int main(int argc, char *argv[]) {
 	return exit_code;
 }
 
-int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdShow) {
+int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _In_ LPSTR lpCmdLine, _In_ int nCmdShow) {
 	return main(0, nullptr);
 }

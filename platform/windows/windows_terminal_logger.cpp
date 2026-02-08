@@ -45,7 +45,7 @@ void WindowsTerminalLogger::logv(const char *p_format, va_list p_list, bool p_er
 	}
 
 	const int static_buffer_size = 1024;
-	char static_buf[static_buffer_size];
+	char static_buf[static_buffer_size] = {};
 	char *buf = static_buf;
 	va_list list_copy;
 	va_copy(list_copy, p_list);

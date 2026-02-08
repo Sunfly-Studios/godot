@@ -51,7 +51,7 @@ class NativeMenuWindows : public NativeMenu {
 	struct MenuItemData {
 		Callable callback;
 		Variant meta;
-		GlobalMenuCheckType checkable_type;
+		GlobalMenuCheckType checkable_type = CHECKABLE_TYPE_NONE;
 		bool checked = false;
 		int max_states = 0;
 		int state = 0;
