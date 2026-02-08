@@ -119,7 +119,7 @@ public:
 	bool store_asn1(PackedByteArray &p_stream, uint8_t p_len_octets) const;
 	void store_text(String &p_stream, uint8_t p_indent) const;
 
-	PListNode() {}
+	PListNode() : data_int(0) {}
 	~PListNode() {}
 };
 

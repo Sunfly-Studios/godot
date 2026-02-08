@@ -866,10 +866,13 @@ String FileAccess::get_md5(const String &p_file) {
 	CryptoCore::MD5Context ctx;
 	ctx.start();
 
-	unsigned char step[32768];
+	// Reduce to 4KB from 32KB.
+	// 4KB is standard, safe for the stack, and cache-friendly.
+	unsigned char step[4096] = {};
 
 	while (true) {
-		uint64_t br = f->get_buffer(step, 32768);
+		uint64_t br = f->get_buffer(step, 4096);
+
 		if (br > 0) {
 			ctx.update(step, br);
 		}
@@ -878,7 +881,7 @@ String FileAccess::get_md5(const String &p_file) {
 		}
 	}
 
-	unsigned char hash[16];
+	unsigned char hash[16] = {};
 	ctx.finish(hash);
 
 	return String::md5(hash);
@@ -892,10 +895,10 @@ String FileAccess::get_multiple_md5(const Vector<String> &p_file) {
 		Ref<FileAccess> f = FileAccess::open(p_file[i], READ);
 		ERR_CONTINUE(f.is_null());
 
-		unsigned char step[32768];
+		unsigned char step[4096] = {};
 
 		while (true) {
-			uint64_t br = f->get_buffer(step, 32768);
+			uint64_t br = f->get_buffer(step, 4096);
 			if (br > 0) {
 				ctx.update(step, br);
 			}
@@ -905,7 +908,7 @@ String FileAccess::get_multiple_md5(const Vector<String> &p_file) {
 		}
 	}
 
-	unsigned char hash[16];
+	unsigned char hash[16] = {};
 	ctx.finish(hash);
 
 	return String::md5(hash);
@@ -920,10 +923,10 @@ String FileAccess::get_sha256(const String &p_file) {
 	CryptoCore::SHA256Context ctx;
 	ctx.start();
 
-	unsigned char step[32768];
+	unsigned char step[4096] = {};
 
 	while (true) {
-		uint64_t br = f->get_buffer(step, 32768);
+		uint64_t br = f->get_buffer(step, 4096);
 		if (br > 0) {
 			ctx.update(step, br);
 		}
@@ -932,7 +935,7 @@ String FileAccess::get_sha256(const String &p_file) {
 		}
 	}
 
-	unsigned char hash[32];
+	unsigned char hash[32] = {};
 	ctx.finish(hash);
 
 	return String::hex_encode_buffer(hash, 32);

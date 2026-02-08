@@ -621,6 +621,9 @@ public:
 			p_I->next_ptr->prev_ptr = p_I->prev_ptr;
 		}
 
+		// It is impossible for p_I to be _data->first here because p_I->prev_ptr is not null.
+		DEV_ASSERT(_data->first != nullptr);
+
 		_data->first->prev_ptr = p_I;
 		p_I->next_ptr = _data->first;
 		p_I->prev_ptr = nullptr;

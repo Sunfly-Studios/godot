@@ -51,7 +51,7 @@ Error FileAccessCompressed::open_after_magic(Ref<FileAccess> p_base) {
 	uint64_t acc_ofs = f->get_position() + bc * 4;
 	uint32_t max_bs = 0;
 	for (uint32_t i = 0; i < bc; i++) {
-		ReadBlock rb;
+		ReadBlock rb = {};
 		rb.offset = acc_ofs;
 		rb.csize = f->get_32();
 		acc_ofs += rb.csize;
@@ -98,7 +98,7 @@ Error FileAccessCompressed::open_internal(const String &p_path, int p_mode_flags
 
 		//don't store anything else unless it's done saving!
 	} else {
-		char rmagic[5];
+		char rmagic[5] = {};
 		f->get_buffer((uint8_t *)rmagic, 4);
 		rmagic[4] = 0;
 		err = ERR_FILE_UNRECOGNIZED;

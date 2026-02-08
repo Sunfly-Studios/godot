@@ -133,7 +133,7 @@ double Engine::get_unfrozen_time_scale() const {
 }
 
 Dictionary Engine::get_version_info() const {
-	Dictionary dict;
+	Dictionary dict = {};
 	dict["major"] = VERSION_MAJOR;
 	dict["minor"] = VERSION_MINOR;
 	dict["patch"] = VERSION_PATCH;
@@ -173,7 +173,7 @@ static Array array_from_info_count(const char *const *info_list, int info_count)
 }
 
 Dictionary Engine::get_author_info() const {
-	Dictionary dict;
+	Dictionary dict = {};
 
 	dict["lead_developers"] = array_from_info(AUTHORS_LEAD_DEVELOPERS);
 	dict["project_managers"] = array_from_info(AUTHORS_PROJECT_MANAGERS);
@@ -206,7 +206,7 @@ TypedArray<Dictionary> Engine::get_copyright_info() const {
 }
 
 Dictionary Engine::get_donor_info() const {
-	Dictionary donors;
+	Dictionary donors = {};
 	donors["patrons"] = array_from_info(DONORS_PATRONS);
 	donors["platinum_sponsors"] = array_from_info(DONORS_SPONSORS_PLATINUM);
 	donors["gold_sponsors"] = array_from_info(DONORS_SPONSORS_GOLD);
@@ -219,7 +219,7 @@ Dictionary Engine::get_donor_info() const {
 }
 
 Dictionary Engine::get_license_info() const {
-	Dictionary licenses;
+	Dictionary licenses = {};
 	for (int i = 0; i < LICENSE_COUNT; i++) {
 		licenses[LICENSE_NAMES[i]] = LICENSE_BODIES[i];
 	}

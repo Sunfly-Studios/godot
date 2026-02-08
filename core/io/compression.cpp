@@ -49,7 +49,7 @@ int Compression::compress(uint8_t *p_dst, const uint8_t *p_src, int p_src_size, 
 		} break;
 		case MODE_FASTLZ: {
 			if (p_src_size < 16) {
-				uint8_t src[16];
+				uint8_t src[16] = {};
 				memset(&src[p_src_size], 0, 16 - p_src_size);
 				memcpy(src, p_src, p_src_size);
 				return fastlz_compress(src, 16, p_dst);
@@ -62,7 +62,7 @@ int Compression::compress(uint8_t *p_dst, const uint8_t *p_src, int p_src_size, 
 		case MODE_GZIP: {
 			int window_bits = p_mode == MODE_DEFLATE ? 15 : 15 + 16;
 
-			z_stream strm;
+			z_stream strm = {};
 			strm.zalloc = zipio_alloc;
 			strm.zfree = zipio_free;
 			strm.opaque = Z_NULL;
@@ -117,7 +117,7 @@ int Compression::get_max_compressed_buffer_size(int p_src_size, Mode p_mode) {
 		case MODE_GZIP: {
 			int window_bits = p_mode == MODE_DEFLATE ? 15 : 15 + 16;
 
-			z_stream strm;
+			z_stream strm = {};
 			strm.zalloc = zipio_alloc;
 			strm.zfree = zipio_free;
 			strm.opaque = Z_NULL;
@@ -153,7 +153,7 @@ int Compression::decompress(uint8_t *p_dst, int p_dst_max_size, const uint8_t *p
 			int ret_size = 0;
 
 			if (p_dst_max_size < 16) {
-				uint8_t dst[16];
+				uint8_t dst[16] = {};
 				fastlz_decompress(p_src, p_src_size, dst, 16);
 				memcpy(p_dst, dst, p_dst_max_size);
 				ret_size = p_dst_max_size;
@@ -166,7 +166,7 @@ int Compression::decompress(uint8_t *p_dst, int p_dst_max_size, const uint8_t *p
 		case MODE_GZIP: {
 			int window_bits = p_mode == MODE_DEFLATE ? 15 : 15 + 16;
 
-			z_stream strm;
+			z_stream strm = {};
 			strm.zalloc = zipio_alloc;
 			strm.zfree = zipio_free;
 			strm.opaque = Z_NULL;
@@ -274,7 +274,7 @@ int Compression::decompress_dynamic(Vector<uint8_t> *p_dst_vect, int p_max_dst_s
 		ERR_FAIL_COND_V(p_mode != MODE_DEFLATE && p_mode != MODE_GZIP, Z_ERRNO);
 
 		int ret;
-		z_stream strm;
+		z_stream strm = {};
 		int window_bits = p_mode == MODE_DEFLATE ? 15 : 15 + 16;
 
 		// Initialize the stream.

@@ -472,6 +472,7 @@ void WorkerThreadPool::_wait_collaboratively(ThreadData *p_caller_pool_thread, T
 					wait_is_over = true;
 				}
 			} else {
+				DEV_ASSERT(p_task != nullptr);
 				if (p_task->completed) {
 					wait_is_over = true;
 				}

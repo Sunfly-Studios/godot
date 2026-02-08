@@ -377,7 +377,9 @@ void PacketPeerUDP::_bind_methods() {
 }
 
 PacketPeerUDP::PacketPeerUDP() :
-		_sock(Ref<NetSocket>(NetSocket::create())) {
+		_sock(Ref<NetSocket>(NetSocket::create())),
+		packet_buffer(),
+		recv_buffer() {
 	rb.resize(16);
 }
 

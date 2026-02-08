@@ -339,6 +339,7 @@ bool AStar3D::_solve(Point *begin_point, Point *end_point, bool p_allow_partial_
 
 	while (!open_list.is_empty()) {
 		Point *p = open_list[0]; // The currently processed point.
+		DEV_ASSERT(p != nullptr);
 
 		// Find point closer to end_point, or same distance to end_point but closer to begin_point.
 		if (last_closest_point == nullptr || last_closest_point->abs_f_score > p->abs_f_score || (last_closest_point->abs_f_score >= p->abs_f_score && last_closest_point->abs_g_score > p->abs_g_score)) {
@@ -836,6 +837,7 @@ bool AStar2D::_solve(AStar3D::Point *begin_point, AStar3D::Point *end_point, boo
 
 	while (!open_list.is_empty()) {
 		AStar3D::Point *p = open_list[0]; // The currently processed point.
+		DEV_ASSERT(p != nullptr);
 
 		// Find point closer to end_point, or same distance to end_point but closer to begin_point.
 		if (astar.last_closest_point == nullptr || astar.last_closest_point->abs_f_score > p->abs_f_score || (astar.last_closest_point->abs_f_score >= p->abs_f_score && astar.last_closest_point->abs_g_score > p->abs_g_score)) {

@@ -622,7 +622,12 @@ private:
 		Edge *n = p_edge->next;
 		Edge *r = p_edge->reverse;
 
-		CHULL_ASSERT(p_edge->target && r->target);
+		// Enforce the invariant so the analyzer
+		// knows execution stops if they are null. 
+		if (!p_edge->target || !r->target) {
+			ERR_PRINT("Convex Hull Error: Invalid edge connectivity.");
+			return;
+		}
 
 		if (n != p_edge) {
 			n->prev = p_edge->prev;
@@ -811,6 +816,8 @@ ConvexHullInternal::Edge *ConvexHullInternal::new_edge_pair(Vertex *p_from, Vert
 	CHULL_ASSERT(p_from && p_to);
 	Edge *e = edge_pool.alloc();
 	Edge *r = edge_pool.alloc();
+	CRASH_COND(!e || !r);
+
 	e->reverse = r;
 	r->reverse = e;
 	e->copy = merge_stamp;
@@ -1190,6 +1197,10 @@ ConvexHullInternal::Edge *ConvexHullInternal::find_max_angle(bool p_ccw, const V
 }
 
 void ConvexHullInternal::find_edge_for_coplanar_faces(Vertex *p_c0, Vertex *p_c1, Edge *&p_e0, Edge *&p_e1, const Vertex *p_stop0, const Vertex *p_stop1) {
+	// If both are null, the logic below is invalid.
+	if (!p_e0 && !p_e1) {
+		return;
+	}
 	Edge *start0 = p_e0;
 	Edge *start1 = p_e1;
 	Point32 et0 = start0 ? start0->target->point : p_c0->point;
@@ -1447,6 +1458,11 @@ void ConvexHullInternal::merge(IntermediateHull &p_h0, IntermediateHull &p_h1) {
 #endif
 			if (first_run || ((cmp >= 0) ? !min_cot1.is_negative_infinity() : !min_cot0.is_negative_infinity())) {
 				Edge *e = new_edge_pair(c0, c1);
+				if (!e) {
+					ERR_PRINT("Convex Hull Error: Failed to create or find new edge pair.");
+					return;
+				}
+
 				if (pending_tail0) {
 					pending_tail0->prev = e;
 				} else {
@@ -2041,6 +2057,11 @@ bool ConvexHullInternal::shift_face(Face *p_face, real_t p_amount, LocalVector<V
 			face_edge->reverse->link(intersection->reverse);
 		} else {
 			face_edge = prev_intersection->reverse->next;
+		}
+
+		if (unlikely(!face_edge)) {
+			ERR_PRINT("Convex Hull Error: Failed to create or find face edge.");
+			return false;
 		}
 
 		if (prev_face_edge) {

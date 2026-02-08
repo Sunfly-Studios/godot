@@ -448,6 +448,7 @@ void PListNode::store_text(String &p_stream, uint8_t p_indent) const {
 
 PList::PList() {
 	root = PListNode::new_dict();
+	trailer = {};
 }
 
 PList::PList(const String &p_string) {

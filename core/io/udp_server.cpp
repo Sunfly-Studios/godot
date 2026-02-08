@@ -197,7 +197,8 @@ void UDPServer::stop() {
 }
 
 UDPServer::UDPServer() :
-		_sock(Ref<NetSocket>(NetSocket::create())) {
+		_sock(Ref<NetSocket>(NetSocket::create())),
+		recv_buffer() {
 }
 
 UDPServer::~UDPServer() {

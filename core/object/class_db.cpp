@@ -41,7 +41,7 @@
 #ifdef DEBUG_METHODS_ENABLED
 
 MethodDefinition D_METHODP(const char *p_name, const char *const **p_args, uint32_t p_argcount) {
-	MethodDefinition md;
+	MethodDefinition md = {};
 	md.name = StaticCString::create(p_name);
 	md.args.resize(p_argcount);
 	for (uint32_t i = 0; i < p_argcount; i++) {

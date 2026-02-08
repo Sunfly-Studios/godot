@@ -33,8 +33,10 @@
 #include "core/templates/local_vector.h"
 
 int godot_unzip_get_current_file_info(unzFile p_zip_file, unz_file_info64 &r_file_info, String &r_filepath) {
-	const uLong short_file_path_buffer_size = 16384ul;
-	char short_file_path_buffer[short_file_path_buffer_size];
+	// 2KB is usually plenty for 99% of file paths instead of 16KB.
+	const uLong short_file_path_buffer_size = 2048ul;
+
+	char short_file_path_buffer[short_file_path_buffer_size] = {};
 
 	int err = unzGetCurrentFileInfo64(p_zip_file, &r_file_info, short_file_path_buffer, short_file_path_buffer_size, nullptr, 0, nullptr, 0);
 	if (unlikely((err != UNZ_OK) || (r_file_info.size_filename > short_file_path_buffer_size))) {

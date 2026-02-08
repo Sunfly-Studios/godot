@@ -234,7 +234,7 @@ void Color::set_hsv(float p_h, float p_s, float p_v, float p_alpha) {
 }
 
 void Color::set_ok_hsl(float p_h, float p_s, float p_l, float p_alpha) {
-	ok_color::HSL hsl;
+	ok_color::HSL hsl = {};
 	hsl.h = p_h;
 	hsl.s = p_s;
 	hsl.l = p_l;
@@ -586,7 +586,7 @@ Color Color::from_ok_hsl(float p_h, float p_s, float p_l, float p_alpha) {
 }
 
 float Color::get_ok_hsl_h() const {
-	ok_color::RGB rgb;
+	ok_color::RGB rgb = {};
 	rgb.r = r;
 	rgb.g = g;
 	rgb.b = b;
@@ -598,7 +598,7 @@ float Color::get_ok_hsl_h() const {
 }
 
 float Color::get_ok_hsl_s() const {
-	ok_color::RGB rgb;
+	ok_color::RGB rgb = {};
 	rgb.r = r;
 	rgb.g = g;
 	rgb.b = b;
@@ -610,7 +610,7 @@ float Color::get_ok_hsl_s() const {
 }
 
 float Color::get_ok_hsl_l() const {
-	ok_color::RGB rgb;
+	ok_color::RGB rgb = {};
 	rgb.r = r;
 	rgb.g = g;
 	rgb.b = b;
