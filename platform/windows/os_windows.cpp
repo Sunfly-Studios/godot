@@ -1396,7 +1396,7 @@ Dictionary OS_Windows::execute_with_pipe(const String &p_path, const List<String
 		CLEAN_PIPES
 		return ret;
 	}
-	if (!SetHandleInformation(pipe_out[0], HANDLE_FLAG_INHERIT, 0)) {
+	if (pipe_out[0] && !SetHandleInformation(pipe_out[0], HANDLE_FLAG_INHERIT, 0)) {
 		CLEAN_PIPES
 		return ret;
 	}
@@ -1406,7 +1406,7 @@ Dictionary OS_Windows::execute_with_pipe(const String &p_path, const List<String
 		return ret;
 	}
 	// Check return value or ensure pipe_err[0] is valid before calling SetHandleInformation
-	if (!SetHandleInformation(pipe_err[0], HANDLE_FLAG_INHERIT, 0)) {
+	if (pipe_err[0] && !SetHandleInformation(pipe_err[0], HANDLE_FLAG_INHERIT, 0)) {
 		CLEAN_PIPES
 		return ret;
 	}
@@ -1469,7 +1469,10 @@ Dictionary OS_Windows::execute_with_pipe(const String &p_path, const List<String
 	}
 
 	// Close the thread handle immediately as we don't need it.
-	CloseHandle(pi.pi.hThread);
+	if (pi.pi.hThread) {
+		CloseHandle(pi.pi.hThread);
+		pi.pi.hThread = 0;
+	}
 
 	// Close the ends of the pipes that the child process inherited.
 	// We check for NULL here just to be strictly safe.
@@ -1489,6 +1492,9 @@ Dictionary OS_Windows::execute_with_pipe(const String &p_path, const List<String
 	process_map_mutex.lock();
 	process_map->insert(pid, pi);
 	process_map_mutex.unlock();
+
+	// This prevents the analyzer from thinking we leaked 'pi.pi.hProcess' when this function returns.
+	pi.pi.hProcess = 0;
 
 	Ref<FileAccessWindowsPipe> main_pipe;
 	main_pipe.instantiate();
@@ -1694,8 +1700,10 @@ Error OS_Windows::create_process(const String &p_path, const List<String> &p_arg
 	ERR_FAIL_COND_V_MSG(ret == 0, ERR_CANT_FORK, "Could not create child process: " + command);
 
 	// Close the thread handle immediately. We don't need it, and keeping it open is a leak.
-	CloseHandle(pi.pi.hThread);
-	pi.pi.hThread = 0; // Zero it out so the structure in the map is clean.
+	if (pi.pi.hThread) {
+		CloseHandle(pi.pi.hThread);
+		pi.pi.hThread = 0;
+	}
 
 	// Note: We intentionally do not close pi.pi.hProcess here.
 	// It is transferred to the process_map below so the OS class can manage the process (wait/kill) later.
@@ -1707,6 +1715,9 @@ Error OS_Windows::create_process(const String &p_path, const List<String> &p_arg
 	process_map_mutex.lock();
 	process_map->insert(pid, pi);
 	process_map_mutex.unlock();
+
+	// Zero out local handle to prevent "leak on scope exit" warning.
+	pi.pi.hProcess = 0;
 
 	return OK;
 }
