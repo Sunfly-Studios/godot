@@ -120,6 +120,12 @@ int32_t RenderingContextDriver::pick_device(SurfaceID p_surface, bool p_print_ve
 }
 
 Error RenderingContextDriver::_check_excluded_devices() {
+	// This setting does not exist for OpenGL, this triggers
+	// warnings when opening the Project Manager.
+	if (!ProjectSettings::get_singleton()->has_setting("rendering/rendering_device/excluded_device_list")) {
+		return OK;
+	}
+
 	// Check if the picked device from the context is excluded from using RenderingDevice. The names must be an exact string match.
 	String device_list_string = GLOBAL_GET("rendering/rendering_device/excluded_device_list");
 	PackedStringArray device_list = device_list_string.split(",");
