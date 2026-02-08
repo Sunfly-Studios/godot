@@ -457,7 +457,7 @@ void DisplayServerWindows::_thread_fd_monitor(void *p_ud) {
 		fd->finished.set();
 		return;
 	}
-	CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
+	(void)CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
 
 	int64_t x = fd->wrect.position.x;
 	int64_t y = fd->wrect.position.y;
@@ -930,27 +930,53 @@ void DisplayServerWindows::clipboard_set(const String &p_text) {
 	}
 	EmptyClipboard();
 
+	// Handle CF_UNICODETEXT
 	Char16String utf16 = text.utf16();
 	HGLOBAL mem = GlobalAlloc(GMEM_MOVEABLE, (utf16.length() + 1) * sizeof(WCHAR));
-	ERR_FAIL_NULL_MSG(mem, "Unable to allocate memory for clipboard contents.");
+
+	if (!mem) {
+		CloseClipboard();
+		ERR_FAIL_MSG("Unable to allocate memory for clipboard contents.");
+	}
 
 	LPWSTR lptstrCopy = (LPWSTR)GlobalLock(mem);
-	memcpy(lptstrCopy, utf16.get_data(), (utf16.length() + 1) * sizeof(WCHAR));
-	GlobalUnlock(mem);
+	if (lptstrCopy) {
+		memcpy(lptstrCopy, utf16.get_data(), (utf16.length() + 1) * sizeof(WCHAR));
+		GlobalUnlock(mem);
+		// SetClipboardData takes ownership of 'mem' on success
+		if (!SetClipboardData(CF_UNICODETEXT, mem)) {
+			// If SetClipboardData fails, we must free 'mem' ourselves
+			GlobalFree(mem);
+		}
+	} else {
+		// GlobalLock failed; we still own 'mem' and must free it
+		GlobalFree(mem);
+		CloseClipboard();
+		ERR_FAIL_MSG("Unable to lock memory for clipboard contents.");
+	}
 
-	SetClipboardData(CF_UNICODETEXT, mem);
-
-	// Set the CF_TEXT version (not needed?).
+	// Handle CF_TEXT (Legacy version)
 	CharString utf8 = text.utf8();
 	mem = GlobalAlloc(GMEM_MOVEABLE, utf8.length() + 1);
-	ERR_FAIL_NULL_MSG(mem, "Unable to allocate memory for clipboard contents.");
 
-	LPTSTR ptr = (LPTSTR)GlobalLock(mem);
-	memcpy(ptr, utf8.get_data(), utf8.length());
-	ptr[utf8.length()] = 0;
-	GlobalUnlock(mem);
+	if (!mem) {
+		// Non-critical failure for legacy format; just log and continue to cleanup
+		ERR_PRINT("Unable to allocate memory for clipboard contents (CF_TEXT).");
+	} else {
+		LPTSTR ptr = (LPTSTR)GlobalLock(mem);
+		if (ptr) {
+			memcpy(ptr, utf8.get_data(), utf8.length());
+			ptr[utf8.length()] = 0;
+			GlobalUnlock(mem);
 
-	SetClipboardData(CF_TEXT, mem);
+			if (!SetClipboardData(CF_TEXT, mem)) {
+				GlobalFree(mem);
+			}
+		} else {
+			GlobalFree(mem);
+			ERR_PRINT("Unable to lock memory for clipboard contents (CF_TEXT).");
+		}
+	}
 
 	CloseClipboard();
 }
@@ -2854,7 +2880,22 @@ void DisplayServerWindows::cursor_set_custom_image(const Ref<Resource> &p_cursor
 
 		HDC dc = GetDC(nullptr);
 		HBITMAP bitmap = CreateDIBSection(dc, reinterpret_cast<BITMAPINFO *>(&bi), DIB_RGB_COLORS, reinterpret_cast<void **>(&buffer), nullptr, 0);
+
+		// Check for failure immediately.
+		if (!bitmap || !buffer) {
+			if (bitmap) {
+				DeleteObject(bitmap); // Should be null if failed, but safe to check.
+			}
+			ReleaseDC(nullptr, dc);
+			ERR_FAIL_MSG("Failed to create DIB section for custom cursor.");
+		}
+
 		HBITMAP mask = CreateBitmap(texture_size.width, texture_size.height, 1, 1, nullptr);
+		if (!mask) {
+			DeleteObject(bitmap);
+			ReleaseDC(nullptr, dc);
+			ERR_FAIL_MSG("Failed to create mask bitmap for custom cursor.");
+		}
 
 		bool fully_transparent = true;
 		for (UINT index = 0; index < image_size; index++) {
@@ -2895,6 +2936,7 @@ void DisplayServerWindows::cursor_set_custom_image(const Ref<Resource> &p_cursor
 			}
 		}
 
+		// 'mask' and 'bitmap' are guaranteed non-null here due to checks above.
 		DeleteObject(mask);
 		DeleteObject(bitmap);
 		ReleaseDC(nullptr, dc);
@@ -4752,9 +4794,13 @@ LRESULT DisplayServerWindows::WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARA
 				break;
 			}
 
-			UINT dwSize;
+			UINT dwSize = 0; // Silences "uninitialised" warning.
 
-			GetRawInputData((HRAWINPUT)lParam, RID_INPUT, nullptr, &dwSize, sizeof(RAWINPUTHEADER));
+			// Check for errors (returns (UINT)-1 on failure) before allocating.
+			if (GetRawInputData((HRAWINPUT)lParam, RID_INPUT, nullptr, &dwSize, sizeof(RAWINPUTHEADER)) == (UINT)-1) {
+				break;
+			}
+
 			LPBYTE lpb = new BYTE[dwSize];
 			if (lpb == nullptr) {
 				return 0;
@@ -5696,12 +5742,20 @@ LRESULT DisplayServerWindows::WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARA
 		} break;
 		case WM_TIMER: {
 			if (wParam == windows[window_id].move_timer_id) {
+#ifdef _MSC_VER
+#pragma warning(push)
+#pragma warning(disable : 26110) // Caller failing to hold lock.
+#pragma warning(disable : 26117) // Releasing unheld lock.
+#endif
 				_THREAD_SAFE_UNLOCK_
 				_process_key_events();
 				if (!Main::is_iterating()) {
 					Main::iteration();
 				}
 				_THREAD_SAFE_LOCK_
+#ifdef _MSC_VER
+#pragma warning(pop)
+#endif
 			} else if (wParam == windows[window_id].activate_timer_id) {
 				_process_activate_event(window_id);
 				KillTimer(windows[window_id].hWnd, windows[window_id].activate_timer_id);
@@ -6490,12 +6544,12 @@ Vector2i _get_device_ids(const String &p_device_name) {
 		return Vector2i();
 	}
 
-	REFCLSID clsid = CLSID_WbemLocator; // Unmarshaler CLSID
-	REFIID uuid = IID_IWbemLocator; // Interface UUID
-	IWbemLocator *wbemLocator = nullptr; // to get the services
-	IWbemServices *wbemServices = nullptr; // to get the class
+	REFCLSID clsid = CLSID_WbemLocator;
+	REFIID uuid = IID_IWbemLocator;
+	IWbemLocator *wbemLocator = nullptr;
+	IWbemServices *wbemServices = nullptr;
 	IEnumWbemClassObject *iter = nullptr;
-	IWbemClassObject *pnpSDriverObject[1]; // contains driver name, version, etc.
+	IWbemClassObject *pnpSDriverObject = nullptr;
 
 	HRESULT hr = CoCreateInstance(clsid, nullptr, CLSCTX_INPROC_SERVER, uuid, (LPVOID *)&wbemLocator);
 	if (hr != S_OK) {
@@ -6505,7 +6559,8 @@ Vector2i _get_device_ids(const String &p_device_name) {
 	hr = wbemLocator->ConnectServer(resource_name, nullptr, nullptr, nullptr, 0, nullptr, nullptr, &wbemServices);
 	SysFreeString(resource_name);
 
-	SAFE_RELEASE(wbemLocator) // from now on, use `wbemServices`
+	SAFE_RELEASE(wbemLocator)
+
 	if (hr != S_OK) {
 		SAFE_RELEASE(wbemServices)
 		return Vector2i();
@@ -6519,15 +6574,20 @@ Vector2i _get_device_ids(const String &p_device_name) {
 	hr = wbemServices->ExecQuery(query_lang, query, WBEM_FLAG_RETURN_IMMEDIATELY | WBEM_FLAG_FORWARD_ONLY, nullptr, &iter);
 	SysFreeString(query_lang);
 	SysFreeString(query);
+
 	if (hr == S_OK) {
 		ULONG resultCount;
-		hr = iter->Next(5000, 1, pnpSDriverObject, &resultCount); // Get exactly 1. Wait max 5 seconds.
+		// Pass the address of the single pointer.
+		hr = iter->Next(5000, 1, &pnpSDriverObject, &resultCount);
 
 		if (hr == S_OK && resultCount > 0) {
 			VARIANT did;
 			VariantInit(&did);
 			BSTR object_name = SysAllocString(L"DeviceID");
-			hr = pnpSDriverObject[0]->Get(object_name, 0, &did, nullptr, nullptr);
+
+			// Access the object directly (no array index needed).
+			hr = pnpSDriverObject->Get(object_name, 0, &did, nullptr, nullptr);
+
 			SysFreeString(object_name);
 			if (hr == S_OK) {
 				String device_id = String(V_BSTR(&did));
@@ -6535,9 +6595,12 @@ Vector2i _get_device_ids(const String &p_device_name) {
 				ids.y = device_id.get_slice("&", 1).lstrip("DEV_").hex_to_int();
 			}
 
-			for (ULONG i = 0; i < resultCount; i++) {
-				SAFE_RELEASE(pnpSDriverObject[i])
-			}
+			// Clear the variant to prevent memory leaks (BSTRs allocated by Get).
+			VariantClear(&did);
+
+			// Now, no loop needed.
+			// Simply release the single object we requested.
+			SAFE_RELEASE(pnpSDriverObject);
 		}
 	}
 
@@ -6804,7 +6867,7 @@ DisplayServerWindows::DisplayServerWindows(const String &p_rendering_driver, Win
 		FreeLibrary(comctl32);
 	}
 
-	OleInitialize(nullptr);
+	(void)OleInitialize(nullptr);
 
 	HICON default_icon = LoadIconW(GetModuleHandle(nullptr), L"GODOT_ICON");
 	if (default_icon == nullptr) {

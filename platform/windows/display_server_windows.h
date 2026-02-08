@@ -467,14 +467,14 @@ class DisplayServerWindows : public DisplayServer {
 	NativeMenuWindows *native_menu = nullptr;
 
 	struct WindowData {
-		HWND hWnd;
-		WindowID id;
+		HWND hWnd = 0;
+		WindowID id = INVALID_WINDOW_ID;
 
 		Vector<Vector2> mpath;
 
 		bool create_completed = false;
 		bool pre_fs_valid = false;
-		RECT pre_fs_rect;
+		RECT pre_fs_rect = {};
 		bool maximized = false;
 		bool maximized_fs = false;
 		bool minimized = false;
@@ -501,23 +501,23 @@ class DisplayServerWindows : public DisplayServer {
 		bool hide_from_capture = false;
 
 		// Used to transfer data between events using timer.
-		WPARAM saved_wparam;
-		LPARAM saved_lparam;
+		WPARAM saved_wparam = 0;
+		LPARAM saved_lparam = 0;
 
 		// Timers.
 		uint32_t move_timer_id = 0U;
 		uint32_t activate_timer_id = 0U;
 
-		HANDLE wtctx;
-		LOGCONTEXTW wtlc;
-		int min_pressure;
-		int max_pressure;
-		bool tilt_supported;
+		HANDLE wtctx = 0;
+		LOGCONTEXTW wtlc = {};
+		int min_pressure = 0;
+		int max_pressure = 0;
+		bool tilt_supported = false;
 		bool pen_inverted = false;
 		bool block_mm = false;
 
-		int last_pressure_update;
-		float last_pressure;
+		int last_pressure_update = 0;
+		float last_pressure = 0.0f;
 		Vector2 last_tilt;
 		bool last_pen_inverted = false;
 
@@ -532,7 +532,7 @@ class DisplayServerWindows : public DisplayServer {
 		ObjectID instance_id;
 
 		// IME
-		HIMC im_himc;
+		HIMC im_himc = 0;
 		Vector2 im_position;
 		bool ime_active = false;
 		bool ime_in_progress = false;
