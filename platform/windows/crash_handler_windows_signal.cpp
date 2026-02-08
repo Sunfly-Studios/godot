@@ -66,7 +66,7 @@ int symbol_callback(void *data, uintptr_t pc, const char *filename, int lineno, 
 	snprintf(fname, 1024, "%s", function);
 
 	if (function[0] == '_') {
-		int status;
+		int status = 0;
 		char *demangled = abi::__cxa_demangle(function, nullptr, nullptr, &status);
 
 		if (status == 0 && demangled) {

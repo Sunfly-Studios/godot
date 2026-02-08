@@ -112,18 +112,18 @@ private:
 	typedef MMRESULT(WINAPI *joyGetDevCaps_t)(UINT uJoyID, LPJOYCAPSW pjc, UINT cbjc);
 
 	HWND *hWnd = nullptr;
-	HANDLE xinput_dll;
-	HANDLE winmm_dll;
-	LPDIRECTINPUT8 dinput;
+	HANDLE xinput_dll = {};
+	HANDLE winmm_dll = {};
+	LPDIRECTINPUT8 dinput = {};
 	Input *input = nullptr;
 
-	int id_to_change;
-	int slider_count;
-	int x_joypad_probe_count; // XInput equivalent to dinput_gamepad.confirmed.
-	int d_joypad_count;
-	bool attached_joypads[JOYPADS_MAX];
-	dinput_gamepad d_joypads[JOYPADS_MAX];
-	xinput_gamepad x_joypads[XUSER_MAX_COUNT];
+	int id_to_change = 0;
+	int slider_count = 0;
+	int x_joypad_probe_count = 0; // XInput equivalent to dinput_gamepad.confirmed.
+	int d_joypad_count = 0;
+	bool attached_joypads[JOYPADS_MAX] = {};
+	dinput_gamepad d_joypads[JOYPADS_MAX] = {};
+	xinput_gamepad x_joypads[XUSER_MAX_COUNT] = {};
 
 	static BOOL CALLBACK enumCallback(const DIDEVICEINSTANCE *p_instance, void *p_context);
 	static BOOL CALLBACK objectsCallback(const DIDEVICEOBJECTINSTANCE *instance, void *context);
@@ -144,9 +144,9 @@ private:
 	void joypad_vibration_stop_xinput(int p_device, uint64_t p_timestamp);
 
 	float axis_correct(int p_val, bool p_xinput = false, bool p_trigger = false, bool p_negate = false) const;
-	XInputGetState_t xinput_get_state;
-	XInputSetState_t xinput_set_state;
-	joyGetDevCaps_t winmm_get_joycaps; // Only for reading info on XInput joypads.
+	XInputGetState_t xinput_get_state = {};
+	XInputSetState_t xinput_set_state = {};
+	joyGetDevCaps_t winmm_get_joycaps = {}; // Only for reading info on XInput joypads.
 };
 
 #endif // JOYPAD_WINDOWS_H

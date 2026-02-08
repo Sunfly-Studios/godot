@@ -70,17 +70,21 @@ JoypadWindows::JoypadWindows(HWND *hwnd) {
 		attached_joypads[i] = false;
 	}
 
-	HRESULT result = DirectInput8Create(GetModuleHandle(nullptr), DIRECTINPUT_VERSION, IID_IDirectInput8, (void **)&dinput, nullptr);
-	if (result == DI_OK) {
-		probe_joypads();
-	} else {
-		ERR_PRINT("Couldn't initialize DirectInput. Error: " + itos(result));
-		if (result == DIERR_OUTOFMEMORY) {
-			ERR_PRINT("The Windows DirectInput subsystem could not allocate sufficient memory.");
-			ERR_PRINT("Rebooting your PC may solve this issue.");
+	HMODULE hInst = GetModuleHandle(nullptr);
+	if (hInst) {
+		HRESULT result = DirectInput8Create(hInst, DIRECTINPUT_VERSION, IID_IDirectInput8, (void **)&dinput, nullptr);
+		if (result == DI_OK) {
+			probe_joypads();
+		} else {
+			ERR_PRINT("Couldn't initialize DirectInput. Error: " + itos(result));
+			if (result == DIERR_OUTOFMEMORY) {
+				ERR_PRINT("The Windows DirectInput subsystem could not allocate sufficient memory.");
+				ERR_PRINT("Rebooting your PC may solve this issue.");
+			}
+			dinput = nullptr;
 		}
-		// Ensure dinput is still a nullptr.
-		dinput = nullptr;
+	} else {
+		ERR_PRINT("Could not get module handle.");
 	}
 }
 
@@ -147,19 +151,28 @@ bool JoypadWindows::is_xinput_joypad(const GUID *p_guid) {
 		return false;
 	}
 	for (unsigned int i = 0; i < dev_list_count; i++) {
-		RID_DEVICE_INFO rdi;
-		char dev_name[128];
+		RID_DEVICE_INFO rdi = {};
 		UINT rdiSize = sizeof(rdi);
-		UINT nameSize = sizeof(dev_name);
-
 		rdi.cbSize = rdiSize;
+
 		if ((dev_list[i].dwType == RIM_TYPEHID) &&
 				(GetRawInputDeviceInfoA(dev_list[i].hDevice, RIDI_DEVICEINFO, &rdi, &rdiSize) != (UINT)-1) &&
-				(MAKELONG(rdi.hid.dwVendorId, rdi.hid.dwProductId) == (LONG)p_guid->Data1) &&
-				(GetRawInputDeviceInfoA(dev_list[i].hDevice, RIDI_DEVICENAME, &dev_name, &nameSize) != (UINT)-1) &&
-				(strstr(dev_name, "IG_") != nullptr)) {
-			memfree(dev_list);
-			return true;
+				(MAKELONG(rdi.hid.dwVendorId, rdi.hid.dwProductId) == (LONG)p_guid->Data1)) {
+			// Dynamic allocation to handle device names of any length
+			// and avoid stack overflow/truncation issues.
+			UINT nameSize = 0;
+
+			if (GetRawInputDeviceInfoA(dev_list[i].hDevice, RIDI_DEVICENAME, nullptr, &nameSize) != (UINT)-1) {
+				// nameSize comes in characters (though for A version it matches bytes).
+				Vector<char> dev_name;
+				dev_name.resize(nameSize + 1);
+				if (GetRawInputDeviceInfoA(dev_list[i].hDevice, RIDI_DEVICENAME, dev_name.ptrw(), &nameSize) != (UINT)-1) {
+					if (strstr(dev_name.ptr(), "IG_") != nullptr) {
+						memfree(dev_list);
+						return true;
+					}
+				}
+			}
 		}
 	}
 	memfree(dev_list);
@@ -185,12 +198,12 @@ void JoypadWindows::probe_xinput_joypad(const String &name) {
 			x_joypads[i].ff_end_timestamp = 0;
 			x_joypads[i].vibrating = false;
 			attached_joypads[id] = true;
-			Dictionary joypad_info;
+			Dictionary joypad_info = {};
 			String joypad_name;
 
 			joypad_info["xinput_index"] = (int)i;
 
-			JOYCAPSW jc;
+			JOYCAPSW jc = {};
 			memset(&jc, 0, sizeof(JOYCAPSW));
 			MMRESULT jcResult = winmm_get_joycaps((UINT)id, &jc, sizeof(JOYCAPSW));
 			if (jcResult == JOYERR_NOERROR) {
@@ -212,7 +225,7 @@ void JoypadWindows::probe_xinput_joypad(const String &name) {
 
 bool JoypadWindows::setup_dinput_joypad(const DIDEVICEINSTANCE *instance) {
 	ERR_FAIL_NULL_V_MSG(dinput, false, "DirectInput not initialized. Rebooting your PC may solve this issue.");
-	HRESULT hr;
+	HRESULT hr = {};
 	int num = input->get_unused_joy_id();
 
 	if (is_d_joypad_known(instance->guidInstance) || num == -1) {
@@ -235,16 +248,24 @@ bool JoypadWindows::setup_dinput_joypad(const DIDEVICEINSTANCE *instance) {
 	}
 
 	const GUID &guid = instance->guidProduct;
-	char uid[128];
+	char uid[128] = {};
 
-	ERR_FAIL_COND_V_MSG(memcmp(&guid.Data4[2], "PIDVID", 6), false, "DirectInput device not recognized.");
+	// If this check fails, we must release the device
+	// we just created, otherwise it leaks.
+	if (memcmp(&guid.Data4[2], "PIDVID", 6) != 0) {
+		joy->di_joy->Release();
+		joy->di_joy = nullptr;
+		ERR_PRINT("DirectInput device not recognized.");
+		return false;
+	}
+
 	WORD type = BSWAP16(0x03);
 	WORD vendor = BSWAP16(LOWORD(guid.Data1));
 	WORD product = BSWAP16(HIWORD(guid.Data1));
 	WORD version = 0;
 	sprintf_s(uid, "%04x%04x%04x%04x%04x%04x%04x%04x", type, 0, vendor, 0, product, 0, version, 0);
 
-	Dictionary joypad_info;
+	Dictionary joypad_info = {};
 	joypad_info["vendor_id"] = itos(vendor);
 	joypad_info["product_id"] = itos(product);
 
@@ -269,10 +290,10 @@ bool JoypadWindows::setup_dinput_joypad(const DIDEVICEINSTANCE *instance) {
 
 void JoypadWindows::setup_d_joypad_object(const DIDEVICEOBJECTINSTANCE *ob, int p_joy_id) {
 	if (ob->dwType & DIDFT_AXIS) {
-		HRESULT res;
-		DIPROPRANGE prop_range;
-		DIPROPDWORD dilong;
-		LONG ofs;
+		HRESULT res = {};
+		DIPROPRANGE prop_range = {};
+		DIPROPDWORD dilong = {};
+		LONG ofs = 0;
 		if (ob->guidType == GUID_XAxis) {
 			ofs = DIJOFS_X;
 		} else if (ob->guidType == GUID_YAxis) {
@@ -387,7 +408,7 @@ void JoypadWindows::probe_joypads() {
 }
 
 void JoypadWindows::process_joypads() {
-	HRESULT hr;
+	HRESULT hr = {};
 
 	// Handle XInput joypads.
 	for (int i = 0; i < XUSER_MAX_COUNT; i++) {
@@ -438,7 +459,7 @@ void JoypadWindows::process_joypads() {
 			continue;
 		}
 
-		DIJOYSTATE2 js;
+		DIJOYSTATE2 js = {};
 		hr = joy->di_joy->Poll();
 		if (hr == DIERR_INPUTLOST || hr == DIERR_NOTACQUIRED) {
 			IDirectInputDevice8_Acquire(joy->di_joy);
@@ -536,7 +557,7 @@ float JoypadWindows::axis_correct(int p_val, bool p_xinput, bool p_trigger, bool
 		// Convert to a value between -1.0f and 1.0f.
 		return 2.0f * p_val / (float)MAX_TRIGGER - 1.0f;
 	}
-	float value;
+	float value = 0.0f;
 	if (p_val < 0) {
 		value = (float)p_val / (float)MAX_JOY_AXIS;
 	} else {
@@ -551,7 +572,7 @@ float JoypadWindows::axis_correct(int p_val, bool p_xinput, bool p_trigger, bool
 void JoypadWindows::joypad_vibration_start_xinput(int p_device, float p_weak_magnitude, float p_strong_magnitude, float p_duration, uint64_t p_timestamp) {
 	xinput_gamepad &joy = x_joypads[p_device];
 	if (joy.attached) {
-		XINPUT_VIBRATION effect;
+		XINPUT_VIBRATION effect = {};
 		effect.wLeftMotorSpeed = (65535 * p_strong_magnitude);
 		effect.wRightMotorSpeed = (65535 * p_weak_magnitude);
 		if (xinput_set_state(p_device, &effect) == ERROR_SUCCESS) {
@@ -565,7 +586,7 @@ void JoypadWindows::joypad_vibration_start_xinput(int p_device, float p_weak_mag
 void JoypadWindows::joypad_vibration_stop_xinput(int p_device, uint64_t p_timestamp) {
 	xinput_gamepad &joy = x_joypads[p_device];
 	if (joy.attached) {
-		XINPUT_VIBRATION effect;
+		XINPUT_VIBRATION effect = {};
 		effect.wLeftMotorSpeed = 0;
 		effect.wRightMotorSpeed = 0;
 		if (xinput_set_state(p_device, &effect) == ERROR_SUCCESS) {
@@ -581,11 +602,13 @@ void JoypadWindows::load_xinput() {
 	winmm_get_joycaps = &_winmm_get_joycaps;
 	bool legacy_xinput = false;
 
-	xinput_dll = LoadLibrary("XInput1_4.dll");
+	// Use LoadLibraryW with Wide strings for consistency
+	// with the rest of the Windows codebase.
+	xinput_dll = LoadLibraryW(L"XInput1_4.dll");
 	if (!xinput_dll) {
-		xinput_dll = LoadLibrary("XInput1_3.dll");
+		xinput_dll = LoadLibraryW(L"XInput1_3.dll");
 		if (!xinput_dll) {
-			xinput_dll = LoadLibrary("XInput9_1_0.dll");
+			xinput_dll = LoadLibraryW(L"XInput9_1_0.dll");
 			legacy_xinput = true;
 		}
 	}
@@ -606,7 +629,7 @@ void JoypadWindows::load_xinput() {
 	xinput_get_state = func;
 	xinput_set_state = set_func;
 
-	winmm_dll = LoadLibrary("Winmm.dll");
+	winmm_dll = LoadLibraryW(L"Winmm.dll");
 	if (winmm_dll) {
 		joyGetDevCaps_t caps_func = (joyGetDevCaps_t)GetProcAddress((HMODULE)winmm_dll, "joyGetDevCapsW");
 		if (caps_func) {

@@ -42,7 +42,7 @@ HBITMAP NativeMenuWindows::_make_bitmap(const Ref<Image> &p_img) const {
 
 	COLORREF *buffer = nullptr;
 
-	BITMAPV5HEADER bi;
+	BITMAPV5HEADER bi = {};
 	ZeroMemory(&bi, sizeof(bi));
 	bi.bV5Size = sizeof(bi);
 	bi.bV5Width = texture_size.width;
@@ -74,7 +74,7 @@ void NativeMenuWindows::_menu_activate(HMENU p_menu, int p_index) const {
 		if (md) {
 			int count = GetMenuItemCount(md->menu);
 			if (p_index >= 0 && p_index < count) {
-				MENUITEMINFOW item;
+				MENUITEMINFOW item = {};
 				ZeroMemory(&item, sizeof(item));
 				item.cbSize = sizeof(item);
 				item.fMask = MIIM_STATE | MIIM_DATA;
@@ -83,7 +83,7 @@ void NativeMenuWindows::_menu_activate(HMENU p_menu, int p_index) const {
 					if (item_data) {
 						if (item_data->callback.is_valid()) {
 							Variant ret;
-							Callable::CallError ce;
+							Callable::CallError ce = {};
 							const Variant *args[1] = { &item_data->meta };
 
 							item_data->callback.callp(args, 1, ret, ce);
@@ -123,7 +123,7 @@ RID NativeMenuWindows::create_menu() {
 	MenuData *md = memnew(MenuData);
 	md->menu = CreatePopupMenu();
 
-	MENUINFO menu_info;
+	MENUINFO menu_info = {};
 	ZeroMemory(&menu_info, sizeof(menu_info));
 	menu_info.cbSize = sizeof(menu_info);
 	menu_info.fMask = MIM_STYLE;
@@ -154,10 +154,10 @@ Size2 NativeMenuWindows::get_size(const RID &p_rid) const {
 	const MenuData *md = menus.get_or_null(p_rid);
 	ERR_FAIL_NULL_V(md, Size2());
 
-	Size2 size;
+	Size2 size = {};
 	int count = GetMenuItemCount(md->menu);
 	for (int i = 0; i < count; i++) {
-		RECT rect;
+		RECT rect = {};
 		if (GetMenuItemRect(nullptr, md->menu, i, &rect)) {
 			size.x = MAX(size.x, rect.right - rect.left);
 			size.y += rect.bottom - rect.top;
@@ -180,7 +180,7 @@ void NativeMenuWindows::popup(const RID &p_rid, const Vector2i &p_position) {
 
 	if (md->close_cb.is_valid()) {
 		Variant ret;
-		Callable::CallError ce;
+		Callable::CallError ce = {};
 		md->close_cb.callp(nullptr, 0, ret, ce);
 		if (ce.error != Callable::CallError::CALL_OK) {
 			ERR_PRINT(vformat("Failed to execute popup close callback: %s.", Variant::get_callable_error_text(md->close_cb, nullptr, 0, ce)));
@@ -257,7 +257,7 @@ int NativeMenuWindows::add_submenu_item(const RID &p_rid, const String &p_label,
 	item_data->state = 0;
 
 	Char16String label = p_label.utf16();
-	MENUITEMINFOW item;
+	MENUITEMINFOW item = {};
 	ZeroMemory(&item, sizeof(item));
 	item.cbSize = sizeof(item);
 	item.fMask = MIIM_FTYPE | MIIM_STRING | MIIM_DATA | MIIM_SUBMENU;
@@ -291,7 +291,7 @@ int NativeMenuWindows::add_item(const RID &p_rid, const String &p_label, const C
 	item_data->state = 0;
 
 	Char16String label = p_label.utf16();
-	MENUITEMINFOW item;
+	MENUITEMINFOW item = {};
 	ZeroMemory(&item, sizeof(item));
 	item.cbSize = sizeof(item);
 	item.fMask = MIIM_FTYPE | MIIM_STRING | MIIM_DATA;
@@ -324,7 +324,7 @@ int NativeMenuWindows::add_check_item(const RID &p_rid, const String &p_label, c
 	item_data->state = 0;
 
 	Char16String label = p_label.utf16();
-	MENUITEMINFOW item;
+	MENUITEMINFOW item = {};
 	ZeroMemory(&item, sizeof(item));
 	item.cbSize = sizeof(item);
 	item.fMask = MIIM_FTYPE | MIIM_STRING | MIIM_DATA;
@@ -365,7 +365,7 @@ int NativeMenuWindows::add_icon_item(const RID &p_rid, const Ref<Texture2D> &p_i
 	}
 
 	Char16String label = p_label.utf16();
-	MENUITEMINFOW item;
+	MENUITEMINFOW item = {};
 	ZeroMemory(&item, sizeof(item));
 	item.cbSize = sizeof(item);
 	item.fMask = MIIM_FTYPE | MIIM_STRING | MIIM_DATA | MIIM_BITMAP;
@@ -407,7 +407,7 @@ int NativeMenuWindows::add_icon_check_item(const RID &p_rid, const Ref<Texture2D
 	}
 
 	Char16String label = p_label.utf16();
-	MENUITEMINFOW item;
+	MENUITEMINFOW item = {};
 	ZeroMemory(&item, sizeof(item));
 	item.cbSize = sizeof(item);
 	item.fMask = MIIM_FTYPE | MIIM_STRING | MIIM_DATA | MIIM_BITMAP;
@@ -441,7 +441,7 @@ int NativeMenuWindows::add_radio_check_item(const RID &p_rid, const String &p_la
 	item_data->state = 0;
 
 	Char16String label = p_label.utf16();
-	MENUITEMINFOW item;
+	MENUITEMINFOW item = {};
 	ZeroMemory(&item, sizeof(item));
 	item.cbSize = sizeof(item);
 	item.fMask = MIIM_FTYPE | MIIM_STRING | MIIM_DATA;
@@ -482,7 +482,7 @@ int NativeMenuWindows::add_icon_radio_check_item(const RID &p_rid, const Ref<Tex
 	}
 
 	Char16String label = p_label.utf16();
-	MENUITEMINFOW item;
+	MENUITEMINFOW item = {};
 	ZeroMemory(&item, sizeof(item));
 	item.cbSize = sizeof(item);
 	item.fMask = MIIM_FTYPE | MIIM_STRING | MIIM_DATA | MIIM_BITMAP;
@@ -516,7 +516,7 @@ int NativeMenuWindows::add_multistate_item(const RID &p_rid, const String &p_lab
 	item_data->state = p_default_state;
 
 	Char16String label = p_label.utf16();
-	MENUITEMINFOW item;
+	MENUITEMINFOW item = {};
 	ZeroMemory(&item, sizeof(item));
 	item.cbSize = sizeof(item);
 	item.fMask = MIIM_FTYPE | MIIM_STRING | MIIM_DATA;
@@ -546,7 +546,7 @@ int NativeMenuWindows::add_separator(const RID &p_rid, int p_index) {
 	item_data->max_states = 0;
 	item_data->state = 0;
 
-	MENUITEMINFOW item;
+	MENUITEMINFOW item = {};
 	ZeroMemory(&item, sizeof(item));
 	item.cbSize = sizeof(item);
 	item.fMask = MIIM_FTYPE | MIIM_DATA;
@@ -564,7 +564,7 @@ int NativeMenuWindows::find_item_index_with_text(const RID &p_rid, const String 
 	const MenuData *md = menus.get_or_null(p_rid);
 	ERR_FAIL_NULL_V(md, -1);
 
-	MENUITEMINFOW item;
+	MENUITEMINFOW item = {};
 	int count = GetMenuItemCount(md->menu);
 	for (int i = 0; i < count; i++) {
 		ZeroMemory(&item, sizeof(item));
@@ -590,7 +590,7 @@ int NativeMenuWindows::find_item_index_with_tag(const RID &p_rid, const Variant 
 	const MenuData *md = menus.get_or_null(p_rid);
 	ERR_FAIL_NULL_V(md, -1);
 
-	MENUITEMINFOW item;
+	MENUITEMINFOW item = {};
 	int count = GetMenuItemCount(md->menu);
 	for (int i = 0; i < count; i++) {
 		ZeroMemory(&item, sizeof(item));
@@ -615,7 +615,7 @@ bool NativeMenuWindows::is_item_checked(const RID &p_rid, int p_idx) const {
 	int count = GetMenuItemCount(md->menu);
 	ERR_FAIL_COND_V(p_idx >= count, false);
 
-	MENUITEMINFOW item;
+	MENUITEMINFOW item = {};
 	ZeroMemory(&item, sizeof(item));
 	item.cbSize = sizeof(item);
 	item.fMask = MIIM_STATE | MIIM_DATA;
@@ -635,7 +635,7 @@ bool NativeMenuWindows::is_item_checkable(const RID &p_rid, int p_idx) const {
 	int count = GetMenuItemCount(md->menu);
 	ERR_FAIL_COND_V(p_idx >= count, false);
 
-	MENUITEMINFOW item;
+	MENUITEMINFOW item = {};
 	ZeroMemory(&item, sizeof(item));
 	item.cbSize = sizeof(item);
 	item.fMask = MIIM_DATA;
@@ -655,7 +655,7 @@ bool NativeMenuWindows::is_item_radio_checkable(const RID &p_rid, int p_idx) con
 	int count = GetMenuItemCount(md->menu);
 	ERR_FAIL_COND_V(p_idx >= count, false);
 
-	MENUITEMINFOW item;
+	MENUITEMINFOW item = {};
 	ZeroMemory(&item, sizeof(item));
 	item.cbSize = sizeof(item);
 	item.fMask = MIIM_DATA;
@@ -675,7 +675,7 @@ Callable NativeMenuWindows::get_item_callback(const RID &p_rid, int p_idx) const
 	int count = GetMenuItemCount(md->menu);
 	ERR_FAIL_COND_V(p_idx >= count, Callable());
 
-	MENUITEMINFOW item;
+	MENUITEMINFOW item = {};
 	ZeroMemory(&item, sizeof(item));
 	item.cbSize = sizeof(item);
 	item.fMask = MIIM_DATA;
@@ -700,7 +700,7 @@ Variant NativeMenuWindows::get_item_tag(const RID &p_rid, int p_idx) const {
 	int count = GetMenuItemCount(md->menu);
 	ERR_FAIL_COND_V(p_idx >= count, Variant());
 
-	MENUITEMINFOW item;
+	MENUITEMINFOW item = {};
 	ZeroMemory(&item, sizeof(item));
 	item.cbSize = sizeof(item);
 	item.fMask = MIIM_DATA;
@@ -720,7 +720,7 @@ String NativeMenuWindows::get_item_text(const RID &p_rid, int p_idx) const {
 	int count = GetMenuItemCount(md->menu);
 	ERR_FAIL_COND_V(p_idx >= count, String());
 
-	MENUITEMINFOW item;
+	MENUITEMINFOW item = {};
 	ZeroMemory(&item, sizeof(item));
 	item.cbSize = sizeof(item);
 	item.fMask = MIIM_STRING;
@@ -744,7 +744,7 @@ RID NativeMenuWindows::get_item_submenu(const RID &p_rid, int p_idx) const {
 	int count = GetMenuItemCount(md->menu);
 	ERR_FAIL_COND_V(p_idx >= count, RID());
 
-	MENUITEMINFOW item;
+	MENUITEMINFOW item = {};
 	ZeroMemory(&item, sizeof(item));
 	item.cbSize = sizeof(item);
 	item.fMask = MIIM_SUBMENU;
@@ -768,7 +768,7 @@ bool NativeMenuWindows::is_item_disabled(const RID &p_rid, int p_idx) const {
 	int count = GetMenuItemCount(md->menu);
 	ERR_FAIL_COND_V(p_idx >= count, false);
 
-	MENUITEMINFOW item;
+	MENUITEMINFOW item = {};
 	ZeroMemory(&item, sizeof(item));
 	item.cbSize = sizeof(item);
 	item.fMask = MIIM_STATE;
@@ -795,7 +795,7 @@ int NativeMenuWindows::get_item_state(const RID &p_rid, int p_idx) const {
 	int count = GetMenuItemCount(md->menu);
 	ERR_FAIL_COND_V(p_idx >= count, -1);
 
-	MENUITEMINFOW item;
+	MENUITEMINFOW item = {};
 	ZeroMemory(&item, sizeof(item));
 	item.cbSize = sizeof(item);
 	item.fMask = MIIM_DATA;
@@ -815,7 +815,7 @@ int NativeMenuWindows::get_item_max_states(const RID &p_rid, int p_idx) const {
 	int count = GetMenuItemCount(md->menu);
 	ERR_FAIL_COND_V(p_idx >= count, -1);
 
-	MENUITEMINFOW item;
+	MENUITEMINFOW item = {};
 	ZeroMemory(&item, sizeof(item));
 	item.cbSize = sizeof(item);
 	item.fMask = MIIM_DATA;
@@ -835,7 +835,7 @@ Ref<Texture2D> NativeMenuWindows::get_item_icon(const RID &p_rid, int p_idx) con
 	int count = GetMenuItemCount(md->menu);
 	ERR_FAIL_COND_V(p_idx >= count, Ref<Texture2D>());
 
-	MENUITEMINFOW item;
+	MENUITEMINFOW item = {};
 	ZeroMemory(&item, sizeof(item));
 	item.cbSize = sizeof(item);
 	item.fMask = MIIM_DATA;
@@ -860,7 +860,7 @@ void NativeMenuWindows::set_item_checked(const RID &p_rid, int p_idx, bool p_che
 	int count = GetMenuItemCount(md->menu);
 	ERR_FAIL_COND(p_idx >= count);
 
-	MENUITEMINFOW item;
+	MENUITEMINFOW item = {};
 	ZeroMemory(&item, sizeof(item));
 	item.cbSize = sizeof(item);
 	item.fMask = MIIM_STATE | MIIM_DATA;
@@ -885,7 +885,7 @@ void NativeMenuWindows::set_item_checkable(const RID &p_rid, int p_idx, bool p_c
 	int count = GetMenuItemCount(md->menu);
 	ERR_FAIL_COND(p_idx >= count);
 
-	MENUITEMINFOW item;
+	MENUITEMINFOW item = {};
 	ZeroMemory(&item, sizeof(item));
 	item.cbSize = sizeof(item);
 	item.fMask = MIIM_FTYPE | MIIM_DATA;
@@ -906,7 +906,7 @@ void NativeMenuWindows::set_item_radio_checkable(const RID &p_rid, int p_idx, bo
 	int count = GetMenuItemCount(md->menu);
 	ERR_FAIL_COND(p_idx >= count);
 
-	MENUITEMINFOW item;
+	MENUITEMINFOW item = {};
 	ZeroMemory(&item, sizeof(item));
 	item.cbSize = sizeof(item);
 	item.fMask = MIIM_FTYPE | MIIM_DATA;
@@ -932,7 +932,7 @@ void NativeMenuWindows::set_item_callback(const RID &p_rid, int p_idx, const Cal
 	int count = GetMenuItemCount(md->menu);
 	ERR_FAIL_COND(p_idx >= count);
 
-	MENUITEMINFOW item;
+	MENUITEMINFOW item = {};
 	ZeroMemory(&item, sizeof(item));
 	item.cbSize = sizeof(item);
 	item.fMask = MIIM_DATA;
@@ -959,7 +959,7 @@ void NativeMenuWindows::set_item_tag(const RID &p_rid, int p_idx, const Variant 
 	int count = GetMenuItemCount(md->menu);
 	ERR_FAIL_COND(p_idx >= count);
 
-	MENUITEMINFOW item;
+	MENUITEMINFOW item = {};
 	ZeroMemory(&item, sizeof(item));
 	item.cbSize = sizeof(item);
 	item.fMask = MIIM_DATA;
@@ -979,7 +979,7 @@ void NativeMenuWindows::set_item_text(const RID &p_rid, int p_idx, const String 
 	ERR_FAIL_COND(p_idx >= count);
 
 	Char16String label = p_text.utf16();
-	MENUITEMINFOW item;
+	MENUITEMINFOW item = {};
 	ZeroMemory(&item, sizeof(item));
 	item.cbSize = sizeof(item);
 	item.fMask = MIIM_FTYPE | MIIM_STRING | MIIM_DATA;
@@ -999,7 +999,7 @@ void NativeMenuWindows::set_item_submenu(const RID &p_rid, int p_idx, const RID 
 	MenuData *md_sub = menus.get_or_null(p_submenu_rid);
 	ERR_FAIL_COND_MSG(md->menu == md_sub->menu, "Can't set submenu to self!");
 
-	MENUITEMINFOW item;
+	MENUITEMINFOW item = {};
 	ZeroMemory(&item, sizeof(item));
 	item.cbSize = sizeof(item);
 	item.fMask = MIIM_SUBMENU;
@@ -1024,7 +1024,7 @@ void NativeMenuWindows::set_item_disabled(const RID &p_rid, int p_idx, bool p_di
 	int count = GetMenuItemCount(md->menu);
 	ERR_FAIL_COND(p_idx >= count);
 
-	MENUITEMINFOW item;
+	MENUITEMINFOW item = {};
 	ZeroMemory(&item, sizeof(item));
 	item.cbSize = sizeof(item);
 	item.fMask = MIIM_STATE;
@@ -1053,7 +1053,7 @@ void NativeMenuWindows::set_item_state(const RID &p_rid, int p_idx, int p_state)
 	int count = GetMenuItemCount(md->menu);
 	ERR_FAIL_COND(p_idx >= count);
 
-	MENUITEMINFOW item;
+	MENUITEMINFOW item = {};
 	ZeroMemory(&item, sizeof(item));
 	item.cbSize = sizeof(item);
 	item.fMask = MIIM_DATA;
@@ -1072,7 +1072,7 @@ void NativeMenuWindows::set_item_max_states(const RID &p_rid, int p_idx, int p_m
 	int count = GetMenuItemCount(md->menu);
 	ERR_FAIL_COND(p_idx >= count);
 
-	MENUITEMINFOW item;
+	MENUITEMINFOW item = {};
 	ZeroMemory(&item, sizeof(item));
 	item.cbSize = sizeof(item);
 	item.fMask = MIIM_DATA;
@@ -1091,7 +1091,7 @@ void NativeMenuWindows::set_item_icon(const RID &p_rid, int p_idx, const Ref<Tex
 	int count = GetMenuItemCount(md->menu);
 	ERR_FAIL_COND(p_idx >= count);
 
-	MENUITEMINFOW item;
+	MENUITEMINFOW item = {};
 	ZeroMemory(&item, sizeof(item));
 	item.cbSize = sizeof(item);
 	item.fMask = MIIM_DATA | MIIM_BITMAP;
@@ -1140,7 +1140,7 @@ void NativeMenuWindows::remove_item(const RID &p_rid, int p_idx) {
 	int count = GetMenuItemCount(md->menu);
 	ERR_FAIL_COND(p_idx >= count);
 
-	MENUITEMINFOW item;
+	MENUITEMINFOW item = {};
 	ZeroMemory(&item, sizeof(item));
 	item.cbSize = sizeof(item);
 	item.fMask = MIIM_DATA;
@@ -1160,7 +1160,7 @@ void NativeMenuWindows::clear(const RID &p_rid) {
 	const MenuData *md = menus.get_or_null(p_rid);
 	ERR_FAIL_NULL(md);
 
-	MENUITEMINFOW item;
+	MENUITEMINFOW item = {};
 	int count = GetMenuItemCount(md->menu);
 	for (int i = 0; i < count; i++) {
 		ZeroMemory(&item, sizeof(item));

@@ -66,15 +66,15 @@ typedef void *(APIENTRY *PFNWGLGETPROCADDRESS)(LPCSTR);
 typedef const char *(APIENTRY *PFNWGLGETSTRINGPROC)(unsigned int);
 
 Dictionary detect_wgl() {
-	Dictionary gl_info;
+	Dictionary gl_info = {};
 	gl_info["version"] = 0;
 	gl_info["vendor"] = String();
 	gl_info["name"] = String();
 
-	PFNWGLCREATECONTEXT gd_wglCreateContext;
-	PFNWGLMAKECURRENT gd_wglMakeCurrent;
-	PFNWGLDELETECONTEXT gd_wglDeleteContext;
-	PFNWGLGETPROCADDRESS gd_wglGetProcAddress;
+	PFNWGLCREATECONTEXT gd_wglCreateContext = nullptr;
+	PFNWGLMAKECURRENT gd_wglMakeCurrent = nullptr;
+	PFNWGLDELETECONTEXT gd_wglDeleteContext = nullptr;
+	PFNWGLGETPROCADDRESS gd_wglGetProcAddress = nullptr;
 
 	HMODULE module = LoadLibraryW(L"opengl32.dll");
 	if (!module) {

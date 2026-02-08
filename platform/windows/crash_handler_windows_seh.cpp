@@ -63,28 +63,51 @@ struct module_data {
 
 class symbol {
 	typedef IMAGEHLP_SYMBOL64 sym_type;
-	sym_type *sym;
+	sym_type *sym = nullptr;
 	static const int max_name_len = 1024;
 
 public:
-	symbol(HANDLE process, DWORD64 address) :
-			sym((sym_type *)::operator new(sizeof(*sym) + max_name_len)) {
-		memset(sym, '\0', sizeof(*sym) + max_name_len);
-		sym->SizeOfStruct = sizeof(*sym);
-		sym->MaxNameLength = max_name_len;
-		DWORD64 displacement;
+	symbol(HANDLE process, DWORD64 address) {
+		// Use malloc/free instead of new/delete.
+		// Using 'new' can throw exceptions (std::bad_alloc), which is dangerous
+		// if the crash was caused by heap corruption or runtime failure.
+		sym = (sym_type *)malloc(sizeof(sym_type) + max_name_len);
+		if (sym) {
+			memset(sym, '\0', sizeof(sym_type) + max_name_len);
+			sym->SizeOfStruct = sizeof(sym_type);
+			sym->MaxNameLength = max_name_len;
+			DWORD64 displacement;
 
-		SymGetSymFromAddr64(process, address, &displacement, sym);
+			if (!SymGetSymFromAddr64(process, address, &displacement, sym)) {
+				// If lookup fails, ensure we don't return garbage
+				sym->Name[0] = '\0';
+			}
+		}
 	}
 
-	std::string name() { return std::string(sym->Name); }
+	// Add destructor to prevent leaking ~1KB per frame printed.
+	~symbol() {
+		if (sym) {
+			free(sym);
+		}
+	}
+
+	std::string name() {
+		if (!sym) {
+			return "<alloc error>";
+		}
+		return std::string(sym->Name);
+	}
+
 	std::string undecorated_name() {
-		if (*sym->Name == '\0') {
+		if (!sym || *sym->Name == '\0') {
 			return "<couldn't map PC to fn name>";
 		}
 		std::vector<char> und_name(max_name_len);
-		UnDecorateSymbolName(sym->Name, &und_name[0], max_name_len, UNDNAME_COMPLETE);
-		return std::string(&und_name[0], strlen(&und_name[0]));
+		if (UnDecorateSymbolName(sym->Name, &und_name[0], max_name_len, UNDNAME_COMPLETE)) {
+			return std::string(&und_name[0]);
+		}
+		return std::string(sym->Name);
 	}
 };
 
@@ -96,21 +119,33 @@ public:
 			process(h) {}
 
 	module_data operator()(HMODULE module) {
-		module_data ret;
-		char temp[4096];
-		MODULEINFO mi;
+		module_data ret = {};
 
-		GetModuleInformation(process, module, &mi, sizeof(mi));
-		ret.base_address = mi.lpBaseOfDll;
-		ret.load_size = mi.SizeOfImage;
+		// If the crash is EXCEPTION_STACK_OVERFLOW, allocating 4KB on stack
+		// would causes a double-fault and instantaneous termination (no log).
+		char *temp = (char *)malloc(4096);
+		if (!temp) {
+			return ret; // If we can't allocate 4KB, we can't resolve names. Return empty.
+		}
+		memset(temp, 0, 4096);
 
-		GetModuleFileNameEx(process, module, temp, sizeof(temp));
-		ret.image_name = temp;
-		GetModuleBaseName(process, module, temp, sizeof(temp));
-		ret.module_name = temp;
-		std::vector<char> img(ret.image_name.begin(), ret.image_name.end());
-		std::vector<char> mod(ret.module_name.begin(), ret.module_name.end());
-		SymLoadModule64(process, nullptr, &img[0], &mod[0], (DWORD64)ret.base_address, ret.load_size);
+		MODULEINFO mi = {};
+		if (GetModuleInformation(process, module, &mi, sizeof(mi))) {
+			ret.base_address = mi.lpBaseOfDll;
+			ret.load_size = mi.SizeOfImage;
+		}
+
+		if (GetModuleFileNameEx(process, module, temp, 4096)) {
+			ret.image_name = temp;
+		}
+		if (GetModuleBaseName(process, module, temp, 4096)) {
+			ret.module_name = temp;
+		}
+
+		// Free the temp buffer immediately.
+		free(temp);
+		SymLoadModule64(process, nullptr, ret.image_name.c_str(), ret.module_name.c_str(), (DWORD64)ret.base_address, ret.load_size);
+
 		return ret;
 	}
 };
@@ -121,10 +156,11 @@ DWORD CrashHandlerException(EXCEPTION_POINTERS *ep) {
 	DWORD offset_from_symbol = 0;
 	IMAGEHLP_LINE64 line = {};
 	std::vector<module_data> modules;
-	DWORD cbNeeded;
+	DWORD cbNeeded = {};
 	std::vector<HMODULE> module_handles(1);
 
-	if (OS::get_singleton() == nullptr || OS::get_singleton()->is_disable_crash_handler() || IsDebuggerPresent()) {
+	// Check OS singleton existence before accessing
+	if (!OS::get_singleton() || OS::get_singleton()->is_disable_crash_handler() || IsDebuggerPresent()) {
 		return EXCEPTION_CONTINUE_SEARCH;
 	}
 
@@ -160,15 +196,23 @@ DWORD CrashHandlerException(EXCEPTION_POINTERS *ep) {
 	}
 
 	SymSetOptions(SymGetOptions() | SYMOPT_LOAD_LINES | SYMOPT_UNDNAME | SYMOPT_EXACT_SYMBOLS);
-	EnumProcessModules(process, &module_handles[0], module_handles.size() * sizeof(HMODULE), &cbNeeded);
-	module_handles.resize(cbNeeded / sizeof(HMODULE));
-	EnumProcessModules(process, &module_handles[0], module_handles.size() * sizeof(HMODULE), &cbNeeded);
-	std::transform(module_handles.begin(), module_handles.end(), std::back_inserter(modules), get_mod_info(process));
-	void *base = modules[0].base_address;
+
+	// Ensure we don't crash resizing vectors if heap is corrupted,
+	// though we can't do much if it is.
+	if (EnumProcessModules(process, &module_handles[0], module_handles.size() * sizeof(HMODULE), &cbNeeded)) {
+		module_handles.resize(cbNeeded / sizeof(HMODULE));
+		EnumProcessModules(process, &module_handles[0], module_handles.size() * sizeof(HMODULE), &cbNeeded);
+		std::transform(module_handles.begin(), module_handles.end(), std::back_inserter(modules), get_mod_info(process));
+	}
+
+	void *base = nullptr;
+	if (!modules.empty()) {
+		base = modules[0].base_address;
+	}
 
 	// Setup stuff:
 	CONTEXT *context = ep->ContextRecord;
-	STACKFRAME64 frame;
+	STACKFRAME64 frame = {};
 	bool skip_first = false;
 
 	frame.AddrPC.Mode = AddrModeFlat;
@@ -197,8 +241,14 @@ DWORD CrashHandlerException(EXCEPTION_POINTERS *ep) {
 #endif
 
 	line.SizeOfStruct = sizeof(line);
-	IMAGE_NT_HEADERS *h = ImageNtHeader(base);
-	DWORD image_type = h->FileHeader.Machine;
+
+	DWORD image_type = IMAGE_FILE_MACHINE_UNKNOWN;
+	if (base) {
+		IMAGE_NT_HEADERS *h = ImageNtHeader(base);
+		if (h) {
+			image_type = h->FileHeader.Machine;
+		}
+	}
 
 	int n = 0;
 	do {
