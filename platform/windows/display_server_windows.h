@@ -566,9 +566,11 @@ class DisplayServerWindows : public DisplayServer {
 	JoypadSDL *joypad_sdl = nullptr;
 #endif
 	HHOOK mouse_monitor = nullptr;
+	HICON internal_icon_handle = nullptr;
 	List<WindowID> popup_list;
 	uint64_t time_since_popup = 0;
 	Ref<Image> icon;
+
 
 	Error _create_window(WindowID p_window_id, WindowMode p_mode, uint32_t p_flags, const Rect2i &p_rect, bool p_exclusive, WindowID p_transient_parent, HWND p_parent_hwnd, bool p_no_redirection_bitmap);
 	void _destroy_window(WindowID p_window_id); // Destroys only what was needed to be created for the main window. Does not destroy transient parent dependencies or GL/rendering context windows.

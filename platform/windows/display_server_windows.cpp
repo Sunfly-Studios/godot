@@ -1055,7 +1055,7 @@ Ref<Image> DisplayServerWindows::clipboard_get_image() const {
 					if (hdc) {
 						HBITMAP hbm = CreateCompatibleBitmap(dc, info->biWidth, abs(info->biHeight));
 						if (hbm) {
-							SelectObject(hdc, hbm);
+							HGDIOBJ prev_obj = SelectObject(hdc, hbm);
 							SetDIBitsToDevice(hdc, 0, 0, info->biWidth, abs(info->biHeight), 0, 0, 0, abs(info->biHeight), dib_bits, ptr, DIB_RGB_COLORS);
 
 							BITMAPINFO bmp_info = {};
@@ -1079,6 +1079,7 @@ Ref<Image> DisplayServerWindows::clipboard_get_image() const {
 							}
 							image = Image::create_from_data(info->biWidth, abs(info->biHeight), false, Image::Format::FORMAT_RGBA8, img_data);
 
+							SelectObject(hdc, prev_obj);
 							DeleteObject(hbm);
 						}
 						DeleteDC(hdc);
@@ -1447,7 +1448,8 @@ Ref<Image> DisplayServerWindows::screen_get_image(int p_screen) const {
 		if (hdc) {
 			HBITMAP hbm = CreateCompatibleBitmap(dc, width, height);
 			if (hbm) {
-				SelectObject(hdc, hbm);
+				// Capture the previous object.
+				HGDIOBJ prev_obj = SelectObject(hdc, hbm);
 				BitBlt(hdc, 0, 0, width, height, dc, p1.x, p1.y, SRCCOPY);
 
 				BITMAPINFO bmp_info = {};
@@ -1468,6 +1470,8 @@ Ref<Image> DisplayServerWindows::screen_get_image(int p_screen) const {
 				}
 				img = Image::create_from_data(width, height, false, Image::FORMAT_RGBA8, img_data);
 
+				// GDI says that we must restore before deleting.
+				SelectObject(hdc, prev_obj); 
 				DeleteObject(hbm);
 			}
 			DeleteDC(hdc);
@@ -1503,7 +1507,7 @@ Ref<Image> DisplayServerWindows::screen_get_image_rect(const Rect2i &p_rect) con
 		if (hdc) {
 			HBITMAP hbm = CreateCompatibleBitmap(dc, width, height);
 			if (hbm) {
-				SelectObject(hdc, hbm);
+				HGDIOBJ prev_obj = SelectObject(hdc, hbm);
 				BitBlt(hdc, 0, 0, width, height, dc, p1.x, p1.y, SRCCOPY);
 
 				BITMAPINFO bmp_info = {};
@@ -1524,6 +1528,7 @@ Ref<Image> DisplayServerWindows::screen_get_image_rect(const Rect2i &p_rect) con
 				}
 				img = Image::create_from_data(width, height, false, Image::FORMAT_RGBA8, img_data);
 
+				SelectObject(hdc, prev_obj);
 				DeleteObject(hbm);
 			}
 			DeleteDC(hdc);
@@ -1683,6 +1688,7 @@ DisplayServer::WindowID DisplayServerWindows::create_sub_window(WindowMode p_mod
 			bb.hRgnBlur = hRgn;
 			bb.fEnable = TRUE;
 			DwmEnableBlurBehindWindow(wd.hWnd, &bb);
+			DeleteObject(hRgn);
 		}
 
 		wd.layered_window = true;
@@ -2555,6 +2561,7 @@ void DisplayServerWindows::window_set_flag(WindowFlags p_flag, bool p_enabled, W
 					bb.hRgnBlur = hRgn;
 					bb.fEnable = TRUE;
 					DwmEnableBlurBehindWindow(wd.hWnd, &bb);
+					DeleteObject(hRgn);
 				}
 				wd.layered_window = true;
 			} else {
@@ -2568,6 +2575,7 @@ void DisplayServerWindows::window_set_flag(WindowFlags p_flag, bool p_enabled, W
 					bb.hRgnBlur = hRgn;
 					bb.fEnable = FALSE;
 					DwmEnableBlurBehindWindow(wd.hWnd, &bb);
+					DeleteObject(hRgn);
 				}
 			}
 		} break;
@@ -3247,12 +3255,14 @@ static INT_PTR input_text_dialog_init(HWND hWnd, UINT code, WPARAM wParam, LPARA
 	if (str_len > 0) {
 		HDC hdc = GetDC(nullptr);
 		RECT trect = { margin, margin, margin + dlg_size.cx, margin + dlg_size.cy };
-		SelectObject(hdc, (HFONT)SendMessageW(hWnd, WM_GETFONT, 0, 0));
+		HGDIOBJ prev_font = SelectObject(hdc, (HFONT)SendMessageW(hWnd, WM_GETFONT, 0, 0));
 
 		// `+ margin` adds some space between the static text and the edit field.
 		// Don't scale this with DPI because DPI is already handled by DrawText.
 		str_size.cy = DrawTextW(hdc, (LPCWSTR)init.description, str_len, &trect, DT_LEFT | DT_WORDBREAK | DT_CALCRECT) + margin;
 
+		// Restore the previous font before releasing DC
+		SelectObject(hdc, prev_font);
 		ReleaseDC(nullptr, hdc);
 	}
 
@@ -3888,6 +3898,11 @@ void DisplayServerWindows::set_icon(const Ref<Image> &p_icon) {
 
 		icon = img;
 
+		if (internal_icon_handle) {
+			DestroyIcon(internal_icon_handle);
+		}
+		internal_icon_handle = hicon; // Track new icon
+
 		// Set the icon for the window.
 		SendMessage(windows[MAIN_WINDOW_ID].hWnd, WM_SETICON, ICON_SMALL, (LPARAM)hicon);
 
@@ -3968,6 +3983,10 @@ DisplayServer::IndicatorID DisplayServerWindows::create_status_indicator(const R
 	IndicatorID iid = indicator_id_counter++;
 	indicators[iid] = idat;
 
+	if (hicon) {
+		DestroyIcon(hicon);
+	}
+
 	return iid;
 }
 
@@ -4031,6 +4050,10 @@ void DisplayServerWindows::status_indicator_set_icon(IndicatorID p_id, const Ref
 	ndat.uVersion = NOTIFYICON_VERSION;
 
 	Shell_NotifyIconW(NIM_MODIFY, &ndat);
+
+	if (hicon) {
+		DestroyIcon(hicon);
+	}
 }
 
 void DisplayServerWindows::status_indicator_set_tooltip(IndicatorID p_id, const String &p_tooltip) {
@@ -7382,6 +7405,15 @@ DisplayServerWindows::~DisplayServerWindows() {
 
 	if (mouse_monitor) {
 		UnhookWindowsHookEx(mouse_monitor);
+	}
+
+	if (window_bkg_brush) {
+		DeleteObject(window_bkg_brush);
+		window_bkg_brush = nullptr;
+	}
+
+	if (internal_icon_handle) {
+		DestroyIcon(internal_icon_handle);
 	}
 
 	if (user_proc) {
