@@ -155,21 +155,23 @@ void *Memory::realloc_static(void *p_memory, size_t p_bytes, bool p_pad_align) {
 			free(mem);
 			return nullptr;
 		} else {
-			*s = p_bytes;
-
-			mem = (uint8_t *)realloc(mem, p_bytes + DATA_OFFSET);
-			ERR_FAIL_NULL_V(mem, nullptr);
+			uint8_t *new_mem = (uint8_t *)realloc(mem, p_bytes + DATA_OFFSET);
+			ERR_FAIL_NULL_V(new_mem, nullptr);
+			mem = new_mem;
 
 			s = (uint64_t *)(mem + SIZE_OFFSET);
-
 			*s = p_bytes;
 
 			return mem + DATA_OFFSET;
 		}
 	} else {
-		mem = (uint8_t *)realloc(mem, p_bytes);
+		// Use temporary pointer to avoid leak on failure
+		uint8_t *new_mem = (uint8_t *)realloc(mem, p_bytes);
 
-		ERR_FAIL_COND_V(mem == nullptr && p_bytes > 0, nullptr);
+		if (new_mem == nullptr && p_bytes > 0) {
+			return nullptr; // Allocation failed.
+		}
+		mem = new_mem;
 
 		return mem;
 	}
