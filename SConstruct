@@ -764,6 +764,10 @@ if env.msvc:
         env.Append(LINKFLAGS=["/OPT:REF"])
     elif env["optimize"] == "debug" or env["optimize"] == "none":
         env.Append(CCFLAGS=["/Od"])
+    if not env["use_llvm"] and (env["debug_paths_relative"] or not env["debug_symbols"]):
+        # Remap absolute paths to relative paths for debug symbols and __FILE__.
+        project_path = Dir("#").abspath
+        env.Prepend(CXXFLAGS=["/d1trimfile:" + project_path])
 else:
     if env["debug_symbols"]:
         if env["platform"] == "windows":

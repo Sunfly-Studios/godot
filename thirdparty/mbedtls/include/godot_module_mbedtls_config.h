@@ -48,6 +48,9 @@
 #undef MBEDTLS_KEY_EXCHANGE_DHE_RSA_ENABLED
 #undef MBEDTLS_DES_C
 #undef MBEDTLS_DHM_C
+#ifndef DEBUG_ENABLED
+#undef MBEDTLS_DEBUG_C
+#endif
 
 #if !(defined(__linux__) && defined(__aarch64__))
 // ARMv8 hardware AES operations. Detection only possible on linux.
