@@ -21,6 +21,7 @@
 #include "SDL_internal.h"
 
 #include "SDL_getenv_c.h"
+#include <stdlib.h>
 
 #if defined(SDL_PLATFORM_WINDOWS)
 #include "../core/windows/SDL_windows.h"

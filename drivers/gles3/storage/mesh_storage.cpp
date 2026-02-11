@@ -263,19 +263,19 @@ void MeshStorage::mesh_add_surface(RID p_mesh, const RS::SurfaceData &p_surface)
 		bool is_index_16 = new_surface.vertex_count <= 65536 && new_surface.vertex_count > 0;
 
 #ifdef BIG_ENDIAN_ENABLED
-        // Make the buffer writable
-        uint8_t *idx_w = new_surface.index_data.ptrw(); 
-        if (is_index_16) {
-            uint16_t *ptr16 = (uint16_t *)idx_w;
-            for (int i = 0; i < new_surface.index_count; i++) {
-                ptr16[i] = BSWAP16(ptr16[i]);
-            }
-        } else {
-            uint32_t *ptr32 = (uint32_t *)idx_w;
-            for (int i = 0; i < new_surface.index_count; i++) {
-                ptr32[i] = BSWAP32(ptr32[i]);
-            }
-        }
+		// Make the buffer writable
+		uint8_t *idx_w = new_surface.index_data.ptrw();
+		if (is_index_16) {
+			uint16_t *ptr16 = (uint16_t *)idx_w;
+			for (uint32_t i = 0; i < new_surface.index_count; i++) {
+				ptr16[i] = BSWAP16(ptr16[i]);
+			}
+		} else {
+			uint32_t *ptr32 = (uint32_t *)idx_w;
+			for (uint32_t i = 0; i < new_surface.index_count; i++) {
+				ptr32[i] = BSWAP32(ptr32[i]);
+			}
+		}
 #endif
 
 		glGenBuffers(1, &s->index_buffer);
@@ -291,25 +291,27 @@ void MeshStorage::mesh_add_surface(RID p_mesh, const RS::SurfaceData &p_surface)
 
 			for (int i = 0; i < new_surface.lods.size(); i++) {
 #ifdef BIG_ENDIAN_ENABLED
-                uint8_t *lod_data_ptr = new_surface.lods[i].index_data.ptrw();
-                
-                // Reuse "is_index_16" from the outer scope 
-                // LODs share the same vertex buffer, so index depth is consistent
-                if (is_index_16) {
-                    uint16_t *lod_ptr16 = (uint16_t *)lod_data_ptr;
-                    int lod_idx_count = new_surface.lods[i].index_data.size() / 2;
-                    
-                    for (int j = 0; j < lod_idx_count; j++) {
-                        lod_ptr16[j] = BSWAP16(lod_ptr16[j]);
-                    }
-                } else {
-                    uint32_t *lod_ptr32 = (uint32_t *)lod_data_ptr;
-                    int lod_idx_count = new_surface.lods[i].index_data.size() / 4;
-                    
-                    for (int j = 0; j < lod_idx_count; j++) {
-                        lod_ptr32[j] = BSWAP32(lod_ptr32[j]);
-                    }
-                }
+				// Create a local copy we can modify
+				Vector<uint8_t> index_data_copy = new_surface.lods[i].index_data;
+				uint8_t *lod_data_ptr = index_data_copy.ptrw();
+
+				// Reuse "is_index_16" from the outer scope
+				// LODs share the same vertex buffer, so index depth is consistent
+				if (is_index_16) {
+					uint16_t *lod_ptr16 = (uint16_t *)lod_data_ptr;
+					int lod_idx_count = new_surface.lods[i].index_data.size() / 2;
+
+					for (int j = 0; j < lod_idx_count; j++) {
+						lod_ptr16[j] = BSWAP16(lod_ptr16[j]);
+					}
+				} else {
+					uint32_t *lod_ptr32 = (uint32_t *)lod_data_ptr;
+					int lod_idx_count = new_surface.lods[i].index_data.size() / 4;
+
+					for (int j = 0; j < lod_idx_count; j++) {
+						lod_ptr32[j] = BSWAP32(lod_ptr32[j]);
+					}
+				}
 #endif
 				glGenBuffers(1, &s->lods[i].index_buffer);
 				glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, s->lods[i].index_buffer);

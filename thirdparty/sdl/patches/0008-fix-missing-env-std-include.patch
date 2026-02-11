@@ -1,0 +1,12 @@
+diff --git a/thirdparty/sdl/stdlib/SDL_getenv.c b/thirdparty/sdl/stdlib/SDL_getenv.c
+index b4a1922465..642f982e3e 100644
+--- a/thirdparty/sdl/stdlib/SDL_getenv.c
++++ b/thirdparty/sdl/stdlib/SDL_getenv.c
+@@ -21,6 +21,7 @@
+ #include "SDL_internal.h"
+ 
+ #include "SDL_getenv_c.h"
++#include <stdlib.h>
+ 
+ #if defined(SDL_PLATFORM_WINDOWS)
+ #include "../core/windows/SDL_windows.h"

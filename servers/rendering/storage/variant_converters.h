@@ -40,9 +40,19 @@
 
 #ifdef BIG_ENDIAN_ENABLED
 static inline float _bswap_f(float x) {
-	uint32_t i = *(uint32_t *)&x;
+	uint32_t i = 0;
+
+	// Move the raw bytes.
+	memcpy(&i, &x, sizeof(float));
+
+	// Perform the swap.
 	i = BSWAP32(i);
-	return *(float *)&i;
+
+	float ret = 0.0;
+
+	memcpy(&ret, &i, sizeof(float));
+
+	return ret;
 }
 static inline uint32_t _bswap_u32(uint32_t x) {
 	return BSWAP32(x);
