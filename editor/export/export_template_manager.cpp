@@ -428,9 +428,13 @@ bool ExportTemplateManager::_install_file_selected(const String &p_file, bool p_
 	String version;
 	String contents_dir;
 
+	// Use heap buffer.
+	Vector<uint8_t> fname_buffer;
+	fname_buffer.resize(16384);
+	char *fname = (char *)fname_buffer.ptrw();
+
 	while (ret == UNZ_OK) {
 		unz_file_info info;
-		char fname[16384];
 		ret = unzGetCurrentFileInfo(pkg, &info, fname, 16384, nullptr, 0, nullptr, 0);
 		if (ret != UNZ_OK) {
 			break;
@@ -502,7 +506,6 @@ bool ExportTemplateManager::_install_file_selected(const String &p_file, bool p_
 	while (ret == UNZ_OK) {
 		// Get filename.
 		unz_file_info info;
-		char fname[16384];
 		ret = unzGetCurrentFileInfo(pkg, &info, fname, 16384, nullptr, 0, nullptr, 0);
 		if (ret != UNZ_OK) {
 			break;
@@ -838,10 +841,15 @@ Error ExportTemplateManager::install_android_template_from_file(const String &p_
 
 	HashSet<String> dirs_tested;
 	int idx = 0;
+
+	// Use heap buffer.
+	Vector<uint8_t> fpath_buffer;
+	fpath_buffer.resize(16384);
+	char *fpath = (char *)fpath_buffer.ptrw();
+
 	while (ret == UNZ_OK) {
 		// Get file path.
 		unz_file_info info;
-		char fpath[16384];
 		ret = unzGetCurrentFileInfo(pkg, &info, fpath, 16384, nullptr, 0, nullptr, 0);
 		if (ret != UNZ_OK) {
 			break;
