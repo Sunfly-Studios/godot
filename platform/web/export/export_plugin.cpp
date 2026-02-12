@@ -60,13 +60,15 @@ Error EditorExportPlatformWeb::_extract_template(const String &p_template, const
 		return ERR_FILE_CORRUPT;
 	}
 
+	Vector<char> fname_buffer;
+	fname_buffer.resize(16384);
+	
 	do {
 		//get filename
 		unz_file_info info;
-		char fname[16384];
-		unzGetCurrentFileInfo(pkg, &info, fname, 16384, nullptr, 0, nullptr, 0);
+		unzGetCurrentFileInfo(pkg, &info, fname_buffer.ptrw(), fname_buffer.size(), nullptr, 0, nullptr, 0);
 
-		String file = String::utf8(fname);
+		String file = String::utf8(fname_buffer.ptr());
 
 		// Skip folders.
 		if (file.ends_with("/")) {

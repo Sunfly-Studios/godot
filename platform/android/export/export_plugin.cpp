@@ -3727,19 +3727,21 @@ Error EditorExportPlatformAndroid::export_project_helper(const Ref<EditorExportP
 	//To temporarily store icon xml data.
 	Vector<uint8_t> themed_icon_xml_data;
 	int icon_xml_compression_method = -1;
+	
+	Vector<char> fname_buffer;
+	fname_buffer.resize(16384);
 
 	while (ret == UNZ_OK) {
 		//get filename
 		unz_file_info info;
-		char fname[16384];
-		ret = unzGetCurrentFileInfo(pkg, &info, fname, 16384, nullptr, 0, nullptr, 0);
+		ret = unzGetCurrentFileInfo(pkg, &info, fname_buffer.ptrw(), fname_buffer.size(), nullptr, 0, nullptr, 0);
 		if (ret != UNZ_OK) {
 			break;
 		}
 
 		bool skip = false;
 
-		String file = String::utf8(fname);
+		String file = String::utf8(fname_buffer.ptr());
 
 		Vector<uint8_t> data;
 		data.resize(info.uncompressed_size);
@@ -3935,6 +3937,12 @@ Error EditorExportPlatformAndroid::export_project_helper(const Ref<EditorExportP
 	io2 = zipio_create_io(&io2_fa);
 	zipFile final_apk = zipOpen2(p_path.utf8().get_data(), APPEND_STATUS_CREATE, nullptr, &io2);
 
+	fname_buffer.clear();
+    fname_buffer.resize(16384);
+    
+    Vector<char> extra_buffer;
+    extra_buffer.resize(16384);
+
 	// Take files from the unaligned APK and write them out to the aligned one
 	// in raw mode, i.e. not uncompressing and recompressing, aligning them as needed,
 	// following what is done in https://github.com/android/platform_build/blob/master/tools/zipalign/ZipAlign.cpp
@@ -3943,12 +3951,12 @@ Error EditorExportPlatformAndroid::export_project_helper(const Ref<EditorExportP
 		unz_file_info info;
 		memset(&info, 0, sizeof(info));
 
-		char fname[16384];
-		char extra[16384];
-		ret = unzGetCurrentFileInfo(tmp_unaligned, &info, fname, 16384, extra, 16384 - ZIP_ALIGNMENT, nullptr, 0);
-		if (ret != UNZ_OK) {
-			break;
-		}
+		char *fname = fname_buffer.ptrw();
+        char *extra = extra_buffer.ptrw();
+		ret = unzGetCurrentFileInfo(tmp_unaligned, &info, fname, fname_buffer.size(), extra, extra_buffer.size() - ZIP_ALIGNMENT, nullptr, 0);
+        if (ret != UNZ_OK) {
+            break;
+        }
 
 		String file = String::utf8(fname);
 
@@ -3965,16 +3973,18 @@ Error EditorExportPlatformAndroid::export_project_helper(const Ref<EditorExportP
 		// align
 		int padding = 0;
 		if (!info.compression_method) {
-			// Uncompressed file => Align
-			long new_offset = file_offset + bias;
-			padding = (ZIP_ALIGNMENT - (new_offset % ZIP_ALIGNMENT)) % ZIP_ALIGNMENT;
-			const char *ext = strrchr(fname, '.');
-			if (ext && strcmp(ext, ".so") == 0) {
-				padding = (PAGE_SIZE_KB - (new_offset % PAGE_SIZE_KB)) % PAGE_SIZE_KB;
-			} else {
-				padding = (ZIP_ALIGNMENT - (new_offset % ZIP_ALIGNMENT)) % ZIP_ALIGNMENT;
-			}
-		}
+            // Uncompressed file => Align
+            long new_offset = file_offset + bias;
+            padding = (ZIP_ALIGNMENT - (new_offset % ZIP_ALIGNMENT)) % ZIP_ALIGNMENT;
+            
+            // fname is safe to use here because it's a valid char* from our vector
+            const char *ext = strrchr(fname, '.'); 
+            if (ext && strcmp(ext, ".so") == 0) {
+                padding = (PAGE_SIZE_KB - (new_offset % PAGE_SIZE_KB)) % PAGE_SIZE_KB;
+            } else {
+                padding = (ZIP_ALIGNMENT - (new_offset % ZIP_ALIGNMENT)) % ZIP_ALIGNMENT;
+            }
+        }
 
 		memset(extra + info.size_file_extra, 0, padding);
 

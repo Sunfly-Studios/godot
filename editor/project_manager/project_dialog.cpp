@@ -125,13 +125,15 @@ void ProjectDialog::_validate_path() {
 			}
 
 			int ret = unzGoToFirstFile(pkg);
+			Vector<char> fname_buffer;
+			fname_buffer.resize(16384);
+
 			while (ret == UNZ_OK) {
 				unz_file_info info;
-				char fname[16384];
-				ret = unzGetCurrentFileInfo(pkg, &info, fname, 16384, nullptr, 0, nullptr, 0);
+				ret = unzGetCurrentFileInfo(pkg, &info, fname_buffer.ptrw(), fname_buffer.size(), nullptr, 0, nullptr, 0);
 				ERR_FAIL_COND_MSG(ret != UNZ_OK, "Failed to get current file info.");
 
-				String name = String::utf8(fname);
+				String name = String::utf8(fname_buffer.ptr());
 
 				// Skip the __MACOSX directory created by macOS's built-in file zipper.
 				if (name.begins_with("__MACOSX")) {
@@ -604,13 +606,15 @@ void ProjectDialog::ok_pressed() {
 			// Find the first directory with a "project.godot".
 			String zip_root;
 			int ret = unzGoToFirstFile(pkg);
+			Vector<char> fname_buffer;
+			fname_buffer.resize(16384);
+
 			while (ret == UNZ_OK) {
 				unz_file_info info;
-				char fname[16384];
-				unzGetCurrentFileInfo(pkg, &info, fname, 16384, nullptr, 0, nullptr, 0);
+				unzGetCurrentFileInfo(pkg, &info, fname_buffer.ptrw(), fname_buffer.size(), nullptr, 0, nullptr, 0);
 				ERR_FAIL_COND_MSG(ret != UNZ_OK, "Failed to get current file info.");
 
-				String name = String::utf8(fname);
+				String name = String::utf8(fname_buffer.ptr());
 
 				// Skip the __MACOSX directory created by macOS's built-in file zipper.
 				if (name.begins_with("__MACOSX")) {
@@ -643,14 +647,17 @@ void ProjectDialog::ok_pressed() {
 			ret = unzGoToFirstFile(pkg);
 
 			Vector<String> failed_files;
+
+			fname_buffer.clear();
+			fname_buffer.resize(16384);
+
 			while (ret == UNZ_OK) {
 				//get filename
 				unz_file_info info;
-				char fname[16384];
-				ret = unzGetCurrentFileInfo(pkg, &info, fname, 16384, nullptr, 0, nullptr, 0);
+				ret = unzGetCurrentFileInfo(pkg, &info, fname_buffer.ptrw(), fname_buffer.size(), nullptr, 0, nullptr, 0);
 				ERR_FAIL_COND_MSG(ret != UNZ_OK, "Failed to get current file info.");
 
-				String name = String::utf8(fname);
+				String name = String::utf8(fname_buffer.ptr());
 
 				// Skip the __MACOSX directory created by macOS's built-in file zipper.
 				if (name.begins_with("__MACOSX")) {

@@ -1869,16 +1869,18 @@ Error EditorExportPlatformMacOS::export_project(const Ref<EditorExportPreset> &p
 		include_angle_libs = true;
 	}
 
+	Vector<char> fname_buffer;
+	fname_buffer.resize(16384);
+
 	while (ret == UNZ_OK && err == OK) {
 		// Get filename.
 		unz_file_info info;
-		char fname[16384];
-		ret = unzGetCurrentFileInfo(src_pkg_zip, &info, fname, 16384, nullptr, 0, nullptr, 0);
+		ret = unzGetCurrentFileInfo(src_pkg_zip, &info, fname_buffer.ptrw(), fname_buffer.size(), nullptr, 0, nullptr, 0);
 		if (ret != UNZ_OK) {
 			break;
 		}
 
-		String file = String::utf8(fname);
+		String file = String::utf8(fname_buffer.ptr());
 
 		Vector<uint8_t> data;
 		data.resize(info.uncompressed_size);

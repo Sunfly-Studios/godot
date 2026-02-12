@@ -120,13 +120,17 @@ void EditorAssetInstaller::open_asset(const String &p_path, bool p_autoskip_topl
 
 	int ret = unzGoToFirstFile(pkg);
 
+	// Allocate buffer to heap.
+	Vector<char> fname_buffer;
+	fname_buffer.resize(16384);
+
 	while (ret == UNZ_OK) {
 		//get filename
 		unz_file_info info;
-		char fname[16384];
-		unzGetCurrentFileInfo(pkg, &info, fname, 16384, nullptr, 0, nullptr, 0);
 
-		String source_name = String::utf8(fname);
+		unzGetCurrentFileInfo(pkg, &info, fname_buffer.ptrw(), fname_buffer.size(), nullptr, 0, nullptr, 0);
+
+		String source_name = String::utf8(fname_buffer.ptr());
 
 		// Create intermediate directories if they aren't reported by unzip.
 		// We are only interested in subfolders, so skip the root slash.
@@ -509,17 +513,19 @@ void EditorAssetInstaller::_install_asset() {
 	int ret = unzGoToFirstFile(pkg);
 
 	ProgressDialog::get_singleton()->add_task("uncompress", TTR("Uncompressing Assets"), file_item_map.size());
-
 	Ref<DirAccess> da = DirAccess::create(DirAccess::ACCESS_RESOURCES);
+
+	Vector<char> fname_buffer;
+	fname_buffer.resize(16384);
+
 	for (int idx = 0; ret == UNZ_OK; ret = unzGoToNextFile(pkg), idx++) {
 		unz_file_info info;
-		char fname[16384];
-		ret = unzGetCurrentFileInfo(pkg, &info, fname, 16384, nullptr, 0, nullptr, 0);
+		ret = unzGetCurrentFileInfo(pkg, &info, fname_buffer.ptrw(), fname_buffer.size(), nullptr, 0, nullptr, 0);
 		if (ret != UNZ_OK) {
 			break;
 		}
 
-		String source_name = String::utf8(fname);
+		String source_name = String::utf8(fname_buffer.ptr());
 		if (!_is_item_checked(source_name)) {
 			continue;
 		}

@@ -362,15 +362,18 @@ Error EditorExportPlatformOpenHarmony::export_project_helper(const Ref<EditorExp
 	}
 
 	int ret = unzGoToFirstFile(pkg);
+
+	Vector<char> fname_buffer;
+	fname_buffer.resize(16384);
+
 	while (ret == UNZ_OK) {
 		unz_file_info info;
-		char filename[16384];
-		ret = unzGetCurrentFileInfo(pkg, &info, filename, 16384, nullptr, 0, nullptr, 0);
+		ret = unzGetCurrentFileInfo(pkg, &info, fname_buffer.ptrw(), fname_buffer.size(), nullptr, 0, nullptr, 0);
 		if (ret != UNZ_OK) {
 			break;
 		}
 
-		String file = String::utf8(filename);
+		String file = String::utf8(fname_buffer.ptr());
 		String full_path = project_dir.path_join(file);
 
 		if (file.ends_with("/")) {

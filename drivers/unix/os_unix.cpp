@@ -824,13 +824,17 @@ Error OS_Unix::execute(const String &p_path, const List<String> &p_arguments, St
 
 		FILE *f = popen(command.utf8().get_data(), "r");
 		ERR_FAIL_NULL_V_MSG(f, ERR_CANT_OPEN, "Cannot create pipe from command: " + command + ".");
-		char buf[65535];
-		while (fgets(buf, 65535, f)) {
+		
+		Vector<char> buf;
+        buf.resize(65535);
+
+		// use .ptrw() to get the writeable char* pointer
+		while (fgets(buf.ptrw(), buf.size(), f)) {
 			if (p_pipe_mutex) {
 				p_pipe_mutex->lock();
 			}
 			String pipe_out;
-			if (pipe_out.parse_utf8(buf) == OK) {
+			if (pipe_out.parse_utf8(buf.ptr()) == OK) {
 				(*r_pipe) += pipe_out;
 			} else {
 				(*r_pipe) += String(buf); // If not valid UTF-8 try decode as Latin-1

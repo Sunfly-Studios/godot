@@ -74,27 +74,35 @@ Error CryptoKeyMbedTLS::load(const String &p_path, bool p_public_only) {
 }
 
 Error CryptoKeyMbedTLS::save(const String &p_path, bool p_public_only) {
-	Ref<FileAccess> f = FileAccess::open(p_path, FileAccess::WRITE);
-	ERR_FAIL_COND_V_MSG(f.is_null(), ERR_INVALID_PARAMETER, "Cannot save CryptoKeyMbedTLS file '" + p_path + "'.");
+    Ref<FileAccess> f = FileAccess::open(p_path, FileAccess::WRITE);
+    ERR_FAIL_COND_V_MSG(f.is_null(), ERR_INVALID_PARAMETER, "Cannot save CryptoKeyMbedTLS file '" + p_path + "'.");
 
-	unsigned char w[16000];
-	memset(w, 0, sizeof(w));
+	// Move to heap.
+    Vector<uint8_t> w;
+    w.resize(16000);
+    
+    memset(w.ptrw(), 0, w.size()); 
 
-	int ret = 0;
-	if (p_public_only) {
-		ret = mbedtls_pk_write_pubkey_pem(&pkey, w, sizeof(w));
-	} else {
-		ret = mbedtls_pk_write_key_pem(&pkey, w, sizeof(w));
-	}
-	if (ret != 0) {
-		mbedtls_platform_zeroize(w, sizeof(w)); // Zeroize anything we might have written.
-		ERR_FAIL_V_MSG(FAILED, "Error writing key '" + itos(ret) + "'.");
-	}
+    int ret = 0;
+    unsigned char *w_ptr = w.ptrw(); // Get writable pointer
+    
+    if (p_public_only) {
+        ret = mbedtls_pk_write_pubkey_pem(&pkey, w_ptr, w.size());
+    } else {
+        ret = mbedtls_pk_write_key_pem(&pkey, w_ptr, w.size());
+    }
 
-	size_t len = strlen((char *)w);
-	f->store_buffer(w, len);
-	mbedtls_platform_zeroize(w, sizeof(w)); // Zeroize temporary buffer.
-	return OK;
+    if (ret != 0) {
+        mbedtls_platform_zeroize(w_ptr, w.size()); // Zeroize heap memory on failure
+        ERR_FAIL_V_MSG(FAILED, "Error writing key '" + itos(ret) + "'.");
+    }
+
+    // Cast to char* for strlen because mbedtls writes a PEM string (null-terminated)
+    size_t len = strlen((char *)w_ptr);
+    f->store_buffer(w_ptr, len);
+
+    mbedtls_platform_zeroize(w_ptr, w.size()); // Zeroize heap memory on success
+    return OK;
 }
 
 Error CryptoKeyMbedTLS::load_from_string(const String &p_string_key, bool p_public_only) {
@@ -112,21 +120,30 @@ Error CryptoKeyMbedTLS::load_from_string(const String &p_string_key, bool p_publ
 }
 
 String CryptoKeyMbedTLS::save_to_string(bool p_public_only) {
-	unsigned char w[16000];
-	memset(w, 0, sizeof(w));
+    Vector<uint8_t> w;
+    w.resize(16000);
+    
+	memset(w.ptrw(), 0, w.size());
+    unsigned char *w_ptr = w.ptrw();
 
-	int ret = 0;
-	if (p_public_only) {
-		ret = mbedtls_pk_write_pubkey_pem(&pkey, w, sizeof(w));
-	} else {
-		ret = mbedtls_pk_write_key_pem(&pkey, w, sizeof(w));
-	}
-	if (ret != 0) {
-		mbedtls_platform_zeroize(w, sizeof(w));
-		ERR_FAIL_V_MSG("", "Error saving key '" + itos(ret) + "'.");
-	}
-	String s = String::utf8((char *)w);
-	return s;
+    int ret = 0;
+    if (p_public_only) {
+        ret = mbedtls_pk_write_pubkey_pem(&pkey, w_ptr, w.size());
+    } else {
+        ret = mbedtls_pk_write_key_pem(&pkey, w_ptr, w.size());
+    }
+
+    if (ret != 0) {
+        mbedtls_platform_zeroize(w_ptr, w.size()); // Zeroize heap memory on failure
+        ERR_FAIL_V_MSG("", "Error saving key '" + itos(ret) + "'.");
+    }
+    
+    String s = String::utf8((char *)w_ptr);
+    
+    // Clean up sensitive data from heap before vector destruction
+    mbedtls_platform_zeroize(w_ptr, w.size());
+    
+    return s;
 }
 
 int CryptoKeyMbedTLS::_parse_key(const uint8_t *p_buf, int p_size) {
