@@ -703,6 +703,9 @@ void FileAccessPack::close() {
 }
 
 FileAccessPack::FileAccessPack(const String &p_path, PackedData::PackedFile *p_file) :
+		eof(false),
+		off(0),
+		pos(0),
 		pf(*p_file),
 		f(FileAccess::open(pf.pack, FileAccess::READ)) {
 	ERR_FAIL_COND_MSG(f.is_null(), vformat("Can't open pack-referenced file '%s'.", String(pf.pack)));

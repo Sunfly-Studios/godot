@@ -446,6 +446,7 @@ class CharBuffer {
 
 public:
 	_FORCE_INLINE_ CharBuffer() :
+			stack_buffer(),
 			buffer(stack_buffer),
 			capacity(sizeof(stack_buffer) / sizeof(char)) {
 	}

@@ -938,9 +938,13 @@ String vformat(const String &p_text, const VarArgs... p_args) {
 	Variant args[sizeof...(p_args) + 1] = { p_args..., Variant() }; // +1 makes sure zero sized arrays are also supported.
 	Array args_array;
 	args_array.resize(sizeof...(p_args));
-	for (uint32_t i = 0; i < sizeof...(p_args); i++) {
-		args_array[i] = args[i];
+
+	if constexpr (sizeof...(p_args) > 0) {
+		for (uint32_t i = 0; i < sizeof...(p_args); i++) {
+			args_array[i] = args[i];
+		}
 	}
+
 
 	bool error = false;
 	String fmt = p_text.sprintf(args_array, &error);
