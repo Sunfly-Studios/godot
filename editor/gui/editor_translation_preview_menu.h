@@ -28,7 +28,8 @@
 /* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                 */
 /**************************************************************************/
 
-#pragma once
+#ifndef EDITOR_TRANSLATION_PREVIEW_MENU_H
+#define EDITOR_TRANSLATION_PREVIEW_MENU_H
 
 #include "scene/gui/popup_menu.h"
 
@@ -44,3 +45,5 @@ protected:
 public:
 	EditorTranslationPreviewMenu();
 };
+
+#endif // EDITOR_TRANSLATION_PREVIEW_MENU_H

@@ -28,7 +28,8 @@
 /* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                 */
 /**************************************************************************/
 
-#pragma once
+#ifndef DIR_ACCESS_OPENHARMONY_H
+#define DIR_ACCESS_OPENHARMONY_H
 
 #include "drivers/unix/dir_access_unix.h"
 
@@ -80,3 +81,5 @@ public:
 	DirAccessOpenHarmony();
 	~DirAccessOpenHarmony();
 };
+
+#endif // DIR_ACCESS_OPENHARMONY_H

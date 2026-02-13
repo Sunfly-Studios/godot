@@ -28,7 +28,8 @@
 /* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                 */
 /**************************************************************************/
 
-#pragma once
+#ifndef FILE_ACCESS_OPENHARMONY_H
+#define FILE_ACCESS_OPENHARMONY_H
 
 #include "drivers/unix/file_access_unix.h"
 
@@ -79,3 +80,5 @@ public:
 	FileAccessOpenHarmony();
 	virtual ~FileAccessOpenHarmony();
 };
+
+#endif // FILE_ACCESS_OPENHARMONY_H

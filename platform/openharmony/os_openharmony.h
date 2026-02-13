@@ -28,7 +28,8 @@
 /* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                 */
 /**************************************************************************/
 
-#pragma once
+#ifndef OS_OPENHARMONY_H
+#define OS_OPENHARMONY_H
 
 #include "audio_driver_openharmony.h"
 
@@ -121,3 +122,5 @@ class Logger_OpenHarmony : public Logger {
 public:
 	virtual void logv(const char *p_format, va_list p_list, bool p_err) override;
 };
+
+#endif // OS_OPENHARMONY_H

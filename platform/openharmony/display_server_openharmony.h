@@ -28,7 +28,8 @@
 /* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                 */
 /**************************************************************************/
 
-#pragma once
+#ifndef DISPLAY_SERVER_OPENHARMONY_H
+#define DISPLAY_SERVER_OPENHARMONY_H
 
 #include "servers/display_server.h"
 
@@ -164,3 +165,5 @@ public:
 	virtual bool can_any_window_draw() const override;
 	virtual void process_events() override;
 };
+
+#endif // DISPLAY_SERVER_OPENHARMONY_H

@@ -28,6 +28,9 @@
 /* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                 */
 /**************************************************************************/
 
-#pragma once
+#ifndef PLATFORM_THREAD_IOS_H
+#define PLATFORM_THREAD_IOS_H
 
 #include "drivers/apple/thread_apple.h"
+
+#endif // PLATFORM_THREAD_IOS_H

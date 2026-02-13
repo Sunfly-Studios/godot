@@ -28,7 +28,8 @@
 /* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                 */
 /**************************************************************************/
 
-#pragma once
+#ifndef THREAD_APPLE_H
+#define THREAD_APPLE_H
 
 #include "core/templates/safe_refcount.h"
 #include "core/typedefs.h"
@@ -108,3 +109,5 @@ public:
 	Thread() = default;
 	~Thread();
 };
+
+#endif // THREAD_APPLE_H

@@ -28,7 +28,8 @@
 /* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                 */
 /**************************************************************************/
 
-#pragma once
+#ifndef SDL_BUILD_CONFIG_PRIVATE_H
+#define SDL_BUILD_CONFIG_PRIVATE_H
 
 #define SDL_build_config_h_
 
@@ -159,3 +160,5 @@
 #ifdef __GNUC__
 #define HAVE_GCC_SYNC_LOCK_TEST_AND_SET 1
 #endif
+
+#endif // SDL_BUILD_CONFIG_PRIVATE_H

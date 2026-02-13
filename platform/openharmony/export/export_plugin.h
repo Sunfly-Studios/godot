@@ -28,7 +28,8 @@
 /* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                 */
 /**************************************************************************/
 
-#pragma once
+#ifndef OPENHARMONY_EXPORT_PLUGIN_H
+#define OPENHARMONY_EXPORT_PLUGIN_H
 
 #include "core/config/project_settings.h"
 #include "core/io/image_loader.h"
@@ -128,3 +129,5 @@ public:
 	EditorExportPlatformOpenHarmony();
 	~EditorExportPlatformOpenHarmony();
 };
+
+#endif // OPENHARMONY_EXPORT_PLUGIN_H

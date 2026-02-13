@@ -28,7 +28,8 @@
 /* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                 */
 /**************************************************************************/
 
-#pragma once
+#ifndef EDITOR_TRANSLATION_PREVIEW_BUTTON_H
+#define EDITOR_TRANSLATION_PREVIEW_BUTTON_H
 
 #include "scene/gui/button.h"
 
@@ -45,3 +46,5 @@ protected:
 public:
 	EditorTranslationPreviewButton();
 };
+
+#endif // EDITOR_TRANSLATION_PREVIEW_BUTTON_H

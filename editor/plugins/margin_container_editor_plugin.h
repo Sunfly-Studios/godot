@@ -28,7 +28,8 @@
 /* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                 */
 /**************************************************************************/
 
-#pragma once
+#ifndef MARGIN_CONTAINER_EDITOR_PLUGIN_H
+#define MARGIN_CONTAINER_EDITOR_PLUGIN_H
 
 #include "editor/plugins/editor_plugin.h"
 #include "scene/gui/margin_container.h"
@@ -46,3 +47,5 @@ public:
 	virtual void edit(Object *p_object) override;
 	virtual bool handles(Object *p_object) const override;
 };
+
+#endif // MARGIN_CONTAINER_EDITOR_PLUGIN_H

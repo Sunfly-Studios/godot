@@ -28,7 +28,10 @@
 /* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                 */
 /**************************************************************************/
 
-#pragma once
+#ifndef PLATFORM_CONFIG_OPENHARMONY_H
+#define PLATFORM_CONFIG_OPENHARMONY_H
 
 #include <alloca.h>
 #include <malloc.h>
+
+#endif // PLATFORM_CONFIG_OPENHARMONY_H

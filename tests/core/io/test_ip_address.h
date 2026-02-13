@@ -28,7 +28,8 @@
 /* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                 */
 /**************************************************************************/
 
-#pragma once
+#ifndef TEST_IP_ADDRESS_H
+#define TEST_IP_ADDRESS_H
 
 #include "core/io/ip_address.h"
 
@@ -281,3 +282,5 @@ TEST_CASE("[IPAddress] IPv6 Parsing") {
 }
 
 } // namespace TestIPAddress
+
+#endif // TEST_IP_ADDRESS_H

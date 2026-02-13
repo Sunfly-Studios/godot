@@ -28,7 +28,8 @@
 /* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                 */
 /**************************************************************************/
 
-#pragma once
+#ifndef BRIDGE_OPENHARMONY_H
+#define BRIDGE_OPENHARMONY_H
 
 #include <rawfile/raw_file_manager.h>
 #include <cstdint>
@@ -66,3 +67,5 @@ void godot_key(GodotKeyEvent *p_event);
 void godot_resize(uint32_t width, uint32_t height);
 void godot_window_event(int32_t event);
 }
+
+#endif // BRIDGE_OPENHARMONY_H

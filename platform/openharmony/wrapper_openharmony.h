@@ -28,7 +28,8 @@
 /* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                 */
 /**************************************************************************/
 
-#pragma once
+#ifndef WRAPPER_OPENHARMONY_H
+#define WRAPPER_OPENHARMONY_H
 
 #include <cstddef>
 #include <cstdint>
@@ -47,3 +48,5 @@ WrapperScreenOrientation ohos_wrapper_get_display_orientation();
 void ohos_wrapper_screen_set_keep_on(int32_t window_id, bool p_enable);
 bool ohos_wrapper_screen_is_kept_on(int32_t window_id);
 int ohos_wrapper_get_keyboard_avoid_area(int32_t window_id);
+
+#endif // WRAPPER_OPENHARMONY_H

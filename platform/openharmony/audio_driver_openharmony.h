@@ -28,7 +28,8 @@
 /* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                 */
 /**************************************************************************/
 
-#pragma once
+#ifndef AUDIO_DRIVER_OPENHARMONY_H
+#define AUDIO_DRIVER_OPENHARMONY_H
 
 #include "servers/audio_server.h"
 
@@ -81,3 +82,5 @@ public:
 
 	AudioDriverOpenHarmony();
 };
+
+#endif // AUDIO_DRIVER_OPENHARMONY_H

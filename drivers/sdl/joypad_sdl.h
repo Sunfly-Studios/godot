@@ -28,7 +28,8 @@
 /* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                 */
 /**************************************************************************/
 
-#pragma once
+#ifndef JOYPAD_SDL_H
+#define JOYPAD_SDL_H
 
 #include "core/input/input.h"
 #include "core/os/thread.h"
@@ -67,3 +68,5 @@ private:
 
 	void close_joypad(int p_pad_idx);
 };
+
+#endif // JOYPAD_SDL_H
