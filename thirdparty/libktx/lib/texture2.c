@@ -2270,10 +2270,10 @@ ktxTexture2_IterateLoadLevelFaces(ktxTexture2* This, PFNKTXITERCB iterCb,
             _ktxSwapEndian16((ktx_uint16_t*)pData, levelSize / 2);
             break;
           case 4:
-            _ktxSwapEndian32((ktx_uint32_t*)pDest, levelSize / 4);
+            _ktxSwapEndian32((ktx_uint32_t*)pData, levelSize / 4);
             break;
           case 8:
-            _ktxSwapEndian64((ktx_uint64_t*)pDest, levelSize / 8);
+            _ktxSwapEndian64((ktx_uint64_t*)pData, levelSize / 8);
             break;
         }
 #endif

@@ -36,8 +36,8 @@
 #include "core/io/marshalls.h"
 #include "scene/main/node.h"
 
-#define MAKE_ROOM(m_amount)             \
-	if (packet_cache.size() < m_amount) \
+#define MAKE_ROOM(m_amount)                                   \
+	if ((uint32_t)packet_cache.size() < (uint32_t)(m_amount)) \
 		packet_cache.resize(m_amount);
 
 #ifdef DEBUG_ENABLED

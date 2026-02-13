@@ -373,7 +373,7 @@ void MultiplayerSynchronizer::set_multiplayer_authority(int p_peer_id, bool p_re
 Error MultiplayerSynchronizer::_watch_changes(uint64_t p_usec) {
 	ERR_FAIL_COND_V(replication_config.is_null(), FAILED);
 	const LocalVector<NodePath> &props = replication_config->get_watch_properties();
-	if (props.size() != watchers.size()) {
+	if (props.size() != (uint32_t)watchers.size()) {
 		watchers.resize(props.size());
 	}
 	if (props.size() == 0) {
