@@ -48,7 +48,7 @@
 #endif
 
 // Define a safe minimum alignment.
-// "16" is perfect for SSE/NEON/128-bit SIMD,
+// "16" is the goldilocks for SSE/NEON/128-bit SIMD,
 // as well as having a mathematical guarantee
 // to be divisble by 8 (or 4, or 2).
 #define GODOT_MIN_STACK_ALIGN 16
@@ -58,28 +58,32 @@
 #define SAFE_ALIGN_SIZE(m_type) \
     ((alignof(m_type) > GODOT_MIN_STACK_ALIGN) ? alignof(m_type) : GODOT_MIN_STACK_ALIGN)
 
+// Unify all safe memory allocation macros
+// here for convenience.
+
 #ifdef _WIN32
-// Safe Stack Allocation Macro. This macro:
-// - Allocates requested size + alignment padding.
-// - Shifts the pointer to match the type's alignment requirement (alignof).
-// - Always guarantees GODOT_MIN_STACK_ALIGN.
-//
-// Should futher prevent crashes on strict RISC architectures
-// and improve SIMD safety on x86.
-// Windows wants `_alloca`.
-#define SAFE_ALLOCA_ARRAY(m_type, m_count) \
-	((m_type *)((((uintptr_t)_alloca(sizeof(m_type) * (m_count) + SAFE_ALIGN_SIZE(m_type))) + (SAFE_ALIGN_SIZE(m_type) - 1)) & ~((uintptr_t)(SAFE_ALIGN_SIZE(m_type) - 1))))
+// Windows wants `_alloca`
+#define SAFE_ALLOCA(m_size, m_align) \
+	((void *)((((uintptr_t)_alloca((m_size) + (m_align))) + ((m_align) - 1)) & ~((uintptr_t)((m_align) - 1))))
 #else
+#define SAFE_ALLOCA(m_size, m_align) \
+	((void *)((((uintptr_t)alloca((m_size) + (m_align))) + ((m_align) - 1)) & ~((uintptr_t)((m_align) - 1))))
+#endif
+
 // Safe Stack Allocation Macro. This macro:
 // - Allocates requested size + alignment padding.
 // - Shifts the pointer to match the type's alignment requirement (alignof).
 // - Always guarantees GODOT_MIN_STACK_ALIGN.
-//
+// - Safely handles zero-count allocations.
+// 
 // Should futher prevent crashes on strict RISC architectures
 // and improve SIMD safety on x86.
 #define SAFE_ALLOCA_ARRAY(m_type, m_count) \
-    ((m_type *)((((uintptr_t)alloca(sizeof(m_type) * (m_count) + SAFE_ALIGN_SIZE(m_type))) + (SAFE_ALIGN_SIZE(m_type) - 1)) & ~((uintptr_t)(SAFE_ALIGN_SIZE(m_type) - 1))))
-#endif
+	((m_count) > 0) ? (m_type *)SAFE_ALLOCA(sizeof(m_type) * (m_count), SAFE_ALIGN_SIZE(m_type)) : (m_type *)nullptr
+
+// Single-element version.
+#define SAFE_ALLOCA_SINGLE(m_type) SAFE_ALLOCA_ARRAY(m_type, 1)
+
 // Helper defined outside the class to ensure it is visible for constexpr usage
 // inside the class static member initialization.
 static inline constexpr size_t _memory_get_aligned_address(size_t p_address, size_t p_alignment) {

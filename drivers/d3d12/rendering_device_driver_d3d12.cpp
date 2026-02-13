@@ -1171,7 +1171,7 @@ RDD::TextureID RenderingDeviceDriverD3D12::texture_create(const TextureFormat &p
 		// If the driver reports relaxed casting is, leverage its new extended resource creation API (via D3D12MA).
 		if (p_format.shareable_formats.size() && format_capabilities.relaxed_casting_supported) {
 			relaxed_casting_available = true;
-			relaxed_casting_formats = ALLOCA_ARRAY(DXGI_FORMAT, p_format.shareable_formats.size() + 1);
+			relaxed_casting_formats = SAFE_ALLOCA_ARRAY(DXGI_FORMAT, p_format.shareable_formats.size() + 1);
 			relaxed_casting_formats[0] = RD_TO_D3D12_FORMAT[p_format.format].general_format;
 			relaxed_casting_format_count++;
 		}
@@ -5013,7 +5013,7 @@ RDD::RenderPassID RenderingDeviceDriverD3D12::render_pass_create(VectorView<Atta
 
 	pass_info->view_count = p_view_count;
 
-	DXGI_FORMAT *formats = ALLOCA_ARRAY(DXGI_FORMAT, p_attachments.size());
+	DXGI_FORMAT *formats = SAFE_ALLOCA_ARRAY(DXGI_FORMAT, p_attachments.size());
 	for (uint32_t i = 0; i < p_attachments.size(); i++) {
 		const D3D12Format &format = RD_TO_D3D12_FORMAT[p_attachments[i].format];
 		if (format.dsv_format != DXGI_FORMAT_UNKNOWN) {
@@ -5114,7 +5114,7 @@ void RenderingDeviceDriverD3D12::command_begin_render_pass(CommandBufferID p_cmd
 	cmd_buf_info->render_pass_state.pass_info = pass_info;
 	command_next_render_subpass(p_cmd_buffer, p_cmd_buffer_type);
 
-	AttachmentClear *clears = ALLOCA_ARRAY(AttachmentClear, pass_info->attachments.size());
+	AttachmentClear *clears = SAFE_ALLOCA_ARRAY(AttachmentClear, pass_info->attachments.size());
 	uint32_t num_clears = 0;
 
 	for (uint32_t i = 0; i < pass_info->attachments.size(); i++) {
@@ -5175,7 +5175,7 @@ void RenderingDeviceDriverD3D12::_end_render_pass(CommandBufferID p_cmd_buffer) 
 		uint32_t dst_subres = 0;
 		DXGI_FORMAT format = DXGI_FORMAT_UNKNOWN;
 	};
-	Resolve *resolves = ALLOCA_ARRAY(Resolve, subpass.resolve_references.size());
+	Resolve *resolves = SAFE_ALLOCA_ARRAY(Resolve, subpass.resolve_references.size());
 	uint32_t num_resolves = 0;
 
 	for (uint32_t i = 0; i < subpass.resolve_references.size(); i++) {
@@ -5250,7 +5250,7 @@ void RenderingDeviceDriverD3D12::command_next_render_subpass(CommandBufferID p_c
 	const RenderPassInfo *pass_info = cmd_buf_info->render_pass_state.pass_info;
 	const Subpass &subpass = pass_info->subpasses[cmd_buf_info->render_pass_state.current_subpass];
 
-	D3D12_CPU_DESCRIPTOR_HANDLE *rtv_handles = ALLOCA_ARRAY(D3D12_CPU_DESCRIPTOR_HANDLE, subpass.color_references.size());
+	D3D12_CPU_DESCRIPTOR_HANDLE *rtv_handles = SAFE_ALLOCA_ARRAY(D3D12_CPU_DESCRIPTOR_HANDLE, subpass.color_references.size());
 	DescriptorsHeap::Walker rtv_heap_walker = fb_info->rtv_heap.make_walker();
 	for (uint32_t i = 0; i < subpass.color_references.size(); i++) {
 		uint32_t attachment = subpass.color_references[i].attachment;
@@ -5301,7 +5301,7 @@ void RenderingDeviceDriverD3D12::command_next_render_subpass(CommandBufferID p_c
 void RenderingDeviceDriverD3D12::command_render_set_viewport(CommandBufferID p_cmd_buffer, VectorView<Rect2i> p_viewports) {
 	const CommandBufferInfo *cmd_buf_info = (const CommandBufferInfo *)p_cmd_buffer.id;
 
-	D3D12_VIEWPORT *d3d12_viewports = ALLOCA_ARRAY(D3D12_VIEWPORT, p_viewports.size());
+	D3D12_VIEWPORT *d3d12_viewports = SAFE_ALLOCA_ARRAY(D3D12_VIEWPORT, p_viewports.size());
 	for (uint32_t i = 0; i < p_viewports.size(); i++) {
 		d3d12_viewports[i] = CD3DX12_VIEWPORT(
 				p_viewports[i].position.x,
@@ -5316,7 +5316,7 @@ void RenderingDeviceDriverD3D12::command_render_set_viewport(CommandBufferID p_c
 void RenderingDeviceDriverD3D12::command_render_set_scissor(CommandBufferID p_cmd_buffer, VectorView<Rect2i> p_scissors) {
 	const CommandBufferInfo *cmd_buf_info = (const CommandBufferInfo *)p_cmd_buffer.id;
 
-	D3D12_RECT *d3d12_scissors = ALLOCA_ARRAY(D3D12_RECT, p_scissors.size());
+	D3D12_RECT *d3d12_scissors = SAFE_ALLOCA_ARRAY(D3D12_RECT, p_scissors.size());
 	for (uint32_t i = 0; i < p_scissors.size(); i++) {
 		d3d12_scissors[i] = CD3DX12_RECT(
 				p_scissors[i].position.x,

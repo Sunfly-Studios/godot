@@ -2068,8 +2068,8 @@ bool Node::is_greater_than(const Node *p_node) const {
 
 	_update_children_cache();
 
-	int *this_stack = ALLOCA_ARRAY(int, data.depth);
-	int *that_stack = ALLOCA_ARRAY(int, p_node->data.depth);
+	int *this_stack = SAFE_ALLOCA_ARRAY(int, data.depth);
+	int *that_stack = SAFE_ALLOCA_ARRAY(int, p_node->data.depth);
 
 	const Node *n = this;
 

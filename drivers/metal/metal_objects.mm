@@ -253,7 +253,7 @@ void MDCommandBuffer::render_clear_attachments(VectorView<RDD::AttachmentClear> 
 	const MDSubpass &subpass = render.get_subpass();
 
 	uint32_t vertex_count = p_rects.size() * 6 * subpass.view_count;
-	simd::float4 *vertices = ALLOCA_ARRAY(simd::float4, vertex_count);
+	simd::float4 *vertices = SAFE_ALLOCA_ARRAY(simd::float4, vertex_count);
 	simd::float4 clear_colors[ClearAttKey::ATTACHMENT_COUNT];
 
 	Size2i size = render.frameBuffer->size;
@@ -366,7 +366,7 @@ void MDCommandBuffer::_render_set_dirty_state() {
 
 	if (render.dirty.has_flag(RenderState::DIRTY_SCISSOR) && !render.scissors.is_empty()) {
 		size_t len = render.scissors.size();
-		MTLScissorRect *rects = ALLOCA_ARRAY(MTLScissorRect, len);
+		MTLScissorRect *rects = SAFE_ALLOCA_ARRAY(MTLScissorRect, len);
 		for (size_t i = 0; i < len; i++) {
 			rects[i] = render.clip_to_render_area(render.scissors[i]);
 		}
@@ -1109,7 +1109,7 @@ void MDUniformSet::bind_uniforms_direct(MDShader *p_shader, MDCommandBuffer::Ren
 			switch (uniform.type) {
 				case RDD::UNIFORM_TYPE_SAMPLER: {
 					size_t count = uniform.ids.size();
-					id<MTLSamplerState> __unsafe_unretained *objects = ALLOCA_ARRAY(id<MTLSamplerState> __unsafe_unretained, count);
+					id<MTLSamplerState> __unsafe_unretained *objects = SAFE_ALLOCA_ARRAY(id<MTLSamplerState> __unsafe_unretained, count);
 					for (size_t j = 0; j < count; j += 1) {
 						objects[j] = rid::get(uniform.ids[j].id);
 					}
@@ -1121,8 +1121,8 @@ void MDUniformSet::bind_uniforms_direct(MDShader *p_shader, MDCommandBuffer::Ren
 				} break;
 				case RDD::UNIFORM_TYPE_SAMPLER_WITH_TEXTURE: {
 					size_t count = uniform.ids.size() / 2;
-					id<MTLTexture> __unsafe_unretained *textures = ALLOCA_ARRAY(id<MTLTexture> __unsafe_unretained, count);
-					id<MTLSamplerState> __unsafe_unretained *samplers = ALLOCA_ARRAY(id<MTLSamplerState> __unsafe_unretained, count);
+					id<MTLTexture> __unsafe_unretained *textures = SAFE_ALLOCA_ARRAY(id<MTLTexture> __unsafe_unretained, count);
+					id<MTLSamplerState> __unsafe_unretained *samplers = SAFE_ALLOCA_ARRAY(id<MTLSamplerState> __unsafe_unretained, count);
 					for (uint32_t j = 0; j < count; j += 1) {
 						id<MTLSamplerState> sampler = rid::get(uniform.ids[j * 2 + 0]);
 						id<MTLTexture> texture = rid::get(uniform.ids[j * 2 + 1]);
@@ -1153,7 +1153,7 @@ void MDUniformSet::bind_uniforms_direct(MDShader *p_shader, MDCommandBuffer::Ren
 							[enc setFragmentTexture:obj atIndex:bi->index];
 						}
 					} else {
-						id<MTLTexture> __unsafe_unretained *objects = ALLOCA_ARRAY(id<MTLTexture> __unsafe_unretained, count);
+						id<MTLTexture> __unsafe_unretained *objects = SAFE_ALLOCA_ARRAY(id<MTLTexture> __unsafe_unretained, count);
 						for (size_t j = 0; j < count; j += 1) {
 							id<MTLTexture> obj = rid::get(uniform.ids[j]);
 							objects[j] = obj;
@@ -1188,7 +1188,7 @@ void MDUniformSet::bind_uniforms_direct(MDShader *p_shader, MDCommandBuffer::Ren
 							}
 						}
 					} else {
-						id<MTLTexture> __unsafe_unretained *objects = ALLOCA_ARRAY(id<MTLTexture> __unsafe_unretained, count);
+						id<MTLTexture> __unsafe_unretained *objects = SAFE_ALLOCA_ARRAY(id<MTLTexture> __unsafe_unretained, count);
 						for (size_t j = 0; j < count; j += 1) {
 							id<MTLTexture> obj = rid::get(uniform.ids[j]);
 							objects[j] = obj;
@@ -1235,7 +1235,7 @@ void MDUniformSet::bind_uniforms_direct(MDShader *p_shader, MDCommandBuffer::Ren
 							[enc setFragmentTexture:obj atIndex:bi->index];
 						}
 					} else {
-						id<MTLTexture> __unsafe_unretained *objects = ALLOCA_ARRAY(id<MTLTexture> __unsafe_unretained, count);
+						id<MTLTexture> __unsafe_unretained *objects = SAFE_ALLOCA_ARRAY(id<MTLTexture> __unsafe_unretained, count);
 						for (size_t j = 0; j < count; j += 1) {
 							id<MTLTexture> obj = rid::get(uniform.ids[j]);
 							objects[j] = obj;
@@ -1310,7 +1310,7 @@ void MDUniformSet::bind_uniforms_direct(MDShader *p_shader, MDCommandBuffer::Com
 		switch (uniform.type) {
 			case RDD::UNIFORM_TYPE_SAMPLER: {
 				size_t count = uniform.ids.size();
-				id<MTLSamplerState> __unsafe_unretained *objects = ALLOCA_ARRAY(id<MTLSamplerState> __unsafe_unretained, count);
+				id<MTLSamplerState> __unsafe_unretained *objects = SAFE_ALLOCA_ARRAY(id<MTLSamplerState> __unsafe_unretained, count);
 				for (size_t j = 0; j < count; j += 1) {
 					objects[j] = rid::get(uniform.ids[j].id);
 				}
@@ -1318,8 +1318,8 @@ void MDUniformSet::bind_uniforms_direct(MDShader *p_shader, MDCommandBuffer::Com
 			} break;
 			case RDD::UNIFORM_TYPE_SAMPLER_WITH_TEXTURE: {
 				size_t count = uniform.ids.size() / 2;
-				id<MTLTexture> __unsafe_unretained *textures = ALLOCA_ARRAY(id<MTLTexture> __unsafe_unretained, count);
-				id<MTLSamplerState> __unsafe_unretained *samplers = ALLOCA_ARRAY(id<MTLSamplerState> __unsafe_unretained, count);
+				id<MTLTexture> __unsafe_unretained *textures = SAFE_ALLOCA_ARRAY(id<MTLTexture> __unsafe_unretained, count);
+				id<MTLSamplerState> __unsafe_unretained *samplers = SAFE_ALLOCA_ARRAY(id<MTLSamplerState> __unsafe_unretained, count);
 				for (uint32_t j = 0; j < count; j += 1) {
 					id<MTLSamplerState> sampler = rid::get(uniform.ids[j * 2 + 0]);
 					id<MTLTexture> texture = rid::get(uniform.ids[j * 2 + 1]);
@@ -1338,7 +1338,7 @@ void MDUniformSet::bind_uniforms_direct(MDShader *p_shader, MDCommandBuffer::Com
 					id<MTLTexture> obj = rid::get(uniform.ids[0]);
 					[enc setTexture:obj atIndex:bi->index];
 				} else {
-					id<MTLTexture> __unsafe_unretained *objects = ALLOCA_ARRAY(id<MTLTexture> __unsafe_unretained, count);
+					id<MTLTexture> __unsafe_unretained *objects = SAFE_ALLOCA_ARRAY(id<MTLTexture> __unsafe_unretained, count);
 					for (size_t j = 0; j < count; j += 1) {
 						id<MTLTexture> obj = rid::get(uniform.ids[j]);
 						objects[j] = obj;
@@ -1361,7 +1361,7 @@ void MDUniformSet::bind_uniforms_direct(MDShader *p_shader, MDCommandBuffer::Com
 						}
 					}
 				} else {
-					id<MTLTexture> __unsafe_unretained *objects = ALLOCA_ARRAY(id<MTLTexture> __unsafe_unretained, count);
+					id<MTLTexture> __unsafe_unretained *objects = SAFE_ALLOCA_ARRAY(id<MTLTexture> __unsafe_unretained, count);
 					for (size_t j = 0; j < count; j += 1) {
 						id<MTLTexture> obj = rid::get(uniform.ids[j]);
 						objects[j] = obj;
@@ -1392,7 +1392,7 @@ void MDUniformSet::bind_uniforms_direct(MDShader *p_shader, MDCommandBuffer::Com
 					id<MTLTexture> obj = rid::get(uniform.ids[0]);
 					[enc setTexture:obj atIndex:bi->index];
 				} else {
-					id<MTLTexture> __unsafe_unretained *objects = ALLOCA_ARRAY(id<MTLTexture> __unsafe_unretained, count);
+					id<MTLTexture> __unsafe_unretained *objects = SAFE_ALLOCA_ARRAY(id<MTLTexture> __unsafe_unretained, count);
 					for (size_t j = 0; j < count; j += 1) {
 						id<MTLTexture> obj = rid::get(uniform.ids[j]);
 						objects[j] = obj;
@@ -1462,7 +1462,7 @@ BoundUniformSet &MDUniformSet::bound_uniform_set(MDShader *p_shader, id<MTLDevic
 				switch (uniform.type) {
 					case RDD::UNIFORM_TYPE_SAMPLER: {
 						size_t count = uniform.ids.size();
-						id<MTLSamplerState> __unsafe_unretained *objects = ALLOCA_ARRAY(id<MTLSamplerState> __unsafe_unretained, count);
+						id<MTLSamplerState> __unsafe_unretained *objects = SAFE_ALLOCA_ARRAY(id<MTLSamplerState> __unsafe_unretained, count);
 						for (size_t j = 0; j < count; j += 1) {
 							objects[j] = rid::get(uniform.ids[j].id);
 						}
@@ -1470,8 +1470,8 @@ BoundUniformSet &MDUniformSet::bound_uniform_set(MDShader *p_shader, id<MTLDevic
 					} break;
 					case RDD::UNIFORM_TYPE_SAMPLER_WITH_TEXTURE: {
 						size_t count = uniform.ids.size() / 2;
-						id<MTLTexture> __unsafe_unretained *textures = ALLOCA_ARRAY(id<MTLTexture> __unsafe_unretained, count);
-						id<MTLSamplerState> __unsafe_unretained *samplers = ALLOCA_ARRAY(id<MTLSamplerState> __unsafe_unretained, count);
+						id<MTLTexture> __unsafe_unretained *textures = SAFE_ALLOCA_ARRAY(id<MTLTexture> __unsafe_unretained, count);
+						id<MTLSamplerState> __unsafe_unretained *samplers = SAFE_ALLOCA_ARRAY(id<MTLSamplerState> __unsafe_unretained, count);
 						for (uint32_t j = 0; j < count; j += 1) {
 							id<MTLSamplerState> sampler = rid::get(uniform.ids[j * 2 + 0]);
 							id<MTLTexture> texture = rid::get(uniform.ids[j * 2 + 1]);
@@ -1493,7 +1493,7 @@ BoundUniformSet &MDUniformSet::bound_uniform_set(MDShader *p_shader, id<MTLDevic
 							[enc setTexture:obj atIndex:bi->index];
 							add_usage(obj, stage, bi->usage);
 						} else {
-							id<MTLTexture> __unsafe_unretained *objects = ALLOCA_ARRAY(id<MTLTexture> __unsafe_unretained, count);
+							id<MTLTexture> __unsafe_unretained *objects = SAFE_ALLOCA_ARRAY(id<MTLTexture> __unsafe_unretained, count);
 							for (size_t j = 0; j < count; j += 1) {
 								id<MTLTexture> obj = rid::get(uniform.ids[j]);
 								objects[j] = obj;
@@ -1517,7 +1517,7 @@ BoundUniformSet &MDUniformSet::bound_uniform_set(MDShader *p_shader, id<MTLDevic
 								}
 							}
 						} else {
-							id<MTLTexture> __unsafe_unretained *objects = ALLOCA_ARRAY(id<MTLTexture> __unsafe_unretained, count);
+							id<MTLTexture> __unsafe_unretained *objects = SAFE_ALLOCA_ARRAY(id<MTLTexture> __unsafe_unretained, count);
 							for (size_t j = 0; j < count; j += 1) {
 								id<MTLTexture> obj = rid::get(uniform.ids[j]);
 								objects[j] = obj;
@@ -1552,7 +1552,7 @@ BoundUniformSet &MDUniformSet::bound_uniform_set(MDShader *p_shader, id<MTLDevic
 							[enc setTexture:obj atIndex:bi->index];
 							add_usage(obj, stage, bi->usage);
 						} else {
-							id<MTLTexture> __unsafe_unretained *objects = ALLOCA_ARRAY(id<MTLTexture> __unsafe_unretained, count);
+							id<MTLTexture> __unsafe_unretained *objects = SAFE_ALLOCA_ARRAY(id<MTLTexture> __unsafe_unretained, count);
 							for (size_t j = 0; j < count; j += 1) {
 								id<MTLTexture> obj = rid::get(uniform.ids[j]);
 								objects[j] = obj;

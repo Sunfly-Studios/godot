@@ -1745,12 +1745,12 @@ RDD::TextureID RenderingDeviceDriverVulkan::texture_create(const TextureFormat &
 		create_info.flags |= VK_IMAGE_CREATE_MUTABLE_FORMAT_BIT;
 
 		if (enabled_device_extension_names.has(VK_KHR_IMAGE_FORMAT_LIST_EXTENSION_NAME)) {
-			VkFormat *vk_allowed_formats = ALLOCA_ARRAY(VkFormat, p_format.shareable_formats.size());
+			VkFormat *vk_allowed_formats = SAFE_ALLOCA_ARRAY(VkFormat, p_format.shareable_formats.size());
 			for (int i = 0; i < p_format.shareable_formats.size(); i++) {
 				vk_allowed_formats[i] = RD_TO_VK_FORMAT[p_format.shareable_formats[i]];
 			}
 
-			VkImageFormatListCreateInfoKHR *format_list_create_info = ALLOCA_SINGLE(VkImageFormatListCreateInfoKHR);
+			VkImageFormatListCreateInfoKHR *format_list_create_info = SAFE_ALLOCA_SINGLE(VkImageFormatListCreateInfoKHR);
 			*format_list_create_info = {};
 			format_list_create_info->sType = VK_STRUCTURE_TYPE_IMAGE_FORMAT_LIST_CREATE_INFO_KHR;
 			format_list_create_info->viewFormatCount = p_format.shareable_formats.size();
@@ -1985,7 +1985,7 @@ RDD::TextureID RenderingDeviceDriverVulkan::texture_create_shared(TextureID p_or
 		// May need to make VK_KHR_maintenance2 mandatory and thus has Vulkan 1.1 be our minimum supported version
 		// if we require setting this information. Vulkan 1.0 may simply not care.
 		if (image_view_create_info.format != owner_tex_info->vk_view_create_info.format) {
-			VkImageViewUsageCreateInfo *usage_info = ALLOCA_SINGLE(VkImageViewUsageCreateInfo);
+			VkImageViewUsageCreateInfo *usage_info = SAFE_ALLOCA_SINGLE(VkImageViewUsageCreateInfo);
 			*usage_info = {};
 			usage_info->sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_USAGE_CREATE_INFO;
 			usage_info->usage = owner_tex_info->vk_create_info.usage;
@@ -2342,7 +2342,7 @@ void RenderingDeviceDriverVulkan::command_pipeline_barrier(
 		VectorView<MemoryBarrier> p_memory_barriers,
 		VectorView<BufferBarrier> p_buffer_barriers,
 		VectorView<TextureBarrier> p_texture_barriers) {
-	VkMemoryBarrier *vk_memory_barriers = ALLOCA_ARRAY(VkMemoryBarrier, p_memory_barriers.size());
+	VkMemoryBarrier *vk_memory_barriers = SAFE_ALLOCA_ARRAY(VkMemoryBarrier, p_memory_barriers.size());
 	for (uint32_t i = 0; i < p_memory_barriers.size(); i++) {
 		vk_memory_barriers[i] = {};
 		vk_memory_barriers[i].sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER;
@@ -2350,7 +2350,7 @@ void RenderingDeviceDriverVulkan::command_pipeline_barrier(
 		vk_memory_barriers[i].dstAccessMask = _rd_to_vk_access_flags(p_memory_barriers[i].dst_access);
 	}
 
-	VkBufferMemoryBarrier *vk_buffer_barriers = ALLOCA_ARRAY(VkBufferMemoryBarrier, p_buffer_barriers.size());
+	VkBufferMemoryBarrier *vk_buffer_barriers = SAFE_ALLOCA_ARRAY(VkBufferMemoryBarrier, p_buffer_barriers.size());
 	for (uint32_t i = 0; i < p_buffer_barriers.size(); i++) {
 		vk_buffer_barriers[i] = {};
 		vk_buffer_barriers[i].sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
@@ -2363,7 +2363,7 @@ void RenderingDeviceDriverVulkan::command_pipeline_barrier(
 		vk_buffer_barriers[i].size = p_buffer_barriers[i].size;
 	}
 
-	VkImageMemoryBarrier *vk_image_barriers = ALLOCA_ARRAY(VkImageMemoryBarrier, p_texture_barriers.size());
+	VkImageMemoryBarrier *vk_image_barriers = SAFE_ALLOCA_ARRAY(VkImageMemoryBarrier, p_texture_barriers.size());
 	for (uint32_t i = 0; i < p_texture_barriers.size(); i++) {
 		const TextureInfo *tex_info = (const TextureInfo *)p_texture_barriers[i].texture.id;
 		vk_image_barriers[i] = {};
@@ -3380,7 +3380,7 @@ void RenderingDeviceDriverVulkan::swap_chain_free(SwapChainID p_swap_chain) {
 /*********************/
 
 RDD::FramebufferID RenderingDeviceDriverVulkan::framebuffer_create(RenderPassID p_render_pass, VectorView<TextureID> p_attachments, uint32_t p_width, uint32_t p_height) {
-	VkImageView *vk_img_views = ALLOCA_ARRAY(VkImageView, p_attachments.size());
+	VkImageView *vk_img_views = SAFE_ALLOCA_ARRAY(VkImageView, p_attachments.size());
 	for (uint32_t i = 0; i < p_attachments.size(); i++) {
 		vk_img_views[i] = ((const TextureInfo *)p_attachments[i].id)->vk_view;
 	}
@@ -3867,7 +3867,7 @@ RDD::ShaderID RenderingDeviceDriverVulkan::shader_create_from_bytecode(const Vec
 		pipeline_layout_create_info.pSetLayouts = shader_info.vk_descriptor_set_layouts.ptr();
 
 		if (binary_data.push_constant_size) {
-			VkPushConstantRange *push_constant_range = ALLOCA_SINGLE(VkPushConstantRange);
+			VkPushConstantRange *push_constant_range = SAFE_ALLOCA_SINGLE(VkPushConstantRange);
 			*push_constant_range = {};
 			push_constant_range->stageFlags = binary_data.vk_push_constant_stages_mask;
 			push_constant_range->size = binary_data.push_constant_size;
@@ -3946,7 +3946,7 @@ VkDescriptorPool RenderingDeviceDriverVulkan::_descriptor_set_pool_find_or_creat
 	// Create a new one.
 
 	// Here comes more vulkan API strangeness.
-	VkDescriptorPoolSize *vk_sizes = ALLOCA_ARRAY(VkDescriptorPoolSize, UNIFORM_TYPE_MAX);
+	VkDescriptorPoolSize *vk_sizes = SAFE_ALLOCA_ARRAY(VkDescriptorPoolSize, UNIFORM_TYPE_MAX);
 	uint32_t vk_sizes_count = 0;
 	{
 		VkDescriptorPoolSize *curr_vk_size = vk_sizes;
@@ -4070,7 +4070,7 @@ RDD::UniformSetID RenderingDeviceDriverVulkan::uniform_set_create(VectorView<Bou
 	}
 	DescriptorSetPoolKey pool_key;
 	// Immutable samplers will be skipped so we need to track the number of vk_writes used.
-	VkWriteDescriptorSet *vk_writes = ALLOCA_ARRAY(VkWriteDescriptorSet, p_uniforms.size());
+	VkWriteDescriptorSet *vk_writes = SAFE_ALLOCA_ARRAY(VkWriteDescriptorSet, p_uniforms.size());
 	uint32_t writes_amount = 0;
 	for (uint32_t i = 0; i < p_uniforms.size(); i++) {
 		const BoundUniform &uniform = p_uniforms[i];
@@ -4086,7 +4086,7 @@ RDD::UniformSetID RenderingDeviceDriverVulkan::uniform_set_create(VectorView<Bou
 					continue; // Skipping immutable samplers.
 				}
 				num_descriptors = uniform.ids.size();
-				VkDescriptorImageInfo *vk_img_infos = ALLOCA_ARRAY(VkDescriptorImageInfo, num_descriptors);
+				VkDescriptorImageInfo *vk_img_infos = SAFE_ALLOCA_ARRAY(VkDescriptorImageInfo, num_descriptors);
 
 				for (uint32_t j = 0; j < num_descriptors; j++) {
 					vk_img_infos[j] = {};
@@ -4100,7 +4100,7 @@ RDD::UniformSetID RenderingDeviceDriverVulkan::uniform_set_create(VectorView<Bou
 			} break;
 			case UNIFORM_TYPE_SAMPLER_WITH_TEXTURE: {
 				num_descriptors = uniform.ids.size() / 2;
-				VkDescriptorImageInfo *vk_img_infos = ALLOCA_ARRAY(VkDescriptorImageInfo, num_descriptors);
+				VkDescriptorImageInfo *vk_img_infos = SAFE_ALLOCA_ARRAY(VkDescriptorImageInfo, num_descriptors);
 
 				for (uint32_t j = 0; j < num_descriptors; j++) {
 #ifdef DEBUG_ENABLED
@@ -4119,7 +4119,7 @@ RDD::UniformSetID RenderingDeviceDriverVulkan::uniform_set_create(VectorView<Bou
 			} break;
 			case UNIFORM_TYPE_TEXTURE: {
 				num_descriptors = uniform.ids.size();
-				VkDescriptorImageInfo *vk_img_infos = ALLOCA_ARRAY(VkDescriptorImageInfo, num_descriptors);
+				VkDescriptorImageInfo *vk_img_infos = SAFE_ALLOCA_ARRAY(VkDescriptorImageInfo, num_descriptors);
 
 				for (uint32_t j = 0; j < num_descriptors; j++) {
 #ifdef DEBUG_ENABLED
@@ -4137,7 +4137,7 @@ RDD::UniformSetID RenderingDeviceDriverVulkan::uniform_set_create(VectorView<Bou
 			} break;
 			case UNIFORM_TYPE_IMAGE: {
 				num_descriptors = uniform.ids.size();
-				VkDescriptorImageInfo *vk_img_infos = ALLOCA_ARRAY(VkDescriptorImageInfo, num_descriptors);
+				VkDescriptorImageInfo *vk_img_infos = SAFE_ALLOCA_ARRAY(VkDescriptorImageInfo, num_descriptors);
 
 				for (uint32_t j = 0; j < num_descriptors; j++) {
 #ifdef DEBUG_ENABLED
@@ -4155,8 +4155,8 @@ RDD::UniformSetID RenderingDeviceDriverVulkan::uniform_set_create(VectorView<Bou
 			} break;
 			case UNIFORM_TYPE_TEXTURE_BUFFER: {
 				num_descriptors = uniform.ids.size();
-				VkDescriptorBufferInfo *vk_buf_infos = ALLOCA_ARRAY(VkDescriptorBufferInfo, num_descriptors);
-				VkBufferView *vk_buf_views = ALLOCA_ARRAY(VkBufferView, num_descriptors);
+				VkDescriptorBufferInfo *vk_buf_infos = SAFE_ALLOCA_ARRAY(VkDescriptorBufferInfo, num_descriptors);
+				VkBufferView *vk_buf_views = SAFE_ALLOCA_ARRAY(VkBufferView, num_descriptors);
 
 				for (uint32_t j = 0; j < num_descriptors; j++) {
 					const BufferInfo *buf_info = (const BufferInfo *)uniform.ids[j].id;
@@ -4173,9 +4173,9 @@ RDD::UniformSetID RenderingDeviceDriverVulkan::uniform_set_create(VectorView<Bou
 			} break;
 			case UNIFORM_TYPE_SAMPLER_WITH_TEXTURE_BUFFER: {
 				num_descriptors = uniform.ids.size() / 2;
-				VkDescriptorImageInfo *vk_img_infos = ALLOCA_ARRAY(VkDescriptorImageInfo, num_descriptors);
-				VkDescriptorBufferInfo *vk_buf_infos = ALLOCA_ARRAY(VkDescriptorBufferInfo, num_descriptors);
-				VkBufferView *vk_buf_views = ALLOCA_ARRAY(VkBufferView, num_descriptors);
+				VkDescriptorImageInfo *vk_img_infos = SAFE_ALLOCA_ARRAY(VkDescriptorImageInfo, num_descriptors);
+				VkDescriptorBufferInfo *vk_buf_infos = SAFE_ALLOCA_ARRAY(VkDescriptorBufferInfo, num_descriptors);
+				VkBufferView *vk_buf_views = SAFE_ALLOCA_ARRAY(VkBufferView, num_descriptors);
 
 				for (uint32_t j = 0; j < num_descriptors; j++) {
 					vk_img_infos[j] = {};
@@ -4199,7 +4199,7 @@ RDD::UniformSetID RenderingDeviceDriverVulkan::uniform_set_create(VectorView<Bou
 			} break;
 			case UNIFORM_TYPE_UNIFORM_BUFFER: {
 				const BufferInfo *buf_info = (const BufferInfo *)uniform.ids[0].id;
-				VkDescriptorBufferInfo *vk_buf_info = ALLOCA_SINGLE(VkDescriptorBufferInfo);
+				VkDescriptorBufferInfo *vk_buf_info = SAFE_ALLOCA_SINGLE(VkDescriptorBufferInfo);
 				*vk_buf_info = {};
 				vk_buf_info->buffer = buf_info->vk_buffer;
 				vk_buf_info->range = buf_info->size;
@@ -4209,7 +4209,7 @@ RDD::UniformSetID RenderingDeviceDriverVulkan::uniform_set_create(VectorView<Bou
 			} break;
 			case UNIFORM_TYPE_STORAGE_BUFFER: {
 				const BufferInfo *buf_info = (const BufferInfo *)uniform.ids[0].id;
-				VkDescriptorBufferInfo *vk_buf_info = ALLOCA_SINGLE(VkDescriptorBufferInfo);
+				VkDescriptorBufferInfo *vk_buf_info = SAFE_ALLOCA_SINGLE(VkDescriptorBufferInfo);
 				*vk_buf_info = {};
 				vk_buf_info->buffer = buf_info->vk_buffer;
 				vk_buf_info->range = buf_info->size;
@@ -4219,7 +4219,7 @@ RDD::UniformSetID RenderingDeviceDriverVulkan::uniform_set_create(VectorView<Bou
 			} break;
 			case UNIFORM_TYPE_INPUT_ATTACHMENT: {
 				num_descriptors = uniform.ids.size();
-				VkDescriptorImageInfo *vk_img_infos = ALLOCA_ARRAY(VkDescriptorImageInfo, num_descriptors);
+				VkDescriptorImageInfo *vk_img_infos = SAFE_ALLOCA_ARRAY(VkDescriptorImageInfo, num_descriptors);
 
 				for (uint32_t j = 0; j < uniform.ids.size(); j++) {
 					vk_img_infos[j] = {};
@@ -4390,7 +4390,7 @@ void RenderingDeviceDriverVulkan::command_copy_buffer(CommandBufferID p_cmd_buff
 }
 
 void RenderingDeviceDriverVulkan::command_copy_texture(CommandBufferID p_cmd_buffer, TextureID p_src_texture, TextureLayout p_src_texture_layout, TextureID p_dst_texture, TextureLayout p_dst_texture_layout, VectorView<TextureCopyRegion> p_regions) {
-	VkImageCopy *vk_copy_regions = ALLOCA_ARRAY(VkImageCopy, p_regions.size());
+	VkImageCopy *vk_copy_regions = SAFE_ALLOCA_ARRAY(VkImageCopy, p_regions.size());
 	for (uint32_t i = 0; i < p_regions.size(); i++) {
 		_texture_copy_region_to_vk(p_regions[i], &vk_copy_regions[i]);
 	}
@@ -4456,7 +4456,7 @@ void RenderingDeviceDriverVulkan::command_clear_color_texture(CommandBufferID p_
 }
 
 void RenderingDeviceDriverVulkan::command_copy_buffer_to_texture(CommandBufferID p_cmd_buffer, BufferID p_src_buffer, TextureID p_dst_texture, TextureLayout p_dst_texture_layout, VectorView<BufferTextureCopyRegion> p_regions) {
-	VkBufferImageCopy *vk_copy_regions = ALLOCA_ARRAY(VkBufferImageCopy, p_regions.size());
+	VkBufferImageCopy *vk_copy_regions = SAFE_ALLOCA_ARRAY(VkBufferImageCopy, p_regions.size());
 	for (uint32_t i = 0; i < p_regions.size(); i++) {
 		_buffer_texture_copy_region_to_vk(p_regions[i], &vk_copy_regions[i]);
 	}
@@ -4472,7 +4472,7 @@ void RenderingDeviceDriverVulkan::command_copy_buffer_to_texture(CommandBufferID
 }
 
 void RenderingDeviceDriverVulkan::command_copy_texture_to_buffer(CommandBufferID p_cmd_buffer, TextureID p_src_texture, TextureLayout p_src_texture_layout, BufferID p_dst_buffer, VectorView<BufferTextureCopyRegion> p_regions) {
-	VkBufferImageCopy *vk_copy_regions = ALLOCA_ARRAY(VkBufferImageCopy, p_regions.size());
+	VkBufferImageCopy *vk_copy_regions = SAFE_ALLOCA_ARRAY(VkBufferImageCopy, p_regions.size());
 	for (uint32_t i = 0; i < p_regions.size(); i++) {
 		_buffer_texture_copy_region_to_vk(p_regions[i], &vk_copy_regions[i]);
 	}
@@ -4635,7 +4635,7 @@ RDD::RenderPassID RenderingDeviceDriverVulkan::render_pass_create(VectorView<Att
 	const uint32_t view_mask = (1 << p_view_count) - 1;
 	const uint32_t correlation_mask = (1 << p_view_count) - 1;
 
-	VkAttachmentDescription2KHR *vk_attachments = ALLOCA_ARRAY(VkAttachmentDescription2KHR, p_attachments.size());
+	VkAttachmentDescription2KHR *vk_attachments = SAFE_ALLOCA_ARRAY(VkAttachmentDescription2KHR, p_attachments.size());
 	for (uint32_t i = 0; i < p_attachments.size(); i++) {
 		vk_attachments[i] = {};
 		vk_attachments[i].sType = VK_STRUCTURE_TYPE_ATTACHMENT_DESCRIPTION_2_KHR;
@@ -4649,26 +4649,26 @@ RDD::RenderPassID RenderingDeviceDriverVulkan::render_pass_create(VectorView<Att
 		vk_attachments[i].finalLayout = RD_TO_VK_LAYOUT[p_attachments[i].final_layout];
 	}
 
-	VkSubpassDescription2KHR *vk_subpasses = ALLOCA_ARRAY(VkSubpassDescription2KHR, p_subpasses.size());
+	VkSubpassDescription2KHR *vk_subpasses = SAFE_ALLOCA_ARRAY(VkSubpassDescription2KHR, p_subpasses.size());
 	for (uint32_t i = 0; i < p_subpasses.size(); i++) {
-		VkAttachmentReference2KHR *vk_subpass_input_attachments = ALLOCA_ARRAY(VkAttachmentReference2KHR, p_subpasses[i].input_references.size());
+		VkAttachmentReference2KHR *vk_subpass_input_attachments = SAFE_ALLOCA_ARRAY(VkAttachmentReference2KHR, p_subpasses[i].input_references.size());
 		for (uint32_t j = 0; j < p_subpasses[i].input_references.size(); j++) {
 			_attachment_reference_to_vk(p_subpasses[i].input_references[j], &vk_subpass_input_attachments[j]);
 		}
 
-		VkAttachmentReference2KHR *vk_subpass_color_attachments = ALLOCA_ARRAY(VkAttachmentReference2KHR, p_subpasses[i].color_references.size());
+		VkAttachmentReference2KHR *vk_subpass_color_attachments = SAFE_ALLOCA_ARRAY(VkAttachmentReference2KHR, p_subpasses[i].color_references.size());
 		for (uint32_t j = 0; j < p_subpasses[i].color_references.size(); j++) {
 			_attachment_reference_to_vk(p_subpasses[i].color_references[j], &vk_subpass_color_attachments[j]);
 		}
 
-		VkAttachmentReference2KHR *vk_subpass_resolve_attachments = ALLOCA_ARRAY(VkAttachmentReference2KHR, p_subpasses[i].resolve_references.size());
+		VkAttachmentReference2KHR *vk_subpass_resolve_attachments = SAFE_ALLOCA_ARRAY(VkAttachmentReference2KHR, p_subpasses[i].resolve_references.size());
 		for (uint32_t j = 0; j < p_subpasses[i].resolve_references.size(); j++) {
 			_attachment_reference_to_vk(p_subpasses[i].resolve_references[j], &vk_subpass_resolve_attachments[j]);
 		}
 
 		VkAttachmentReference2KHR *vk_subpass_depth_stencil_attachment = nullptr;
 		if (p_subpasses[i].depth_stencil_reference.attachment != AttachmentReference::UNUSED) {
-			vk_subpass_depth_stencil_attachment = ALLOCA_SINGLE(VkAttachmentReference2KHR);
+			vk_subpass_depth_stencil_attachment = SAFE_ALLOCA_SINGLE(VkAttachmentReference2KHR);
 			_attachment_reference_to_vk(p_subpasses[i].depth_stencil_reference, vk_subpass_depth_stencil_attachment);
 		}
 
@@ -4687,13 +4687,13 @@ RDD::RenderPassID RenderingDeviceDriverVulkan::render_pass_create(VectorView<Att
 
 		// VRS.
 		if (vrs_capabilities.attachment_vrs_supported && p_subpasses[i].vrs_reference.attachment != AttachmentReference::UNUSED) {
-			VkAttachmentReference2KHR *vk_subpass_vrs_attachment = ALLOCA_SINGLE(VkAttachmentReference2KHR);
+			VkAttachmentReference2KHR *vk_subpass_vrs_attachment = SAFE_ALLOCA_SINGLE(VkAttachmentReference2KHR);
 			*vk_subpass_vrs_attachment = {};
 			vk_subpass_vrs_attachment->sType = VK_STRUCTURE_TYPE_ATTACHMENT_REFERENCE_2_KHR;
 			vk_subpass_vrs_attachment->attachment = p_subpasses[i].vrs_reference.attachment;
 			vk_subpass_vrs_attachment->layout = VK_IMAGE_LAYOUT_FRAGMENT_SHADING_RATE_ATTACHMENT_OPTIMAL_KHR;
 
-			VkFragmentShadingRateAttachmentInfoKHR *vk_vrs_info = ALLOCA_SINGLE(VkFragmentShadingRateAttachmentInfoKHR);
+			VkFragmentShadingRateAttachmentInfoKHR *vk_vrs_info = SAFE_ALLOCA_SINGLE(VkFragmentShadingRateAttachmentInfoKHR);
 			*vk_vrs_info = {};
 			vk_vrs_info->sType = VK_STRUCTURE_TYPE_FRAGMENT_SHADING_RATE_ATTACHMENT_INFO_KHR;
 			vk_vrs_info->pFragmentShadingRateAttachment = vk_subpass_vrs_attachment;
@@ -4704,7 +4704,7 @@ RDD::RenderPassID RenderingDeviceDriverVulkan::render_pass_create(VectorView<Att
 		}
 	}
 
-	VkSubpassDependency2KHR *vk_subpass_dependencies = ALLOCA_ARRAY(VkSubpassDependency2KHR, p_subpass_dependencies.size());
+	VkSubpassDependency2KHR *vk_subpass_dependencies = SAFE_ALLOCA_ARRAY(VkSubpassDependency2KHR, p_subpass_dependencies.size());
 	for (uint32_t i = 0; i < p_subpass_dependencies.size(); i++) {
 		vk_subpass_dependencies[i] = {};
 		vk_subpass_dependencies[i].sType = VK_STRUCTURE_TYPE_SUBPASS_DEPENDENCY_2;
@@ -4733,12 +4733,12 @@ RDD::RenderPassID RenderingDeviceDriverVulkan::render_pass_create(VectorView<Att
 		// We add it if vkCreateRenderPass2KHR is not supported,
 		// resulting this in being passed to our vkCreateRenderPass fallback.
 
-		uint32_t *vk_view_masks = ALLOCA_ARRAY(uint32_t, p_subpasses.size());
+		uint32_t *vk_view_masks = SAFE_ALLOCA_ARRAY(uint32_t, p_subpasses.size());
 		for (uint32_t i = 0; i < p_subpasses.size(); i++) {
 			vk_view_masks[i] = view_mask;
 		}
 
-		VkRenderPassMultiviewCreateInfo *multiview_create_info = ALLOCA_SINGLE(VkRenderPassMultiviewCreateInfo);
+		VkRenderPassMultiviewCreateInfo *multiview_create_info = SAFE_ALLOCA_SINGLE(VkRenderPassMultiviewCreateInfo);
 		*multiview_create_info = {};
 		multiview_create_info->sType = VK_STRUCTURE_TYPE_RENDER_PASS_MULTIVIEW_CREATE_INFO;
 		multiview_create_info->subpassCount = p_subpasses.size();
@@ -4815,7 +4815,7 @@ void RenderingDeviceDriverVulkan::command_next_render_subpass(CommandBufferID p_
 }
 
 void RenderingDeviceDriverVulkan::command_render_set_viewport(CommandBufferID p_cmd_buffer, VectorView<Rect2i> p_viewports) {
-	VkViewport *vk_viewports = ALLOCA_ARRAY(VkViewport, p_viewports.size());
+	VkViewport *vk_viewports = SAFE_ALLOCA_ARRAY(VkViewport, p_viewports.size());
 	for (uint32_t i = 0; i < p_viewports.size(); i++) {
 		vk_viewports[i] = {};
 		vk_viewports[i].x = p_viewports[i].position.x;
@@ -4833,7 +4833,7 @@ void RenderingDeviceDriverVulkan::command_render_set_scissor(CommandBufferID p_c
 }
 
 void RenderingDeviceDriverVulkan::command_render_clear_attachments(CommandBufferID p_cmd_buffer, VectorView<AttachmentClear> p_attachment_clears, VectorView<Rect2i> p_rects) {
-	VkClearAttachment *vk_clears = ALLOCA_ARRAY(VkClearAttachment, p_attachment_clears.size());
+	VkClearAttachment *vk_clears = SAFE_ALLOCA_ARRAY(VkClearAttachment, p_attachment_clears.size());
 	for (uint32_t i = 0; i < p_attachment_clears.size(); i++) {
 		vk_clears[i] = {};
 		memcpy(&vk_clears[i].clearValue, &p_attachment_clears[i].value, sizeof(VkClearValue));
@@ -4841,7 +4841,7 @@ void RenderingDeviceDriverVulkan::command_render_clear_attachments(CommandBuffer
 		vk_clears[i].aspectMask = p_attachment_clears[i].aspect;
 	}
 
-	VkClearRect *vk_rects = ALLOCA_ARRAY(VkClearRect, p_rects.size());
+	VkClearRect *vk_rects = SAFE_ALLOCA_ARRAY(VkClearRect, p_rects.size());
 	for (uint32_t i = 0; i < p_rects.size(); i++) {
 		vk_rects[i] = {};
 		vk_rects[i].rect.offset.x = p_rects[i].position.x;
@@ -4913,7 +4913,7 @@ void RenderingDeviceDriverVulkan::command_render_draw_indirect_count(CommandBuff
 }
 
 void RenderingDeviceDriverVulkan::command_render_bind_vertex_buffers(CommandBufferID p_cmd_buffer, uint32_t p_binding_count, const BufferID *p_buffers, const uint64_t *p_offsets) {
-	VkBuffer *vk_buffers = ALLOCA_ARRAY(VkBuffer, p_binding_count);
+	VkBuffer *vk_buffers = SAFE_ALLOCA_ARRAY(VkBuffer, p_binding_count);
 	for (uint32_t i = 0; i < p_binding_count; i++) {
 		vk_buffers[i] = ((const BufferInfo *)p_buffers[i].id)->vk_buffer;
 	}
@@ -5029,7 +5029,7 @@ RDD::PipelineID RenderingDeviceDriverVulkan::render_pipeline_create(
 		const VertexFormatInfo *vf_info = (const VertexFormatInfo *)p_vertex_format.id;
 		vertex_input_state_create_info = &vf_info->vk_create_info;
 	} else {
-		VkPipelineVertexInputStateCreateInfo *null_vertex_input_state = ALLOCA_SINGLE(VkPipelineVertexInputStateCreateInfo);
+		VkPipelineVertexInputStateCreateInfo *null_vertex_input_state = SAFE_ALLOCA_SINGLE(VkPipelineVertexInputStateCreateInfo);
 		*null_vertex_input_state = {};
 		null_vertex_input_state->sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
 		vertex_input_state_create_info = null_vertex_input_state;
@@ -5118,7 +5118,7 @@ RDD::PipelineID RenderingDeviceDriverVulkan::render_pipeline_create(
 	color_blend_state_create_info.logicOpEnable = p_blend_state.enable_logic_op;
 	color_blend_state_create_info.logicOp = (VkLogicOp)p_blend_state.logic_op;
 
-	VkPipelineColorBlendAttachmentState *vk_attachment_states = ALLOCA_ARRAY(VkPipelineColorBlendAttachmentState, p_color_attachments.size());
+	VkPipelineColorBlendAttachmentState *vk_attachment_states = SAFE_ALLOCA_ARRAY(VkPipelineColorBlendAttachmentState, p_color_attachments.size());
 	{
 		for (uint32_t i = 0; i < p_color_attachments.size(); i++) {
 			vk_attachment_states[i] = {};
@@ -5162,7 +5162,7 @@ RDD::PipelineID RenderingDeviceDriverVulkan::render_pipeline_create(
 	dynamic_state_create_info.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
 
 	static const uint32_t MAX_DYN_STATE_COUNT = 9;
-	VkDynamicState *vk_dynamic_states = ALLOCA_ARRAY(VkDynamicState, MAX_DYN_STATE_COUNT);
+	VkDynamicState *vk_dynamic_states = SAFE_ALLOCA_ARRAY(VkDynamicState, MAX_DYN_STATE_COUNT);
 	uint32_t vk_dynamic_states_count = 0;
 
 	vk_dynamic_states[vk_dynamic_states_count] = VK_DYNAMIC_STATE_VIEWPORT; // Viewport and scissor are always dynamic.
@@ -5211,7 +5211,7 @@ RDD::PipelineID RenderingDeviceDriverVulkan::render_pipeline_create(
 		// combinerOps[0] decides how we use the output of pipeline and primitive (drawcall) VRS.
 		// combinerOps[1] decides how we use the output of combinerOps[0] and our attachment VRS.
 
-		VkPipelineFragmentShadingRateStateCreateInfoKHR *vrs_create_info = ALLOCA_SINGLE(VkPipelineFragmentShadingRateStateCreateInfoKHR);
+		VkPipelineFragmentShadingRateStateCreateInfoKHR *vrs_create_info = SAFE_ALLOCA_SINGLE(VkPipelineFragmentShadingRateStateCreateInfoKHR);
 		*vrs_create_info = {};
 		vrs_create_info->sType = VK_STRUCTURE_TYPE_PIPELINE_FRAGMENT_SHADING_RATE_STATE_CREATE_INFO_KHR;
 		vrs_create_info->fragmentSize = { 4, 4 };
@@ -5233,13 +5233,13 @@ RDD::PipelineID RenderingDeviceDriverVulkan::render_pipeline_create(
 
 	ERR_FAIL_COND_V_MSG(pipeline_create_info.stageCount == 0, PipelineID(),
 			"Cannot create pipeline without shader module, please make sure shader modules are destroyed only after all associated pipelines are created.");
-	VkPipelineShaderStageCreateInfo *vk_pipeline_stages = ALLOCA_ARRAY(VkPipelineShaderStageCreateInfo, shader_info->vk_stages_create_info.size());
+	VkPipelineShaderStageCreateInfo *vk_pipeline_stages = SAFE_ALLOCA_ARRAY(VkPipelineShaderStageCreateInfo, shader_info->vk_stages_create_info.size());
 
 	for (uint32_t i = 0; i < shader_info->vk_stages_create_info.size(); i++) {
 		vk_pipeline_stages[i] = shader_info->vk_stages_create_info[i];
 
 		if (p_specialization_constants.size()) {
-			VkSpecializationMapEntry *specialization_map_entries = ALLOCA_ARRAY(VkSpecializationMapEntry, p_specialization_constants.size());
+			VkSpecializationMapEntry *specialization_map_entries = SAFE_ALLOCA_ARRAY(VkSpecializationMapEntry, p_specialization_constants.size());
 			for (uint32_t j = 0; j < p_specialization_constants.size(); j++) {
 				specialization_map_entries[j] = {};
 				specialization_map_entries[j].constantID = p_specialization_constants[j].constant_id;
@@ -5247,7 +5247,7 @@ RDD::PipelineID RenderingDeviceDriverVulkan::render_pipeline_create(
 				specialization_map_entries[j].size = sizeof(uint32_t);
 			}
 
-			VkSpecializationInfo *specialization_info = ALLOCA_SINGLE(VkSpecializationInfo);
+			VkSpecializationInfo *specialization_info = SAFE_ALLOCA_SINGLE(VkSpecializationInfo);
 			*specialization_info = {};
 			specialization_info->dataSize = p_specialization_constants.size() * sizeof(PipelineSpecializationConstant);
 			specialization_info->pData = p_specialization_constants.ptr();
@@ -5334,7 +5334,7 @@ RDD::PipelineID RenderingDeviceDriverVulkan::compute_pipeline_create(ShaderID p_
 	pipeline_create_info.layout = shader_info->vk_pipeline_layout;
 
 	if (p_specialization_constants.size()) {
-		VkSpecializationMapEntry *specialization_map_entries = ALLOCA_ARRAY(VkSpecializationMapEntry, p_specialization_constants.size());
+		VkSpecializationMapEntry *specialization_map_entries = SAFE_ALLOCA_ARRAY(VkSpecializationMapEntry, p_specialization_constants.size());
 		for (uint32_t i = 0; i < p_specialization_constants.size(); i++) {
 			specialization_map_entries[i] = {};
 			specialization_map_entries[i].constantID = p_specialization_constants[i].constant_id;
@@ -5342,7 +5342,7 @@ RDD::PipelineID RenderingDeviceDriverVulkan::compute_pipeline_create(ShaderID p_
 			specialization_map_entries[i].size = sizeof(uint32_t);
 		}
 
-		VkSpecializationInfo *specialization_info = ALLOCA_SINGLE(VkSpecializationInfo);
+		VkSpecializationInfo *specialization_info = SAFE_ALLOCA_SINGLE(VkSpecializationInfo);
 		*specialization_info = {};
 		specialization_info->dataSize = p_specialization_constants.size() * sizeof(PipelineSpecializationConstant);
 		specialization_info->pData = p_specialization_constants.ptr();

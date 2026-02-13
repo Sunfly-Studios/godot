@@ -1055,7 +1055,7 @@ Error ResourceLoaderText::rename_dependencies(Ref<FileAccess> p_f, const String 
 	f->seek(tag_end);
 
 	const uint32_t buffer_size = 2048;
-	uint8_t *buffer = ALLOCA_ARRAY(uint8_t, buffer_size);
+	uint8_t *buffer = SAFE_ALLOCA_ARRAY(uint8_t, buffer_size);
 	uint32_t num_read;
 
 	num_read = f->get_buffer(buffer, buffer_size);
