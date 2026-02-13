@@ -850,6 +850,10 @@ RDD::BufferID RenderingDeviceDriverD3D12::buffer_create(uint64_t p_size, BitFiel
 		} break;
 		case MEMORY_ALLOCATION_TYPE_GPU: {
 			// Use default parameters.
+			// D3D12_HEAP_TYPE_UPLOAD mandates D3D12_RESOURCE_STATE_GENERIC_READ.
+			if (dynamic_persistent_upload_heap == D3D12_HEAP_TYPE_UPLOAD) {
+				initial_state = D3D12_RESOURCE_STATE_GENERIC_READ;
+			}
 		} break;
 	}
 
