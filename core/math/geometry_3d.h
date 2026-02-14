@@ -472,7 +472,11 @@ public:
 			return polygon;
 		}
 
-		int *location_cache = SAFE_ALLOCA_ARRAY(int, polygon.size());
+		// Move to heap allocation for better
+		// safety against large geometry.
+		LocalVector<int> location_cache;
+		location_cache.resize(polygon.size());
+
 		int inside_count = 0;
 		int outside_count = 0;
 
