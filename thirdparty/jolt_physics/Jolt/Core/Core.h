@@ -305,6 +305,26 @@
 	// PA-RISC requires strict alignment.
 	#define JPH_VECTOR_ALIGNMENT 16
 	#define JPH_DVECTOR_ALIGNMENT 16
+#elif defined(__arc__)
+	// Synopsys ARC Architecture
+	#define JPH_CPU_ARC
+
+	// ARC Linux is almost always 32-bit (ILP32).
+	// Even ARC HS (High Speed) cores running Linux usually use 32-bit pointers.
+	#if defined(__ARC64__) || defined(__LP64__)
+		#define JPH_CPU_ADDRESS_BITS 64
+	#else
+		#define JPH_CPU_ADDRESS_BITS 32
+	#endif
+
+	#if defined(BIG_ENDIAN_ENABLED) || defined(__ARC_BE__)
+		#define JPH_CPU_BIG_ENDIAN
+	#endif
+
+	// ARC requires strict alignment (16-byte) to avoid unaligned access faults
+	// during vector emulation.
+	#define JPH_VECTOR_ALIGNMENT 16
+	#define JPH_DVECTOR_ALIGNMENT 16
 #else
 	#error Unsupported CPU architecture
 #endif
@@ -461,7 +481,7 @@
 #elif defined(JPH_PLATFORM_LINUX) || defined(JPH_PLATFORM_ANDROID) || defined(JPH_PLATFORM_MACOS) || defined(JPH_PLATFORM_IOS) || defined(JPH_PLATFORM_FREEBSD) || defined(JPH_PLATFORM_NETBSD)
 	#if defined(JPH_CPU_X86)
 		#define JPH_BREAKPOINT	__asm volatile ("int $0x3")
-	#elif defined(JPH_CPU_ARM) || defined(JPH_CPU_RISCV) || defined(JPH_CPU_E2K) || defined(JPH_CPU_PPC) || defined(JPH_CPU_LOONGARCH) || defined(JPH_CPU_SPARC) || defined(JPH_CPU_MIPS) || defined(JPH_CPU_ALPHA) || defined(JPH_CPU_HPPA)
+	#elif defined(JPH_CPU_ARM) || defined(JPH_CPU_RISCV) || defined(JPH_CPU_E2K) || defined(JPH_CPU_PPC) || defined(JPH_CPU_LOONGARCH) || defined(JPH_CPU_SPARC) || defined(JPH_CPU_MIPS) || defined(JPH_CPU_ALPHA) || defined(JPH_CPU_HPPA) || defined(JPH_CPU_ARC)
 		#define JPH_BREAKPOINT	__builtin_trap()
 	#else
 		#error Unknown CPU architecture

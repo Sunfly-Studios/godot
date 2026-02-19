@@ -78,7 +78,7 @@ def configure(env: "SConsEnvironment"):
         "arm64", "rv64", "ppc32",
         "ppc64", "loongarch64",
         "sparc64", "mips64", "alpha",
-        "hppa"
+        "hppa", "arc"
     ]
     validate_arch(env["arch"], get_name(), supported_arches)
 
@@ -213,11 +213,39 @@ def configure(env: "SConsEnvironment"):
         # may mark some parts of the binary as read-only but
         # try to read into it.
         env.Append(LINKFLAGS=["-Wl,-z,norelro"])
+    elif env["arch"] == "arc":
+        env.Append(
+            CCFLAGS=[
+                # Wanted to target arc700, but in ARC Linux, there
+                # was a hard cut between the legacy and ARC HS CPUs.
+                # After some research, it seems that `hs38` is the recommended
+                # option because any board *in use* today would have this or better.
+                "-mcpu=hs38",
+                "-mlong-calls",
+
+                # Soft float guarantees compatibility with all boards,
+                # even if that means running a bit slower.
+                "-msoft-float",
+
+                # Enable atomics.
+                "-matomic"
+            ]
+        )
+        env.Append(CPPDEFINES=["IS_32_BIT"])
+        env.Append(LINKFLAGS=[
+            "-latomic",
+
+            # Avoid relocation errors.
+            # By default the toolchains are configured for short jumps, but
+            # projects like Godot require a bit more than short jumps.
+            "-Wl,--relax"
+        ])
 
     if (
         env["arch"] == "sparc64" or
         env["arch"] == "alpha" or
-        env["arch"] == "hppa"
+        env["arch"] == "hppa" or
+        env["arch"] == "arc"
     ):
         # Disable JIT for pcre2. Not supported.
         env["builtin_pcre2_with_jit"] = False
@@ -232,7 +260,8 @@ def configure(env: "SConsEnvironment"):
         env["arch"] == "ppc64" or
         env["arch"] == "ppc32" or
         env["arch"] == "mips64" or
-        env["arch"] == "hppa"
+        env["arch"] == "hppa" or
+        env["arch"] == "arc"
     ):
         if is_big_endian:
             # Godot technically supports compiling for big endian,
@@ -255,6 +284,8 @@ def configure(env: "SConsEnvironment"):
                 # 64-bit mips compatibility. Targets R4000 or better.
                 env.Append(CCFLAGS=["-EB", "-march=mips3"])
                 print("Building MIPS64 Big Endian")
+            elif env["arch"] == "arc":
+                print("Building ARC Big Endian")
         else:
             if env["arch"] == "ppc32":
                 print("Building PowerPC 32 Little Endian")
@@ -263,6 +294,8 @@ def configure(env: "SConsEnvironment"):
             elif env["arch"] == "mips64":
                 env.Append(CCFLAGS=["-EL", "-march=mips3"])
                 print("Building MIPS64 Little Endian")
+            elif env["arch"] == "arc":
+                print("Building ARC Little Endian")
 
     ## Compiler configuration
 

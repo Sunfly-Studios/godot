@@ -272,6 +272,9 @@ String Engine::get_architecture_name() const {
 #elif defined(__hppa__)
 	return "hppa";
 
+#elif defined(__arc__)
+	return "arc";
+
 #elif defined(__wasm__)
 #if defined(__wasm64__)
 	return "wasm64";

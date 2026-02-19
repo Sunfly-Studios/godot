@@ -75,6 +75,8 @@
 #define XR_ARCH_ABI "sparc64"
 #elif defined(__loongarch64__) || defined(__loongarch64)
 #define XR_ARCH_ABI "loong64"
+#elif defined(__arc__)
+#define XR_ARCH_ABI "arc"
 #else
 #error "No architecture string known!"
 #endif

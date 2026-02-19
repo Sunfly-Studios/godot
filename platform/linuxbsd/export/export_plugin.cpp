@@ -179,7 +179,7 @@ bool EditorExportPlatformLinuxBSD::get_export_option_visibility(const EditorExpo
 void EditorExportPlatformLinuxBSD::get_export_options(List<ExportOption> *r_options) const {
 	EditorExportPlatformPC::get_export_options(r_options);
 
-	r_options->push_back(ExportOption(PropertyInfo(Variant::STRING, "binary_format/architecture", PROPERTY_HINT_ENUM, "x86_64,x86_32,arm64,arm32,rv64,ppc64,ppc32,loongarch64,sparc64,mips64,alpha,hppa"), "x86_64"));
+	r_options->push_back(ExportOption(PropertyInfo(Variant::STRING, "binary_format/architecture", PROPERTY_HINT_ENUM, "x86_64,x86_32,arm64,arm32,rv64,ppc64,ppc32,loongarch64,sparc64,mips64,alpha,hppa,arc"), "x86_64"));
 
 	String run_script = "#!/usr/bin/env bash\n"
 						"export DISPLAY=:0\n"
@@ -296,6 +296,18 @@ String EditorExportPlatformLinuxBSD::_get_exe_arch(const String &p_path) const {
 		case 0x000f:
 		case 0x0f00:
 			return "hppa";
+
+		// EM_ARC (Legacy/Original),
+		// EM_ARC_COMPACT (ARCv2 / ARCompact / ARC HS),
+		// and EM_ARCV2 (Newer ARCv2/v3 allocations)
+		// IDs.
+		case 0x002d:
+		case 0x2d00: // Byte-swapped (Big Endian)
+		case 0x005d:
+		case 0x5d00:
+		case 0x00c3:
+		case 0xc300:
+			return "arc";
 		default:
 			return "unknown";
 	}

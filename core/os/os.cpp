@@ -608,6 +608,10 @@ bool OS::has_feature(const String &p_feature) {
 	if (p_feature == "hppa") {
 		return true;
 	}
+#elif defined(__arc__)
+	if (p_feature == "arc") {
+		return true;
+	}
 #endif
 
 #if defined(IOS_SIMULATOR)

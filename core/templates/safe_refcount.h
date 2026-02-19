@@ -61,7 +61,7 @@
 
 template <typename T>
 class SafeNumeric {
-#if !defined(__powerpc__) || defined(__powerpc64__)
+#if (!defined(__powerpc__) || defined(__powerpc64__)) && !defined(__arc__)
 	std::atomic<T> value;
 	static_assert(std::atomic<T>::is_always_lock_free);
 #else
@@ -155,7 +155,7 @@ public:
 };
 
 class SafeFlag {
-#if !defined(__powerpc__) || defined(__powerpc64__)
+#if (!defined(__powerpc__) || defined(__powerpc64__)) && !defined(__arc__)
 	std::atomic_bool flag;
 	static_assert(std::atomic_bool::is_always_lock_free);
 #else

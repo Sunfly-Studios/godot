@@ -63,7 +63,7 @@ class SafeList {
 		T val;
 	};
 
-#if !defined(__powerpc__) || defined(__powerpc64__)
+#if (!defined(__powerpc__) || defined(__powerpc64__)) && !defined(__arc__)
 	static_assert(std::atomic<T>::is_always_lock_free);
 #endif
 
