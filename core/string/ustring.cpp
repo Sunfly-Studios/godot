@@ -1607,7 +1607,7 @@ String String::num(double p_num, int p_decimals) {
 	}
 
 	if (Math::is_inf(p_num)) {
-		if (signbit(p_num)) {
+		if (std::signbit(p_num)) {
 			return "-inf";
 		} else {
 			return "inf";
@@ -5453,7 +5453,7 @@ String String::sprintf(const Array &values, bool *error) const {
 					}
 
 					double value = values[value_index];
-					bool is_negative = signbit(value);
+					bool is_negative = std::signbit(value);
 					String str = String::num(Math::abs(value), min_decimals);
 					const bool is_finite = Math::is_finite(value);
 
