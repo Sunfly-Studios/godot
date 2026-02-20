@@ -280,7 +280,7 @@
 	#else
 		#define JPH_CPU_ADDRESS_BITS 32
 	#endif
-	#if BIG_ENDIAN_ENABLED
+	#ifdef BIG_ENDIAN_ENABLED
 		#define JPH_CPU_BIG_ENDIAN
 	#endif
 

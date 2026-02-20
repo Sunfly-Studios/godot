@@ -203,15 +203,25 @@ void EditorExportPlatformLinuxBSD::get_export_options(List<ExportOption> *r_opti
 bool EditorExportPlatformLinuxBSD::is_elf(const String &p_path) const {
 	Ref<FileAccess> fb = FileAccess::open(p_path, FileAccess::READ);
 	ERR_FAIL_COND_V_MSG(fb.is_null(), false, vformat("Can't open file: \"%s\".", p_path));
+#ifdef BIG_ENDIAN_ENABLED
+	fb->set_big_endian(false);
+#endif
 	uint32_t magic = fb->get_32();
-	return (magic == 0x464c457f);
+
+	// Even though the above big endian switch would probably make
+	// the right hand side of this irrelevant, we still
+	// need to check just to make absolutely sure.
+	return (magic == 0x464c457f || magic == 0x7f454c46);
 }
 
 bool EditorExportPlatformLinuxBSD::is_shebang(const String &p_path) const {
 	Ref<FileAccess> fb = FileAccess::open(p_path, FileAccess::READ);
 	ERR_FAIL_COND_V_MSG(fb.is_null(), false, vformat("Can't open file: \"%s\".", p_path));
+#ifdef BIG_ENDIAN_ENABLED
+	fb->set_big_endian(false);
+#endif
 	uint16_t magic = fb->get_16();
-	return (magic == 0x2123);
+	return (magic == 0x2123 || magic == 0x2321);
 }
 
 bool EditorExportPlatformLinuxBSD::is_executable(const String &p_path) const {
@@ -252,10 +262,14 @@ String EditorExportPlatformLinuxBSD::_get_exe_arch(const String &p_path) const {
 		return "invalid";
 	}
 
+#ifdef BIG_ENDIAN_ENABLED
+	f->set_big_endian(false);
+#endif
+
 	// Read and check ELF magic number.
 	{
 		uint32_t magic = f->get_32();
-		if (magic != 0x464c457f) { // 0x7F + "ELF"
+		if (magic != 0x464c457f || magic != 0x7f454c46) { // 0x7F + "ELF"
 			return "invalid";
 		}
 	}
@@ -322,10 +336,14 @@ Error EditorExportPlatformLinuxBSD::fixup_embedded_pck(const String &p_path, int
 		return ERR_CANT_OPEN;
 	}
 
+#ifdef BIG_ENDIAN_ENABLED
+	f->set_big_endian(false);
+#endif
+
 	// Read and check ELF magic number.
 	{
 		uint32_t magic = f->get_32();
-		if (magic != 0x464c457f) { // 0x7F + "ELF"
+		if (magic != 0x464c457f || magic != 0x7f454c46) { // 0x7F + "ELF"
 			add_message(EXPORT_MESSAGE_ERROR, TTR("PCK Embedding"), TTR("Executable file header corrupted."));
 			return ERR_FILE_CORRUPT;
 		}
