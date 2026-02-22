@@ -271,11 +271,8 @@ def configure(env: "SConsEnvironment"):
             elif env["arch"] == "ppc64":
                 print("Building PowerPC 64 Big Endian (ELFv1/v2 compatible)")
             elif env["arch"] == "mips64":
-                # I think this is already a default depending
-                # on the toolchain, but is not bad being explicit.
-                # Target mips3 instead of mips64 for maximum
-                # 64-bit mips compatibility. Targets R4000 or better.
-                env.Append(CCFLAGS=["-EB", "-march=mips3"])
+                # Append Big Endian (Endian Big) flag.
+                env.Append(CCFLAGS=["-EB"])
                 print("Building MIPS64 Big Endian")
             elif env["arch"] == "arc":
                 print("Building ARC Big Endian")
@@ -285,7 +282,7 @@ def configure(env: "SConsEnvironment"):
             elif env["arch"] == "ppc64":
                 print("Building PowerPC 64 Little Endian (ELFv2)")
             elif env["arch"] == "mips64":
-                env.Append(CCFLAGS=["-EL", "-march=mips3"])
+                env.Append(CCFLAGS=["-EL"])
                 print("Building MIPS64 Little Endian")
             elif env["arch"] == "arc":
                 print("Building ARC Little Endian")
