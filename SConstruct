@@ -58,7 +58,7 @@ import glsl_builders
 import methods
 import scu_builders
 from misc.utility.color import is_stderr_color, print_error, print_info, print_warning
-from platform_methods import architecture_aliases, architectures, compatibility_platform_aliases
+from platform_methods import architecture_aliases, architectures, compatibility_platform_aliases, detect_and_set_32_bit_arch
 
 if ARGUMENTS.get("target", "editor") == "editor":
     _helper_module("editor.editor_builders", "editor/editor_builders.py")
@@ -729,12 +729,7 @@ if env["arch"] == "x86_32":
             env.Append(CCFLAGS=["-msse", "-mno-sse2", "-mfpmath=sse,387"])
         env.Append(CPPDEFINES=["NO_SSE2"])
 
-# Catches x86_32, arm32, ppc32, and wasm32.
-# The most common ones.
-# Other architectures like HPPA must set this manually.
-# TODO: Maybe automate this.
-if env["arch"].endswith("32"):
-    env.Append(CPPDEFINES=["IS_32_BIT"])
+detect_and_set_32_bit_arch(env)
 
 # Explicitly specify colored output.
 if methods.using_gcc(env):

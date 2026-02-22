@@ -203,12 +203,6 @@ def configure(env: "SConsEnvironment"):
                 "-mlong-calls",
             ]
         )
-
-        # This is required because programs compiled for HPPA
-        # are usually 32-bit (because the 64-bit userland was
-        # never finalised).
-        env.Append(CPPDEFINES=["IS_32_BIT"])
-
         # Fix issue with modern toolchains under PA-RISC that
         # may mark some parts of the binary as read-only but
         # try to read into it.
@@ -231,7 +225,6 @@ def configure(env: "SConsEnvironment"):
                 "-matomic"
             ]
         )
-        env.Append(CPPDEFINES=["IS_32_BIT"])
         env.Append(LINKFLAGS=[
             "-latomic",
 
