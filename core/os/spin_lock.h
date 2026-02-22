@@ -131,7 +131,7 @@ _ALWAYS_INLINE_ static void _cpu_pause() {
 #elif defined(__hppa__)
 	// PA-RISC
 	asm volatile("or %%r31, %%r31, %%r31" ::: "memory");
-#elif defined(__arc__)
+#elif defined(__arc__) || defined(__arc64__)
 	// Synopsys ARC
 	asm volatile("nop" ::: "memory");
 #else

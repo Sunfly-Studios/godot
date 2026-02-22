@@ -16,7 +16,7 @@ compatibility_platform_aliases = {
 }
 
 # CPU architecture options.
-architectures = ["x86_32", "x86_64", "arm32", "arm64", "rv64", "ppc32", "ppc64", "wasm32", "wasm64", "loongarch64", "sparc64", "mips64", "alpha", "hppa", "arc"]
+architectures = ["x86_32", "x86_64", "arm32", "arm64", "rv64", "ppc32", "ppc64", "wasm32", "wasm64", "loongarch64", "sparc64", "mips64", "alpha", "hppa", "arc32", "arc64"]
 architecture_aliases = {
     "x86": "x86_32",
     "x64": "x86_64",
@@ -50,10 +50,8 @@ architecture_aliases = {
     "parisc": "hppa",
     "pa-risc": "hppa",
     "hppa64": "hppa",
-    "hs38": "arc",
-    "hs": "arc",
-    "arc32": "arc",
-    "arc64": "arc" # Only 32-bit
+    "hs38": "arc32",
+    "hs": "arc32"
 }
 
 
@@ -230,7 +228,6 @@ def detect_and_set_32_bit_arch(env):
         # are usually 32-bit (because the 64-bit userland was
         # never finalised).
         "hppa",
-        "arc",
         "ppc" # If used by the abbreviation instead of "ppc32"
     }
     

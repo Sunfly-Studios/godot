@@ -608,8 +608,12 @@ bool OS::has_feature(const String &p_feature) {
 	if (p_feature == "hppa") {
 		return true;
 	}
+#elif defined(__arc64__)
+	if (p_feature == "arc64") {
+		return true;
+	}
 #elif defined(__arc__)
-	if (p_feature == "arc") {
+	if (p_feature == "arc32") {
 		return true;
 	}
 #endif

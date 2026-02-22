@@ -305,19 +305,17 @@
 	// PA-RISC requires strict alignment.
 	#define JPH_VECTOR_ALIGNMENT 16
 	#define JPH_DVECTOR_ALIGNMENT 16
-#elif defined(__arc__)
+#elif defined(__arc__) || defined(__arc64__)
 	// Synopsys ARC Architecture
 	#define JPH_CPU_ARC
 
-	// ARC Linux is almost always 32-bit (ILP32).
-	// Even ARC HS (High Speed) cores running Linux usually use 32-bit pointers.
-	#if defined(__ARC64__) || defined(__LP64__)
+	#if defined(__arc64__)
 		#define JPH_CPU_ADDRESS_BITS 64
 	#else
 		#define JPH_CPU_ADDRESS_BITS 32
 	#endif
 
-	#if defined(BIG_ENDIAN_ENABLED) || defined(__ARC_BE__)
+	#ifdef BIG_ENDIAN_ENABLED
 		#define JPH_CPU_BIG_ENDIAN
 	#endif
 

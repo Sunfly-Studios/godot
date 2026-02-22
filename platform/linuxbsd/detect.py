@@ -78,7 +78,7 @@ def configure(env: "SConsEnvironment"):
         "arm64", "rv64", "ppc32",
         "ppc64", "loongarch64",
         "sparc64", "mips64", "alpha",
-        "hppa", "arc"
+        "hppa", "arc32", "arc64"
     ]
     validate_arch(env["arch"], get_name(), supported_arches)
 
@@ -199,22 +199,19 @@ def configure(env: "SConsEnvironment"):
     elif env["arch"] == "hppa":
         env.Append(
             CCFLAGS=[
+                # Not targetting the ancient PA 1.1 CPUs.
                 "-march=2.0",
                 "-mlong-calls",
             ]
         )
+
         # Fix issue with modern toolchains under PA-RISC that
         # may mark some parts of the binary as read-only but
         # try to read into it.
         env.Append(LINKFLAGS=["-Wl,-z,norelro"])
-    elif env["arch"] == "arc":
+    elif env["arch"].startswith("arc"):
         env.Append(
             CCFLAGS=[
-                # Wanted to target arc700, but in ARC Linux, there
-                # was a hard cut between the legacy and ARC HS CPUs.
-                # After some research, it seems that `hs38` is the recommended
-                # option because any board *in use* today would have this or better.
-                "-mcpu=hs38",
                 "-mlong-calls",
 
                 # Soft float guarantees compatibility with all boards,
@@ -233,12 +230,32 @@ def configure(env: "SConsEnvironment"):
             # projects like Godot require a bit more than short jumps.
             "-Wl,--relax"
         ])
+        
+        if env["arch"].endswith("32"):
+            env.Append(
+                CCFLAGS=[
+                    # For 32-bit, I wanted to target arc700, but in ARC Linux, there
+                    # was a hard cut between the legacy and ARC HS CPUs.
+                    # After some research, it seems that `hs38` is the recommended
+                    # option because any board *in use* today would have this or better.
+                    "-mcpu=hs38"
+                ]
+            )
+        else:
+            env.Append(
+                CCFLAGS=[
+                    # For 64-bit ARCv3 Linux targets.
+                    # hs6x provides the broadest compatibility across 64-bit ARC.
+                    "-mcpu=hs6x" 
+                ]
+            )
+            
 
     if (
         env["arch"] == "sparc64" or
         env["arch"] == "alpha" or
         env["arch"] == "hppa" or
-        env["arch"] == "arc"
+        env["arch"].startswith("arc")
     ):
         # Disable JIT for pcre2. Not supported.
         env["builtin_pcre2_with_jit"] = False
@@ -254,7 +271,7 @@ def configure(env: "SConsEnvironment"):
         env["arch"] == "ppc32" or
         env["arch"] == "mips64" or
         env["arch"] == "hppa" or
-        env["arch"] == "arc"
+        env["arch"].startswith("arc")
     ):
         if is_big_endian:
             # Godot technically supports compiling for big endian,
@@ -274,8 +291,11 @@ def configure(env: "SConsEnvironment"):
                 # Append Big Endian (Endian Big) flag.
                 env.Append(CCFLAGS=["-EB"])
                 print("Building MIPS64 Big Endian")
-            elif env["arch"] == "arc":
-                print("Building ARC Big Endian")
+            elif env["arch"].startswith("arc"):
+                if env["arch"].endswith("32"):
+                    print("Building ARC32 Big Endian")
+                else:
+                    print("Building ARC64 Big Endian")
         else:
             if env["arch"] == "ppc32":
                 print("Building PowerPC 32 Little Endian")
@@ -284,8 +304,11 @@ def configure(env: "SConsEnvironment"):
             elif env["arch"] == "mips64":
                 env.Append(CCFLAGS=["-EL"])
                 print("Building MIPS64 Little Endian")
-            elif env["arch"] == "arc":
-                print("Building ARC Little Endian")
+            elif env["arch"].startswith("arc"):
+                if env["arch"].endswith("32"):
+                    print("Building ARC32 Little Endian")
+                else:
+                    print("Building ARC64 Little Endian")
 
     ## Compiler configuration
 
