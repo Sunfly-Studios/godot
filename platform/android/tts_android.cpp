@@ -137,11 +137,21 @@ Array TTS_Android::get_voices() {
 		ERR_FAIL_NULL_V(env, list);
 
 		jobject voices_object = env->CallObjectMethod(tts, _get_voices);
+
+		if (!voices_object) {
+            // No voices are available or TTS failed.
+            return list; 
+        }
 		jobjectArray *arr = reinterpret_cast<jobjectArray *>(&voices_object);
 
 		jsize len = env->GetArrayLength(*arr);
 		for (int i = 0; i < len; i++) {
 			jstring jStr = (jstring)env->GetObjectArrayElement(*arr, i);
+
+			if (!jStr) {
+                continue; 
+            }
+
 			String str = jstring_to_string(jStr, env);
 			Vector<String> tokens = str.split(";", true, 2);
 			if (tokens.size() == 2) {
@@ -153,6 +163,7 @@ Array TTS_Android::get_voices() {
 			}
 			env->DeleteLocalRef(jStr);
 		}
+		env->DeleteLocalRef(voices_object);
 	}
 	return list;
 }
