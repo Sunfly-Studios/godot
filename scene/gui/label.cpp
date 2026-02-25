@@ -731,6 +731,7 @@ void Label::_notification(int p_what) {
 			int visible_glyphs = total_glyphs * visible_ratio;
 
 			int line_index = 0;
+			// Note: part of this method between this comment and `canvas_item_flush_presort` call uses pre-sorted draw, draw call order is ignored, use `canvas_item_set_presort_level` to specify draw order.
 			for (int p = 0; p < paragraphs.size(); p++) {
 				const Paragraph &para = paragraphs[p];
 				if (line_index + para.lines_rid.size() <= lines_skipped) {
@@ -776,6 +777,16 @@ void Label::_notification(int p_what) {
 								continue;
 							}
 
+							bool presort = (
+								(outline_size > 0 && font_outline_color.a != 0) ||
+								(font_shadow_color.a != 0 && shadow_outline_size > 0) ||
+								(font_shadow_color.a > 0)
+							);
+
+							if (presort) {
+								RenderingServer::get_singleton()->canvas_item_set_presort_level(ci, step);
+							}
+
 							processed_glyphs_step = processed_glyphs;
 							Vector2 offset_step = ofs;
 							// Draw RTL ellipsis string when necessary.
@@ -791,6 +802,7 @@ void Label::_notification(int p_what) {
 											} else if (step == DRAW_STEP_TEXT) {
 												draw_glyph(ellipsis_glyphs[gl_idx], ci, font_color, offset_step);
 											}
+											RenderingServer::get_singleton()->canvas_item_set_presort_level(ci, step);
 										}
 										processed_glyphs_step++;
 										offset_step.x += ellipsis_glyphs[gl_idx].advance;
@@ -821,6 +833,7 @@ void Label::_notification(int p_what) {
 										} else if (step == DRAW_STEP_TEXT) {
 											draw_glyph(glyphs[j], ci, font_color, offset_step);
 										}
+										RenderingServer::get_singleton()->canvas_item_set_presort_level(ci, step);
 									}
 									processed_glyphs_step++;
 									offset_step.x += glyphs[j].advance;
@@ -839,6 +852,7 @@ void Label::_notification(int p_what) {
 											} else if (step == DRAW_STEP_TEXT) {
 												draw_glyph(ellipsis_glyphs[gl_idx], ci, font_color, offset_step);
 											}
+											RenderingServer::get_singleton()->canvas_item_set_presort_level(ci, step);
 										}
 										processed_glyphs_step++;
 										offset_step.x += ellipsis_glyphs[gl_idx].advance;
@@ -853,6 +867,7 @@ void Label::_notification(int p_what) {
 					line_index += para.lines_rid.size();
 				}
 			}
+			RenderingServer::get_singleton()->canvas_item_flush_presort(ci);
 		} break;
 
 		case NOTIFICATION_THEME_CHANGED: {

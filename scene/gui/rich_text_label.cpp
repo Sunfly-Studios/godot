@@ -814,7 +814,8 @@ void RichTextLabel::_set_table_size(ItemTable *p_table, int p_available_width) {
 	}
 }
 
-int RichTextLabel::_draw_line(ItemFrame *p_frame, int p_line, const Vector2 &p_ofs, int p_width, float p_vsep, const Color &p_base_color, int p_outline_size, const Color &p_outline_color, const Color &p_font_shadow_color, int p_shadow_outline_size, const Point2 &p_shadow_ofs, int &r_processed_glyphs) {
+int RichTextLabel::_draw_line(ItemFrame *p_frame, int p_line, const Vector2 &p_ofs, int p_width, float p_vsep, const Color &p_base_color, int p_outline_size, const Color &p_outline_color, const Color &p_font_shadow_color, int p_shadow_outline_size, const Point2 &p_shadow_ofs, int &r_processed_glyphs, int p_draw_step) {
+	// Note: this method uses pre-sorted draw, draw call order is ignored, use `canvas_item_set_presort_level` to specify draw order.
 	ERR_FAIL_NULL_V(p_frame, 0);
 	ERR_FAIL_COND_V(p_line < 0 || p_line >= (int)p_frame->lines.size(), 0);
 
@@ -845,8 +846,10 @@ int RichTextLabel::_draw_line(ItemFrame *p_frame, int p_line, const Vector2 &p_o
 	bool skip_dc = (trim_chars && l.char_offset > visible_characters) || (trim_glyphs_ltr && (r_processed_glyphs >= visible_glyphs)) || (trim_glyphs_rtl && (r_processed_glyphs < total_glyphs - visible_glyphs));
 	if (!skip_dc) {
 		if (l.dc_ol_size > 0) {
+			RenderingServer::get_singleton()->canvas_item_set_presort_level(ci, p_draw_step + DRAW_STEP_OUTLINE);
 			l.text_buf->draw_dropcap_outline(ci, p_ofs + ((rtl) ? Vector2() : Vector2(l.offset.x, 0)), l.dc_ol_size, l.dc_ol_color);
 		}
+		RenderingServer::get_singleton()->canvas_item_set_presort_level(ci, p_draw_step + DRAW_STEP_TEXT);
 		l.text_buf->draw_dropcap(ci, p_ofs + ((rtl) ? Vector2() : Vector2(l.offset.x, 0)), l.dc_color);
 	}
 
@@ -912,20 +915,24 @@ int RichTextLabel::_draw_line(ItemFrame *p_frame, int p_line, const Vector2 &p_o
 			Color font_outline_color = _find_outline_color(l.from, p_outline_color);
 			Color font_shadow_color = p_font_shadow_color * Color(1, 1, 1, font_color.a);
 			if (rtl) {
+				RenderingServer::get_singleton()->canvas_item_set_presort_level(ci, p_draw_step + DRAW_STEP_OUTLINE);
 				if (p_shadow_outline_size > 0 && font_shadow_color.a != 0.0) {
 					l.text_prefix->draw_outline(ci, p_ofs + Vector2(off.x + length, 0) + p_shadow_ofs, p_shadow_outline_size, font_shadow_color);
 				}
 				if (outline_size > 0 && font_outline_color.a != 0.0) {
 					l.text_prefix->draw_outline(ci, p_ofs + Vector2(off.x + length, 0), outline_size, font_outline_color);
 				}
+				RenderingServer::get_singleton()->canvas_item_set_presort_level(ci, p_draw_step + DRAW_STEP_TEXT);
 				l.text_prefix->draw(ci, p_ofs + Vector2(off.x + length, 0), font_color);
 			} else {
+				RenderingServer::get_singleton()->canvas_item_set_presort_level(ci, p_draw_step + DRAW_STEP_OUTLINE);
 				if (p_shadow_outline_size > 0 && font_shadow_color.a != 0.0) {
 					l.text_prefix->draw_outline(ci, p_ofs + Vector2(off.x - l.text_prefix->get_size().x, 0) + p_shadow_ofs, p_shadow_outline_size, font_shadow_color);
 				}
 				if (outline_size > 0 && font_outline_color.a != 0.0) {
 					l.text_prefix->draw_outline(ci, p_ofs + Vector2(off.x - l.text_prefix->get_size().x, 0), outline_size, font_outline_color);
 				}
+				RenderingServer::get_singleton()->canvas_item_set_presort_level(ci, p_draw_step + DRAW_STEP_TEXT);
 				l.text_prefix->draw(ci, p_ofs + Vector2(off.x - l.text_prefix->get_size().x, 0), font_color);
 			}
 		}
@@ -959,7 +966,7 @@ int RichTextLabel::_draw_line(ItemFrame *p_frame, int p_line, const Vector2 &p_o
 		}
 
 		int processed_glyphs_step = 0;
-		for (int step = DRAW_STEP_BACKGROUND; step < DRAW_STEP_MAX; step++) {
+		for (int step = DRAW_STEP_BACKGROUND; step < DRAW_STEP_TEXT_MAX; step++) {
 			if (step == DRAW_STEP_TEXT) {
 				// Draw inlined objects.
 				Array objects = TS->shaped_text_get_objects(rid);
@@ -980,6 +987,7 @@ int RichTextLabel::_draw_line(ItemFrame *p_frame, int p_line, const Vector2 &p_o
 						switch (it->type) {
 							case ITEM_IMAGE: {
 								ItemImage *img = static_cast<ItemImage *>(it);
+								RenderingServer::get_singleton()->canvas_item_set_presort_level(ci, p_draw_step + DRAW_STEP_TEXT);
 								if (img->pad) {
 									Size2 pad_size = rect.size.min(img->image->get_size());
 									Vector2 pad_off = (rect.size - pad_size) / 2;
@@ -1012,25 +1020,26 @@ int RichTextLabel::_draw_line(ItemFrame *p_frame, int p_line, const Vector2 &p_o
 										if (rtl) {
 											coff.x = rect.size.width - table->columns[col].width - coff.x;
 										}
+
+										Color row_bg;
 										if (row % 2 == 0) {
-											Color c = frame->odd_row_bg != Color(0, 0, 0, 0) ? frame->odd_row_bg : odd_row_bg;
-											if (c.a > 0.0) {
-												draw_rect(Rect2(p_ofs + rect.position + off + coff - frame->padding.position - Vector2(h_separation * 0.5, v_separation * 0.5).floor(), Size2(table->columns[col].width + h_separation + frame->padding.position.x + frame->padding.size.x, table->rows[row])), c, true);
-											}
+											row_bg = frame->odd_row_bg != Color(0, 0, 0, 0) ? frame->odd_row_bg : odd_row_bg;
 										} else {
-											Color c = frame->even_row_bg != Color(0, 0, 0, 0) ? frame->even_row_bg : even_row_bg;
-											if (c.a > 0.0) {
-												draw_rect(Rect2(p_ofs + rect.position + off + coff - frame->padding.position - Vector2(h_separation * 0.5, v_separation * 0.5).floor(), Size2(table->columns[col].width + h_separation + frame->padding.position.x + frame->padding.size.x, table->rows[row])), c, true);
-											}
+											row_bg = frame->even_row_bg != Color(0, 0, 0, 0) ? frame->even_row_bg : even_row_bg;
+										}
+										if (row_bg.a > 0.0) {
+											RenderingServer::get_singleton()->canvas_item_set_presort_level(ci, p_draw_step + DRAW_STEP_CELL_BACKGROUND);
+											draw_rect(Rect2(p_ofs + rect.position + off + coff - frame->padding.position - Vector2(h_separation * 0.5, v_separation * 0.5).floor(), Size2(table->columns[col].width + h_separation + frame->padding.position.x + frame->padding.size.x, table->rows[row])), row_bg, true);
 										}
 										Color bc = frame->border != Color(0, 0, 0, 0) ? frame->border : border;
 										if (bc.a > 0.0) {
+											RenderingServer::get_singleton()->canvas_item_set_presort_level(ci, p_draw_step + DRAW_STEP_CELL_BORDER);
 											draw_rect(Rect2(p_ofs + rect.position + off + coff - frame->padding.position - Vector2(h_separation * 0.5, v_separation * 0.5).floor(), Size2(table->columns[col].width + h_separation + frame->padding.position.x + frame->padding.size.x, table->rows[row])), bc, false);
 										}
 									}
 
 									for (int j = 0; j < (int)frame->lines.size(); j++) {
-										_draw_line(frame, j, p_ofs + rect.position + off + Vector2(0, frame->lines[j].offset.y), rect.size.x, 0, p_base_color, p_outline_size, p_outline_color, p_font_shadow_color, p_shadow_outline_size, p_shadow_ofs, r_processed_glyphs);
+										_draw_line(frame, j, p_ofs + rect.position + off + Vector2(0, frame->lines[j].offset.y), rect.size.x, 0, p_base_color, p_outline_size, p_outline_color, p_font_shadow_color, p_shadow_outline_size, p_shadow_ofs, r_processed_glyphs, p_draw_step + DRAW_STEP_MAX);
 									}
 									idx++;
 								}
@@ -1041,6 +1050,7 @@ int RichTextLabel::_draw_line(ItemFrame *p_frame, int p_line, const Vector2 &p_o
 					}
 				}
 			}
+			RenderingServer::get_singleton()->canvas_item_set_presort_level(ci, p_draw_step + step);
 			Vector2 off_step = off;
 			processed_glyphs_step = r_processed_glyphs;
 
@@ -2024,14 +2034,16 @@ void RichTextLabel::_notification(int p_what) {
 			// New cache draw.
 			Point2 ofs = text_rect.get_position() + Vector2(0, vbegin + main->lines[from_line].offset.y - vofs);
 			int processed_glyphs = 0;
+			// Note: this loop uses pre-sorted draw, draw call order is ignored, use `canvas_item_set_presort_level` to specify draw order.
 			while (ofs.y < size.height - v_limit && from_line < to_line) {
 				MutexLock lock(main->lines[from_line].text_buf->get_mutex());
 
 				visible_paragraph_count++;
-				visible_line_count += _draw_line(main, from_line, ofs, text_rect.size.x, vsep, theme_cache.default_color, theme_cache.outline_size, theme_cache.font_outline_color, theme_cache.font_shadow_color, theme_cache.shadow_outline_size, shadow_ofs, processed_glyphs);
+				visible_line_count += _draw_line(main, from_line, ofs, text_rect.size.x, vsep, theme_cache.default_color, theme_cache.outline_size, theme_cache.font_outline_color, theme_cache.font_shadow_color, theme_cache.shadow_outline_size, shadow_ofs, processed_glyphs, 0);
 				ofs.y += main->lines[from_line].text_buf->get_size().y + main->lines[from_line].text_buf->get_line_count() * (theme_cache.line_separation + vsep);
 				from_line++;
 			}
+			RenderingServer::get_singleton()->canvas_item_flush_presort(ci);
 		} break;
 
 		case NOTIFICATION_INTERNAL_PROCESS: {

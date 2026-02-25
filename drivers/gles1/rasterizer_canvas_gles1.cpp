@@ -1879,7 +1879,7 @@ void RasterizerCanvasGLES1::canvas_render_items_implementation(Item *p_item_list
 			bool backbuffer_cleared = false;
 
 			if (ci->skeleton.is_valid()) {
-				const Item::Command *c = ci->commands;
+				const Item::Command *c = ci->first_command;
 
 				while (c) {
 					if (c->type == Item::Command::TYPE_MESH) {

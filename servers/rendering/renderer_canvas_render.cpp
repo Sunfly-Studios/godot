@@ -40,7 +40,7 @@ const Rect2 &RendererCanvasRender::Item::get_rect() const {
 
 	//must update rect
 
-	if (commands == nullptr) {
+	if (first_command == nullptr) {
 		rect = Rect2();
 		rect_dirty = false;
 		return rect;
@@ -50,7 +50,7 @@ const Rect2 &RendererCanvasRender::Item::get_rect() const {
 	bool found_xform = false;
 	bool first = true;
 
-	const Item::Command *c = commands;
+	const Item::Command *c = first_command;
 
 	while (c) {
 		Rect2 r;

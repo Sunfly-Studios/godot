@@ -393,10 +393,10 @@ bool RasterizerCanvasBatcherCommon<T_API>::_sort_items_match(const BSortItem &p_
 	ERR_FAIL_NULL_V(b, false);
 
 	// Fast check for "exactly 1 command" using linked lists
-	if (!a->commands || a->commands->next != nullptr) {
+	if (!a->first_command || a->first_command->next != nullptr) {
 		return false;
 	}
-	if (!b->commands || b->commands->next != nullptr) {
+	if (!b->first_command || b->first_command->next != nullptr) {
 		return false;
 	}
 
@@ -415,8 +415,8 @@ bool RasterizerCanvasBatcherCommon<T_API>::_sort_items_match(const BSortItem &p_
 		return false;
 	}
 
-	const RendererCanvasRender::Item::Command *ca = a->commands;
-	const RendererCanvasRender::Item::Command *cb = b->commands;
+	const RendererCanvasRender::Item::Command *ca = a->first_command;
+	const RendererCanvasRender::Item::Command *cb = b->first_command;
 	ERR_FAIL_NULL_V(ca, false);
 	ERR_FAIL_NULL_V(cb, false);
 
@@ -469,10 +469,10 @@ bool RasterizerCanvasBatcherCommon<T_API>::sort_items_from(int p_start) {
 	int start_z = start.z_index;
 
 	// Check start is the right type for sorting (exactly 1 command, RECT or POLY)
-	if (!start.item->commands || start.item->commands->next != nullptr) {
+	if (!start.item->first_command || start.item->first_command->next != nullptr) {
 		return false;
 	}
-	const RendererCanvasRender::Item::Command *command_start = start.item->commands;
+	const RendererCanvasRender::Item::Command *command_start = start.item->first_command;
 	ERR_FAIL_NULL_V(command_start, false);
 	if (
 		command_start->type != RendererCanvasRender::Item::Command::TYPE_RECT && 
@@ -681,7 +681,7 @@ void RasterizerCanvasBatcherCommon<T_API>::render_joined_item_commands(const BIt
 		// so we can defer sending until we see a default command
 		fill_state.transform_extra_command = nullptr;
 
-		RendererCanvasRender::Item::Command *current_command = item->commands;
+		RendererCanvasRender::Item::Command *current_command = item->first_command;
 		while (current_command) {
 			RendererCanvasRender::Item::Command *prev_command = current_command;
 			
@@ -780,7 +780,7 @@ void RasterizerCanvasBatcherCommon<T_API>::flush_render_batches(RendererCanvasRe
 	get_this()->_batch_upload_buffers();
 
 	// Execute the GL calls
-	RendererCanvasRender::Item::Command *const *commands = &p_first_item->commands;
+	RendererCanvasRender::Item::Command *const *commands = &p_first_item->first_command;
 	get_this()->render_batches(commands, p_current_clip, r_reclip, p_material);
 
 	// if we overrode the fvf for lines, set it back to the joined item fvf
@@ -941,7 +941,7 @@ bool RasterizerCanvasBatcherCommon<T_API>::prefill_joined_item(FillState &r_fill
 
 template <typename T_API>
 void RasterizerCanvasBatcherCommon<T_API>::_legacy_canvas_item_render_commands(RendererCanvasRender::Item* p_item, RendererCanvasRender::Item* p_current_clip, bool& r_reclip, typename T_API::MaterialData* p_material) {
-	if (!p_item || !p_item->commands) {
+	if (!p_item || !p_item->first_command) {
 		return;
 	}
 
@@ -954,8 +954,8 @@ void RasterizerCanvasBatcherCommon<T_API>::_legacy_canvas_item_render_commands(R
 		return;
 	}
 	batch->type = BatcherEnums::BT_DEFAULT;
-	batch->first_command = p_item->commands;
-	batch->num_commands = godot4_commands_count(p_item->commands);
+	batch->first_command = p_item->first_command;
+	batch->num_commands = godot4_commands_count(p_item->first_command);
 	batch->item = p_item;
 
 	get_this()->state.uniforms.modelview_matrix = p_item->final_transform;
@@ -1199,7 +1199,7 @@ bool RasterizerCanvasBatcherCommon<T_API>::_light_find_intersection(const Rect2 
 
 template <typename T_API>
 bool RasterizerCanvasBatcherCommon<T_API>::_detect_item_batch_break(RenderItemState &r_ris, RendererCanvasRender::Item *p_ci, bool &r_batch_break) {
-	int command_count = godot4_commands_count(p_ci->commands);
+	int command_count = godot4_commands_count(p_ci->first_command);
 
 	r_ris.joined_item_batch_type_flags_curr = 0;
 
@@ -1207,7 +1207,7 @@ bool RasterizerCanvasBatcherCommon<T_API>::_detect_item_batch_break(RenderItemSt
 		return true;
 	}
 
-	RendererCanvasRender::Item::Command *command = p_ci->commands;
+	RendererCanvasRender::Item::Command *command = p_ci->first_command;
 
 	// Run through the linked list of commands looking for one that could prevent joining
 	while (command) {
