@@ -39,8 +39,8 @@ const char *RenderingContextDriverVulkanAndroid::_get_platform_surface_extension
 }
 
 RenderingContextDriver::SurfaceID RenderingContextDriverVulkanAndroid::surface_create(const void *p_platform_data) {
-	const WindowPlatformData *wpd = (const WindowPlatformData *)(p_platform_data);
-
+	const WindowPlatformData *wpd = static_cast<const WindowPlatformData *>(p_platform_data);
+	
 	VkAndroidSurfaceCreateInfoKHR create_info = {};
 	create_info.sType = VK_STRUCTURE_TYPE_ANDROID_SURFACE_CREATE_INFO_KHR;
 	create_info.window = wpd->window;

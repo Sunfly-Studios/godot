@@ -33,12 +33,29 @@
 #include "thread_jandroid.h"
 
 GodotJavaViewWrapper::GodotJavaViewWrapper(jobject godot_view) {
+	if (unlikely(!godot_view)) {
+		ERR_PRINT("JNI Error: Invalid arguments passed to GodotJavaViewWrapper constructor.");
+		return;
+	}
 	JNIEnv *env = get_jni_env();
 	ERR_FAIL_NULL(env);
 
 	_godot_view = env->NewGlobalRef(godot_view);
+	JNI_CHECK_EXCEPTION(env);
 
-	_cls = (jclass)env->NewGlobalRef(env->GetObjectClass(godot_view));
+	jclass local_cls = env->GetObjectClass(godot_view);
+	JNI_CHECK_EXCEPTION_CLEANUP_V(env, , {
+		env->DeleteGlobalRef(_godot_view); 
+		_godot_view = nullptr;
+	});
+
+	_cls = static_cast<jclass>(env->NewGlobalRef(local_cls));
+	JNI_CHECK_EXCEPTION_CLEANUP_V(env, , {
+		env->DeleteGlobalRef(_godot_view); 
+		_godot_view = nullptr;
+		env->DeleteLocalRef(local_cls);
+	});
+	env->DeleteLocalRef(local_cls);
 
 	int android_device_api_level = android_get_device_api_level();
 	if (android_device_api_level >= __ANDROID_API_N__) {
@@ -51,6 +68,8 @@ GodotJavaViewWrapper::GodotJavaViewWrapper(jobject godot_view) {
 	}
 
 	_can_capture_pointer = env->GetMethodID(_cls, "canCapturePointer", "()Z");
+	
+	JNI_CHECK_EXCEPTION_CONTINUE(env);
 }
 
 bool GodotJavaViewWrapper::can_update_pointer_icon() const {
@@ -64,7 +83,9 @@ bool GodotJavaViewWrapper::can_capture_pointer() const {
 		JNIEnv *env = get_jni_env();
 		ERR_FAIL_NULL_V(env, false);
 
-		return env->CallBooleanMethod(_godot_view, _can_capture_pointer);
+		bool result = env->CallBooleanMethod(_godot_view, _can_capture_pointer);
+		JNI_CHECK_EXCEPTION_V(env, false);
+		return result;
 	}
 
 	return false;
@@ -76,6 +97,7 @@ void GodotJavaViewWrapper::request_pointer_capture() {
 		ERR_FAIL_NULL(env);
 
 		env->CallVoidMethod(_godot_view, _request_pointer_capture);
+		JNI_CHECK_EXCEPTION(env);
 	}
 }
 
@@ -85,18 +107,28 @@ void GodotJavaViewWrapper::release_pointer_capture() {
 		ERR_FAIL_NULL(env);
 
 		env->CallVoidMethod(_godot_view, _release_pointer_capture);
+		JNI_CHECK_EXCEPTION(env);
 	}
 }
 
 void GodotJavaViewWrapper::configure_pointer_icon(int pointer_type, const String &image_path, const Vector2 &p_hotspot) {
-	if (_configure_pointer_icon != nullptr) {
-		JNIEnv *env = get_jni_env();
-		ERR_FAIL_NULL(env);
+    if (_configure_pointer_icon != nullptr) {
+        JNIEnv *env = get_jni_env();
+        ERR_FAIL_NULL(env);
 
-		jstring jImagePath = env->NewStringUTF(image_path.utf8().get_data());
-		env->CallVoidMethod(_godot_view, _configure_pointer_icon, pointer_type, jImagePath, p_hotspot.x, p_hotspot.y);
-		env->DeleteLocalRef(jImagePath);
-	}
+        CharString path_utf8 = image_path.utf8();
+        jstring jImagePath = env->NewStringUTF(path_utf8.get_data());
+        
+        JNI_CHECK_EXCEPTION_V(env, );
+
+        env->CallVoidMethod(_godot_view, _configure_pointer_icon, pointer_type, jImagePath, p_hotspot.x, p_hotspot.y);
+        
+        JNI_CHECK_EXCEPTION_CLEANUP_V(env, , {
+            env->DeleteLocalRef(jImagePath);
+        });
+        
+        env->DeleteLocalRef(jImagePath);
+    }
 }
 
 void GodotJavaViewWrapper::set_pointer_icon(int pointer_type) {
@@ -105,6 +137,7 @@ void GodotJavaViewWrapper::set_pointer_icon(int pointer_type) {
 		ERR_FAIL_NULL(env);
 
 		env->CallVoidMethod(_godot_view, _set_pointer_icon, pointer_type);
+		JNI_CHECK_EXCEPTION(env);
 	}
 }
 
@@ -112,6 +145,12 @@ GodotJavaViewWrapper::~GodotJavaViewWrapper() {
 	JNIEnv *env = get_jni_env();
 	ERR_FAIL_NULL(env);
 
-	env->DeleteGlobalRef(_godot_view);
-	env->DeleteGlobalRef(_cls);
+	if (_godot_view) {
+		env->DeleteGlobalRef(_godot_view);
+		_godot_view = nullptr;
+	}
+	if (_cls) {
+		env->DeleteGlobalRef(_cls);
+		_cls = nullptr;
+	}
 }

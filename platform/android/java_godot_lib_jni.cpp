@@ -98,9 +98,11 @@ static void _terminate(JNIEnv *env, bool p_restart = false) {
 
 	if (java_class_wrapper) {
 		memdelete(java_class_wrapper);
+		java_class_wrapper = nullptr;
 	}
 	if (input_handler) {
 		delete input_handler;
+		input_handler = nullptr;
 	}
 	// Whether restarting is handled by 'Main::cleanup()'
 	bool restart_on_cleanup = false;
@@ -109,9 +111,11 @@ static void _terminate(JNIEnv *env, bool p_restart = false) {
 		os_android->main_loop_end();
 		Main::cleanup();
 		delete os_android;
+		os_android = nullptr;
 	}
 	if (godot_io_java) {
 		delete godot_io_java;
+		godot_io_java = nullptr; // ADDED
 	}
 
 	TTS_Android::terminate();
@@ -130,6 +134,7 @@ static void _terminate(JNIEnv *env, bool p_restart = false) {
 			}
 		}
 		delete godot_java;
+		godot_java = nullptr; // ADDED
 	}
 }
 
@@ -193,11 +198,35 @@ JNIEXPORT jboolean JNICALL Java_org_godotengine_godot_GodotLib_setup(JNIEnv *env
 			ERR_FAIL_NULL_V_MSG(cmdline, false, "Out of memory.");
 			cmdline[cmdlen] = nullptr;
 			j_cmdline = (jstring *)memalloc(cmdlen * sizeof(jstring));
-			ERR_FAIL_NULL_V_MSG(j_cmdline, false, "Out of memory.");
+			if (!j_cmdline) {
+				memfree(cmdline);
+				ERR_FAIL_V_MSG(false, "Out of memory.");
+			}
 
 			for (int i = 0; i < cmdlen; i++) {
-				jstring string = (jstring)env->GetObjectArrayElement(p_cmdline, i);
+				jstring string = static_cast<jstring>(env->GetObjectArrayElement(p_cmdline, i));
+				JNI_CHECK_EXCEPTION_CLEANUP_V(env, false, {
+					// Cleanup previously allocated C++ memory and local refs
+					for (int j = 0; j < i; j++) {
+						env->ReleaseStringUTFChars(j_cmdline[j], cmdline[j]);
+						env->DeleteLocalRef(j_cmdline[j]);
+					}
+					memfree(j_cmdline);
+					memfree(cmdline);
+				});
+
 				const char *rawString = env->GetStringUTFChars(string, nullptr);
+				JNI_CHECK_EXCEPTION_CLEANUP_V(env, false, {
+					env->DeleteLocalRef(string);
+					
+					for (int j = 0; j < i; j++) {
+						env->ReleaseStringUTFChars(j_cmdline[j], cmdline[j]);
+						env->DeleteLocalRef(j_cmdline[j]);
+					}
+					memfree(j_cmdline);
+					memfree(cmdline);
+					return false;
+				});
 
 				cmdline[i] = rawString;
 				j_cmdline[i] = string;
@@ -210,6 +239,7 @@ JNIEXPORT jboolean JNICALL Java_org_godotengine_godot_GodotLib_setup(JNIEnv *env
 		if (j_cmdline) {
 			for (int i = 0; i < cmdlen; ++i) {
 				env->ReleaseStringUTFChars(j_cmdline[i], cmdline[i]);
+				env->DeleteLocalRef(j_cmdline[i]);
 			}
 			memfree(j_cmdline);
 		}
@@ -487,7 +517,13 @@ JNIEXPORT jstring JNICALL Java_org_godotengine_godot_GodotLib_getGlobal(JNIEnv *
 
 	Variant setting_with_override = GLOBAL_GET(js);
 	String setting_value = (setting_with_override.get_type() == Variant::NIL) ? "" : setting_with_override;
-	return env->NewStringUTF(setting_value.utf8().get_data());
+	
+	CharString cs = setting_value.utf8();
+	jstring result = env->NewStringUTF(cs.get_data());
+	
+	JNI_CHECK_EXCEPTION_V(env, nullptr);
+	
+	return result;
 }
 
 JNIEXPORT jobjectArray JNICALL Java_org_godotengine_godot_GodotLib_getRendererInfo(JNIEnv *env, jclass clazz, jboolean p_vulkan_requirements_met) {
@@ -508,12 +544,31 @@ JNIEXPORT jobjectArray JNICALL Java_org_godotengine_godot_GodotLib_getRendererIn
 	String rendering_driver_source = rendering_source_to_string(OS::get_singleton()->get_current_rendering_driver_name_source());
 	String rendering_method_source = rendering_source_to_string(OS::get_singleton()->get_current_rendering_method_source());
 
-	jobjectArray result = env->NewObjectArray(5, env->FindClass("java/lang/String"), nullptr);
-	env->SetObjectArrayElement(result, 0, env->NewStringUTF(rendering_driver_chosen.utf8().get_data()));
-	env->SetObjectArrayElement(result, 1, env->NewStringUTF(rendering_driver_original.utf8().get_data()));
-	env->SetObjectArrayElement(result, 2, env->NewStringUTF(rendering_method.utf8().get_data()));
-	env->SetObjectArrayElement(result, 3, env->NewStringUTF(rendering_driver_source.utf8().get_data()));
-	env->SetObjectArrayElement(result, 4, env->NewStringUTF(rendering_method_source.utf8().get_data()));
+	jclass string_cls = env->FindClass("java/lang/String");
+	JNI_CHECK_EXCEPTION_V(env, nullptr);
+
+	jobjectArray result = env->NewObjectArray(5, string_cls, nullptr);
+	env->DeleteLocalRef(string_cls);
+	JNI_CHECK_EXCEPTION_V(env, nullptr);
+
+	String arr[5] = { rendering_driver_chosen, rendering_driver_original, rendering_method, rendering_driver_source, rendering_method_source };
+
+	for (int i = 0; i < 5; i++) {
+		CharString cs = arr[i].utf8();
+		jstring val = env->NewStringUTF(cs.get_data());
+		
+		JNI_CHECK_EXCEPTION_CLEANUP_V(env, nullptr, {
+			env->DeleteLocalRef(result);
+		});
+
+		env->SetObjectArrayElement(result, i, val);
+		
+		JNI_CHECK_EXCEPTION_CLEANUP_V(env, nullptr, {
+			env->DeleteLocalRef(result);
+			env->DeleteLocalRef(val);
+		});
+		env->DeleteLocalRef(val);
+	}
 
 	return result;
 }
@@ -528,7 +583,8 @@ JNIEXPORT jstring JNICALL Java_org_godotengine_godot_GodotLib_getEditorSetting(J
 	WARN_PRINT("Access to the Editor Settings in only available on Editor builds");
 #endif
 
-	return env->NewStringUTF(editor_setting_value.utf8().get_data());
+	CharString cs = editor_setting_value.utf8();
+	return env->NewStringUTF(cs.get_data());
 }
 
 JNIEXPORT void JNICALL Java_org_godotengine_godot_GodotLib_setEditorSetting(JNIEnv *env, jclass clazz, jstring p_key, jobject p_data) {
@@ -545,6 +601,9 @@ JNIEXPORT void JNICALL Java_org_godotengine_godot_GodotLib_setEditorSetting(JNIE
 
 JNIEXPORT jobject JNICALL Java_org_godotengine_godot_GodotLib_getEditorProjectMetadata(JNIEnv *env, jclass clazz, jstring p_section, jstring p_key, jobject p_default_value) {
 	jvalret result;
+
+	// Prevents returning garbage memory if tools are disabled
+	result.obj = nullptr;
 
 #ifdef TOOLS_ENABLED
 	if (EditorSettings::get_singleton() != nullptr) {
@@ -586,12 +645,21 @@ JNIEXPORT void JNICALL Java_org_godotengine_godot_GodotLib_filePickerCallback(JN
 	if (ds) {
 		Vector<String> selected_paths;
 
-		jint length = env->GetArrayLength(p_selected_paths);
-		for (jint i = 0; i < length; ++i) {
-			jstring java_string = (jstring)env->GetObjectArrayElement(p_selected_paths, i);
-			String path = jstring_to_string(java_string, env);
-			selected_paths.push_back(path);
-			env->DeleteLocalRef(java_string);
+		if (p_selected_paths != nullptr) {
+			jint length = env->GetArrayLength(p_selected_paths);
+			JNI_CHECK_EXCEPTION(env); // Void return on error
+
+			for (jint i = 0; i < length; ++i) {
+				jstring java_string = static_cast<jstring>(env->GetObjectArrayElement(p_selected_paths, i));
+		
+				JNI_CHECK_EXCEPTION(env); // Stop processing, but keep the paths we already successfully parsed
+
+				if (java_string != nullptr) {
+					String path = jstring_to_string(java_string, env);
+					selected_paths.push_back(path);
+					env->DeleteLocalRef(java_string);
+				}
+			}
 		}
 		ds->emit_file_picker_callback(p_ok, selected_paths);
 	}
@@ -603,7 +671,7 @@ JNIEXPORT void JNICALL Java_org_godotengine_godot_GodotLib_requestPermissionResu
 		AudioDriver::get_singleton()->input_start();
 	}
 
-	if (os_android->get_main_loop()) {
+	if (os_android && os_android->get_main_loop()) { 
 		os_android->get_main_loop()->emit_signal(SNAME("on_request_permissions_result"), permission, p_result == JNI_TRUE);
 	}
 }
@@ -644,7 +712,8 @@ JNIEXPORT jboolean JNICALL Java_org_godotengine_godot_GodotLib_shouldDispatchInp
 
 JNIEXPORT jstring JNICALL Java_org_godotengine_godot_GodotLib_getProjectResourceDir(JNIEnv *env, jclass clazz) {
 	const String resource_dir = OS::get_singleton()->get_resource_dir();
-	return env->NewStringUTF(resource_dir.utf8().get_data());
+	CharString cs = resource_dir.utf8();
+	return env->NewStringUTF(cs.get_data());
 }
 JNIEXPORT jboolean JNICALL Java_org_godotengine_godot_GodotLib_isEditorHint(JNIEnv *env, jclass clazz) {
 	Engine *engine = Engine::get_singleton();

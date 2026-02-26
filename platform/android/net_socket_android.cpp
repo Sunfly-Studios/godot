@@ -31,6 +31,7 @@
 #include "net_socket_android.h"
 
 #include "thread_jandroid.h"
+#include "jni_utils.h" // For JNI_ macros
 
 jobject NetSocketAndroid::net_utils = nullptr;
 jclass NetSocketAndroid::cls = nullptr;
@@ -38,36 +39,64 @@ jmethodID NetSocketAndroid::_multicast_lock_acquire = nullptr;
 jmethodID NetSocketAndroid::_multicast_lock_release = nullptr;
 
 void NetSocketAndroid::setup(jobject p_net_utils) {
-	JNIEnv *env = get_jni_env();
+    JNIEnv *env = get_jni_env();
+    ERR_FAIL_NULL(env);
 
-	net_utils = env->NewGlobalRef(p_net_utils);
+    net_utils = env->NewGlobalRef(p_net_utils);
+    JNI_CHECK_EXCEPTION(env);
 
-	jclass c = env->GetObjectClass(net_utils);
-	cls = (jclass)env->NewGlobalRef(c);
+    jclass local_c = env->GetObjectClass(net_utils);
+    JNI_CHECK_EXCEPTION_CLEANUP_V(env, , {
+        env->DeleteGlobalRef(net_utils);
+        net_utils = nullptr;
+    });
 
-	_multicast_lock_acquire = env->GetMethodID(cls, "multicastLockAcquire", "()V");
-	_multicast_lock_release = env->GetMethodID(cls, "multicastLockRelease", "()V");
+    cls = static_cast<jclass>(env->NewGlobalRef(local_c));
+    JNI_CHECK_EXCEPTION_CLEANUP_V(env, , {
+        env->DeleteLocalRef(local_c);
+        env->DeleteGlobalRef(net_utils);
+        net_utils = nullptr;
+    });
+
+    env->DeleteLocalRef(local_c);
+    _multicast_lock_acquire = env->GetMethodID(cls, "multicastLockAcquire", "()V");
+    _multicast_lock_release = env->GetMethodID(cls, "multicastLockRelease", "()V");
+    JNI_CHECK_EXCEPTION_CONTINUE(env);
 }
 
 void NetSocketAndroid::terminate() {
 	JNIEnv *env = get_jni_env();
 	ERR_FAIL_NULL(env);
 
-	env->DeleteGlobalRef(cls);
-	env->DeleteGlobalRef(net_utils);
+	if (cls) {
+		env->DeleteGlobalRef(cls);
+		cls = nullptr;
+	}
+	if (net_utils) {
+		env->DeleteGlobalRef(net_utils);
+		net_utils = nullptr;
+	}
+	_multicast_lock_acquire = nullptr;
+	_multicast_lock_release = nullptr;
 }
 
 void NetSocketAndroid::multicast_lock_acquire() {
 	if (_multicast_lock_acquire) {
 		JNIEnv *env = get_jni_env();
+		ERR_FAIL_NULL(env);
+
 		env->CallVoidMethod(net_utils, _multicast_lock_acquire);
+		JNI_CHECK_EXCEPTION(env);
 	}
 }
 
 void NetSocketAndroid::multicast_lock_release() {
 	if (_multicast_lock_release) {
 		JNIEnv *env = get_jni_env();
+		ERR_FAIL_NULL(env);
+
 		env->CallVoidMethod(net_utils, _multicast_lock_release);
+		JNI_CHECK_EXCEPTION(env);
 	}
 }
 

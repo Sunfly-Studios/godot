@@ -39,6 +39,38 @@
 
 #include <jni.h>
 
+// Macros to safely check for and clear JNI exceptions, printing the stack trace to logcat.
+#define JNI_CHECK_EXCEPTION(env) \
+	if (unlikely((env)->ExceptionCheck())) { \
+		(env)->ExceptionDescribe(); \
+		(env)->ExceptionClear(); \
+		ERR_PRINT("JNI Exception occurred."); \
+		return; \
+	}
+
+#define JNI_CHECK_EXCEPTION_CONTINUE(env) \
+	if (unlikely((env)->ExceptionCheck())) { \
+		(env)->ExceptionDescribe(); \
+		(env)->ExceptionClear(); \
+		ERR_PRINT("JNI Exception occurred. Continuing."); \
+	}
+
+#define JNI_CHECK_EXCEPTION_V(env, ret_val) \
+	if (unlikely((env)->ExceptionCheck())) { \
+		(env)->ExceptionDescribe(); \
+		(env)->ExceptionClear(); \
+		ERR_PRINT("JNI Exception occurred."); \
+		return ret_val; \
+	}
+
+#define JNI_CHECK_EXCEPTION_CLEANUP_V(env, return_val, cleanup_code) \
+	if (unlikely((env)->ExceptionCheck())) { \
+		(env)->ExceptionDescribe(); \
+		(env)->ExceptionClear(); \
+		cleanup_code; \
+		return return_val; \
+	}
+
 struct jvalret {
 	jobject obj;
 	jvalue val;
@@ -90,6 +122,7 @@ static inline String jstring_to_string(jstring source, JNIEnv *env = nullptr) {
 			env = get_jni_env();
 		}
 		const char *const source_utf8 = env->GetStringUTFChars(source, nullptr);
+		JNI_CHECK_EXCEPTION_V(env, result);
 		if (source_utf8) {
 			result.parse_utf8(source_utf8);
 			env->ReleaseStringUTFChars(source, source_utf8);

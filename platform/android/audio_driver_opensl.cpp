@@ -37,39 +37,39 @@
 
 /* Structure for passing information to callback function */
 
-void AudioDriverOpenSL::_buffer_callback(
-		SLAndroidSimpleBufferQueueItf queueItf) {
-	bool mix = true;
+void AudioDriverOpenSL::_buffer_callback(SLAndroidSimpleBufferQueueItf queueItf) {
+	bool mixed = false;
+	bool has_lock = mutex.try_lock();
 
-	if (pause) {
-		mix = false;
-	} else {
-		mix = mutex.try_lock();
-	}
-
-	if (mix) {
-		audio_server_process(buffer_size, mixdown_buffer);
-	} else {
-		int32_t *src_buff = mixdown_buffer;
-		for (unsigned int i = 0; i < buffer_size * 2; i++) {
-			src_buff[i] = 0;
+	if (has_lock) {
+		if (!pause) {
+			audio_server_process(buffer_size, mixdown_buffer);
+			mixed = true;
 		}
-	}
 
-	if (mix) {
+		// Release as soon as the "Server Process" check is done
 		mutex.unlock();
 	}
 
-	const int32_t *src_buff = mixdown_buffer;
+	// If we couldn't lock or were paused, fill the buffer with silence
+	if (!mixed) {
+		if (mixdown_buffer) {
+			memset(mixdown_buffer, 0, buffer_size * 2 * sizeof(int32_t));
+		}
+	}
+
+	if (unlikely(!mixdown_buffer)) {
+		return; 
+	}
 
 	int16_t *ptr = (int16_t *)buffers[last_free];
 	last_free = (last_free + 1) % BUFFER_COUNT;
 
 	for (unsigned int i = 0; i < buffer_size * 2; i++) {
-		ptr[i] = src_buff[i] >> 16;
+		ptr[i] = mixdown_buffer[i] >> 16;
 	}
 
-	(*queueItf)->Enqueue(queueItf, ptr, 4 * buffer_size);
+	(*queueItf)->Enqueue(queueItf, ptr, buffer_size * 2 * sizeof(int16_t));
 }
 
 void AudioDriverOpenSL::_buffer_callbacks(
@@ -77,7 +77,10 @@ void AudioDriverOpenSL::_buffer_callbacks(
 		void *pContext) {
 	AudioDriverOpenSL *ad = static_cast<AudioDriverOpenSL *>(pContext);
 
-	ad->_buffer_callback(queueItf);
+	// Ensure the driver is still active before processing callbacks
+	if (ad && ad->active) {
+		ad->_buffer_callback(queueItf);
+	}
 }
 
 Error AudioDriverOpenSL::init() {
@@ -103,16 +106,14 @@ void AudioDriverOpenSL::start() {
 
 	for (int i = 0; i < BUFFER_COUNT; i++) {
 		buffers[i] = memnew_arr(int16_t, buffer_size * 2);
-		memset(buffers[i], 0, buffer_size * 4);
+		memset(buffers[i], 0, buffer_size * 2 * sizeof(int16_t));
 	}
 
 	mixdown_buffer = memnew_arr(int32_t, buffer_size * 2);
-
 	/* Callback context for the buffer queue callback function */
 
 	/* Get the SL Engine Interface which is implicit */
 	res = (*sl)->GetInterface(sl, SL_IID_ENGINE, (void *)&EngineItf);
-
 	ERR_FAIL_COND(res != SL_RESULT_SUCCESS);
 
 	{
@@ -174,7 +175,7 @@ void AudioDriverOpenSL::start() {
 	//fill up buffers
 	for (int i = 0; i < BUFFER_COUNT; i++) {
 		/* Enqueue a few buffers to get the ball rolling */
-		res = (*bufferQueueItf)->Enqueue(bufferQueueItf, buffers[i], 4 * buffer_size); /* Size given in */
+		res = (*bufferQueueItf)->Enqueue(bufferQueueItf, buffers[i], buffer_size * 2 * sizeof(int16_t)); 
 	}
 
 	res = (*playItf)->SetPlayState(playItf, SL_PLAYSTATE_PLAYING);
@@ -196,11 +197,15 @@ void AudioDriverOpenSL::_record_buffer_callback(SLAndroidSimpleBufferQueueItf qu
 
 void AudioDriverOpenSL::_record_buffer_callbacks(SLAndroidSimpleBufferQueueItf queueItf, void *pContext) {
 	AudioDriverOpenSL *ad = static_cast<AudioDriverOpenSL *>(pContext);
-
-	ad->_record_buffer_callback(queueItf);
+	if (ad && ad->active) {
+		ad->_record_buffer_callback(queueItf);
+	}
 }
 
 Error AudioDriverOpenSL::init_input_device() {
+	// Avert Segfault if requested before engine initialization
+	ERR_FAIL_NULL_V_MSG(EngineItf, ERR_UNCONFIGURED, "Cannot initialize input device: OpenSL Engine interface is null.");
+
 	SLDataLocator_IODevice loc_dev = {
 		SL_DATALOCATOR_IODEVICE,
 		SL_IODEVICE_AUDIOINPUT,
@@ -321,6 +326,10 @@ void AudioDriverOpenSL::unlock() {
 }
 
 void AudioDriverOpenSL::finish() {
+	// Signal to the audio callback threads that the driver is shutting down
+	// to prevent writing to memory as it gets freed.
+	active = false;
+
 	if (recordItf) {
 		(*recordItf)->SetRecordState(recordItf, SL_RECORDSTATE_STOPPED);
 		recordItf = nullptr;
@@ -344,6 +353,19 @@ void AudioDriverOpenSL::finish() {
 	if (sl) {
 		(*sl)->Destroy(sl);
 		sl = nullptr;
+	}
+
+	// Free the audio buffers that were dynamically allocated in start().
+	for (int i = 0; i < BUFFER_COUNT; i++) {
+		if (buffers[i]) {
+			memdelete_arr(buffers[i]);
+			buffers[i] = nullptr;
+		}
+	}
+
+	if (mixdown_buffer) {
+		memdelete_arr(mixdown_buffer);
+		mixdown_buffer = nullptr;
 	}
 }
 

@@ -48,10 +48,12 @@ String FileAccessAndroid::get_path_absolute() const {
 
 Error FileAccessAndroid::open_internal(const String &p_path, int p_mode_flags) {
 	_close();
+	ERR_FAIL_NULL_V(asset_manager, ERR_UNCONFIGURED);
 
 	path_src = p_path;
 	String path = fix_path(p_path).simplify_path();
 	absolute_path = path;
+	
 	if (path.begins_with("/")) {
 		path = path.substr(1, path.length());
 	} else if (path.begins_with("res://")) {
@@ -59,10 +61,12 @@ Error FileAccessAndroid::open_internal(const String &p_path, int p_mode_flags) {
 	}
 
 	ERR_FAIL_COND_V(p_mode_flags & FileAccess::WRITE, ERR_UNAVAILABLE); //can't write on android..
+	
 	asset = AAssetManager_open(asset_manager, path.utf8().get_data(), AASSET_MODE_STREAMING);
 	if (!asset) {
 		return ERR_CANT_OPEN;
 	}
+	
 	len = AAsset_getLength(asset);
 	pos = 0;
 	eof = false;
@@ -114,7 +118,12 @@ bool FileAccessAndroid::eof_reached() const {
 }
 
 uint64_t FileAccessAndroid::get_buffer(uint8_t *p_dst, uint64_t p_length) const {
-	ERR_FAIL_COND_V(!p_dst && p_length > 0, -1);
+	// Return 0 instead of -1 to prevent uint64_t wrapping to UINT64_MAX
+	ERR_FAIL_COND_V(!p_dst && p_length > 0, 0); 
+	
+	if (p_length == 0) {
+		return 0;
+	}
 
 	int r = AAsset_read(asset, p_dst, p_length);
 
@@ -122,14 +131,16 @@ uint64_t FileAccessAndroid::get_buffer(uint8_t *p_dst, uint64_t p_length) const 
 		eof = true;
 	}
 
+	// Ensure a failed read (< 0) doesn't cast into a massive uint64_t
 	if (r >= 0) {
 		pos += r;
 		if (pos > len) {
 			pos = len;
 		}
+		return r;
 	}
 
-	return r;
+	return 0; // Read error occurred
 }
 
 Error FileAccessAndroid::get_error() const {
@@ -145,6 +156,10 @@ bool FileAccessAndroid::store_buffer(const uint8_t *p_src, uint64_t p_length) {
 }
 
 bool FileAccessAndroid::file_exists(const String &p_path) {
+	if (!asset_manager) {
+		return false;
+	}
+
 	String path = fix_path(p_path).simplify_path();
 	if (path.begins_with("/")) {
 		path = path.substr(1, path.length());
@@ -172,6 +187,9 @@ FileAccessAndroid::~FileAccessAndroid() {
 
 void FileAccessAndroid::setup(jobject p_asset_manager) {
 	JNIEnv *env = get_jni_env();
+	ERR_FAIL_NULL(env);
+	ERR_FAIL_NULL(p_asset_manager);
+
 	j_asset_manager = env->NewGlobalRef(p_asset_manager);
 	asset_manager = AAssetManager_fromJava(env, j_asset_manager);
 }
@@ -180,5 +198,10 @@ void FileAccessAndroid::terminate() {
 	JNIEnv *env = get_jni_env();
 	ERR_FAIL_NULL(env);
 
-	env->DeleteGlobalRef(j_asset_manager);
+	if (j_asset_manager) {
+		env->DeleteGlobalRef(j_asset_manager);
+		j_asset_manager = nullptr;
+	}
+	
+	asset_manager = nullptr;
 }

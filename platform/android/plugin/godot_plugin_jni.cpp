@@ -80,12 +80,28 @@ JNIEXPORT void JNICALL Java_org_godotengine_godot_plugin_GodotPlugin_nativeRegis
 	String retval = jstring_to_string(ret, env);
 	Vector<Variant::Type> types;
 
-	int stringCount = env->GetArrayLength(args);
+	int stringCount = 0;
+	if (args) {
+		stringCount = env->GetArrayLength(args);
+	}
+
+	if (env->ExceptionCheck()) {
+		env->ExceptionClear();
+		stringCount = 0;
+	}
 
 	for (int i = 0; i < stringCount; i++) {
-		jstring string = (jstring)env->GetObjectArrayElement(args, i);
-		const String rawString = jstring_to_string(string, env);
-		types.push_back(get_jni_type(rawString));
+		jstring string = static_cast<jstring>(env->GetObjectArrayElement(args, i));
+		if (env->ExceptionCheck()) {
+			env->ExceptionClear();
+			continue;
+		}
+		
+		if (string) {
+			const String rawString = jstring_to_string(string, env);
+			types.push_back(get_jni_type(rawString));
+			env->DeleteLocalRef(string);
+		}
 	}
 
 	s->add_method(mname, types, get_jni_type(retval));
@@ -101,12 +117,28 @@ JNIEXPORT void JNICALL Java_org_godotengine_godot_plugin_GodotPlugin_nativeRegis
 	String signal_name = jstring_to_string(j_signal_name, env);
 	Vector<Variant::Type> types;
 
-	int stringCount = env->GetArrayLength(j_signal_param_types);
+	int stringCount = 0;
+	if (j_signal_param_types) {
+		stringCount = env->GetArrayLength(j_signal_param_types);
+	}
+
+	if (env->ExceptionCheck()) {
+		env->ExceptionClear();
+		stringCount = 0;
+	}
 
 	for (int i = 0; i < stringCount; i++) {
-		jstring j_signal_param_type = (jstring)env->GetObjectArrayElement(j_signal_param_types, i);
-		const String signal_param_type = jstring_to_string(j_signal_param_type, env);
-		types.push_back(get_jni_type(signal_param_type));
+		jstring j_signal_param_type = static_cast<jstring>(env->GetObjectArrayElement(j_signal_param_types, i));
+		if (env->ExceptionCheck()) {
+			env->ExceptionClear();
+			continue;
+		}
+		
+		if (j_signal_param_type) {
+			const String signal_param_type = jstring_to_string(j_signal_param_type, env);
+			types.push_back(get_jni_type(signal_param_type));
+			env->DeleteLocalRef(j_signal_param_type);
+		}
 	}
 
 	singleton->add_signal(signal_name, types);
@@ -121,17 +153,33 @@ JNIEXPORT void JNICALL Java_org_godotengine_godot_plugin_GodotPlugin_nativeEmitS
 
 	String signal_name = jstring_to_string(j_signal_name, env);
 
-	int count = env->GetArrayLength(j_signal_params);
+	int count = 0;
+	if (j_signal_params) {
+		count = env->GetArrayLength(j_signal_params);
+	}
+
+	if (env->ExceptionCheck()) {
+		env->ExceptionClear();
+		count = 0;
+	}
 
 	Variant *variant_params = SAFE_ALLOCA_ARRAY(Variant, count);
 	const Variant **args = SAFE_ALLOCA_ARRAY(const Variant *, count);
 
 	for (int i = 0; i < count; i++) {
 		jobject j_param = env->GetObjectArrayElement(j_signal_params, i);
-		ERR_FAIL_NULL(j_param);
-		memnew_placement(&variant_params[i], Variant(_jobject_to_variant(env, j_param)));
+		JNI_CHECK_EXCEPTION_CONTINUE(env);
+		
+		// Removed early ERR_FAIL_NULL return to prevent placement-new leak.
+		// If a plugin passes null, we gracefully construct a Nil Godot Variant.
+		if (j_param) {
+			memnew_placement(&variant_params[i], Variant(_jobject_to_variant(env, j_param)));
+			env->DeleteLocalRef(j_param);
+		} else {
+			memnew_placement(&variant_params[i], Variant());
+		}
+		
 		args[i] = &variant_params[i];
-		env->DeleteLocalRef(j_param);
 	}
 
 	singleton->emit_signalp(StringName(signal_name), args, count);

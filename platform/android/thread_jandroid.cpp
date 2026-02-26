@@ -50,11 +50,35 @@ static void init_thread() {
 		return;
 	}
 
-	java_vm->AttachCurrentThread(&env, nullptr);
+	if (!java_vm) {
+		// Safety check in case JNI isn't initialized yet
+		return;
+	}
+
+	// Check if the thread is already attached by the OS
+	// (e.g., Main UI thread)
+	int status = java_vm->GetEnv((void **)&env, JNI_VERSION_1_6);
+	if (status == JNI_OK) {
+		return; 
+	}
+
+	// Attach as a Daemon Thread. 
+	// This allows the JVM to safely clean it up if the C++ thread exits unexpectedly
+	// without calling term_thread().
+	JavaVMAttachArgs args;
+
+	// We request 1.6 to avoid older devices to automatically
+	// request older 1.4 versions.
+	args.version = JNI_VERSION_1_6;
+	args.name = nullptr;
+	args.group = nullptr;
+	java_vm->AttachCurrentThreadAsDaemon(&env, &args);
 }
 
 static void term_thread() {
-	java_vm->DetachCurrentThread();
+	if (java_vm) {
+		java_vm->DetachCurrentThread();
+	}
 
 	// this is no longer valid, must called init_thread to re-establish
 	env = nullptr;

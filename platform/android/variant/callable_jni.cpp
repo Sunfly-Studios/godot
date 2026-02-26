@@ -38,20 +38,42 @@
 static Callable _generate_callable(JNIEnv *p_env, jlong p_object_id, jstring p_method_name, jobjectArray p_parameters) {
 	Object *obj = ObjectDB::get_instance(ObjectID(p_object_id));
 	ERR_FAIL_NULL_V(obj, Callable());
+	String str_method;
+	int count = 0;
 
-	String str_method = jstring_to_string(p_method_name, p_env);
+	if (p_method_name) {
+		str_method = jstring_to_string(p_method_name, p_env);
+	} else {
+		str_method = String();
+	}
 
-	int count = p_env->GetArrayLength(p_parameters);
+	if (p_parameters) {
+		count = p_env->GetArrayLength(p_parameters);
+	}
+
+	if (p_env->ExceptionCheck()) {
+		p_env->ExceptionClear();
+		count = 0;
+	}
 
 	Variant *args = SAFE_ALLOCA_ARRAY(Variant, count);
 	const Variant **argptrs = SAFE_ALLOCA_ARRAY(const Variant *, count);
 
 	for (int i = 0; i < count; i++) {
 		jobject jobj = p_env->GetObjectArrayElement(p_parameters, i);
-		ERR_FAIL_NULL_V(jobj, Callable());
-		memnew_placement(&args[i], Variant(_jobject_to_variant(p_env, jobj)));
+		JNI_CHECK_EXCEPTION_CONTINUE(p_env);
+
+		// Replaced early return, which could caused massive memory leaks if
+		// the loop encounters a null parameter halfway through,
+		// with graceful `null` to `Nil` conversion.
+		if (jobj) {
+			memnew_placement(&args[i], Variant(_jobject_to_variant(p_env, jobj)));
+			p_env->DeleteLocalRef(jobj);
+		} else {
+			memnew_placement(&args[i], Variant()); // Creates a Godot Nil Variant
+		}
+		
 		argptrs[i] = &args[i];
-		p_env->DeleteLocalRef(jobj);
 	}
 
 	Callable ret = Callable(obj, str_method).bindp(argptrs, count);
@@ -71,18 +93,33 @@ JNIEXPORT jobject JNICALL Java_org_godotengine_godot_variant_Callable_nativeCall
 	if (callable_variant->get_type() != Variant::CALLABLE) {
 		return nullptr;
 	}
+	int count = 0;
 
-	int count = p_env->GetArrayLength(p_parameters);
+	if (p_parameters) {
+		count = p_env->GetArrayLength(p_parameters);
+	}
+
+	if (p_env->ExceptionCheck()) {
+		p_env->ExceptionClear();
+		count = 0;
+	}
 
 	Variant *args = SAFE_ALLOCA_ARRAY(Variant, count);
-    const Variant **argptrs = SAFE_ALLOCA_ARRAY(const Variant *, count);
+	const Variant **argptrs = SAFE_ALLOCA_ARRAY(const Variant *, count);
 
 	for (int i = 0; i < count; i++) {
 		jobject jobj = p_env->GetObjectArrayElement(p_parameters, i);
-		ERR_FAIL_NULL_V(jobj, nullptr);
-		memnew_placement(&args[i], Variant(_jobject_to_variant(p_env, jobj)));
+		JNI_CHECK_EXCEPTION_CONTINUE(p_env);
+
+		// Prevent early return memory leak and support Java nulls
+		if (jobj) {
+			memnew_placement(&args[i], Variant(_jobject_to_variant(p_env, jobj)));
+			p_env->DeleteLocalRef(jobj);
+		} else {
+			memnew_placement(&args[i], Variant());
+		}
+		
 		argptrs[i] = &args[i];
-		p_env->DeleteLocalRef(jobj);
 	}
 
 	Callable callable = *callable_variant;

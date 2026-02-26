@@ -34,15 +34,19 @@
 #include "display_server_android.h"
 
 void AndroidInputHandler::process_joy_event(AndroidInputHandler::JoypadEvent p_event) {
+	Input *input = Input::get_singleton();
+
+	ERR_FAIL_NULL(input);
+
 	switch (p_event.type) {
 		case JOY_EVENT_BUTTON:
-			Input::get_singleton()->joy_button(p_event.device, (JoyButton)p_event.index, p_event.pressed);
+			input->joy_button(p_event.device, (JoyButton)p_event.index, p_event.pressed);
 			break;
 		case JOY_EVENT_AXIS:
-			Input::get_singleton()->joy_axis(p_event.device, (JoyAxis)p_event.index, p_event.value);
+			input->joy_axis(p_event.device, (JoyAxis)p_event.index, p_event.value);
 			break;
 		case JOY_EVENT_HAT:
-			Input::get_singleton()->joy_hat(p_event.device, p_event.hat);
+			input->joy_hat(p_event.device, p_event.hat);
 			break;
 		default:
 			return;
@@ -86,6 +90,8 @@ void AndroidInputHandler::process_key_event(int p_physical_keycode, int p_unicod
 
 	Ref<InputEventKey> ev;
 	ev.instantiate();
+
+	ERR_FAIL_NULL(ev);
 
 	Key physical_keycode = godot_code_from_android_code(p_physical_keycode);
 	Key keycode;
@@ -150,6 +156,8 @@ void AndroidInputHandler::_parse_all_touch(bool p_pressed, bool p_canceled, bool
 		for (int i = 0; i < touch.size(); i++) {
 			Ref<InputEventScreenTouch> ev;
 			ev.instantiate();
+
+			ERR_FAIL_NULL(ev);
 			ev->set_index(touch[i].id);
 			ev->set_pressed(p_pressed);
 			ev->set_canceled(p_canceled);
@@ -206,13 +214,19 @@ void AndroidInputHandler::process_touch_event(int p_event, int p_pointer, const 
 
 				Ref<InputEventScreenDrag> ev;
 				ev.instantiate();
+
+				ERR_FAIL_NULL(ev);
 				ev->set_index(touch[i].id);
 				ev->set_position(p_points[idx].pos);
 				ev->set_relative(p_points[idx].pos - touch[i].pos);
 				ev->set_relative_screen_position(ev->get_relative());
 				ev->set_pressure(p_points[idx].pressure);
 				ev->set_tilt(p_points[idx].tilt);
-				Input::get_singleton()->parse_input_event(ev);
+				Input *input = Input::get_singleton();
+
+				ERR_FAIL_NULL(input);
+
+				input->parse_input_event(ev);
 				touch.write[i].pos = p_points[idx].pos;
 			}
 
@@ -232,10 +246,14 @@ void AndroidInputHandler::process_touch_event(int p_event, int p_pointer, const 
 					Ref<InputEventScreenTouch> ev;
 					ev.instantiate();
 
+					ERR_FAIL_NULL(ev);
 					ev->set_index(tp.id);
 					ev->set_pressed(true);
 					ev->set_position(tp.pos);
-					Input::get_singleton()->parse_input_event(ev);
+					Input *input = Input::get_singleton();
+	
+					ERR_FAIL_NULL(input);
+					input->parse_input_event(ev);
 
 					break;
 				}
@@ -246,10 +264,14 @@ void AndroidInputHandler::process_touch_event(int p_event, int p_pointer, const 
 				if (touch[i].id == p_pointer) {
 					Ref<InputEventScreenTouch> ev;
 					ev.instantiate();
+					ERR_FAIL_NULL(ev);
 					ev->set_index(touch[i].id);
 					ev->set_pressed(false);
 					ev->set_position(touch[i].pos);
-					Input::get_singleton()->parse_input_event(ev);
+					Input *input = Input::get_singleton();
+	
+					ERR_FAIL_NULL(input);
+					input->parse_input_event(ev);
 					touch.remove_at(i);
 
 					break;
@@ -270,8 +292,10 @@ void AndroidInputHandler::_parse_mouse_event_info(BitField<MouseButtonMask> even
 		return;
 	}
 
+	Input *input = Input::get_singleton();
 	Ref<InputEventMouseButton> ev;
 	ev.instantiate();
+	ERR_FAIL_NULL(ev);
 	_set_key_modifier_state(ev, Key::NONE);
 	if (p_source_mouse_relative) {
 		ev->set_position(hover_prev_pos);
@@ -290,7 +314,9 @@ void AndroidInputHandler::_parse_mouse_event_info(BitField<MouseButtonMask> even
 	ev->set_button_index(_button_index_from_mask(changed_button_mask));
 	ev->set_button_mask(event_buttons_mask);
 	ev->set_double_click(p_double_click);
-	Input::get_singleton()->parse_input_event(ev);
+	
+	ERR_FAIL_NULL(input);
+	input->parse_input_event(ev);
 }
 
 void AndroidInputHandler::_release_mouse_event_info(bool p_source_mouse_relative) {
@@ -300,6 +326,9 @@ void AndroidInputHandler::_release_mouse_event_info(bool p_source_mouse_relative
 
 void AndroidInputHandler::process_mouse_event(int p_event_action, int p_event_android_buttons_mask, Point2 p_event_pos, Vector2 p_delta, bool p_double_click, bool p_source_mouse_relative, float p_pressure, Vector2 p_tilt) {
 	BitField<MouseButtonMask> event_buttons_mask = _android_button_mask_to_godot_button_mask(p_event_android_buttons_mask);
+	Input *input = Input::get_singleton();
+	
+	ERR_FAIL_NULL(input);
 	switch (p_event_action) {
 		case AMOTION_EVENT_ACTION_HOVER_MOVE: // hover move
 		case AMOTION_EVENT_ACTION_HOVER_ENTER: // hover enter
@@ -307,12 +336,13 @@ void AndroidInputHandler::process_mouse_event(int p_event_action, int p_event_an
 			// https://developer.android.com/reference/android/view/MotionEvent.html#ACTION_HOVER_ENTER
 			Ref<InputEventMouseMotion> ev;
 			ev.instantiate();
+			ERR_FAIL_NULL(ev);
 			_set_key_modifier_state(ev, Key::NONE);
 			ev->set_position(p_event_pos);
 			ev->set_global_position(p_event_pos);
 			ev->set_relative(p_event_pos - hover_prev_pos);
 			ev->set_relative_screen_position(ev->get_relative());
-			Input::get_singleton()->parse_input_event(ev);
+			input->parse_input_event(ev);
 			hover_prev_pos = p_event_pos;
 		} break;
 
@@ -343,6 +373,7 @@ void AndroidInputHandler::process_mouse_event(int p_event_action, int p_event_an
 
 			Ref<InputEventMouseMotion> ev;
 			ev.instantiate();
+			ERR_FAIL_NULL(ev);
 			_set_key_modifier_state(ev, Key::NONE);
 			if (p_source_mouse_relative) {
 				ev->set_position(hover_prev_pos);
@@ -360,12 +391,13 @@ void AndroidInputHandler::process_mouse_event(int p_event_action, int p_event_an
 			ev->set_button_mask(event_buttons_mask);
 			ev->set_pressure(p_pressure);
 			ev->set_tilt(p_tilt);
-			Input::get_singleton()->parse_input_event(ev);
+			input->parse_input_event(ev);
 		} break;
 
 		case AMOTION_EVENT_ACTION_SCROLL: {
 			Ref<InputEventMouseButton> ev;
 			ev.instantiate();
+			ERR_FAIL_NULL(ev);
 			_set_key_modifier_state(ev, Key::NONE);
 			if (p_source_mouse_relative) {
 				ev->set_position(hover_prev_pos);
@@ -393,33 +425,40 @@ void AndroidInputHandler::process_mouse_event(int p_event_action, int p_event_an
 
 void AndroidInputHandler::_wheel_button_click(BitField<MouseButtonMask> event_buttons_mask, const Ref<InputEventMouseButton> &ev, MouseButton wheel_button, float factor) {
 	Ref<InputEventMouseButton> evd = ev->duplicate();
+	Input *input = Input::get_singleton();
 	_set_key_modifier_state(evd, Key::NONE);
 	evd->set_button_index(wheel_button);
 	evd->set_button_mask(BitField<MouseButtonMask>(event_buttons_mask.operator int64_t() ^ int64_t(mouse_button_to_mask(wheel_button))));
 	evd->set_factor(factor);
-	Input::get_singleton()->parse_input_event(evd);
+	
+	ERR_FAIL_NULL(input);
+	input->parse_input_event(evd);
 	Ref<InputEventMouseButton> evdd = evd->duplicate();
 	evdd->set_pressed(false);
 	evdd->set_button_mask(event_buttons_mask);
-	Input::get_singleton()->parse_input_event(evdd);
+	input->parse_input_event(evdd);
 }
 
 void AndroidInputHandler::process_magnify(Point2 p_pos, float p_factor) {
 	Ref<InputEventMagnifyGesture> magnify_event;
+	Input *input = Input::get_singleton();
 	magnify_event.instantiate();
+	ERR_FAIL_NULL(magnify_event);
 	_set_key_modifier_state(magnify_event, Key::NONE);
 	magnify_event->set_position(p_pos);
 	magnify_event->set_factor(p_factor);
-	Input::get_singleton()->parse_input_event(magnify_event);
+	input->parse_input_event(magnify_event);
 }
 
 void AndroidInputHandler::process_pan(Point2 p_pos, Vector2 p_delta) {
 	Ref<InputEventPanGesture> pan_event;
+	Input *input = Input::get_singleton();
 	pan_event.instantiate();
+	ERR_FAIL_NULL(pan_event);
 	_set_key_modifier_state(pan_event, Key::NONE);
 	pan_event->set_position(p_pos);
 	pan_event->set_delta(p_delta);
-	Input::get_singleton()->parse_input_event(pan_event);
+	input->parse_input_event(pan_event);
 }
 
 MouseButton AndroidInputHandler::_button_index_from_mask(BitField<MouseButtonMask> button_mask) {

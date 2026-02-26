@@ -58,7 +58,8 @@ void TTS_Android::setup(jobject p_tts) {
 		tts = env->NewGlobalRef(p_tts);
 
 		jclass c = env->GetObjectClass(tts);
-		cls = (jclass)env->NewGlobalRef(c);
+		cls = static_cast<jclass>(env->NewGlobalRef(c)); 
+		env->DeleteLocalRef(c);
 
 		_init = env->GetMethodID(cls, "init", "()V");
 		_is_speaking = env->GetMethodID(cls, "isSpeaking", "()Z");
@@ -71,7 +72,10 @@ void TTS_Android::setup(jobject p_tts) {
 
 		if (_init) {
 			env->CallVoidMethod(tts, _init);
-			initialized = true;
+			// Clear pending exceptions if init fails on the Java side
+			JNI_CHECK_EXCEPTION_CONTINUE(env) else {
+				initialized = true;
+			}
 		}
 	}
 }
@@ -80,8 +84,15 @@ void TTS_Android::terminate() {
 	JNIEnv *env = get_jni_env();
 	ERR_FAIL_NULL(env);
 
-	env->DeleteGlobalRef(cls);
-	env->DeleteGlobalRef(tts);
+	if (cls) {
+		env->DeleteGlobalRef(cls);
+		cls = nullptr;
+	}
+	if (tts) {
+		env->DeleteGlobalRef(tts);
+		tts = nullptr;
+	}
+	initialized = false;
 }
 
 void TTS_Android::_java_utterance_callback(int p_event, int p_id, int p_pos) {
@@ -111,7 +122,10 @@ bool TTS_Android::is_speaking() {
 		JNIEnv *env = get_jni_env();
 
 		ERR_FAIL_NULL_V(env, false);
-		return env->CallBooleanMethod(tts, _is_speaking);
+
+		bool result = env->CallBooleanMethod(tts, _is_speaking);
+		JNI_CHECK_EXCEPTION_V(env, false);
+		return result;
 	} else {
 		return false;
 	}
@@ -123,7 +137,9 @@ bool TTS_Android::is_paused() {
 		JNIEnv *env = get_jni_env();
 
 		ERR_FAIL_NULL_V(env, false);
-		return env->CallBooleanMethod(tts, _is_paused);
+		bool result = env->CallBooleanMethod(tts, _is_paused);
+		JNI_CHECK_EXCEPTION_V(env, false);
+		return result;
 	} else {
 		return false;
 	}
@@ -132,25 +148,28 @@ bool TTS_Android::is_paused() {
 Array TTS_Android::get_voices() {
 	ERR_FAIL_COND_V_MSG(!initialized, Array(), "Enable the \"audio/general/text_to_speech\" project setting to use text-to-speech.");
 	Array list;
+	
 	if (_get_voices) {
 		JNIEnv *env = get_jni_env();
 		ERR_FAIL_NULL_V(env, list);
 
 		jobject voices_object = env->CallObjectMethod(tts, _get_voices);
+		JNI_CHECK_EXCEPTION_V(env, list);
 
 		if (!voices_object) {
-            // No voices are available or TTS failed.
-            return list; 
-        }
-		jobjectArray *arr = reinterpret_cast<jobjectArray *>(&voices_object);
+			// No voices are available or TTS failed.
+			return list; 
+		}
 
-		jsize len = env->GetArrayLength(*arr);
+		jobjectArray arr = static_cast<jobjectArray>(voices_object);
+
+		jsize len = env->GetArrayLength(arr);
 		for (int i = 0; i < len; i++) {
-			jstring jStr = (jstring)env->GetObjectArrayElement(*arr, i);
+			jstring jStr = static_cast<jstring>(env->GetObjectArrayElement(arr, i));
 
 			if (!jStr) {
-                continue; 
-            }
+				continue; 
+			}
 
 			String str = jstring_to_string(jStr, env);
 			Vector<String> tokens = str.split(";", true, 2);
@@ -163,8 +182,9 @@ Array TTS_Android::get_voices() {
 			}
 			env->DeleteLocalRef(jStr);
 		}
-		env->DeleteLocalRef(voices_object);
+		env->DeleteLocalRef(voices_object); 
 	}
+	
 	return list;
 }
 
@@ -184,10 +204,16 @@ void TTS_Android::speak(const String &p_text, const String &p_voice, int p_volum
 	if (_speak) {
 		JNIEnv *env = get_jni_env();
 		ERR_FAIL_NULL(env);
+		
+		CharString text_utf8 = p_text.utf8();
+		CharString voice_utf8 = p_voice.utf8();
 
-		jstring jStrT = env->NewStringUTF(p_text.utf8().get_data());
-		jstring jStrV = env->NewStringUTF(p_voice.utf8().get_data());
+		jstring jStrT = env->NewStringUTF(text_utf8.get_data());
+		jstring jStrV = env->NewStringUTF(voice_utf8.get_data());
 		env->CallVoidMethod(tts, _speak, jStrT, jStrV, CLAMP(p_volume, 0, 100), CLAMP(p_pitch, 0.f, 2.f), CLAMP(p_rate, 0.1f, 10.f), p_utterance_id, p_interrupt);
+		
+		JNI_CHECK_EXCEPTION(env);
+
 		env->DeleteLocalRef(jStrT);
 		env->DeleteLocalRef(jStrV);
 	}
@@ -200,6 +226,7 @@ void TTS_Android::pause() {
 
 		ERR_FAIL_NULL(env);
 		env->CallVoidMethod(tts, _pause_speaking);
+		JNI_CHECK_EXCEPTION(env);
 	}
 }
 
@@ -210,6 +237,7 @@ void TTS_Android::resume() {
 
 		ERR_FAIL_NULL(env);
 		env->CallVoidMethod(tts, _resume_speaking);
+		JNI_CHECK_EXCEPTION(env);
 	}
 }
 
@@ -225,5 +253,6 @@ void TTS_Android::stop() {
 
 		ERR_FAIL_NULL(env);
 		env->CallVoidMethod(tts, _stop_speaking);
+		JNI_CHECK_EXCEPTION(env);
 	}
 }

@@ -31,6 +31,7 @@
 #include "file_access_filesystem_jandroid.h"
 
 #include "thread_jandroid.h"
+#include "jni_utils.h" // for JNI_ macros
 
 #include "core/os/os.h"
 #include "core/templates/local_vector.h"
@@ -73,8 +74,14 @@ Error FileAccessFilesystemJAndroid::open_internal(const String &p_path, int p_mo
 		ERR_FAIL_NULL_V(env, ERR_UNCONFIGURED);
 
 		String path = fix_path(p_path).simplify_path();
-		jstring js = env->NewStringUTF(path.utf8().get_data());
+		CharString path_utf8 = path.utf8();
+		jstring js = env->NewStringUTF(path_utf8.get_data());
 		int res = env->CallIntMethod(file_access_handler, _file_open, js, p_mode_flags);
+		
+		JNI_CHECK_EXCEPTION_CLEANUP_V(env, ERR_CANT_OPEN, {
+			env->DeleteLocalRef(js);
+		});
+
 		env->DeleteLocalRef(js);
 
 		if (res < 0) {
@@ -86,9 +93,8 @@ Error FileAccessFilesystemJAndroid::open_internal(const String &p_path, int p_mo
 		path_src = p_path;
 		absolute_path = path;
 		return OK;
-	} else {
-		return ERR_UNCONFIGURED;
 	}
+	return ERR_UNCONFIGURED;
 }
 
 void FileAccessFilesystemJAndroid::_close() {
@@ -100,6 +106,7 @@ void FileAccessFilesystemJAndroid::_close() {
 		JNIEnv *env = get_jni_env();
 		ERR_FAIL_NULL(env);
 		env->CallVoidMethod(file_access_handler, _file_close, id);
+		JNI_CHECK_EXCEPTION(env);
 	}
 	id = 0;
 }
@@ -114,6 +121,7 @@ void FileAccessFilesystemJAndroid::seek(uint64_t p_position) {
 		ERR_FAIL_NULL(env);
 		ERR_FAIL_COND_MSG(!is_open(), "File must be opened before use.");
 		env->CallVoidMethod(file_access_handler, _file_seek, id, p_position);
+		JNI_CHECK_EXCEPTION(env);
 	}
 }
 
@@ -123,6 +131,7 @@ void FileAccessFilesystemJAndroid::seek_end(int64_t p_position) {
 		ERR_FAIL_NULL(env);
 		ERR_FAIL_COND_MSG(!is_open(), "File must be opened before use.");
 		env->CallVoidMethod(file_access_handler, _file_seek_end, id, p_position);
+		JNI_CHECK_EXCEPTION(env);
 	}
 }
 
@@ -131,10 +140,11 @@ uint64_t FileAccessFilesystemJAndroid::get_position() const {
 		JNIEnv *env = get_jni_env();
 		ERR_FAIL_NULL_V(env, 0);
 		ERR_FAIL_COND_V_MSG(!is_open(), 0, "File must be opened before use.");
-		return env->CallLongMethod(file_access_handler, _file_tell, id);
-	} else {
-		return 0;
+		uint64_t result = env->CallLongMethod(file_access_handler, _file_tell, id);
+		JNI_CHECK_EXCEPTION_V(env, 0);
+		return result;
 	}
+	return 0;
 }
 
 uint64_t FileAccessFilesystemJAndroid::get_length() const {
@@ -142,10 +152,11 @@ uint64_t FileAccessFilesystemJAndroid::get_length() const {
 		JNIEnv *env = get_jni_env();
 		ERR_FAIL_NULL_V(env, 0);
 		ERR_FAIL_COND_V_MSG(!is_open(), 0, "File must be opened before use.");
-		return env->CallLongMethod(file_access_handler, _file_get_size, id);
-	} else {
-		return 0;
+		uint64_t result = env->CallLongMethod(file_access_handler, _file_get_size, id);
+		JNI_CHECK_EXCEPTION_V(env, 0);
+		return result;
 	}
+	return 0;
 }
 
 bool FileAccessFilesystemJAndroid::eof_reached() const {
@@ -153,10 +164,11 @@ bool FileAccessFilesystemJAndroid::eof_reached() const {
 		JNIEnv *env = get_jni_env();
 		ERR_FAIL_NULL_V(env, false);
 		ERR_FAIL_COND_V_MSG(!is_open(), false, "File must be opened before use.");
-		return env->CallBooleanMethod(file_access_handler, _file_eof, id);
-	} else {
-		return false;
+		bool result = env->CallBooleanMethod(file_access_handler, _file_eof, id);
+		JNI_CHECK_EXCEPTION_V(env, false);
+		return result;
 	}
+	return false;
 }
 
 void FileAccessFilesystemJAndroid::_set_eof(bool eof) {
@@ -166,6 +178,7 @@ void FileAccessFilesystemJAndroid::_set_eof(bool eof) {
 		JNIEnv *env = get_jni_env();
 		ERR_FAIL_NULL(env);
 		env->CallVoidMethod(file_access_handler, _file_set_eof, id, eof);
+		JNI_CHECK_EXCEPTION(env);
 	}
 }
 
@@ -218,6 +231,9 @@ String FileAccessFilesystemJAndroid::get_line() const {
 uint64_t FileAccessFilesystemJAndroid::get_buffer(uint8_t *p_dst, uint64_t p_length) const {
 	if (_file_read) {
 		ERR_FAIL_COND_V_MSG(!is_open(), 0, "File must be opened before use.");
+		// Ensure pointer safety before passing to JNI
+		ERR_FAIL_COND_V(!p_dst && p_length > 0, 0);
+
 		if (p_length == 0) {
 			return 0;
 		}
@@ -226,7 +242,18 @@ uint64_t FileAccessFilesystemJAndroid::get_buffer(uint8_t *p_dst, uint64_t p_len
 		ERR_FAIL_NULL_V(env, 0);
 
 		jobject j_buffer = env->NewDirectByteBuffer(p_dst, p_length);
+
+		// Ensure JVM successfully pinned the buffer
+		if (!j_buffer) {
+			return 0;
+		}
+
 		int length = env->CallIntMethod(file_access_handler, _file_read, id, j_buffer);
+
+		JNI_CHECK_EXCEPTION_CLEANUP_V(env, 0, {
+			env->DeleteLocalRef(j_buffer);
+		});
+
 		env->DeleteLocalRef(j_buffer);
 		return length;
 	} else {
@@ -246,12 +273,20 @@ bool FileAccessFilesystemJAndroid::store_buffer(const uint8_t *p_src, uint64_t p
 		ERR_FAIL_NULL_V(env, false);
 
 		jobject j_buffer = env->NewDirectByteBuffer((void *)p_src, p_length);
+		if (!j_buffer) {
+			return false;
+		}
+
 		bool ok = env->CallBooleanMethod(file_access_handler, _file_write, id, j_buffer);
+
+		JNI_CHECK_EXCEPTION_CLEANUP_V(env, false, {
+			env->DeleteLocalRef(j_buffer);
+		});
+
 		env->DeleteLocalRef(j_buffer);
 		return ok;
-	} else {
-		return false;
 	}
+	return false;
 }
 
 Error FileAccessFilesystemJAndroid::get_error() const {
@@ -267,10 +302,11 @@ Error FileAccessFilesystemJAndroid::resize(int64_t p_length) {
 		ERR_FAIL_NULL_V(env, FAILED);
 		ERR_FAIL_COND_V_MSG(!is_open(), FAILED, "File must be opened before use.");
 		int res = env->CallIntMethod(file_access_handler, _file_resize, id, p_length);
+		JNI_CHECK_EXCEPTION_V(env, static_cast<Error>(FAILED));
+		
 		return static_cast<Error>(res);
-	} else {
-		return ERR_UNAVAILABLE;
 	}
+	return ERR_UNAVAILABLE;
 }
 
 void FileAccessFilesystemJAndroid::flush() {
@@ -279,6 +315,7 @@ void FileAccessFilesystemJAndroid::flush() {
 		ERR_FAIL_NULL(env);
 		ERR_FAIL_COND_MSG(!is_open(), "File must be opened before use.");
 		env->CallVoidMethod(file_access_handler, _file_flush, id);
+		JNI_CHECK_EXCEPTION(env);
 	}
 }
 
@@ -290,34 +327,59 @@ bool FileAccessFilesystemJAndroid::file_exists(const String &p_path) {
 		String path = fix_path(p_path).simplify_path();
 		jstring js = env->NewStringUTF(path.utf8().get_data());
 		bool result = env->CallBooleanMethod(file_access_handler, _file_exists, js);
+		
+		JNI_CHECK_EXCEPTION_CLEANUP_V(env, false, {
+			env->DeleteLocalRef(js);
+		});
+
 		env->DeleteLocalRef(js);
 		return result;
-	} else {
-		return false;
 	}
+	return false;
 }
 
 uint64_t FileAccessFilesystemJAndroid::_get_modified_time(const String &p_file) {
 	if (_file_last_modified) {
 		JNIEnv *env = get_jni_env();
-		ERR_FAIL_NULL_V(env, false);
+		ERR_FAIL_NULL_V(env, 0);
 
 		String path = fix_path(p_file).simplify_path();
 		jstring js = env->NewStringUTF(path.utf8().get_data());
 		uint64_t result = env->CallLongMethod(file_access_handler, _file_last_modified, js);
+		
+		JNI_CHECK_EXCEPTION_CLEANUP_V(env, 0, {
+			env->DeleteLocalRef(js);
+		});
+
 		env->DeleteLocalRef(js);
 		return result;
-	} else {
-		return 0;
 	}
+	return 0;
 }
 
 void FileAccessFilesystemJAndroid::setup(jobject p_file_access_handler) {
 	JNIEnv *env = get_jni_env();
-	file_access_handler = env->NewGlobalRef(p_file_access_handler);
+	ERR_FAIL_NULL(env);
 
-	jclass c = env->GetObjectClass(file_access_handler);
-	cls = (jclass)env->NewGlobalRef(c);
+	file_access_handler = env->NewGlobalRef(p_file_access_handler);
+	JNI_CHECK_EXCEPTION(env);
+
+	jclass local_c = env->GetObjectClass(file_access_handler);
+	
+	JNI_CHECK_EXCEPTION_CLEANUP_V(env, , {
+		env->DeleteGlobalRef(file_access_handler);
+		file_access_handler = nullptr;
+	});
+
+	cls = static_cast<jclass>(env->NewGlobalRef(local_c));
+
+	JNI_CHECK_EXCEPTION_CLEANUP_V(env, , {
+		env->DeleteLocalRef(local_c);
+		env->DeleteGlobalRef(file_access_handler);
+		file_access_handler = nullptr;
+	});
+
+	env->DeleteLocalRef(local_c);
 
 	_file_open = env->GetMethodID(cls, "fileOpen", "(Ljava/lang/String;I)I");
 	_file_get_size = env->GetMethodID(cls, "fileGetSize", "(I)J");
@@ -333,14 +395,22 @@ void FileAccessFilesystemJAndroid::setup(jobject p_file_access_handler) {
 	_file_exists = env->GetMethodID(cls, "fileExists", "(Ljava/lang/String;)Z");
 	_file_last_modified = env->GetMethodID(cls, "fileLastModified", "(Ljava/lang/String;)J");
 	_file_resize = env->GetMethodID(cls, "fileResize", "(IJ)I");
+	
+	JNI_CHECK_EXCEPTION_CONTINUE(env);
 }
 
 void FileAccessFilesystemJAndroid::terminate() {
 	JNIEnv *env = get_jni_env();
 	ERR_FAIL_NULL(env);
 
-	env->DeleteGlobalRef(cls);
-	env->DeleteGlobalRef(file_access_handler);
+	if (cls) {
+		env->DeleteGlobalRef(cls);
+		cls = nullptr;
+	}
+	if (file_access_handler) {
+		env->DeleteGlobalRef(file_access_handler);
+		file_access_handler = nullptr;
+	}
 }
 
 void FileAccessFilesystemJAndroid::close() {
