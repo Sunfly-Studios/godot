@@ -75,10 +75,16 @@ internal class VkThread(private val vkSurfaceView: VkSurfaceView, private val vk
 		get() = hasSurface && resumed
 
 	private fun threadExiting() {
-		lock.withLock {
-			Log.d(TAG, "Exiting render thread")
-			vkRenderer.onRenderThreadExiting()
+		Log.d(TAG, "Exiting render thread")
 
+		// Tear down the native engine before acquiring the lock.
+		try {
+			vkRenderer.onRenderThreadExiting()
+		} catch (ex: Exception) {
+			Log.e(TAG, "Error during native Vulkan teardown", ex)
+		}
+
+		lock.withLock {
 			exited = true
 			lockCondition.signalAll()
 		}
@@ -195,6 +201,13 @@ internal class VkThread(private val vkSurfaceView: VkSurfaceView, private val vk
 		try {
 			while (true) {
 				var event: Runnable? = null
+				var doPause = false
+				var doResume = false
+				var doCreate = false
+				var doResize = false
+				var resizeW = 0
+				var resizeH = 0
+
 				lock.withLock {
 					while (true) {
 						// Code path for exiting the thread loop.
@@ -212,26 +225,25 @@ internal class VkThread(private val vkSurfaceView: VkSurfaceView, private val vk
 						if (readyToDraw) {
 							if (!rendererResumed) {
 								rendererResumed = true
-								vkRenderer.onVkResume()
+								doResume = true
 
 								if (!rendererInitialized) {
 									rendererInitialized = true
-									vkRenderer.onVkSurfaceCreated(vkSurfaceView.holder.surface)
+									doCreate = true
 								}
 							}
 
 							if (surfaceChanged) {
-								vkRenderer.onVkSurfaceChanged(vkSurfaceView.holder.surface, width, height)
 								surfaceChanged = false
+								doResize = true
+								resizeW = width
+								resizeH = height
 							}
-
-							// Break out of the loop so drawing can occur without holding onto the lock.
 							break
 						} else if (rendererResumed) {
-							// If we aren't ready to draw but are resumed, that means we either lost a surface
-							// or the app was paused.
 							rendererResumed = false
-							vkRenderer.onVkPause()
+							doPause = true
+							break
 						}
 						// We only reach this state if we are not ready to draw and have no queued events, so
 						// we wait.
@@ -243,17 +255,35 @@ internal class VkThread(private val vkSurfaceView: VkSurfaceView, private val vk
 
 				// Run queued event.
 				if (event != null) {
-					event?.run()
+					event.run()
 					continue
 				}
 
-				// Draw only when there no more queued events.
+				// Execute heavy native calls outside
+				// the lock to prevent UI thread ANRs.
+				if (doPause) {
+					vkRenderer.onVkPause()
+					continue
+				}
+				if (doResume) {
+					vkRenderer.onVkResume()
+				}
+				if (doCreate) {
+					vkRenderer.onVkSurfaceCreated(vkSurfaceView.holder.surface)
+				}
+				if (doResize) {
+					vkRenderer.onVkSurfaceChanged(vkSurfaceView.holder.surface, resizeW, resizeH)
+				}
+
+				// Draw only when there are no more queued events.
 				vkRenderer.onVkDrawFrame()
 			}
 		} catch (ex: InterruptedException) {
 			Log.i(TAG, "InterruptedException", ex)
 		} catch (ex: IllegalStateException) {
 			Log.i(TAG, "IllegalStateException", ex)
+		} catch (ex: Throwable) {
+			Log.e(TAG, "Fatal exception in VkThread. Terminating gracefully.", ex)
 		} finally {
 			threadExiting()
 		}

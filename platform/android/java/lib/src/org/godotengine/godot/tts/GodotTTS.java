@@ -38,6 +38,7 @@ import android.os.Bundle;
 import android.speech.tts.TextToSpeech;
 import android.speech.tts.UtteranceProgressListener;
 import android.speech.tts.Voice;
+import android.util.Log;
 
 import androidx.annotation.Keep;
 
@@ -71,36 +72,51 @@ public class GodotTTS extends UtteranceProgressListener {
 
 	private boolean speaking;
 	private boolean paused;
-
+	private boolean ttsInitialized = false;
 	public GodotTTS(Context context) {
 		this.context = context;
 	}
 
 	private void updateTTS() {
-		if (!speaking && queue.size() > 0) {
-			int mode = TextToSpeech.QUEUE_FLUSH;
-			GodotUtterance message = queue.pollFirst();
-
-			Set<Voice> voices = synth.getVoices();
-			for (Voice v : voices) {
-				if (v.getName().equals(message.voice)) {
-					synth.setVoice(v);
-					break;
-				}
+		// Protect the LinkedList from concurrent modification
+		synchronized (lock) {
+			if (!ttsInitialized) {
+				// Wait until OS is ready
+				return;
 			}
-			synth.setPitch(message.pitch);
-			synth.setSpeechRate(message.rate);
 
-			Bundle params = new Bundle();
-			params.putFloat(TextToSpeech.Engine.KEY_PARAM_VOLUME, message.volume / 100.f);
+			if (!speaking && queue.size() > 0) {
+				int mode = TextToSpeech.QUEUE_FLUSH;
+				GodotUtterance message = queue.pollFirst();
 
-			lastUtterance = message;
-			lastUtterance.start = 0;
-			lastUtterance.offset = 0;
-			paused = false;
+				if (message == null) {
+					return;
+				}
 
-			synth.speak(message.text, mode, params, String.valueOf(message.id));
-			speaking = true;
+				Set<Voice> voices = synth.getVoices();
+				if (voices != null) {
+					for (Voice v : voices) {
+						if (v.getName().equals(message.voice)) {
+							synth.setVoice(v);
+							break;
+						}
+					}
+				}
+
+				synth.setPitch(message.pitch);
+				synth.setSpeechRate(message.rate);
+
+				Bundle params = new Bundle();
+				params.putFloat(TextToSpeech.Engine.KEY_PARAM_VOLUME, message.volume / 100.f);
+
+				lastUtterance = message;
+				lastUtterance.start = 0;
+				lastUtterance.offset = 0;
+				paused = false;
+
+				synth.speak(message.text, mode, params, String.valueOf(message.id));
+				speaking = true;
+			}
 		}
 	}
 
@@ -189,10 +205,19 @@ public class GodotTTS extends UtteranceProgressListener {
 	 * Initialize synth and query.
 	 */
 	public void init() {
-		synth = new TextToSpeech(context, null);
 		queue = new LinkedList<GodotUtterance>();
 
-		synth.setOnUtteranceProgressListener(this);
+		// Provide an explicit listener to track when TTS is safely bound.
+		synth = new TextToSpeech(context, status -> {
+			if (status == TextToSpeech.SUCCESS) {
+				ttsInitialized = true;
+				synth.setOnUtteranceProgressListener(GodotTTS.this);
+				// If anything was queued during startup, flush it now
+				updateTTS();
+			} else {
+				Log.e("GodotTTS", "Android TextToSpeech failed to initialize.");
+			}
+		});
 	}
 
 	/**
@@ -232,10 +257,12 @@ public class GodotTTS extends UtteranceProgressListener {
 				int mode = TextToSpeech.QUEUE_FLUSH;
 
 				Set<Voice> voices = synth.getVoices();
-				for (Voice v : voices) {
-					if (v.getName().equals(lastUtterance.voice)) {
-						synth.setVoice(v);
-						break;
+				if (voices != null) {
+					for (Voice v : voices) {
+						if (v.getName().equals(lastUtterance.voice)) {
+							synth.setVoice(v);
+							break;
+						}
 					}
 				}
 				synth.setPitch(lastUtterance.pitch);
@@ -282,7 +309,16 @@ public class GodotTTS extends UtteranceProgressListener {
 	 * Returns voice information.
 	 */
 	public String[] getVoices() {
+		if (!ttsInitialized || synth == null) {
+			return new String[0];
+		}
+
 		Set<Voice> voices = synth.getVoices();
+		// Prevent nullptr if OS has no voices installed.
+		if (voices == null) {
+			return new String[0];
+		}
+
 		String[] list = new String[voices.size()];
 		int i = 0;
 		for (Voice v : voices) {

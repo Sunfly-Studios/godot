@@ -49,7 +49,7 @@ import android.view.SurfaceView
  * UI thread.
  * </ul>
  */
-open internal class VkSurfaceView(context: Context) : SurfaceView(context), SurfaceHolder.Callback {
+internal open class VkSurfaceView(context: Context) : SurfaceView(context), SurfaceHolder.Callback {
 	companion object {
 		fun checkState(expression: Boolean, errorMessage: Any) {
 			check(expression) { errorMessage.toString() }

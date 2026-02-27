@@ -73,8 +73,10 @@ abstract class GodotActivity : FragmentActivity(), GodotHost {
 
 	@CallSuper
 	override fun onCreate(savedInstanceState: Bundle?) {
-		val params = intent.getStringArrayExtra(EXTRA_COMMAND_LINE_PARAMS)
-		Log.d(TAG, "Starting intent $intent with parameters ${params.contentToString()}")
+		// Use safe call operator '?' in case the OS resurrects the Activity with a null Intent
+		val params = intent?.getStringArrayExtra(EXTRA_COMMAND_LINE_PARAMS)
+		Log.d(TAG, "Starting intent $intent with parameters ${params?.contentToString()}")
+
 		commandLineParams.addAll(params ?: emptyArray())
 
 		super.onCreate(savedInstanceState)
@@ -126,7 +128,16 @@ abstract class GodotActivity : FragmentActivity(), GodotHost {
 	}
 
 	override fun onGodotForceQuit(instance: Godot) {
-		runOnUiThread { terminateGodotInstance(instance) }
+		runOnUiThread {
+			// Ensure the Activity is still alive before attempting a process rebirth.
+			if (isFinishing || isDestroyed) {
+				Log.w(TAG, "Activity is already dying. Aborting restart request.")
+
+				// Exits this lambda block safely
+				return@runOnUiThread
+			}
+			terminateGodotInstance(instance)
+		}
 	}
 
 	private fun terminateGodotInstance(instance: Godot) {
@@ -140,6 +151,12 @@ abstract class GodotActivity : FragmentActivity(), GodotHost {
 
 	override fun onGodotRestartRequested(instance: Godot) {
 		runOnUiThread {
+			// Ensure the Activity is still alive before attempting a process rebirth.
+			if (isFinishing || isDestroyed) {
+				Log.w(TAG, "Activity is already dying. Aborting restart request.")
+				return@runOnUiThread
+			}
+
 			godotFragment?.let {
 				if (instance === it.godot) {
 					// It's very hard to properly de-initialize Godot on Android to restart the game
@@ -189,9 +206,15 @@ abstract class GodotActivity : FragmentActivity(), GodotHost {
 		// Logging the result of permission requests
 		if (requestCode == PermissionsUtil.REQUEST_ALL_PERMISSION_REQ_CODE || requestCode == PermissionsUtil.REQUEST_SINGLE_PERMISSION_REQ_CODE) {
 			Log.d(TAG, "Received permissions request result..")
-			for (i in permissions.indices) {
-				val permissionGranted = grantResults[i] == PackageManager.PERMISSION_GRANTED
-				Log.d(TAG, "Permission ${permissions[i]} ${if (permissionGranted) { "granted"} else { "denied" }}")
+
+			// Guard against canceled permission dialogs returning empty result arrays.
+			if (grantResults.isNotEmpty() && grantResults.size == permissions.size) {
+				for (i in permissions.indices) {
+					val permissionGranted = grantResults[i] == PackageManager.PERMISSION_GRANTED
+					Log.d(TAG, "Permission ${permissions[i]} ${if (permissionGranted) { "granted"} else { "denied" }}")
+				}
+			} else {
+				Log.w(TAG, "Permissions request was interrupted or cancelled by the OS.")
 			}
 		}
 	}

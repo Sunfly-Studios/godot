@@ -563,8 +563,9 @@ public class GLSurfaceView extends SurfaceView implements SurfaceHolder.Callback
 	@Deprecated
 	@Override
 	public void surfaceRedrawNeeded(SurfaceHolder holder) {
-		// Since we are part of the framework we know only surfaceRedrawNeededAsync
-		// will be called.
+		if (mGLThread != null) {
+			mGLThread.requestRender();
+		}
 	}
 
 
@@ -868,14 +869,14 @@ public class GLSurfaceView extends SurfaceView implements SurfaceHolder.Callback
 			EGLSurface result = null;
 			try {
 				result = egl.eglCreateWindowSurface(display, config, nativeWindow, null);
-			} catch (IllegalArgumentException e) {
+			} catch (Exception e) {
 				// This exception indicates that the surface flinger surface
 				// is not valid. This can happen if the surface flinger surface has
 				// been torn down, but the application has not yet been
 				// notified via SurfaceHolder.Callback.surfaceDestroyed.
 				// In theory the application should be notified first,
 				// but in practice sometimes it is not. See b/4588890
-				Log.e(TAG, "eglCreateWindowSurface", e);
+				Log.e(TAG, "eglCreateWindowSurface failed. Hardware might be out of resources.", e);
 			}
 			return result;
 		}
@@ -1085,6 +1086,8 @@ public class GLSurfaceView extends SurfaceView implements SurfaceHolder.Callback
 			if (view == null) {
 				mEglConfig = null;
 				mEglContext = null;
+				Log.w("EglHelper", "GLSurfaceView was garbage collected during start(). Aborting.");
+				return;
 			} else {
 				mEglConfig = view.mEGLConfigChooser.chooseConfig(mEgl, mEglDisplay);
 
@@ -1218,11 +1221,14 @@ public class GLSurfaceView extends SurfaceView implements SurfaceHolder.Callback
 		private void destroySurfaceImp() {
 			if (mEglSurface != null && mEglSurface != EGL10.EGL_NO_SURFACE) {
 				mEgl.eglMakeCurrent(mEglDisplay, EGL10.EGL_NO_SURFACE,
-						EGL10.EGL_NO_SURFACE,
-						EGL10.EGL_NO_CONTEXT);
+					EGL10.EGL_NO_SURFACE,
+					EGL10.EGL_NO_CONTEXT);
 				GLSurfaceView view = mGLSurfaceViewWeakRef.get();
 				if (view != null) {
 					view.mEGLWindowSurfaceFactory.destroySurface(mEgl, mEglDisplay, mEglSurface);
+				} else {
+					// We must manually destroy the context to prevent possible VRAM leaks.
+					mEgl.eglDestroySurface(mEglDisplay, mEglSurface);
 				}
 				mEglSurface = null;
 			}
@@ -1236,6 +1242,8 @@ public class GLSurfaceView extends SurfaceView implements SurfaceHolder.Callback
 				GLSurfaceView view = mGLSurfaceViewWeakRef.get();
 				if (view != null) {
 					view.mEGLContextFactory.destroyContext(mEgl, mEglDisplay, mEglContext);
+				} else {
+					mEgl.eglDestroyContext(mEglDisplay, mEglContext);
 				}
 				mEglContext = null;
 			}
@@ -1306,6 +1314,9 @@ public class GLSurfaceView extends SurfaceView implements SurfaceHolder.Callback
 				guardedRun();
 			} catch (InterruptedException e) {
 				// fall thru and exit normally
+			} catch (Throwable t) {
+				// Catch all fatal errors and exceptions.
+				Log.e("GLThread", "Fatal error in GLThread. Thread terminating gracefully.", t);
 			} finally {
 				sGLThreadManager.threadExiting(this);
 			}
@@ -1602,12 +1613,19 @@ public class GLSurfaceView extends SurfaceView implements SurfaceHolder.Callback
 						if (view != null) {
 							try {
 								swapBuffers = view.mRenderer.onDrawFrame(gl);
-								if (finishDrawingRunnable != null) {
-									finishDrawingRunnable.run();
-									finishDrawingRunnable = null;
-								}
-							} finally {}
+							} catch (Exception e) {
+								Log.e("GLThread", "Exception during onDrawFrame", e);
+							}
 						}
+					}
+
+					// Move the OS callback outside the view null-check.
+					// The Android WindowManager must be notified that we are done,
+					// even if we aborted the draw, otherwise the entire app UI may
+					// freeze permanently.
+					if (finishDrawingRunnable != null) {
+						finishDrawingRunnable.run();
+						finishDrawingRunnable = null;
 					}
 					if (swapBuffers) {
 						int swapError = mEglHelper.swap();
@@ -1798,7 +1816,10 @@ public class GLSurfaceView extends SurfaceView implements SurfaceHolder.Callback
 			synchronized(sGLThreadManager) {
 				mShouldExit = true;
 				sGLThreadManager.notifyAll();
-				while (! mExited) {
+
+				// Ensure we do not block the UI thread waiting for a thread
+				// that the OS scheduler hasn't started yet, or has already killed.
+				while (!mExited && isAlive()) {
 					try {
 						sGLThreadManager.wait();
 					} catch (InterruptedException ex) {
@@ -1813,14 +1834,19 @@ public class GLSurfaceView extends SurfaceView implements SurfaceHolder.Callback
 			synchronized(sGLThreadManager) {
 				mShouldExit = true;
 				sGLThreadManager.notifyAll();
-				if (!mExited) {
+
+				// Guard against spurious wake ups using a while loop and clock check.
+				long startTime = System.currentTimeMillis();
+				long timeRemaining = timeInMs;
+
+				while (!mExited && timeRemaining > 0) {
 					try {
-						sGLThreadManager.wait(timeInMs);
+						sGLThreadManager.wait(timeRemaining);
 					} catch (InterruptedException ex) {
 						Thread.currentThread().interrupt();
 					}
+					timeRemaining = timeInMs - (System.currentTimeMillis() - startTime);
 				}
-
 				return mExited;
 			}
 		}

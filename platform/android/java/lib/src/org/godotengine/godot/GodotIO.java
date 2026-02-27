@@ -53,6 +53,7 @@ import androidx.core.content.FileProvider;
 import java.io.File;
 import java.util.List;
 import java.util.Locale;
+import java.util.Objects;
 
 // Wrapper for native library
 
@@ -322,11 +323,6 @@ public class GodotIO {
 	public String getSystemDir(int idx, boolean shared_storage) {
 		String what;
 		switch (idx) {
-			case SYSTEM_DIR_DESKTOP:
-			default: {
-				what = null; // This leads to the app specific external root directory.
-			} break;
-
 			case SYSTEM_DIR_DCIM: {
 				what = Environment.DIRECTORY_DCIM;
 			} break;
@@ -354,6 +350,9 @@ public class GodotIO {
 			case SYSTEM_DIR_RINGTONES: {
 				what = Environment.DIRECTORY_RINGTONES;
 			} break;
+			default: {
+				what = null; // This leads to the app specific external root directory.
+			} break;
 		}
 
 		if (shared_storage) {
@@ -366,7 +365,13 @@ public class GodotIO {
 				return Environment.getExternalStoragePublicDirectory(what).getAbsolutePath();
 			}
 		} else {
-			return activity.getExternalFilesDir(what).getAbsolutePath();
+			File externalDir = activity.getExternalFilesDir(what);
+			if (externalDir != null) {
+				return externalDir.getAbsolutePath();
+			} else {
+				Log.e(TAG, "External files directory is null. Storage might be unavailable.");
+				return ""; // Safely return an empty string back to the JNI bridge
+			}
 		}
 	}
 

@@ -155,27 +155,24 @@ public final class PermissionsUtil {
 
 		final int requestCode;
 		final String updatedPermissionName;
-		switch (permissionName) {
-			case "RECORD_AUDIO":
+		requestCode = switch (permissionName) {
+			case "RECORD_AUDIO" -> {
 				updatedPermissionName = Manifest.permission.RECORD_AUDIO;
-				requestCode = REQUEST_RECORD_AUDIO_PERMISSION;
-				break;
-
-			case "CAMERA":
+				yield REQUEST_RECORD_AUDIO_PERMISSION;
+			}
+			case "CAMERA" -> {
 				updatedPermissionName = Manifest.permission.CAMERA;
-				requestCode = REQUEST_CAMERA_PERMISSION;
-				break;
-
-			case "VIBRATE":
+				yield REQUEST_CAMERA_PERMISSION;
+			}
+			case "VIBRATE" -> {
 				updatedPermissionName = Manifest.permission.VIBRATE;
-				requestCode = REQUEST_VIBRATE_PERMISSION;
-				break;
-
-			default:
+				yield REQUEST_VIBRATE_PERMISSION;
+			}
+			default -> {
 				updatedPermissionName = permissionName;
-				requestCode = REQUEST_SINGLE_PERMISSION_REQ_CODE;
-				break;
-		}
+				yield REQUEST_SINGLE_PERMISSION_REQ_CODE;
+			}
+		};
 
 		List<String> permissions = Collections.singletonList(updatedPermissionName);
 		return requestPermissions(activity, permissions, requestCode);

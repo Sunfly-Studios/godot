@@ -356,7 +356,7 @@ public class GodotInputHandler implements InputManager.InputDeviceListener, Sens
 				Log.i(TAG, "=== Input Device ignored: " + device.getName());
 				return;
 			}
-		}		
+		}
 
 		// Assign first available number. Reuse numbers where possible.
 		final int id = assignJoystickIdNumber(deviceId);
@@ -418,73 +418,33 @@ public class GodotInputHandler implements InputManager.InputDeviceListener, Sens
 	}
 
 	public static int getGodotButton(int keyCode) {
-		int button;
-		switch (keyCode) {
-			case KeyEvent.KEYCODE_BUTTON_A: // Android A is SNES B
-				button = 0;
-				break;
-			case KeyEvent.KEYCODE_BUTTON_B:
-				button = 1;
-				break;
-			case KeyEvent.KEYCODE_BUTTON_X: // Android X is SNES Y
-				button = 2;
-				break;
-			case KeyEvent.KEYCODE_BUTTON_Y:
-				button = 3;
-				break;
-			case KeyEvent.KEYCODE_BUTTON_L1:
-				button = 9;
-				break;
-			case KeyEvent.KEYCODE_BUTTON_L2:
-				button = 15;
-				break;
-			case KeyEvent.KEYCODE_BUTTON_R1:
-				button = 10;
-				break;
-			case KeyEvent.KEYCODE_BUTTON_R2:
-				button = 16;
-				break;
-			case KeyEvent.KEYCODE_BUTTON_SELECT:
-				button = 4;
-				break;
-			case KeyEvent.KEYCODE_BUTTON_MODE: // Home/Xbox Button on Xbox controllers
-				button = 5;
-				break;
-			case KeyEvent.KEYCODE_BUTTON_START:
-				button = 6;
-				break;
-			case KeyEvent.KEYCODE_BUTTON_THUMBL:
-				button = 7;
-				break;
-			case KeyEvent.KEYCODE_BUTTON_THUMBR:
-				button = 8;
-				break;
-			case KeyEvent.KEYCODE_DPAD_UP:
-				button = 11;
-				break;
-			case KeyEvent.KEYCODE_DPAD_DOWN:
-				button = 12;
-				break;
-			case KeyEvent.KEYCODE_DPAD_LEFT:
-				button = 13;
-				break;
-			case KeyEvent.KEYCODE_DPAD_RIGHT:
-				button = 14;
-				break;
-			case KeyEvent.KEYCODE_MEDIA_RECORD: // Share Button on Xbox controllers
-				button = 15;
-				break;
-			case KeyEvent.KEYCODE_BUTTON_C:
-				button = 17;
-				break;
-			case KeyEvent.KEYCODE_BUTTON_Z:
-				button = 18;
-				break;
-
-			default:
-				button = keyCode - KeyEvent.KEYCODE_BUTTON_1 + 20;
-				break;
-		}
+		int button = switch (keyCode) {
+			case KeyEvent.KEYCODE_BUTTON_A -> // Android A is SNES B
+				0;
+			case KeyEvent.KEYCODE_BUTTON_B -> 1;
+			case KeyEvent.KEYCODE_BUTTON_X -> // Android X is SNES Y
+				2;
+			case KeyEvent.KEYCODE_BUTTON_Y -> 3;
+			case KeyEvent.KEYCODE_BUTTON_L1 -> 9;
+			case KeyEvent.KEYCODE_BUTTON_L2 -> 15;
+			case KeyEvent.KEYCODE_BUTTON_R1 -> 10;
+			case KeyEvent.KEYCODE_BUTTON_R2 -> 16;
+			case KeyEvent.KEYCODE_BUTTON_SELECT -> 4;
+			case KeyEvent.KEYCODE_BUTTON_MODE -> // Home/Xbox Button on Xbox controllers
+				5;
+			case KeyEvent.KEYCODE_BUTTON_START -> 6;
+			case KeyEvent.KEYCODE_BUTTON_THUMBL -> 7;
+			case KeyEvent.KEYCODE_BUTTON_THUMBR -> 8;
+			case KeyEvent.KEYCODE_DPAD_UP -> 11;
+			case KeyEvent.KEYCODE_DPAD_DOWN -> 12;
+			case KeyEvent.KEYCODE_DPAD_LEFT -> 13;
+			case KeyEvent.KEYCODE_DPAD_RIGHT -> 14;
+			case KeyEvent.KEYCODE_MEDIA_RECORD -> // Share Button on Xbox controllers
+				15;
+			case KeyEvent.KEYCODE_BUTTON_C -> 17;
+			case KeyEvent.KEYCODE_BUTTON_Z -> 18;
+			default -> keyCode - KeyEvent.KEYCODE_BUTTON_1 + 20;
+		};
 		return button;
 	}
 
@@ -582,7 +542,10 @@ public class GodotInputHandler implements InputManager.InputDeviceListener, Sens
 
 		// If event came from RotaryEncoder (Bezel or Crown rotate event on Wear OS smart watches),
 		// convert it to mouse wheel event.
-		if (event.isFromSource(InputDevice.SOURCE_ROTARY_ENCODER)) {
+		if (
+			android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O &&
+				event.isFromSource(InputDevice.SOURCE_ROTARY_ENCODER)
+		) {
 			if (rotaryInputAxis == ROTARY_INPUT_HORIZONTAL_AXIS) {
 				horizontalFactor = -event.getAxisValue(MotionEvent.AXIS_SCROLL);
 			} else {

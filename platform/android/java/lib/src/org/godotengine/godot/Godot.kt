@@ -418,7 +418,7 @@ class Godot(private val context: Context) {
 			backgroundColor
 		}
 	}
-	
+
 	/**
 	 * Initializes the native layer of the Godot engine.
 	 *
@@ -502,10 +502,10 @@ class Godot(private val context: Context) {
 				window.addFlags(WindowManager.LayoutParams.FLAG_TRANSLUCENT_NAVIGATION)
 			}
 		} else {
-			if (rootView.rootWindowInsets != null) {
+			val rootWindowInsets = ViewCompat.getRootWindowInsets(rootView)
+			if (rootWindowInsets != null) {
 				if (!useImmersive.get() || (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R)) {
-					val windowInsets = WindowInsetsCompat.toWindowInsetsCompat(rootView.rootWindowInsets)
-					val insets = windowInsets.getInsets(getInsetType())
+					val insets = rootWindowInsets.getInsets(getInsetType())
 					rootView.setPadding(insets.left, insets.top, insets.right, insets.bottom)
 				}
 			}
@@ -580,16 +580,20 @@ class Godot(private val context: Context) {
 				!isProjectManagerHint() &&
 					!isEditorHint() &&
 					java.lang.Boolean.parseBoolean(GodotLib.getGlobal("display/window/per_pixel_transparency/allowed"))
-			
+
 			Log.d(TAG, "Render view should be transparent: $shouldBeTransparent")
 
 			val nativeRenderer = getNativeRenderer();
-			if (nativeRenderer == "vulkan") {
-				renderView = GodotVulkanRenderView(host, this, godotInputHandler, shouldBeTransparent)
-			} else if (nativeRenderer == "opengl3") {
-				renderView = GodotGLRenderView(host, this, godotInputHandler, xrMode, useDebugOpengl, shouldBeTransparent)
-			} else {
-				throw IllegalStateException("No native renderer is available.")
+			renderView = when (nativeRenderer) {
+				"vulkan" -> {
+					GodotVulkanRenderView(host, this, godotInputHandler, shouldBeTransparent)
+				}
+				"opengl3" -> {
+					GodotGLRenderView(host, this, godotInputHandler, xrMode, useDebugOpengl, shouldBeTransparent)
+				}
+				else -> {
+					throw IllegalStateException("No native renderer is available.")
+				}
 			}
 
 			if (host == primaryHost) {
@@ -611,7 +615,7 @@ class Godot(private val context: Context) {
 
 			// Listeners for keyboard height.
 			val decorView = activity.window.decorView
-			val topView = activity?.window?.decorView ?: providedContainerLayout
+			val topView = activity.window?.decorView ?: providedContainerLayout
 			// Report the height of virtual keyboard as it changes during the animation.
 			ViewCompat.setWindowInsetsAnimationCallback(decorView, object : WindowInsetsAnimationCompat.Callback(DISPATCH_MODE_STOP) {
 				var startBottom = 0
@@ -947,11 +951,11 @@ class Godot(private val context: Context) {
 	 */
 	private fun getNativeRenderer(): String {
 		val rendererInfo = GodotLib.getRendererInfo(meetsVulkanRequirements(context.packageManager))
-		var renderingDriverChosen = rendererInfo[0]
-		var renderingDriverOriginal = rendererInfo[1]
-		var renderingMethod = rendererInfo[2]
-		var renderingDriverSource = rendererInfo[3]
-		var renderingMethodSource = rendererInfo[4]
+		val renderingDriverChosen = rendererInfo[0]
+		val renderingDriverOriginal = rendererInfo[1]
+		val renderingMethod = rendererInfo[2]
+		val renderingDriverSource = rendererInfo[3]
+		val renderingMethodSource = rendererInfo[4]
 		Log.d(TAG, """renderingDevice: ${renderingDriverChosen} (${renderingDriverSource})
 			renderer: ${renderingMethod} (${renderingMethodSource})""")
 
@@ -1101,14 +1105,14 @@ class Godot(private val context: Context) {
 
 	@Keep
 	private fun forceQuit(instanceId: Int): Boolean {
-		primaryHost?.let {
+		return primaryHost?.let {
 			if (instanceId == 0) {
 				it.onGodotForceQuit(this)
-				return true
+				true
 			} else {
-				return it.onGodotForceQuit(instanceId)
+				it.onGodotForceQuit(instanceId)
 			}
-		} ?: return false
+		} ?: false
 	}
 
 	fun onBackPressed() {

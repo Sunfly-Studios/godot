@@ -233,13 +233,15 @@ class GodotGLRenderView extends GLSurfaceView implements GodotRenderView {
 	 */
 	@Keep
 	@Override
-	public void setPointerIcon(int pointerType) {
+	public void setPointerIcon(final int pointerType) {
 		if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-			PointerIcon pointerIcon = customPointerIcons.get(pointerType);
-			if (pointerIcon == null) {
-				pointerIcon = PointerIcon.getSystemIcon(getContext(), pointerType);
-			}
-			setPointerIcon(pointerIcon);
+			host.getActivity().runOnUiThread(() -> {
+				PointerIcon pointerIcon = customPointerIcons.get(pointerType);
+				if (pointerIcon == null) {
+					pointerIcon = PointerIcon.getSystemIcon(getContext(), pointerType);
+				}
+				GodotGLRenderView.super.setPointerIcon(pointerIcon);
+			});
 		}
 	}
 

@@ -135,10 +135,12 @@ public final class GodotPluginRegistry {
 		// Register the manifest plugins
 		try {
 			final Activity activity = godot.getActivity();
-			ApplicationInfo appInfo = activity
-											  .getPackageManager()
-											  .getApplicationInfo(activity.getPackageName(),
-													  PackageManager.GET_META_DATA);
+			if (activity == null) {
+				Log.w(TAG, "Activity is null. Cannot load manifest-based Godot plugins.");
+				return;
+			}
+			ApplicationInfo appInfo = activity.getPackageManager()
+				.getApplicationInfo(activity.getPackageName(), PackageManager.GET_META_DATA);
 			Bundle metaData = appInfo.metaData;
 			if (metaData == null || metaData.isEmpty()) {
 				return;

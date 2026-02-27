@@ -186,6 +186,13 @@ public class GodotFragment extends Fragment implements IDownloaderClient, GodotH
 		super.onCreate(icicle);
 
 		final Activity activity = getActivity();
+
+		if (activity == null) {
+			Log.e(TAG, "Fragment is detached from Activity. Cannot initialize Godot.");
+			BenchmarkUtils.endBenchmarkMeasure("Startup", "GodotFragment::onCreate");
+			return;
+		}
+
 		mCurrentIntent = activity.getIntent();
 
 		if (parentHost != null) {
@@ -218,16 +225,22 @@ public class GodotFragment extends Fragment implements IDownloaderClient, GodotH
 			godot.alert(errorMessage, getString(R.string.text_error_title), godot::destroyAndKillProcess);
 		} catch (IllegalArgumentException ignored) {
 			final Activity activity = getActivity();
+
+			if (activity == null) {
+				Log.e(TAG, "Activity is null. Cannot launch APK Expansion download service.");
+				return;
+			}
+
 			Intent notifierIntent = new Intent(activity, activity.getClass());
 			notifierIntent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);
 
 			PendingIntent pendingIntent;
 			if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
 				pendingIntent = PendingIntent.getActivity(activity, 0,
-						notifierIntent, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+					notifierIntent, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
 			} else {
 				pendingIntent = PendingIntent.getActivity(activity, 0,
-						notifierIntent, PendingIntent.FLAG_UPDATE_CURRENT);
+					notifierIntent, PendingIntent.FLAG_UPDATE_CURRENT);
 			}
 
 			int startResult;

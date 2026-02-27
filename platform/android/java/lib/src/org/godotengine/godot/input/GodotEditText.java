@@ -143,9 +143,6 @@ public class GodotEditText extends EditText {
 					int inputType = InputType.TYPE_CLASS_TEXT;
 					String acceptCharacters = null;
 					switch (edit.getKeyboardType()) {
-						case KEYBOARD_TYPE_DEFAULT:
-							inputType = InputType.TYPE_CLASS_TEXT;
-							break;
 						case KEYBOARD_TYPE_MULTILINE:
 							inputType = InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_MULTI_LINE;
 							break;

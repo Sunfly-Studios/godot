@@ -35,12 +35,14 @@ import org.godotengine.godot.vulkan.VkRenderer;
 import org.godotengine.godot.vulkan.VkSurfaceView;
 
 import android.annotation.SuppressLint;
+import android.content.Context;
 import android.content.res.AssetManager;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.os.Build;
 import android.graphics.PixelFormat;
 import android.text.TextUtils;
+import android.util.Log;
 import android.util.SparseArray;
 import android.view.KeyEvent;
 import android.view.MotionEvent;
@@ -194,20 +196,24 @@ class GodotVulkanRenderView extends VkSurfaceView implements GodotRenderView {
 				Bitmap bitmap = null;
 				if (!TextUtils.isEmpty(imagePath)) {
 					if (godot.getDirectoryAccessHandler().filesystemFileExists(imagePath)) {
-						// Try to load the bitmap from the file system
 						bitmap = BitmapFactory.decodeFile(imagePath);
 					} else if (godot.getDirectoryAccessHandler().assetsFileExists(imagePath)) {
-						// Try to load the bitmap from the assets directory
 						AssetManager am = getContext().getAssets();
-						InputStream imageInputStream = am.open(imagePath);
-						bitmap = BitmapFactory.decodeStream(imageInputStream);
+						try (InputStream imageInputStream = am.open(imagePath)) {
+							bitmap = BitmapFactory.decodeStream(imageInputStream);
+						}
 					}
+				}
+
+				if (bitmap == null) {
+					Log.w("Godot", "Failed to load pointer icon: " + imagePath);
+					return; // Safely abort without crashing
 				}
 
 				PointerIcon customPointerIcon = PointerIcon.create(bitmap, hotSpotX, hotSpotY);
 				customPointerIcons.put(pointerType, customPointerIcon);
 			} catch (Exception e) {
-				// Reset the custom pointer icon
+				Log.e("Godot", "Error configuring pointer icon", e);
 				customPointerIcons.delete(pointerType);
 			}
 		}
@@ -218,13 +224,15 @@ class GodotVulkanRenderView extends VkSurfaceView implements GodotRenderView {
 	 */
 	@Keep
 	@Override
-	public void setPointerIcon(int pointerType) {
+	public void setPointerIcon(final int pointerType) {
 		if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-			PointerIcon pointerIcon = customPointerIcons.get(pointerType);
-			if (pointerIcon == null) {
-				pointerIcon = PointerIcon.getSystemIcon(getContext(), pointerType);
-			}
-			setPointerIcon(pointerIcon);
+			host.getActivity().runOnUiThread(() -> {
+				PointerIcon pointerIcon = customPointerIcons.get(pointerType);
+				if (pointerIcon == null) {
+					pointerIcon = PointerIcon.getSystemIcon(getContext(), pointerType);
+				}
+				GodotVulkanRenderView.super.setPointerIcon(pointerIcon);
+			});
 		}
 	}
 
