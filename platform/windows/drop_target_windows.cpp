@@ -100,14 +100,15 @@ static bool stream2file(IStream *p_stream, FILEDESCRIPTORW *p_desc, const String
 	}
 
 	const int bufsize = 4096;
-	char buf[bufsize];
+	LocalVector<int> buf;
+	buf.resize(bufsize);
 	ULONG nread = 0;
 	DWORD nwritten = 0;
 	HRESULT read_result = S_OK;
 	bool result = true;
 
 	while (true) {
-		read_result = p_stream->Read(buf, bufsize, &nread);
+		read_result = p_stream->Read(buf.ptr(), bufsize, &nread);
 		if (read_result != S_OK && read_result != S_FALSE) {
 			result = false;
 			goto cleanup;
@@ -118,7 +119,7 @@ static bool stream2file(IStream *p_stream, FILEDESCRIPTORW *p_desc, const String
 		}
 
 		while (nread > 0) {
-			if (!WriteFile(file, buf, nread, &nwritten, nullptr) || !nwritten) {
+			if (!WriteFile(file, buf.ptr(), nread, &nwritten, nullptr) || !nwritten) {
 				result = false;
 				goto cleanup;
 			}
