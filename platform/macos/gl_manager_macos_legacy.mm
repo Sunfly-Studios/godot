@@ -86,11 +86,15 @@ void GLManagerLegacy_MacOS::window_resize(DisplayServer::WindowID p_window_id, i
 
 	GLWindow &win = windows[p_window_id];
 
-	GLint dim[2];
-	dim[0] = p_width;
-	dim[1] = p_height;
-	CGLSetParameter((CGLContextObj)[win.context CGLContextObj], kCGLCPSurfaceBackingSize, &dim[0]);
-	CGLEnable((CGLContextObj)[win.context CGLContextObj], kCGLCESurfaceBackingSize);
+	// Defend against nullptr dereference if OpenGL framework failed to load
+	if (CGLSetParameter && CGLEnable) {
+		GLint dim[2];
+		dim[0] = p_width;
+		dim[1] = p_height;
+		CGLSetParameter((CGLContextObj)[win.context CGLContextObj], kCGLCPSurfaceBackingSize, &dim[0]);
+		CGLEnable((CGLContextObj)[win.context CGLContextObj], kCGLCESurfaceBackingSize);
+	}
+
 	if (OS::get_singleton()->is_hidpi_allowed()) {
 		[win.window_view setWantsBestResolutionOpenGLSurface:YES];
 	} else {
@@ -106,8 +110,17 @@ void GLManagerLegacy_MacOS::window_destroy(DisplayServer::WindowID p_window_id) 
 	}
 
 	if (current_window == p_window_id) {
+		// Explicitly clear the thread's OS-level context
+		// to prevent dangling pointer crashes
+		[NSOpenGLContext clearCurrentContext];
 		current_window = DisplayServer::INVALID_WINDOW_ID;
 	}
+
+	GLWindow &win = windows[p_window_id];
+	
+	// Break the retain cycle between NSOpenGLContext and NSView. 
+	// Without this, the OpenGL context may permanently leak into VRAM.
+	[win.context clearDrawable];
 
 	windows.erase(p_window_id);
 }
@@ -163,13 +176,15 @@ Error GLManagerLegacy_MacOS::initialize() {
 void GLManagerLegacy_MacOS::set_use_vsync(bool p_use) {
 	use_vsync = p_use;
 
-	CGLContextObj ctx = CGLGetCurrentContext();
-	if (ctx) {
-		GLint swapInterval = p_use ? 1 : 0;
-		if (CGLSetParameter(ctx, kCGLCPSwapInterval, &swapInterval) != kCGLNoError) {
-			WARN_PRINT("Could not set V-Sync mode.");
+	if (CGLGetCurrentContext && CGLSetParameter) {
+		CGLContextObj ctx = CGLGetCurrentContext();
+		if (ctx) {
+			GLint swapInterval = p_use ? 1 : 0;
+			if (CGLSetParameter(ctx, kCGLCPSwapInterval, &swapInterval) != kCGLNoError) {
+				WARN_PRINT("Could not set V-Sync mode.");
+			}
+			use_vsync = p_use;
 		}
-		use_vsync = p_use;
 	}
 }
 

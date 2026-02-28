@@ -55,7 +55,7 @@
 
 static uint64_t load_address() {
 	const struct segment_command_64 *cmd = getsegbyname("__TEXT");
-	char full_path[1024];
+	static char full_path[1024];
 	uint32_t size = sizeof(full_path);
 
 	if (cmd && !_NSGetExecutablePath(full_path, &size)) {
@@ -85,7 +85,7 @@ static void handle_crash(int sig) {
 		std::_Exit(0);
 	}
 
-	void *bt_buffer[256];
+	static void *bt_buffer[256];
 	size_t size = backtrace(bt_buffer, 256);
 	String _execpath = OS::get_singleton()->get_executable_path();
 
@@ -94,8 +94,9 @@ static void handle_crash(int sig) {
 	if (proj_settings) {
 		msg = proj_settings->get("debug/settings/crash_handler/message");
 	}
-
+	
 	// Tell MainLoop about the crash. This can be handled by users too in Node.
+	
 	if (OS::get_singleton()->get_main_loop()) {
 		OS::get_singleton()->get_main_loop()->notification(MainLoop::NOTIFICATION_CRASH);
 	}
@@ -111,17 +112,26 @@ static void handle_crash(int sig) {
 		print_error(vformat("Engine version: %s (%s)", VERSION_FULL_NAME, VERSION_HASH));
 	}
 	print_error(vformat("Dumping the backtrace. %s", msg));
+	
 	char **strings = backtrace_symbols(bt_buffer, size);
 	if (strings) {
 		void *load_addr = (void *)load_address();
 
+		// We only need one instance of these, reused per loop iteration.
+		static char fname[2048]; 
+		static char str[1024];
+
 		for (size_t i = 1; i < size; i++) {
-			char fname[1024];
 			Dl_info info;
 
-			snprintf(fname, 1024, "%s", strings[i]);
-
 			// Try to demangle the function name to provide a more readable one
+			// Prevent null pointer dereference if backtrace_symbols fails partially
+			if (strings[i]) {
+				snprintf(fname, 1024, "%s", strings[i]);
+			} else {
+				snprintf(fname, 1024, "<unknown symbol>");
+			}
+
 			if (dladdr(bt_buffer[i], &info) && info.dli_sname) {
 				if (info.dli_sname[0] == '_') {
 					int status;
@@ -138,11 +148,10 @@ static void handle_crash(int sig) {
 			}
 
 			String output = fname;
-
+			
 			// Try to get the file/line number using atos
 			if (bt_buffer[i] > (void *)0x0 && OS::get_singleton()) {
 				List<String> args;
-				char str[1024];
 
 				args.push_back("-o");
 				args.push_back(_execpath);
@@ -163,9 +172,10 @@ static void handle_crash(int sig) {
 				int ret;
 				String out = "";
 				Error err = OS::get_singleton()->execute(String("atos"), args, &out, &ret);
-				if (err == OK && out.substr(0, 2) != "0x") {
-					out = out.substr(0, out.length() - 1);
-					output = out;
+				
+				// Safely parse atos output to prevent String underflow double-faults
+				if (err == OK && out.length() > 0 && !out.begins_with("0x")) {
+					output = out.strip_edges(); 
 				}
 			}
 
@@ -177,7 +187,6 @@ static void handle_crash(int sig) {
 	print_error("-- END OF BACKTRACE --");
 	print_error("================================================================");
 
-	// Abort to pass the error to the OS
 	abort();
 }
 #endif

@@ -59,8 +59,14 @@
 	ds->popup_close(window_id);
 
 	DisplayServerMacOS::WindowData &wd = ds->get_window(window_id);
-	while (wd.transient_children.size()) {
-		ds->window_set_transient(*wd.transient_children.begin(), DisplayServerMacOS::INVALID_WINDOW_ID);
+	
+	// Copy to prevent infinite loops if unparenting fails
+	Vector<DisplayServer::WindowID> transient_children_copy;
+	for (const DisplayServer::WindowID &child_id : wd.transient_children) {
+		transient_children_copy.push_back(child_id);
+	}
+	for (int i = 0; i < transient_children_copy.size(); i++) {
+		ds->window_set_transient(transient_children_copy[i], DisplayServerMacOS::INVALID_WINDOW_ID);
 	}
 
 	if (wd.transient_parent != DisplayServerMacOS::INVALID_WINDOW_ID) {
@@ -68,6 +74,10 @@
 	}
 
 	ds->mouse_exit_window(window_id);
+	
+	// Detach the delegate to prevent rogue AppKit notifications during C++ teardown
+	[wd.window_object setDelegate:nil];
+	
 	ds->window_destroy(window_id);
 }
 
@@ -124,21 +134,50 @@
 	[self windowDidResize:notification];
 }
 
-- (void)windowWillExitFullScreen:(NSNotification *)notification {
+- (void)windowDidExitFullScreen:(NSNotification *)notification {
 	DisplayServerMacOS *ds = (DisplayServerMacOS *)DisplayServer::get_singleton();
 	if (!ds || !ds->has_window(window_id)) {
 		return;
 	}
 
 	DisplayServerMacOS::WindowData &wd = ds->get_window(window_id);
-	wd.fs_transition = true;
-
-	// Restore custom window buttons.
-	if ([wd.window_object styleMask] & NSWindowStyleMaskFullSizeContentView) {
-		ds->window_set_custom_window_buttons(wd, true);
+	if (wd.exclusive_fullscreen) {
+		ds->update_presentation_mode();
 	}
 
-	ds->send_window_event(wd, DisplayServerMacOS::WINDOW_EVENT_TITLEBAR_CHANGE);
+	wd.fullscreen = false;
+	wd.exclusive_fullscreen = false;
+	wd.fs_transition = false;
+
+	// Set window size limits.
+	const float scale = ds->screen_get_max_scale();
+	
+	// Keep precision for High-DPI screens,
+	// prevent Size2i float truncation.
+	if (wd.min_size != Size2i()) {
+		[wd.window_object setContentMinSize:NSMakeSize((CGFloat)wd.min_size.x / scale, (CGFloat)wd.min_size.y / scale)];
+	}
+	if (wd.max_size != Size2i()) {
+		[wd.window_object setContentMaxSize:NSMakeSize((CGFloat)wd.max_size.x / scale, (CGFloat)wd.max_size.y / scale)];
+	}
+
+	// Restore borderless, transparent and resizability state.
+	if (wd.borderless || wd.layered_window) {
+		[wd.window_object setStyleMask:NSWindowStyleMaskBorderless];
+	} else {
+		[wd.window_object setStyleMask:NSWindowStyleMaskTitled | NSWindowStyleMaskClosable | NSWindowStyleMaskMiniaturizable | (wd.extend_to_title ? NSWindowStyleMaskFullSizeContentView : 0) | (wd.resize_disabled ? 0 : NSWindowStyleMaskResizable)];
+	}
+	if (wd.layered_window) {
+		ds->set_window_per_pixel_transparency_enabled(true, window_id);
+	}
+
+	// Restore on-top state.
+	if (ds->is_always_on_top_recursive(window_id)) {
+		[wd.window_object setLevel:NSFloatingWindowLevel];
+	}
+
+	// Force window resize event and redraw.
+	[self windowDidResize:notification];
 }
 
 - (void)windowDidFailToExitFullScreen:(NSWindow *)window {

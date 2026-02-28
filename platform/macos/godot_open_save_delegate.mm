@@ -34,7 +34,7 @@
 
 - (instancetype)init {
 	self = [super init];
-	if ((self = [super init])) {
+	if (self) {
 		dialog = nullptr;
 		cur_index = 0;
 		ctr_id = 1;
@@ -61,45 +61,47 @@
 	int option_count = 0;
 
 	for (int i = 0; i < p_options.size(); i++) {
-		const Dictionary &item = p_options[i];
-		if (!item.has("name") || !item.has("values") || !item.has("default")) {
-			continue;
-		}
-		const String &name = item["name"];
-		const Vector<String> &values = item["values"];
-		int default_idx = item["default"];
-
-		NSTextField *label = [NSTextField labelWithString:[NSString stringWithUTF8String:name.utf8().get_data()]];
-		if (@available(macOS 10.14, *)) {
-			label.textColor = NSColor.secondaryLabelColor;
-		}
-		if (@available(macOS 11.10, *)) {
-			label.font = [NSFont systemFontOfSize:[NSFont smallSystemFontSize]];
-		}
-
-		NSView *popup = nullptr;
-		if (values.is_empty()) {
-			NSButton *popup_check = [NSButton checkboxWithTitle:@"" target:self action:@selector(popupCheckAction:)];
-			int tag = [self setDefaultBool:name value:(bool)default_idx];
-			popup_check.state = (default_idx) ? NSControlStateValueOn : NSControlStateValueOff;
-			popup_check.tag = tag;
-			popup = popup_check;
-		} else {
-			NSPopUpButton *popup_list = [[NSPopUpButton alloc] initWithFrame:NSZeroRect pullsDown:NO];
-			for (int i = 0; i < values.size(); i++) {
-				[popup_list addItemWithTitle:[NSString stringWithUTF8String:values[i].utf8().get_data()]];
+		// Protect string allocations per option
+		@autoreleasepool {
+			const Dictionary &item = p_options[i];
+			if (!item.has("name") || !item.has("values") || !item.has("default")) {
+				continue;
 			}
-			int tag = [self setDefaultInt:name value:default_idx];
-			[popup_list selectItemAtIndex:default_idx];
-			popup_list.tag = tag;
-			popup_list.target = self;
-			popup_list.action = @selector(popupOptionAction:);
-			popup = popup_list;
+			const String &name = item["name"];
+			const Vector<String> &values = item["values"];
+			int default_idx = item["default"];
+
+			NSTextField *label = [NSTextField labelWithString:[NSString stringWithUTF8String:name.utf8().get_data()]];
+			if (@available(macOS 10.14, *)) {
+				label.textColor = NSColor.secondaryLabelColor;
+			}
+			if (@available(macOS 11.10, *)) {
+				label.font = [NSFont systemFontOfSize:[NSFont smallSystemFontSize]];
+			}
+
+			NSView *popup = nullptr;
+			if (values.is_empty()) {
+				NSButton *popup_check = [NSButton checkboxWithTitle:@"" target:self action:@selector(popupCheckAction:)];
+				int tag = [self setDefaultBool:name value:(bool)default_idx];
+				popup_check.state = (default_idx) ? NSControlStateValueOn : NSControlStateValueOff;
+				popup_check.tag = tag;
+				popup = popup_check;
+			} else {
+				NSPopUpButton *popup_list = [[NSPopUpButton alloc] initWithFrame:NSZeroRect pullsDown:NO];
+				for (int j = 0; j < values.size(); j++) {
+					[popup_list addItemWithTitle:[NSString stringWithUTF8String:values[j].utf8().get_data()]];
+				}
+				int tag = [self setDefaultInt:name value:default_idx];
+				[popup_list selectItemAtIndex:default_idx];
+				popup_list.tag = tag;
+				popup_list.target = self;
+				popup_list.action = @selector(popupOptionAction:);
+				popup = popup_list;
+			}
+
+			[view addRowWithViews:[NSArray arrayWithObjects:label, popup, nil]];
+			option_count++;
 		}
-
-		[view addRowWithViews:[NSArray arrayWithObjects:label, popup, nil]];
-
-		option_count++;
 	}
 
 	NSMutableArray *new_allowed_types = [[NSMutableArray alloc] init];
@@ -116,10 +118,68 @@
 		if (p_filters.size() > 1) {
 			NSPopUpButton *popup = [[NSPopUpButton alloc] initWithFrame:NSZeroRect pullsDown:NO];
 			for (int i = 0; i < p_filters.size(); i++) {
-				Vector<String> tokens = p_filters[i].split(";");
+				// Protect string allocations per filter
+				@autoreleasepool {
+					Vector<String> tokens = p_filters[i].split(";");
+					if (tokens.size() >= 1) {
+						String flt = tokens[0].strip_edges();
+						String mime = (tokens.size() >= 2) ? tokens[2].strip_edges() : String();
+						int filter_slice_count = flt.get_slice_count(",");
+
+						NSMutableArray *type_filters = [[NSMutableArray alloc] init];
+						for (int j = 0; j < filter_slice_count; j++) {
+							String str = (flt.get_slice(",", j).strip_edges());
+							if (!str.is_empty()) {
+								if (@available(macOS 11, *)) {
+									UTType *ut = nullptr;
+									if (str == "*.*") {
+										ut = UTTypeData;
+									} else {
+										ut = [UTType typeWithFilenameExtension:[NSString stringWithUTF8String:str.replace("*.", "").strip_edges().utf8().get_data()]];
+									}
+									if (ut) {
+										[type_filters addObject:ut];
+									}
+								} else {
+									[type_filters addObject:[NSString stringWithUTF8String:str.replace("*.", "").strip_edges().utf8().get_data()]];
+								}
+							}
+						}
+
+						if (@available(macOS 11, *)) {
+							filter_slice_count = mime.get_slice_count(",");
+							for (int j = 0; j < filter_slice_count; j++) {
+								String str = mime.get_slicec(',', j).strip_edges();
+								if (!str.is_empty()) {
+									UTType *ut = [UTType typeWithMIMEType:[NSString stringWithUTF8String:str.strip_edges().utf8().get_data()]];
+									if (ut) {
+										[type_filters addObject:ut];
+									}
+								}
+							}
+						}
+
+						if ([type_filters count] > 0) {
+							NSString *name_str = [NSString stringWithUTF8String:((tokens.size() == 1) ? tokens[0] : tokens[1].strip_edges()).utf8().get_data()];
+							[new_allowed_types addObject:type_filters];
+							[popup addItemWithTitle:name_str];
+						}
+					}
+				}
+			}
+			if (popup.numberOfItems > 1) {
+				has_type_popup = true;
+				popup.target = self;
+				popup.action = @selector(popupFileAction:);
+
+				[view addRowWithViews:[NSArray arrayWithObjects:label, popup, nil]];
+			}
+		} else if (p_filters.size() == 1) {
+			@autoreleasepool {
+				Vector<String> tokens = p_filters[0].split(";");
 				if (tokens.size() >= 1) {
 					String flt = tokens[0].strip_edges();
-					String mime = (tokens.size() >= 2) ? tokens[2].strip_edges() : String();
+					String mime = (tokens.size() >= 2) ? tokens[2] : String();
 					int filter_slice_count = flt.get_slice_count(",");
 
 					NSMutableArray *type_filters = [[NSMutableArray alloc] init];
@@ -141,7 +201,6 @@
 							}
 						}
 					}
-
 					if (@available(macOS 11, *)) {
 						filter_slice_count = mime.get_slice_count(",");
 						for (int j = 0; j < filter_slice_count; j++) {
@@ -156,60 +215,8 @@
 					}
 
 					if ([type_filters count] > 0) {
-						NSString *name_str = [NSString stringWithUTF8String:((tokens.size() == 1) ? tokens[0] : tokens[1].strip_edges()).utf8().get_data()];
 						[new_allowed_types addObject:type_filters];
-						[popup addItemWithTitle:name_str];
 					}
-				}
-			}
-			if (popup.numberOfItems > 1) {
-				has_type_popup = true;
-				popup.target = self;
-				popup.action = @selector(popupFileAction:);
-
-				[view addRowWithViews:[NSArray arrayWithObjects:label, popup, nil]];
-			}
-		} else if (p_filters.size() == 1) {
-			Vector<String> tokens = p_filters[0].split(";");
-			if (tokens.size() >= 1) {
-				String flt = tokens[0].strip_edges();
-				String mime = (tokens.size() >= 2) ? tokens[2] : String();
-				int filter_slice_count = flt.get_slice_count(",");
-
-				NSMutableArray *type_filters = [[NSMutableArray alloc] init];
-				for (int j = 0; j < filter_slice_count; j++) {
-					String str = (flt.get_slice(",", j).strip_edges());
-					if (!str.is_empty()) {
-						if (@available(macOS 11, *)) {
-							UTType *ut = nullptr;
-							if (str == "*.*") {
-								ut = UTTypeData;
-							} else {
-								ut = [UTType typeWithFilenameExtension:[NSString stringWithUTF8String:str.replace("*.", "").strip_edges().utf8().get_data()]];
-							}
-							if (ut) {
-								[type_filters addObject:ut];
-							}
-						} else {
-							[type_filters addObject:[NSString stringWithUTF8String:str.replace("*.", "").strip_edges().utf8().get_data()]];
-						}
-					}
-				}
-				if (@available(macOS 11, *)) {
-					filter_slice_count = mime.get_slice_count(",");
-					for (int j = 0; j < filter_slice_count; j++) {
-						String str = mime.get_slicec(',', j).strip_edges();
-						if (!str.is_empty()) {
-							UTType *ut = [UTType typeWithMIMEType:[NSString stringWithUTF8String:str.strip_edges().utf8().get_data()]];
-							if (ut) {
-								[type_filters addObject:ut];
-							}
-						}
-					}
-				}
-
-				if ([type_filters count] > 0) {
-					[new_allowed_types addObject:type_filters];
 				}
 			}
 		}
@@ -228,7 +235,7 @@
 	if ([new_allowed_types count] > 0) {
 		NSMutableArray *type_filters = [new_allowed_types objectAtIndex:0];
 		if (@available(macOS 11, *)) {
-			if (type_filters && [type_filters count] == 1 && [type_filters objectAtIndex:0] == UTTypeData) {
+			if (type_filters && [type_filters count] == 1 && [[type_filters objectAtIndex:0] isEqual:UTTypeData]) {
 				[p_panel setAllowedContentTypes:@[ UTTypeData ]];
 				[p_panel setAllowsOtherFileTypes:true];
 			} else {
@@ -313,7 +320,7 @@
 		if (allowed_types && index < [allowed_types count]) {
 			NSMutableArray *type_filters = [allowed_types objectAtIndex:index];
 			if (@available(macOS 11, *)) {
-				if (type_filters && [type_filters count] == 1 && [type_filters objectAtIndex:0] == UTTypeData) {
+				if (type_filters && [type_filters count] == 1 && [[type_filters objectAtIndex:0] isEqual:UTTypeData]) {
 					[dialog setAllowedContentTypes:@[ UTTypeData ]];
 					[dialog setAllowsOtherFileTypes:true];
 				} else {
@@ -352,6 +359,12 @@
 	}
 
 	NSString *ns_path = url.URLByStandardizingPath.URLByResolvingSymlinksInPath.path;
+	
+	// Prevent hard C++ crash if url is malformed and ns_path is nil
+	if (!ns_path) {
+		return NO;
+	}
+
 	String path = String::utf8([ns_path UTF8String]).simplify_path();
 	if (!path.begins_with(root.simplify_path())) {
 		return NO;

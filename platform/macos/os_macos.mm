@@ -67,7 +67,7 @@ void OS_MacOS::pre_wait_observer_cb(CFRunLoopObserverRef p_observer, CFRunLoopAc
 
 void OS_MacOS::initialize() {
 	crash_handler.initialize();
-    initialize_joypads();
+	initialize_joypads();
 	initialize_core();
 }
 
@@ -99,13 +99,19 @@ Vector<String> OS_MacOS::get_granted_permissions() const {
 	if (is_sandboxed()) {
 		NSArray *bookmarks = [[NSUserDefaults standardUserDefaults] arrayForKey:@"sec_bookmarks"];
 		for (id bookmark in bookmarks) {
-			NSError *error = nil;
-			BOOL isStale = NO;
-			NSURL *url = [NSURL URLByResolvingBookmarkData:bookmark options:NSURLBookmarkResolutionWithSecurityScope relativeToURL:nil bookmarkDataIsStale:&isStale error:&error];
-			if (!error && !isStale) {
-				String url_string;
-				url_string.parse_utf8([[url path] UTF8String]);
-				ret.push_back(url_string);
+			// Prevent massive memory bloat during bookmark resolution
+			@autoreleasepool {
+				NSError *error = nil;
+				BOOL isStale = NO;
+				NSURL *url = [NSURL URLByResolvingBookmarkData:bookmark options:NSURLBookmarkResolutionWithSecurityScope relativeToURL:nil bookmarkDataIsStale:&isStale error:&error];
+				if (!error && !isStale && url && url.path) {
+					const char *utf8_path = [[url path] UTF8String];
+					if (utf8_path) {
+						String url_string;
+						url_string.parse_utf8(utf8_path);
+						ret.push_back(url_string);
+					}
+				}
 			}
 		}
 	}
@@ -131,11 +137,13 @@ void OS_MacOS::finalize() {
 	if (is_sandboxed()) {
 		NSArray *bookmarks = [[NSUserDefaults standardUserDefaults] arrayForKey:@"sec_bookmarks"];
 		for (id bookmark in bookmarks) {
-			NSError *error = nil;
-			BOOL isStale = NO;
-			NSURL *url = [NSURL URLByResolvingBookmarkData:bookmark options:NSURLBookmarkResolutionWithSecurityScope relativeToURL:nil bookmarkDataIsStale:&isStale error:&error];
-			if (!error && !isStale) {
-				[url stopAccessingSecurityScopedResource];
+			@autoreleasepool {
+				NSError *error = nil;
+				BOOL isStale = NO;
+				NSURL *url = [NSURL URLByResolvingBookmarkData:bookmark options:NSURLBookmarkResolutionWithSecurityScope relativeToURL:nil bookmarkDataIsStale:&isStale error:&error];
+				if (!error && !isStale && url) {
+					[url stopAccessingSecurityScopedResource];
+				}
 			}
 		}
 	}
@@ -228,21 +236,35 @@ String OS_MacOS::get_version_alias() const {
 }
 
 void OS_MacOS::alert(const String &p_alert, const String &p_title) {
-	NSAlert *window = [[NSAlert alloc] init];
 	NSString *ns_title = [NSString stringWithUTF8String:p_title.utf8().get_data()];
 	NSString *ns_alert = [NSString stringWithUTF8String:p_alert.utf8().get_data()];
+	if (!ns_title) ns_title = @"Alert";
+	if (!ns_alert) ns_alert = @"An error occurred.";
 
-	NSTextField *text_field = [NSTextField labelWithString:ns_alert];
-	[text_field setAlignment:NSTextAlignmentCenter];
-	[window addButtonWithTitle:@"OK"];
-	[window setMessageText:ns_title];
-	[window setAccessoryView:text_field];
-	[window setAlertStyle:NSAlertStyleWarning];
+	// Define the block that actually shows the UI
+	void (^runAlert)(void) = ^{
+		NSAlert *window = [[NSAlert alloc] init];
+		NSTextField *text_field = [NSTextField labelWithString:ns_alert];
+		[text_field setAlignment:NSTextAlignmentCenter];
+		[window addButtonWithTitle:@"OK"];
+		[window setMessageText:ns_title];
+		[window setAccessoryView:text_field];
+		[window setAlertStyle:NSAlertStyleWarning];
 
-	id key_window = [[NSApplication sharedApplication] keyWindow];
-	[window runModal];
-	if (key_window) {
-		[key_window makeKeyAndOrderFront:nil];
+		id key_window = [[NSApplication sharedApplication] keyWindow];
+		[window runModal];
+		if (key_window) {
+			[key_window makeKeyAndOrderFront:nil];
+		}
+	};
+
+	// Ensure UI is strictly drawn on the main thread
+	// to prevent AppKit deadlocks
+	if ([NSThread isMainThread]) {
+		runAlert();
+	} else {
+		// Block the background thread until the user dismisses the alert on the main thread
+		dispatch_sync(dispatch_get_main_queue(), runAlert); 
 	}
 }
 
@@ -286,7 +308,18 @@ Error OS_MacOS::open_dynamic_library(const String &p_path, void *&p_library_hand
 		path = p_path;
 	}
 
-	p_library_handle = dlopen(path.utf8().get_data(), RTLD_NOW);
+	if (path.is_empty()) {
+		ERR_PRINT("Can't open dynamic library: Path is empty.");
+		return ERR_CANT_OPEN;
+	}
+	
+	const char *path_utf8 = path.utf8().get_data();
+	if (!path_utf8) {
+		ERR_PRINT("Can't open dynamic library: Path contains invalid UTF-8.");
+		return ERR_CANT_OPEN;
+	}
+
+	p_library_handle = dlopen(path_utf8, RTLD_NOW);
 	ERR_FAIL_NULL_V_MSG(p_library_handle, ERR_CANT_OPEN, vformat("Can't open dynamic library: %s. Error: %s.", p_path, dlerror()));
 
 	if (p_data != nullptr && p_data->r_resolved_path != nullptr) {
@@ -323,9 +356,12 @@ String OS_MacOS::get_temp_path() const {
 	if (ret.is_empty()) {
 		NSURL *url = [NSURL fileURLWithPath:NSTemporaryDirectory()
 								isDirectory:YES];
-		if (url) {
-			ret = String::utf8([url.path UTF8String]);
-			ret = ret.trim_prefix("file://");
+		if (url && url.path) {
+			const char *path_str = [url.path UTF8String];
+			if (path_str) {
+				ret = String::utf8(path_str);
+				ret = ret.trim_prefix("file://");
+			}
 		}
 	}
 	return ret;
@@ -333,23 +369,26 @@ String OS_MacOS::get_temp_path() const {
 
 String OS_MacOS::get_bundle_resource_dir() const {
 	String ret;
-
 	NSBundle *main = [NSBundle mainBundle];
+
 	if (main) {
 		NSString *resource_path = [main resourcePath];
-		ret.parse_utf8([resource_path UTF8String]);
+		if (resource_path) {
+			const char *utf8_str = [resource_path UTF8String];
+			if (utf8_str) ret.parse_utf8(utf8_str);
+		}
 	}
 	return ret;
 }
 
 String OS_MacOS::get_bundle_icon_path() const {
 	String ret;
-
 	NSBundle *main = [NSBundle mainBundle];
 	if (main) {
 		NSString *icon_path = [[main infoDictionary] objectForKey:@"CFBundleIconFile"];
 		if (icon_path) {
-			ret.parse_utf8([icon_path UTF8String]);
+			const char *utf8_str = [icon_path UTF8String];
+			if (utf8_str) ret.parse_utf8(utf8_str);
 		}
 	}
 	return ret;
@@ -357,12 +396,12 @@ String OS_MacOS::get_bundle_icon_path() const {
 
 String OS_MacOS::get_bundle_icon_name() const {
 	String ret;
-
 	NSBundle *main = [NSBundle mainBundle];
 	if (main) {
 		NSString *icon_name = [[main infoDictionary] objectForKey:@"CFBundleIconName"];
 		if (icon_name) {
-			ret.parse_utf8([icon_name UTF8String]);
+			const char *utf8_str = [icon_name UTF8String];
+			if (utf8_str) ret.parse_utf8(utf8_str);
 		}
 	}
 	return ret;
@@ -405,7 +444,13 @@ String OS_MacOS::get_system_dir(SystemDir p_dir, bool p_shared_storage) const {
 	if (found) {
 		NSArray *paths = NSSearchPathForDirectoriesInDomains(id, NSUserDomainMask, YES);
 		if (paths && [paths count] >= 1) {
-			ret.parse_utf8([[paths firstObject] UTF8String]);
+			NSString *ns_path = [paths firstObject];
+			if (ns_path) {
+				const char *utf8_str = [ns_path UTF8String];
+				if (utf8_str) {
+					ret.parse_utf8(utf8_str);
+				}
+			}
 		}
 	}
 
@@ -421,12 +466,19 @@ Error OS_MacOS::shell_show_in_file_manager(String p_path, bool p_open_folder) {
 		}
 	}
 
-	if (!p_path.begins_with("file://")) {
-		p_path = String("file://") + p_path;
-	}
+	// Remove any existing file:// prefix to get a raw path
+	p_path = p_path.trim_prefix("file://");
 
 	NSString *string = [NSString stringWithUTF8String:p_path.utf8().get_data()];
-	NSURL *uri = [[NSURL alloc] initWithString:[string stringByAddingPercentEncodingWithAllowedCharacters:[NSCharacterSet URLFragmentAllowedCharacterSet]]];
+	if (!string) {
+		ERR_PRINT("shell_show_in_file_manager error: Invalid UTF-8 path.");
+		return ERR_INVALID_PARAMETER;
+	}
+
+	NSURL *uri = [NSURL fileURLWithPath:ns_path];
+	if (!uri) {
+		return ERR_INVALID_PARAMETER;
+	}
 
 	if (open_folder) {
 		[[NSWorkspace sharedWorkspace] openURL:uri];
@@ -438,16 +490,26 @@ Error OS_MacOS::shell_show_in_file_manager(String p_path, bool p_open_folder) {
 
 Error OS_MacOS::shell_open(const String &p_uri) {
 	NSString *string = [NSString stringWithUTF8String:p_uri.utf8().get_data()];
+	if (!string) {
+		ERR_PRINT("shell_open error: Invalid UTF-8 URI.");
+		return ERR_INVALID_PARAMETER;
+	}
+
 	NSURL *uri = [[NSURL alloc] initWithString:string];
 	if (!uri || !uri.scheme || [uri.scheme isEqual:@"file"]) {
-		// No scheme set, assume "file://" and escape special characters.
-		if (!p_uri.begins_with("file://")) {
-			string = [NSString stringWithUTF8String:("file://" + p_uri).utf8().get_data()];
-		}
-		uri = [[NSURL alloc] initWithString:[string stringByAddingPercentEncodingWithAllowedCharacters:[NSCharacterSet URLFragmentAllowedCharacterSet]]];
+		// Safely construct local file paths instead of manual URI encoding
+		String raw_path = p_uri.trim_prefix("file://");
+		NSString *ns_raw_path = [NSString stringWithUTF8String:raw_path.utf8().get_data()];
+		if (!ns_raw_path) return ERR_INVALID_PARAMETER;
+		
+		uri = [NSURL fileURLWithPath:ns_raw_path];
 	}
-	[[NSWorkspace sharedWorkspace] openURL:uri];
-	return OK;
+	
+	if (uri) {
+		[[NSWorkspace sharedWorkspace] openURL:uri];
+		return OK;
+	}
+	return ERR_INVALID_PARAMETER;
 }
 
 String OS_MacOS::get_locale() const {
@@ -463,7 +525,12 @@ Vector<String> OS_MacOS::get_system_fonts() const {
 			CFStringRef cf_name = (CFStringRef)CFArrayGetValueAtIndex(fonts, i);
 			if (cf_name && (CFStringGetLength(cf_name) > 0) && (CFStringCompare(cf_name, CFSTR("LastResort"), kCFCompareCaseInsensitive) != kCFCompareEqualTo) && (CFStringGetCharacterAtIndex(cf_name, 0) != '.')) {
 				NSString *ns_name = (__bridge NSString *)cf_name;
-				font_names.insert(String::utf8([ns_name UTF8String]));
+				if (ns_name) {
+					const char *utf8_name = [ns_name UTF8String];
+					if (utf8_name) {
+						font_names.insert(String::utf8(utf8_name));
+					}
+				}
 			}
 		}
 		CFRelease(fonts);
@@ -542,7 +609,16 @@ Vector<String> OS_MacOS::get_system_font_path_for_text(const String &p_font_name
 	Vector<String> ret;
 	String font_name = _get_default_fontname(p_font_name);
 
-	CFStringRef name = CFStringCreateWithCString(kCFAllocatorDefault, font_name.utf8().get_data(), kCFStringEncodingUTF8);
+	const char *font_name_utf8 = font_name.utf8().get_data();
+	if (!font_name_utf8) {
+		return ret;
+	}
+
+	CFStringRef name = CFStringCreateWithCString(kCFAllocatorDefault, font_name_utf8, kCFStringEncodingUTF8);
+	if (!name) {
+		return ret;
+	}
+
 	CTFontSymbolicTraits traits = 0;
 	if (p_weight >= 700) {
 		traits |= kCTFontBoldTrait;
@@ -576,23 +652,28 @@ Vector<String> OS_MacOS::get_system_font_path_for_text(const String &p_font_name
 	if (font) {
 		CTFontRef family = CTFontCreateWithFontDescriptor(font, 0, nullptr);
 		if (family) {
-			CFStringRef string = CFStringCreateWithCString(kCFAllocatorDefault, p_text.utf8().get_data(), kCFStringEncodingUTF8);
-			CFRange range = CFRangeMake(0, CFStringGetLength(string));
-			CTFontRef fallback_family = CTFontCreateForString(family, string, range);
-			if (fallback_family) {
-				CTFontDescriptorRef fallback_font = CTFontCopyFontDescriptor(fallback_family);
-				if (fallback_font) {
-					CFURLRef url = (CFURLRef)CTFontDescriptorCopyAttribute(fallback_font, kCTFontURLAttribute);
-					if (url) {
-						NSString *font_path = [NSString stringWithString:[(__bridge NSURL *)url path]];
-						ret.push_back(String::utf8([font_path UTF8String]));
-						CFRelease(url);
+			const char *text_utf8 = p_text.utf8().get_data();
+			if (text_utf8) {
+				CFStringRef string = CFStringCreateWithCString(kCFAllocatorDefault, text_utf8, kCFStringEncodingUTF8);
+				if (string) {
+					CFRange range = CFRangeMake(0, CFStringGetLength(string));
+					CTFontRef fallback_family = CTFontCreateForString(family, string, range);
+					if (fallback_family) {
+						CTFontDescriptorRef fallback_font = CTFontCopyFontDescriptor(fallback_family);
+						if (fallback_font) {
+							CFURLRef url = (CFURLRef)CTFontDescriptorCopyAttribute(fallback_font, kCTFontURLAttribute);
+							if (url) {
+								NSString *font_path = [NSString stringWithString:[(__bridge NSURL *)url path]];
+								ret.push_back(String::utf8([font_path UTF8String]));
+								CFRelease(url);
+							}
+							CFRelease(fallback_font);
+						}
+						CFRelease(fallback_family);
 					}
-					CFRelease(fallback_font);
+					CFRelease(string);
 				}
-				CFRelease(fallback_family);
 			}
-			CFRelease(string);
 			CFRelease(family);
 		}
 		CFRelease(font);
@@ -612,7 +693,15 @@ String OS_MacOS::get_system_font_path(const String &p_font_name, int p_weight, i
 	String ret;
 	String font_name = _get_default_fontname(p_font_name);
 
-	CFStringRef name = CFStringCreateWithCString(kCFAllocatorDefault, font_name.utf8().get_data(), kCFStringEncodingUTF8);
+	const char *font_name_utf8 = font_name.utf8().get_data();
+	if (!font_name_utf8) {
+		return ret;
+	}
+
+	CFStringRef name = CFStringCreateWithCString(kCFAllocatorDefault, font_name_utf8, kCFStringEncodingUTF8);
+	if (!name) {
+		return ret;
+	}
 
 	CTFontSymbolicTraits traits = 0;
 	if (p_weight > 700) {
@@ -685,7 +774,12 @@ Error OS_MacOS::create_process(const String &p_path, const List<String> &p_argum
 	if (bundle) {
 		NSMutableArray *arguments = [[NSMutableArray alloc] init];
 		for (const String &arg : p_arguments) {
-			[arguments addObject:[NSString stringWithUTF8String:arg.utf8().get_data()]];
+			NSString *ns_arg = [NSString stringWithUTF8String:arg.utf8().get_data()];
+			if (ns_arg) {
+				[arguments addObject:ns_arg];
+			} else {
+				ERR_PRINT("create_process: Dropped invalid UTF-8 argument.");
+			}
 		}
 #if defined(__x86_64__)
 		if (@available(macOS 10.15, *)) {
@@ -779,7 +873,10 @@ String OS_MacOS::get_unique_id() const {
 		}
 
 		if (serial_number_ns_string) {
-			serial_number.parse_utf8([serial_number_ns_string UTF8String]);
+			const char *utf8_str = [serial_number_ns_string UTF8String];
+			if (utf8_str) {
+				serial_number.parse_utf8(utf8_str);
+			}
 		}
 	}
 
@@ -808,10 +905,14 @@ bool OS_MacOS::is_disable_crash_handler() const {
 Error OS_MacOS::move_to_trash(const String &p_path) {
 	NSFileManager *fm = [NSFileManager defaultManager];
 	NSURL *url = [NSURL fileURLWithPath:@(p_path.utf8().get_data())];
-	NSError *err;
+	NSError *err = nil;
 
 	if (![fm trashItemAtURL:url resultingItemURL:nil error:&err]) {
-		ERR_PRINT("trashItemAtURL error: " + String::utf8(err.localizedDescription.UTF8String));
+		if (err) {
+			ERR_PRINT("trashItemAtURL error: " + String::utf8(err.localizedDescription.UTF8String));
+		} else {
+			ERR_PRINT("trashItemAtURL error: Unknown");
+		}
 		return FAILED;
 	}
 
@@ -832,6 +933,12 @@ String OS_MacOS::get_system_ca_certificates() {
 	for (CFIndex i = 0; i < l; i++) {
 		item = (SecCertificateRef)CFArrayGetValueAtIndex(result, i);
 		der = SecCertificateCopyData(item);
+		
+		// SecCertificateCopyData returns NULL for invalid/restricted certs. 
+		if (!der) {
+			continue;
+		}
+
 		int derlen = CFDataGetLength(der);
 		if (pba.size() < derlen * 3) {
 			pba.resize(derlen * 3);
@@ -869,9 +976,9 @@ void OS_MacOS::run() {
 					DisplayServer::get_singleton()->process_events(); // Get rid of pending events.
 				}
 #ifdef SDL_ENABLED
-                if (joypad_sdl) {
-                    joypad_sdl->process_events();
-                }
+				if (joypad_sdl) {
+					joypad_sdl->process_events();
+				}
 #endif
 				if (Main::iteration()) {
 					quit = true;
@@ -886,37 +993,42 @@ void OS_MacOS::run() {
 }
 
 OS_MacOS::OS_MacOS() {
-    if (is_sandboxed()) {
-        // Load security-scoped bookmarks, request access, remove stale or invalid bookmarks.
-        NSArray *bookmarks = [[NSUserDefaults standardUserDefaults] arrayForKey:@"sec_bookmarks"];
-        NSMutableArray *new_bookmarks = [[NSMutableArray alloc] init];
-        for (id bookmark in bookmarks) {
-            NSError *error = nil;
-            BOOL isStale = NO;
-            NSURL *url = [NSURL URLByResolvingBookmarkData:bookmark options:NSURLBookmarkResolutionWithSecurityScope relativeToURL:nil bookmarkDataIsStale:&isStale error:&error];
-            if (!error && !isStale) {
-                if ([url startAccessingSecurityScopedResource]) {
-                    [new_bookmarks addObject:bookmark];
-                }
-            }
-        }
-        [[NSUserDefaults standardUserDefaults] setObject:new_bookmarks forKey:@"sec_bookmarks"];
-    }
-    
-    main_loop = nullptr;
-    
-    Vector<Logger *> loggers;
-    loggers.push_back(memnew(MacOSTerminalLogger));
-    _set_logger(memnew(CompositeLogger(loggers)));
-    
+	pre_wait_observer = nullptr;
+
+	if (is_sandboxed()) {
+		// Load security-scoped bookmarks, request access, remove stale or invalid bookmarks.
+		NSArray *bookmarks = [[NSUserDefaults standardUserDefaults] arrayForKey:@"sec_bookmarks"];
+		NSMutableArray *new_bookmarks = [[NSMutableArray alloc] init];
+		for (id bookmark in bookmarks) {
+			NSError *error = nil;
+			BOOL isStale = NO;
+			NSURL *url = [NSURL URLByResolvingBookmarkData:bookmark options:NSURLBookmarkResolutionWithSecurityScope relativeToURL:nil bookmarkDataIsStale:&isStale error:&error];
+			if (!error && !isStale && url) {
+				if ([url startAccessingSecurityScopedResource]) {
+					[new_bookmarks addObject:bookmark];
+				}
+			}
+		}
+		[[NSUserDefaults standardUserDefaults] setObject:new_bookmarks forKey:@"sec_bookmarks"];
+	}
+	
+	main_loop = nullptr;
+	
+	Vector<Logger *> loggers;
+	loggers.push_back(memnew(MacOSTerminalLogger));
+	_set_logger(memnew(CompositeLogger(loggers)));
+	
 #ifdef COREAUDIO_ENABLED
-    AudioDriverManager::add_driver(&audio_driver);
+	AudioDriverManager::add_driver(&audio_driver);
 #endif
-    
-    DisplayServerMacOS::register_macos_driver();
+	
+	DisplayServerMacOS::register_macos_driver();
 }
 
 OS_MacOS::~OS_MacOS() {
-	CFRunLoopRemoveObserver(CFRunLoopGetCurrent(), pre_wait_observer, kCFRunLoopCommonModes);
-	CFRelease(pre_wait_observer);
+	if (pre_wait_observer) { 
+		CFRunLoopRemoveObserver(CFRunLoopGetCurrent(), pre_wait_observer, kCFRunLoopCommonModes);
+		CFRelease(pre_wait_observer);
+		pre_wait_observer = nullptr;
+	}
 }

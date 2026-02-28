@@ -63,17 +63,21 @@ void *Thread::thread_callback(void *p_data) {
 }
 
 Error Thread::set_name(const String &p_name) {
-	int err = pthread_setname_np(p_name.utf8().get_data());
+	// macOS limits thread names to 64 bytes (including null terminator).
+	String name = p_name.length() > 63 ? p_name.substr(0, 63) : p_name;
+	int err = pthread_setname_np(name.utf8().get_data());
 	return err == 0 ? OK : ERR_INVALID_PARAMETER;
 }
 
 Thread::ID Thread::start(Thread::Callback p_callback, void *p_user, const Settings &p_settings) {
 	ERR_FAIL_COND_V_MSG(id != UNASSIGNED_ID, UNASSIGNED_ID, "A Thread object has been re-started without wait_to_finish() having been called on it.");
-	id = id_counter.increment();
 
 	ThreadData *thread_data = memnew(ThreadData);
 	thread_data->callback = p_callback;
 	thread_data->userdata = p_user;
+	
+	// Temporarily assign ID to pass to thread_data
+	id = id_counter.increment();
 	thread_data->caller_id = id;
 
 	// Create the thread
@@ -97,10 +101,17 @@ Thread::ID Thread::start(Thread::Callback p_callback, void *p_user, const Settin
 	}
 
 	// Create the thread
-	pthread_create(&pthread, &attr, thread_callback, thread_data);
+	int err = pthread_create(&pthread, &attr, thread_callback, thread_data);
 
 	// Clean up attributes
 	pthread_attr_destroy(&attr);
+
+	// Protect against OS thread exhaustion or creation failure
+	if (err != 0) {
+		memdelete(thread_data);
+		id = UNASSIGNED_ID;
+		ERR_FAIL_V_MSG(UNASSIGNED_ID, "pthread_create failed with error code: " + itos(err));
+	}
 
 	return id;
 }

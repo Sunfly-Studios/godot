@@ -50,9 +50,27 @@
 	return self;
 }
 
+- (void)dealloc {
+	if (self->synth) {
+		[self->synth setDelegate:nil];
+		// Stop speaking immediately to prevent rogue callbacks during destruction
+		if (@available(macOS 10.14, *)) {
+			[(AVSpeechSynthesizer *)self->synth stopSpeakingAtBoundary:AVSpeechBoundaryImmediate];
+		} else {
+			[(NSSpeechSynthesizer *)self->synth stopSpeaking];
+		}
+	}
+	queue.clear();
+	ids.clear();
+}
+
 // AVSpeechSynthesizer callback (macOS 10.14+)
 
 - (void)speechSynthesizer:(AVSpeechSynthesizer *)av_synth willSpeakRangeOfSpeechString:(NSRange)characterRange utterance:(AVSpeechUtterance *)utterance API_AVAILABLE(macosx(10.14)) {
+	DisplayServer *ds = DisplayServer::get_singleton();
+	if (!ds) {
+		return;
+	}
 	NSString *string = [utterance speechString];
 
 	// Convert from UTF-16 to UTF-32 position.
@@ -65,13 +83,16 @@
 		pos++;
 	}
 
-	DisplayServer::get_singleton()->tts_post_utterance_event(DisplayServer::TTS_UTTERANCE_BOUNDARY, ids[utterance], pos);
+	ds->tts_post_utterance_event(DisplayServer::TTS_UTTERANCE_BOUNDARY, ids[utterance], pos);
 }
 
 // AVSpeechSynthesizer callback (macOS 10.14+)
 
 - (void)speechSynthesizer:(AVSpeechSynthesizer *)av_synth didCancelSpeechUtterance:(AVSpeechUtterance *)utterance API_AVAILABLE(macosx(10.14)) {
-	DisplayServer::get_singleton()->tts_post_utterance_event(DisplayServer::TTS_UTTERANCE_CANCELED, ids[utterance]);
+	DisplayServer *ds = DisplayServer::get_singleton();
+	if (ds) {
+		ds->tts_post_utterance_event(DisplayServer::TTS_UTTERANCE_CANCELED, ids[utterance]);
+	}
 	ids.erase(utterance);
 	speaking = false;
 	[self update];
@@ -80,7 +101,10 @@
 // AVSpeechSynthesizer callback (macOS 10.14+)
 
 - (void)speechSynthesizer:(AVSpeechSynthesizer *)av_synth didFinishSpeechUtterance:(AVSpeechUtterance *)utterance API_AVAILABLE(macosx(10.14)) {
-	DisplayServer::get_singleton()->tts_post_utterance_event(DisplayServer::TTS_UTTERANCE_ENDED, ids[utterance]);
+	DisplayServer *ds = DisplayServer::get_singleton();
+	if (ds) {
+		ds->tts_post_utterance_event(DisplayServer::TTS_UTTERANCE_ENDED, ids[utterance]);
+	}
 	ids.erase(utterance);
 	speaking = false;
 	[self update];
@@ -89,6 +113,11 @@
 // NSSpeechSynthesizer callback (macOS 10.4+)
 
 - (void)speechSynthesizer:(NSSpeechSynthesizer *)ns_synth willSpeakWord:(NSRange)characterRange ofString:(NSString *)string {
+	DisplayServer *ds = DisplayServer::get_singleton();
+	if (!ds) {
+		return;
+	}
+
 	if (!paused && have_utterance) {
 		// Convert from UTF-16 to UTF-32 position.
 		int pos = 0;
@@ -100,16 +129,17 @@
 			pos++;
 		}
 
-		DisplayServer::get_singleton()->tts_post_utterance_event(DisplayServer::TTS_UTTERANCE_BOUNDARY, last_utterance, pos);
+		ds->tts_post_utterance_event(DisplayServer::TTS_UTTERANCE_BOUNDARY, last_utterance, pos);
 	}
 }
 
 - (void)speechSynthesizer:(NSSpeechSynthesizer *)ns_synth didFinishSpeaking:(BOOL)success {
-	if (!paused && have_utterance) {
+	DisplayServer *ds = DisplayServer::get_singleton();
+	if (ds && !paused && have_utterance) {
 		if (success) {
-			DisplayServer::get_singleton()->tts_post_utterance_event(DisplayServer::TTS_UTTERANCE_ENDED, last_utterance);
+			ds->tts_post_utterance_event(DisplayServer::TTS_UTTERANCE_ENDED, last_utterance);
 		} else {
-			DisplayServer::get_singleton()->tts_post_utterance_event(DisplayServer::TTS_UTTERANCE_CANCELED, last_utterance);
+			ds->tts_post_utterance_event(DisplayServer::TTS_UTTERANCE_CANCELED, last_utterance);
 		}
 		have_utterance = false;
 	}
@@ -119,38 +149,45 @@
 
 - (void)update {
 	if (!speaking && queue.size() > 0) {
-		DisplayServer::TTSUtterance &message = queue.front()->get();
-
-		if (@available(macOS 10.14, *)) {
-			AVSpeechSynthesizer *av_synth = synth;
-			AVSpeechUtterance *new_utterance = [[AVSpeechUtterance alloc] initWithString:[NSString stringWithUTF8String:message.text.utf8().get_data()]];
-			[new_utterance setVoice:[AVSpeechSynthesisVoice voiceWithIdentifier:[NSString stringWithUTF8String:message.voice.utf8().get_data()]]];
-			if (message.rate > 1.f) {
-				[new_utterance setRate:Math::remap(message.rate, 1.f, 10.f, AVSpeechUtteranceDefaultSpeechRate, AVSpeechUtteranceMaximumSpeechRate)];
-			} else if (message.rate < 1.f) {
-				[new_utterance setRate:Math::remap(message.rate, 0.1f, 1.f, AVSpeechUtteranceMinimumSpeechRate, AVSpeechUtteranceDefaultSpeechRate)];
-			}
-			[new_utterance setPitchMultiplier:message.pitch];
-			[new_utterance setVolume:(Math::remap(message.volume, 0.f, 100.f, 0.f, 1.f))];
-
-			ids[new_utterance] = message.id;
-			[av_synth speakUtterance:new_utterance];
-		} else {
-			NSSpeechSynthesizer *ns_synth = synth;
-			[ns_synth setObject:nil forProperty:NSSpeechResetProperty error:nil];
-			[ns_synth setVoice:[NSString stringWithUTF8String:message.voice.utf8().get_data()]];
-			int base_pitch = [[ns_synth objectForProperty:NSSpeechPitchBaseProperty error:nil] intValue];
-			[ns_synth setObject:[NSNumber numberWithInt:(base_pitch * (message.pitch / 2.f + 0.5f))] forProperty:NSSpeechPitchBaseProperty error:nullptr];
-			[ns_synth setVolume:(Math::remap(message.volume, 0.f, 100.f, 0.f, 1.f))];
-			[ns_synth setRate:(message.rate * 200)];
-
-			last_utterance = message.id;
-			have_utterance = true;
-			[ns_synth startSpeakingString:[NSString stringWithUTF8String:message.text.utf8().get_data()]];
-		}
+		// Use a value copy to prevent use-after-free when popping the queue
+		DisplayServer::TTSUtterance message = queue.front()->get();
 		queue.pop_front();
 
-		DisplayServer::get_singleton()->tts_post_utterance_event(DisplayServer::TTS_UTTERANCE_STARTED, message.id);
+		@autoreleasepool {
+			if (@available(macOS 10.14, *)) {
+				AVSpeechSynthesizer *av_synth = synth;
+				AVSpeechUtterance *new_utterance = [[AVSpeechUtterance alloc] initWithString:[NSString stringWithUTF8String:message.text.utf8().get_data()]];
+				[new_utterance setVoice:[AVSpeechSynthesisVoice voiceWithIdentifier:[NSString stringWithUTF8String:message.voice.utf8().get_data()]]];
+				
+				if (message.rate > 1.f) {
+					[new_utterance setRate:Math::remap(message.rate, 1.f, 10.f, AVSpeechUtteranceDefaultSpeechRate, AVSpeechUtteranceMaximumSpeechRate)];
+				} else if (message.rate < 1.f) {
+					[new_utterance setRate:Math::remap(message.rate, 0.1f, 1.f, AVSpeechUtteranceMinimumSpeechRate, AVSpeechUtteranceDefaultSpeechRate)];
+				}
+				[new_utterance setPitchMultiplier:message.pitch];
+				[new_utterance setVolume:(Math::remap(message.volume, 0.f, 100.f, 0.f, 1.f))];
+
+				ids[new_utterance] = message.id;
+				[av_synth speakUtterance:new_utterance];
+			} else {
+				NSSpeechSynthesizer *ns_synth = synth;
+				[ns_synth setObject:nil forProperty:NSSpeechResetProperty error:nil];
+				[ns_synth setVoice:[NSString stringWithUTF8String:message.voice.utf8().get_data()]];
+				int base_pitch = [[ns_synth objectForProperty:NSSpeechPitchBaseProperty error:nil] intValue];
+				[ns_synth setObject:[NSNumber numberWithInt:(base_pitch * (message.pitch / 2.f + 0.5f))] forProperty:NSSpeechPitchBaseProperty error:nullptr];
+				[ns_synth setVolume:(Math::remap(message.volume, 0.f, 100.f, 0.f, 1.f))];
+				[ns_synth setRate:(message.rate * 200)];
+
+				last_utterance = message.id;
+				have_utterance = true;
+				[ns_synth startSpeakingString:[NSString stringWithUTF8String:message.text.utf8().get_data()]];
+			}
+		}
+
+		DisplayServer *ds = DisplayServer::get_singleton();
+		if (ds) {
+			ds->tts_post_utterance_event(DisplayServer::TTS_UTTERANCE_STARTED, message.id);
+		}
 		speaking = true;
 	}
 }
@@ -179,7 +216,10 @@
 
 - (void)stopSpeaking {
 	for (DisplayServer::TTSUtterance &message : queue) {
-		DisplayServer::get_singleton()->tts_post_utterance_event(DisplayServer::TTS_UTTERANCE_CANCELED, message.id);
+		DisplayServer *ds = DisplayServer::get_singleton();
+		if (ds) {
+			ds->tts_post_utterance_event(DisplayServer::TTS_UTTERANCE_CANCELED, message.id);
+		}
 	}
 	queue.clear();
 	if (@available(macOS 10.14, *)) {
@@ -188,7 +228,10 @@
 	} else {
 		NSSpeechSynthesizer *ns_synth = synth;
 		if (have_utterance) {
-			DisplayServer::get_singleton()->tts_post_utterance_event(DisplayServer::TTS_UTTERANCE_CANCELED, last_utterance);
+			DisplayServer *ds = DisplayServer::get_singleton();
+			if (ds) {
+				ds->tts_post_utterance_event(DisplayServer::TTS_UTTERANCE_CANCELED, last_utterance);
+			}
 		}
 		[ns_synth stopSpeaking];
 	}
@@ -216,7 +259,10 @@
 	}
 
 	if (text.is_empty()) {
-		DisplayServer::get_singleton()->tts_post_utterance_event(DisplayServer::TTS_UTTERANCE_CANCELED, utterance_id);
+		DisplayServer *ds = DisplayServer::get_singleton();
+		if (ds) {
+			ds->tts_post_utterance_event(DisplayServer::TTS_UTTERANCE_CANCELED, utterance_id);
+		}
 		return;
 	}
 
@@ -240,24 +286,28 @@
 	Array list;
 	if (@available(macOS 10.14, *)) {
 		for (AVSpeechSynthesisVoice *voice in [AVSpeechSynthesisVoice speechVoices]) {
-			NSString *voiceIdentifierString = [voice identifier];
-			NSString *voiceLocaleIdentifier = [voice language];
-			NSString *voiceName = [voice name];
-			Dictionary voice_d;
-			voice_d["name"] = String::utf8([voiceName UTF8String]);
-			voice_d["id"] = String::utf8([voiceIdentifierString UTF8String]);
-			voice_d["language"] = String::utf8([voiceLocaleIdentifier UTF8String]);
-			list.push_back(voice_d);
+			@autoreleasepool { // Prevent bloat per loop iteration
+				NSString *voiceIdentifierString = [voice identifier];
+				NSString *voiceLocaleIdentifier = [voice language];
+				NSString *voiceName = [voice name];
+				Dictionary voice_d;
+				voice_d["name"] = String::utf8([voiceName UTF8String]);
+				voice_d["id"] = String::utf8([voiceIdentifierString UTF8String]);
+				voice_d["language"] = String::utf8([voiceLocaleIdentifier UTF8String]);
+				list.push_back(voice_d);
+			}
 		}
 	} else {
 		for (NSString *voiceIdentifierString in [NSSpeechSynthesizer availableVoices]) {
-			NSString *voiceLocaleIdentifier = [[NSSpeechSynthesizer attributesForVoice:voiceIdentifierString] objectForKey:NSVoiceLocaleIdentifier];
-			NSString *voiceName = [[NSSpeechSynthesizer attributesForVoice:voiceIdentifierString] objectForKey:NSVoiceName];
-			Dictionary voice_d;
-			voice_d["name"] = String([voiceName UTF8String]);
-			voice_d["id"] = String([voiceIdentifierString UTF8String]);
-			voice_d["language"] = String([voiceLocaleIdentifier UTF8String]);
-			list.push_back(voice_d);
+			@autoreleasepool { // Prevent bloat per loop iteration
+				NSString *voiceLocaleIdentifier = [[NSSpeechSynthesizer attributesForVoice:voiceIdentifierString] objectForKey:NSVoiceLocaleIdentifier];
+				NSString *voiceName = [[NSSpeechSynthesizer attributesForVoice:voiceIdentifierString] objectForKey:NSVoiceName];
+				Dictionary voice_d;
+				voice_d["name"] = String([voiceName UTF8String]);
+				voice_d["id"] = String([voiceIdentifierString UTF8String]);
+				voice_d["language"] = String([voiceLocaleIdentifier UTF8String]);
+				list.push_back(voice_d);
+			}
 		}
 	}
 	return list;

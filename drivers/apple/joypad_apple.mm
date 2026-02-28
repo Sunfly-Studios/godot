@@ -59,23 +59,35 @@ public:
 	}
 
 	void execute_pattern(CHHapticPattern *p_pattern) {
-		NSError *error;
+		// Initialize error to nil to prevent reading garbage stack memory
+		NSError *error = nil; 
 		if (!is_started) {
-			ERR_FAIL_COND_MSG(![engine startAndReturnError:&error], "Couldn't start controller haptic engine: " + String::utf8(error.localizedDescription.UTF8String));
+			if (![engine startAndReturnError:&error]) {
+				ERR_PRINT("Couldn't start controller haptic engine: " + String::utf8(error.localizedDescription.UTF8String));
+				return;
+			}
 			is_started = YES;
 		}
 
 		player = [engine createPlayerWithPattern:p_pattern error:&error];
-		ERR_FAIL_COND_MSG(error, "Couldn't create controller haptic pattern player: " + String::utf8(error.localizedDescription.UTF8String));
-		ERR_FAIL_COND_MSG(![player startAtTime:CHHapticTimeImmediate error:&error], "Couldn't execute controller haptic pattern: " + String::utf8(error.localizedDescription.UTF8String));
+		if (!player) {
+			ERR_PRINT("Couldn't create controller haptic pattern player: " + String::utf8(error.localizedDescription.UTF8String));
+			return;
+		}
+		
+		if (![player startAtTime:CHHapticTimeImmediate error:&error]) {
+			ERR_PRINT("Couldn't execute controller haptic pattern: " + String::utf8(error.localizedDescription.UTF8String));
+		}
 	}
 
 	void stop() {
 		id<CHHapticPatternPlayer> old_player = player;
 		player = nil;
 
-		NSError *error;
-		ERR_FAIL_COND_MSG(![old_player stopAtTime:CHHapticTimeImmediate error:&error], "Couldn't stop controller haptic pattern: " + String::utf8(error.localizedDescription.UTF8String));
+		NSError *error = nil;
+		if (old_player && ![old_player stopAtTime:CHHapticTimeImmediate error:&error]) {
+			ERR_PRINT("Couldn't stop controller haptic pattern: " + String::utf8(error.localizedDescription.UTF8String));
+		}
 	}
 };
 
@@ -262,6 +274,16 @@ GameController::GameController(int p_joy_id, GCController *p_controller) :
 }
 
 GameController::~GameController() {
+	// Explicitly detach C++ state blocks
+	// from OS-owned objects
+	if (controller.extendedGamepad != nil) {
+		GCExtendedGamepad *gamepad = controller.extendedGamepad;
+		gamepad.leftThumbstick.valueChangedHandler = nil;
+		gamepad.rightThumbstick.valueChangedHandler = nil;
+		gamepad.leftTrigger.valueChangedHandler = nil;
+		gamepad.rightTrigger.valueChangedHandler = nil;
+	}
+
 	if (@available(macOS 11.0, iOS 14.0, tvOS 14.0, *)) {
 		if (rumble_context) {
 			memdelete(rumble_context);
@@ -396,8 +418,13 @@ CHHapticPattern *get_vibration_pattern(float p_magnitude, float p_duration) {
 			},
 		],
 	};
-	NSError *error;
+	NSError *error = nil;
 	CHHapticPattern *pattern = [[CHHapticPattern alloc] initWithDictionary:hapticDict error:&error];
+	
+	if (error) {
+		ERR_PRINT("Couldn't create haptic pattern: " + String::utf8(error.localizedDescription.UTF8String));
+	}
+	
 	return pattern;
 }
 
@@ -436,18 +463,20 @@ void JoypadApple::joypad_vibration_stop(GameController &p_joypad, uint64_t p_tim
 }
 
 void JoypadApple::process_joypads() {
-	if (@available(macOS 11.0, iOS 14.0, tvOS 14.0, *)) {
-		for (KeyValue<int, GameController *> &E : joypads) {
-			int id = E.key;
-			GameController &joypad = *E.value;
+	for (KeyValue<int, GameController *> &E : joypads) {
+		int id = E.key;
+		GameController &joypad = *E.value;
 
-			for (int i = 0; i < (int)JoyAxis::MAX; i++) {
-				if (joypad.axis_changed[i]) {
-					joypad.axis_changed[i] = false;
-					Input::get_singleton()->joy_axis(id, (JoyAxis)i, joypad.axis_value[i]);
-				}
+		// Pull analog stick processing outside the macOS 11 haptics check 
+		// so analog sticks don't break on older OS versions.
+		for (int i = 0; i < (int)JoyAxis::MAX; i++) {
+			if (joypad.axis_changed[i]) {
+				joypad.axis_changed[i] = false;
+				Input::get_singleton()->joy_axis(id, (JoyAxis)i, joypad.axis_value[i]);
 			}
+		}
 
+		if (@available(macOS 11.0, iOS 14.0, tvOS 14.0, *)) {
 			if (joypad.force_feedback) {
 				Input *input = Input::get_singleton();
 				uint64_t timestamp = input->get_joy_vibration_timestamp(id);

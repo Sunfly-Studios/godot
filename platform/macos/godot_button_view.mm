@@ -34,22 +34,41 @@
 
 - (id)initWithFrame:(NSRect)frame {
 	self = [super initWithFrame:frame];
-
-	tracking_area = nil;
-	offset = NSMakePoint(8, 8);
-	spacing = 20;
-	mouse_in_group = false;
-	rtl = false;
-	close_button = nullptr;
-	miniaturize_button = nullptr;
-	zoom_button = nullptr;
-
+	// Ensure self successfully initialized before assigning ivars
+	if (self) {
+		tracking_area = nil;
+		offset = NSMakePoint(8, 8);
+		spacing = 20;
+		mouse_in_group = false;
+		rtl = false;
+		close_button = nullptr;
+		miniaturize_button = nullptr;
+		zoom_button = nullptr;
+	}
 	return self;
+}
+
+- (void)dealloc {
+	if (tracking_area != nil) {
+		[self removeTrackingArea:tracking_area];
+	}
 }
 
 - (void)initButtons:(CGFloat)button_spacing offset:(NSPoint)button_offset rtl:(bool)is_rtl {
 	spacing = button_spacing;
 	rtl = is_rtl;
+
+	// Prevent UI memory bloat by clearing out
+	// existing buttons before re-initializing
+	if (close_button) {
+		[close_button removeFromSuperview];
+	}
+	if (miniaturize_button) {
+		[miniaturize_button removeFromSuperview];
+	}
+	if (zoom_button) {
+		[zoom_button removeFromSuperview];
+	}
 
 	close_button = [NSWindow standardWindowButton:NSWindowCloseButton forStyleMask:NSWindowStyleMaskTitled];
 	[close_button setFrameOrigin:NSMakePoint(rtl ? spacing * 2 : 0, 0)];

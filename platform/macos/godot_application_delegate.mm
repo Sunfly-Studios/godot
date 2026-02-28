@@ -64,11 +64,14 @@
 		}
 		Dictionary results = ret;
 		for (const Variant *E = results.next(); E; E = results.next(E)) {
-			const String &key = *E;
-			const String &value = results[*E];
-			if (key.length() > 0 && value.length() > 0) {
-				NSArray *item = @[ [NSString stringWithUTF8String:key.utf8().get_data()], [NSString stringWithUTF8String:value.utf8().get_data()] ];
-				[found_items addObject:item];
+			// Prevent memory bloat during high-frequency search typing
+			@autoreleasepool {
+				const String &key = *E;
+				const String &value = results[*E];
+				if (key.length() > 0 && value.length() > 0) {
+					NSArray *item = @[ [NSString stringWithUTF8String:key.utf8().get_data()], [NSString stringWithUTF8String:value.utf8().get_data()] ];
+					[found_items addObject:item];
+				}
 			}
 		}
 	}
@@ -140,16 +143,23 @@
 - (id)init {
 	self = [super init];
 
-	NSAppleEventManager *aem = [NSAppleEventManager sharedAppleEventManager];
-	[aem setEventHandler:self andSelector:@selector(handleAppleEvent:withReplyEvent:) forEventClass:kInternetEventClass andEventID:kAEGetURL];
-	[aem setEventHandler:self andSelector:@selector(handleAppleEvent:withReplyEvent:) forEventClass:kCoreEventClass andEventID:kAEOpenDocuments];
-
+	// Ensure initialization succeeds before wiring events
+	if (self) {
+		NSAppleEventManager *aem = [NSAppleEventManager sharedAppleEventManager];
+		[aem setEventHandler:self andSelector:@selector(handleAppleEvent:withReplyEvent:) forEventClass:kInternetEventClass andEventID:kAEGetURL];
+		[aem setEventHandler:self andSelector:@selector(handleAppleEvent:withReplyEvent:) forEventClass:kCoreEventClass andEventID:kAEOpenDocuments];
+	}
 	return self;
 }
 
 - (void)dealloc {
 	[[NSDistributedNotificationCenter defaultCenter] removeObserver:self name:@"AppleInterfaceThemeChangedNotification" object:nil];
 	[[NSDistributedNotificationCenter defaultCenter] removeObserver:self name:@"AppleColorPreferencesChangedNotification" object:nil];
+	
+	// Properly teardown Apple Event Manager handlers to prevent dangling pointers
+	NSAppleEventManager *aem = [NSAppleEventManager sharedAppleEventManager];
+	[aem removeEventHandlerForEventClass:kInternetEventClass andEventID:kAEGetURL];
+	[aem removeEventHandlerForEventClass:kCoreEventClass andEventID:kAEOpenDocuments];
 }
 
 - (void)handleAppleEvent:(NSAppleEventDescriptor *)event withReplyEvent:(NSAppleEventDescriptor *)replyEvent {
@@ -161,8 +171,10 @@
 	List<String> args;
 	if (([event eventClass] == kInternetEventClass) && ([event eventID] == kAEGetURL)) {
 		// Opening URL scheme.
-		NSString *url = [[event paramDescriptorForKeyword:keyDirectObject] stringValue];
-		args.push_back(vformat("--uri=\"%s\"", String::utf8([url UTF8String])));
+		NSString *url_str = [[event paramDescriptorForKeyword:keyDirectObject] stringValue];
+		if (url_str) {
+			args.push_back(vformat("--uri=\"%s\"", String::utf8([url_str UTF8String])));
+		}
 	}
 
 	if (([event eventClass] == kCoreEventClass) && ([event eventID] == kAEOpenDocuments)) {
@@ -171,8 +183,13 @@
 		if (files) {
 			NSInteger count = [files numberOfItems];
 			for (NSInteger i = 1; i <= count; i++) {
-				NSURL *url = [NSURL URLWithString:[[files descriptorAtIndex:i] stringValue]];
-				args.push_back(String::utf8([url.path UTF8String]));
+				NSString *file_str = [[files descriptorAtIndex:i] stringValue];
+				if (file_str) {
+					NSURL *url = [NSURL URLWithString:file_str];
+					if (url && url.path) {
+						args.push_back(String::utf8([url.path UTF8String]));
+					}
+				}
 			}
 		}
 	}

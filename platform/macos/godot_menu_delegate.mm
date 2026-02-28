@@ -79,11 +79,26 @@
 }
 
 - (BOOL)menuHasKeyEquivalent:(NSMenu *)menu forEvent:(NSEvent *)event target:(id *)target action:(SEL *)action {
-	NSString *ev_key = [[event charactersIgnoringModifiers] lowercaseString];
+	NSString *chars = [event charactersIgnoringModifiers];
+	// Defend against nil characters from IME or simulated events
+	if (!chars || chars.length == 0) {
+		return NO;
+	}
+	
+	NSString *ev_key = [chars lowercaseString];
 	NSUInteger ev_modifiers = [event modifierFlags] & NSEventModifierFlagDeviceIndependentFlagsMask;
+	
 	for (int i = 0; i < [menu numberOfItems]; i++) {
 		const NSMenuItem *menu_item = [menu itemAtIndex:i];
-		if ([menu_item isEnabled] && [[menu_item keyEquivalent] compare:ev_key] == NSOrderedSame) {
+		if (![menu_item isEnabled]) {
+			continue;
+		}
+		
+		NSString *item_key_eq = [menu_item keyEquivalent];
+		
+		// Guarantee item_key_eq is valid before comparing to
+		// prevent NSInvalidArgumentException or phantom 0==0 matches
+		if (item_key_eq && item_key_eq.length > 0 && [item_key_eq compare:ev_key] == NSOrderedSame) {
 			NSUInteger item_modifiers = [menu_item keyEquivalentModifierMask];
 
 			if (ev_modifiers == item_modifiers) {
@@ -102,10 +117,15 @@
 					} else {
 						// Otherwise redirect event to the engine.
 						if (DisplayServer::get_singleton()) {
-							if ([[NSApplication sharedApplication] keyWindow].sheet) {
-								[[[[NSApplication sharedApplication] keyWindow] sheetParent] sendEvent:event];
-							} else {
-								[[[NSApplication sharedApplication] keyWindow] sendEvent:event];
+							// Capture window state once to prevent
+							// race conditions and redundant AppKit queries
+							NSWindow *key_window = [[NSApplication sharedApplication] keyWindow];
+							if (key_window) {
+								if (key_window.sheet) {
+									[[key_window sheetParent] sendEvent:event];
+								} else {
+									[key_window sendEvent:event];
+								}
 							}
 						}
 					}

@@ -42,68 +42,121 @@
 String DirAccessMacOS::fix_unicode_name(const char *p_name) const {
 	String fname;
 	if (p_name != nullptr) {
-		NSString *nsstr = [[NSString stringWithUTF8String:p_name] precomposedStringWithCanonicalMapping];
-		fname.parse_utf8([nsstr UTF8String]);
+		@autoreleasepool {
+			NSString *nsstr = [[NSString stringWithUTF8String:p_name] precomposedStringWithCanonicalMapping];
+			
+			// Prevent C++ null dereference crash if
+			// the file name contains invalid UTF-8
+			if (nsstr != nil) {
+				const char *utf8_str = [nsstr UTF8String];
+				if (utf8_str != nullptr) {
+					fname.parse_utf8(utf8_str);
+				}
+			} else {
+				// Fallback if conversion fails
+				fname.parse_utf8(p_name); 
+			}
+		}
 	}
-
 	return fname;
 }
 
 int DirAccessMacOS::get_drive_count() {
-	NSArray *res_keys = [NSArray arrayWithObjects:NSURLVolumeURLKey, NSURLIsSystemImmutableKey, nil];
-	NSArray *vols = [[NSFileManager defaultManager] mountedVolumeURLsIncludingResourceValuesForKeys:res_keys options:NSVolumeEnumerationSkipHiddenVolumes];
-
-	return [vols count];
+	@autoreleasepool {
+		NSArray *res_keys = [NSArray arrayWithObjects:NSURLVolumeURLKey, NSURLIsSystemImmutableKey, nil];
+		NSArray *vols = [[NSFileManager defaultManager] mountedVolumeURLsIncludingResourceValuesForKeys:res_keys options:NSVolumeEnumerationSkipHiddenVolumes];
+		return (int)[vols count];
+	}
 }
 
 String DirAccessMacOS::get_drive(int p_drive) {
-	NSArray *res_keys = [NSArray arrayWithObjects:NSURLVolumeURLKey, NSURLIsSystemImmutableKey, nil];
-	NSArray *vols = [[NSFileManager defaultManager] mountedVolumeURLsIncludingResourceValuesForKeys:res_keys options:NSVolumeEnumerationSkipHiddenVolumes];
-	int count = [vols count];
+	@autoreleasepool {
+		NSArray *res_keys = [NSArray arrayWithObjects:NSURLVolumeURLKey, NSURLIsSystemImmutableKey, nil];
+		NSArray *vols = [[NSFileManager defaultManager] mountedVolumeURLsIncludingResourceValuesForKeys:res_keys options:NSVolumeEnumerationSkipHiddenVolumes];
+		int count = (int)[vols count];
 
-	ERR_FAIL_INDEX_V(p_drive, count, "");
+		ERR_FAIL_INDEX_V(p_drive, count, "");
 
-	String volname;
-	NSString *path = [vols[p_drive] path];
+		String volname;
+		NSString *path = [vols[p_drive] path];
+		
+		if (path != nil) {
+			const char *utf8_str = [path UTF8String];
+			if (utf8_str != nullptr) {
+				volname.parse_utf8(utf8_str);
+			}
+		}
 
-	volname.parse_utf8([path UTF8String]);
-
-	return volname;
+		return volname;
+	}
 }
 
 bool DirAccessMacOS::is_hidden(const String &p_name) {
-	String f = get_current_dir().path_join(p_name);
-	NSURL *url = [NSURL fileURLWithPath:@(f.utf8().get_data())];
-	NSNumber *hidden = nil;
-	if (![url getResourceValue:&hidden forKey:NSURLIsHiddenKey error:nil]) {
-		return DirAccessUnix::is_hidden(p_name);
+	@autoreleasepool {
+		String f = get_current_dir().path_join(p_name);
+		NSString *ns_path = [NSString stringWithUTF8String:f.utf8().get_data()];
+		
+		// Defend against invalid UTF-8 paths returning nil
+		if (!ns_path) {
+			return DirAccessUnix::is_hidden(p_name);
+		}
+
+		NSURL *url = [NSURL fileURLWithPath:ns_path];
+		if (!url) {
+			return DirAccessUnix::is_hidden(p_name);
+		}
+
+		NSNumber *hidden = nil;
+		if (![url getResourceValue:&hidden forKey:NSURLIsHiddenKey error:nil]) {
+			return DirAccessUnix::is_hidden(p_name);
+		}
+		return [hidden boolValue];
 	}
-	return [hidden boolValue];
 }
 
 bool DirAccessMacOS::is_case_sensitive(const String &p_path) const {
-	String f = p_path;
-	if (!f.is_absolute_path()) {
-		f = get_current_dir().path_join(f);
-	}
-	f = fix_path(f);
+	@autoreleasepool {
+		String f = p_path;
+		if (!f.is_absolute_path()) {
+			f = get_current_dir().path_join(f);
+		}
+		f = fix_path(f);
 
-	NSURL *url = [NSURL fileURLWithPath:@(f.utf8().get_data())];
-	NSNumber *cs = nil;
-	if (![url getResourceValue:&cs forKey:NSURLVolumeSupportsCaseSensitiveNamesKey error:nil]) {
-		return false;
+		NSString *ns_path = [NSString stringWithUTF8String:f.utf8().get_data()];
+		if (!ns_path) {
+			return false;
+		}
+
+		NSURL *url = [NSURL fileURLWithPath:ns_path];
+		if (!url) {
+			return false;
+		}
+
+		NSNumber *cs = nil;
+		if (![url getResourceValue:&cs forKey:NSURLVolumeSupportsCaseSensitiveNamesKey error:nil]) {
+			return false;
+		}
+		return [cs boolValue];
 	}
-	return [cs boolValue];
 }
 
 bool DirAccessMacOS::is_bundle(const String &p_file) const {
-	String f = p_file;
-	if (!f.is_absolute_path()) {
-		f = get_current_dir().path_join(f);
-	}
-	f = fix_path(f);
+	@autoreleasepool {
+		String f = p_file;
+		if (!f.is_absolute_path()) {
+			f = get_current_dir().path_join(f);
+		}
+		f = fix_path(f);
 
-	return [[NSWorkspace sharedWorkspace] isFilePackageAtPath:[NSString stringWithUTF8String:f.utf8().get_data()]];
+		NSString *ns_path = [NSString stringWithUTF8String:f.utf8().get_data()];
+		
+		// Prevent passing nil to isFilePackageAtPath
+		if (!ns_path) {
+			return false;
+		}
+
+		return [[NSWorkspace sharedWorkspace] isFilePackageAtPath:ns_path];
+	}
 }
 
 #endif // UNIX_ENABLED
