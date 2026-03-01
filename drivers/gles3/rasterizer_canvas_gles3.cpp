@@ -874,7 +874,7 @@ void RasterizerCanvasGLES3::_record_item_commands(const Item *p_item, RID p_rend
 		state.canvas_instance_batches[state.current_batch_index].specialization ^= CanvasShaderGLES3::DISABLE_LIGHTING;
 	}
 
-	const RS::CanvasItemTextureRepeat texture_repeat = p_item->texture_repeat == RS::CANVAS_ITEM_TEXTURE_REPEAT_DEFAULT ? state.default_repeat : p_item->texture_repeat;
+	const RS::CanvasItemTextureRepeat base_texture_repeat = p_item->texture_repeat == RS::CANVAS_ITEM_TEXTURE_REPEAT_DEFAULT ? state.default_repeat : p_item->texture_repeat;
 	const Item::Command *c = p_item->commands;
 	while (c) {
 		if (skipping && c->type != Item::Command::TYPE_ANIMATION_SLICE) {
@@ -908,7 +908,7 @@ void RasterizerCanvasGLES3::_record_item_commands(const Item *p_item, RID p_rend
 
 		Color blend_color = base_color;
 		GLES3::CanvasShaderData::BlendMode blend_mode = p_blend_mode;
-		bool validate_texture_repeat = true;
+		RS::CanvasItemTextureRepeat texture_repeat = base_texture_repeat;
 		if (c->type == Item::Command::TYPE_RECT) {
 			const Item::CommandRect *rect = static_cast<const Item::CommandRect *>(c);
 			if (rect->flags & CANVAS_RECT_LCD) {
@@ -917,15 +917,10 @@ void RasterizerCanvasGLES3::_record_item_commands(const Item *p_item, RID p_rend
 			}
 
 			if (rect->flags & CANVAS_RECT_TILE) {
-				if (state.canvas_instance_batches[state.current_batch_index].repeat != RS::CanvasItemTextureRepeat::CANVAS_ITEM_TEXTURE_REPEAT_ENABLED) {
-					_new_batch(r_batch_broken);
-					state.canvas_instance_batches[state.current_batch_index].repeat = RS::CanvasItemTextureRepeat::CANVAS_ITEM_TEXTURE_REPEAT_ENABLED;
-				}
-				validate_texture_repeat = false;
+				texture_repeat = RS::CanvasItemTextureRepeat::CANVAS_ITEM_TEXTURE_REPEAT_ENABLED;
 			}
 		}
-
-		if (validate_texture_repeat && texture_repeat != state.canvas_instance_batches[state.current_batch_index].repeat) {
+		if (texture_repeat != state.canvas_instance_batches[state.current_batch_index].repeat) {
 			_new_batch(r_batch_broken);
 			state.canvas_instance_batches[state.current_batch_index].repeat = texture_repeat;
 		}
