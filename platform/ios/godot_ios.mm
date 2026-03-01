@@ -36,6 +36,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <unistd.h>
+#include <vector>
 
 static OS_IOS *os = nullptr;
 // Use a vector to safely manage dynamic argument memory for the lifetime of the engine.

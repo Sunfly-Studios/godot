@@ -112,7 +112,11 @@ static AppDelegate *delegate_singleton = nil;
 		return NO;
 	}
 
+#if __clang_major__ >= 15
 	if (@available(iOS 13, tvOS 13, visionOS 1, *)) {
+#else
+    if (@available(iOS 13, tvOS 13, *)) {
+#endif
 		// NOP
 	} else {
 		// Create a full-screen window
@@ -212,60 +216,80 @@ static AppDelegate *delegate_singleton = nil;
 // if you open the app list without switching to another app or open/close the
 // notification panel by swiping from the upper part of the screen.
 
+
+#if __clang_major__ >= 15
 - (void)sceneDidDisconnect:(UIScene *)scene API_AVAILABLE(ios(13.0), tvos(13.0), visionos(1.0)) {
-	if (OS_IOS::get_singleton()) {
-		OS_IOS::get_singleton()->on_focus_out();
-	}
+#else
+- (void)sceneDidDisconnect:(UIScene *)scene API_AVAILABLE(ios(13.0), tvos(13.0)) {
+#endif
+    if (OS_IOS::get_singleton()) {
+        OS_IOS::get_singleton()->on_focus_out();
+    }
 }
 
 - (void)applicationWillResignActive:(UIApplication *)application {
-	if (OS_IOS::get_singleton()) {
-		OS_IOS::get_singleton()->on_focus_out();
-	}
+    if (OS_IOS::get_singleton()) {
+        OS_IOS::get_singleton()->on_focus_out();
+    }
 }
 
+#if __clang_major__ >= 15
 - (void)sceneWillResignActive:(UIScene *)scene API_AVAILABLE(ios(13.0), tvos(13.0), visionos(1.0)) {
-	if (OS_IOS::get_singleton()) {
-		OS_IOS::get_singleton()->on_focus_out();
-	}
+#else
+- (void)sceneWillResignActive:(UIScene *)scene API_AVAILABLE(ios(13.0), tvos(13.0)) {
+#endif
+    if (OS_IOS::get_singleton()) {
+        OS_IOS::get_singleton()->on_focus_out();
+    }
 }
 
 - (void)applicationDidBecomeActive:(UIApplication *)application {
-	if (OS_IOS::get_singleton()) {
-		OS_IOS::get_singleton()->on_focus_in();
-	}
+    if (OS_IOS::get_singleton()) {
+        OS_IOS::get_singleton()->on_focus_in();
+    }
 }
 
+#if __clang_major__ >= 15
 - (void)sceneDidBecomeActive:(UIScene *)scene API_AVAILABLE(ios(13.0), tvos(13.0), visionos(1.0)) {
-	if (OS_IOS::get_singleton()) {
-		OS_IOS::get_singleton()->on_focus_in();
-	}
+#else
+- (void)sceneDidBecomeActive:(UIScene *)scene API_AVAILABLE(ios(13.0), tvos(13.0)) {
+#endif
+    if (OS_IOS::get_singleton()) {
+        OS_IOS::get_singleton()->on_focus_in();
+    }
 }
 
 - (void)applicationDidEnterBackground:(UIApplication *)application {
-	if (OS_IOS::get_singleton()) {
-		OS_IOS::get_singleton()->on_enter_background();
-	}
+    if (OS_IOS::get_singleton()) {
+        OS_IOS::get_singleton()->on_enter_background();
+    }
 }
 
+#if __clang_major__ >= 15
 - (void)sceneDidEnterBackground:(UIScene *)scene API_AVAILABLE(ios(13.0), tvos(13.0), visionos(1.0)) {
-	if (OS_IOS::get_singleton()) {
-		OS_IOS::get_singleton()->on_enter_background();
-	}
+#else
+- (void)sceneDidEnterBackground:(UIScene *)scene API_AVAILABLE(ios(13.0), tvos(13.0)) {
+#endif
+    if (OS_IOS::get_singleton()) {
+        OS_IOS::get_singleton()->on_enter_background();
+    }
 }
 
 - (void)applicationWillEnterForeground:(UIApplication *)application {
-	if (OS_IOS::get_singleton()) {
-		OS_IOS::get_singleton()->on_exit_background();
-	}
+    if (OS_IOS::get_singleton()) {
+        OS_IOS::get_singleton()->on_exit_background();
+    }
 }
 
+#if __clang_major__ >= 15
 - (void)sceneWillEnterForeground:(UIScene *)scene API_AVAILABLE(ios(13.0), tvos(13.0), visionos(1.0)) {
-	if (OS_IOS::get_singleton()) {
-		OS_IOS::get_singleton()->on_exit_background();
-	}
+#else
+- (void)sceneWillEnterForeground:(UIScene *)scene API_AVAILABLE(ios(13.0), tvos(13.0)) {
+#endif
+    if (OS_IOS::get_singleton()) {
+        OS_IOS::get_singleton()->on_exit_background();
+    }
 }
-
 - (void)dealloc {
 	self.window = nil;
 }
