@@ -209,10 +209,17 @@ void TTS_Android::speak(const String &p_text, const String &p_voice, int p_volum
 		CharString voice_utf8 = p_voice.utf8();
 
 		jstring jStrT = env->NewStringUTF(text_utf8.get_data());
+		JNI_CHECK_EXCEPTION(env);
 		jstring jStrV = env->NewStringUTF(voice_utf8.get_data());
+		JNI_CHECK_EXCEPTION_CLEANUP_V(env, , {
+			env->DeleteLocalRef(jStrT);
+		});
 		env->CallVoidMethod(tts, _speak, jStrT, jStrV, CLAMP(p_volume, 0, 100), CLAMP(p_pitch, 0.f, 2.f), CLAMP(p_rate, 0.1f, 10.f), p_utterance_id, p_interrupt);
 		
-		JNI_CHECK_EXCEPTION(env);
+		JNI_CHECK_EXCEPTION_CLEANUP_V(env, , {
+			env->DeleteLocalRef(jStrT);
+			env->DeleteLocalRef(jStrV);
+		});
 
 		env->DeleteLocalRef(jStrT);
 		env->DeleteLocalRef(jStrV);
