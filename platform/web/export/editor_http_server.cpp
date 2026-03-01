@@ -71,7 +71,11 @@ void EditorHTTPServer::_set_internal_certs(Ref<Crypto> p_crypto) {
 }
 
 void EditorHTTPServer::_send_response() {
-	Vector<String> psa = String((char *)req_buf).split("\r\n");
+	// Parse strictly up to the bytes we received
+	String request_str;
+	request_str.parse_utf8((const char *)req_buf, req_pos);
+    Vector<String> psa = request_str.split("\r\n");
+
 	int len = psa.size();
 	ERR_FAIL_COND_MSG(len < 4, "Not enough response headers, got: " + itos(len) + ", expected >= 4.");
 
@@ -83,8 +87,8 @@ void EditorHTTPServer::_send_response() {
 
 	const int query_index = req[1].find_char('?');
 	const String path = (query_index == -1) ? req[1] : req[1].substr(0, query_index);
+    const String req_file = path.uri_decode().get_file(); // Decode the URL!
 
-	const String req_file = path.get_file();
 	const String req_ext = path.get_extension();
 	const String cache_path = EditorPaths::get_singleton()->get_temp_dir().path_join("web");
 	const String filepath = cache_path.path_join(req_file);
@@ -115,13 +119,15 @@ void EditorHTTPServer::_send_response() {
 		ERR_FAIL();
 	}
 
+	Vector<uint8_t> buffer;
+    buffer.resize(4096);
+
 	while (true) {
-		uint8_t bytes[4096];
-		uint64_t read = f->get_buffer(bytes, 4096);
+		uint64_t read = f->get_buffer(buffer.ptrw(), 4096);
 		if (read == 0) {
 			break;
 		}
-		err = peer->put_data(bytes, read);
+		err = peer->put_data(buffer.ptr(), read);
 		if (err != OK) {
 			ERR_FAIL();
 		}
@@ -140,7 +146,7 @@ void EditorHTTPServer::_poll() {
 		peer = tcp;
 		time = OS::get_singleton()->get_ticks_usec();
 	}
-	if (OS::get_singleton()->get_ticks_usec() - time > 1000000) {
+	if (OS::get_singleton()->get_ticks_usec() - time > 5000000) {
 		_clear_client();
 		return;
 	}
@@ -178,7 +184,11 @@ void EditorHTTPServer::_poll() {
 		}
 
 		int read = 0;
-		ERR_FAIL_COND(req_pos >= 4096);
+		if (req_pos >= 4096) {
+            ERR_PRINT("HTTP Request Header exceeded maximum size.");
+            _clear_client();
+            return;
+        }
 		Error err = peer->get_partial_data(&req_buf[req_pos], 1, read);
 		if (err != OK) {
 			// Got an error

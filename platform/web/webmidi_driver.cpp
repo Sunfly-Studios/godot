@@ -47,7 +47,7 @@ Error MIDIDriverWebMidi::open() {
 }
 
 void MIDIDriverWebMidi::close() {
-	get_singleton()->connected_input_names.clear();
+	connected_input_names.clear();
 	godot_js_webmidi_close_midi_inputs();
 }
 
@@ -57,8 +57,12 @@ MIDIDriverWebMidi::~MIDIDriverWebMidi() {
 
 void MIDIDriverWebMidi::set_input_names_callback(int p_size, const char **p_input_names) {
 	Vector<String> input_names;
-	for (int i = 0; i < p_size; i++) {
-		input_names.append(String::utf8(p_input_names[i]));
+	if (p_input_names != nullptr) {
+		for (int i = 0; i < p_size; i++) {
+			if (p_input_names[i] != nullptr) {
+				input_names.append(String::utf8(p_input_names[i]));
+			}
+		}
 	}
 #ifdef PROXY_TO_PTHREAD_ENABLED
 	if (!Thread::is_main_thread()) {
@@ -71,18 +75,21 @@ void MIDIDriverWebMidi::set_input_names_callback(int p_size, const char **p_inpu
 }
 
 void MIDIDriverWebMidi::_set_input_names_callback(const Vector<String> &p_input_names) {
-	get_singleton()->connected_input_names.clear();
+	MIDIDriverWebMidi *singleton = get_singleton();
+	if (!singleton) {
+		return; // Failsafe for teardown race conditions
+	}
+	singleton->connected_input_names.clear();
 	for (const String &input_name : p_input_names) {
-		get_singleton()->connected_input_names.push_back(input_name);
+		singleton->connected_input_names.push_back(input_name);
 	}
 }
 
 void MIDIDriverWebMidi::on_midi_message(int p_device_index, int p_status, const uint8_t *p_data, int p_data_len) {
 	PackedByteArray data;
 	data.resize(p_data_len);
-	uint8_t *data_ptr = data.ptrw();
-	for (int i = 0; i < p_data_len; i++) {
-		data_ptr[i] = p_data[i];
+	if (p_data_len > 0 && p_data != nullptr) {
+		memcpy(data.ptrw(), p_data, p_data_len);
 	}
 #ifdef PROXY_TO_PTHREAD_ENABLED
 	if (!Thread::is_main_thread()) {

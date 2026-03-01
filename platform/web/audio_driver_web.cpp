@@ -65,10 +65,17 @@ void AudioDriverWeb::_sample_playback_finished_callback(const char *p_playback_o
 		return;
 	}
 
-	AudioServer::get_singleton()->stop_sample_playback(playback);
+	AudioServer *server = AudioServer::get_singleton();
+	if (server) {
+		server->stop_sample_playback(playback);
+	}
 }
 
 void AudioDriverWeb::_audio_driver_process(int p_from, int p_samples) {
+	if (channel_count <= 0) {
+		return;
+	}
+
 	int32_t *stream_buffer = reinterpret_cast<int32_t *>(output_rb);
 	const int max_samples = memarr_len(output_rb);
 
@@ -147,6 +154,8 @@ Error AudioDriverWeb::init() {
 	}
 	input_rb = memnew_arr(float, array_size);
 	if (!input_rb) {
+		memdelete_arr(output_rb);
+		output_rb = nullptr;
 		return ERR_OUT_OF_MEMORY;
 	}
 
@@ -461,6 +470,7 @@ Error AudioDriverWorklet::create(int &p_buffer_size, int p_channels) {
 	if (!godot_audio_has_worklet()) {
 		return ERR_UNAVAILABLE;
 	}
+	singleton = this;
 	return (Error)godot_audio_worklet_create(p_channels);
 }
 

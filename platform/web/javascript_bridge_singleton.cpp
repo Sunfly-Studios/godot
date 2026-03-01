@@ -73,7 +73,7 @@ private:
 	WASM_EXPORT static int _variant2js(const void **p_args, int p_pos, godot_js_wrapper_ex *r_val, void **p_lock);
 	WASM_EXPORT static void _free_lock(void **p_lock, int p_type);
 	WASM_EXPORT static Variant _js2variant(int p_type, godot_js_wrapper_ex *p_val);
-	WASM_EXPORT static void *_alloc_variants(int p_size);
+	//WASM_EXPORT static void *_alloc_variants(int p_size); UNUSED
 	WASM_EXPORT static void callback(void *p_ref, int p_arg_id, int p_argc);
 	static void _callback(const JavaScriptObjectImpl *obj, Variant arg);
 
@@ -100,8 +100,8 @@ bool JavaScriptObjectImpl::_set(const StringName &p_name, const Variant &p_value
 	const String name = p_name;
 	godot_js_wrapper_ex exchange;
 	void *lock = nullptr;
-	const Variant *v = &p_value;
-	int type = _variant2js((const void **)&v, 0, &exchange, &lock);
+	const Variant *v_arr[1] = { &p_value }; // Proper array
+	int type = _variant2js((const void **)v_arr, 0, &exchange, &lock);	
 	godot_js_wrapper_object_set(_js_id, name.utf8().get_data(), type, &exchange);
 	if (lock) {
 		_free_lock(&lock, type);
@@ -114,6 +114,10 @@ bool JavaScriptObjectImpl::_get(const StringName &p_name, Variant &r_ret) const 
 	const String name = p_name;
 	godot_js_wrapper_ex exchange;
 	int type = godot_js_wrapper_object_get(_js_id, &exchange, name.utf8().get_data());
+	if (type < 0) {
+		// Assuming negative means undefined/error
+		return false; 
+	}
 	r_ret = _js2variant(type, &exchange);
 	return true;
 }
@@ -124,8 +128,8 @@ Variant JavaScriptObjectImpl::getvar(const Variant &p_key, bool *r_valid) const 
 	}
 	godot_js_wrapper_ex exchange;
 	void *lock = nullptr;
-	const Variant *v = &p_key;
-	int prop_type = _variant2js((const void **)&v, 0, &exchange, &lock);
+	const Variant *v_arr[1] = { &p_key }; // Proper array
+	int prop_type = _variant2js((const void **)v_arr, 0, &exchange, &lock);
 	int type = godot_js_wrapper_object_getvar(_js_id, prop_type, &exchange);
 	if (lock) {
 		_free_lock(&lock, prop_type);
@@ -146,10 +150,11 @@ void JavaScriptObjectImpl::setvar(const Variant &p_key, const Variant &p_value, 
 	godot_js_wrapper_ex kex, vex;
 	void *klock = nullptr;
 	void *vlock = nullptr;
-	const Variant *kv = &p_key;
-	const Variant *vv = &p_value;
-	int ktype = _variant2js((const void **)&kv, 0, &kex, &klock);
-	int vtype = _variant2js((const void **)&vv, 0, &vex, &vlock);
+	const Variant *kv_arr[1] = { &p_key }; 
+	const Variant *vv_arr[1] = { &p_value }; 
+	int ktype = _variant2js((const void **)kv_arr, 0, &kex, &klock);
+	int vtype = _variant2js((const void **)vv_arr, 0, &vex, &vlock);
+	
 	int ret = godot_js_wrapper_object_setvar(_js_id, ktype, &kex, vtype, &vex);
 	if (klock) {
 		_free_lock(&klock, ktype);
@@ -273,14 +278,13 @@ void JavaScriptObjectImpl::callback(void *p_ref, int p_args_id, int p_argc) {
 }
 
 void JavaScriptObjectImpl::_callback(const JavaScriptObjectImpl *obj, Variant arg) {
-	obj->_callable.call(arg);
+	Variant ret = obj->_callable.call(arg);
 
 	// Set return value
 	godot_js_wrapper_ex exchange;
 	void *lock = nullptr;
-	Variant ret;
-	const Variant *v = &ret;
-	int type = _variant2js((const void **)&v, 0, &exchange, &lock);
+	const Variant *v_arr[1] = { &ret };
+	int type = _variant2js((const void **)v_arr, 0, &exchange, &lock);
 	godot_js_wrapper_object_set_cb_ret(type, &exchange);
 	if (lock) {
 		_free_lock(&lock, type);
@@ -336,6 +340,10 @@ extern int godot_js_eval(const char *p_js, int p_use_global_ctx, union js_eval_r
 }
 
 void *resize_PackedByteArray_and_open_write(void *p_arr, void *r_write, int p_len) {
+	if (p_len < 0 || p_len > 1024 * 1024 * 512) { // 512MB sanity limit
+		ERR_PRINT("JavaScript attempted to allocate an invalid buffer size.");
+		return nullptr;
+	}
 	PackedByteArray *arr = (PackedByteArray *)p_arr;
 	VectorWriteProxy<uint8_t> *write = (VectorWriteProxy<uint8_t> *)r_write;
 	arr->resize(p_len);
@@ -356,8 +364,11 @@ Variant JavaScriptBridge::eval(const String &p_code, bool p_use_global_exec_cont
 		case Variant::FLOAT:
 			return js_data.d;
 		case Variant::STRING: {
-			String str = String::utf8(js_data.s);
-			free(js_data.s); // Must free the string allocated in JS.
+			String str;
+			if (js_data.s) {
+				str = String::utf8(js_data.s);
+				free(js_data.s); // Must free the string allocated in JS.
+			}
 			return str;
 		}
 		case Variant::PACKED_BYTE_ARRAY:
@@ -396,13 +407,18 @@ void JavaScriptBridge::download_buffer(Vector<uint8_t> p_arr, const String &p_na
 }
 
 bool JavaScriptBridge::pwa_needs_update() const {
-	return OS_Web::get_singleton()->pwa_needs_update();
+	OS_Web *os = OS_Web::get_singleton();
+	return os ? os->pwa_needs_update() : false;
 }
 
 Error JavaScriptBridge::pwa_update() {
-	return OS_Web::get_singleton()->pwa_update();
+	OS_Web *os = OS_Web::get_singleton();
+	return os ? os->pwa_update() : ERR_UNAVAILABLE;
 }
 
 void JavaScriptBridge::force_fs_sync() {
-	OS_Web::get_singleton()->force_fs_sync();
+	OS_Web *os = OS_Web::get_singleton();
+	if (os) {
+		os->force_fs_sync();
+	}
 }

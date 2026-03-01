@@ -38,6 +38,8 @@
 #include "core/os/thread.h"
 #include "servers/audio_server.h"
 
+#include <atomic>
+
 class AudioDriverWeb : public AudioDriver {
 private:
 	struct AudioContext {
@@ -124,7 +126,7 @@ private:
 	};
 	Mutex mutex;
 	Thread thread;
-	bool quit = false;
+	std::atomic<bool> quit { false };
 	int32_t state[STATE_MAX] = { 0 };
 
 	static void _audio_thread_func(void *p_data);

@@ -61,9 +61,13 @@ void exit_callback() {
 		Main::cleanup();
 		main_started = false;
 	}
-	int exit_code = OS_Web::get_singleton()->get_exit_code();
-	memdelete(os);
-	os = nullptr;
+
+	int exit_code = 0;
+	if (os) {
+		exit_code = os->get_exit_code();
+		memdelete(os);
+		os = nullptr;
+	}
 	emscripten_force_exit(exit_code); // Exit runtime.
 }
 
@@ -76,7 +80,8 @@ void main_loop_callback() {
 	uint64_t current_ticks = os->get_ticks_usec();
 #endif
 
-	bool force_draw = DisplayServerWeb::get_singleton()->check_size_force_redraw();
+	DisplayServerWeb *ds = static_cast<DisplayServerWeb *>(DisplayServerWeb::get_singleton());
+	bool force_draw = ds ? ds->check_size_force_redraw() : false;
 	if (force_draw) {
 		Main::force_redraw();
 #ifndef PROXY_TO_PTHREAD_ENABLED
@@ -138,6 +143,11 @@ extern EMSCRIPTEN_KEEPALIVE int godot_web_main(int argc, char *argv[]) {
 
 	// Proper shutdown in case of setup failure.
 	if (err != OK) {
+#ifdef TOOLS_ENABLED
+		// Manually clean up the editor plugin 
+		// since Main::cleanup() will be skipped by the exit callback.
+		WebToolsEditorPlugin::finalize(); 
+#endif
 		// Will only exit after sync.
 		emscripten_set_main_loop(exit_callback, -1, false);
 		godot_js_os_finish_async(cleanup_after_sync);
@@ -156,7 +166,9 @@ extern EMSCRIPTEN_KEEPALIVE int godot_web_main(int argc, char *argv[]) {
 
 	int ret = Main::start();
 	os->set_exit_code(ret);
-	os->get_main_loop()->initialize();
+	if (os->get_main_loop()) {
+		os->get_main_loop()->initialize();
+	}
 #ifdef TOOLS_ENABLED
 	if (Engine::get_singleton()->is_project_manager_hint() && FileAccess::exists("/tmp/preload.zip")) {
 		PackedStringArray ps;

@@ -32,8 +32,14 @@
 
 void HTTPClientWeb::_parse_headers(int p_len, const char **p_headers, void *p_ref) {
 	HTTPClientWeb *client = static_cast<HTTPClientWeb *>(p_ref);
+	if (!p_headers) {
+		return; // Failsafe
+	}
+
 	for (int i = 0; i < p_len; i++) {
-		client->response_headers.push_back(String::utf8(p_headers[i]));
+		if (p_headers[i]) {
+			client->response_headers.push_back(String::utf8(p_headers[i]));
+		}
 	}
 }
 
@@ -95,9 +101,11 @@ Error HTTPClientWeb::request(Method p_method, const String &p_url, const Vector<
 	String url = (use_tls ? "https://" : "http://") + host + ":" + itos(port) + p_url;
 	Vector<CharString> keeper;
 	Vector<const char *> c_strings;
+	keeper.resize(p_headers.size());
+	c_strings.resize(p_headers.size());
 	for (int i = 0; i < p_headers.size(); i++) {
-		keeper.push_back(p_headers[i].utf8());
-		c_strings.push_back(keeper[i].get_data());
+		keeper.write[i] = p_headers[i].utf8();
+		c_strings.write[i] = keeper[i].get_data();
 	}
 	if (js_id) {
 		godot_js_fetch_free(js_id);
@@ -177,7 +185,7 @@ PackedByteArray HTTPClientWeb::read_response_body_chunk() {
 	}
 
 	PackedByteArray chunk;
-	if (!read) {
+	if (read <= 0) {
 		return chunk;
 	}
 	chunk.resize(read);
@@ -234,12 +242,16 @@ Error HTTPClientWeb::poll() {
 		case STATUS_REQUESTING: {
 #ifdef DEBUG_ENABLED
 			// forcing synchronous requests is not possible on the web
-			if (last_polling_frame == Engine::get_singleton()->get_process_frames()) {
-				WARN_PRINT("HTTPClientWeb polled multiple times in one frame, "
+			Engine *engine = Engine::get_singleton();
+			if (engine) {
+				uint64_t current_frame = engine->get_process_frames();
+				if (last_polling_frame == current_frame) {
+					WARN_PRINT("HTTPClientWeb polled multiple times in one frame, "
 						   "but request cannot progress more than once per "
 						   "frame on the Web platform.");
+				}
+				last_polling_frame = current_frame;
 			}
-			last_polling_frame = Engine::get_singleton()->get_process_frames();
 #endif
 
 			polled_response_code = godot_js_fetch_http_status_get(js_id);

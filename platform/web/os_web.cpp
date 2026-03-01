@@ -73,7 +73,10 @@ MainLoop *OS_Web::get_main_loop() const {
 }
 
 void OS_Web::fs_sync_callback() {
-	get_singleton()->idb_is_syncing = false;
+	OS_Web *os = get_singleton();
+	if (os) {
+		os->idb_is_syncing = false;
+	}
 }
 
 bool OS_Web::main_loop_iterate() {
@@ -106,6 +109,12 @@ void OS_Web::finalize() {
 // Miscellaneous
 
 Error OS_Web::execute(const String &p_path, const List<String> &p_arguments, String *r_pipe, int *r_exitcode, bool read_stderr, Mutex *p_pipe_mutex, bool p_open_console) {
+	if (r_exitcode) {
+		*r_exitcode = -1; // Explicitly state we don't know the exit code
+	}
+	if (r_pipe) {
+		*r_pipe = "";
+	}
 	return create_process(p_path, p_arguments);
 }
 
@@ -217,6 +226,9 @@ String OS_Web::get_data_path() const {
 
 void OS_Web::file_access_close_callback(const String &p_file, int p_flags) {
 	OS_Web *os = OS_Web::get_singleton();
+	if (!os) {
+		return; // Engine is shutting down
+	}
 	if (!(os->is_userfs_persistent() && (p_flags & FileAccess::WRITE))) {
 		return; // FS persistence is not working or we are not writing.
 	}
@@ -243,11 +255,14 @@ void OS_Web::dir_access_remove_callback(const String &p_file) {
 }
 
 void OS_Web::update_pwa_state_callback() {
-	if (OS_Web::get_singleton()) {
-		OS_Web::get_singleton()->pwa_is_waiting = true;
+	OS_Web *os = OS_Web::get_singleton();
+	if (os) {
+		os->pwa_is_waiting = true;
 	}
-	if (JavaScriptBridge::get_singleton()) {
-		JavaScriptBridge::get_singleton()->emit_signal("pwa_update_available");
+	
+	JavaScriptBridge *js_bridge = JavaScriptBridge::get_singleton();
+	if (js_bridge) {
+		js_bridge->emit_signal("pwa_update_available");
 	}
 }
 

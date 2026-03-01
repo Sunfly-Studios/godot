@@ -106,17 +106,14 @@ void DisplayServerWeb::drop_files_js_callback(const char **p_filev, int p_filec)
 
 void DisplayServerWeb::_drop_files_js_callback(const Vector<String> &p_files) {
 	DisplayServerWeb *ds = get_singleton();
-	if (!ds) {
-		ERR_FAIL_MSG("Unable to drop files because the DisplayServer is not active");
-	}
-	if (!ds->drop_files_callback.is_valid()) {
+	if (!ds || !ds->drop_files_callback.is_valid()) {
 		return;
 	}
 	Variant v_files = p_files;
 	const Variant *v_args[1] = { &v_files };
 	Variant ret;
 	Callable::CallError ce;
-	ds->drop_files_callback.callp((const Variant **)&v_args, 1, ret, ce);
+	ds->drop_files_callback.callp(v_args, 1, ret, ce);
 	if (ce.error != Callable::CallError::CALL_OK) {
 		ERR_PRINT(vformat("Failed to execute drop files callback: %s.", Variant::get_callable_error_text(ds->drop_files_callback, v_args, 1, ce)));
 	}
@@ -178,9 +175,17 @@ void DisplayServerWeb::key_callback(int p_pressed, int p_repeat, int p_modifiers
 
 void DisplayServerWeb::_key_callback(const String &p_key_event_code, const String &p_key_event_key, int p_pressed, int p_repeat, int p_modifiers) {
 	// Resume audio context after input in case autoplay was denied.
-	OS_Web::get_singleton()->resume_audio();
+	OS_Web *os = OS_Web::get_singleton();
+	if (os) {
+		os->resume_audio();
+	}
 
 	DisplayServerWeb *ds = get_singleton();
+
+	if (!ds) {
+		return;
+	}
+
 	if (ds->ime_started) {
 		return;
 	}
@@ -235,6 +240,7 @@ int DisplayServerWeb::_mouse_button_callback(int p_pressed, int p_button, double
 	Point2 pos(p_x, p_y);
 	Ref<InputEventMouseButton> ev;
 	ev.instantiate();
+	ERR_FAIL_NULL(ev);
 	ev->set_position(pos);
 	ev->set_global_position(pos);
 	ev->set_pressed(p_pressed);
@@ -295,7 +301,10 @@ int DisplayServerWeb::_mouse_button_callback(int p_pressed, int p_button, double
 
 	Input::get_singleton()->parse_input_event(ev);
 	// Resume audio context after input in case autoplay was denied.
-	OS_Web::get_singleton()->resume_audio();
+	OS_Web *os = OS_Web::get_singleton();
+	if (os) {
+		os->resume_audio();
+	}
 
 	// Make sure to flush all events so we can call restricted APIs inside the event.
 	Input::get_singleton()->flush_buffered_events();
@@ -327,6 +336,7 @@ void DisplayServerWeb::_mouse_move_callback(double p_x, double p_y, double p_rel
 	Point2 pos(p_x, p_y);
 	Ref<InputEventMouseMotion> ev;
 	ev.instantiate();
+	ERR_FAIL_NULL(ev);
 	dom2godot_mod(ev, p_modifiers, Key::NONE);
 	ev->set_button_mask(input_mask);
 
@@ -395,8 +405,14 @@ bool DisplayServerWeb::tts_is_paused() const {
 
 void DisplayServerWeb::update_voices_callback(int p_size, const char **p_voice) {
 	Vector<String> voices;
+	if (!p_voice) {
+		return;
+	}
+
 	for (int i = 0; i < p_size; i++) {
-		voices.append(String::utf8(p_voice[i]));
+		if (p_voice[i]) {
+			voices.append(String::utf8(p_voice[i]));
+		}
 	}
 
 #ifdef PROXY_TO_PTHREAD_ENABLED
@@ -478,6 +494,8 @@ void DisplayServerWeb::js_utterance_callback(int p_event, int p_id, int p_pos) {
 
 void DisplayServerWeb::_js_utterance_callback(int p_event, int p_id, int p_pos) {
 	DisplayServerWeb *ds = (DisplayServerWeb *)DisplayServer::get_singleton();
+	ERR_FAIL_NULL(ds);
+
 	if (ds->utterance_ids.has(p_id)) {
 		int pos = 0;
 		if ((TTSUtteranceEvent)p_event == DisplayServer::TTS_UTTERANCE_BOUNDARY) {
@@ -519,6 +537,7 @@ void DisplayServerWeb::cursor_set_custom_image(const Ref<Resource> &p_cursor, Cu
 	if (p_cursor.is_valid()) {
 		Ref<Image> image = _get_cursor_image_from_resource(p_cursor, p_hotspot);
 		ERR_FAIL_COND(image.is_null());
+		ERR_FAIL_COND_MSG(image->is_empty(), "Cannot create a cursor from an empty image.");
 		Vector2i texture_size = image->get_size();
 
 		if (image->get_format() != Image::FORMAT_RGBA8) {
@@ -663,6 +682,7 @@ int DisplayServerWeb::_mouse_wheel_callback(double p_delta_x, double p_delta_y) 
 	Input *input = Input::get_singleton();
 	Ref<InputEventMouseButton> ev;
 	ev.instantiate();
+	ERR_FAIL_NULL(ev);
 	ev->set_position(input->get_mouse_position());
 	ev->set_global_position(ev->get_position());
 
@@ -718,12 +738,14 @@ void DisplayServerWeb::_touch_callback(int p_type, int p_count) {
 	DisplayServerWeb *ds = get_singleton();
 
 	const JSTouchEvent &touch_event = ds->touch_event;
-	for (int i = 0; i < p_count; i++) {
+	int count = MIN(p_count, 32);
+	for (int i = 0; i < count; i++) {
 		Point2 point(touch_event.coords[i * 2], touch_event.coords[i * 2 + 1]);
 		if (p_type == 2) {
 			// touchmove
 			Ref<InputEventScreenDrag> ev;
 			ev.instantiate();
+			ERR_FAIL_NULL(ev);
 			ev->set_index(touch_event.identifier[i]);
 			ev->set_position(point);
 
@@ -738,9 +760,13 @@ void DisplayServerWeb::_touch_callback(int p_type, int p_count) {
 			Ref<InputEventScreenTouch> ev;
 
 			// Resume audio context after input in case autoplay was denied.
-			OS_Web::get_singleton()->resume_audio();
+			OS_Web *os = OS_Web::get_singleton();
+			if (os) {
+				os->resume_audio();
+			}
 
 			ev.instantiate();
+			ERR_FAIL_NULL(ev);
 			ev->set_index(touch_event.identifier[i]);
 			ev->set_position(point);
 			ev->set_pressed(p_type == 0);
@@ -784,12 +810,8 @@ void DisplayServerWeb::_vk_input_text_callback(const String &p_text, int p_curso
 	Ref<InputEventKey> k;
 	for (int i = 0; i < p_cursor; i++) {
 		k.instantiate();
+		ERR_FAIL_NULL(k);
 		k->set_pressed(true);
-		k->set_echo(false);
-		k->set_keycode(Key::RIGHT);
-		input->parse_input_event(k);
-		k.instantiate();
-		k->set_pressed(false);
 		k->set_echo(false);
 		k->set_keycode(Key::RIGHT);
 		input->parse_input_event(k);
@@ -816,7 +838,10 @@ void DisplayServerWeb::window_blur_callback() {
 }
 
 void DisplayServerWeb::_window_blur_callback() {
-	Input::get_singleton()->release_pressed_events();
+	Input *input = Input::get_singleton();
+	if (input) {
+		input->release_pressed_events();
+	}
 }
 
 // Gamepad
@@ -859,8 +884,12 @@ void DisplayServerWeb::ime_callback(int p_type, const char *p_text) {
 
 void DisplayServerWeb::_ime_callback(int p_type, const String &p_text) {
 	DisplayServerWeb *ds = get_singleton();
+	ERR_FAIL_NULL(ds);
 	// Resume audio context after input in case autoplay was denied.
-	OS_Web::get_singleton()->resume_audio();
+	OS_Web *os = OS_Web::get_singleton();
+	if (os) {
+		os->resume_audio();
+	}
 
 	switch (p_type) {
 		case 0: {
@@ -896,6 +925,13 @@ void DisplayServerWeb::_ime_callback(int p_type, const String &p_text) {
 				OS::get_singleton()->get_main_loop()->notification(MainLoop::NOTIFICATION_OS_IME_UPDATE);
 
 				String text = p_text;
+				
+				// Ensure the buffer has enough space for the entire string at once.
+				int required_size = ds->key_event_pos + text.length();
+				if (required_size > ds->key_event_buffer.size()) {
+					ds->key_event_buffer.resize(required_size);
+				}
+
 				for (int i = 0; i < text.length(); i++) {
 					DisplayServerWeb::KeyEvent ke;
 
@@ -908,9 +944,6 @@ void DisplayServerWeb::_ime_callback(int p_type, const String &p_text) {
 					ke.unicode = text[i];
 					ke.mod = 0;
 
-					if (ds->key_event_pos >= ds->key_event_buffer.size()) {
-						ds->key_event_buffer.resize(1 + ds->key_event_pos);
-					}
 					ds->key_event_buffer.write[ds->key_event_pos++] = ke;
 				}
 			}
@@ -1164,8 +1197,8 @@ DisplayServerWeb::~DisplayServerWeb() {
 	}
 #ifdef GLES3_ENABLED
 	if (webgl_ctx) {
-		emscripten_webgl_commit_frame();
 		emscripten_webgl_destroy_context(webgl_ctx);
+		webgl_ctx = 0;
 	}
 #endif
 }
@@ -1427,6 +1460,7 @@ void DisplayServerWeb::process_keys() {
 
 		Ref<InputEventKey> ev;
 		ev.instantiate();
+		ERR_FAIL_NULL(ev);
 		ev->set_pressed(ke.pressed);
 		ev->set_echo(ke.echo);
 		ev->set_keycode(ke.keycode);
