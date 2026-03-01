@@ -65,28 +65,30 @@
 	}
 	if (@available(iOS 13.4, *)) {
 		for (UIPress *press in presses) {
-			String u32lbl = String::utf8([press.key.charactersIgnoringModifiers UTF8String]);
-			String u32text = String::utf8([press.key.characters UTF8String]);
-			Key key = KeyMappingIOS::remap_key(press.key.keyCode);
+			@autoreleasepool {
+				String u32lbl = String::utf8([press.key.charactersIgnoringModifiers UTF8String]);
+				String u32text = String::utf8([press.key.characters UTF8String]);
+				Key key = KeyMappingIOS::remap_key(press.key.keyCode);
 
-			if (press.key.keyCode == 0 && u32text.is_empty() && u32lbl.is_empty()) {
-				continue;
-			}
-
-			char32_t us = 0;
-			if (!u32lbl.is_empty() && !u32lbl.begins_with("UIKey")) {
-				us = u32lbl[0];
-			}
-
-			KeyLocation location = KeyMappingIOS::key_location(press.key.keyCode);
-
-			if (!u32text.is_empty() && !u32text.begins_with("UIKey")) {
-				for (int i = 0; i < u32text.length(); i++) {
-					const char32_t c = u32text[i];
-					DisplayServerIOS::get_singleton()->key(fix_keycode(us, key), c, fix_key_label(us, key), key, press.key.modifierFlags, true, location);
+				if (press.key.keyCode == 0 && u32text.is_empty() && u32lbl.is_empty()) {
+					continue;
 				}
-			} else {
-				DisplayServerIOS::get_singleton()->key(fix_keycode(us, key), 0, fix_key_label(us, key), key, press.key.modifierFlags, true, location);
+
+				char32_t us = 0;
+				if (!u32lbl.is_empty() && !u32lbl.begins_with("UIKey")) {
+					us = u32lbl[0];
+				}
+
+				KeyLocation location = KeyMappingIOS::key_location(press.key.keyCode);
+
+				if (!u32text.is_empty() && !u32text.begins_with("UIKey")) {
+					for (int i = 0; i < u32text.length(); i++) {
+						const char32_t c = u32text[i];
+						DisplayServerIOS::get_singleton()->key(fix_keycode(us, key), c, fix_key_label(us, key), key, press.key.modifierFlags, true, location);
+					}
+				} else {
+					DisplayServerIOS::get_singleton()->key(fix_keycode(us, key), 0, fix_key_label(us, key), key, press.key.modifierFlags, true, location);
+				}
 			}
 		}
 	}
@@ -100,21 +102,23 @@
 	}
 	if (@available(iOS 13.4, *)) {
 		for (UIPress *press in presses) {
-			String u32lbl = String::utf8([press.key.charactersIgnoringModifiers UTF8String]);
-			Key key = KeyMappingIOS::remap_key(press.key.keyCode);
+			@autoreleasepool {
+				String u32lbl = String::utf8([press.key.charactersIgnoringModifiers UTF8String]);
+				Key key = KeyMappingIOS::remap_key(press.key.keyCode);
 
-			if (press.key.keyCode == 0 && u32lbl.is_empty()) {
-				continue;
+				if (press.key.keyCode == 0 && u32lbl.is_empty()) {
+					continue;
+				}
+
+				char32_t us = 0;
+				if (!u32lbl.is_empty() && !u32lbl.begins_with("UIKey")) {
+					us = u32lbl[0];
+				}
+
+				KeyLocation location = KeyMappingIOS::key_location(press.key.keyCode);
+
+				DisplayServerIOS::get_singleton()->key(fix_keycode(us, key), 0, fix_key_label(us, key), key, press.key.modifierFlags, false, location);
 			}
-
-			char32_t us = 0;
-			if (!u32lbl.is_empty() && !u32lbl.begins_with("UIKey")) {
-				us = u32lbl[0];
-			}
-
-			KeyLocation location = KeyMappingIOS::key_location(press.key.keyCode);
-
-			DisplayServerIOS::get_singleton()->key(fix_keycode(us, key), 0, fix_key_label(us, key), key, press.key.modifierFlags, false, location);
 		}
 	}
 }
@@ -205,13 +209,22 @@
 }
 
 - (BOOL)godotViewFinishedSetup:(GodotView *)view {
-	[self.godotLoadingOverlay removeFromSuperview];
-	self.godotLoadingOverlay = nil;
+	// If the Godot rendering thread calls this delegate method, removing a UIKit
+    // view from a background thread will cause an immediate crash.
+    dispatch_async(dispatch_get_main_queue(), ^{
+        if (self.godotLoadingOverlay) {
+            [self.godotLoadingOverlay removeFromSuperview];
+            self.godotLoadingOverlay = nil;
+        }
+    });
 
 	return YES;
 }
 
 - (void)dealloc {
+	if (self.keyboardView) {
+        [self.keyboardView removeFromSuperview];
+    }
 	self.keyboardView = nil;
 
 	self.renderer = nil;

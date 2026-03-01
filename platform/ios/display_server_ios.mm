@@ -143,6 +143,7 @@ DisplayServerIOS::DisplayServerIOS(const String &p_rendering_driver, WindowMode 
 
 		rendering_device = memnew(RenderingDevice);
 		if (rendering_device->initialize(rendering_context, MAIN_WINDOW_ID) != OK) {
+			memdelete(rendering_device);
 			rendering_device = nullptr;
 			memdelete(rendering_context);
 			rendering_context = nullptr;
@@ -192,6 +193,12 @@ DisplayServerIOS::~DisplayServerIOS() {
 		rendering_context->window_destroy(MAIN_WINDOW_ID);
 		memdelete(rendering_context);
 		rendering_context = nullptr;
+	}
+#endif
+
+#if defined(__OBJC__)
+	if (tts) {
+		tts = nil;
 	}
 #endif
 }
@@ -265,7 +272,17 @@ void DisplayServerIOS::send_window_event(DisplayServer::WindowEvent p_event) con
 
 void DisplayServerIOS::_window_callback(const Callable &p_callable, const Variant &p_arg) const {
 	if (p_callable.is_valid()) {
-		p_callable.call(p_arg);
+		// Safely wrap the Variant pointer and execute with strict CallError 
+		// validation to prevent the GDScript VM from crashing on mismatched arguments.
+		Variant ret;
+		Callable::CallError ce;
+		const Variant *argp = &p_arg;
+		
+		p_callable.callp(&argp, 1, ret, ce);
+		
+		if (ce.error != Callable::CallError::CALL_OK) {
+			ERR_PRINT(vformat("Godot iOS: Failed to execute window callback: %s", Variant::get_callable_error_text(p_callable, &argp, 1, ce)));
+		}
 	}
 }
 
@@ -276,6 +293,7 @@ void DisplayServerIOS::_window_callback(const Callable &p_callable, const Varian
 void DisplayServerIOS::touch_press(int p_idx, int p_x, int p_y, bool p_pressed, bool p_double_click) {
 	Ref<InputEventScreenTouch> ev;
 	ev.instantiate();
+	ERR_FAIL_NULL(ev);
 
 	ev->set_index(p_idx);
 	ev->set_pressed(p_pressed);
@@ -287,6 +305,7 @@ void DisplayServerIOS::touch_press(int p_idx, int p_x, int p_y, bool p_pressed, 
 void DisplayServerIOS::touch_drag(int p_idx, int p_prev_x, int p_prev_y, int p_x, int p_y, float p_pressure, Vector2 p_tilt) {
 	Ref<InputEventScreenDrag> ev;
 	ev.instantiate();
+	ERR_FAIL_NULL(ev);
 	ev->set_index(p_idx);
 	ev->set_pressure(p_pressure);
 	ev->set_tilt(p_tilt);
@@ -314,6 +333,9 @@ void DisplayServerIOS::touches_canceled(int p_idx) {
 void DisplayServerIOS::key(Key p_key, char32_t p_char, Key p_unshifted, Key p_physical, NSInteger p_modifier, bool p_pressed, KeyLocation p_location) {
 	Ref<InputEventKey> ev;
 	ev.instantiate();
+
+	ERR_FAIL_NULL(ev);
+
 	ev->set_echo(false);
 	ev->set_pressed(p_pressed);
 	ev->set_keycode(fix_keycode(p_char, p_key));
@@ -439,11 +461,21 @@ bool DisplayServerIOS::is_dark_mode_supported() const {
 }
 
 bool DisplayServerIOS::is_dark_mode() const {
-	if (@available(iOS 13.0, *)) {
-		return [UITraitCollection currentTraitCollection].userInterfaceStyle == UIUserInterfaceStyleDark;
+	__block bool is_dark = false;
+	
+	void (^check_dark)(void) = ^{
+        if (@available(iOS 13.0, *)) {
+            is_dark = [UITraitCollection currentTraitCollection].userInterfaceStyle == UIUserInterfaceStyleDark;
+        }
+    };
+	
+	if ([NSThread isMainThread]) {
+		check_dark();
 	} else {
-		return false;
+		dispatch_sync(dispatch_get_main_queue(), check_dark);
 	}
+	
+	return is_dark;
 }
 
 void DisplayServerIOS::set_system_theme_change_callback(const Callable &p_callable) {
@@ -462,14 +494,29 @@ void DisplayServerIOS::emit_system_theme_changed() {
 }
 
 Rect2i DisplayServerIOS::get_display_safe_area() const {
-	UIEdgeInsets insets = UIEdgeInsetsZero;
-	UIView *view = AppDelegate.viewController.godotView;
-	if ([view respondsToSelector:@selector(safeAreaInsets)]) {
-		insets = [view safeAreaInsets];
+	__block UIEdgeInsets insets = UIEdgeInsetsZero;
+	
+	// Accessing UIView geometry off the main thread is risky.
+	// We must safely route this query to the main thread if Godot is running this 
+	// from a background worker or multithreaded rendering pipeline.
+	if ([NSThread isMainThread]) {
+		UIView *view = AppDelegate.viewController.godotView;
+		if ([view respondsToSelector:@selector(safeAreaInsets)]) {
+			insets = [view safeAreaInsets];
+		}
+	} else {
+		dispatch_sync(dispatch_get_main_queue(), ^{
+			UIView *view = AppDelegate.viewController.godotView;
+			if ([view respondsToSelector:@selector(safeAreaInsets)]) {
+				insets = [view safeAreaInsets];
+			}
+		});
 	}
+
 	float scale = screen_get_scale();
 	Size2i insets_position = Size2i(insets.left, insets.top) * scale;
 	Size2i insets_size = Size2i(insets.left + insets.right, insets.top + insets.bottom) * scale;
+	
 	return Rect2i(screen_get_position() + insets_position, screen_get_size() - insets_size);
 }
 
@@ -486,54 +533,61 @@ Point2i DisplayServerIOS::screen_get_position(int p_screen) const {
 }
 
 Size2i DisplayServerIOS::screen_get_size(int p_screen) const {
-	CALayer *layer = AppDelegate.viewController.godotView.renderingLayer;
-
-	if (!layer) {
-		return Size2i();
-	}
-
-	return Size2i(layer.bounds.size.width, layer.bounds.size.height) * screen_get_scale(p_screen);
+	CGRect screenBounds = [UIScreen mainScreen].bounds;
+    return Size2i(screenBounds.size.width, screenBounds.size.height) * screen_get_scale(p_screen);
 }
 
 Rect2i DisplayServerIOS::screen_get_usable_rect(int p_screen) const {
-	return Rect2i(screen_get_position(p_screen), screen_get_size(p_screen));
+	return get_display_safe_area();
 }
 
 int DisplayServerIOS::screen_get_dpi(int p_screen) const {
-	struct utsname systemInfo;
-	uname(&systemInfo);
-
-	NSString *string = [NSString stringWithCString:systemInfo.machine encoding:NSUTF8StringEncoding];
-
-	NSDictionary *iOSModelToDPI = [GodotDeviceMetrics dpiList];
-
-	for (NSArray *keyArray in iOSModelToDPI) {
-		if ([keyArray containsObject:string]) {
-			NSNumber *value = iOSModelToDPI[keyArray];
-			return [value intValue];
-		}
+	// Hardware DPI cannot change. Cache this as optimisation.
+	static int cached_dpi = 0;
+	if (cached_dpi > 0) {
+		return cached_dpi;
 	}
 
-	// If device wasn't found in dictionary
-	// make a best guess from device metrics.
-	CGFloat scale = [UIScreen mainScreen].scale;
+	@autoreleasepool {
+		struct utsname systemInfo;
+		uname(&systemInfo);
 
-	UIUserInterfaceIdiom idiom = [UIDevice currentDevice].userInterfaceIdiom;
-
-	switch (idiom) {
-		case UIUserInterfaceIdiomPad:
-			return scale == 2 ? 264 : 132;
-		case UIUserInterfaceIdiomPhone: {
-			if (scale == 3) {
-				CGFloat nativeScale = [UIScreen mainScreen].nativeScale;
-				return nativeScale == 3 ? 458 : 401;
+		NSString *string = [NSString stringWithCString:systemInfo.machine encoding:NSUTF8StringEncoding];
+		if (string) {
+			NSDictionary *iOSModelToDPI = [GodotDeviceMetrics dpiList];
+			for (NSArray *keyArray in iOSModelToDPI) {
+				if ([keyArray containsObject:string]) {
+					NSNumber *value = iOSModelToDPI[keyArray];
+					cached_dpi = [value intValue];
+					return cached_dpi;
+				}
 			}
-
-			return 326;
 		}
-		default:
-			return 72;
+
+		// If device wasn't found in dictionary, make a best guess from device metrics.
+		CGFloat scale = [UIScreen mainScreen].scale;
+		UIUserInterfaceIdiom idiom = [UIDevice currentDevice].userInterfaceIdiom;
+
+		switch (idiom) {
+			case UIUserInterfaceIdiomPad:
+				cached_dpi = (scale == 2) ? 264 : 132;
+				break;
+			case UIUserInterfaceIdiomPhone: {
+				if (scale == 3) {
+					CGFloat nativeScale = [UIScreen mainScreen].nativeScale;
+					cached_dpi = (nativeScale == 3) ? 458 : 401;
+				} else {
+					cached_dpi = 326;
+				}
+				break;
+			}
+			default:
+				cached_dpi = 72;
+				break;
+		}
 	}
+	
+	return cached_dpi;
 }
 
 float DisplayServerIOS::screen_get_refresh_rate(int p_screen) const {
@@ -549,11 +603,24 @@ float DisplayServerIOS::screen_get_scale(int p_screen) const {
 	int screen_count = get_screen_count();
 	ERR_FAIL_INDEX_V(p_screen, screen_count, 1.0f);
 
-	if (@available(iOS 13, *)) {
-		return MAX([UITraitCollection currentTraitCollection].displayScale, 1);
+	__block float scale = 1.0f;
+	
+	// Force the call to be on the main thread.
+	void (^get_scale)(void) = ^{
+        if (@available(iOS 13, *)) {
+            scale = MAX([UITraitCollection currentTraitCollection].displayScale, 1);
+        } else {
+            scale = [UIScreen mainScreen].scale;
+        }
+    };
+
+	if ([NSThread isMainThread]) {
+		get_scale();
 	} else {
-		return [UIScreen mainScreen].scale;
+		dispatch_sync(dispatch_get_main_queue(), get_scale);
 	}
+	
+	return scale;
 }
 
 Vector<DisplayServer::WindowID> DisplayServerIOS::get_window_list() const {
@@ -573,10 +640,10 @@ int64_t DisplayServerIOS::window_get_native_handle(HandleType p_handle_type, Win
 			return 0; // Not supported.
 		}
 		case WINDOW_HANDLE: {
-			return (int64_t)AppDelegate.viewController;
+			return (int64_t)(__bridge void *)AppDelegate.viewController;
 		}
 		case WINDOW_VIEW: {
-			return (int64_t)AppDelegate.viewController.godotView;
+			return (int64_t)(__bridge void *)AppDelegate.viewController.godotView;
 		}
 		default: {
 			return 0;
@@ -605,7 +672,14 @@ void DisplayServerIOS::window_set_current_screen(int p_screen, WindowID p_window
 }
 
 Point2i DisplayServerIOS::window_get_position(WindowID p_window) const {
-	return Point2i();
+    // iPads (Stage Manager) and Mac Catalyst have movable, floating windows. 
+    // We must report actual OS coordinates instead of a hardcoded Point2i(0,0).
+    UIView *view = AppDelegate.viewController.godotView;
+    if (view && view.window) {
+        CGRect frame = view.window.frame;
+        return Point2i(frame.origin.x, frame.origin.y) * screen_get_max_scale();
+    }
+    return Point2i();
 }
 
 Point2i DisplayServerIOS::window_get_position_with_decorations(WindowID p_window) const {
@@ -641,8 +715,11 @@ void DisplayServerIOS::window_set_size(const Size2i p_size, WindowID p_window) {
 }
 
 Size2i DisplayServerIOS::window_get_size(WindowID p_window) const {
-	CGRect screenBounds = [UIScreen mainScreen].bounds;
-	return Size2i(screenBounds.size.width, screenBounds.size.height) * screen_get_max_scale();
+	UIView *view = AppDelegate.viewController.godotView;
+	if (!view) {
+		return Size2i();
+	}
+	return Size2i(view.bounds.size.width, view.bounds.size.height) * screen_get_max_scale();
 }
 
 Size2i DisplayServerIOS::window_get_size_with_decorations(WindowID p_window) const {
@@ -654,6 +731,19 @@ void DisplayServerIOS::window_set_mode(WindowMode p_mode, WindowID p_window) {
 }
 
 DisplayServer::WindowMode DisplayServerIOS::window_get_mode(WindowID p_window) const {
+	// Dynamically detect if we are running in an iPadOS multitasking floating window.
+	if (@available(iOS 13.0, *)) {
+		UIWindow *window = AppDelegate.viewController.godotView.window;
+		if (window && window.screen) {
+			CGRect windowFrame = window.frame;
+			CGRect screenBounds = window.screen.bounds;
+			
+			// If our window frame doesn't match the monitor bounds, iOS has windowed us.
+			if (!CGRectEqualToRect(windowFrame, screenBounds)) {
+				return WindowMode::WINDOW_MODE_WINDOWED;
+			}
+		}
+	}
 	return WindowMode::WINDOW_MODE_FULLSCREEN;
 }
 
@@ -687,11 +777,16 @@ float DisplayServerIOS::screen_get_max_scale() const {
 
 void DisplayServerIOS::screen_set_orientation(DisplayServer::ScreenOrientation p_orientation, int p_screen) {
 	screen_orientation = p_orientation;
-	if (@available(iOS 16.0, *)) {
-		[AppDelegate.viewController setNeedsUpdateOfSupportedInterfaceOrientations];
-	} else {
-		[UIViewController attemptRotationToDeviceOrientation];
-	}
+	
+	// Forcing device rotation interacts heavily with the iOS Window Manager.
+	// It must be performed strictly on the Main Thread to avoid inconsistency crashes.
+	dispatch_async(dispatch_get_main_queue(), ^{
+		if (@available(iOS 16.0, *)) {
+			[AppDelegate.viewController setNeedsUpdateOfSupportedInterfaceOrientations];
+		} else {
+			[UIViewController attemptRotationToDeviceOrientation];
+		}
+	});
 }
 
 DisplayServer::ScreenOrientation DisplayServerIOS::screen_get_orientation(int p_screen) const {
@@ -721,45 +816,58 @@ _FORCE_INLINE_ int _convert_utf32_offset_to_utf16(const String &p_existing_text,
 }
 
 void DisplayServerIOS::virtual_keyboard_show(const String &p_existing_text, const Rect2 &p_screen_rect, VirtualKeyboardType p_type, int p_max_length, int p_cursor_start, int p_cursor_end) {
-	NSString *existingString = [[NSString alloc] initWithUTF8String:p_existing_text.utf8().get_data()];
-
-	AppDelegate.viewController.keyboardView.keyboardType = UIKeyboardTypeDefault;
-	AppDelegate.viewController.keyboardView.textContentType = nil;
-	switch (p_type) {
-		case KEYBOARD_TYPE_DEFAULT: {
-			AppDelegate.viewController.keyboardView.keyboardType = UIKeyboardTypeDefault;
-		} break;
-		case KEYBOARD_TYPE_MULTILINE: {
-			AppDelegate.viewController.keyboardView.keyboardType = UIKeyboardTypeDefault;
-		} break;
-		case KEYBOARD_TYPE_NUMBER: {
-			AppDelegate.viewController.keyboardView.keyboardType = UIKeyboardTypeNumberPad;
-		} break;
-		case KEYBOARD_TYPE_NUMBER_DECIMAL: {
-			AppDelegate.viewController.keyboardView.keyboardType = UIKeyboardTypeDecimalPad;
-		} break;
-		case KEYBOARD_TYPE_PHONE: {
-			AppDelegate.viewController.keyboardView.keyboardType = UIKeyboardTypePhonePad;
-			AppDelegate.viewController.keyboardView.textContentType = UITextContentTypeTelephoneNumber;
-		} break;
-		case KEYBOARD_TYPE_EMAIL_ADDRESS: {
-			AppDelegate.viewController.keyboardView.keyboardType = UIKeyboardTypeEmailAddress;
-			AppDelegate.viewController.keyboardView.textContentType = UITextContentTypeEmailAddress;
-		} break;
-		case KEYBOARD_TYPE_PASSWORD: {
-			AppDelegate.viewController.keyboardView.keyboardType = UIKeyboardTypeDefault;
-			AppDelegate.viewController.keyboardView.textContentType = UITextContentTypePassword;
-		} break;
-		case KEYBOARD_TYPE_URL: {
-			AppDelegate.viewController.keyboardView.keyboardType = UIKeyboardTypeWebSearch;
-			AppDelegate.viewController.keyboardView.textContentType = UITextContentTypeURL;
-		} break;
+	CharString utf8_str = p_existing_text.utf8();
+	const char *utf8_data = utf8_str.get_data();
+	
+	NSString *existingString = utf8_data ? [[NSString alloc] initWithUTF8String:utf8_data] : @"";
+	if (!existingString) {
+		existingString = @"";
 	}
 
-	[AppDelegate.viewController.keyboardView
-			becomeFirstResponderWithString:existingString
-							   cursorStart:_convert_utf32_offset_to_utf16(p_existing_text, p_cursor_start)
-								 cursorEnd:_convert_utf32_offset_to_utf16(p_existing_text, p_cursor_end)];
+	int cursor_start = _convert_utf32_offset_to_utf16(p_existing_text, p_cursor_start);
+	int cursor_end = _convert_utf32_offset_to_utf16(p_existing_text, p_cursor_end);
+
+	// Force UIKit interactions onto the Main Thread. This prevents GDScript from 
+	// crashing the app if it calls `show_virtual_keyboard()` from a background thread.
+	dispatch_async(dispatch_get_main_queue(), ^{
+		AppDelegate.viewController.keyboardView.keyboardType = UIKeyboardTypeDefault;
+		AppDelegate.viewController.keyboardView.textContentType = nil;
+		switch (p_type) {
+			case KEYBOARD_TYPE_DEFAULT: {
+				AppDelegate.viewController.keyboardView.keyboardType = UIKeyboardTypeDefault;
+			} break;
+			case KEYBOARD_TYPE_MULTILINE: {
+				AppDelegate.viewController.keyboardView.keyboardType = UIKeyboardTypeDefault;
+			} break;
+			case KEYBOARD_TYPE_NUMBER: {
+				AppDelegate.viewController.keyboardView.keyboardType = UIKeyboardTypeNumberPad;
+			} break;
+			case KEYBOARD_TYPE_NUMBER_DECIMAL: {
+				AppDelegate.viewController.keyboardView.keyboardType = UIKeyboardTypeDecimalPad;
+			} break;
+			case KEYBOARD_TYPE_PHONE: {
+				AppDelegate.viewController.keyboardView.keyboardType = UIKeyboardTypePhonePad;
+				AppDelegate.viewController.keyboardView.textContentType = UITextContentTypeTelephoneNumber;
+			} break;
+			case KEYBOARD_TYPE_EMAIL_ADDRESS: {
+				AppDelegate.viewController.keyboardView.keyboardType = UIKeyboardTypeEmailAddress;
+				AppDelegate.viewController.keyboardView.textContentType = UITextContentTypeEmailAddress;
+			} break;
+			case KEYBOARD_TYPE_PASSWORD: {
+				AppDelegate.viewController.keyboardView.keyboardType = UIKeyboardTypeDefault;
+				AppDelegate.viewController.keyboardView.textContentType = UITextContentTypePassword;
+			} break;
+			case KEYBOARD_TYPE_URL: {
+				AppDelegate.viewController.keyboardView.keyboardType = UIKeyboardTypeWebSearch;
+				AppDelegate.viewController.keyboardView.textContentType = UITextContentTypeURL;
+			} break;
+		}
+
+		[AppDelegate.viewController.keyboardView
+				becomeFirstResponderWithString:existingString
+								 cursorStart:cursor_start
+								   cursorEnd:cursor_end];
+	});
 }
 
 bool DisplayServerIOS::is_keyboard_active() const {
@@ -767,7 +875,9 @@ bool DisplayServerIOS::is_keyboard_active() const {
 }
 
 void DisplayServerIOS::virtual_keyboard_hide() {
-	[AppDelegate.viewController.keyboardView resignFirstResponder];
+	dispatch_async(dispatch_get_main_queue(), ^{
+		[AppDelegate.viewController.keyboardView resignFirstResponder];
+	});
 }
 
 void DisplayServerIOS::virtual_keyboard_set_height(int height) {
@@ -787,13 +897,40 @@ bool DisplayServerIOS::has_hardware_keyboard() const {
 }
 
 void DisplayServerIOS::clipboard_set(const String &p_text) {
-	[UIPasteboard generalPasteboard].string = [NSString stringWithUTF8String:p_text.utf8()];
+	CharString utf8_str = p_text.utf8();
+	const char *utf8_data = utf8_str.get_data();
+	
+	if (utf8_data) {
+		// Create the NSString on the caller thread, but push the UI pasteboard access to the main thread.
+		NSString *ns_str = [NSString stringWithUTF8String:utf8_data];
+		if (ns_str) {
+			dispatch_async(dispatch_get_main_queue(), ^{
+				[UIPasteboard generalPasteboard].string = ns_str;
+			});
+		}
+	}
 }
 
 String DisplayServerIOS::clipboard_get() const {
-	NSString *text = [UIPasteboard generalPasteboard].string;
+	__block NSString *text = nil;
+	
+	// UIPasteboard reads trigger a UI Privacy Toast in iOS 14+. 
+	// This must be executed synchronously on the main thread to
+	// prevent possible UI deadlocks.
+	if ([NSThread isMainThread]) {
+		text = [UIPasteboard generalPasteboard].string;
+	} else {
+		dispatch_sync(dispatch_get_main_queue(), ^{
+			text = [UIPasteboard generalPasteboard].string;
+		});
+	}
 
-	return String::utf8([text UTF8String]);
+	if (!text) {
+		return String();
+	}
+	
+	const char *utf8_data = [text UTF8String];
+	return utf8_data ? String::utf8(utf8_data) : String();
 }
 
 void DisplayServerIOS::screen_set_keep_on(bool p_enable) {
@@ -805,7 +942,10 @@ bool DisplayServerIOS::screen_is_kept_on() const {
 }
 
 void DisplayServerIOS::resize_window(CGSize viewSize) {
-	Size2i size = Size2i(viewSize.width, viewSize.height) * screen_get_max_scale();
+	// viewSize is already multiplied by the hardware contentScaleFactor in GodotView.mm.
+	// We remove the redundant `* screen_get_max_scale()` here to prevent the engine 
+	// from rendering at 9x resolution and crashing the GPU.
+	Size2i size = Size2i(viewSize.width, viewSize.height);
 
 #if defined(RD_ENABLED)
 	if (rendering_context) {

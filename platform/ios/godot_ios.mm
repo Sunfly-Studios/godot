@@ -38,53 +38,57 @@
 #include <unistd.h>
 
 static OS_IOS *os = nullptr;
+// Use a vector to safely manage dynamic argument memory for the lifetime of the engine.
+static std::vector<char *> dynamic_args;
 
-int add_path(int p_argc, char **p_args) {
-	NSString *str = [[[NSBundle mainBundle] infoDictionary] objectForKey:@"godot_path"];
-	if (!str) {
-		return p_argc;
+void add_path(std::vector<char *> &p_args) {
+	@autoreleasepool {
+		id obj = [[[NSBundle mainBundle] infoDictionary] objectForKey:@"godot_path"];
+		if (!obj || ![obj isKindOfClass:[NSString class]]) {
+			return;
+		}
+
+		NSString *str = (NSString *)obj;
+		// Use strdup so the C-string survives past the autorelease pool
+		p_args.push_back(strdup("--path"));
+		p_args.push_back(strdup([str UTF8String]));
 	}
-
-	p_args[p_argc++] = (char *)"--path";
-	p_args[p_argc++] = (char *)[str cStringUsingEncoding:NSUTF8StringEncoding];
-	p_args[p_argc] = nullptr;
-
-	return p_argc;
 }
 
-int add_cmdline(int p_argc, char **p_args) {
-	NSArray *arr = [[[NSBundle mainBundle] infoDictionary] objectForKey:@"godot_cmdline"];
-	if (!arr) {
-		return p_argc;
-	}
-
-	for (NSUInteger i = 0; i < [arr count]; i++) {
-		NSString *str = [arr objectAtIndex:i];
-		if (!str) {
-			continue;
+void add_cmdline(std::vector<char *> &p_args) {
+	@autoreleasepool {
+		id obj = [[[NSBundle mainBundle] infoDictionary] objectForKey:@"godot_cmdline"];
+		if (!obj || ![obj isKindOfClass:[NSArray class]]) {
+			return;
 		}
-		p_args[p_argc++] = (char *)[str cStringUsingEncoding:NSUTF8StringEncoding];
+
+		NSArray *arr = (NSArray *)obj;
+		for (NSUInteger i = 0; i < [arr count]; i++) {
+			id item = [arr objectAtIndex:i];
+			if (!item || ![item isKindOfClass:[NSString class]]) {
+				continue;
+			}
+			
+			NSString *str = (NSString *)item;
+			p_args.push_back(strdup([str UTF8String]));
+		}
 	}
-
-	p_args[p_argc] = nullptr;
-
-	return p_argc;
 }
 
 int ios_main(int argc, char **argv) {
-	size_t len = strlen(argv[0]);
-
-	while (len--) {
-		if (argv[0][len] == '/') {
-			break;
+	if (argc > 0 && argv[0] != nullptr) {
+		const char *last_slash = strrchr(argv[0], '/');
+		if (last_slash != nullptr) {
+			size_t len = last_slash - argv[0];
+			char path[512] = {};
+			
+			// Protect against excessively long paths causing buffer overflows
+			size_t safe_len = len >= sizeof(path) ? sizeof(path) - 1 : len;
+			memcpy(path, argv[0], safe_len);
+			path[safe_len] = '\0';
+			
+			chdir(path);
 		}
-	}
-
-	if (len >= 0) {
-		char path[512];
-		memcpy(path, argv[0], len > sizeof(path) ? sizeof(path) : len);
-		path[len] = 0;
-		chdir(path);
 	}
 
 	os = new OS_IOS();
@@ -92,15 +96,25 @@ int ios_main(int argc, char **argv) {
 	// We must override main when testing is enabled
 	TEST_MAIN_OVERRIDE
 
-	char *fargv[64];
+	// Prevent stack-smashing by pushing arguments into a dynamic vector
 	for (int i = 0; i < argc; i++) {
-		fargv[i] = argv[i];
+		if (argv[i] != nullptr) {
+			dynamic_args.push_back(strdup(argv[i]));
+		}
 	}
-	fargv[argc] = nullptr;
-	argc = add_path(argc, fargv);
-	argc = add_cmdline(argc, fargv);
 
-	Error err = Main::setup(fargv[0], argc - 1, &fargv[1], false);
+	add_path(dynamic_args);
+	add_cmdline(dynamic_args);
+
+	// Reconstruct safely bounded arguments for Main::setup
+	int setup_argc = (int)dynamic_args.size();
+	char *exec_path = setup_argc > 0 ? dynamic_args[0] : strdup("");
+	
+	// Main::setup expects: execpath, argc (excluding execpath), and argv (starting after execpath)
+	int engine_argc = setup_argc > 1 ? setup_argc - 1 : 0;
+	char **engine_argv = setup_argc > 1 ? &dynamic_args[1] : nullptr;
+
+	Error err = Main::setup(exec_path, engine_argc, engine_argv, false);
 
 	if (err != OK) {
 		if (err == ERR_HELP) { // Returned by --help and --version, so success.
@@ -117,4 +131,10 @@ int ios_main(int argc, char **argv) {
 void ios_finish() {
 	Main::cleanup();
 	delete os;
+	
+	// Clean up the duplicated strings
+	for (char *arg : dynamic_args) {
+		free(arg);
+	}
+	dynamic_args.clear();
 }

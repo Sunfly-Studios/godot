@@ -84,25 +84,38 @@
 
 	Main::setup2();
 
-	// this might be necessary before here
 	NSDictionary *dict = [[NSBundle mainBundle] infoDictionary];
-	for (NSString *key in dict) {
-		NSObject *value = [dict objectForKey:key];
-		String ukey = String::utf8([key UTF8String]);
+	if (!dict || !ProjectSettings::get_singleton()) {
+		return;
+	}
 
-		// we need a NSObject to Variant conversor
+	// Iterate using id to prevent implicit cast crashes.
+	for (id keyObj in dict) {
+		@autoreleasepool {
+			if (![keyObj isKindOfClass:[NSString class]]) {
+				continue;
+			}
+			
+			NSString *key = (NSString *)keyObj;
+			const char *key_utf8 = [key UTF8String];
+			if (!key_utf8) {
+				continue; // Skip if UTF8 bridging fails
+			}
+			
+			String ukey = String::utf8(key_utf8);
+			NSObject *value = [dict objectForKey:key];
 
-		if ([value isKindOfClass:[NSString class]]) {
-			NSString *str = (NSString *)value;
-			String uval = String::utf8([str UTF8String]);
-
-			ProjectSettings::get_singleton()->set("Info.plist/" + ukey, uval);
-
-		} else if ([value isKindOfClass:[NSNumber class]]) {
-			NSNumber *n = (NSNumber *)value;
-			double dval = [n doubleValue];
-
-			ProjectSettings::get_singleton()->set("Info.plist/" + ukey, dval);
+			if ([value isKindOfClass:[NSString class]]) {
+				NSString *str = (NSString *)value;
+				const char *str_utf8 = [str UTF8String];
+				
+				String uval = String::utf8(str_utf8 ? str_utf8 : "");
+				ProjectSettings::get_singleton()->set("Info.plist/" + ukey, uval);
+			} else if ([value isKindOfClass:[NSNumber class]]) {
+				NSNumber *n = (NSNumber *)value;
+				double dval = [n doubleValue];
+				ProjectSettings::get_singleton()->set("Info.plist/" + ukey, dval);
+			}
 		}
 		// do stuff
 	}
@@ -113,7 +126,9 @@
 		return;
 	}
 
-	OS_IOS::get_singleton()->iterate();
+	@autoreleasepool {
+		OS_IOS::get_singleton()->iterate();
+	}
 }
 
 @end

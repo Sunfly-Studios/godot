@@ -86,16 +86,20 @@
 }
 
 - (BOOL)becomeFirstResponderWithString:(NSString *)existingString cursorStart:(NSInteger)start cursorEnd:(NSInteger)end {
-	self.text = existingString;
-	self.previousText = existingString;
+	self.text = existingString ? existingString : @"";
+	self.previousText = self.text;
 
 	NSInteger safeStartIndex = MAX(start, 0);
+	// Ensure we don't exceed the bounds of the existing string
+	safeStartIndex = MIN(safeStartIndex, (NSInteger)self.text.length);
 
 	NSRange textRange;
 
 	// Either a simple cursor or a selection.
 	if (end > 0) {
-		textRange = NSMakeRange(safeStartIndex, end - start);
+		NSInteger safeEndIndex = MIN(end, (NSInteger)self.text.length);
+		NSInteger length = MAX(0, safeEndIndex - safeStartIndex);
+		textRange = NSMakeRange(safeStartIndex, length);
 	} else {
 		textRange = NSMakeRange(safeStartIndex, 0);
 	}
@@ -115,6 +119,10 @@
 // MARK: OS Messages
 
 - (void)deleteText:(NSInteger)charactersToDelete {
+	if (!DisplayServerIOS::get_singleton() || charactersToDelete <= 0) {
+		return;
+	}
+
 	for (int i = 0; i < charactersToDelete; i++) {
 		DisplayServerIOS::get_singleton()->key(Key::BACKSPACE, 0, Key::BACKSPACE, Key::NONE, 0, true, KeyLocation::UNSPECIFIED);
 		DisplayServerIOS::get_singleton()->key(Key::BACKSPACE, 0, Key::BACKSPACE, Key::NONE, 0, false, KeyLocation::UNSPECIFIED);
@@ -122,10 +130,19 @@
 }
 
 - (void)enterText:(NSString *)substring {
-	String characters;
-	characters.parse_utf8([substring UTF8String]);
+	if (!DisplayServerIOS::get_singleton() || !substring || substring.length == 0) {
+		return;
+	}
 
-	for (int i = 0; i < characters.size(); i++) {
+	const char *utf8_str = [substring UTF8String];
+	if (!utf8_str) {
+		return;
+	}
+
+	String characters;
+	characters.parse_utf8(utf8_str);
+
+	for (int i = 0; i < characters.length(); i++) {
 		int character = characters[i];
 		Key key = Key::NONE;
 
@@ -149,54 +166,72 @@
 		return;
 	}
 
-	NSString *substringToDelete = nil;
-	if (self.previousSelectedRange.length == 0) {
-		// Get previous text to delete.
-		substringToDelete = [self.previousText substringToIndex:self.previousSelectedRange.location];
-	} else {
-		// If text was previously selected we are sending only one `backspace`. It will remove all text from text input.
-		[self deleteText:1];
-	}
+	@autoreleasepool {
+		NSString *currentText = self.text ? self.text : @"";
+		NSString *prevText = self.previousText ? self.previousText : @"";
+		
+		NSRange currentSel = self.selectedRange;
+		NSRange prevSel = self.previousSelectedRange;
 
-	NSString *substringToEnter = nil;
-	if (self.selectedRange.length == 0) {
-		// If previous cursor had a selection we have to calculate an inserted text.
-		if (self.previousSelectedRange.length != 0) {
-			NSInteger rangeEnd = self.selectedRange.location + self.selectedRange.length;
-			NSInteger rangeStart = MIN(self.previousSelectedRange.location, self.selectedRange.location);
-			NSInteger rangeLength = MAX(0, rangeEnd - rangeStart);
-
-			NSRange calculatedRange;
-
-			if (rangeLength >= 0) {
-				calculatedRange = NSMakeRange(rangeStart, rangeLength);
-			} else {
-				calculatedRange = NSMakeRange(rangeStart, 0);
-			}
-
-			substringToEnter = [self.text substringWithRange:calculatedRange];
+		NSString *substringToDelete = nil;
+		
+		if (prevSel.length == 0) {
+			// Safely clamp the range to prevent NSRangeException crashes on auto-correct.
+			NSUInteger safeLocation = MIN(prevSel.location, prevText.length);
+			substringToDelete = [prevText substringToIndex:safeLocation];
 		} else {
-			substringToEnter = [self.text substringToIndex:self.selectedRange.location];
+			// If text was previously selected we are sending only one `backspace`. It will remove all text from text input.
+			[self deleteText:1];
 		}
-	} else {
-		substringToEnter = [self.text substringWithRange:self.selectedRange];
-	}
 
-	NSInteger skip = 0;
-	if (substringToDelete != nil) {
-		for (NSUInteger i = 0; i < MIN([substringToDelete length], [substringToEnter length]); i++) {
-			if ([substringToDelete characterAtIndex:i] == [substringToEnter characterAtIndex:i]) {
-				skip++;
+		NSString *substringToEnter = nil;
+		if (currentSel.length == 0) {
+			if (prevSel.length != 0) {
+				NSInteger rangeEnd = currentSel.location + currentSel.length;
+				NSInteger rangeStart = MIN(prevSel.location, currentSel.location);
+				NSInteger rangeLength = MAX(0, rangeEnd - rangeStart);
+
+				// Clamp bounds before extracting substring
+				NSUInteger safeStart = MIN((NSUInteger)MAX(0, rangeStart), currentText.length);
+				NSUInteger safeLength = MIN((NSUInteger)rangeLength, currentText.length - safeStart);
+				NSRange calculatedRange = NSMakeRange(safeStart, safeLength);
+
+				substringToEnter = [currentText substringWithRange:calculatedRange];
 			} else {
-				break;
+				NSUInteger safeLocation = MIN(currentSel.location, currentText.length);
+				substringToEnter = [currentText substringToIndex:safeLocation];
+			}
+		} else {
+			// Clamp the selected range to current text bounds.
+			NSUInteger safeStart = MIN(currentSel.location, currentText.length);
+			NSUInteger safeLength = MIN(currentSel.length, currentText.length - safeStart);
+			substringToEnter = [currentText substringWithRange:NSMakeRange(safeStart, safeLength)];
+		}
+
+		NSInteger skip = 0;
+		if (substringToDelete != nil && substringToEnter != nil) {
+			NSUInteger minLength = MIN(substringToDelete.length, substringToEnter.length);
+			for (NSUInteger i = 0; i < minLength; i++) {
+				if ([substringToDelete characterAtIndex:i] == [substringToEnter characterAtIndex:i]) {
+					skip++;
+				} else {
+					break;
+				}
+			}
+			
+			NSInteger deleteCount = substringToDelete.length - skip;
+			if (deleteCount > 0) {
+				[self deleteText:deleteCount]; // Delete changed part of previous text.
 			}
 		}
-		[self deleteText:[substringToDelete length] - skip]; // Delete changed part of previous text.
-	}
-	[self enterText:[substringToEnter substringFromIndex:skip]]; // Enter changed part of new text.
+		
+		if (substringToEnter != nil && skip <= substringToEnter.length) {
+			[self enterText:[substringToEnter substringFromIndex:skip]]; // Enter changed part of new text.
+		}
 
-	self.previousText = self.text;
-	self.previousSelectedRange = self.selectedRange;
+		self.previousText = currentText;
+		self.previousSelectedRange = currentSel;
+	}
 }
 
 @end

@@ -39,22 +39,40 @@
 
 @implementation GodotApplicationDelegate
 
+// Explicitly synthesize the window property so we can cache it,
+// bypassing the potential massive overhead of array iteration on every UIKit frame.
+@synthesize window = _window;
+
 static NSMutableArray<ApplicationDelegateService *> *services = nil;
 
-+ (NSArray<ApplicationDelegateService *> *)services {
+// Lazy, thread-safe initialization to prevent potential
+// +load race conditions.
++ (NSMutableArray<ApplicationDelegateService *> *)sharedServices {
+	static dispatch_once_t onceToken;
+	dispatch_once(&onceToken, ^{
+		services = [[NSMutableArray alloc] init];
+		[services addObject:[AppDelegate getSingleton]];
+	});
 	return services;
 }
 
-+ (void)load {
-	services = [NSMutableArray new];
-	[services addObject:[AppDelegate getSingleton]];
++ (NSArray<ApplicationDelegateService *> *)services {
+	@synchronized(self) {
+		return [[self sharedServices] copy];
+	}
 }
 
 + (void)addService:(ApplicationDelegateService *)service {
-	if (!services || !service) {
+	if (!service) {
 		return;
 	}
-	[services addObject:service];
+	
+	@synchronized(self) {
+		NSMutableArray *currentServices = [self sharedServices];
+		if (![currentServices containsObject:service]) {
+			[currentServices addObject:service];
+		}
+	}
 }
 
 // UIApplicationDelegate documentation can be found here: https://developer.apple.com/documentation/uikit/uiapplicationdelegate
@@ -62,6 +80,10 @@ static NSMutableArray<ApplicationDelegateService *> *services = nil;
 // MARK: Window
 
 - (UIWindow *)window {
+	if (_window) {
+		return _window;
+	}
+
 	UIWindow *result = nil;
 
 	if (@available(iOS 13, tvOS 13, *)) {
@@ -77,7 +99,7 @@ static NSMutableArray<ApplicationDelegateService *> *services = nil;
 			}
 		}
 	} else {
-		for (ApplicationDelegateService *service in services) {
+		for (ApplicationDelegateService *service in [GodotApplicationDelegate services]) {
 			if (![service respondsToSelector:_cmd]) {
 				continue;
 			}
@@ -89,41 +111,41 @@ static NSMutableArray<ApplicationDelegateService *> *services = nil;
 			}
 		}
 	}
-
+	
+	_window = result;
 	return result;
 }
 
 // MARK: Initializing
 
 - (BOOL)application:(UIApplication *)application willFinishLaunchingWithOptions:(NSDictionary<UIApplicationLaunchOptionsKey, id> *)launchOptions {
-	BOOL result = NO;
-
-	for (ApplicationDelegateService *service in services) {
+	// An app launch is successful by default unless explicitly failed.
+	BOOL result = YES; 
+	for (ApplicationDelegateService *service in [GodotApplicationDelegate services]) {
 		if (![service respondsToSelector:_cmd]) {
 			continue;
 		}
-
-		if ([service application:application willFinishLaunchingWithOptions:launchOptions]) {
-			result = YES;
+		
+		// If any service explicitly fails, we can track it, but we still allow others to initialize.
+		if (![service application:application willFinishLaunchingWithOptions:launchOptions]) {
+			result = NO;
 		}
 	}
-
 	return result;
 }
 
 - (BOOL)application:(UIApplication *)application didFinishLaunchingWithOptions:(NSDictionary<UIApplicationLaunchOptionsKey, id> *)launchOptions {
-	BOOL result = NO;
-
-	for (ApplicationDelegateService *service in services) {
+	// Defaulting to YES ensure iOS grants the app proper lifecycle privileges.
+	BOOL result = YES;
+	for (ApplicationDelegateService *service in [GodotApplicationDelegate services]) {
 		if (![service respondsToSelector:_cmd]) {
 			continue;
 		}
 
-		if ([service application:application didFinishLaunchingWithOptions:launchOptions]) {
-			result = YES;
+		if (![service application:application didFinishLaunchingWithOptions:launchOptions]) {
+			result = NO;
 		}
 	}
-
 	return result;
 }
 
@@ -140,7 +162,7 @@ static NSMutableArray<ApplicationDelegateService *> *services = nil;
 // MARK: Life-Cycle
 
 - (void)applicationDidBecomeActive:(UIApplication *)application {
-	for (ApplicationDelegateService *service in services) {
+	for (ApplicationDelegateService *service in [GodotApplicationDelegate services]) {
 		if (![service respondsToSelector:_cmd]) {
 			continue;
 		}
@@ -150,7 +172,7 @@ static NSMutableArray<ApplicationDelegateService *> *services = nil;
 }
 
 - (void)applicationWillResignActive:(UIApplication *)application {
-	for (ApplicationDelegateService *service in services) {
+	for (ApplicationDelegateService *service in [GodotApplicationDelegate services]) {
 		if (![service respondsToSelector:_cmd]) {
 			continue;
 		}
@@ -160,7 +182,7 @@ static NSMutableArray<ApplicationDelegateService *> *services = nil;
 }
 
 - (void)applicationDidEnterBackground:(UIApplication *)application {
-	for (ApplicationDelegateService *service in services) {
+	for (ApplicationDelegateService *service in [GodotApplicationDelegate services]) {
 		if (![service respondsToSelector:_cmd]) {
 			continue;
 		}
@@ -170,7 +192,7 @@ static NSMutableArray<ApplicationDelegateService *> *services = nil;
 }
 
 - (void)applicationWillEnterForeground:(UIApplication *)application {
-	for (ApplicationDelegateService *service in services) {
+	for (ApplicationDelegateService *service in [GodotApplicationDelegate services]) {
 		if (![service respondsToSelector:_cmd]) {
 			continue;
 		}
@@ -180,7 +202,7 @@ static NSMutableArray<ApplicationDelegateService *> *services = nil;
 }
 
 - (void)applicationWillTerminate:(UIApplication *)application {
-	for (ApplicationDelegateService *service in services) {
+	for (ApplicationDelegateService *service in [GodotApplicationDelegate services]) {
 		if (![service respondsToSelector:_cmd]) {
 			continue;
 		}
@@ -192,7 +214,7 @@ static NSMutableArray<ApplicationDelegateService *> *services = nil;
 // MARK: Environment Changes
 
 - (void)applicationProtectedDataDidBecomeAvailable:(UIApplication *)application {
-	for (ApplicationDelegateService *service in services) {
+	for (ApplicationDelegateService *service in [GodotApplicationDelegate services]) {
 		if (![service respondsToSelector:_cmd]) {
 			continue;
 		}
@@ -202,7 +224,7 @@ static NSMutableArray<ApplicationDelegateService *> *services = nil;
 }
 
 - (void)applicationProtectedDataWillBecomeUnavailable:(UIApplication *)application {
-	for (ApplicationDelegateService *service in services) {
+	for (ApplicationDelegateService *service in [GodotApplicationDelegate services]) {
 		if (![service respondsToSelector:_cmd]) {
 			continue;
 		}
@@ -212,7 +234,7 @@ static NSMutableArray<ApplicationDelegateService *> *services = nil;
 }
 
 - (void)applicationDidReceiveMemoryWarning:(UIApplication *)application {
-	for (ApplicationDelegateService *service in services) {
+	for (ApplicationDelegateService *service in [GodotApplicationDelegate services]) {
 		if (![service respondsToSelector:_cmd]) {
 			continue;
 		}
@@ -222,7 +244,7 @@ static NSMutableArray<ApplicationDelegateService *> *services = nil;
 }
 
 - (void)applicationSignificantTimeChange:(UIApplication *)application {
-	for (ApplicationDelegateService *service in services) {
+	for (ApplicationDelegateService *service in [GodotApplicationDelegate services]) {
 		if (![service respondsToSelector:_cmd]) {
 			continue;
 		}
@@ -236,7 +258,7 @@ static NSMutableArray<ApplicationDelegateService *> *services = nil;
 - (BOOL)application:(UIApplication *)application shouldSaveSecureApplicationState:(NSCoder *)coder API_AVAILABLE(ios(13.2)) {
 	BOOL result = NO;
 
-	for (ApplicationDelegateService *service in services) {
+	for (ApplicationDelegateService *service in [GodotApplicationDelegate services]) {
 		if (![service respondsToSelector:_cmd]) {
 			continue;
 		}
@@ -252,7 +274,7 @@ static NSMutableArray<ApplicationDelegateService *> *services = nil;
 - (BOOL)application:(UIApplication *)application shouldRestoreSecureApplicationState:(NSCoder *)coder API_AVAILABLE(ios(13.2)) {
 	BOOL result = NO;
 
-	for (ApplicationDelegateService *service in services) {
+	for (ApplicationDelegateService *service in [GodotApplicationDelegate services]) {
 		if (![service respondsToSelector:_cmd]) {
 			continue;
 		}
@@ -266,7 +288,7 @@ static NSMutableArray<ApplicationDelegateService *> *services = nil;
 }
 
 - (UIViewController *)application:(UIApplication *)application viewControllerWithRestorationIdentifierPath:(NSArray<NSString *> *)identifierComponents coder:(NSCoder *)coder {
-	for (ApplicationDelegateService *service in services) {
+	for (ApplicationDelegateService *service in [GodotApplicationDelegate services]) {
 		if (![service respondsToSelector:_cmd]) {
 			continue;
 		}
@@ -282,7 +304,7 @@ static NSMutableArray<ApplicationDelegateService *> *services = nil;
 }
 
 - (void)application:(UIApplication *)application willEncodeRestorableStateWithCoder:(NSCoder *)coder {
-	for (ApplicationDelegateService *service in services) {
+	for (ApplicationDelegateService *service in [GodotApplicationDelegate services]) {
 		if (![service respondsToSelector:_cmd]) {
 			continue;
 		}
@@ -292,7 +314,7 @@ static NSMutableArray<ApplicationDelegateService *> *services = nil;
 }
 
 - (void)application:(UIApplication *)application didDecodeRestorableStateWithCoder:(NSCoder *)coder {
-	for (ApplicationDelegateService *service in services) {
+	for (ApplicationDelegateService *service in [GodotApplicationDelegate services]) {
 		if (![service respondsToSelector:_cmd]) {
 			continue;
 		}
@@ -304,15 +326,28 @@ static NSMutableArray<ApplicationDelegateService *> *services = nil;
 // MARK: Download Data in Background
 
 - (void)application:(UIApplication *)application handleEventsForBackgroundURLSession:(NSString *)identifier completionHandler:(void (^)(void))completionHandler {
-	for (ApplicationDelegateService *service in services) {
+	// Protect the completionHandler block from being called multiple times.
+	__block BOOL handlerCalled = NO;
+	void (^safeHandler)(void) = ^{
+		// Ensure execution happens on the main thread and only once.
+		dispatch_async(dispatch_get_main_queue(), ^{
+			if (!handlerCalled) {
+				handlerCalled = YES;
+				completionHandler();
+			}
+		});
+	};
+
+	for (ApplicationDelegateService *service in [GodotApplicationDelegate services]) {
 		if (![service respondsToSelector:_cmd]) {
 			continue;
 		}
 
-		[service application:application handleEventsForBackgroundURLSession:identifier completionHandler:completionHandler];
+		[service application:application handleEventsForBackgroundURLSession:identifier completionHandler:safeHandler];
 	}
 
-	completionHandler();
+	// Fire it safely just in case no service intercepted it or called it asynchronously.
+	safeHandler();
 }
 
 // MARK: Remote Notification
@@ -324,7 +359,7 @@ static NSMutableArray<ApplicationDelegateService *> *services = nil;
 - (BOOL)application:(UIApplication *)application willContinueUserActivityWithType:(NSString *)userActivityType {
 	BOOL result = NO;
 
-	for (ApplicationDelegateService *service in services) {
+	for (ApplicationDelegateService *service in [GodotApplicationDelegate services]) {
 		if (![service respondsToSelector:_cmd]) {
 			continue;
 		}
@@ -339,8 +374,7 @@ static NSMutableArray<ApplicationDelegateService *> *services = nil;
 
 - (BOOL)application:(UIApplication *)application continueUserActivity:(NSUserActivity *)userActivity restorationHandler:(void (^)(NSArray<id<UIUserActivityRestoring>> *restorableObjects))restorationHandler {
 	BOOL result = NO;
-
-	for (ApplicationDelegateService *service in services) {
+	for (ApplicationDelegateService *service in [GodotApplicationDelegate services]) {
 		if (![service respondsToSelector:_cmd]) {
 			continue;
 		}
@@ -349,12 +383,11 @@ static NSMutableArray<ApplicationDelegateService *> *services = nil;
 			result = YES;
 		}
 	}
-
 	return result;
 }
 
 - (void)application:(UIApplication *)application didUpdateUserActivity:(NSUserActivity *)userActivity {
-	for (ApplicationDelegateService *service in services) {
+	for (ApplicationDelegateService *service in [GodotApplicationDelegate services]) {
 		if (![service respondsToSelector:_cmd]) {
 			continue;
 		}
@@ -364,7 +397,7 @@ static NSMutableArray<ApplicationDelegateService *> *services = nil;
 }
 
 - (void)application:(UIApplication *)application didFailToContinueUserActivityWithType:(NSString *)userActivityType error:(NSError *)error {
-	for (ApplicationDelegateService *service in services) {
+	for (ApplicationDelegateService *service in [GodotApplicationDelegate services]) {
 		if (![service respondsToSelector:_cmd]) {
 			continue;
 		}
@@ -374,7 +407,7 @@ static NSMutableArray<ApplicationDelegateService *> *services = nil;
 }
 
 - (void)application:(UIApplication *)application performActionForShortcutItem:(UIApplicationShortcutItem *)shortcutItem completionHandler:(void (^)(BOOL succeeded))completionHandler {
-	for (ApplicationDelegateService *service in services) {
+	for (ApplicationDelegateService *service in [GodotApplicationDelegate services]) {
 		if (![service respondsToSelector:_cmd]) {
 			continue;
 		}
@@ -386,7 +419,7 @@ static NSMutableArray<ApplicationDelegateService *> *services = nil;
 // MARK: WatchKit
 
 - (void)application:(UIApplication *)application handleWatchKitExtensionRequest:(NSDictionary *)userInfo reply:(void (^)(NSDictionary *replyInfo))reply {
-	for (ApplicationDelegateService *service in services) {
+	for (ApplicationDelegateService *service in [GodotApplicationDelegate services]) {
 		if (![service respondsToSelector:_cmd]) {
 			continue;
 		}
@@ -398,7 +431,7 @@ static NSMutableArray<ApplicationDelegateService *> *services = nil;
 // MARK: HealthKit
 
 - (void)applicationShouldRequestHealthAuthorization:(UIApplication *)application {
-	for (ApplicationDelegateService *service in services) {
+	for (ApplicationDelegateService *service in [GodotApplicationDelegate services]) {
 		if (![service respondsToSelector:_cmd]) {
 			continue;
 		}
@@ -410,31 +443,33 @@ static NSMutableArray<ApplicationDelegateService *> *services = nil;
 // MARK: Opening an URL
 
 - (BOOL)application:(UIApplication *)app openURL:(NSURL *)url options:(NSDictionary<UIApplicationOpenURLOptionsKey, id> *)options {
-	for (ApplicationDelegateService *service in services) {
+	// This allows multiple plugins (like Firebase and Deep linking) to both
+	// receive the URL.
+	BOOL handled = NO;
+	for (ApplicationDelegateService *service in [GodotApplicationDelegate services]) {
 		if (![service respondsToSelector:_cmd]) {
 			continue;
 		}
-
+		
 		if ([service application:app openURL:url options:options]) {
-			return YES;
+			handled = YES;
 		}
 	}
-
-	return NO;
+	return handled;
 }
 
 // MARK: Disallowing Specified App Extension Types
 
 - (BOOL)application:(UIApplication *)application shouldAllowExtensionPointIdentifier:(UIApplicationExtensionPointIdentifier)extensionPointIdentifier {
-	BOOL result = NO;
+	BOOL result = YES;
 
-	for (ApplicationDelegateService *service in services) {
+	for (ApplicationDelegateService *service in [GodotApplicationDelegate services]) {
 		if (![service respondsToSelector:_cmd]) {
 			continue;
 		}
-
-		if ([service application:application shouldAllowExtensionPointIdentifier:extensionPointIdentifier]) {
-			result = YES;
+		
+		if (![service application:application shouldAllowExtensionPointIdentifier:extensionPointIdentifier]) {
+			result = NO;
 		}
 	}
 
@@ -444,7 +479,7 @@ static NSMutableArray<ApplicationDelegateService *> *services = nil;
 // MARK: SiriKit
 
 - (id)application:(UIApplication *)application handlerForIntent:(INIntent *)intent API_AVAILABLE(ios(14.0)) {
-	for (ApplicationDelegateService *service in services) {
+	for (ApplicationDelegateService *service in [GodotApplicationDelegate services]) {
 		if (![service respondsToSelector:_cmd]) {
 			continue;
 		}
@@ -462,7 +497,7 @@ static NSMutableArray<ApplicationDelegateService *> *services = nil;
 // MARK: CloudKit
 
 - (void)application:(UIApplication *)application userDidAcceptCloudKitShareWithMetadata:(CKShareMetadata *)cloudKitShareMetadata {
-	for (ApplicationDelegateService *service in services) {
+	for (ApplicationDelegateService *service in [GodotApplicationDelegate services]) {
 		if (![service respondsToSelector:_cmd]) {
 			continue;
 		}

@@ -43,6 +43,27 @@
 static const int max_touches = 32;
 static const float earth_gravity = 9.80665;
 
+// Create a lightweight Weak Proxy to break the CADisplayLink/NSTimer retain cycle.
+// This allows the DisplayLink to call GodotView without holding it hostage in memory.
+@interface GodotWeakProxy : NSProxy
+@property (weak, nonatomic, readonly) id target;
++ (instancetype)proxyWithTarget:(id)target;
+@end
+
+@implementation GodotWeakProxy
++ (instancetype)proxyWithTarget:(id)target {
+	GodotWeakProxy *proxy = [GodotWeakProxy alloc];
+	proxy->_target = target;
+	return proxy;
+}
+- (NSMethodSignature *)methodSignatureForSelector:(SEL)sel {
+	return [self.target methodSignatureForSelector:sel];
+}
+- (void)forwardInvocation:(NSInvocation *)invocation {
+	[invocation invokeWithTarget:self.target];
+}
+@end
+
 @interface GodotView () {
 	UITouch *godot_touches[max_touches];
 }
@@ -137,15 +158,11 @@ static const float earth_gravity = 9.80665;
 		self.motionManager = nil;
 	}
 
-	if (self.displayLink) {
-		[self.displayLink invalidate];
-		self.displayLink = nil;
-	}
-
-	if (self.animationTimer) {
-		[self.animationTimer invalidate];
-		self.animationTimer = nil;
-	}
+	[_displayLink invalidate];
+	_displayLink = nil;
+	
+	[_animationTimer invalidate];
+	_animationTimer = nil;
 }
 
 - (void)godot_commonInit {
@@ -160,7 +177,15 @@ static const float earth_gravity = 9.80665;
 		self.motionManager = [[CMMotionManager alloc] init];
 		if (self.motionManager.deviceMotionAvailable) {
 			self.motionManager.deviceMotionUpdateInterval = 1.0 / 70.0;
-			[self.motionManager startDeviceMotionUpdatesUsingReferenceFrame:CMAttitudeReferenceFrameXMagneticNorthZVertical];
+			
+			// Magnetic North requires Location/Compass permissions. 
+			// If it fails, fallback to arbitrary Z vertical so Gyro/Accel still work!
+			CMAttitudeReferenceFrame frame = CMAttitudeReferenceFrameXMagneticNorthZVertical;
+			if (!([CMMotionManager availableAttitudeReferenceFrames] & frame)) {
+				frame = CMAttitudeReferenceFrameXArbitraryZVertical;
+				print_verbose("Magnetic North reference frame not available. Falling back to Arbitrary Z. Magnetometer data may be zero.");
+			}
+			[self.motionManager startDeviceMotionUpdatesUsingReferenceFrame:frame];
 		} else {
 			self.motionManager = nil;
 		}
@@ -210,11 +235,13 @@ static const float earth_gravity = 9.80665;
 	}
 
 	self.isActive = YES;
-
 	print_verbose("Start animation!");
 
+	// Inject the GodotWeakProxy to break the retain cycle.
+	GodotWeakProxy *proxy = [GodotWeakProxy proxyWithTarget:self];
+
 	if (self.useCADisplayLink) {
-		self.displayLink = [CADisplayLink displayLinkWithTarget:self selector:@selector(drawView)];
+		self.displayLink = [CADisplayLink displayLinkWithTarget:proxy selector:@selector(drawView)];
 
 		if (GLOBAL_GET("display/window/ios/allow_high_refresh_rate")) {
 			self.displayLink.preferredFramesPerSecond = 120;
@@ -222,10 +249,9 @@ static const float earth_gravity = 9.80665;
 			self.displayLink.preferredFramesPerSecond = 60;
 		}
 
-		// Setup DisplayLink in main thread
-		[self.displayLink addToRunLoop:[NSRunLoop currentRunLoop] forMode:NSRunLoopCommonModes];
+		[self.displayLink addToRunLoop:[NSRunLoop mainRunLoop] forMode:NSRunLoopCommonModes];
 	} else {
-		self.animationTimer = [NSTimer scheduledTimerWithTimeInterval:(1.0 / 60) target:self selector:@selector(drawView) userInfo:nil repeats:YES];
+		self.animationTimer = [NSTimer scheduledTimerWithTimeInterval:(1.0 / 60) target:proxy selector:@selector(drawView) userInfo:nil repeats:YES];
 	}
 }
 
@@ -235,19 +261,9 @@ static const float earth_gravity = 9.80665;
 		return;
 	}
 
-	if (self.useCADisplayLink) {
-		// Pause the CADisplayLink to avoid recursion
-		[self.displayLink setPaused:YES];
-
-		// Process all input events
-		while (CFRunLoopRunInMode(kCFRunLoopDefaultMode, 0.0, TRUE) == kCFRunLoopRunHandledSource) {
-			// Continue.
-		}
-
-		// We are good to go, resume the CADisplayLink
-		[self.displayLink setPaused:NO];
-	}
-
+	// Removed the `CFRunLoopRunInMode` hack. 
+	// CADisplayLink on NSRunLoopCommonModes inherently handles inputs perfectly between frames.
+	// Forcing a runloop pump here could cause UI locking and nested event dispatches.
 	[self.renderingLayer startRenderDisplayLayer];
 
 	if (!self.renderer) {
@@ -260,7 +276,6 @@ static const float earth_gravity = 9.80665;
 
 	if (self.delegate) {
 		BOOL delegateFinishedSetup = [self.delegate godotViewFinishedSetup:self];
-
 		if (!delegateFinishedSetup) {
 			return;
 		}
@@ -295,10 +310,12 @@ static const float earth_gravity = 9.80665;
 		[self.renderingLayer layoutDisplayLayer];
 
 		if (DisplayServerIOS::get_singleton()) {
-			DisplayServerIOS::get_singleton()->resize_window(self.bounds.size);
+			// Convert iOS abstract layout points into hardware pixels for the engine.
+			CGSize pixelSize = CGSizeMake(self.bounds.size.width * self.contentScaleFactor, 
+										  self.bounds.size.height * self.contentScaleFactor);
+			DisplayServerIOS::get_singleton()->resize_window(pixelSize);
 		}
 	}
-
 	[super layoutSubviews];
 }
 
@@ -354,18 +371,32 @@ static const float earth_gravity = 9.80665;
 }
 
 - (void)touchesBegan:(NSSet *)touches withEvent:(UIEvent *)event {
+	if (!DisplayServerIOS::get_singleton()) {
+		return;
+	}
+	
 	for (UITouch *touch in touches) {
 		int tid = [self getTouchIDForTouch:touch];
-		ERR_FAIL_COND(tid == -1);
+		if (tid == -1) {
+			continue; 
+		}
+		
 		CGPoint touchPoint = [touch locationInView:self];
 		DisplayServerIOS::get_singleton()->touch_press(tid, touchPoint.x * self.contentScaleFactor, touchPoint.y * self.contentScaleFactor, true, touch.tapCount > 1);
 	}
 }
 
 - (void)touchesMoved:(NSSet *)touches withEvent:(UIEvent *)event {
+	if (!DisplayServerIOS::get_singleton()) {
+		return;
+	}
+	
 	for (UITouch *touch in touches) {
 		int tid = [self getTouchIDForTouch:touch];
-		ERR_FAIL_COND(tid == -1);
+		if (tid == -1) {
+			continue;
+		}
+		
 		CGPoint touchPoint = [touch locationInView:self];
 		CGPoint prev_point = [touch previousLocationInView:self];
 		CGFloat alt = [touch altitudeAngle];
@@ -375,9 +406,16 @@ static const float earth_gravity = 9.80665;
 }
 
 - (void)touchesEnded:(NSSet *)touches withEvent:(UIEvent *)event {
+	if (!DisplayServerIOS::get_singleton()) {
+		return;
+	}
+	
 	for (UITouch *touch in touches) {
 		int tid = [self getTouchIDForTouch:touch];
-		ERR_FAIL_COND(tid == -1);
+		if (tid == -1) {
+			continue;
+		}
+		
 		[self removeTouch:touch];
 		CGPoint touchPoint = [touch locationInView:self];
 		DisplayServerIOS::get_singleton()->touch_press(tid, touchPoint.x * self.contentScaleFactor, touchPoint.y * self.contentScaleFactor, false, false);
@@ -385,9 +423,16 @@ static const float earth_gravity = 9.80665;
 }
 
 - (void)touchesCancelled:(NSSet *)touches withEvent:(UIEvent *)event {
+	if (!DisplayServerIOS::get_singleton()) {
+		return;
+	}
+
 	for (UITouch *touch in touches) {
 		int tid = [self getTouchIDForTouch:touch];
-		ERR_FAIL_COND(tid == -1);
+		if (tid == -1) {
+			continue;
+		}
+		
 		DisplayServerIOS::get_singleton()->touches_canceled(tid);
 	}
 	[self clearTouches];
@@ -396,19 +441,18 @@ static const float earth_gravity = 9.80665;
 // MARK: Motion
 
 - (void)handleMotion {
-	if (!self.motionManager) {
+	if (!self.motionManager || !self.motionManager.deviceMotion) {
+		return;
+	}
+	
+	DisplayServerIOS *ds = (DisplayServerIOS *)DisplayServerIOS::get_singleton();
+	if (!ds) {
 		return;
 	}
 
-	// Just using polling approach for now, we can set this up so it sends
-	// data to us in intervals, might be better. See Apple reference pages
-	// for more details:
-	// https://developer.apple.com/reference/coremotion/cmmotionmanager?language=objc
-
-	// Apple splits our accelerometer date into a gravity and user movement
-	// component. We add them back together.
-	CMAcceleration gravity = self.motionManager.deviceMotion.gravity;
-	CMAcceleration acceleration = self.motionManager.deviceMotion.userAcceleration;
+	CMDeviceMotion *motion = self.motionManager.deviceMotion;
+	CMAcceleration gravity = motion.gravity;
+	CMAcceleration acceleration = motion.userAcceleration;
 
 	// To be consistent with Android we convert the unit of measurement from g (Earth's gravity)
 	// to m/s^2.
@@ -419,25 +463,8 @@ static const float earth_gravity = 9.80665;
 	acceleration.y *= earth_gravity;
 	acceleration.z *= earth_gravity;
 
-	///@TODO We don't seem to be getting data here, is my device broken or
-	/// is this code incorrect?
-	CMMagneticField magnetic = self.motionManager.deviceMotion.magneticField.field;
-
-	///@TODO we can access rotationRate as a CMRotationRate variable
-	///(processed date) or CMGyroData (raw data), have to see what works
-	/// best
-	CMRotationRate rotation = self.motionManager.deviceMotion.rotationRate;
-
-	// Adjust for screen orientation.
-	// [[UIDevice currentDevice] orientation] changes even if we've fixed
-	// our orientation which is not a good thing when you're trying to get
-	// your user to move the screen in all directions and want consistent
-	// output
-
-	///@TODO Using [[UIApplication sharedApplication] statusBarOrientation]
-	/// is a bit of a hack. Godot obviously knows the orientation so maybe
-	/// we
-	// can use that instead? (note that left and right seem swapped)
+	CMMagneticField magnetic = motion.magneticField.field;
+	CMRotationRate rotation = motion.rotationRate;
 
 	UIInterfaceOrientation interfaceOrientation = UIInterfaceOrientationUnknown;
 
@@ -445,7 +472,12 @@ static const float earth_gravity = 9.80665;
 	interfaceOrientation = [[UIApplication sharedApplication] statusBarOrientation];
 #else
 	if (@available(iOS 13, *)) {
-		interfaceOrientation = [UIApplication sharedApplication].delegate.window.windowScene.interfaceOrientation;
+		// Accessing the sharedApplication delegate's window inside a 120hz display 
+		// link is potencially dangerous. We look directly at the
+		// scene attached to this view.
+		if (self.window && self.window.windowScene) {
+			interfaceOrientation = self.window.windowScene.interfaceOrientation;
+		}
 #if !defined(TARGET_OS_SIMULATOR) || !TARGET_OS_SIMULATOR
 	} else {
 		interfaceOrientation = [[UIApplication sharedApplication] statusBarOrientation];
@@ -455,28 +487,28 @@ static const float earth_gravity = 9.80665;
 
 	switch (interfaceOrientation) {
 		case UIInterfaceOrientationLandscapeLeft: {
-			DisplayServerIOS::get_singleton()->update_gravity(Vector3(gravity.x, gravity.y, gravity.z).rotated(Vector3(0, 0, 1), -Math_PI * 0.5));
-			DisplayServerIOS::get_singleton()->update_accelerometer(Vector3(acceleration.x + gravity.x, acceleration.y + gravity.y, acceleration.z + gravity.z).rotated(Vector3(0, 0, 1), -Math_PI * 0.5));
-			DisplayServerIOS::get_singleton()->update_magnetometer(Vector3(magnetic.x, magnetic.y, magnetic.z).rotated(Vector3(0, 0, 1), -Math_PI * 0.5));
-			DisplayServerIOS::get_singleton()->update_gyroscope(Vector3(rotation.x, rotation.y, rotation.z).rotated(Vector3(0, 0, 1), -Math_PI * 0.5));
+			ds->update_gravity(Vector3(gravity.x, gravity.y, gravity.z).rotated(Vector3(0, 0, 1), -Math_PI * 0.5));
+			ds->update_accelerometer(Vector3(acceleration.x + gravity.x, acceleration.y + gravity.y, acceleration.z + gravity.z).rotated(Vector3(0, 0, 1), -Math_PI * 0.5));
+			ds->update_magnetometer(Vector3(magnetic.x, magnetic.y, magnetic.z).rotated(Vector3(0, 0, 1), -Math_PI * 0.5));
+			ds->update_gyroscope(Vector3(rotation.x, rotation.y, rotation.z).rotated(Vector3(0, 0, 1), -Math_PI * 0.5));
 		} break;
 		case UIInterfaceOrientationLandscapeRight: {
-			DisplayServerIOS::get_singleton()->update_gravity(Vector3(gravity.x, gravity.y, gravity.z).rotated(Vector3(0, 0, 1), Math_PI * 0.5));
-			DisplayServerIOS::get_singleton()->update_accelerometer(Vector3(acceleration.x + gravity.x, acceleration.y + gravity.y, acceleration.z + gravity.z).rotated(Vector3(0, 0, 1), Math_PI * 0.5));
-			DisplayServerIOS::get_singleton()->update_magnetometer(Vector3(magnetic.x, magnetic.y, magnetic.z).rotated(Vector3(0, 0, 1), Math_PI * 0.5));
-			DisplayServerIOS::get_singleton()->update_gyroscope(Vector3(rotation.x, rotation.y, rotation.z).rotated(Vector3(0, 0, 1), Math_PI * 0.5));
+			ds->update_gravity(Vector3(gravity.x, gravity.y, gravity.z).rotated(Vector3(0, 0, 1), Math_PI * 0.5));
+			ds->update_accelerometer(Vector3(acceleration.x + gravity.x, acceleration.y + gravity.y, acceleration.z + gravity.z).rotated(Vector3(0, 0, 1), Math_PI * 0.5));
+			ds->update_magnetometer(Vector3(magnetic.x, magnetic.y, magnetic.z).rotated(Vector3(0, 0, 1), Math_PI * 0.5));
+			ds->update_gyroscope(Vector3(rotation.x, rotation.y, rotation.z).rotated(Vector3(0, 0, 1), Math_PI * 0.5));
 		} break;
 		case UIInterfaceOrientationPortraitUpsideDown: {
-			DisplayServerIOS::get_singleton()->update_gravity(Vector3(gravity.x, gravity.y, gravity.z).rotated(Vector3(0, 0, 1), Math_PI));
-			DisplayServerIOS::get_singleton()->update_accelerometer(Vector3(acceleration.x + gravity.x, acceleration.y + gravity.y, acceleration.z + gravity.z).rotated(Vector3(0, 0, 1), Math_PI));
-			DisplayServerIOS::get_singleton()->update_magnetometer(Vector3(magnetic.x, magnetic.y, magnetic.z).rotated(Vector3(0, 0, 1), Math_PI));
-			DisplayServerIOS::get_singleton()->update_gyroscope(Vector3(rotation.x, rotation.y, rotation.z).rotated(Vector3(0, 0, 1), Math_PI));
+			ds->update_gravity(Vector3(gravity.x, gravity.y, gravity.z).rotated(Vector3(0, 0, 1), Math_PI));
+			ds->update_accelerometer(Vector3(acceleration.x + gravity.x, acceleration.y + gravity.y, acceleration.z + gravity.z).rotated(Vector3(0, 0, 1), Math_PI));
+			ds->update_magnetometer(Vector3(magnetic.x, magnetic.y, magnetic.z).rotated(Vector3(0, 0, 1), Math_PI));
+			ds->update_gyroscope(Vector3(rotation.x, rotation.y, rotation.z).rotated(Vector3(0, 0, 1), Math_PI));
 		} break;
 		default: { // assume portrait
-			DisplayServerIOS::get_singleton()->update_gravity(Vector3(gravity.x, gravity.y, gravity.z));
-			DisplayServerIOS::get_singleton()->update_accelerometer(Vector3(acceleration.x + gravity.x, acceleration.y + gravity.y, acceleration.z + gravity.z));
-			DisplayServerIOS::get_singleton()->update_magnetometer(Vector3(magnetic.x, magnetic.y, magnetic.z));
-			DisplayServerIOS::get_singleton()->update_gyroscope(Vector3(rotation.x, rotation.y, rotation.z));
+			ds->update_gravity(Vector3(gravity.x, gravity.y, gravity.z));
+			ds->update_accelerometer(Vector3(acceleration.x + gravity.x, acceleration.y + gravity.y, acceleration.z + gravity.z));
+			ds->update_magnetometer(Vector3(magnetic.x, magnetic.y, magnetic.z));
+			ds->update_gyroscope(Vector3(rotation.x, rotation.y, rotation.z));
 		} break;
 	}
 }

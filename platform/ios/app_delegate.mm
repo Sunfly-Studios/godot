@@ -69,10 +69,17 @@ static ViewController *mainViewController = nil;
 static AppDelegate *delegate_singleton = nil;
 
 + (AppDelegate *)getSingleton {
-	if (!delegate_singleton) {
-		delegate_singleton = [AppDelegate new];
-	}
 	return delegate_singleton;
+}
+
+- (instancetype)init {
+	self = [super init];
+	if (self) {
+		// Capture the OS-created instance so the rest of the 
+		// engine (and SceneDelegate) talks to the real application.
+		delegate_singleton = self;
+	}
+	return self;
 }
 
 - (void)createViewController {
@@ -151,19 +158,42 @@ static AppDelegate *delegate_singleton = nil;
 }
 
 - (void)onAudioInterruption:(NSNotification *)notification {
-	if ([notification.name isEqualToString:AVAudioSessionInterruptionNotification]) {
-		if ([[notification.userInfo valueForKey:AVAudioSessionInterruptionTypeKey] isEqualToNumber:[NSNumber numberWithInt:AVAudioSessionInterruptionTypeBegan]]) {
-			NSLog(@"Audio interruption began");
+	NSDictionary *userInfo = notification.userInfo;
+	if (!userInfo) {
+		return;
+	}
+
+	NSNumber *typeValue = userInfo[AVAudioSessionInterruptionTypeKey];
+	if (!typeValue) {
+		return;
+	}
+	
+	AVAudioSessionInterruptionType type = (AVAudioSessionInterruptionType)typeValue.unsignedIntegerValue;
+
+	if (type == AVAudioSessionInterruptionTypeBegan) {
+		NSLog(@"Godot iOS: Audio interruption began");
+		if (OS_IOS::get_singleton()) {
 			OS_IOS::get_singleton()->on_focus_out();
-		} else if ([[notification.userInfo valueForKey:AVAudioSessionInterruptionTypeKey] isEqualToNumber:[NSNumber numberWithInt:AVAudioSessionInterruptionTypeEnded]]) {
-			NSLog(@"Audio interruption ended");
-			OS_IOS::get_singleton()->on_focus_in();
+		}
+	} else if (type == AVAudioSessionInterruptionTypeEnded) {
+		// Ensure we are actually allowed to resume
+		// audio before blindly doing so.
+		NSNumber *optionsValue = userInfo[AVAudioSessionInterruptionOptionKey];
+		AVAudioSessionInterruptionOptions options = optionsValue ? (AVAudioSessionInterruptionOptions)optionsValue.unsignedIntegerValue : 0;
+		
+		if (options & AVAudioSessionInterruptionOptionShouldResume) {
+			NSLog(@"Godot iOS: Audio interruption ended. Resuming.");
+			if (OS_IOS::get_singleton()) {
+				OS_IOS::get_singleton()->on_focus_in();
+			}
+		} else {
+			NSLog(@"Godot iOS: Audio interruption ended, but OS dictates we should not resume.");
 		}
 	}
 }
 
 - (void)applicationDidReceiveMemoryWarning:(UIApplication *)application {
-	if (OS::get_singleton()->get_main_loop()) {
+	if (OS::get_singleton() && OS::get_singleton()->get_main_loop()) {
 		OS::get_singleton()->get_main_loop()->notification(MainLoop::NOTIFICATION_OS_MEMORY_WARNING);
 	}
 }
@@ -183,39 +213,57 @@ static AppDelegate *delegate_singleton = nil;
 // notification panel by swiping from the upper part of the screen.
 
 - (void)sceneDidDisconnect:(UIScene *)scene API_AVAILABLE(ios(13.0), tvos(13.0), visionos(1.0)) {
-	OS_IOS::get_singleton()->on_focus_out();
+	if (OS_IOS::get_singleton()) {
+		OS_IOS::get_singleton()->on_focus_out();
+	}
 }
 
 - (void)applicationWillResignActive:(UIApplication *)application {
-	OS_IOS::get_singleton()->on_focus_out();
+	if (OS_IOS::get_singleton()) {
+		OS_IOS::get_singleton()->on_focus_out();
+	}
 }
 
 - (void)sceneWillResignActive:(UIScene *)scene API_AVAILABLE(ios(13.0), tvos(13.0), visionos(1.0)) {
-	OS_IOS::get_singleton()->on_focus_out();
+	if (OS_IOS::get_singleton()) {
+		OS_IOS::get_singleton()->on_focus_out();
+	}
 }
 
 - (void)applicationDidBecomeActive:(UIApplication *)application {
-	OS_IOS::get_singleton()->on_focus_in();
+	if (OS_IOS::get_singleton()) {
+		OS_IOS::get_singleton()->on_focus_in();
+	}
 }
 
 - (void)sceneDidBecomeActive:(UIScene *)scene API_AVAILABLE(ios(13.0), tvos(13.0), visionos(1.0)) {
-	OS_IOS::get_singleton()->on_focus_in();
+	if (OS_IOS::get_singleton()) {
+		OS_IOS::get_singleton()->on_focus_in();
+	}
 }
 
 - (void)applicationDidEnterBackground:(UIApplication *)application {
-	OS_IOS::get_singleton()->on_enter_background();
+	if (OS_IOS::get_singleton()) {
+		OS_IOS::get_singleton()->on_enter_background();
+	}
 }
 
 - (void)sceneDidEnterBackground:(UIScene *)scene API_AVAILABLE(ios(13.0), tvos(13.0), visionos(1.0)) {
-	OS_IOS::get_singleton()->on_enter_background();
+	if (OS_IOS::get_singleton()) {
+		OS_IOS::get_singleton()->on_enter_background();
+	}
 }
 
 - (void)applicationWillEnterForeground:(UIApplication *)application {
-	OS_IOS::get_singleton()->on_exit_background();
+	if (OS_IOS::get_singleton()) {
+		OS_IOS::get_singleton()->on_exit_background();
+	}
 }
 
 - (void)sceneWillEnterForeground:(UIScene *)scene API_AVAILABLE(ios(13.0), tvos(13.0), visionos(1.0)) {
-	OS_IOS::get_singleton()->on_exit_background();
+	if (OS_IOS::get_singleton()) {
+		OS_IOS::get_singleton()->on_exit_background();
+	}
 }
 
 - (void)dealloc {

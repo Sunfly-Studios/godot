@@ -50,6 +50,7 @@
 #import <UIKit/UIKit.h>
 #import <dlfcn.h>
 #include <sys/sysctl.h>
+#include <mutex>
 
 #if defined(RD_ENABLED)
 #include "servers/rendering/renderer_rd/renderer_compositor_rd.h"
@@ -67,26 +68,38 @@ typedef void (*init_callback)();
 static init_callback *ios_init_callbacks = nullptr;
 static int ios_init_callbacks_count = 0;
 static int ios_init_callbacks_capacity = 0;
+
+static std::mutex dynamic_symbol_mutex;
 HashMap<String, void *> OS_IOS::dynamic_symbol_lookup_table;
 
 void add_ios_init_callback(init_callback cb) {
 	if (ios_init_callbacks_count == ios_init_callbacks_capacity) {
-		void *new_ptr = realloc(ios_init_callbacks, sizeof(cb) * (ios_init_callbacks_capacity + 32));
+		int new_capacity = ios_init_callbacks_capacity + 32;
+		// Store in a temporary pointer to prevent leaking the original 
+		// memory block if realloc fails.
+		void *new_ptr = realloc(ios_init_callbacks, sizeof(cb) * new_capacity);
 		if (new_ptr) {
 			ios_init_callbacks = (init_callback *)(new_ptr);
-			ios_init_callbacks_capacity += 32;
+			ios_init_callbacks_capacity = new_capacity;
 		} else {
 			ERR_FAIL_MSG("Unable to allocate memory for extension callbacks.");
+			return;
 		}
 	}
 	ios_init_callbacks[ios_init_callbacks_count++] = cb;
 }
 
 void register_dynamic_symbol(char *name, void *address) {
+	// Lock the map to prevent memory corruption if multiple GDExtensions 
+    // load concurrently on background threads.
+    std::lock_guard<std::mutex> lock(dynamic_symbol_mutex);
 	OS_IOS::dynamic_symbol_lookup_table[String(name)] = address;
 }
 
 Rect2 fit_keep_aspect_centered(const Vector2 &p_container, const Vector2 &p_rect) {
+	if (p_container.height <= 0.0f || p_rect.height <= 0.0f) {
+        return Rect2();
+    }
 	real_t available_ratio = p_container.width / p_container.height;
 	real_t fit_ratio = p_rect.width / p_rect.height;
 	Rect2 result;
@@ -107,6 +120,9 @@ Rect2 fit_keep_aspect_centered(const Vector2 &p_container, const Vector2 &p_rect
 }
 
 Rect2 fit_keep_aspect_covered(const Vector2 &p_container, const Vector2 &p_rect) {
+	if (p_container.height <= 0.0f || p_rect.height <= 0.0f) {
+        return Rect2();
+    }
 	real_t available_ratio = p_container.width / p_container.height;
 	real_t fit_ratio = p_rect.width / p_rect.height;
 	Rect2 result;
@@ -233,16 +249,30 @@ void OS_IOS::finalize() {
 
 _FORCE_INLINE_ String OS_IOS::get_framework_executable(const String &p_path) {
 	Ref<DirAccess> da = DirAccess::create(DirAccess::ACCESS_FILESYSTEM);
+    String result = p_path; // Default fallback
 
-	// Read framework bundle to get executable name.
-	NSURL *url = [NSURL fileURLWithPath:@(p_path.utf8().get_data())];
-	NSBundle *bundle = [NSBundle bundleWithURL:url];
-	if (bundle) {
-		String exe_path = String::utf8([[bundle executablePath] UTF8String]);
-		if (da->file_exists(exe_path)) {
-			return exe_path;
-		}
-	}
+    @autoreleasepool {
+        const char *path_utf8 = p_path.utf8().get_data();
+        if (path_utf8) {
+            NSURL *url = [NSURL fileURLWithPath:@(path_utf8)];
+            if (url) {
+                NSBundle *bundle = [NSBundle bundleWithURL:url];
+                if (bundle) {
+                    NSString *exe_path_ns = [bundle executablePath];
+                    // Verify framework bundle is not malformed.
+                    if (exe_path_ns) {
+                        const char *exe_path_utf8 = [exe_path_ns UTF8String];
+                        if (exe_path_utf8) {
+                            String exe_path = String::utf8(exe_path_utf8);
+                            if (da->file_exists(exe_path)) {
+                                return exe_path;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
 
 	// Try default executable name (invalid framework).
 	if (da->dir_exists(p_path) && da->file_exists(p_path.path_join(p_path.get_file().get_basename()))) {
@@ -250,7 +280,7 @@ _FORCE_INLINE_ String OS_IOS::get_framework_executable(const String &p_path) {
 	}
 
 	// Not a framework, try loading as .dylib.
-	return p_path;
+	return result;
 }
 
 Error OS_IOS::open_dynamic_library(const String &p_path, void *&p_library_handle, GDExtensionData *p_data) {
@@ -308,6 +338,8 @@ Error OS_IOS::close_dynamic_library(void *p_library_handle) {
 
 Error OS_IOS::get_dynamic_library_symbol_handle(void *p_library_handle, const String &p_name, void *&p_symbol_handle, bool p_optional) {
 	if (p_library_handle == RTLD_SELF) {
+        // Thread-safe reading to match our thread-safe writing.
+        std::lock_guard<std::mutex> lock(dynamic_symbol_mutex);
 		void **ptr = OS_IOS::dynamic_symbol_lookup_table.getptr(p_name);
 		if (ptr) {
 			p_symbol_handle = *ptr;
@@ -340,10 +372,20 @@ String OS_IOS::get_model_name() const {
 }
 
 Error OS_IOS::shell_open(const String &p_uri) {
-	NSString *urlPath = [[NSString alloc] initWithUTF8String:p_uri.utf8().get_data()];
+	// Guard against null pointers and malformed URI strings
+	const char *uri_utf8 = p_uri.utf8().get_data();
+	if (!uri_utf8) {
+		return ERR_CANT_OPEN;
+	}
+
+	NSString *urlPath = [[NSString alloc] initWithUTF8String:uri_utf8];
+	if (!urlPath) {
+		return ERR_CANT_OPEN;
+	}
+	
 	NSURL *url = [NSURL URLWithString:urlPath];
 
-	if (![[UIApplication sharedApplication] canOpenURL:url]) {
+	if (!url || ![[UIApplication sharedApplication] canOpenURL:url]) {
 		return ERR_CANT_OPEN;
 	}
 
@@ -355,61 +397,94 @@ Error OS_IOS::shell_open(const String &p_uri) {
 }
 
 String OS_IOS::get_user_data_dir(const String &p_user_dir) const {
-	static String ret;
-	if (ret.is_empty()) {
-		NSArray *paths = NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES);
-		if (paths && [paths count] >= 1) {
-			ret.parse_utf8([[paths firstObject] UTF8String]);
-		}
-	}
-	return ret;
+    @autoreleasepool {
+        NSArray *paths = NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES);
+        if (paths && [paths count] >= 1) {
+            NSString *first_path = [paths firstObject];
+            if (first_path) {
+                const char *path_utf8 = [first_path UTF8String];
+                if (path_utf8) {
+                    return String::utf8(path_utf8);
+                }
+            }
+        }
+    }
+    return "";
 }
 
 String OS_IOS::get_cache_path() const {
-	static String ret;
-	if (ret.is_empty()) {
-		NSArray *paths = NSSearchPathForDirectoriesInDomains(NSCachesDirectory, NSUserDomainMask, YES);
-		if (paths && [paths count] >= 1) {
-			ret.parse_utf8([[paths firstObject] UTF8String]);
-		}
-	}
-	return ret;
+    @autoreleasepool {
+        NSArray *paths = NSSearchPathForDirectoriesInDomains(NSCachesDirectory, NSUserDomainMask, YES);
+        if (paths && [paths count] >= 1) {
+            NSString *first_path = [paths firstObject];
+            if (first_path) {
+                const char *path_utf8 = [first_path UTF8String];
+                if (path_utf8) {
+                    return String::utf8(path_utf8);
+                }
+            }
+        }
+    }
+    return "";
 }
 
 String OS_IOS::get_temp_path() const {
-	static String ret;
-	if (ret.is_empty()) {
-		NSURL *url = [NSURL fileURLWithPath:NSTemporaryDirectory()
-								isDirectory:YES];
-		if (url) {
-			ret = String::utf8([url.path UTF8String]);
-			ret = ret.trim_prefix("file://");
-		}
-	}
-	return ret;
+    @autoreleasepool {
+        NSURL *url = [NSURL fileURLWithPath:NSTemporaryDirectory() isDirectory:YES];
+        if (url && url.path) {
+            const char *path_utf8 = [url.path UTF8String];
+            if (path_utf8) {
+                String ret = String::utf8(path_utf8);
+                return ret.trim_prefix("file://");
+            }
+        }
+    }
+    return "";
 }
 
 String OS_IOS::get_locale() const {
-	NSString *preferredLanguage = [NSLocale preferredLanguages].firstObject;
+    @autoreleasepool {
+        NSString *preferredLanguage = [NSLocale preferredLanguages].firstObject;
+        if (preferredLanguage) {
+            const char *lang_utf8 = [preferredLanguage UTF8String];
+            if (lang_utf8) {
+                return String::utf8(lang_utf8).replace("-", "_");
+            }
+        }
 
-	if (preferredLanguage) {
-		return String::utf8([preferredLanguage UTF8String]).replace("-", "_");
-	}
-
-	NSString *localeIdentifier = [[NSLocale currentLocale] localeIdentifier];
-	return String::utf8([localeIdentifier UTF8String]).replace("-", "_");
+        NSString *localeIdentifier = [[NSLocale currentLocale] localeIdentifier];
+        if (localeIdentifier) {
+            const char *loc_utf8 = [localeIdentifier UTF8String];
+            if (loc_utf8) {
+                return String::utf8(loc_utf8).replace("-", "_");
+            }
+        }
+    }
+	return "en";
 }
 
 String OS_IOS::get_unique_id() const {
-	NSString *uuid = [UIDevice currentDevice].identifierForVendor.UUIDString;
-	return String::utf8([uuid UTF8String]);
+    @autoreleasepool {
+        // identifierForVendor can return nil depending on device lock state and MDM profiles.
+        NSUUID *uuid = [UIDevice currentDevice].identifierForVendor;
+        if (uuid && uuid.UUIDString) {
+            const char *uuid_utf8 = [uuid.UUIDString UTF8String];
+            if (uuid_utf8) {
+                return String::utf8(uuid_utf8);
+            }
+        }
+    }
+	return "";
 }
 
 String OS_IOS::get_processor_name() const {
 	char buffer[256];
 	size_t buffer_len = 256;
 	if (sysctlbyname("machdep.cpu.brand_string", &buffer, &buffer_len, nullptr, 0) == 0) {
-		return String::utf8(buffer, buffer_len);
+        // sysctlbyname modifies buffer_len to the exact length including the null terminator.
+        // We ensure we don't accidentally parse the null terminator as part of the string payload.
+        size_t string_len = (buffer_len > 0 && buffer[buffer_len - 1] == '\0') ? buffer_len - 1 : buffer_len;
+		return String::utf8(buffer, string_len);
 	}
 	ERR_FAIL_V_MSG("", String("Couldn't get the CPU model name. Returning an empty string."));
 }
@@ -419,10 +494,15 @@ Vector<String> OS_IOS::get_system_fonts() const {
 	CFArrayRef fonts = CTFontManagerCopyAvailableFontFamilyNames();
 	if (fonts) {
 		for (CFIndex i = 0; i < CFArrayGetCount(fonts); i++) {
-			CFStringRef cf_name = (CFStringRef)CFArrayGetValueAtIndex(fonts, i);
-			if (cf_name && (CFStringGetLength(cf_name) > 0) && (CFStringCompare(cf_name, CFSTR("LastResort"), kCFCompareCaseInsensitive) != kCFCompareEqualTo) && (CFStringGetCharacterAtIndex(cf_name, 0) != '.')) {
-				NSString *ns_name = (__bridge NSString *)cf_name;
-				font_names.insert(String::utf8([ns_name UTF8String]));
+			@autoreleasepool {
+				CFStringRef cf_name = (CFStringRef)CFArrayGetValueAtIndex(fonts, i);
+				if (cf_name && (CFStringGetLength(cf_name) > 0) && (CFStringCompare(cf_name, CFSTR("LastResort"), kCFCompareCaseInsensitive) != kCFCompareEqualTo) && (CFStringGetCharacterAtIndex(cf_name, 0) != '.')) {
+					NSString *ns_name = (__bridge NSString *)cf_name;
+					const char *utf8_name = [ns_name UTF8String];
+					if (utf8_name) {
+						font_names.insert(String::utf8(utf8_name));
+					}
+				}
 			}
 		}
 		CFRelease(fonts);
@@ -510,59 +590,88 @@ Vector<String> OS_IOS::get_system_font_path_for_text(const String &p_font_name, 
 		traits |= kCTFontItalicTrait;
 	}
 	if (p_stretch < 100) {
-		traits |= kCTFontCondensedTrait;
+		traits |= kCTFontCondensedTrait; 
 	} else if (p_stretch > 100) {
 		traits |= kCTFontExpandedTrait;
 	}
 
 	CFNumberRef sym_traits = CFNumberCreate(kCFAllocatorDefault, kCFNumberSInt32Type, &traits);
 	CFMutableDictionaryRef traits_dict = CFDictionaryCreateMutable(kCFAllocatorDefault, 0, nullptr, nullptr);
-	CFDictionaryAddValue(traits_dict, kCTFontSymbolicTrait, sym_traits);
+	if (traits_dict && sym_traits) {
+		CFDictionaryAddValue(traits_dict, kCTFontSymbolicTrait, sym_traits);
+	}
 
 	CGFloat weight = _weight_to_ct(p_weight);
 	CFNumberRef font_weight = CFNumberCreate(kCFAllocatorDefault, kCFNumberCGFloatType, &weight);
-	CFDictionaryAddValue(traits_dict, kCTFontWeightTrait, font_weight);
+	if (traits_dict && font_weight) {
+		CFDictionaryAddValue(traits_dict, kCTFontWeightTrait, font_weight);
+	}
 
 	CGFloat stretch = _stretch_to_ct(p_stretch);
 	CFNumberRef font_stretch = CFNumberCreate(kCFAllocatorDefault, kCFNumberCGFloatType, &stretch);
-	CFDictionaryAddValue(traits_dict, kCTFontWidthTrait, font_stretch);
+	if (traits_dict && font_stretch) {
+		CFDictionaryAddValue(traits_dict, kCTFontWidthTrait, font_stretch);
+	}
 
 	CFMutableDictionaryRef attributes = CFDictionaryCreateMutable(kCFAllocatorDefault, 0, nullptr, nullptr);
-	CFDictionaryAddValue(attributes, kCTFontFamilyNameAttribute, name);
-	CFDictionaryAddValue(attributes, kCTFontTraitsAttribute, traits_dict);
+	if (attributes && name) {
+		CFDictionaryAddValue(attributes, kCTFontFamilyNameAttribute, name);
+	}
+	if (attributes && traits_dict) {
+		CFDictionaryAddValue(attributes, kCTFontTraitsAttribute, traits_dict);
+	}
 
-	CTFontDescriptorRef font = CTFontDescriptorCreateWithAttributes(attributes);
+	CTFontDescriptorRef font = attributes ? CTFontDescriptorCreateWithAttributes(attributes) : nullptr;
 	if (font) {
 		CTFontRef family = CTFontCreateWithFontDescriptor(font, 0, nullptr);
 		if (family) {
 			CFStringRef string = CFStringCreateWithCString(kCFAllocatorDefault, p_text.utf8().get_data(), kCFStringEncodingUTF8);
-			CFRange range = CFRangeMake(0, CFStringGetLength(string));
-			CTFontRef fallback_family = CTFontCreateForString(family, string, range);
-			if (fallback_family) {
-				CTFontDescriptorRef fallback_font = CTFontCopyFontDescriptor(fallback_family);
-				if (fallback_font) {
-					CFURLRef url = (CFURLRef)CTFontDescriptorCopyAttribute(fallback_font, kCTFontURLAttribute);
-					if (url) {
-						NSString *font_path = [NSString stringWithString:[(__bridge NSURL *)url path]];
-						ret.push_back(String::utf8([font_path UTF8String]));
-						CFRelease(url);
+			if (string) {
+				CFRange range = CFRangeMake(0, CFStringGetLength(string));
+				CTFontRef fallback_family = CTFontCreateForString(family, string, range);
+				if (fallback_family) {
+					CTFontDescriptorRef fallback_font = CTFontCopyFontDescriptor(fallback_family);
+					if (fallback_font) {
+						CFURLRef url = (CFURLRef)CTFontDescriptorCopyAttribute(fallback_font, kCTFontURLAttribute);
+						if (url) {
+							@autoreleasepool {
+								NSString *font_path = [NSString stringWithString:[(__bridge NSURL *)url path]];
+								const char *utf8_path = [font_path UTF8String];
+								if (utf8_path) {
+									ret.push_back(String::utf8(utf8_path));
+								}
+							}
+							CFRelease(url);
+						}
+						CFRelease(fallback_font);
 					}
-					CFRelease(fallback_font);
+					CFRelease(fallback_family);
 				}
-				CFRelease(fallback_family);
+				CFRelease(string);
 			}
-			CFRelease(string);
 			CFRelease(family);
 		}
 		CFRelease(font);
 	}
 
-	CFRelease(attributes);
-	CFRelease(traits_dict);
-	CFRelease(sym_traits);
-	CFRelease(font_stretch);
-	CFRelease(font_weight);
-	CFRelease(name);
+	if (attributes) {
+		CFRelease(attributes);
+	}
+	if (traits_dict) {
+		CFRelease(traits_dict);
+	}
+	if (sym_traits) {
+		CFRelease(sym_traits);
+	}
+	if (font_stretch) {
+		CFRelease(font_stretch);
+	}
+	if (font_weight) {
+		CFRelease(font_weight);
+	}
+	if (name) {
+		CFRelease(name);
+	}
 
 	return ret;
 }
@@ -581,44 +690,71 @@ String OS_IOS::get_system_font_path(const String &p_font_name, int p_weight, int
 		traits |= kCTFontItalicTrait;
 	}
 	if (p_stretch < 100) {
-		traits |= kCTFontCondensedTrait;
+		traits |= kCTFontCondensedTrait; 
 	} else if (p_stretch > 100) {
 		traits |= kCTFontExpandedTrait;
 	}
 
 	CFNumberRef sym_traits = CFNumberCreate(kCFAllocatorDefault, kCFNumberSInt32Type, &traits);
 	CFMutableDictionaryRef traits_dict = CFDictionaryCreateMutable(kCFAllocatorDefault, 0, nullptr, nullptr);
-	CFDictionaryAddValue(traits_dict, kCTFontSymbolicTrait, sym_traits);
+	if (traits_dict && sym_traits) {
+		CFDictionaryAddValue(traits_dict, kCTFontSymbolicTrait, sym_traits);
+	}
 
 	CGFloat weight = _weight_to_ct(p_weight);
 	CFNumberRef font_weight = CFNumberCreate(kCFAllocatorDefault, kCFNumberCGFloatType, &weight);
-	CFDictionaryAddValue(traits_dict, kCTFontWeightTrait, font_weight);
+	if (traits_dict && font_weight) {
+		CFDictionaryAddValue(traits_dict, kCTFontWeightTrait, font_weight);
+	}
 
 	CGFloat stretch = _stretch_to_ct(p_stretch);
 	CFNumberRef font_stretch = CFNumberCreate(kCFAllocatorDefault, kCFNumberCGFloatType, &stretch);
-	CFDictionaryAddValue(traits_dict, kCTFontWidthTrait, font_stretch);
+	if (traits_dict && font_stretch) {
+		CFDictionaryAddValue(traits_dict, kCTFontWidthTrait, font_stretch);
+	}
 
 	CFMutableDictionaryRef attributes = CFDictionaryCreateMutable(kCFAllocatorDefault, 0, nullptr, nullptr);
-	CFDictionaryAddValue(attributes, kCTFontFamilyNameAttribute, name);
-	CFDictionaryAddValue(attributes, kCTFontTraitsAttribute, traits_dict);
+	if (attributes && name) {
+		CFDictionaryAddValue(attributes, kCTFontFamilyNameAttribute, name);
+	}
+	if (attributes && traits_dict) {
+		CFDictionaryAddValue(attributes, kCTFontTraitsAttribute, traits_dict);
+	}
 
-	CTFontDescriptorRef font = CTFontDescriptorCreateWithAttributes(attributes);
+	CTFontDescriptorRef font = attributes ? CTFontDescriptorCreateWithAttributes(attributes) : nullptr;
 	if (font) {
 		CFURLRef url = (CFURLRef)CTFontDescriptorCopyAttribute(font, kCTFontURLAttribute);
 		if (url) {
-			NSString *font_path = [NSString stringWithString:[(__bridge NSURL *)url path]];
-			ret = String::utf8([font_path UTF8String]);
+			@autoreleasepool {
+				NSString *font_path = [NSString stringWithString:[(__bridge NSURL *)url path]];
+				const char *utf8_path = [font_path UTF8String];
+				if (utf8_path) {
+					ret = String::utf8(utf8_path);
+				}
+			}
 			CFRelease(url);
 		}
 		CFRelease(font);
 	}
 
-	CFRelease(attributes);
-	CFRelease(traits_dict);
-	CFRelease(sym_traits);
-	CFRelease(font_stretch);
-	CFRelease(font_weight);
-	CFRelease(name);
+	if (attributes) {
+		CFRelease(attributes);
+	}
+	if (traits_dict) {
+		CFRelease(traits_dict);
+	}
+	if (sym_traits) {
+		CFRelease(sym_traits);
+	}
+	if (font_stretch) {
+		CFRelease(font_stretch);
+	}
+	if (font_weight) {
+		CFRelease(font_weight);
+	}
+	if (name) {
+		CFRelease(name);
+	}
 
 	return ret;
 }
@@ -694,12 +830,11 @@ void OS_IOS::on_enter_background() {
 }
 
 void OS_IOS::on_exit_background() {
-	if (!is_focused) {
-		on_focus_in();
-
-		if (OS::get_singleton()->get_main_loop()) {
-			OS::get_singleton()->get_main_loop()->notification(MainLoop::NOTIFICATION_APPLICATION_RESUMED);
-		}
+	// Removed the focus in code here.
+	// iOS is transitioning the app to the foreground, but it is not active yet.
+    // Resuming graphics rendering here violates the iOS lifecycle and will crash.
+	if (OS::get_singleton()->get_main_loop()) {
+		OS::get_singleton()->get_main_loop()->notification(MainLoop::NOTIFICATION_APPLICATION_RESUMED);
 	}
 }
 

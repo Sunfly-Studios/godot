@@ -37,32 +37,49 @@
 API_AVAILABLE(ios(13.0), tvos(13.0))
 static NSMutableArray<SceneDelegateService *> *services = nil;
 
-+ (NSArray<SceneDelegateService *> *)services API_AVAILABLE(ios(13.0), tvos(13.0)) {
+// Replace +load with a thread-safe singleton accessor. This guarantees
+// that AppDelegate is only queried after the app has actually started, 
+// completely eliminating the +load order race conditions, if any.
++ (NSMutableArray<SceneDelegateService *> *)sharedServices API_AVAILABLE(ios(13.0), tvos(13.0)) {
+	static dispatch_once_t onceToken;
+	dispatch_once(&onceToken, ^{
+		services = [[NSMutableArray alloc] init];
+		[services addObject:[AppDelegate getSingleton]];
+	});
 	return services;
 }
 
-+ (void)load {
-	if (@available(iOS 13, tvOS 13, visionOS 1, *)) {
-		services = [NSMutableArray new];
-		[services addObject:[AppDelegate getSingleton]];
++ (NSArray<SceneDelegateService *> *)services API_AVAILABLE(ios(13.0), tvos(13.0)) {
+	// Return an immutable copy of the array.
+	@synchronized(self) {
+		return [[self sharedServices] copy];
 	}
 }
 
 + (void)addService:(SceneDelegateService *)service API_AVAILABLE(ios(13.0), tvos(13.0)) {
-	if (!services || !service) {
+	if (!service) {
 		return;
 	}
-	[services addObject:service];
+	
+	// Make addition thread-safe and prevent duplicate registrations.
+	@synchronized(self) {
+		NSMutableArray *currentServices = [self sharedServices];
+		if (![currentServices containsObject:service]) {
+			[currentServices addObject:service];
+		}
+	}
 }
 
 // MARK: Scene
 
 - (void)scene:(UIScene *)scene willConnectToSession:(UISceneSession *)session options:(UISceneConnectionOptions *)connectionOptions API_AVAILABLE(ios(13.0), tvos(13.0)) {
-	for (SceneDelegateService *service in services) {
+	// Iterate over a snapshot copy of the services. If a service adds another
+	// service during this loop, it won't make a crash to the enumeration.
+	NSArray *servicesSnapshot = [SceneDelegate services];
+	for (SceneDelegateService *service in servicesSnapshot) {
 		if (![service respondsToSelector:_cmd]) {
 			continue;
 		}
-
 		[service scene:scene willConnectToSession:session options:connectionOptions];
 	}
 }
@@ -70,51 +87,51 @@ static NSMutableArray<SceneDelegateService *> *services = nil;
 // MARK: Life-Cycle
 
 - (void)sceneDidDisconnect:(UIScene *)scene API_AVAILABLE(ios(13.0), tvos(13.0)) {
-	for (SceneDelegateService *service in services) {
+	NSArray *servicesSnapshot = [SceneDelegate services];
+	for (SceneDelegateService *service in servicesSnapshot) {
 		if (![service respondsToSelector:_cmd]) {
 			continue;
 		}
-
 		[service sceneDidDisconnect:scene];
 	}
 }
 
 - (void)sceneDidBecomeActive:(UIScene *)scene API_AVAILABLE(ios(13.0), tvos(13.0)) {
-	for (SceneDelegateService *service in services) {
+	NSArray *servicesSnapshot = [SceneDelegate services];
+	for (SceneDelegateService *service in servicesSnapshot) {
 		if (![service respondsToSelector:_cmd]) {
 			continue;
 		}
-
 		[service sceneDidBecomeActive:scene];
 	}
 }
 
 - (void)sceneWillResignActive:(UIScene *)scene API_AVAILABLE(ios(13.0), tvos(13.0)) {
-	for (SceneDelegateService *service in services) {
+	NSArray *servicesSnapshot = [SceneDelegate services];
+	for (SceneDelegateService *service in servicesSnapshot) {
 		if (![service respondsToSelector:_cmd]) {
 			continue;
 		}
-
 		[service sceneWillResignActive:scene];
 	}
 }
 
 - (void)sceneDidEnterBackground:(UIScene *)scene API_AVAILABLE(ios(13.0), tvos(13.0)) {
-	for (SceneDelegateService *service in services) {
+	NSArray *servicesSnapshot = [SceneDelegate services];
+	for (SceneDelegateService *service in servicesSnapshot) {
 		if (![service respondsToSelector:_cmd]) {
 			continue;
 		}
-
 		[service sceneDidEnterBackground:scene];
 	}
 }
 
 - (void)sceneWillEnterForeground:(UIScene *)scene API_AVAILABLE(ios(13.0), tvos(13.0)) {
-	for (SceneDelegateService *service in services) {
+	NSArray *servicesSnapshot = [SceneDelegate services];
+	for (SceneDelegateService *service in servicesSnapshot) {
 		if (![service respondsToSelector:_cmd]) {
 			continue;
 		}
-
 		[service sceneWillEnterForeground:scene];
 	}
 }

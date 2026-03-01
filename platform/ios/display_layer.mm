@@ -92,53 +92,73 @@
 	// Create GL ES 3 context
 	if (GLOBAL_GET("rendering/renderer/rendering_method") == "gl_compatibility") {
 		context = [[EAGLContext alloc] initWithAPI:kEAGLRenderingAPIOpenGLES3];
-		NSLog(@"Setting up an OpenGL ES 3.0 context.");
 		if (!context) {
-			NSLog(@"Failed to create OpenGL ES 3.0 context!");
+			NSLog(@"Godot iOS: Failed to create OpenGL ES 3.0 context!");
 			return;
 		}
+	} else {
+		// If we are not using the GL Compatibility renderer,
+		// don't go any further.
+		return;
 	}
 
 	if (![EAGLContext setCurrentContext:context]) {
-		NSLog(@"Failed to set EAGLContext!");
+		NSLog(@"Godot iOS: Failed to set EAGLContext!");
 		return;
 	}
+	
 	if (![self createFramebuffer]) {
-		NSLog(@"Failed to create frame buffer!");
+		NSLog(@"Godot iOS: Failed to create frame buffer!");
 		return;
 	}
 }
 
 - (void)layoutDisplayLayer {
+	if (!context) {
+		// Guard against null context
+		return;
+	}
+	
 	[EAGLContext setCurrentContext:context];
 	[self destroyFramebuffer];
 	[self createFramebuffer];
 }
 
 - (void)startRenderDisplayLayer {
+	if (!context) {
+		return;
+	}
+	
 	[EAGLContext setCurrentContext:context];
-
 	glBindFramebufferOES(GL_FRAMEBUFFER_OES, viewFramebuffer);
 }
 
 - (void)stopRenderDisplayLayer {
+	if (!context) {
+		return;
+	}
+	
 	glBindRenderbufferOES(GL_RENDERBUFFER_OES, viewRenderbuffer);
 	[context presentRenderbuffer:GL_RENDERBUFFER_OES];
 
 #ifdef DEBUG_ENABLED
 	GLenum err = glGetError();
 	if (err) {
-		NSLog(@"DrawView: %x error", err);
+		NSLog(@"Godot iOS DrawView: %x error", err);
 	}
 #endif
 }
 
 - (void)dealloc {
-	if ([EAGLContext currentContext] == context) {
-		[EAGLContext setCurrentContext:nil];
-	}
-
 	if (context) {
+		// Ensure the context is current on this thread before attempting GL deletions
+		[EAGLContext setCurrentContext:context];
+		[self destroyFramebuffer];
+		
+		if ([EAGLContext currentContext] == context) {
+			[EAGLContext setCurrentContext:nil];
+		}
+		
 		context = nil;
 	}
 }
@@ -175,17 +195,23 @@
 
 // Clean up any buffers we have allocated.
 - (void)destroyFramebuffer {
-	GLES3::TextureStorage::system_fbo = 0;
-
-	glDeleteFramebuffersOES(1, &viewFramebuffer);
-	viewFramebuffer = 0;
-	glDeleteRenderbuffersOES(1, &viewRenderbuffer);
-	viewRenderbuffer = 0;
+	// Only delete if they actually exist to
+	if (viewFramebuffer) {
+		glDeleteFramebuffersOES(1, &viewFramebuffer);
+		viewFramebuffer = 0;
+	}
+	
+	if (viewRenderbuffer) {
+		glDeleteRenderbuffersOES(1, &viewRenderbuffer);
+		viewRenderbuffer = 0;
+	}
 
 	if (depthRenderbuffer) {
 		glDeleteRenderbuffersOES(1, &depthRenderbuffer);
 		depthRenderbuffer = 0;
 	}
+	
+	GLES3::TextureStorage::system_fbo = 0;
 }
 
 @end
