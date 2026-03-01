@@ -196,51 +196,6 @@
 	ds->send_window_event(wd, DisplayServerMacOS::WINDOW_EVENT_TITLEBAR_CHANGE);
 }
 
-- (void)windowDidExitFullScreen:(NSNotification *)notification {
-	DisplayServerMacOS *ds = (DisplayServerMacOS *)DisplayServer::get_singleton();
-	if (!ds || !ds->has_window(window_id)) {
-		return;
-	}
-
-	DisplayServerMacOS::WindowData &wd = ds->get_window(window_id);
-	if (wd.exclusive_fullscreen) {
-		ds->update_presentation_mode();
-	}
-
-	wd.fullscreen = false;
-	wd.exclusive_fullscreen = false;
-	wd.fs_transition = false;
-
-	// Set window size limits.
-	const float scale = ds->screen_get_max_scale();
-	if (wd.min_size != Size2i()) {
-		Size2i size = wd.min_size / scale;
-		[wd.window_object setContentMinSize:NSMakeSize(size.x, size.y)];
-	}
-	if (wd.max_size != Size2i()) {
-		Size2i size = wd.max_size / scale;
-		[wd.window_object setContentMaxSize:NSMakeSize(size.x, size.y)];
-	}
-
-	// Restore borderless, transparent and resizability state.
-	if (wd.borderless || wd.layered_window) {
-		[wd.window_object setStyleMask:NSWindowStyleMaskBorderless];
-	} else {
-		[wd.window_object setStyleMask:NSWindowStyleMaskTitled | NSWindowStyleMaskClosable | NSWindowStyleMaskMiniaturizable | (wd.extend_to_title ? NSWindowStyleMaskFullSizeContentView : 0) | (wd.resize_disabled ? 0 : NSWindowStyleMaskResizable)];
-	}
-	if (wd.layered_window) {
-		ds->set_window_per_pixel_transparency_enabled(true, window_id);
-	}
-
-	// Restore on-top state.
-	if (ds->is_always_on_top_recursive(window_id)) {
-		[wd.window_object setLevel:NSFloatingWindowLevel];
-	}
-
-	// Force window resize event and redraw.
-	[self windowDidResize:notification];
-}
-
 - (void)windowDidChangeBackingProperties:(NSNotification *)notification {
 	DisplayServerMacOS *ds = (DisplayServerMacOS *)DisplayServer::get_singleton();
 	if (!ds || !ds->has_window(window_id)) {

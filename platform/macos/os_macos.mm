@@ -475,7 +475,7 @@ Error OS_MacOS::shell_show_in_file_manager(String p_path, bool p_open_folder) {
 		return ERR_INVALID_PARAMETER;
 	}
 
-	NSURL *uri = [NSURL fileURLWithPath:ns_path];
+	NSURL *uri = [NSURL fileURLWithPath:string];
 	if (!uri) {
 		return ERR_INVALID_PARAMETER;
 	}

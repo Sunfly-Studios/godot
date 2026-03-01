@@ -72,7 +72,7 @@
 	if (ds && ds->has_window(window_id)) {
 		DisplayServerMacOS::WindowData &wd = ds->get_window(window_id);
 		if (!wd.im_active) {
-			return NSMakeRect(0, 0, 0, 0);
+			return;
 		}
 
 		NSRect frameRect = [wd.window_object frame];

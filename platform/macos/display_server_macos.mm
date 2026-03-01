@@ -2577,7 +2577,7 @@ DisplayServer::WindowMode DisplayServerMacOS::window_get_mode(WindowID p_window)
 
 	// All other discarded, return windowed.
 	return WINDOW_MODE_WINDOWED;
-}set_window_per_pixel_transpare ncy_enabled
+}
 
 bool DisplayServerMacOS::window_is_maximize_allowed(WindowID p_window) const {
 	return true;
