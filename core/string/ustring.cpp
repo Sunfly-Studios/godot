@@ -1607,13 +1607,7 @@ String String::num(double p_num, int p_decimals) {
 	}
 
 	if (Math::is_inf(p_num)) {
-#ifdef __NetBSD__
-		// NetBSD seems to no have a standard
-		// signbit.
-		if (signbit(p_num)) {
-#else
 		if (std::signbit(p_num)) {
-#endif
 			return "-inf";
 		} else {
 			return "inf";
@@ -5376,7 +5370,7 @@ String String::sprintf(const Array &values, bool *error) const {
 				case 'x': // Hexadecimal (lowercase)
 				case 'X': { // Hexadecimal (uppercase)
 					uint64_t index = (selected_index >= 0 ? selected_index : value_index);
-					if (index >= (uint64_t)values.size()) {
+					if (index >= values.size()) {
 						return "not enough arguments for format string";
 					}
 
@@ -5450,7 +5444,7 @@ String String::sprintf(const Array &values, bool *error) const {
 				}
 				case 'f': { // Float
 					uint64_t index = (selected_index >= 0 ? selected_index : value_index);
-					if (index >= (uint64_t)values.size()) {
+					if (index >= values.size()) {
 						return "not enough arguments for format string";
 					}
 
@@ -5459,11 +5453,7 @@ String String::sprintf(const Array &values, bool *error) const {
 					}
 
 					double value = values[value_index];
-#ifdef __NetBSD__
-					bool is_negative = signbit(value);
-#else
 					bool is_negative = std::signbit(value);
-#endif
 					String str = String::num(Math::abs(value), min_decimals);
 					const bool is_finite = Math::is_finite(value);
 
@@ -5503,7 +5493,7 @@ String String::sprintf(const Array &values, bool *error) const {
 				}
 				case 'v': { // Vector2/3/4/2i/3i/4i
 					uint64_t index = (selected_index >= 0 ? selected_index : value_index);
-					if (index >= (uint64_t)values.size()) {
+					if (index >= values.size()) {
 						return "not enough arguments for format string";
 					}
 
@@ -5577,7 +5567,7 @@ String String::sprintf(const Array &values, bool *error) const {
 				}
 				case 's': { // String
 					uint64_t index = (selected_index >= 0 ? selected_index : value_index);
-					if (index >= (uint64_t)values.size()) {
+					if (index >= values.size()) {
 						return "not enough arguments for format string";
 					}
 
@@ -5599,7 +5589,7 @@ String String::sprintf(const Array &values, bool *error) const {
 				}
 				case 'c': {
 					uint64_t index = (selected_index >= 0 ? selected_index : value_index);
-					if (index >= (uint64_t)values.size()) {
+					if (index >= values.size()) {
 						return "not enough arguments for format string";
 					}
 
@@ -5698,7 +5688,7 @@ String String::sprintf(const Array &values, bool *error) const {
 
 				case '*': { // Dynamic width, based on value.
 					uint64_t index = (selected_index >= 0 ? selected_index : value_index);
-					if (index >= (uint64_t)values.size()) {
+					if (index >= values.size()) {
 						return "not enough arguments for format string";
 					}
 
