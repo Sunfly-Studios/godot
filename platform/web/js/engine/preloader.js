@@ -21,18 +21,22 @@ const Preloader = /** @constructor */ function () { // eslint-disable-line no-un
 			start: function (controller) {
 				onloadprogress(reader, controller).then(function () {
 					controller.close();
+				}).catch(function (err) {
+					controller.error(err);
 				});
 			},
 		}), { headers: response.headers });
 	}
 
-	function loadFetch(file, tracker, fileSize, raw) {
+	function loadFetch(file, tracker, fileSize, raw, signal) {
 		tracker[file] = {
 			total: fileSize || 0,
 			loaded: 0,
-			done: false,
+			done: false
 		};
-		return fetch(file).then(function (response) {
+		const init = signal ? { signal: signal } : {};
+		
+		return fetch(file, init).then(function (response) {
 			if (!response.ok) {
 				return Promise.reject(new Error(`Failed loading file '${file}'`));
 			}
@@ -86,7 +90,8 @@ const Preloader = /** @constructor */ function () { // eslint-disable-line no-un
 			lastProgress.loaded = loaded;
 			lastProgress.total = total;
 			if (typeof progressFunc === 'function') {
-				progressFunc(loaded, total);
+				const safeTotal = total === 0 ? Math.max(loaded, 1) : total;
+				progressFunc(loaded, safeTotal);
 			}
 		}
 		if (!progressIsFinal) {
@@ -101,7 +106,19 @@ const Preloader = /** @constructor */ function () { // eslint-disable-line no-un
 	};
 
 	this.loadPromise = function (file, fileSize, raw = false) {
-		return retry(loadFetch.bind(null, file, loadingFiles, fileSize, raw), DOWNLOAD_ATTEMPTS_MAX);
+		const abortController = new AbortController();
+		
+		// If the fetch fails, we should abort the hanging controller just in case 
+		// it was a timeout or stream stall.
+		const func = () => {
+			return loadFetch(file, loadingFiles, fileSize, raw, abortController.signal)
+				.catch(err => {
+					abortController.abort();
+					throw err;
+				});
+		};
+
+		return retry(func, DOWNLOAD_ATTEMPTS_MAX);
 	};
 
 	this.preloadedFiles = [];
@@ -119,12 +136,12 @@ const Preloader = /** @constructor */ function () { // eslint-disable-line no-un
 		} else if (pathOrBuffer instanceof ArrayBuffer) {
 			buffer = new Uint8Array(pathOrBuffer);
 		} else if (ArrayBuffer.isView(pathOrBuffer)) {
-			buffer = new Uint8Array(pathOrBuffer.buffer);
+			buffer = new Uint8Array(pathOrBuffer.buffer, pathOrBuffer.byteOffset, pathOrBuffer.byteLength);
 		}
 		if (buffer) {
 			this.preloadedFiles.push({
 				path: destPath,
-				buffer: pathOrBuffer,
+				buffer: buffer,
 			});
 			return Promise.resolve();
 		}

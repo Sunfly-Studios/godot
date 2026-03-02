@@ -282,13 +282,16 @@ const InternalConfig = function (initConfig) { // eslint-disable-line no-unused-
 				function done(result) {
 					onSuccess(result['instance'], result['module']);
 				}
+				const onCatch = (err) => {
+                    console.error("Failed to instantiate WebAssembly module:", err);
+                };
 				if (typeof (WebAssembly.instantiateStreaming) !== 'undefined') {
-					WebAssembly.instantiateStreaming(Promise.resolve(r), imports).then(done);
-				} else {
-					r.arrayBuffer().then(function (buffer) {
-						WebAssembly.instantiate(buffer, imports).then(done);
-					});
-				}
+                    WebAssembly.instantiateStreaming(Promise.resolve(r), imports).then(done).catch(onCatch);
+                } else {
+                    r.arrayBuffer().then(function (buffer) {
+                        WebAssembly.instantiate(buffer, imports).then(done).catch(onCatch);
+                    }).catch(onCatch);
+                }
 				r = null;
 				return {};
 			},
@@ -301,8 +304,8 @@ const InternalConfig = function (initConfig) { // eslint-disable-line no-unused-
 					return `${loadPath}.audio.position.worklet.js`;
 				} else if (path.endsWith('.js')) {
 					return `${loadPath}.js`;
-				} else if (path in gdext) {
-					return path;
+				} else if (gdext.includes(path)) {
+                    return path;
 				} else if (path.endsWith('.side.wasm')) {
 					return `${loadPath}.side.wasm`;
 				} else if (path.endsWith('.wasm')) {
@@ -336,11 +339,12 @@ const InternalConfig = function (initConfig) { // eslint-disable-line no-unused-
 
 		// Browser locale, or custom one if defined.
 		let locale = this.locale;
-		if (!locale) {
-			locale = navigator.languages ? navigator.languages[0] : navigator.language;
-			locale = locale.split('.')[0];
-		}
-		locale = locale.replace('-', '_');
+        if (!locale) {
+            locale = navigator.languages && navigator.languages.length > 0 ? navigator.languages[0] : navigator.language;
+            // Fallback to 'en' if the browser hides the language
+            locale = locale ? locale.split('.')[0] : 'en';
+        }
+        locale = locale.replace('-', '_');
 		const onExit = this.onExit;
 
 		// Godot configuration.

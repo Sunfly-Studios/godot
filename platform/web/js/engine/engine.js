@@ -58,6 +58,7 @@ const Engine = (function () {
 	 */
 	Engine.unload = function () {
 		loadPromise = null;
+		initPromise = null;
 	};
 
 	/**
@@ -101,9 +102,9 @@ const Engine = (function () {
 										Engine.unload();
 									}
 									resolve();
-								});
-							});
-						});
+								}).catch(reject);
+							}).catch(reject);
+						}).catch(reject);
 					});
 				}
 				preloader.setProgressFunc(this.config.onProgress);
@@ -172,9 +173,19 @@ const Engine = (function () {
 							me.rtenv['copyToFS'](file.path, file.buffer);
 						}
 						preloader.preloadedFiles.length = 0; // Clear memory
-						me.rtenv['callMain'](me.config.args);
+						
+						try {
+							me.rtenv['callMain'](me.config.args);
+						} catch (e) {
+							initPromise = null;
+							reject(e);
+							return;
+						}
+
 						initPromise = null;
-						me.installServiceWorker();
+						me.installServiceWorker().catch(function (err) {
+							console.warn("Godot ServiceWorker registration failed:", err);
+						}).finally(resolve);
 						resolve();
 					});
 				});
