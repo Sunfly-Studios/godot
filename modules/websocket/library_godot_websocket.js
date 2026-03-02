@@ -39,7 +39,11 @@ const GodotWebSocket = {
 				return; // Godot object is gone.
 			}
 			const c_str = GodotRuntime.allocString(ref.protocol);
+#if MEMORY64
+			callback(BigInt(c_str));
+#else
 			callback(c_str);
+#endif
 			GodotRuntime.free(c_str);
 		},
 
@@ -66,8 +70,12 @@ const GodotWebSocket = {
 			}
 			const len = buffer.length * buffer.BYTES_PER_ELEMENT;
 			const out = GodotRuntime.malloc(len);
-			HEAPU8.set(buffer, out);
+			HEAPU8.set(buffer, Number(out));
+#if MEMORY64
+			callback(BigInt(out), len, is_string);
+#else
 			callback(out, len, is_string);
+#endif
 			GodotRuntime.free(out);
 		},
 
@@ -87,7 +95,11 @@ const GodotWebSocket = {
 				return; // Godot object is gone.
 			}
 			const c_str = GodotRuntime.allocString(event.reason);
+#if MEMORY64
+			callback(event.code, BigInt(c_str), event.wasClean ? 1 : 0);
+#else
 			callback(event.code, c_str, event.wasClean ? 1 : 0);
+#endif
 			GodotRuntime.free(c_str);
 		},
 
@@ -170,17 +182,19 @@ const GodotWebSocket = {
 	godot_js_websocket_send__proxy: 'sync',
 	godot_js_websocket_send__sig: 'iiiii',
 	godot_js_websocket_send: function (p_id, p_buf, p_buf_len, p_raw) {
-		const bytes_array = new Uint8Array(p_buf_len);
-		let i = 0;
-		for (i = 0; i < p_buf_len; i++) {
-			bytes_array[i] = GodotRuntime.getHeapValue(p_buf + i, 'i8');
-		}
-		let out = bytes_array.buffer;
-		if (!p_raw) {
-			out = new TextDecoder('utf-8').decode(bytes_array);
-		}
-		return GodotWebSocket.send(p_id, out);
-	},
+        const c_buf = Number(p_buf);
+
+        // Extract a view from Wasm memory, then clone it to a new Uint8Array.
+        // If we sent the raw HEAPU8.subarray().buffer over the socket, 
+        // we may accidentally send the entire game's RAM over the network.
+        const bytes_array = new Uint8Array(HEAPU8.subarray(c_buf, c_buf + p_buf_len));
+        
+        let out = bytes_array.buffer;
+        if (!p_raw) {
+            out = new TextDecoder('utf-8').decode(bytes_array);
+        }
+        return GodotWebSocket.send(p_id, out);
+    },
 
 	godot_js_websocket_buffered_amount__proxy: 'sync',
 	godot_js_websocket_buffered_amount__sig: 'ii',
