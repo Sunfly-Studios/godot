@@ -149,23 +149,21 @@ class Sample {
 	 * Returns a duplicate of the stored audio buffer.
 	 * @returns {AudioBuffer}
 	 */
+
 	_duplicateAudioBuffer() {
 		if (this._audioBuffer == null) {
 			throw new Error('couldn\'t duplicate a null audioBuffer');
-		}
-		/** @type {Array<Float32Array>} */
-		const channels = new Array(this._audioBuffer.numberOfChannels);
-		for (let i = 0; i < this._audioBuffer.numberOfChannels; i++) {
-			const channel = new Float32Array(this._audioBuffer.getChannelData(i));
-			channels[i] = channel;
 		}
 		const buffer = GodotAudio.ctx.createBuffer(
 			this.numberOfChannels,
 			this._audioBuffer.length,
 			this._audioBuffer.sampleRate
 		);
-		for (let i = 0; i < channels.length; i++) {
-			buffer.copyToChannel(channels[i], i, 0);
+
+		for (let i = 0; i < this.numberOfChannels; i++) {
+			// If source is Mono, copy channel 0 into both Left and Right speakers
+			const sourceChannel = i < this._audioBuffer.numberOfChannels ? i : 0;
+			buffer.copyToChannel(this._audioBuffer.getChannelData(sourceChannel), i, 0);
 		}
 		return buffer;
 	}
@@ -590,7 +588,7 @@ class SampleNode {
 		for (let busIdx = 0; busIdx < buses.length; busIdx++) {
 			const sampleNodeBus = this.getSampleNodeBus(buses[busIdx]);
 			sampleNodeBus.setVolume(
-				volumes.slice(
+				volumes.subarray(
 					busIdx * GodotAudio.MAX_VOLUME_CHANNELS,
 					(busIdx * GodotAudio.MAX_VOLUME_CHANNELS) + GodotAudio.MAX_VOLUME_CHANNELS
 				)
@@ -726,10 +724,24 @@ class SampleNode {
 	 */
 	_restart() {
 		if (this._source != null) {
+			if (this._onended != null) {
+				this._source.removeEventListener('ended', this._onended);
+			}
 			this._source.disconnect();
 		}
+		
 		this._source = GodotAudio.ctx.createBufferSource();
 		this._source.buffer = this.getSample().getAudioBuffer();
+
+		// Use native Web Audio API looping to prevent JS playback gaps.
+		// This replaces the old method of waiting for 'onended' to manually trigger _restart()
+		if (this.loopMode === 'forward' || this.loopMode === 'backward' || this.loopMode === 'pingpong') {
+			this._source.loop = true;
+			// Convert Godot frames (integers) to Web Audio seconds (floats)
+			const sampleRate = this.getSample().sampleRate;
+			this._source.loopStart = this.getSample().loopBegin / sampleRate;
+			this._source.loopEnd = this.getSample().loopEnd / sampleRate;
+		}
 
 		// Make sure that we connect the new source to the sample node bus.
 		for (const sampleNodeBus of this._sampleNodeBuses.values()) {
@@ -737,13 +749,16 @@ class SampleNode {
 		}
 
 		this._addEndedListener();
+		
 		const pauseTime = this.isPaused
 			? this.pauseTime
 			: 0;
+			
 		if (this._positionWorklet != null) {
 			this._positionWorklet.port.postMessage({ type: 'clear' });
 			this._source.connect(this._positionWorklet);
 		}
+		
 		this._source.start(this.startTime, this.offset + pauseTime);
 		this.isStarted = true;
 	}
@@ -1097,6 +1112,15 @@ class Bus {
 	 */
 	clear() {
 		GodotAudio.buses = GodotAudio.buses.filter((v) => v !== this);
+		if (this._gainNode) {
+			this._gainNode.disconnect();
+		}
+		if (this._soloNode) {
+			this._soloNode.disconnect();
+		}
+		if (this._muteNode) {
+			this._muteNode.disconnect();
+		}
 	}
 
 	_syncSampleNodes() {
@@ -1596,7 +1620,12 @@ const _GodotAudio = {
 	godot_audio_resume__sig: 'v',
 	godot_audio_resume: function () {
 		if (GodotAudio.ctx && GodotAudio.ctx.state !== 'running') {
-			GodotAudio.ctx.resume();
+			const promise = GodotAudio.ctx.resume();
+			if (promise) {
+				promise.catch(function(err) {
+					// Browser blocked audio resume
+				});
+			}
 		}
 	},
 
@@ -1975,11 +2004,11 @@ const GodotAudioWorklet = {
 					GodotAudioWorklet.worklet = new AudioWorkletNode(
 						GodotAudio.ctx,
 						'godot-processor',
-						{
-							outputChannelCount: [channels],
-						}
+						{ outputChannelCount: [channels] }
 					);
 					return Promise.resolve();
+				}).catch(function (err) {
+					GodotRuntime.error("AudioWorklet initialization failed. Browser restrictions may be active.", err);
 				});
 			GodotAudio.driver = GodotAudioWorklet;
 		},
@@ -2098,22 +2127,25 @@ const GodotAudioWorklet = {
 		close: function () {
 			return new Promise(function (resolve, reject) {
 				if (GodotAudioWorklet.promise === null) {
+					resolve();
 					return;
 				}
 				const p = GodotAudioWorklet.promise;
 				p.then(function () {
-					GodotAudioWorklet.worklet.port.postMessage({
-						'cmd': 'stop',
-						'data': null,
-					});
-					GodotAudioWorklet.worklet.disconnect();
-					GodotAudioWorklet.worklet.port.onmessage = null;
-					GodotAudioWorklet.worklet = null;
+					if (GodotAudioWorklet.worklet) {
+						GodotAudioWorklet.worklet.port.postMessage({
+							'cmd': 'stop',
+							'data': null
+						});
+						GodotAudioWorklet.worklet.disconnect();
+						GodotAudioWorklet.worklet.port.onmessage = null;
+						GodotAudioWorklet.worklet = null;
+					}
 					GodotAudioWorklet.promise = null;
 					resolve();
 				}).catch(function (err) {
-					// Aborted?
-					GodotRuntime.error(err);
+					GodotRuntime.error("Error during Worklet teardown", err);
+					resolve();
 				});
 			});
 		},
@@ -2169,24 +2201,20 @@ const GodotAudioWorklet = {
 	},
 
 	godot_audio_worklet_state_wait__sig: 'iiii',
-	godot_audio_worklet_state_wait: function (
-		p_state,
-		p_idx,
-		p_expected,
-		p_timeout
-	) {
-		Atomics.wait(HEAP32, (p_state >> 2) + p_idx, p_expected, p_timeout);
-		return Atomics.load(HEAP32, (p_state >> 2) + p_idx);
+	godot_audio_worklet_state_wait: function (p_state, p_idx, p_expected, p_timeout) {
+		const index = (Number(p_state) / 4) + p_idx;
+		Atomics.wait(HEAP32, index, p_expected, p_timeout);
+		return Atomics.load(HEAP32, index);
 	},
 
-	godot_audio_worklet_state_add__sig: 'iiii',
 	godot_audio_worklet_state_add: function (p_state, p_idx, p_value) {
-		return Atomics.add(HEAP32, (p_state >> 2) + p_idx, p_value);
+		const index = (Number(p_state) / 4) + p_idx;
+		return Atomics.add(HEAP32, index, p_value);
 	},
 
-	godot_audio_worklet_state_get__sig: 'iii',
 	godot_audio_worklet_state_get: function (p_state, p_idx) {
-		return Atomics.load(HEAP32, (p_state >> 2) + p_idx);
+		const index = (Number(p_state) / 4) + p_idx;
+		return Atomics.load(HEAP32, index);
 	},
 };
 
@@ -2213,15 +2241,18 @@ const GodotAudioScript = {
 
 		start: function (p_in_buf, p_in_size, p_out_buf, p_out_size, onprocess) {
 			GodotAudioScript.script.onaudioprocess = function (event) {
+				// Convert Wasm byte pointers to Float32 index offsets
+				const in_offset = Number(p_in_buf) / 4; 
+				const out_offset = Number(p_out_buf) / 4;
+
 				// Read input
-				const inb = GodotRuntime.heapSub(HEAPF32, p_in_buf, p_in_size);
 				const input = event.inputBuffer;
 				if (GodotAudio.input) {
 					const inlen = input.getChannelData(0).length;
 					for (let ch = 0; ch < 2; ch++) {
 						const data = input.getChannelData(ch);
 						for (let s = 0; s < inlen; s++) {
-							inb[s * 2 + ch] = data[s];
+							HEAPF32[in_offset + (s * 2 + ch)] = data[s]; 
 						}
 					}
 				}
@@ -2230,14 +2261,12 @@ const GodotAudioScript = {
 				onprocess();
 
 				// Write the output.
-				const outb = GodotRuntime.heapSub(HEAPF32, p_out_buf, p_out_size);
 				const output = event.outputBuffer;
 				const channels = output.numberOfChannels;
 				for (let ch = 0; ch < channels; ch++) {
 					const data = output.getChannelData(ch);
-					// Loop through samples and assign computed values.
 					for (let sample = 0; sample < data.length; sample++) {
-						data[sample] = outb[sample * channels + ch];
+						data[sample] = HEAPF32[out_offset + (sample * channels + ch)]; 
 					}
 				}
 			};

@@ -188,19 +188,20 @@ const GodotFS = {
 
 		sync: function () {
 			if (GodotFS._syncing) {
-				GodotRuntime.error('Already syncing!');
-				return Promise.resolve();
+				return GodotFS._active_sync_promise || Promise.resolve();
 			}
 			GodotFS._syncing = true;
-			return new Promise(function (resolve, reject) {
+			GodotFS._active_sync_promise = new Promise(function (resolve, reject) {
 				FS.syncfs(false, function (error) {
 					if (error) {
-						GodotRuntime.error(`Failed to save IDB file system: ${error.message}`);
+						GodotRuntime.error(`Failed to save IDB: ${error.message}`);
 					}
 					GodotFS._syncing = false;
+					GodotFS._active_sync_promise = null; // Clean up
 					resolve(error);
 				});
 			});
+			return GodotFS._active_sync_promise;
 		},
 
 		// Copies a buffer to the internal file system. Creating directories recursively.
@@ -252,15 +253,13 @@ const GodotOS = {
 
 		finish_async: function (callback) {
 			GodotOS._fs_sync_promise.then(function (err) {
-				const promises = [];
-				GodotOS._async_cbs.forEach(function (cb) {
-					promises.push(new Promise(cb));
-				});
+				const promises = GodotOS._async_cbs.map(cb => new Promise(cb));
 				return Promise.all(promises);
 			}).then(function () {
-				return GodotFS.sync(); // Final FS sync.
-			}).then(function (err) {
-				// Always deferred.
+				return GodotFS.sync();
+			}).catch(function (err) {
+				GodotRuntime.error("Error during OS cleanup", err);
+			}).finally(function () {
 				setTimeout(function () {
 					callback();
 				}, 0);
@@ -324,7 +323,14 @@ const GodotOS = {
 	godot_js_os_execute__sig: 'ii',
 	godot_js_os_execute: function (p_json) {
 		const json_args = GodotRuntime.parseString(p_json);
-		const args = JSON.parse(json_args);
+		let args;
+		try {
+			args = JSON.parse(json_args);
+		} catch (e) {
+			GodotRuntime.error("OS.execute failed to parse arguments", e);
+			return 1; // Return failure to C++
+		}
+		
 		if (GodotConfig.on_execute) {
 			GodotConfig.on_execute(args);
 			return 0;
@@ -425,15 +431,16 @@ const GodotPWA = {
 				GodotPWA.hasUpdate = true;
 				cb();
 			}
-			GodotEventListeners.add(reg, 'updatefound', function () {
-				const installing = reg.installing;
-				GodotEventListeners.add(installing, 'statechange', function () {
-					if (installing.state === 'installed') {
-						GodotPWA.hasUpdate = true;
-						cb();
-					}
-				});
-			});
+			function onStateChange() {
+				if (reg.installing && reg.installing.state === 'installed') {
+					GodotPWA.hasUpdate = true;
+					cb();
+				}
+			}
+			function onUpdateFound() {
+				GodotEventListeners.add(reg.installing, 'statechange', onStateChange);
+			}
+			GodotEventListeners.add(reg, 'updatefound', onUpdateFound);
 		},
 	},
 

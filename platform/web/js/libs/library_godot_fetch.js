@@ -78,9 +78,11 @@ const GodotFetch = {
 		},
 
 		create: function (method, url, headers, body) {
+			const abortController = new AbortController();
 			const obj = {
 				request: null,
 				response: null,
+				abortController: abortController,
 				reader: null,
 				error: null,
 				done: false,
@@ -93,6 +95,7 @@ const GodotFetch = {
 				method: method,
 				headers: headers,
 				body: body,
+				signal: abortController.signal,
 			};
 			obj.request = fetch(url, init);
 			obj.request.then(GodotFetch.onresponse.bind(null, id)).catch(GodotFetch.onerror.bind(null, id));
@@ -105,13 +108,11 @@ const GodotFetch = {
 				return;
 			}
 			IDHandler.remove(id);
-			if (!obj.request) {
-				return;
+			
+			// Abort the fetch and the stream immediately
+			if (obj.abortController) {
+				obj.abortController.abort();
 			}
-			// Try to abort
-			obj.request.then(function (response) {
-				response.abort();
-			}).catch(function (e) { /* nothing to do */ });
 		},
 
 		read: function (id) {
@@ -219,14 +220,17 @@ const GodotFetch = {
 		const chunks = obj.chunks;
 		while (to_read && chunks.length) {
 			const chunk = obj.chunks[0];
+			// Calculate the current offset in the Wasm buffer
+			const current_p_buf = p_buf + (p_buf_size - to_read); 
+
 			if (chunk.length > to_read) {
-				GodotRuntime.heapCopy(HEAP8, chunk.slice(0, to_read), p_buf);
+				GodotRuntime.heapCopy(HEAP8, chunk.slice(0, to_read), current_p_buf);
 				chunks[0] = chunk.slice(to_read);
 				to_read = 0;
 			} else {
-				GodotRuntime.heapCopy(HEAP8, chunk, p_buf);
+				GodotRuntime.heapCopy(HEAP8, chunk, current_p_buf);
 				to_read -= chunk.length;
-				chunks.pop();
+				chunks.shift();
 			}
 		}
 		if (!chunks.length) {

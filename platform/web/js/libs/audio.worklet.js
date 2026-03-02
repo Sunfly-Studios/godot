@@ -143,7 +143,7 @@ class GodotProcessor extends AudioWorkletProcessor {
 	}
 
 	static array_has_data(arr) {
-		return arr.length && arr[0].length && arr[0][0].length;
+		return arr.length > 0 && arr[0].length > 0 && arr[0][0] !== undefined && arr[0][0].length > 0;
 	}
 
 	process(inputs, outputs, parameters) {
@@ -184,7 +184,10 @@ class GodotProcessor extends AudioWorkletProcessor {
 					this.port.postMessage({ 'cmd': 'read', 'data': chunk });
 				}
 			} else {
-				// this.port.postMessage('Output buffer has not enough frames! Skipping output frame.'); // Uncomment this line to debug output buffer.
+				// Zero out the buffer to prevent repeating garbage memory
+				for (let ch = 0; ch < output.length; ch++) {
+					output[ch].fill(0);
+				}
 			}
 		}
 		this.process_notify();

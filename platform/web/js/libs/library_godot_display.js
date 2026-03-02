@@ -44,7 +44,7 @@ const GodotDisplayVK = {
 			function create(what) {
 				const elem = document.createElement(what);
 				elem.style.display = 'none';
-				elem.style.position = 'absolute';
+				elem.style.position = 'fixed'; // Using fix locks to viewport.
 				elem.style.zIndex = '-1';
 				elem.style.background = 'transparent';
 				elem.style.padding = '0px';
@@ -126,7 +126,11 @@ const GodotDisplayVK = {
 			elem.value = text;
 			elem.style.display = 'block';
 			elem.focus();
-			elem.setSelectionRange(start, end);
+			try {
+				elem.setSelectionRange(start, end);
+			} catch (e) {
+				// Ignore InvalidStateError on unsupported input types
+			}
 		},
 		hide: function () {
 			if (!GodotDisplayVK.textinput || !GodotDisplayVK.textarea) {
@@ -185,7 +189,9 @@ const GodotDisplayCursor = {
 			let css = shape;
 			if (shape in GodotDisplayCursor.cursors) {
 				const c = GodotDisplayCursor.cursors[shape];
-				css = `url("${c.url}") ${c.x} ${c.y}, default`;
+				const x = Math.round(c.x);
+				const y = Math.round(c.y);
+				css = `url("${c.url}") ${x} ${y}, default`;
 			}
 			if (GodotDisplayCursor.visible) {
 				GodotDisplayCursor.set_style(css);
@@ -196,14 +202,19 @@ const GodotDisplayCursor = {
 			GodotDisplayCursor.shape = 'default';
 			GodotDisplayCursor.visible = true;
 			Object.keys(GodotDisplayCursor.cursors).forEach(function (key) {
-				URL.revokeObjectURL(GodotDisplayCursor.cursors[key]);
+				URL.revokeObjectURL(GodotDisplayCursor.cursors[key].url);
 				delete GodotDisplayCursor.cursors[key];
 			});
 		},
 		lockPointer: function () {
 			const canvas = GodotConfig.canvas;
 			if (canvas.requestPointerLock) {
-				canvas.requestPointerLock();
+				const promise = canvas.requestPointerLock();
+				if (promise) {
+					promise.catch(function(err) {
+						// Browser denied lock
+					});
+				}
 			}
 		},
 		releasePointer: function () {
@@ -246,10 +257,14 @@ const GodotDisplayScreen = {
 			}
 			const canvas = GodotConfig.canvas;
 			try {
-				const promise = (canvas.requestFullscreen || canvas.msRequestFullscreen
-					|| canvas.mozRequestFullScreen || canvas.mozRequestFullscreen
-					|| canvas.webkitRequestFullscreen
-				).call(canvas);
+				const reqFunc = canvas.requestFullscreen || canvas.msRequestFullscreen 
+					|| canvas.mozRequestFullScreen || canvas.webkitRequestFullscreen;
+				
+				if (!reqFunc) {
+					return 1; // Failsafe
+				}
+				
+				const promise = reqFunc.call(canvas);
 				// Some browsers (Safari) return undefined.
 				// For the standard ones, we need to catch it.
 				if (promise) {
@@ -267,7 +282,12 @@ const GodotDisplayScreen = {
 				return 0;
 			}
 			try {
-				const promise = document.exitFullscreen();
+				const exitFunc = document.exitFullscreen || document.webkitExitFullscreen || document.mozCancelFullScreen || document.msExitFullscreen;
+				if (!exitFunc) {
+					return 1;
+				}
+				
+				const promise = exitFunc.call(document);
 				if (promise) {
 					promise.catch(function () {
 						// nothing to do.
@@ -306,8 +326,8 @@ const GodotDisplayScreen = {
 			const scale = GodotDisplayScreen.getPixelRatio();
 			if (isFullscreen || wantsFullWindow) {
 				// We need to match screen size.
-				width = window.innerWidth * scale;
-				height = window.innerHeight * scale;
+				width = Math.round(window.innerWidth * scale);
+				height = Math.round(window.innerHeight * scale);
 			}
 			const csw = `${width / scale}px`;
 			const csh = `${height / scale}px`;
@@ -334,8 +354,10 @@ mergeInto(LibraryManager.library, GodotDisplayScreen);
  */
 const GodotDisplay = {
 	$GodotDisplay__deps: ['$GodotConfig', '$GodotRuntime', '$GodotDisplayCursor', '$GodotEventListeners', '$GodotDisplayScreen', '$GodotDisplayVK'],
+	$GodotDisplay__postset: 'GodotOS.atexit(function(resolve) { if (GodotDisplay.window_icon) { URL.revokeObjectURL(GodotDisplay.window_icon); } resolve(); });',
 	$GodotDisplay: {
 		window_icon: '',
+		active_utterances: new Set(),
 		getDPI: function () {
 			// devicePixelRatio is given in dppx
 			// https://drafts.csswg.org/css-values/#resolution
@@ -392,6 +414,7 @@ const GodotDisplay = {
 		const func = GodotRuntime.get_func(p_callback);
 
 		function listener_end(evt) {
+			GodotDisplay.active_utterances.delete(evt.currentTarget);
 			evt.currentTarget.cb(1 /* TTS_UTTERANCE_ENDED */, evt.currentTarget.id, 0);
 		}
 
@@ -400,6 +423,7 @@ const GodotDisplay = {
 		}
 
 		function listener_error(evt) {
+			GodotDisplay.active_utterances.delete(evt.currentTarget);
 			evt.currentTarget.cb(2 /* TTS_UTTERANCE_CANCELED */, evt.currentTarget.id, 0);
 		}
 
@@ -426,6 +450,7 @@ const GodotDisplay = {
 			}
 		}
 		window.speechSynthesis.resume();
+		GodotDisplay.active_utterances.add(utterance);
 		window.speechSynthesis.speak(utterance);
 	},
 
@@ -444,6 +469,10 @@ const GodotDisplay = {
 	godot_js_tts_stop__proxy: 'sync',
 	godot_js_tts_stop__sig: 'v',
 	godot_js_tts_stop: function () {
+		// Browsers often fail to fire events on cancellation. 
+		if (GodotDisplay.active_utterances) {
+			GodotDisplay.active_utterances.clear();
+		}
 		window.speechSynthesis.cancel();
 		window.speechSynthesis.resume();
 	},
@@ -569,7 +598,15 @@ const GodotDisplay = {
 		const func = GodotRuntime.get_func(callback);
 		try {
 			navigator.clipboard.readText().then(function (result) {
+				if (!result) {
+					return; // Ignore empty clipboard
+				}
+				
 				const ptr = GodotRuntime.allocString(result);
+				if (Number(ptr) === 0) {
+					GodotRuntime.error("Clipboard data is too large for WebAssembly heap.");
+					return; // Graceful fail
+				}
 				func(ptr);
 				GodotRuntime.free(ptr);
 			}).catch(function (e) {
@@ -735,6 +772,7 @@ const GodotDisplay = {
 		GodotEventListeners.add(canvas, 'webglcontextlost', function (ev) {
 			alert('WebGL context lost, please reload the page'); // eslint-disable-line no-alert
 			ev.preventDefault();
+			GodotOS.request_quit();
 		}, false);
 		GodotDisplayScreen.hidpi = !!p_hidpi;
 		switch (GodotConfig.canvas_resize_policy) {

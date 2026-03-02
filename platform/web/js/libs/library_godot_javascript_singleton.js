@@ -229,8 +229,11 @@ const GodotJSWrapper = {
 			GodotJSWrapper.cb_ret = null;
 			const args = Array.from(arguments);
 			const argsProxy = new GodotJSWrapper.MyProxy(args);
-			func(p_ref, argsProxy.get_id(), args.length);
-			argsProxy.unref();
+			try {
+				func(p_ref, argsProxy.get_id(), args.length);
+			} finally {
+				argsProxy.unref();
+			}
 			const ret = GodotJSWrapper.cb_ret;
 			GodotJSWrapper.cb_ret = null;
 			return ret;
@@ -326,7 +329,7 @@ const GodotJSWrapper = {
 		}
 
 		if (ArrayBuffer.isView(obj) && !(obj instanceof Uint8Array)) {
-			obj = new Uint8Array(obj.buffer);
+			obj = new Uint8Array(obj.buffer, obj.byteOffset, obj.byteLength);
 		} else if (obj instanceof ArrayBuffer) {
 			obj = new Uint8Array(obj);
 		}
@@ -377,14 +380,18 @@ const GodotEval = {
 			}
 
 			if (ArrayBuffer.isView(eval_ret) && !(eval_ret instanceof Uint8Array)) {
-				eval_ret = new Uint8Array(eval_ret.buffer);
+				eval_ret = new Uint8Array(eval_ret.buffer, eval_ret.byteOffset, eval_ret.byteLength);
 			} else if (eval_ret instanceof ArrayBuffer) {
 				eval_ret = new Uint8Array(eval_ret);
 			}
 			if (eval_ret instanceof Uint8Array) {
 				const func = GodotRuntime.get_func(p_callback);
 				const bytes_ptr = func(p_byte_arr, p_byte_arr_write, eval_ret.length);
-				HEAPU8.set(eval_ret, bytes_ptr);
+				if (offset === 0) {
+					GodotRuntime.error("Godot Wasm Allocator failed to provide memory for JS buffer.");
+					return 0; // NIL
+				}
+				HEAPU8.set(eval_ret, Number(bytes_ptr));
 				return 29; // PACKED_BYTE_ARRAY
 			}
 			break;

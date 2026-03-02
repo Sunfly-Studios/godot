@@ -61,8 +61,7 @@ const GodotRuntime = {
 
 		free: function (p_ptr) {
 #if MEMORY64
-			// Ensure _free recieves a BigInt in wasm64 mode.
-			_free(p_ptr);
+			_free(BigInt(p_ptr)); // Safely coerces both Numbers and existing BigInts
 #else
 			_free(Number(p_ptr));
 #endif
@@ -109,7 +108,11 @@ const GodotRuntime = {
 
 		parseStringArray: function (p_ptr, p_size) {
 			const strings = [];
+#if MEMORY64
+			const ptrs = GodotRuntime.heapSub(HEAPU64, p_ptr, p_size);
+#else
 			const ptrs = GodotRuntime.heapSub(HEAP32, p_ptr, p_size);
+#endif
 			ptrs.forEach(function (ptr) {
 				strings.push(GodotRuntime.parseString(ptr));
 			});
@@ -130,16 +133,28 @@ const GodotRuntime = {
 
 		allocStringArray: function (p_strings) {
 			const size = p_strings.length;
+#if MEMORY64
+			const c_ptr = GodotRuntime.malloc(size * 8);
+			for (let i = 0; i < size; i++) {
+				// Divide by 8n for 64-bit alignment, cast result to Number for array index
+				HEAPU64[Number(c_ptr / 8n) + i] = BigInt(GodotRuntime.allocString(p_strings[i]));
+			}
+#else
 			const c_ptr = GodotRuntime.malloc(size * 4);
 			for (let i = 0; i < size; i++) {
 				HEAP32[(c_ptr >> 2) + i] = GodotRuntime.allocString(p_strings[i]);
 			}
+#endif
 			return c_ptr;
 		},
 
 		freeStringArray: function (p_ptr, p_len) {
 			for (let i = 0; i < p_len; i++) {
+#if MEMORY64
+				GodotRuntime.free(HEAPU64[Number(p_ptr / 8n) + i]);
+#else
 				GodotRuntime.free(HEAP32[(p_ptr >> 2) + i]);
+#endif
 			}
 			GodotRuntime.free(p_ptr);
 		},

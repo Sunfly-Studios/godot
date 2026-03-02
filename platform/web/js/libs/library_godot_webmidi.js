@@ -40,7 +40,7 @@ const GodotWebMidi = {
 	godot_js_webmidi_open_midi_inputs__proxy: 'sync',
 	godot_js_webmidi_open_midi_inputs__sig: 'iiii',
 	godot_js_webmidi_open_midi_inputs: function (pSetInputNamesCb, pOnMidiMessageCb, pDataBuffer, dataBufferLen) {
-		if (GodotWebMidi.is_listening) {
+		if (GodotWebMidi.isListening) {
 			return 0; // OK
 		}
 		if (!navigator.requestMIDIAccess) {
@@ -51,6 +51,9 @@ const GodotWebMidi = {
 
 		GodotWebMidi.isListening = true;
 		navigator.requestMIDIAccess().then((midi) => {
+			if (!GodotWebMidi.isListening) {
+				return; // Engine shut down while we were waiting.
+			}
 			const inputs = [...midi.inputs.values()];
 			const inputNames = inputs.map((input) => input.name);
 
@@ -67,13 +70,17 @@ const GodotWebMidi = {
 					const size = data.length;
 
 					if (size > dataBufferLen) {
-						throw new Error(`data too big ${size} > ${dataBufferLen}`);
+						console.warn(`Godot WebMIDI: Dropped oversized MIDI message (${size} > ${dataBufferLen})`);
+						return;
 					}
 					HEAPU8.set(data, pDataBuffer);
 
 					onMidiMessageCb(i, status, pDataBuffer, data.length);
 				}, { signal: abortController.signal });
 			});
+		}).catch((err) => {
+			console.warn("Godot WebMIDI: Access denied or unavailable.", err);
+			GodotWebMidi.isListening = false;
 		});
 
 		return 0; // OK

@@ -109,12 +109,12 @@ const GodotIME = {
 					GodotIME.ime.innerHTML = '';
 					break;
 				case 'compositionupdate': {
-					const ptr = GodotRuntime.allocString(event.data);
+					const ptr = GodotRuntime.allocString(event.data || '');
 					ime_cb(1, ptr);
 					GodotRuntime.free(ptr);
 				} break;
 				case 'compositionend': {
-					const ptr = GodotRuntime.allocString(event.data);
+					const ptr = GodotRuntime.allocString(event.data || '');
 					ime_cb(2, ptr);
 					GodotRuntime.free(ptr);
 					GodotIME.ime.innerHTML = '';
@@ -149,6 +149,10 @@ const GodotIME = {
 				this.style.display = 'none';
 				GodotConfig.canvas.focus();
 				GodotIME.active = false;
+				if (GodotIME.focusTimerIntervalId > -1) {
+					clearInterval(GodotIME.focusTimerIntervalId);
+					GodotIME.focusTimerIntervalId = -1;
+				}
 			};
 
 			GodotConfig.canvas.parentElement.appendChild(ime);
@@ -249,6 +253,8 @@ const GodotInputGamepads = {
 				'duration': duration * 1000,
 				'weakMagnitude': weak_magnitude,
 				'strongMagnitude': strong_magnitude,
+			}).catch(function(err) {
+				// Ignore
 			});
 		},
 
@@ -366,6 +372,11 @@ const GodotInputDragDrop = {
 		add_file: function (entry) {
 			GodotInputDragDrop.promises.push(new Promise(function (resolve, reject) {
 				entry.file(function (file) {
+					if (file.size > 256 * 1024 * 1024) {
+						GodotRuntime.error(`File ${file.name} is too large to drop into the Web browser.`);
+						reject();
+						return;
+					}
 					const reader = new FileReader();
 					reader.onload = function () {
 						const f = {
@@ -402,6 +413,12 @@ const GodotInputDragDrop = {
 				setTimeout(function () {
 					GodotInputDragDrop.process(resolve, reject);
 				}, 0);
+			}).catch(function (err) {
+				GodotRuntime.error("Dropped file failed to read, skipping...", err);
+				// Continue the loop anyway.
+				setTimeout(function () {
+					GodotInputDragDrop.process(resolve, reject);
+				}, 0);
 			});
 		},
 
@@ -428,7 +445,18 @@ const GodotInputDragDrop = {
 				const DROP = `/tmp/drop-${parseInt(Math.random() * (1 << 30), 10)}/`;
 				const drops = [];
 				const files = [];
-				FS.mkdir(DROP.slice(0, -1)); // Without trailing slash
+				const drop_dir = DROP.slice(0, -1); // Without trailing slash
+				try {
+					FS.stat(drop_dir);
+				} catch (e) {
+					// Directory does not exist
+					try {
+						FS.mkdir(drop_dir);
+					} catch (err) {
+						GodotRuntime.error("Failed to create drop directory", err);
+						return;
+					}
+				}
 				GodotInputDragDrop.pending_files.forEach((elem) => {
 					const path = elem['path'];
 					GodotFS.copy_to_fs(DROP + path, elem['data']);
@@ -465,7 +493,11 @@ const GodotInputDragDrop = {
 			const dirs = [drop_path.substr(0, drop_path.length - 1)];
 			// Remove temporary files
 			files.forEach(function (file) {
-				FS.unlink(file);
+				try {
+					FS.unlink(file);
+				} catch (e) {
+					GodotRuntime.error("Drop clean error:", e);
+				}
 				let dir = file.replace(drop_path, '');
 				let idx = dir.lastIndexOf('/');
 				while (idx > 0) {
@@ -487,7 +519,9 @@ const GodotInputDragDrop = {
 				}
 				return 0;
 			}).forEach(function (dir) {
-				FS.rmdir(dir);
+				try {
+					FS.rmdir(dir);
+				} catch (e) {}
 			});
 		},
 
@@ -511,8 +545,8 @@ const GodotInput = {
 		},
 		computePosition: function (evt, rect) {
 			const canvas = GodotConfig.canvas;
-			const rw = canvas.width / rect.width;
-			const rh = canvas.height / rect.height;
+			const rw = rect.width === 0 ? 0 : canvas.width / rect.width;
+			const rh = rect.height === 0 ? 0 : canvas.height / rect.height;
 			const x = (evt.clientX - rect.x) * rw;
 			const y = (evt.clientY - rect.y) * rh;
 			return [x, y];
@@ -550,7 +584,8 @@ const GodotInput = {
 				evt.preventDefault();
 			}
 		}
-		GodotEventListeners.add(GodotConfig.canvas, 'wheel', wheel_cb, false);
+		const options = { capture: false, passive: false };
+		GodotEventListeners.add(GodotConfig.canvas, 'wheel', wheel_cb, options);
 	},
 
 	godot_js_input_mouse_button_cb__proxy: 'sync',
@@ -591,22 +626,26 @@ const GodotInput = {
 			}
 			const rect = canvas.getBoundingClientRect();
 			const touches = evt.changedTouches;
-			for (let i = 0; i < touches.length; i++) {
+			const count = Math.min(touches.length, 32);
+			const c_coords = Number(coords);
+			const c_ids = Number(ids);
+			for (let i = 0; i < count; i++) {
 				const touch = touches[i];
 				const pos = GodotInput.computePosition(touch, rect);
-				GodotRuntime.setHeapValue(coords + (i * 2) * 8, pos[0], 'double');
-				GodotRuntime.setHeapValue(coords + (i * 2 + 1) * 8, pos[1], 'double');
-				GodotRuntime.setHeapValue(ids + i * 4, touch.identifier, 'i32');
+				GodotRuntime.setHeapValue(c_coords + (i * 2) * 8, pos[0], 'double');
+				GodotRuntime.setHeapValue(c_coords + (i * 2 + 1) * 8, pos[1], 'double');
+				GodotRuntime.setHeapValue(c_ids + i * 4, touch.identifier, 'i32');
 			}
-			func(type, touches.length);
+			func(type, count);
 			if (evt.cancelable) {
 				evt.preventDefault();
 			}
 		}
-		GodotEventListeners.add(canvas, 'touchstart', touch_cb.bind(null, 0), false);
-		GodotEventListeners.add(canvas, 'touchend', touch_cb.bind(null, 1), false);
-		GodotEventListeners.add(canvas, 'touchcancel', touch_cb.bind(null, 1), false);
-		GodotEventListeners.add(canvas, 'touchmove', touch_cb.bind(null, 2), false);
+		const options = { capture: false, passive: false };
+		GodotEventListeners.add(canvas, 'touchstart', touch_cb.bind(null, 0), options);
+		GodotEventListeners.add(canvas, 'touchend', touch_cb.bind(null, 1), options);
+		GodotEventListeners.add(canvas, 'touchcancel', touch_cb.bind(null, 1), options);
+		GodotEventListeners.add(canvas, 'touchmove', touch_cb.bind(null, 2), options);
 	},
 
 	/*
@@ -688,18 +727,20 @@ const GodotInput = {
 		}
 		const btns = sample.buttons;
 		const btns_len = btns.length < 16 ? btns.length : 16;
+		const c_btns = Number(r_btns);
 		for (let i = 0; i < btns_len; i++) {
-			GodotRuntime.setHeapValue(r_btns + (i << 2), btns[i], 'float');
+			GodotRuntime.setHeapValue(c_btns + (i << 2), btns[i], 'float');
 		}
 		GodotRuntime.setHeapValue(r_btns_num, btns_len, 'i32');
 		const axes = sample.axes;
 		const axes_len = axes.length < 10 ? axes.length : 10;
+		const c_axes = Number(r_axes);
 		for (let i = 0; i < axes_len; i++) {
-			GodotRuntime.setHeapValue(r_axes + (i << 2), axes[i], 'float');
+			GodotRuntime.setHeapValue(c_axes + (i << 2), axes[i], 'float');
 		}
-		GodotRuntime.setHeapValue(r_axes_num, axes_len, 'i32');
+		GodotRuntime.setHeapValue(Number(r_axes_num), axes_len, 'i32');
 		const is_standard = sample.standard ? 1 : 0;
-		GodotRuntime.setHeapValue(r_standard, is_standard, 'i32');
+		GodotRuntime.setHeapValue(Number(r_standard), is_standard, 'i32');
 		return 0;
 	},
 
@@ -741,7 +782,15 @@ const GodotInput = {
 		const func = GodotRuntime.get_func(callback);
 		GodotEventListeners.add(window, 'paste', function (evt) {
 			const text = evt.clipboardData.getData('text');
+			if (!text) {
+				return; // Ignore empty pastes
+			}
+
 			const ptr = GodotRuntime.allocString(text);
+			if (Number(ptr) === 0) {
+				GodotRuntime.error("Godot Wasm Allocator failed to allocate memory for pasted text.");
+				return; // Graceful fail
+			}
 			func(ptr);
 			GodotRuntime.free(ptr);
 		}, false);
