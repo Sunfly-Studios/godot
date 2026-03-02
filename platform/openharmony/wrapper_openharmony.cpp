@@ -34,26 +34,27 @@
 #include <window_manager/oh_window.h>
 
 int ohos_wrapper_get_display_dpi() {
-	int32_t dpi = 0;
+	int32_t dpi = 160; // Safe default
 	OH_NativeDisplayManager_GetDefaultDisplayDensityDpi(&dpi);
 	return dpi;
 }
 
 float ohos_wrapper_get_display_scaled_density() {
-	float scaled_density = 0;
+	float scaled_density = 1.0f;
 	OH_NativeDisplayManager_GetDefaultDisplayScaledDensity(&scaled_density);
 	return scaled_density;
 }
 
 float ohos_wrapper_get_display_refresh_rate() {
-	uint32_t refresh_rate = 0;
+	uint32_t refresh_rate = 60;
 	OH_NativeDisplayManager_GetDefaultDisplayRefreshRate(&refresh_rate);
 	return refresh_rate;
 }
 
 WrapperScreenOrientation ohos_wrapper_get_display_orientation() {
-	NativeDisplayManager_Orientation orientation;
+	NativeDisplayManager_Orientation orientation = DISPLAY_MANAGER_PORTRAIT; 
 	OH_NativeDisplayManager_GetDefaultDisplayOrientation(&orientation);
+	
 	switch (orientation) {
 		case DISPLAY_MANAGER_PORTRAIT:
 			return WrapperScreenOrientation::WRAPPER_SCREEN_PORTRAIT;
@@ -73,13 +74,17 @@ void ohos_wrapper_screen_set_keep_on(int32_t window_id, bool p_enable) {
 }
 
 bool ohos_wrapper_screen_is_kept_on(int32_t window_id) {
-	WindowManager_WindowProperties properties;
-	OH_WindowManager_GetWindowProperties(window_id, &properties);
-	return properties.isKeepScreenOn;
+	WindowManager_WindowProperties properties = {};
+	if (OH_WindowManager_GetWindowProperties(window_id, &properties) == 0) { // Assuming 0 is OK/SUCCESS
+		return properties.isKeepScreenOn;
+	}
+	return false;
 }
 
 int ohos_wrapper_get_keyboard_avoid_area(int32_t window_id) {
-	WindowManager_AvoidArea area;
-	OH_WindowManager_GetWindowAvoidArea(window_id, WINDOW_MANAGER_AVOID_AREA_TYPE_KEYBOARD, &area);
-	return area.bottomRect.height;
+	WindowManager_AvoidArea area = {};
+	if (OH_WindowManager_GetWindowAvoidArea(window_id, WINDOW_MANAGER_AVOID_AREA_TYPE_KEYBOARD, &area) == 0) {
+		return area.bottomRect.height;
+	}
+	return 0; // Safe fallback if keyboard height cannot be queried
 }

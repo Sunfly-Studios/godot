@@ -33,6 +33,10 @@
 AudioDriverOpenHarmony::AudioDriverOpenHarmony() {
 }
 
+AudioDriverOpenHarmony::~AudioDriverOpenHarmony() {
+	finish();
+}
+
 OH_AudioData_Callback_Result AudioDriverOpenHarmony::_buffer_callback(OH_AudioRenderer *renderer, void *userData, void *audioData, int32_t audioDataSize) {
 	bool mix = true;
 
@@ -66,7 +70,10 @@ OH_AudioData_Callback_Result AudioDriverOpenHarmony::_buffer_callback(OH_AudioRe
 
 OH_AudioData_Callback_Result AudioDriverOpenHarmony::_buffer_callbacks(OH_AudioRenderer *renderer, void *userData, void *audioData, int32_t audioDataSize) {
 	AudioDriverOpenHarmony *ad = static_cast<AudioDriverOpenHarmony *>(userData);
-	return ad->_buffer_callback(renderer, userData, audioData, audioDataSize);
+	if (ad) {
+		return ad->_buffer_callback(renderer, userData, audioData, audioDataSize);
+	}
+	return static_cast<OH_AudioData_Callback_Result>(0);
 }
 
 int32_t AudioDriverOpenHarmony::_capturer_read_data(OH_AudioCapturer *capturer, void *buffer, int32_t length) {
@@ -86,7 +93,10 @@ int32_t AudioDriverOpenHarmony::_capturer_read_data(OH_AudioCapturer *capturer, 
 
 int32_t AudioDriverOpenHarmony::_on_capturer_read_data(OH_AudioCapturer *capturer, void *userData, void *buffer, int32_t length) {
 	AudioDriverOpenHarmony *ad = static_cast<AudioDriverOpenHarmony *>(userData);
-	return ad->_capturer_read_data(capturer, buffer, length);
+	if (ad) {
+		return ad->_capturer_read_data(capturer, buffer, length);
+	}
+	return 0;
 }
 
 int32_t AudioDriverOpenHarmony::_on_capturer_error(OH_AudioCapturer *capturer, void *userData, OH_AudioStream_Result error) {
@@ -129,8 +139,14 @@ void AudioDriverOpenHarmony::start() {
 	}
 
 	if (!audio_renderer) {
-		OH_AudioStreamBuilder_GenerateRenderer(audio_stream_builder, &audio_renderer);
-		OH_AudioRenderer_Start(audio_renderer);
+		OH_AudioStream_Result r = OH_AudioStreamBuilder_GenerateRenderer(audio_stream_builder, &audio_renderer);
+		if (r == AUDIOSTREAM_SUCCESS && audio_renderer) {
+			OH_AudioRenderer_Start(audio_renderer);
+		} else {
+			ERR_PRINT(vformat("Failed to generate OpenHarmony audio renderer: %d", r));
+			// Make sure to nullify it just in case it returned garbage
+			audio_renderer = nullptr; 
+		}
 	}
 
 	active = true;
@@ -169,8 +185,7 @@ void AudioDriverOpenHarmony::finish() {
 		audio_stream_builder = nullptr;
 	}
 
-	if (!mixdown_buffer) {
-		buffer_size = 1024;
+	if (mixdown_buffer) {
 		memdelete_arr(mixdown_buffer);
 		mixdown_buffer = nullptr;
 	}
@@ -190,7 +205,7 @@ Error AudioDriverOpenHarmony::input_start() {
 		OH_AudioStreamBuilder_SetCapturerInfo(audio_stream_capture_builder, AUDIOSTREAM_SOURCE_TYPE_MIC);
 		OH_AudioStreamBuilder_SetLatencyMode(audio_stream_capture_builder, AUDIOSTREAM_LATENCY_MODE_FAST);
 
-		OH_AudioCapturer_Callbacks callbacks;
+		OH_AudioCapturer_Callbacks callbacks = {};
 		callbacks.OH_AudioCapturer_OnReadData = _on_capturer_read_data;
 		callbacks.OH_AudioCapturer_OnError = _on_capturer_error;
 		callbacks.OH_AudioCapturer_OnInterruptEvent = _on_capturer_interrupt_event;
@@ -205,7 +220,11 @@ Error AudioDriverOpenHarmony::input_start() {
 
 		input_buffer_init(2048);
 		r = OH_AudioCapturer_Start(audio_capturer);
-		ERR_FAIL_COND_V_MSG(r != AUDIOSTREAM_SUCCESS, FAILED, vformat("Failed to start capturer: %d.", r));
+		if (r != AUDIOSTREAM_SUCCESS) {
+			OH_AudioCapturer_Release(audio_capturer);
+			audio_capturer = nullptr;
+			ERR_FAIL_V_MSG(FAILED, vformat("Failed to start capturer: %d.", r));
+		}
 	}
 	return OK;
 }

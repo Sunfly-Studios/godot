@@ -78,6 +78,7 @@ DisplayServerOpenHarmony::DisplayServerOpenHarmony(const String &p_rendering_dri
 	if (rendering_driver != "vulkan") {
 		ERR_PRINT(vformat("Failed to create %s context.", rendering_driver));
 		r_error = ERR_UNAVAILABLE;
+		return;
 	}
 
 	rendering_context = memnew(RenderingContextDriverVulkanOpenHarmony);
@@ -91,7 +92,13 @@ DisplayServerOpenHarmony::DisplayServerOpenHarmony(const String &p_rendering_dri
 	}
 	RenderingContextDriverVulkanOpenHarmony::WindowPlatformData vulkan;
 	OHNativeWindow *native_window = OS_OpenHarmony::get_singleton()->get_native_window();
-	ERR_FAIL_NULL(native_window);
+	if (unlikely(native_window == nullptr)) {
+		ERR_PRINT("OpenHarmony native window is null.");
+		memdelete(rendering_context);
+		rendering_context = nullptr;
+		r_error = ERR_UNAVAILABLE;
+		return;
+	}
 	vulkan.window = native_window;
 
 	if (rendering_context->window_create(MAIN_WINDOW_ID, &vulkan) != OK) {
@@ -108,6 +115,7 @@ DisplayServerOpenHarmony::DisplayServerOpenHarmony(const String &p_rendering_dri
 
 	rendering_device = memnew(RenderingDevice);
 	if (rendering_device->initialize(rendering_context, MAIN_WINDOW_ID) != OK) {
+		memdelete(rendering_device);
 		rendering_device = nullptr;
 		memdelete(rendering_context);
 		rendering_context = nullptr;
@@ -124,6 +132,14 @@ DisplayServerOpenHarmony::DisplayServerOpenHarmony(const String &p_rendering_dri
 }
 
 DisplayServerOpenHarmony::~DisplayServerOpenHarmony() {
+	if (rendering_device) {
+		memdelete(rendering_device);
+		rendering_device = nullptr;
+	}
+	if (rendering_context) {
+		memdelete(rendering_context);
+		rendering_context = nullptr;
+	}
 }
 
 void DisplayServerOpenHarmony::_window_callback(const Callable &p_callable, const Variant &p_arg, bool p_deferred) const {
@@ -255,12 +271,13 @@ String DisplayServerOpenHarmony::clipboard_get() const {
 	if (hasPlainTextData) {
 		int status = 0;
 		OH_UdmfData *udmfData = OH_Pasteboard_GetData(pasteboard, &status);
-		if (status == 0) {
+		if (status == 0 && udmfData != nullptr) {
 			OH_UdmfRecord *record = OH_UdmfData_GetRecord(udmfData, 0);
 			OH_UdsPlainText *plainText = OH_UdsPlainText_Create();
 			OH_UdmfRecord_GetPlainText(record, plainText);
 			content = String::utf8(OH_UdsPlainText_GetContent(plainText));
 			OH_UdsPlainText_Destroy(plainText);
+			OH_UdmfData_Destroy(udmfData);
 		} else {
 			ERR_PRINT("Failed to get clipboard data with PASTEBOARD_ErrCode: " + itos(status));
 		}
@@ -326,7 +343,7 @@ void DisplayServerOpenHarmony::_insert_text(InputMethod_TextEditorProxy *p_text_
 			key = Key::TAB;
 		} else if (character == '\n') { // 0x0A
 			key = Key::ENTER;
-		} else if (character == 0x2006) {
+		} else if (character == ' ' || character == 0x2006) {
 			key = Key::SPACE;
 		}
 
@@ -458,7 +475,13 @@ void DisplayServerOpenHarmony::virtual_keyboard_show(const String &p_existing_te
 	OH_TextEditorProxy_SetFinishTextPreviewFunc(text_editor_proxy, _finish_text_preview);
 
 	InputMethod_ErrorCode code = OH_InputMethodController_Attach(text_editor_proxy, attach_options, &input_method_proxy);
-	ERR_FAIL_COND_MSG(code != IME_ERR_OK, vformat("Failed to attach input method controller: %d.", code));
+	if (code != IME_ERR_OK) {
+		OH_TextEditorProxy_Destroy(text_editor_proxy);
+		OH_AttachOptions_Destroy(attach_options);
+		text_editor_proxy = nullptr;
+		attach_options = nullptr;
+		ERR_FAIL_MSG(vformat("Failed to attach input method controller: %d.", code));
+	}
 }
 
 void DisplayServerOpenHarmony::virtual_keyboard_hide() {
@@ -500,6 +523,7 @@ void DisplayServerOpenHarmony::window_set_ime_position(const Point2i &p_pos, Dis
 	if (ime_active) {
 		InputMethod_CursorInfo *info = OH_CursorInfo_Create(p_pos.x, p_pos.y, 0, 30);
 		OH_InputMethodProxy_NotifyCursorUpdate(input_method_proxy, info);
+		OH_CursorInfo_Destroy(info);
 	}
 }
 

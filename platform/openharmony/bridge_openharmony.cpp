@@ -210,6 +210,7 @@ void godot_touch(GodotTouchEvent *p_event, int count) {
 			case 0: { // Touch begin
 				Ref<InputEventScreenTouch> ev;
 				ev.instantiate();
+				ERR_FAIL_NULL(ev);
 				ev->set_index(event.id);
 				ev->set_pressed(true);
 				ev->set_position(Vector2(event.x, event.y));
@@ -218,6 +219,7 @@ void godot_touch(GodotTouchEvent *p_event, int count) {
 			case 1: { // Touch up
 				Ref<InputEventScreenTouch> ev;
 				ev.instantiate();
+				ERR_FAIL_NULL(ev);
 				ev->set_index(event.id);
 				ev->set_pressed(false);
 				ev->set_position(Vector2(event.x, event.y));
@@ -226,6 +228,7 @@ void godot_touch(GodotTouchEvent *p_event, int count) {
 			case 2: { // Touch move
 				Ref<InputEventScreenDrag> ev;
 				ev.instantiate();
+				ERR_FAIL_NULL(ev);
 				ev->set_index(event.id);
 				ev->set_position(Vector2(event.x, event.y));
 				ev->set_relative(Vector2(event.x - last_touch_events[event.id].x, event.y - last_touch_events[event.id].y));
@@ -235,6 +238,7 @@ void godot_touch(GodotTouchEvent *p_event, int count) {
 			case 3: { // Touch cancel
 				Ref<InputEventScreenTouch> ev;
 				ev.instantiate();
+				ERR_FAIL_NULL(ev);
 				ev->set_index(event.id);
 				ev->set_canceled(true);
 				ev->set_position(Vector2(event.x, event.y));
@@ -252,6 +256,7 @@ void godot_mouse(GodotMouseEvent *p_event) {
 		case 0: { // Mouse down
 			Ref<InputEventMouseButton> ev;
 			ev.instantiate();
+			ERR_FAIL_NULL(ev);
 			ev->set_pressed(true);
 			ev->set_position(Vector2(event.x, event.y));
 			ev->set_global_position(ev->get_position());
@@ -262,6 +267,7 @@ void godot_mouse(GodotMouseEvent *p_event) {
 		case 1: { // Mouse up
 			Ref<InputEventMouseButton> ev;
 			ev.instantiate();
+			ERR_FAIL_NULL(ev);
 			ev->set_pressed(false);
 			ev->set_position(Vector2(event.x, event.y));
 			ev->set_global_position(ev->get_position());
@@ -271,6 +277,7 @@ void godot_mouse(GodotMouseEvent *p_event) {
 		case 2: { // Mouse move
 			Ref<InputEventMouseMotion> ev;
 			ev.instantiate();
+			ERR_FAIL_NULL(ev);
 			ev->set_position(Vector2(event.x, event.y));
 			ev->set_global_position(ev->get_position());
 			ev->set_relative(Vector2(event.x - last_mouse_event.x, event.y - last_mouse_event.y));
@@ -285,6 +292,7 @@ void godot_key(GodotKeyEvent *p_event) {
 	GodotKeyEvent &event = *p_event;
 	Ref<InputEventKey> ev;
 	ev.instantiate();
+	ERR_FAIL_NULL(ev);
 	ev->set_pressed(event.pressed);
 	ev->set_echo(false);
 	ev->set_keycode(Key(event.code));

@@ -81,6 +81,7 @@ public:
 	void set_pause(bool p_pause);
 
 	AudioDriverOpenHarmony();
+	~AudioDriverOpenHarmony();
 };
 
 #endif // AUDIO_DRIVER_OPENHARMONY_H

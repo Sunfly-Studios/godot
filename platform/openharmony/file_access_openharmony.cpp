@@ -80,6 +80,7 @@ Error FileAccessOpenHarmony::open_internal(const String &p_path, int p_mode_flag
 		}
 		_cpath = file;
 		_is_rawfile = true;
+		last_error = OK;
 		return OK;
 	}
 	return FileAccessUnix::open_internal(p_path, p_mode_flags);
@@ -110,6 +111,7 @@ void FileAccessOpenHarmony::seek(uint64_t p_position) {
 	if (_is_rawfile) {
 		if (_rawfile) {
 			OH_ResourceManager_SeekRawFile64(_rawfile, p_position, SEEK_SET);
+			last_error = OK;
 		}
 		return;
 	}
@@ -120,10 +122,12 @@ void FileAccessOpenHarmony::seek_end(int64_t p_position) {
 	if (_is_rawfile) {
 		if (_rawfile) {
 			OH_ResourceManager_SeekRawFile64(_rawfile, p_position, SEEK_END);
+			last_error = OK;
 		}
 		return;
+	} else {
+		FileAccessUnix::seek(p_position);
 	}
-	return FileAccessUnix::seek_end(p_position);
 }
 
 uint64_t FileAccessOpenHarmony::get_position() const {
@@ -159,7 +163,11 @@ bool FileAccessOpenHarmony::eof_reached() const {
 uint64_t FileAccessOpenHarmony::get_buffer(uint8_t *p_dst, uint64_t p_length) const {
 	if (_is_rawfile) {
 		if (_rawfile) {
-			return OH_ResourceManager_ReadRawFile64(_rawfile, p_dst, p_length);
+			uint64_t read = OH_ResourceManager_ReadRawFile64(_rawfile, p_dst, p_length);
+			if (read < p_length) {
+				last_error = ERR_FILE_EOF; // Set EOF when we run out of bytes
+			}
+			return read;
 		}
 		return 0;
 	}
@@ -168,7 +176,7 @@ uint64_t FileAccessOpenHarmony::get_buffer(uint8_t *p_dst, uint64_t p_length) co
 
 Error FileAccessOpenHarmony::get_error() const {
 	if (_is_rawfile) {
-		return OK;
+		return last_error;
 	}
 	return FileAccessUnix::get_error();
 }
@@ -197,8 +205,16 @@ bool FileAccessOpenHarmony::store_buffer(const uint8_t *p_src, uint64_t p_length
 bool FileAccessOpenHarmony::file_exists(const String &p_path) {
 	String file = fix_path(p_path);
 	if (is_in_bundle(file)) {
-		Ref<DirAccess> dir_access = DirAccessOpenHarmony::create(DirAccess::AccessType::ACCESS_FILESYSTEM);
-		return dir_access->file_exists(file);
+		if (resource_manager == nullptr) {
+			return false;
+		}
+		String rawfile_path = file.trim_prefix(OS_OpenHarmony::get_singleton()->get_bundle_resource_dir());
+		RawFile64 *rawfile = OH_ResourceManager_OpenRawFile64(resource_manager, rawfile_path.utf8().get_data());
+		if (rawfile != nullptr) {
+			OH_ResourceManager_CloseRawFile64(rawfile);
+			return true;
+		}
+		return false;
 	}
 	return FileAccessUnix::file_exists(p_path);
 }
@@ -233,6 +249,8 @@ void FileAccessOpenHarmony::close() {
 			OH_ResourceManager_CloseRawFile64(_rawfile);
 			_rawfile = nullptr;
 		}
+		_is_rawfile = false;
+		_cpath = "";
 		return;
 	}
 	FileAccessUnix::close();

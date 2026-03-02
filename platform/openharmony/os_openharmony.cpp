@@ -122,9 +122,15 @@ MainLoop *OS_OpenHarmony::get_main_loop() const {
 }
 
 void OS_OpenHarmony::delete_main_loop() {
+	if (main_loop) {
+		memdelete(main_loop);
+		main_loop = nullptr;
+	}
 }
 
 void OS_OpenHarmony::finalize() {
+	// Cleans up standard Unix resources if Godot requires it
+	OS_Unix::finalize_core();
 }
 
 bool OS_OpenHarmony::_check_internal_feature_support(const String &p_feature) {
@@ -182,12 +188,21 @@ void OS_OpenHarmony::_load_system_font_config() const {
 	OH_Drawing_DestroySystemFontConfigInfo(font_config_info);
 
 	OH_Drawing_Array *names = OH_Drawing_GetSystemFontFullNamesByType(OH_Drawing_SystemFontType::GENERIC);
-	for (size_t i = 0;; i++) {
+	if (!names) {
+		font_config_loaded = true;
+		return; // No fonts available
+	}
+
+	size_t font_count = OH_Drawing_GetDrawingArraySize(names);
+	for (size_t i = 0; i < font_count; i++) {
 		const OH_Drawing_String *name = OH_Drawing_GetSystemFontFullNameByIndex(names, i);
 		if (!name) {
-			break;
+			continue;
 		}
 		OH_Drawing_FontDescriptor *descriptor = OH_Drawing_GetFontDescriptorByFullName(name, OH_Drawing_SystemFontType::GENERIC);
+		if (!descriptor) {
+			continue; // Skip this broken font
+		}
 		String font_name = String(descriptor->fontFamily).to_lower();
 		FontInfo fi;
 		if (!generic_font_names.has(font_name)) {
@@ -202,7 +217,7 @@ void OS_OpenHarmony::_load_system_font_config() const {
 		fi.weight = descriptor->weight;
 		fi.italic = descriptor->italic;
 		fi.path = String(descriptor->path);
-		fi.descriptor = descriptor;
+		OH_Drawing_DestroyFontDescriptor(descriptor);
 		Vector<String> lang_codes = font_languages[font_name];
 		if (lang_codes.is_empty()) {
 			lang_codes.push_back("en");
@@ -356,7 +371,7 @@ String OS_OpenHarmony::get_system_ca_certificates() {
 	String certfile;
 	Ref<DirAccess> da = DirAccess::create(DirAccess::ACCESS_FILESYSTEM);
 
-	if (da->file_exists("/etc/ssl/certs/cacert.pem")) {
+	if (da.is_valid() && da->file_exists("/etc/ssl/certs/cacert.pem")) {
 		certfile = "/etc/ssl/certs/cacert.pem";
 	}
 
@@ -399,16 +414,12 @@ void OS_OpenHarmony::main_loop_end() {
 void OS_OpenHarmony::on_focus_out() {
 	if (is_focused) {
 		is_focused = false;
-
 		if (DisplayServerOpenHarmony::get_singleton()) {
 			DisplayServerOpenHarmony::get_singleton()->send_window_event(DisplayServer::WINDOW_EVENT_FOCUS_OUT);
 		}
-
 		if (OS::get_singleton()->get_main_loop()) {
 			OS::get_singleton()->get_main_loop()->notification(MainLoop::NOTIFICATION_APPLICATION_FOCUS_OUT);
 		}
-
-		audio_driver.set_pause(true);
 	}
 }
 
@@ -432,14 +443,15 @@ void OS_OpenHarmony::on_enter_background() {
 	if (OS::get_singleton()->get_main_loop()) {
 		OS::get_singleton()->get_main_loop()->notification(MainLoop::NOTIFICATION_APPLICATION_PAUSED);
 	}
-
 	on_focus_out();
+	audio_driver.set_pause(true);
 }
 
 void OS_OpenHarmony::on_exit_background() {
+	audio_driver.set_pause(false);
+
 	if (!is_focused) {
 		on_focus_in();
-
 		if (OS::get_singleton()->get_main_loop()) {
 			OS::get_singleton()->get_main_loop()->notification(MainLoop::NOTIFICATION_APPLICATION_RESUMED);
 		}

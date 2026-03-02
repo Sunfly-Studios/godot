@@ -41,6 +41,7 @@ class FileAccessOpenHarmony : public FileAccessUnix {
 	RawFile64 *_rawfile = nullptr;
 	bool _is_rawfile = false;
 	String _cpath;
+	mutable Error last_error = OK;
 
 protected:
 	bool is_in_bundle(String p_path);
