@@ -240,7 +240,7 @@ int DisplayServerWeb::_mouse_button_callback(int p_pressed, int p_button, double
 	Point2 pos(p_x, p_y);
 	Ref<InputEventMouseButton> ev;
 	ev.instantiate();
-	ERR_FAIL_NULL(ev);
+	ERR_FAIL_NULL_V(ev, 0);
 	ev->set_position(pos);
 	ev->set_global_position(pos);
 	ev->set_pressed(p_pressed);
@@ -263,7 +263,7 @@ int DisplayServerWeb::_mouse_button_callback(int p_pressed, int p_button, double
 			ev->set_button_index(MouseButton::MB_XBUTTON2);
 			break;
 		default:
-			return false;
+			return 0;
 	}
 
 	if (p_pressed) {
@@ -295,7 +295,7 @@ int DisplayServerWeb::_mouse_button_callback(int p_pressed, int p_button, double
 		mask.clear_flag(button_flag);
 	} else {
 		// Received release event, but press was outside the canvas, so ignore.
-		return false;
+		return 0;
 	}
 	ev->set_button_mask(mask);
 
@@ -311,7 +311,7 @@ int DisplayServerWeb::_mouse_button_callback(int p_pressed, int p_button, double
 
 	// Prevent multi-click text selection and wheel-click scrolling anchor.
 	// Context menu is prevented through contextmenu event.
-	return true;
+	return 1;
 }
 
 void DisplayServerWeb::mouse_move_callback(double p_x, double p_y, double p_rel_x, double p_rel_y, int p_modifiers) {
@@ -682,7 +682,7 @@ int DisplayServerWeb::_mouse_wheel_callback(double p_delta_x, double p_delta_y) 
 	Input *input = Input::get_singleton();
 	Ref<InputEventMouseButton> ev;
 	ev.instantiate();
-	ERR_FAIL_NULL(ev);
+	ERR_FAIL_NULL_V(ev, 0);
 	ev->set_position(input->get_mouse_position());
 	ev->set_global_position(ev->get_position());
 
@@ -700,7 +700,7 @@ int DisplayServerWeb::_mouse_wheel_callback(double p_delta_x, double p_delta_y) 
 	} else if (p_delta_x < 0) {
 		ev->set_button_index(MouseButton::WHEEL_RIGHT);
 	} else {
-		return false;
+		return 0;
 	}
 
 	// Different browsers give wildly different delta values, and we can't
@@ -719,7 +719,7 @@ int DisplayServerWeb::_mouse_wheel_callback(double p_delta_x, double p_delta_y) 
 	release->set_button_mask(input->get_mouse_button_mask());
 	input->parse_input_event(release);
 
-	return true;
+	return 1;
 }
 
 // Touch

@@ -387,11 +387,12 @@ const GodotEval = {
 			if (eval_ret instanceof Uint8Array) {
 				const func = GodotRuntime.get_func(p_callback);
 				const bytes_ptr = func(p_byte_arr, p_byte_arr_write, eval_ret.length);
+				const offset = Number(bytes_ptr);
 				if (offset === 0) {
 					GodotRuntime.error("Godot Wasm Allocator failed to provide memory for JS buffer.");
 					return 0; // NIL
 				}
-				HEAPU8.set(eval_ret, Number(bytes_ptr));
+				HEAPU8.set(eval_ret, offset);
 				return 29; // PACKED_BYTE_ARRAY
 			}
 			break;

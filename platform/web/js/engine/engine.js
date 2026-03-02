@@ -58,7 +58,6 @@ const Engine = (function () {
 	 */
 	Engine.unload = function () {
 		loadPromise = null;
-		initPromise = null;
 	};
 
 	/**
