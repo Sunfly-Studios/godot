@@ -270,8 +270,13 @@
 	#endif
 
 	// SPARC has strict alignment requirements
-	#define JPH_VECTOR_ALIGNMENT 16
-	#define JPH_DVECTOR_ALIGNMENT 16
+	#ifdef REAL_T_IS_DOUBLE
+		#define JPH_VECTOR_ALIGNMENT 16
+		#define JPH_DVECTOR_ALIGNMENT 16
+	#else
+		#define JPH_VECTOR_ALIGNMENT 16
+		#define JPH_DVECTOR_ALIGNMENT 8
+	#endif
 #elif defined(__mips__) || defined(__mips64)
 	// MIPS CPU architecture
 	#define JPH_CPU_MIPS
@@ -284,27 +289,46 @@
 		#define JPH_CPU_BIG_ENDIAN
 	#endif
 
-	#define JPH_VECTOR_ALIGNMENT 16
-	#define JPH_DVECTOR_ALIGNMENT 16
+	#ifdef REAL_T_IS_DOUBLE
+		#define JPH_VECTOR_ALIGNMENT 16
+		#define JPH_DVECTOR_ALIGNMENT 16
+	#else
+		#define JPH_VECTOR_ALIGNMENT 16
+		#define JPH_DVECTOR_ALIGNMENT 8
+	#endif
 #elif defined(__alpha__)
 	// ALPHA CPU architecture
 	// Always is 64-bit
 	#define JPH_CPU_ALPHA
 	#define JPH_CPU_ADDRESS_BITS 64
-	#define JPH_VECTOR_ALIGNMENT 16
-	#define JPH_DVECTOR_ALIGNMENT 16
+	#ifdef REAL_T_IS_DOUBLE
+		#define JPH_VECTOR_ALIGNMENT 16
+		#define JPH_DVECTOR_ALIGNMENT 16
+	#else
+		#define JPH_VECTOR_ALIGNMENT 16
+		#define JPH_DVECTOR_ALIGNMENT 8
+	#endif
 #elif defined(__hppa__)
 	// HP PA-RISC architecture
 	// This architecture is 64-bit, but the userland
 	// is 32-bit because the ABI for 64 was never
 	// finalised.
 	#define JPH_CPU_HPPA
-	#define JPH_CPU_ADDRESS_BITS 32
+	#if defined(__LP64__)
+    	#define JPH_CPU_ADDRESS_BITS 64
+	#else
+		#define JPH_CPU_ADDRESS_BITS 32
+	#endif
 	#define JPH_CPU_BIG_ENDIAN
 
 	// PA-RISC requires strict alignment.
-	#define JPH_VECTOR_ALIGNMENT 16
-	#define JPH_DVECTOR_ALIGNMENT 16
+	#ifdef REAL_T_IS_DOUBLE
+		#define JPH_VECTOR_ALIGNMENT 16
+		#define JPH_DVECTOR_ALIGNMENT 16
+	#else
+		#define JPH_VECTOR_ALIGNMENT 16
+		#define JPH_DVECTOR_ALIGNMENT 8
+	#endif
 #elif defined(__arc__) || defined(__arc64__)
 	// Synopsys ARC Architecture
 	#define JPH_CPU_ARC
@@ -321,8 +345,13 @@
 
 	// ARC requires strict alignment (16-byte) to avoid unaligned access faults
 	// during vector emulation.
-	#define JPH_VECTOR_ALIGNMENT 16
-	#define JPH_DVECTOR_ALIGNMENT 16
+	#ifdef REAL_T_IS_DOUBLE
+		#define JPH_VECTOR_ALIGNMENT 16
+		#define JPH_DVECTOR_ALIGNMENT 16
+	#else
+		#define JPH_VECTOR_ALIGNMENT 16
+		#define JPH_DVECTOR_ALIGNMENT 8
+	#endif
 #else
 	#error Unsupported CPU architecture
 #endif
