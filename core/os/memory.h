@@ -47,11 +47,22 @@
     #include <alloca.h>
 #endif
 
-// Define a safe minimum alignment.
-// "16" is the Goldilocks for SSE/NEON/128-bit SIMD,
-// as well as having a mathematical guarantee
-// to be divisible by 8 (or 4, or 2).
-#define GODOT_MIN_STACK_ALIGN 16
+// Detect 32-bit architectures with 128-bit vector units.
+#if (defined(__i386__) && (defined(__SSE__) || defined(__SSE2__))) || \
+    (defined(_M_IX86) && _M_IX86_FP > 0) || \
+    defined(__ARM_NEON)
+    #define HAS_128_BIT_SIMD 1
+#endif
+
+// Determine the safe minimum stack alignment.
+#if !defined(IS_32_BIT) || defined(HAS_128_BIT_SIMD)
+    // 64-bit platforms.
+    // 32-bit platforms with 128-bit SIMD (x86_32 SSE, etc.).
+    #define GODOT_MIN_STACK_ALIGN 16 
+#else
+    // "Vanilla" 32-bit architectures with no SSE-like goodies.
+    #define GODOT_MIN_STACK_ALIGN 8 
+#endif
 
 // Calculate the required alignment:
 // The larger of the type's requirement or GODOT_MIN_STACK_ALIGN.
