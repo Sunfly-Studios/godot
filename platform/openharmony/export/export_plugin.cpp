@@ -74,10 +74,17 @@ static const char *OPENHARMONY_DEFAULT_BUNDLE_ID = "org.godotengine.template";
 static const char *OPENHARMONY_ORIENTATION_ENUMS = "landscape,landscape_inverted,auto_rotation_landscape,auto_rotation_landscape_restricted,portrait,portrait_inverted,auto_rotation_portrait,auto_rotation_portrait_restricted,auto_rotation_unspecified,auto_rotation_restricted,follow_recent,follow_desktop";
 
 void EditorExportPlatformOpenHarmony::get_preset_features(const Ref<EditorExportPreset> &p_preset, List<String> *r_features) const {
+	String architecture = p_preset->get("binary_format/architecture");
 	r_features->push_back("etc2");
 	r_features->push_back("astc");
-	r_features->push_back("arm64");
-	r_features->push_back("x86_64");
+
+	if (architecture == "arm64") {
+		r_features->push_back("arm64");
+	} else if (architecture == "x86_64") {
+		r_features->push_back("x86_64");
+		r_features->push_back("sse");
+		r_features->push_back("sse2");
+	}
 }
 
 void EditorExportPlatformOpenHarmony::get_export_options(List<ExportOption> *r_options) const {

@@ -48,5 +48,6 @@ void register_openharmony_exporter() {
 
 	Ref<EditorExportPlatformOpenHarmony> exporter;
 	exporter.instantiate();
+	ERR_FAIL_COND(exporter.is_null());
 	EditorExport::get_singleton()->add_export_platform(exporter);
 }

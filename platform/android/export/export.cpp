@@ -71,6 +71,7 @@ void register_android_exporter() {
 #endif
 
 	Ref<EditorExportPlatformAndroid> exporter = Ref<EditorExportPlatformAndroid>(memnew(EditorExportPlatformAndroid));
+	ERR_FAIL_COND(exporter.is_null());
 	EditorExport::get_singleton()->add_export_platform(exporter);
 }
 

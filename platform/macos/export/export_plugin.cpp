@@ -50,8 +50,8 @@
 #include "modules/svg/image_loader_svg.h"
 
 void EditorExportPlatformMacOS::get_preset_features(const Ref<EditorExportPreset> &p_preset, List<String> *r_features) const {
-	r_features->push_back(p_preset->get("binary_format/architecture"));
 	String architecture = p_preset->get("binary_format/architecture");
+	r_features->push_back(architecture);
 
 	if (architecture == "universal" || architecture == "x86_64") {
 		r_features->push_back("s3tc");

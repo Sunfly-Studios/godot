@@ -56,7 +56,13 @@ void EditorExportPlatformIOS::get_preset_features(const Ref<EditorExportPreset> 
 
 	Vector<String> architectures = _get_preset_architectures(p_preset);
 	for (int i = 0; i < architectures.size(); ++i) {
-		r_features->push_back(architectures[i]);
+		String arch = architectures[i];
+		r_features->push_back(arch);
+
+		if (arch == "x86_64") {
+			r_features->push_back("sse");
+			r_features->push_back("sse2");
+		}
 	}
 }
 

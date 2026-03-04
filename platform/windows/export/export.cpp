@@ -57,6 +57,7 @@ void register_windows_exporter() {
 
 	Ref<EditorExportPlatformWindows> platform;
 	platform.instantiate();
+	ERR_FAIL_COND(platform.is_null());
 	platform->set_name("Windows Desktop");
 	platform->set_os_name("Windows");
 

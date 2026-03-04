@@ -41,6 +41,7 @@ void register_linuxbsd_exporter_types() {
 void register_linuxbsd_exporter() {
 	Ref<EditorExportPlatformLinuxBSD> platform;
 	platform.instantiate();
+	ERR_FAIL_COND(platform.is_null());
 	platform->set_name("Linux");
 	platform->set_os_name("Linux");
 	platform->set_chmod_flags(0755);

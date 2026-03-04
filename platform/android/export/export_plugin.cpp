@@ -1905,7 +1905,18 @@ void EditorExportPlatformAndroid::get_preset_features(const Ref<EditorExportPres
 
 	Vector<ABI> abis = get_enabled_abis(p_preset);
 	for (int i = 0; i < abis.size(); ++i) {
-		r_features->push_back(abis[i].arch);
+		ABI abi = abis[i];
+		r_features->push_back(abi.arch);
+
+		if (abi.arch == "x86_64") {
+			r_features->push_back("sse");
+			r_features->push_back("sse2");
+		} else if (abi.arch == "x86_32") {
+			r_features->push_back("sse");
+#ifndef NO_SSE2
+			r_features->push_back("sse2");
+#endif
+		}
 	}
 }
 

@@ -52,5 +52,6 @@ void register_web_exporter() {
 
 	Ref<EditorExportPlatformWeb> platform;
 	platform.instantiate();
+	ERR_FAIL_COND(platform.is_null());
 	EditorExport::get_singleton()->add_export_platform(platform);
 }

@@ -34,6 +34,7 @@
 #include "scene/resources/image_texture.h"
 
 void EditorExportPlatformPC::get_preset_features(const Ref<EditorExportPreset> &p_preset, List<String> *r_features) const {
+	String architecture = p_preset->get("binary_format/architecture");
 	if (p_preset->get("texture_format/s3tc_bptc")) {
 		r_features->push_back("s3tc");
 		r_features->push_back("bptc");
@@ -42,9 +43,17 @@ void EditorExportPlatformPC::get_preset_features(const Ref<EditorExportPreset> &
 		r_features->push_back("etc2");
 		r_features->push_back("astc");
 	}
+
+	if (architecture == "x86_64" || architecture == "x86_32") {
+		r_features->push_back("sse");
+#ifndef NO_SSE2
+		r_features->push_back("sse2");
+#endif
+	}
+
 	// PC platforms only have one architecture per export, since
 	// we export a single executable instead of a bundle.
-	r_features->push_back(p_preset->get("binary_format/architecture"));
+	r_features->push_back(architecture);
 }
 
 void EditorExportPlatformPC::get_export_options(List<ExportOption> *r_options) const {
