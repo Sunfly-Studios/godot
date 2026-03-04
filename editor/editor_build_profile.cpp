@@ -49,6 +49,7 @@ const char *EditorBuildProfile::build_option_identifiers[BUILD_OPTION_MAX] = {
 	"openxr",
 	"rendering_device", // FIXME: there's no scons option to disable rendering device
 	"opengl3",
+	"opengl2",
 	"vulkan",
 	"module_text_server_fb_enabled",
 	"module_text_server_adv_enabled",
@@ -67,6 +68,7 @@ const bool EditorBuildProfile::build_option_disabled_by_default[BUILD_OPTION_MAX
 	false, // XR
 	false, // RENDERING_DEVICE
 	false, // OPENGL
+	false, // OPENGL2
 	false, // VULKAN
 	true, // TEXT_SERVER_FALLBACK
 	false, // TEXT_SERVER_COMPLEX
@@ -85,6 +87,7 @@ const bool EditorBuildProfile::build_option_disable_values[BUILD_OPTION_MAX] = {
 	false, // XR
 	false, // RENDERING_DEVICE
 	false, // OPENGL
+	false, // OPENGL2
 	false, // VULKAN
 	false, // TEXT_SERVER_FALLBACK
 	false, // TEXT_SERVER_COMPLEX
@@ -102,6 +105,7 @@ const EditorBuildProfile::BuildOptionCategory EditorBuildProfile::build_option_c
 	BUILD_OPTION_CATEGORY_GENERAL, // XR
 	BUILD_OPTION_CATEGORY_GENERAL, // RENDERING_DEVICE
 	BUILD_OPTION_CATEGORY_GENERAL, // OPENGL
+	BUILD_OPTION_CATEGORY_GENERAL, // OPENGL2
 	BUILD_OPTION_CATEGORY_GENERAL, // VULKAN
 	BUILD_OPTION_CATEGORY_TEXT_SERVER, // TEXT_SERVER_FALLBACK
 	BUILD_OPTION_CATEGORY_TEXT_SERVER, // TEXT_SERVER_COMPLEX
@@ -176,6 +180,7 @@ String EditorBuildProfile::get_build_option_name(BuildOption p_build_option) {
 		TTRC("XR"),
 		TTRC("RenderingDevice"),
 		TTRC("OpenGL"),
+		TTRC("OpenGL2"),
 		TTRC("Vulkan"),
 		TTRC("Text Server: Fallback"),
 		TTRC("Text Server: Advanced"),
@@ -197,7 +202,8 @@ String EditorBuildProfile::get_build_option_description(BuildOption p_build_opti
 		TTRC("Navigation, both 2D and 3D."),
 		TTRC("XR (AR and VR)."),
 		TTRC("RenderingDevice based rendering (if disabled, the OpenGL back-end is required)."),
-		TTRC("OpenGL back-end (if disabled, the RenderingDevice back-end is required)."),
+		TTRC("OpenGL 3 back-end (if disabled, the RenderingDevice back-end is required)."),
+		TTRC("OpenGL 2 back-end (if disabled, the RenderingDevice back-end or OpenGL 3 back-end is required)."),
 		TTRC("Vulkan back-end of RenderingDevice."),
 		TTRC("Fallback implementation of Text Server\nSupports basic text layouts."),
 		TTRC("Text Server implementation powered by ICU and HarfBuzz libraries.\nSupports complex text layouts, BiDi, and contextual OpenType font features."),
@@ -339,6 +345,7 @@ void EditorBuildProfile::_bind_methods() {
 	BIND_ENUM_CONSTANT(BUILD_OPTION_XR);
 	BIND_ENUM_CONSTANT(BUILD_OPTION_RENDERING_DEVICE);
 	BIND_ENUM_CONSTANT(BUILD_OPTION_OPENGL);
+	BIND_ENUM_CONSTANT(BUILD_OPTION_OPENGL2);
 	BIND_ENUM_CONSTANT(BUILD_OPTION_VULKAN);
 	BIND_ENUM_CONSTANT(BUILD_OPTION_TEXT_SERVER_FALLBACK);
 	BIND_ENUM_CONSTANT(BUILD_OPTION_TEXT_SERVER_ADVANCED);

@@ -1384,6 +1384,11 @@ Vector<String> DisplayServerWayland::get_rendering_drivers_func() {
 	drivers.push_back("opengl3_es");
 #endif
 
+#ifdef GLES2_ENABLED
+	drivers.push_back("opengl2");
+	drivers.push_back("opengl2_es");
+#endif
+
 	return drivers;
 }
 
@@ -1584,6 +1589,117 @@ DisplayServerWayland::DisplayServerWayland(const String &p_rendering_driver, Win
 		}
 	}
 #endif // GLES3_ENABLED
+
+#ifdef GLES2_ENABLED // TODO(GLES2): Make GLES2 fallback work for GLES2
+	if (rendering_driver == "opengl2" || rendering_driver == "opengl2_es") {
+#ifdef SOWRAP_ENABLED
+		if (initialize_wayland_egl(dylibloader_verbose) != 0) {
+			WARN_PRINT("Can't load the Wayland EGL library.");
+			return;
+		}
+#endif // SOWRAP_ENABLED
+
+		if (getenv("DRI_PRIME") == nullptr) {
+			int prime_idx = -1;
+
+			if (getenv("PRIMUS_DISPLAY") ||
+					getenv("PRIMUS_libGLd") ||
+					getenv("PRIMUS_libGLa") ||
+					getenv("PRIMUS_libGL") ||
+					getenv("PRIMUS_LOAD_GLOBAL") ||
+					getenv("BUMBLEBEE_SOCKET") ||
+					getenv("__NV_PRIME_RENDER_OFFLOAD")) {
+				print_verbose("Optirun/primusrun detected. Skipping GPU detection");
+				prime_idx = 0;
+			}
+
+			// Some tools use fake libGL libraries and have them override the real one using
+			// LD_LIBRARY_PATH, so we skip them. *But* Steam also sets LD_LIBRARY_PATH for its
+			// runtime and includes system `/lib` and `/lib64`... so ignore Steam.
+			if (prime_idx == -1 && getenv("LD_LIBRARY_PATH") && !getenv("STEAM_RUNTIME_LIBRARY_PATH")) {
+				String ld_library_path(getenv("LD_LIBRARY_PATH"));
+				Vector<String> libraries = ld_library_path.split(":");
+
+				for (int i = 0; i < libraries.size(); ++i) {
+					if (FileAccess::exists(libraries[i] + "/libGL.so.1") ||
+							FileAccess::exists(libraries[i] + "/libGL.so")) {
+						print_verbose("Custom libGL override detected. Skipping GPU detection");
+						prime_idx = 0;
+					}
+				}
+			}
+
+			if (prime_idx == -1) {
+				print_verbose("Detecting GPUs, set DRI_PRIME in the environment to override GPU detection logic.");
+				prime_idx = DetectPrimeEGL::detect_prime(EGL_PLATFORM_WAYLAND_KHR);
+			}
+
+			if (prime_idx) {
+				print_line(vformat("Found discrete GPU, setting DRI_PRIME=%d to use it.", prime_idx));
+				print_line("Note: Set DRI_PRIME=0 in the environment to disable Godot from using the discrete GPU.");
+				setenv("DRI_PRIME", itos(prime_idx).utf8().ptr(), 1);
+			}
+		}
+
+		if (rendering_driver == "opengl2") {
+			egl_manager = memnew(EGLManagerWayland);
+
+			if (egl_manager->initialize(wayland_thread.get_wl_display()) != OK || egl_manager->open_display(wayland_thread.get_wl_display()) != OK) {
+				memdelete(egl_manager);
+				egl_manager = nullptr;
+
+				bool fallback = GLOBAL_GET("rendering/gl_legacy/fallback_to_gles");
+				if (fallback) {
+					WARN_PRINT("Your video card drivers seem not to support the required OpenGL version, switching to OpenGLES.");
+					rendering_driver = "opengl2_es";
+					OS::get_singleton()->set_current_rendering_driver_name(rendering_driver, OS::RENDERING_SOURCE_FALLBACK);
+				} else {
+					r_error = ERR_UNAVAILABLE;
+
+					OS::get_singleton()->alert(
+							vformat("Your video card drivers seem not to support the required OpenGL 2.0 version.\n\n"
+									"If possible, consider updating your video card drivers or using the OpenGL 3.0 driver.\n\n"
+									"You can enable the OpenGL 3.0 driver by starting the engine from the\n"
+									"command line with the command:\n\n    \"%s\" --rendering-driver opengl3\n\n"
+									"If you recently updated your video card drivers, try rebooting.",
+									executable_name),
+							"Unable to initialize OpenGL 2.0 video driver");
+
+					ERR_FAIL_MSG("Could not initialize OpenGL 2.0.");
+				}
+			} else {
+				// RasterizerGLES2::make_current(true); TODO(GLES2): Make this work
+				driver_found = true;
+			}
+		}
+
+		if (rendering_driver == "opengl2_es") {
+			egl_manager = memnew(EGLManagerWaylandGLES);
+
+			if (egl_manager->initialize(wayland_thread.get_wl_display()) != OK || egl_manager->open_display(wayland_thread.get_wl_display()) != OK) {
+				memdelete(egl_manager);
+				egl_manager = nullptr;
+				r_error = ERR_CANT_CREATE;
+
+				OS::get_singleton()->alert(
+						vformat("Your video card drivers seem not to support the required OpenGL ES 2.0 version.\n\n"
+								"If possible, consider updating your video card drivers, using the Vulkan driver, or the OpenGL ES 3.0.\n\n"
+								"You can enable the Vulkan driver by starting the engine from the\n"
+								"command line with the command:\n\n    \"%s\" --rendering-driver vulkan\n\n"
+								"You can enable the OpenGL ES 3.0 driver by starting the engine from the\n"
+								"command line with the command:\n\n    \"%s\" --rendering-driver opengl3_es\n\n"
+								"If you recently updated your video card drivers, try rebooting.",
+								executable_name),
+						"Unable to initialize OpenGL ES video driver");
+
+				ERR_FAIL_MSG("Could not initialize OpenGL ES.");
+			}
+
+			// RasterizerGLES2::make_current(false); TODO(GLES2): Make this work
+			driver_found = true;
+		}
+	}
+#endif // GLES2_ENABLED
 
 	if (!driver_found) {
 		r_error = ERR_UNAVAILABLE;

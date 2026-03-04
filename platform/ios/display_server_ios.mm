@@ -168,6 +168,19 @@ DisplayServerIOS::DisplayServerIOS(const String &p_rendering_driver, WindowMode 
 	}
 #endif
 
+#if defined(GLES2_ENABLED)
+	if (rendering_driver == "opengl2") {
+		// TODO(GLES2): Make this this initializeRenderingForDriver work for GLES2
+		// CALayer *layer = [AppDelegate.viewController.godotView initializeRenderingForDriver:@"opengl2"];
+
+		// if (!layer) {
+		// 	ERR_FAIL_MSG("Failed to create iOS OpenGLES rendering layer.");
+		// }
+
+		// RasterizerGLES2::make_current(false);
+	}
+#endif
+
 	bool keep_screen_on = bool(GLOBAL_GET("display/window/energy_saving/keep_screen_on"));
 	screen_set_keep_on(keep_screen_on);
 
@@ -220,6 +233,9 @@ Vector<String> DisplayServerIOS::get_rendering_drivers_func() {
 #endif
 #if defined(GLES3_ENABLED)
 	drivers.push_back("opengl3");
+#endif
+#if defined(GLES2_ENABLED)
+	drivers.push_back("opengl2");
 #endif
 
 	return drivers;

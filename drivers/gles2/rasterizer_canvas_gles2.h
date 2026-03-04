@@ -31,8 +31,7 @@
 #ifndef RASTERIZERCANVASGLES2_H
 #define RASTERIZERCANVASGLES2_H
 
-#include "drivers/gles2/rasterizer_platforms.h"
-#ifdef GLES2_BACKEND_ENABLED
+#ifdef GLES2_ENABLED
 
 #include "drivers/gles2/rasterizer_canvas_batcher.h"
 #include "rasterizer_canvas_base_gles2.h"
@@ -99,5 +98,5 @@ public:
 	RasterizerCanvasGLES2();
 };
 
-#endif // GLES2_BACKEND_ENABLED
+#endif // GLES2_ENABLED
 #endif // RASTERIZERCANVASGLES2_H

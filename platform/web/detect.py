@@ -211,8 +211,11 @@ def configure(env: "SConsEnvironment"):
     env.Prepend(CPPPATH=["#platform/web"])
     env.Append(CPPDEFINES=["WEB_ENABLED", "UNIX_ENABLED", "UNIX_SOCKET_UNAVAILABLE"])
 
-    if env["opengl3"]:
-        env.AppendUnique(CPPDEFINES=["GLES3_ENABLED"])
+    if env["opengl3"] or env["opengl2"]:
+        if env["opengl3"]:
+            env.AppendUnique(CPPDEFINES=["GLES3_ENABLED"])
+        if env["opengl2"]:
+            env.AppendUnique(CPPDEFINES=["GLES2_ENABLED"])
         # This setting just makes WebGL 2 APIs available, it does NOT disable WebGL 1.
         env.Append(LINKFLAGS=["-sMAX_WEBGL_VERSION=2"])
         # Allow use to take control of swapping WebGL buffers.

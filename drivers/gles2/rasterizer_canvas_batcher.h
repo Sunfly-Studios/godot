@@ -771,7 +771,7 @@ PREAMBLE(void)::batch_canvas_render_items_begin(const Color &p_modulate, Rendere
 	while (p_light) {
 		light_count++;
 
-		if ((p_light->z_min != GD_VS::CANVAS_ITEM_Z_MIN) || (p_light->z_max != GD_VS::CANVAS_ITEM_Z_MAX)) {
+		if ((p_light->z_min != RS::CANVAS_ITEM_Z_MIN) || (p_light->z_max != RS::CANVAS_ITEM_Z_MAX)) {
 			// prevent joining across z indices. This would have caused visual regressions
 			bdata.join_across_z_indices = false;
 		}
@@ -1615,7 +1615,7 @@ bool C_PREAMBLE::_prefill_polygon(RendererCanvasRender::Item::CommandPolygon *p_
 		batchtex.tex_pixel_size.to(r_fill_state.texpixel_size);
 
 		if (bdata.settings_uv_contract) {
-			r_fill_state.contract_uvs = (batchtex.flags & GD_VS::TEXTURE_FLAG_FILTER) == 0;
+			r_fill_state.contract_uvs = (batchtex.flags & RS::TEXTURE_FLAG_FILTER) == 0;
 		}
 
 		// open new batch (this should never fail, it dynamically grows)
@@ -1925,7 +1925,7 @@ bool C_PREAMBLE::_prefill_rect(RendererCanvasRender::Item::CommandRect *rect, Fi
 		batchtex.tex_pixel_size.to(r_fill_state.texpixel_size);
 
 		if (bdata.settings_uv_contract) {
-			r_fill_state.contract_uvs = (batchtex.flags & GD_VS::TEXTURE_FLAG_FILTER) == 0;
+			r_fill_state.contract_uvs = (batchtex.flags & RS::TEXTURE_FLAG_FILTER) == 0;
 		}
 
 		// need to preserve texpixel_size between items
@@ -2556,7 +2556,7 @@ PREAMBLE(void)::join_sorted_items() {
 	/*
 	sort_items();
 
-	int z = GD_VS::CANVAS_ITEM_Z_MIN;
+	int z = RS::CANVAS_ITEM_Z_MIN;
 	_render_item_state.item_group_z = z;
 
 	for (int s = 0; s < bdata.sort_items.size(); s++) {

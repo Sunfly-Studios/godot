@@ -30,8 +30,7 @@
 
 #pragma once
 
-#include "drivers/gles2/rasterizer_platforms.h"
-#ifdef GLES2_BACKEND_ENABLED
+#ifdef GLES2_ENABLED
 
 // This must come first to avoid windows.h mess
 #include "platform_config.h"
@@ -280,4 +279,4 @@ void ShaderGLES2::_set_conditional(int p_which, bool p_value) {
 		new_conditional_version.version &= ~(1 << p_which);
 }
 
-#endif // GLES2_BACKEND_ENABLED
+#endif // GLES2_ENABLED

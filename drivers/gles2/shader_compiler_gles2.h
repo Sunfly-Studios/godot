@@ -30,10 +30,8 @@
 
 #pragma once
 
-#include "drivers/gles2/rasterizer_platforms.h"
-#ifdef GLES2_BACKEND_ENABLED
+#ifdef GLES2_ENABLED
 
-#include "drivers/gles2/rasterizer_version.h"
 #ifdef GODOT_3
 #include "core/pair.h"
 #include "core/string_builder.h"
@@ -98,15 +96,15 @@ private:
 	Set<StringName> used_rmode_defines;
 	Set<StringName> internal_functions;
 
-	DefaultIdentifierActions actions[GD_VS::SHADER_MAX];
+	DefaultIdentifierActions actions[RS::SHADER_MAX];
 
 	// compatibility with godot 4
 	static ShaderLanguage::DataType _get_variable_type(const StringName &p_type);
 
 public:
-	Error compile(GD_VS::ShaderMode p_mode, const String &p_code, IdentifierActions *p_actions, const String &p_path, GeneratedCode &r_gen_code);
+	Error compile(RS::ShaderMode p_mode, const String &p_code, IdentifierActions *p_actions, const String &p_path, GeneratedCode &r_gen_code);
 
 	ShaderCompilerGLES2();
 };
 
-#endif // GLES2_BACKEND_ENABLED
+#endif // GLES2_ENABLED

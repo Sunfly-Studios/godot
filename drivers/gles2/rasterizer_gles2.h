@@ -30,8 +30,7 @@
 
 #pragma once
 
-#include "drivers/gles2/rasterizer_platforms.h"
-#ifdef GLES2_BACKEND_ENABLED
+#ifdef GLES2_ENABLED
 
 #include "rasterizer_canvas_gles2.h"
 #include "rasterizer_scene_gles2.h"
@@ -86,4 +85,4 @@ public:
 	~RasterizerGLES2() {}
 };
 
-#endif // GLES2_BACKEND_ENABLED
+#endif // GLES2_ENABLED

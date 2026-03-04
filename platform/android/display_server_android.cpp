@@ -585,6 +585,9 @@ Vector<String> DisplayServerAndroid::get_rendering_drivers_func() {
 #ifdef GLES3_ENABLED
 	drivers.push_back("opengl3");
 #endif
+#ifdef GLES2_ENABLED
+	drivers.push_back("opengl2");
+#endif
 #ifdef VULKAN_ENABLED
 	drivers.push_back("vulkan");
 #endif
@@ -755,6 +758,12 @@ DisplayServerAndroid::DisplayServerAndroid(const String &p_rendering_driver, Dis
 #if defined(GLES3_ENABLED)
 	if (rendering_driver == "opengl3") {
 		RasterizerGLES3::make_current(false);
+	}
+#endif
+#if defined(GLES2_ENABLED)
+	if (rendering_driver == "opengl2") {
+		// TODO(GLES2): Implement this make current method
+		// RasterizerGLES2::make_current(false);
 	}
 #endif
 

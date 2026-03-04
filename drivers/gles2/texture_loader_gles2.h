@@ -30,8 +30,7 @@
 
 #pragma once
 
-#include "drivers/gles2/rasterizer_platforms.h"
-#ifdef GLES2_BACKEND_ENABLED
+#ifdef GLES2_ENABLED
 
 #include "core/io/resource_loader.h"
 #include "scene/resources/texture.h"

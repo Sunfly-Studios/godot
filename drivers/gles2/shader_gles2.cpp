@@ -29,8 +29,8 @@
 /*************************************************************************/
 
 #include "shader_gles2.h"
-#include "drivers/gles2/rasterizer_platforms.h"
-#ifdef GLES2_BACKEND_ENABLED
+
+#ifdef GLES2_ENABLED
 
 #include "core/os/memory.h"
 #include "rasterizer_gles2.h"
@@ -1133,4 +1133,4 @@ ShaderGLES2::~ShaderGLES2() {
 	finish();
 }
 
-#endif // GLES2_BACKEND_ENABLED
+#endif // GLES2_ENABLED

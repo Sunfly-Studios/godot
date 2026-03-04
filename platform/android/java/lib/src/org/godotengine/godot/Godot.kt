@@ -591,6 +591,10 @@ class Godot(private val context: Context) {
 				"opengl3" -> {
 					GodotGLRenderView(host, this, godotInputHandler, xrMode, useDebugOpengl, shouldBeTransparent)
 				}
+				// TODO: (Implement this GLES2 Render View)
+				//"opengl2" -> {
+				//	GodotGLRenderView(host, this, godotInputHandler, xrMode, useDebugOpengl, shouldBeTransparent)
+				//}
 				else -> {
 					throw IllegalStateException("No native renderer is available.")
 				}

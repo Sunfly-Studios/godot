@@ -50,6 +50,7 @@ def get_flags():
         "target": "template_debug",
         "builtin_pcre2_with_jit": False,
         "opengl3": False,
+        "opengl2": False,
     }
 
 
@@ -144,8 +145,8 @@ def configure(env: "SConsEnvironment"):
         if not env["use_volk"]:
             env.Append(LIBS=["vulkan"])
 
-    if env["opengl3"]:
-        print_error("OpenGL 3 is not supported on OpenHarmony")
+    if env["opengl3"] or env["opengl2"]:
+        print_error("OpenGL 3 / OpenGL 2 are not supported on OpenHarmony")
         sys.exit(255)
 
     env["ARGMAX"] = 8000

@@ -30,7 +30,7 @@
 
 #include "rasterizer_gles2.h"
 
-#ifdef GLES2_BACKEND_ENABLED
+#ifdef GLES2_ENABLED
 #include "shader_gles2.h"
 
 #include "core/config/project_settings.h"
@@ -252,7 +252,7 @@ void RasterizerGLES2::initialize() {
 #endif // GLES_OVER_GL
 #endif // CAN_DEBUG
 
-	print_line("OpenGL ES 2.0 Renderer: " + GD_VS::get_singleton()->get_video_adapter_name());
+	print_line("OpenGL ES 2.0 Renderer: " + RS::get_singleton()->get_video_adapter_name());
 	storage.initialize();
 	canvas.initialize();
 	//	scene.initialize();
@@ -339,7 +339,7 @@ void RasterizerGLES2::set_boot_image(const Ref<Image> &p_image, const Color &p_c
 
 	RID texture = storage.texture_create();
 	//storage.texture_allocate(texture, p_image->get_width(), p_image->get_height(), 0, p_image->get_format(), VS::TEXTURE_TYPE_2D, p_use_filter ? VS::TEXTURE_FLAG_FILTER : 0);
-	storage._texture_allocate_internal(texture, p_image->get_width(), p_image->get_height(), 0, p_image->get_format(), GD_RD::TEXTURE_TYPE_2D);
+	storage._texture_allocate_internal(texture, p_image->get_width(), p_image->get_height(), 0, p_image->get_format(), RD::TEXTURE_TYPE_2D);
 	storage.texture_set_data(texture, p_image);
 
 	Rect2 imgrect(0, 0, p_image->get_width(), p_image->get_height());
@@ -374,4 +374,4 @@ void RasterizerGLES2::set_boot_image(const Ref<Image> &p_image, const Color &p_c
 	end_frame(true);
 }
 
-#endif // GLES2_BACKEND_ENABLED
+#endif // GLES2_ENABLED

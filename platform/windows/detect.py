@@ -586,8 +586,12 @@ def configure_msvc(env: "SConsEnvironment", vcvars_msvc_config):
         env.Append(LIBPATH=[env["mesa_libs"] + "/bin"])
         LIBS += ["libNIR.windows." + env["arch"] + prebuilt_lib_extra_suffix]
 
-    if env["opengl3"]:
-        env.AppendUnique(CPPDEFINES=["GLES3_ENABLED"])
+    if env["opengl3"] or env["opengl2"]:
+        if env["opengl3"]:
+            env.AppendUnique(CPPDEFINES=["GLES3_ENABLED"])
+        if env["opengl2"]:
+            env.AppendUnique(CPPDEFINES=["GLES2_ENABLED"])
+        
         if env["angle_libs"] != "":
             env.AppendUnique(CPPDEFINES=["EGL_STATIC"])
             env.Append(LIBPATH=[env["angle_libs"]])
