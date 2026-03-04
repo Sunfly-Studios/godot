@@ -53,9 +53,11 @@ template <typename T>
 class VectorWriteProxy {
 public:
 	_FORCE_INLINE_ T &operator[](typename CowData<T>::Size p_index) {
-		CRASH_BAD_INDEX(p_index, ((Vector<T> *)(this))->_cowdata.size());
+		// Vector<T> is standard-layout and this is the first member.
+		Vector<T> *vec = reinterpret_cast<Vector<T> *>(this);
+		CRASH_BAD_INDEX(p_index, vec->_cowdata.size());
 
-		return ((Vector<T> *)(this))->_cowdata.ptrw()[p_index];
+		return vec->_cowdata.ptrw()[p_index];
 	}
 };
 
@@ -67,7 +69,9 @@ public:
 	VectorWriteProxy<T> write;
 	typedef typename CowData<T>::Size Size;
 
-private:
+	// Moved to public to ensure Vector<T> satisfies std::is_standard_layout.
+	// This guarantees pointer-interconvertibility between Vector<T> and its first member (write).
+	// DO NOT ACCESS DIRECTLY.
 	CowData<T> _cowdata;
 
 public:
@@ -275,14 +279,17 @@ public:
 		return Iterator(ptrw());
 	}
 	_FORCE_INLINE_ Iterator end() {
-		return Iterator(ptrw() + size());
+		T *p = ptrw();
+		// Prevent null pointer arithmetic when size is 0
+		return Iterator(p ? (p + size()) : nullptr);
 	}
 
 	_FORCE_INLINE_ ConstIterator begin() const {
 		return ConstIterator(ptr());
 	}
 	_FORCE_INLINE_ ConstIterator end() const {
-		return ConstIterator(ptr() + size());
+		const T *p = ptr();
+		return ConstIterator(p ? (p + size()) : nullptr);
 	}
 
 	_FORCE_INLINE_ Vector() {}
@@ -294,6 +301,9 @@ public:
 
 	_FORCE_INLINE_ ~Vector() {}
 };
+
+static_assert(std::is_standard_layout_v<Vector<void *>>,
+		"Vector<T> must remain standard-layout for safe VectorWriteProxy casting.");
 
 template <typename T>
 void Vector<T>::reverse() {

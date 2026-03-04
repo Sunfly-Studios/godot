@@ -376,12 +376,18 @@ Error CowData<T>::resize(Size p_size) {
 
 		// construct the newly created elements
 
-		if constexpr (!std::is_trivially_constructible_v<T>) {
+		if constexpr (std::is_trivially_constructible_v<T> && std::is_trivially_copyable_v<T>) {
+			// Safe to leave uninitialized or zero out because
+			// lifetime is implicit for trivial C-types
+			if (p_ensure_zero) {
+				memset((void *)(_ptr + current_size), 0, (p_size - current_size) * sizeof(T));
+			}
+		} else {
+			// Always formally begin the object lifetime
+			// for anything with non-trivial operators
 			for (Size i = *_get_size(); i < p_size; i++) {
 				memnew_placement(&_ptr[i], T);
 			}
-		} else if (p_ensure_zero) {
-			memset((void *)(_ptr + current_size), 0, (p_size - current_size) * sizeof(T));
 		}
 
 		*_get_size() = p_size;
@@ -395,14 +401,17 @@ Error CowData<T>::resize(Size p_size) {
 			}
 		}
 
+		// Update the internal size before reallocating.
+		// _realloc needs the accurate active count so it doesn't move
+		// already-destroyed elements or overflow the new smaller buffer.
+		*_get_size() = p_size;
+
 		if (alloc_size != current_alloc_size) {
 			const Error error = _realloc(alloc_size);
 			if (error) {
 				return error;
 			}
 		}
-
-		*_get_size() = p_size;
 	}
 
 	return OK;
@@ -410,15 +419,39 @@ Error CowData<T>::resize(Size p_size) {
 
 template <typename T>
 Error CowData<T>::_realloc(Size p_alloc_size) {
-	uint8_t *mem_new = (uint8_t *)Memory::realloc_static(((uint8_t *)_ptr) - DATA_OFFSET, p_alloc_size + DATA_OFFSET, false);
-	ERR_FAIL_NULL_V(mem_new, ERR_OUT_OF_MEMORY);
+	if constexpr (std::is_trivially_copyable_v<T>) {
+		// Safe to C-realloc
+		uint8_t *mem_new = (uint8_t *)Memory::realloc_static(((uint8_t *)_ptr) - DATA_OFFSET, p_alloc_size + DATA_OFFSET, false);
+		ERR_FAIL_NULL_V(mem_new, ERR_OUT_OF_MEMORY);
 
-	SafeNumeric<USize> *_refc_ptr = _get_refcount_ptr(mem_new);
-	T *_data_ptr = _get_data_ptr(mem_new);
+		SafeNumeric<USize> *_refc_ptr = _get_refcount_ptr(mem_new);
+		T *_data_ptr = _get_data_ptr(mem_new);
 
-	// If we realloc, we're guaranteed to be the only reference.
-	new (_refc_ptr) SafeNumeric<USize>(1);
-	_ptr = _data_ptr;
+		new (_refc_ptr) SafeNumeric<USize>(1);
+		_ptr = _data_ptr;
+	} else {
+		// Non-trivial types must be formally moved
+		USize active_elements = *_get_size();
+
+		uint8_t *mem_new = (uint8_t *)Memory::alloc_static(p_alloc_size + DATA_OFFSET, false);
+		ERR_FAIL_NULL_V(mem_new, ERR_OUT_OF_MEMORY);
+
+		SafeNumeric<USize> *_refc_ptr = _get_refcount_ptr(mem_new);
+		USize *_size_ptr = _get_size_ptr(mem_new);
+		T *_data_ptr = _get_data_ptr(mem_new);
+
+		new (_refc_ptr) SafeNumeric<USize>(1);
+		*(_size_ptr) = active_elements;
+
+		// Cleanly move only the living objects
+		for (USize i = 0; i < active_elements; i++) {
+			memnew_placement(&_data_ptr[i], T(std::move(_ptr[i])));
+			_ptr[i].~T(); // Destroy old
+		}
+
+		Memory::free_static(((uint8_t *)_ptr) - DATA_OFFSET, false);
+		_ptr = _data_ptr;
+	}
 
 	return OK;
 }

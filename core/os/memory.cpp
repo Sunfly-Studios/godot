@@ -67,6 +67,11 @@ SafeNumeric<uint64_t> Memory::alloc_count;
 void *Memory::alloc_aligned_static(size_t p_bytes, size_t p_alignment) {
 	DEV_ASSERT(is_power_of_2(p_alignment));
 
+	// Guarantee minimum alignment.
+	if (p_alignment < sizeof(uint32_t)) {
+		p_alignment = sizeof(uint32_t);
+	}
+
 	void *p1, *p2;
 	if ((p1 = (void *)malloc(p_bytes + p_alignment - 1 + sizeof(uint32_t))) == nullptr) {
 		return nullptr;
@@ -84,7 +89,9 @@ void *Memory::realloc_aligned_static(void *p_memory, size_t p_bytes, size_t p_pr
 
 	void *ret = alloc_aligned_static(p_bytes, p_alignment);
 	if (ret) {
-		memcpy(ret, p_memory, p_prev_bytes);
+		// Prevent buffer overflow when shrinking the allocation
+		size_t copy_size = (p_bytes < p_prev_bytes) ? p_bytes : p_prev_bytes;
+		memcpy(ret, p_memory, copy_size);
 	}
 	free_aligned_static(p_memory);
 	return ret;
@@ -152,6 +159,7 @@ void *Memory::realloc_static(void *p_memory, size_t p_bytes, bool p_pad_align) {
 #endif
 
 		if (p_bytes == 0) {
+			alloc_count.decrement();
 			free(mem);
 			return nullptr;
 		} else {
