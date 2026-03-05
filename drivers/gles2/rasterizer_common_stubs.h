@@ -30,11 +30,12 @@
 
 #pragma once
 
-#include "core/math/camera_matrix.h"
+#include "core/math/math_defs.h"
 #include "core/templates/rid_owner.h"
 #include "core/templates/self_list.h"
 #include "scene/resources/mesh.h"
-#include "servers/rendering/rasterizer_dummy.h"
+#include "servers/rendering/dummy/rasterizer_dummy.h"
+#include "servers/rendering/dummy/storage/light_storage.h"
 #include "servers/rendering/renderer_compositor.h"
 #include "servers/rendering_server.h"
 
@@ -45,10 +46,10 @@ class StubsScene : public RasterizerSceneDummy {
 };
 
 //class StubsStorage : public RendererStorage {
-class StubsStorage : public RasterizerStorageDummy {
-	//	StubsStorage() {}
-	//	~StubsStorage() {}
-};
+//class StubsStorage : public RasterizerStorageDummy {
+//	//	StubsStorage() {}
+//	//	~StubsStorage() {}
+//};
 
 //class StubsCanvas : public RendererCanvasRender {
 class StubsCanvas : public RasterizerCanvasDummy {
@@ -1000,7 +1001,7 @@ void directional_shadow_quality_set(RS::ShadowQuality p_quality) override {}
 RID light_instance_create(RID p_light) override { return RID(); }
 void light_instance_set_transform(RID p_light_instance, const Transform3D &p_transform) override {}
 void light_instance_set_aabb(RID p_light_instance, const AABB &p_aabb) override {}
-void light_instance_set_shadow_transform(RID p_light_instance, const CameraMatrix &p_projection, const Transform3D &p_transform, float p_far, float p_split, int p_pass, float p_shadow_texel_size, float p_bias_scale = 1.0, float p_range_begin = 0, const Vector2 &p_uv_scale = Vector2()) override {}
+void light_instance_set_shadow_transform(RID p_light_instance, const Projection &p_projection, const Transform3D &p_transform, float p_far, float p_split, int p_pass, float p_shadow_texel_size, float p_bias_scale = 1.0, float p_range_begin = 0, const Vector2 &p_uv_scale = Vector2()) override {}
 void light_instance_mark_visible(RID p_light_instance) override {}
 
 RID reflection_atlas_create() override { return RID(); }
@@ -1028,11 +1029,11 @@ void gi_probe_update(RID p_probe, bool p_update_light_instances, const Vector<RI
 
 void gi_probe_set_quality(RS::GIProbeQuality) override {}
 
-void render_scene(RID p_render_buffers, const Transform3D &p_cam_transform, const CameraMatrix &p_cam_projection, bool p_cam_ortogonal, const PagedArray<GeometryInstance *> &p_instances, const PagedArray<RID> &p_lights, const PagedArray<RID> &p_reflection_probes, const PagedArray<RID> &p_gi_probes, const PagedArray<RID> &p_decals, const PagedArray<RID> &p_lightmaps, RID p_environment, RID p_camera_effects, RID p_shadow_atlas, RID p_reflection_atlas, RID p_reflection_probe, int p_reflection_probe_pass, float p_screen_lod_threshold) override {}
+void render_scene(RID p_render_buffers, const Transform3D &p_cam_transform, const Projection &p_cam_projection, bool p_cam_ortogonal, const PagedArray<GeometryInstance *> &p_instances, const PagedArray<RID> &p_lights, const PagedArray<RID> &p_reflection_probes, const PagedArray<RID> &p_gi_probes, const PagedArray<RID> &p_decals, const PagedArray<RID> &p_lightmaps, RID p_environment, RID p_camera_effects, RID p_shadow_atlas, RID p_reflection_atlas, RID p_reflection_probe, int p_reflection_probe_pass, float p_screen_lod_threshold) override {}
 
 void render_shadow(RID p_light, RID p_shadow_atlas, int p_pass, const PagedArray<GeometryInstance *> &p_instances, const Plane &p_camera_plane = Plane(), float p_lod_distance_multiplier = 0, float p_screen_lod_threshold = 0.0) override {}
 
-void render_material(const Transform3D &p_cam_transform, const CameraMatrix &p_cam_projection, bool p_cam_ortogonal, const PagedArray<GeometryInstance *> &p_instances, RID p_framebuffer, const Rect2i &p_region) override {}
+void render_material(const Transform3D &p_cam_transform, const Projection &p_cam_projection, bool p_cam_ortogonal, const PagedArray<GeometryInstance *> &p_instances, RID p_framebuffer, const Rect2i &p_region) override {}
 
 void render_sdfgi(RID p_render_buffers, int p_region, const PagedArray<GeometryInstance *> &p_instances) override {}
 

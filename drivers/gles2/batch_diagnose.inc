@@ -47,17 +47,6 @@ String get_command_type_string(const RendererCanvasRender::Item::Command &p_comm
 	switch (p_command.type) {
 		default:
 			break;
-#ifdef GODOT_3
-		case RendererCanvasRender::Item::Command::GD_TYPE_LINE: {
-			sz = "l";
-		} break;
-		case RendererCanvasRender::Item::Command::GD_TYPE_POLYLINE: {
-			sz = "PL";
-		} break;
-		case RendererCanvasRender::Item::Command::GD_TYPE_CIRCLE: {
-			sz = "c";
-		} break;
-#endif
 		case RendererCanvasRender::Item::Command::TYPE_RECT: {
 			sz = "r";
 		} break;
@@ -87,7 +76,7 @@ String get_command_type_string(const RendererCanvasRender::Item::Command &p_comm
 			const Transform2D &mat = transform->xform;
 
 			sz += " ";
-			sz += String(Variant(mat.elements[2]));
+			sz += String(Variant(mat.columns[2]));
 			sz += " ";
 		} break;
 		case RendererCanvasRender::Item::Command::TYPE_CLIP_IGNORE: {

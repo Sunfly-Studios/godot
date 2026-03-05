@@ -3119,15 +3119,17 @@ Error Main::setup2(bool p_show_boot_logo) {
 	/* Initialize Display Server */
 
 	{
-		String display_driver = DisplayServer::get_create_function_name(display_driver_idx);
+		OS::get_singleton()->benchmark_begin_measure("Servers", "Display");
 
-		// rendering_driver now held in static global String in main and initialized in setup()
-		print_line("creating display driver : " + display_driver);
-		print_line("creating rendering driver : " + rendering_driver);
-		Error err;
-		display_server = DisplayServer::create(display_driver_idx, rendering_driver, window_mode, window_vsync_mode, window_flags, window_size, err);
-		if (err != OK || display_server == nullptr) {
-			//ok i guess we can't use this display server, try other ones
+		if (display_driver.is_empty()) {
+			display_driver = GLOBAL_GET("display/display_server/driver");
+		}
+
+		int display_driver_idx = -1;
+
+		if (display_driver.is_empty() || display_driver == "default") {
+			display_driver_idx = 0;
+		} else {
 			for (int i = 0; i < DisplayServer::get_create_function_count(); i++) {
 				String name = DisplayServer::get_create_function_name(i);
 				if (display_driver == name) {

@@ -33,18 +33,9 @@
 
 #include "core/os/os.h"
 
-//#ifdef GODOT_3
-
-#ifdef GODOT_3
-#include "core/project_settings.h"
-#include "core/string_buffer.h"
-#include "core/string_builder.h"
-#else
 #include "core/config/project_settings.h"
 #include "core/string/string_buffer.h"
 #include "core/string/string_builder.h"
-
-#endif
 
 #define SL ShaderLanguage
 
@@ -216,7 +207,7 @@ static String get_constant_text(SL::DataType p_type, const Vector<SL::ConstantNo
 	}
 }
 
-void ShaderCompilerGLES2::_dump_function_deps(SL::ShaderNode *p_node, const StringName &p_for_func, const Map<StringName, String> &p_func_code, StringBuilder &r_to_add, Set<StringName> &r_added) {
+void ShaderCompilerGLES2::_dump_function_deps(SL::ShaderNode *p_node, const StringName &p_for_func, const HashMap<StringName, String> &p_func_code, StringBuilder &r_to_add, RBSet<StringName> &r_added) {
 	int fidx = -1;
 
 	for (int i = 0; i < p_node->functions.size(); i++) {
@@ -228,7 +219,7 @@ void ShaderCompilerGLES2::_dump_function_deps(SL::ShaderNode *p_node, const Stri
 
 	ERR_FAIL_COND(fidx == -1);
 
-	for (Set<StringName>::Element *E = p_node->functions[fidx].uses_function.front(); E; E = E->next()) {
+	for (RBSet<StringName>::Element *E = p_node->functions[fidx].uses_function.front(); E; E = E->next()) {
 		if (r_added.has(E->get())) {
 			continue;
 		}
@@ -302,7 +293,7 @@ String ShaderCompilerGLES2::_dump_node_code(SL::Node *p_node, int p_level, Gener
 			int max_texture_uniforms = 0;
 			int max_uniforms = 0;
 
-			for (Map<StringName, SL::ShaderNode::Uniform>::Element *E = snode->uniforms.front(); E; E = E->next()) {
+			for (HashMap<StringName, SL::ShaderNode::Uniform>::Element *E = snode->uniforms.front(); E; E = E->next()) {
 				if (SL::is_sampler_type(E->get().type))
 					max_texture_uniforms++;
 				else
@@ -319,7 +310,7 @@ String ShaderCompilerGLES2::_dump_node_code(SL::Node *p_node, int p_level, Gener
 
 			// uniforms
 
-			for (Map<StringName, SL::ShaderNode::Uniform>::Element *E = snode->uniforms.front(); E; E = E->next()) {
+			for (HashMap<StringName, SL::ShaderNode::Uniform>::Element *E = snode->uniforms.front(); E; E = E->next()) {
 				StringBuffer<> uniform_code;
 
 				// use highp if no precision is specified to prevent different default values in fragment and vertex shader
@@ -350,7 +341,7 @@ String ShaderCompilerGLES2::_dump_node_code(SL::Node *p_node, int p_level, Gener
 
 			// varyings
 
-			for (Map<StringName, SL::ShaderNode::Varying>::Element *E = snode->varyings.front(); E; E = E->next()) {
+			for (HashMap<StringName, SL::ShaderNode::Varying>::Element *E = snode->varyings.front(); E; E = E->next()) {
 				StringBuffer<> varying_code;
 
 				varying_code += "varying ";
@@ -388,7 +379,7 @@ String ShaderCompilerGLES2::_dump_node_code(SL::Node *p_node, int p_level, Gener
 
 			// functions
 
-			Map<StringName, String> function_code;
+			HashMap<StringName, String> function_code;
 
 			for (int i = 0; i < snode->functions.size(); i++) {
 				SL::FunctionNode *fnode = snode->functions[i].function;
@@ -396,8 +387,8 @@ String ShaderCompilerGLES2::_dump_node_code(SL::Node *p_node, int p_level, Gener
 				function_code[fnode->name] = _dump_node_code(fnode->body, 1, r_gen_code, p_actions, p_default_actions, p_assigning);
 			}
 
-			Set<StringName> added_vertex;
-			Set<StringName> added_fragment;
+			RBSet<StringName> added_vertex;
+			RBSet<StringName> added_fragment;
 
 			for (int i = 0; i < snode->functions.size(); i++) {
 				SL::FunctionNode *fnode = snode->functions[i].function;
@@ -864,7 +855,7 @@ Error ShaderCompilerGLES2::compile(RS::ShaderMode p_mode, const String &p_code, 
 	
 	Error err = parser.compile(p_code, ShaderTypes::get_singleton()->get_functions(p_mode), ShaderTypes::get_singleton()->get_modes(p_mode), var_names, ShaderTypes::get_singleton()->get_types(), _get_variable_type);
 
-	//	Error ShaderLanguage::compile(const String &p_code, const Map<StringName, FunctionInfo> &p_functions, const Vector<StringName> &p_render_modes, const Set<String> &p_shader_types, GlobalVariableGetTypeFunc p_global_variable_type_func) {
+	//	Error ShaderLanguage::compile(const String &p_code, const HashMap<StringName, FunctionInfo> &p_functions, const Vector<StringName> &p_render_modes, const RBSet<String> &p_shader_types, GlobalVariableGetTypeFunc p_global_variable_type_func) {
 	if (err != OK) {
 		Vector<String> shader = p_code.split("\n");
 		for (int i = 0; i < shader.size(); i++) {

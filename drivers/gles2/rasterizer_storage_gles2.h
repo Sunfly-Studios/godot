@@ -73,7 +73,7 @@ public:
 		// TODO implement wireframe in GLES2
 		// bool generate_wireframes;
 
-		Set<String> extensions;
+		RBSet<String> extensions;
 
 		bool float_texture_supported;
 		bool s3tc_supported;
@@ -258,7 +258,7 @@ public:
 		RID self;
 
 		Texture *proxy;
-		Set<Texture *> proxy_owners;
+		RBSet<Texture *> proxy_owners;
 
 		String path;
 		uint32_t flags;
@@ -396,7 +396,7 @@ public:
 		void destroy() {
 			images.clear();
 
-			for (Set<Texture *>::Element *E = proxy_owners.front(); E; E = E->next()) {
+			for (RBSet<Texture *>::Element *E = proxy_owners.front(); E; E = E->next()) {
 				E->get()->proxy = NULL;
 			}
 
@@ -569,7 +569,7 @@ public:
 		String code;
 		SelfList<Material>::List materials;
 
-		Map<StringName, ShaderLanguage::ShaderNode::Uniform> uniforms;
+		HashMap<StringName, ShaderLanguage::ShaderNode::Uniform> uniforms;
 
 		uint32_t texture_count;
 
@@ -578,7 +578,7 @@ public:
 
 		SelfList<Shader> dirty_list;
 
-		Map<StringName, RID> default_textures;
+		HashMap<StringName, RID> default_textures;
 
 		Vector<ShaderLanguage::ShaderNode::Uniform::Hint> texture_hints;
 
@@ -724,7 +724,7 @@ public:
 	struct Material {
 		RID self;
 		Shader *shader;
-		Map<StringName, Variant> params;
+		HashMap<StringName, Variant> params;
 		SelfList<Material> list;
 		SelfList<Material> dirty_list;
 		Vector<Pair<StringName, RID>> textures;
@@ -736,8 +736,8 @@ public:
 		uint32_t index;
 		uint64_t last_pass;
 
-		//		Map<Geometry *, int> geometry_owners;
-		//		Map<InstanceBaseDependency *, int> instance_owners;
+		//		HashMap<Geometry *, int> geometry_owners;
+		//		HashMap<InstanceBaseDependency *, int> instance_owners;
 
 		bool can_cast_shadow_cache;
 		bool is_animated_cache;

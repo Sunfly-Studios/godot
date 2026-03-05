@@ -289,17 +289,17 @@ def build_legacygl_header(filename, include, class_suffix, output_attribs, gles2
         const Transform3D &tr = p_transform;
 
         GLfloat matrix[16]={ /* build a 16x16 matrix */
-            tr.basis.elements[0][0],
-            tr.basis.elements[1][0],
-            tr.basis.elements[2][0],
+            tr.basis.rows[0][0],
+            tr.basis.rows[1][0],
+            tr.basis.rows[2][0],
             0,
-            tr.basis.elements[0][1],
-            tr.basis.elements[1][1],
-            tr.basis.elements[2][1],
+            tr.basis.rows[0][1],
+            tr.basis.rows[1][1],
+            tr.basis.rows[2][1],
             0,
-            tr.basis.elements[0][2],
-            tr.basis.elements[1][2],
-            tr.basis.elements[2][2],
+            tr.basis.rows[0][2],
+            tr.basis.rows[1][2],
+            tr.basis.rows[2][2],
             0,
             tr.origin.x,
             tr.origin.y,
@@ -322,20 +322,20 @@ def build_legacygl_header(filename, include, class_suffix, output_attribs, gles2
         const Transform2D &tr = p_transform;
 
         GLfloat matrix[16]={ /* build a 16x16 matrix */
-            tr.elements[0][0],
-            tr.elements[0][1],
+            tr.columns[0][0],
+            tr.columns[0][1],
             0,
             0,
-            tr.elements[1][0],
-            tr.elements[1][1],
+            tr.columns[1][0],
+            tr.columns[1][1],
             0,
             0,
             0,
             0,
             1,
             0,
-            tr.elements[2][0],
-            tr.elements[2][1],
+            tr.columns[2][0],
+            tr.columns[2][1],
             0,
             1
         };
@@ -350,13 +350,13 @@ def build_legacygl_header(filename, include, class_suffix, output_attribs, gles2
     )
 
     fd.write(
-        """_FORCE_INLINE_ void set_uniform(Uniforms p_uniform, const CameraMatrix& p_matrix) {  _FU
+        """_FORCE_INLINE_ void set_uniform(Uniforms p_uniform, const Projection& p_matrix) {  _FU
 
         GLfloat matrix[16];
 
         for (int i=0;i<4;i++) {
             for (int j=0;j<4;j++) {
-                matrix[i*4+j]=p_matrix.matrix[i][j];
+                matrix[i*4+j]=p_matrix.columns[i][j];
             }
         }
 

@@ -29,19 +29,15 @@
 /*************************************************************************/
 
 #include "rasterizer_canvas_base_gles2.h"
+
 #ifdef GLES2_ENABLED
 
 #include "core/os/os.h"
 #include "drivers/gles2/rasterizer_asserts.h"
 #include "rasterizer_scene_gles2.h"
 
-#ifdef GODOT_3
-#include "core/project_settings.h"
-#include "servers/visual/visual_server_raster.h"
-#else
 #include "core/config/project_settings.h"
 #include "servers/rendering/rendering_server_default.h"
-#endif
 
 #ifndef GLES_OVER_GL
 #define glClearDepth glClearDepthf
@@ -905,7 +901,7 @@ void RasterizerCanvasBaseGLES2::_copy_screen(const Rect2 &p_rect) {
 	glEnable(GL_BLEND);
 }
 
-void RasterizerCanvasBaseGLES2::canvas_light_shadow_buffer_update(RID p_buffer, const Transform2D &p_light_xform, int p_light_mask, float p_near, float p_far, LightOccluderInstance *p_occluders, CameraMatrix *p_xform_cache) {
+void RasterizerCanvasBaseGLES2::canvas_light_shadow_buffer_update(RID p_buffer, const Transform2D &p_light_xform, int p_light_mask, float p_near, float p_far, LightOccluderInstance *p_occluders, Projection *p_xform_cache) {
 #if 0
 	RasterizerStorageGLES2::CanvasLightShadow *cls = storage->canvas_light_shadow_owner.get(p_buffer);
 	ERR_FAIL_COND(!cls);
@@ -944,7 +940,7 @@ void RasterizerCanvasBaseGLES2::canvas_light_shadow_buffer_update(RID p_buffer, 
 		//light.basis.scale(Vector3(to_light.elements[0].length(),to_light.elements[1].length(),1));
 
 		//p_near=1;
-		CameraMatrix projection;
+		Projection projection;
 		{
 			real_t fov = 90;
 			real_t nearp = p_near;
@@ -960,7 +956,7 @@ void RasterizerCanvasBaseGLES2::canvas_light_shadow_buffer_update(RID p_buffer, 
 		}
 
 		Vector3 cam_target = Basis(Vector3(0, 0, Math_PI * 2 * (i / 4.0))).xform(Vector3(0, 1, 0));
-		projection = projection * CameraMatrix(Transform3D().looking_at(cam_target, Vector3(0, 0, -1)).affine_inverse());
+		projection = projection * Projection(Transform3D().looking_at(cam_target, Vector3(0, 0, -1)).affine_inverse());
 
 		state.canvas_shadow_shader.set_uniform(CanvasShadowShaderGLES2::PROJECTION_MATRIX, projection);
 		state.canvas_shadow_shader.set_uniform(CanvasShadowShaderGLES2::LIGHT_MATRIX, light);

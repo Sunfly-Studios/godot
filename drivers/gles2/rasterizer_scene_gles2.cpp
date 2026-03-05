@@ -31,7 +31,6 @@
 #include "rasterizer_scene_gles2.h"
 #ifdef GLES2_ENABLED
 
-#ifdef GODOT_3
 
 #include "core/math/math_funcs.h"
 #include "core/math/transform.h"
@@ -110,7 +109,7 @@ void RasterizerSceneGLES2::shadow_atlas_set_size(RID p_atlas, int p_size) {
 	}
 
 	// erase shadow atlast references from lights
-	for (Map<RID, uint32_t>::Element *E = shadow_atlas->shadow_owners.front(); E; E = E->next()) {
+	for (HashMap<RID, uint32_t>::Element *E = shadow_atlas->shadow_owners.front(); E; E = E->next()) {
 		LightInstance *li = light_instance_owner.getornull(E->key());
 		ERR_CONTINUE(!li);
 		li->shadow_atlases.erase(p_atlas);
@@ -881,7 +880,7 @@ void RasterizerSceneGLES2::light_instance_set_transform(RID p_light_instance, co
 	light_instance->transform = p_transform;
 }
 
-void RasterizerSceneGLES2::light_instance_set_shadow_transform(RID p_light_instance, const CameraMatrix &p_projection, const Transform3D &p_transform, float p_far, float p_split, int p_pass, float p_bias_scale) {
+void RasterizerSceneGLES2::light_instance_set_shadow_transform(RID p_light_instance, const Projection &p_projection, const Transform3D &p_transform, float p_far, float p_split, int p_pass, float p_bias_scale) {
 	LightInstance *light_instance = light_instance_owner.getornull(p_light_instance);
 	ERR_FAIL_COND(!light_instance);
 
@@ -1877,7 +1876,7 @@ void RasterizerSceneGLES2::_setup_light(LightInstance *light, ShadowAtlas *shado
 			Vector3 direction = p_view_transform.basis.xform_inv(light->transform.basis.xform(Vector3(0, 0, -1))).normalized();
 			state.scene_shader.set_uniform(SceneShaderGLES2::LIGHT_DIRECTION, direction);
 
-			CameraMatrix matrices[4];
+			Projection matrices[4];
 
 			if (!state.render_no_shadows && light_ptr->shadow && directional_shadow.depth) {
 				int shadow_count = 0;
@@ -1928,13 +1927,13 @@ void RasterizerSceneGLES2::_setup_light(LightInstance *light, ShadowAtlas *shado
 
 					Transform3D modelview = (p_view_transform.inverse() * light->shadow_transform[k].transform).affine_inverse();
 
-					CameraMatrix bias;
+					Projection bias;
 					bias.set_light_bias();
-					CameraMatrix rectm;
+					Projection rectm;
 					Rect2 atlas_rect = Rect2(float(x) / directional_shadow.size, float(y) / directional_shadow.size, float(width) / directional_shadow.size, float(height) / directional_shadow.size);
 					rectm.set_light_atlas_rect(atlas_rect);
 
-					CameraMatrix shadow_mtx = rectm * bias * light->shadow_transform[k].camera * modelview;
+					Projection shadow_mtx = rectm * bias * light->shadow_transform[k].camera * modelview;
 					matrices[k] = shadow_mtx;
 
 					/*Color light_clamp;
@@ -2054,13 +2053,13 @@ void RasterizerSceneGLES2::_setup_light(LightInstance *light, ShadowAtlas *shado
 
 				Transform3D modelview = (p_view_transform.inverse() * light->transform).inverse();
 
-				CameraMatrix bias;
+				Projection bias;
 				bias.set_light_bias();
 
-				CameraMatrix rectm;
+				Projection rectm;
 				rectm.set_light_atlas_rect(rect);
 
-				CameraMatrix shadow_matrix = rectm * bias * light->shadow_transform[0].camera * modelview;
+				Projection shadow_matrix = rectm * bias * light->shadow_transform[0].camera * modelview;
 
 				state.scene_shader.set_uniform(SceneShaderGLES2::SHADOW_PIXEL_SIZE, Size2(1.0 / shadow_atlas->size, 1.0 / shadow_atlas->size));
 				state.scene_shader.set_uniform(SceneShaderGLES2::LIGHT_SHADOW_MATRIX, shadow_matrix);
@@ -2121,7 +2120,7 @@ void RasterizerSceneGLES2::_setup_refprobes(ReflectionProbeInstance *p_refprobe1
 	}
 }
 
-void RasterizerSceneGLES2::_render_render_list(RenderList::Element **p_elements, int p_element_count, const Transform3D &p_view_transform, const CameraMatrix &p_projection, RID p_shadow_atlas, Environment *p_env, GLuint p_base_env, float p_shadow_bias, float p_shadow_normal_bias, bool p_reverse_cull, bool p_alpha_pass, bool p_shadow) {
+void RasterizerSceneGLES2::_render_render_list(RenderList::Element **p_elements, int p_element_count, const Transform3D &p_view_transform, const Projection &p_projection, RID p_shadow_atlas, Environment *p_env, GLuint p_base_env, float p_shadow_bias, float p_shadow_normal_bias, bool p_reverse_cull, bool p_alpha_pass, bool p_shadow) {
 	ShadowAtlas *shadow_atlas = shadow_atlas_owner.getornull(p_shadow_atlas);
 
 	Vector2 viewport_size = state.viewport_size;
@@ -2146,7 +2145,7 @@ void RasterizerSceneGLES2::_render_render_list(RenderList::Element **p_elements,
 	RasterizerStorageGLES2::GeometryOwner *prev_owner = NULL;
 
 	Transform3D view_transform_inverse = p_view_transform.inverse();
-	CameraMatrix projection_inverse = p_projection.inverse();
+	Projection projection_inverse = p_projection.inverse();
 
 	bool prev_base_pass = false;
 	LightInstance *prev_light = NULL;
@@ -2534,7 +2533,7 @@ void RasterizerSceneGLES2::_render_render_list(RenderList::Element **p_elements,
 	state.scene_shader.set_conditional(SceneShaderGLES2::USE_DEPTH_PREPASS, false);
 }
 
-void RasterizerSceneGLES2::_draw_sky(RasterizerStorageGLES2::Sky *p_sky, const CameraMatrix &p_projection, const Transform3D &p_transform, bool p_vflip, float p_custom_fov, float p_energy, const Basis &p_sky_orientation) {
+void RasterizerSceneGLES2::_draw_sky(RasterizerStorageGLES2::Sky *p_sky, const Projection &p_projection, const Transform3D &p_transform, bool p_vflip, float p_custom_fov, float p_energy, const Basis &p_sky_orientation) {
 	ERR_FAIL_COND(!p_sky);
 
 	RasterizerStorageGLES2::Texture *tex = storage->texture_owner.getornull(p_sky->panorama);
@@ -2550,7 +2549,7 @@ void RasterizerSceneGLES2::_draw_sky(RasterizerStorageGLES2::Sky *p_sky, const C
 	glDepthFunc(GL_LEQUAL);
 
 	// Camera
-	CameraMatrix camera;
+	Projection camera;
 
 	if (p_custom_fov) {
 		float near_plane = p_projection.get_z_near();
@@ -2635,7 +2634,7 @@ void RasterizerSceneGLES2::_draw_sky(RasterizerStorageGLES2::Sky *p_sky, const C
 	storage->shaders.copy.set_conditional(CopyShaderGLES2::USE_CUBEMAP, false);
 }
 
-void RasterizerSceneGLES2::_post_process(Environment *env, const CameraMatrix &p_cam_projection) {
+void RasterizerSceneGLES2::_post_process(Environment *env, const Projection &p_cam_projection) {
 	//copy to front buffer
 
 	glDepthMask(GL_FALSE);
@@ -3084,7 +3083,7 @@ void RasterizerSceneGLES2::_post_process(Environment *env, const CameraMatrix &p
 	state.tonemap_shader.set_conditional(TonemapShaderGLES2::USE_COLOR_CORRECTION, false);
 }
 
-void RasterizerSceneGLES2::render_scene(const Transform3D &p_cam_transform, const CameraMatrix &p_cam_projection, bool p_cam_ortogonal, InstanceBase **p_cull_result, int p_cull_count, RID *p_light_cull_result, int p_light_cull_count, RID *p_reflection_probe_cull_result, int p_reflection_probe_cull_count, RID p_environment, RID p_shadow_atlas, RID p_reflection_atlas, RID p_reflection_probe, int p_reflection_probe_pass) {
+void RasterizerSceneGLES2::render_scene(const Transform3D &p_cam_transform, const Projection &p_cam_projection, bool p_cam_ortogonal, InstanceBase **p_cull_result, int p_cull_count, RID *p_light_cull_result, int p_light_cull_count, RID *p_reflection_probe_cull_result, int p_reflection_probe_cull_count, RID p_environment, RID p_shadow_atlas, RID p_reflection_atlas, RID p_reflection_probe, int p_reflection_probe_pass) {
 	Transform3D cam_transform = p_cam_transform;
 
 	storage->info.render.object_count += p_cull_count;
@@ -3480,7 +3479,7 @@ void RasterizerSceneGLES2::render_shadow(RID p_light, RID p_shadow_atlas, int p_
 	float bias = 0;
 	float normal_bias = 0;
 
-	CameraMatrix light_projection;
+	Projection light_projection;
 	Transform3D light_transform;
 
 	// TODO directional light
@@ -3740,7 +3739,7 @@ bool RasterizerSceneGLES2::free(RID p_rid) {
 		LightInstance *light_instance = light_instance_owner.getptr(p_rid);
 
 		//remove from shadow atlases..
-		for (Set<RID>::Element *E = light_instance->shadow_atlases.front(); E; E = E->next()) {
+		for (RBSet<RID>::Element *E = light_instance->shadow_atlases.front(); E; E = E->next()) {
 			ShadowAtlas *shadow_atlas = shadow_atlas_owner.get(E->get());
 			ERR_CONTINUE(!shadow_atlas->shadow_owners.has(p_rid));
 			uint32_t key = shadow_atlas->shadow_owners[p_rid];
@@ -3949,7 +3948,5 @@ void RasterizerSceneGLES2::finalize() {
 
 RasterizerSceneGLES2::RasterizerSceneGLES2() {
 }
-
-#endif // godot 3
 
 #endif // GLES2_ENABLED

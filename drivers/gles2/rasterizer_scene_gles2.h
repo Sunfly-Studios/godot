@@ -33,7 +33,7 @@
 
 #ifdef GLES2_ENABLED
 
-#include "core/math/camera_matrix.h"
+#include "core/math/projection.h"
 #include "core/templates/rid_owner.h"
 #include "core/templates/self_list.h"
 #include "drivers/gles2/rasterizer_common_stubs.h"
@@ -53,8 +53,6 @@ public:
 	RasterizerSceneGLES2() {}
 	~RasterizerSceneGLES2() {}
 };
-
-#ifdef GODOT_3
 
 /* Must come before shaders or the Windows build fails... */
 #include "rasterizer_storage_gles2.h"
@@ -284,7 +282,7 @@ public:
 		GLuint depth;
 		GLuint color;
 
-		Map<RID, uint32_t> shadow_owners;
+		HashMap<RID, uint32_t> shadow_owners;
 	};
 
 	struct ShadowCubeMap {
@@ -520,7 +518,7 @@ public:
 
 	struct LightInstance : public RID_Data {
 		struct ShadowTransform {
-			CameraMatrix camera;
+			Projection camera;
 			Transform3D transform;
 			float farplane;
 			float split;
@@ -548,14 +546,14 @@ public:
 
 		Rect2 directional_rect;
 
-		Set<RID> shadow_atlases; // atlases where this light is registered
+		RBSet<RID> shadow_atlases; // atlases where this light is registered
 	};
 
 	mutable RID_Owner<LightInstance> light_instance_owner;
 
 	virtual RID light_instance_create(RID p_light);
 	virtual void light_instance_set_transform(RID p_light_instance, const Transform3D &p_transform);
-	virtual void light_instance_set_shadow_transform(RID p_light_instance, const CameraMatrix &p_projection, const Transform3D &p_transform, float p_far, float p_split, int p_pass, float p_bias_scale = 1.0);
+	virtual void light_instance_set_shadow_transform(RID p_light_instance, const Projection &p_projection, const Transform3D &p_transform, float p_far, float p_split, int p_pass, float p_bias_scale = 1.0);
 	virtual void light_instance_mark_visible(RID p_light_instance);
 	virtual bool light_instances_can_render_shadow_cube() const { return storage->config.support_shadow_cubemaps; }
 
@@ -751,7 +749,7 @@ public:
 	void _fill_render_list(InstanceBase **p_cull_result, int p_cull_count, bool p_depth_pass, bool p_shadow_pass);
 	void _render_render_list(RenderList::Element **p_elements, int p_element_count,
 			const Transform3D &p_view_transform,
-			const CameraMatrix &p_projection,
+			const Projection &p_projection,
 			RID p_shadow_atlas,
 			Environment *p_env,
 			GLuint p_base_env,
@@ -761,7 +759,7 @@ public:
 			bool p_alpha_pass,
 			bool p_shadow);
 
-	void _draw_sky(RasterizerStorageGLES2::Sky *p_sky, const CameraMatrix &p_projection, const Transform3D &p_transform, bool p_vflip, float p_custom_fov, float p_energy, const Basis &p_sky_orientation);
+	void _draw_sky(RasterizerStorageGLES2::Sky *p_sky, const Projection &p_projection, const Transform3D &p_transform, bool p_vflip, float p_custom_fov, float p_energy, const Basis &p_sky_orientation);
 
 	_FORCE_INLINE_ void _set_cull(bool p_front, bool p_disabled, bool p_reverse_cull);
 	_FORCE_INLINE_ bool _setup_material(RasterizerStorageGLES2::Material *p_material, bool p_alpha_pass, Size2i p_skeleton_tex_size = Size2i(0, 0));
@@ -771,9 +769,9 @@ public:
 	_FORCE_INLINE_ void _setup_refprobes(ReflectionProbeInstance *p_refprobe1, ReflectionProbeInstance *p_refprobe2, const Transform3D &p_view_transform, Environment *p_env);
 	_FORCE_INLINE_ void _render_geometry(RenderList::Element *p_element);
 
-	void _post_process(Environment *env, const CameraMatrix &p_cam_projection);
+	void _post_process(Environment *env, const Projection &p_cam_projection);
 
-	virtual void render_scene(const Transform3D &p_cam_transform, const CameraMatrix &p_cam_projection, bool p_cam_ortogonal, InstanceBase **p_cull_result, int p_cull_count, RID *p_light_cull_result, int p_light_cull_count, RID *p_reflection_probe_cull_result, int p_reflection_probe_cull_count, RID p_environment, RID p_shadow_atlas, RID p_reflection_atlas, RID p_reflection_probe, int p_reflection_probe_pass);
+	virtual void render_scene(const Transform3D &p_cam_transform, const Projection &p_cam_projection, bool p_cam_ortogonal, InstanceBase **p_cull_result, int p_cull_count, RID *p_light_cull_result, int p_light_cull_count, RID *p_reflection_probe_cull_result, int p_reflection_probe_cull_count, RID p_environment, RID p_shadow_atlas, RID p_reflection_atlas, RID p_reflection_probe, int p_reflection_probe_pass);
 	virtual void render_shadow(RID p_light, RID p_shadow_atlas, int p_pass, InstanceBase **p_cull_result, int p_cull_count);
 	virtual bool free(RID p_rid);
 
@@ -785,7 +783,5 @@ public:
 	void finalize();
 	RasterizerSceneGLES2();
 };
-
-#endif // godot 3
 
 #endif // GLES2_ENABLED

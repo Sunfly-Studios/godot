@@ -58,7 +58,7 @@
 #include "drivers/gles3/rasterizer_gles3.h"
 #endif
 #if defined(GLES2_ENABLED)
-#include "drivers/gles2/rasterizer_gles3.h"
+#include "drivers/gles2/rasterizer_gles2.h"
 #endif
 
 #include <avrt.h>

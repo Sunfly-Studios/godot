@@ -32,33 +32,16 @@
 
 #ifdef GLES2_ENABLED
 
-// This must come first to avoid windows.h mess
-#include "platform_config.h"
-#ifndef GLES2_INCLUDE_H
-#include <GLES2/gl2.h>
-#else
-#include GLES2_INCLUDE_H
-#endif
-
-#include "core/math/camera_matrix.h"
-#ifdef GODOT_3
-#include "core/hash_map.h"
-#include "core/map.h"
-#include "core/pair.h"
-#include "core/variant.h"
-#include "servers/visual/shader_language.h"
-#else
+#include "core/math/projection.h"
 #include "core/templates/hash_map.h"
-#include "core/templates/map.h"
 #include "core/templates/pair.h"
 #include "core/variant/variant.h"
 #include "servers/rendering/shader_language.h"
-#endif
+#include "thirdparty/glad/glad/gl.h"
 
 #include <stdio.h>
 
 class RasterizerStorageGLES2;
-//#ifdef GODOT_3
 
 class ShaderGLES2 {
 protected:
@@ -111,7 +94,7 @@ private:
 		Vector<StringName> texture_uniforms;
 		Vector<StringName> custom_uniforms;
 		Vector<CharString> custom_defines;
-		Set<uint32_t> versions;
+		RBSet<uint32_t> versions;
 	};
 
 	struct Version {
@@ -120,7 +103,7 @@ private:
 		GLuint frag_id;
 		GLint *uniform_location;
 		Vector<GLint> texture_uniform_locations;
-		Map<StringName, GLint> custom_uniform_locations;
+		HashMap<StringName, GLint> custom_uniform_locations;
 		uint32_t code_version;
 		bool ok;
 		Version() {
@@ -183,7 +166,7 @@ private:
 
 	int max_image_units;
 
-	Map<StringName, Pair<ShaderLanguage::DataType, Vector<ShaderLanguage::ConstantNode::Value>>> uniform_values;
+	HashMap<StringName, Pair<ShaderLanguage::DataType, Vector<ShaderLanguage::ConstantNode::Type>>> uniform_values;
 
 protected:
 	_FORCE_INLINE_ int _get_uniform(int p_which) const;

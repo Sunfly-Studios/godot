@@ -35,16 +35,9 @@
 #include "core/os/memory.h"
 #include "rasterizer_gles2.h"
 #include "rasterizer_storage_gles2.h"
-
-#ifdef GODOT_3
-#include "core/print_string.h"
-#include "core/project_settings.h"
-#include "core/string_builder.h"
-#else
 #include "core/config/project_settings.h"
 #include "core/string/print_string.h"
 #include "core/string/string_builder.h"
-#endif
 
 // #define DEBUG_OPENGL
 
@@ -84,8 +77,6 @@ GLint ShaderGLES2::get_uniform_location(int p_index) const {
 
 	return version->uniform_location[p_index];
 }
-
-//#ifdef GODOT_3
 
 bool ShaderGLES2::bind() {
 	if (active != this || !version || new_conditional_version.key != conditional_version.key) {
@@ -662,7 +653,7 @@ void ShaderGLES2::free_custom_shader(uint32_t p_code_id) {
 
 	VersionKey key;
 	key.code_version = p_code_id;
-	for (Set<uint32_t>::Element *E = custom_code_map[p_code_id].versions.front(); E; E = E->next()) {
+	for (RBSet<uint32_t>::Element *E = custom_code_map[p_code_id].versions.front(); E; E = E->next()) {
 		key.version = E->get();
 		ERR_CONTINUE(!version_map.has(key));
 		Version &v = version_map[key];
@@ -693,17 +684,17 @@ void ShaderGLES2::use_material(void *p_material) {
 	Version *v = version_map.getptr(conditional_version);
 
 	// bind uniforms
-	for (Map<StringName, ShaderLanguage::ShaderNode::Uniform>::Element *E = material->shader->uniforms.front(); E; E = E->next()) {
+	for (HashMap<StringName, ShaderLanguage::ShaderNode::Uniform>::Element *E = material->shader->uniforms.front(); E; E = E->next()) {
 		if (E->get().texture_order >= 0)
 			continue; // this is a texture, doesn't go here
 
-		Map<StringName, GLint>::Element *L = v->custom_uniform_locations.find(E->key());
+		HashMap<StringName, GLint>::Element *L = v->custom_uniform_locations.find(E->key());
 		if (!L || L->get() < 0)
 			continue; //uniform not valid
 
 		GLuint location = L->get();
 
-		Map<StringName, Variant>::Element *V = material->params.find(E->key());
+		HashMap<StringName, Variant>::Element *V = material->params.find(E->key());
 
 		if (V) {
 			switch (E->get().type) {
