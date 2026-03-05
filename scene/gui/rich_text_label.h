@@ -515,7 +515,7 @@ private:
 
 	void _texture_changed(RID p_item);
 
-	RID_PtrOwner<Item> items;
+	static inline RID_PtrOwner<Item, true> items;
 	List<String> tag_stack;
 
 	String language;
