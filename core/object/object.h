@@ -160,9 +160,7 @@ struct PropertyInfo {
 
 	template <typename T>
 	static _FORCE_INLINE_ T _get_from_extension_ptr(const void *p_ptr) {
-		alignas(alignof(T)) uint8_t buf[sizeof(T)] = {};
-		memcpy(buf, p_ptr, sizeof(T));
-		return *reinterpret_cast<T *>(buf);
+		return unaligned_read<T>(p_ptr);
 	}
 
 	// If you are thinking about adding another member to this class, ask the maintainer (Juan) first.

@@ -40,34 +40,34 @@
 #include <cstdint> // for uintptr_t
 
 #ifdef _WIN32
-    #include <malloc.h>
+	#include <malloc.h>
 #elif defined(__NetBSD__) || defined(__FreeBSD__) || defined(__OpenBSD__) || defined(__APPLE__)
-    #include <stdlib.h>
+	#include <stdlib.h>
 #else
-    #include <alloca.h>
+	#include <alloca.h>
 #endif
 
 // Detect 32-bit architectures with 128-bit vector units.
 #if (defined(__i386__) && (defined(__SSE__) || defined(__SSE2__))) || \
-    (defined(_M_IX86) && _M_IX86_FP > 0) || \
-    defined(__ARM_NEON)
-    #define HAS_128_BIT_SIMD 1
+	(defined(_M_IX86) && _M_IX86_FP > 0) || \
+	defined(__ARM_NEON)
+	#define HAS_128_BIT_SIMD 1
 #endif
 
 // Determine the safe minimum stack alignment.
 #if !defined(IS_32_BIT) || defined(HAS_128_BIT_SIMD)
-    // 64-bit platforms.
-    // 32-bit platforms with 128-bit SIMD (x86_32 SSE, etc.).
-    #define GODOT_MIN_STACK_ALIGN 16 
+	// 64-bit platforms.
+	// 32-bit platforms with 128-bit SIMD (x86_32 SSE, etc.).
+	#define GODOT_MIN_STACK_ALIGN 16 
 #else
-    // "Vanilla" 32-bit architectures with no SSE-like goodies.
-    #define GODOT_MIN_STACK_ALIGN 8 
+	// "Vanilla" 32-bit architectures with no SSE-like goodies.
+	#define GODOT_MIN_STACK_ALIGN 8 
 #endif
 
 // Calculate the required alignment:
 // The larger of the type's requirement or GODOT_MIN_STACK_ALIGN.
 #define SAFE_ALIGN_SIZE(m_type) \
-    ((alignof(m_type) > GODOT_MIN_STACK_ALIGN) ? alignof(m_type) : GODOT_MIN_STACK_ALIGN)
+	((alignof(m_type) > GODOT_MIN_STACK_ALIGN) ? alignof(m_type) : GODOT_MIN_STACK_ALIGN)
 
 // Unify all safe memory allocation macros
 // here for convenience.
@@ -210,6 +210,34 @@ _ALWAYS_INLINE_ T *_post_initialize(T *p_obj) {
 
 _ALWAYS_INLINE_ bool predelete_handler(void *) {
 	return true;
+}
+
+template <typename T>
+_FORCE_INLINE_ T unaligned_read(const void *p_ptr) {
+	alignas(alignof(T)) uint8_t buf[sizeof(T)] = {};
+	memcpy(buf, p_ptr, sizeof(T));
+	return *reinterpret_cast<const T *>(buf);
+}
+
+template <typename T>
+_FORCE_INLINE_ void unaligned_write(void *p_ptr, const T &p_val) {
+	alignas(alignof(T)) uint8_t buf[sizeof(T)] = {};
+	// Must copy original memory first in case operator= relies on the
+	// existing state (e.g., decref'ing an existing pointer before overwrite)
+	memcpy(buf, p_ptr, sizeof(T));
+
+	T *dst = reinterpret_cast<T *>(buf);
+	*dst = p_val; // Invoke operator=
+
+	// Copy the resulting state back to the unaligned destination
+	memcpy(p_ptr, buf, sizeof(T));
+}
+
+template <typename ConstructT, typename ArgT>
+_FORCE_INLINE_ void unaligned_construct(void *p_ptr, const ArgT &p_arg) {
+	alignas(alignof(ConstructT)) uint8_t buf[sizeof(ConstructT)] = {};
+	memnew_placement(buf, ConstructT(p_arg));
+	memcpy(p_ptr, buf, sizeof(ConstructT));
 }
 
 template <typename T>
