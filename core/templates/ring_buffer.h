@@ -79,7 +79,7 @@ public:
 	int copy(T *p_buf, int p_offset, int p_size) const {
 		int left = data_left();
 		if ((p_offset + p_size) > left) {
-			p_size -= left - p_offset;
+			p_size = left - p_offset;
 			if (p_size <= 0) {
 				return 0;
 			}
@@ -105,7 +105,7 @@ public:
 	int find(const T &t, int p_offset, int p_max_size) const {
 		int left = data_left();
 		if ((p_offset + p_max_size) > left) {
-			p_max_size -= left - p_offset;
+			p_max_size = left - p_offset;
 			if (p_max_size <= 0) {
 				return 0;
 			}
