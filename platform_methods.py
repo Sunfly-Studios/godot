@@ -51,7 +51,8 @@ architecture_aliases = {
     "pa-risc": "hppa",
     "hppa64": "hppa",
     "hs38": "arc32",
-    "hs": "arc32"
+    "hs": "arc32",
+    "hs6x": "arc64",
 }
 
 

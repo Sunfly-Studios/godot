@@ -79,6 +79,8 @@ void GDExtensionExportPlugin::_export_file(const String &p_path, const String &p
 	all_archs.insert("mips64");
 	all_archs.insert("alpha");
 	all_archs.insert("loongarch64");
+	all_archs.insert("arc32");
+	all_archs.insert("arc64");
 	all_archs.insert("universal");
 
 	HashSet<String> archs;
