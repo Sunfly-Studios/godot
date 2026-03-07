@@ -163,6 +163,7 @@ Ref<AudioStreamPlayback> AudioStreamPlayerInternal::play_basic() {
 				}
 				Ref<AudioSamplePlayback> sample_playback;
 				sample_playback.instantiate();
+				ERR_FAIL_COND_V(sample_playback.is_null(), Ref<AudioStreamPlayback>());
 				sample_playback->stream = stream;
 				sample_playback->pitch_scale = pitch_scale;
 				stream_playback->set_sample_playback(sample_playback);

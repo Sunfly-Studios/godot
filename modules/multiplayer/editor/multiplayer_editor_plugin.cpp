@@ -120,6 +120,7 @@ MultiplayerEditorPlugin::MultiplayerEditorPlugin() {
 	button->hide();
 	repl_editor->get_pin()->connect(SceneStringName(pressed), callable_mp(this, &MultiplayerEditorPlugin::_pinned));
 	debugger.instantiate();
+	ERR_FAIL_COND(debugger.is_null());
 	debugger->connect("open_request", callable_mp(this, &MultiplayerEditorPlugin::_open_request));
 }
 

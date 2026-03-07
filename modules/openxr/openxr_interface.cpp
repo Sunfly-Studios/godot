@@ -213,6 +213,7 @@ void OpenXRInterface::_load_action_map() {
 	if (Engine::get_singleton()->is_editor_hint()) {
 #ifdef TOOLS_ENABLED
 		action_map.instantiate();
+		ERR_FAIL_COND(action_map.is_null());
 		action_map->create_editor_action_sets();
 #endif
 	} else {
@@ -226,6 +227,7 @@ void OpenXRInterface::_load_action_map() {
 		// Check if we need to create default action set
 		if (action_map.is_null()) {
 			action_map.instantiate();
+			ERR_FAIL_COND(action_map.is_null());
 			action_map->create_default_action_sets();
 #ifdef TOOLS_ENABLED
 			// Save our action sets so our user can
@@ -469,6 +471,7 @@ OpenXRInterface::Tracker *OpenXRInterface::find_tracker(const String &p_tracker_
 	// Create our controller tracker.
 	Ref<XRControllerTracker> controller_tracker;
 	controller_tracker.instantiate();
+	ERR_FAIL_COND_V(controller_tracker.is_null(), nullptr);
 
 	// We have standardized some names to make things nicer to the user so lets recognize the toplevel paths related to these.
 	if (p_tracker_name == "/user/hand/left") {
@@ -652,6 +655,7 @@ bool OpenXRInterface::initialize() {
 
 	// we must create a tracker for our head
 	head.instantiate();
+	ERR_FAIL_COND_V(head.is_null(), false);
 	head->set_tracker_type(XRServer::TRACKER_HEAD);
 	head->set_tracker_name("head");
 	head->set_tracker_desc("Players head");

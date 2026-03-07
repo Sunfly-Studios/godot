@@ -96,6 +96,7 @@ void AudioEffectDistortionInstance::process(const AudioFrame *p_src_frames, Audi
 Ref<AudioEffectInstance> AudioEffectDistortion::instantiate() {
 	Ref<AudioEffectDistortionInstance> ins;
 	ins.instantiate();
+	ERR_FAIL_COND_V(ins.is_null(), Ref<AudioEffectInstance>());
 	ins->base = Ref<AudioEffectDistortion>(this);
 	ins->h[0] = 0;
 	ins->h[1] = 0;

@@ -213,6 +213,7 @@ void CodeEdit::_notification(int p_what) {
 
 						Ref<TextLine> tl;
 						tl.instantiate();
+						ERR_FAIL_COND(tl.is_null());
 						tl->add_string(code_completion_options[l].display, theme_cache.font, theme_cache.font_size);
 
 						int yofs = (row_height - tl->get_size().y) / 2;

@@ -184,6 +184,7 @@ Error RDShaderFile::parse_versions_from_text(const String &p_text, const String 
 		for (const KeyValue<StringName, String> &E : version_texts) {
 			Ref<RDShaderSPIRV> bytecode;
 			bytecode.instantiate();
+			ERR_FAIL_COND_V_MSG(bytecode.is_null(), ERR_PARSE_ERROR, "Could not instantiate bytecode, Out of Memory.");
 
 			for (int i = 0; i < RD::SHADER_STAGE_MAX; i++) {
 				String code = stage_code[i];

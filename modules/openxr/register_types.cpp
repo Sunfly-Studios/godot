@@ -217,10 +217,12 @@ void initialize_openxr_module(ModuleInitializationLevel p_level) {
 		XRServer *xr_server = XRServer::get_singleton();
 		if (xr_server) {
 			openxr_interface.instantiate();
-			xr_server->add_interface(openxr_interface);
-
-			if (openxr_interface->initialize_on_startup()) {
-				openxr_interface->initialize();
+			if (openxr_interface.is_valid()) {
+				xr_server->add_interface(openxr_interface);
+	
+				if (openxr_interface->initialize_on_startup()) {
+					openxr_interface->initialize();
+				}
 			}
 		}
 

@@ -812,6 +812,7 @@ bool LightStorage::reflection_probe_instance_begin_render(RID p_instance, RID p_
 
 	if (atlas->render_buffers.is_null()) {
 		atlas->render_buffers.instantiate();
+		ERR_FAIL_COND_V(atlas->render_buffers.is_null(), false);
 		atlas->render_buffers->configure_for_probe(Size2i(atlas->size, atlas->size));
 	}
 

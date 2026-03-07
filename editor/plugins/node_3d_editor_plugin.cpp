@@ -5895,12 +5895,14 @@ Node3DEditorViewport::Node3DEditorViewport(Node3DEditor *p_spatial_editor, int p
 	ruler_end_point->set_visible(false);
 
 	ruler_material.instantiate();
+	ERR_FAIL_COND(ruler_material.is_null());
 	ruler_material->set_albedo(Color(1.0, 0.9, 0.0, 1.0));
 	ruler_material->set_flag(BaseMaterial3D::FLAG_DISABLE_FOG, true);
 	ruler_material->set_shading_mode(BaseMaterial3D::SHADING_MODE_UNSHADED);
 	ruler_material->set_depth_draw_mode(BaseMaterial3D::DEPTH_DRAW_DISABLED);
 
 	ruler_material_xray.instantiate();
+	ERR_FAIL_COND(ruler_material_xray.is_null());
 	ruler_material_xray->set_albedo(Color(1.0, 0.9, 0.0, 0.15));
 	ruler_material_xray->set_flag(BaseMaterial3D::FLAG_DISABLE_FOG, true);
 	ruler_material_xray->set_shading_mode(BaseMaterial3D::SHADING_MODE_UNSHADED);
@@ -5909,6 +5911,7 @@ Node3DEditorViewport::Node3DEditorViewport(Node3DEditor *p_spatial_editor, int p
 	ruler_material_xray->set_render_priority(BaseMaterial3D::RENDER_PRIORITY_MAX);
 
 	geometry.instantiate();
+	ERR_FAIL_COND(geometry.is_null());
 
 	ruler_line = memnew(MeshInstance3D);
 	ruler_line->set_mesh(geometry);
@@ -7105,6 +7108,7 @@ void fragment() {
 )");
 
 		origin_mat.instantiate();
+		ERR_FAIL_COND(origin_mat.is_null());
 		origin_mat->set_shader(origin_shader);
 
 		Vector<Vector3> origin_points;
@@ -8863,6 +8867,7 @@ Node3DEditor::Node3DEditor() {
 	gizmo.scale = 1.0;
 
 	viewport_environment.instantiate();
+	ERR_FAIL_COND(viewport_environment.is_null());
 	VBoxContainer *vbc = this;
 
 	custom_camera = nullptr;
@@ -9317,6 +9322,7 @@ Node3DEditor::Node3DEditor() {
 		sun_direction->set_default_cursor_shape(CURSOR_MOVE);
 
 		sun_direction_shader.instantiate();
+		ERR_FAIL_COND(sun_direction_shader.is_null());
 		sun_direction_shader->set_code(R"(
 // 3D editor Preview Sun direction shader.
 
@@ -9334,6 +9340,7 @@ void fragment() {
 }
 )");
 		sun_direction_material.instantiate();
+		ERR_FAIL_COND(sun_direction_material.is_null());
 		sun_direction_material->set_shader(sun_direction_shader);
 		sun_direction_material->set_shader_parameter("sun_direction", Vector3(0, 0, 1));
 		sun_direction_material->set_shader_parameter("sun_color", Vector3(1, 1, 1));
@@ -9490,14 +9497,18 @@ void fragment() {
 		preview_sun->set_shadow_mode(DirectionalLight3D::SHADOW_PARALLEL_4_SPLITS);
 		preview_environment = memnew(WorldEnvironment);
 		environment.instantiate();
+		ERR_FAIL_COND(environment.is_null());
 		preview_environment->set_environment(environment);
 		if (GLOBAL_GET("rendering/lights_and_shadows/use_physical_light_units")) {
 			camera_attributes.instantiate();
+			ERR_FAIL_COND(camera_attributes.is_null());
 			preview_environment->set_camera_attributes(camera_attributes);
 		}
 		Ref<Sky> sky;
 		sky.instantiate();
+		ERR_FAIL_COND(sky.is_null());
 		sky_material.instantiate();
+		ERR_FAIL_COND(sky_material.is_null());
 		sky->set_material(sky_material);
 		environment->set_sky(sky);
 		environment->set_background(Environment::BG_SKY);

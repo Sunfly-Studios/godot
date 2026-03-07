@@ -42,9 +42,11 @@ void initialize_webp_module(ModuleInitializationLevel p_level) {
 	}
 
 	image_loader_webp.instantiate();
+	ERR_FAIL_COND(image_loader_webp.is_null());
 	ImageLoader::add_image_format_loader(image_loader_webp);
 
 	resource_saver_webp.instantiate();
+	ERR_FAIL_COND(resource_saver_webp.is_null());
 	ResourceSaver::add_resource_format_saver(resource_saver_webp);
 }
 
@@ -53,9 +55,13 @@ void uninitialize_webp_module(ModuleInitializationLevel p_level) {
 		return;
 	}
 
-	ImageLoader::remove_image_format_loader(image_loader_webp);
-	image_loader_webp.unref();
+	if (image_loader_webp.is_valid()) {
+		ImageLoader::remove_image_format_loader(image_loader_webp);
+		image_loader_webp.unref();
+	}
 
-	ResourceSaver::remove_resource_format_saver(resource_saver_webp);
-	resource_saver_webp.unref();
+	if (resource_saver_webp.is_valid()) {
+		ResourceSaver::remove_resource_format_saver(resource_saver_webp);
+		resource_saver_webp.unref();
+	}
 }

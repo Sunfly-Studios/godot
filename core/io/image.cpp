@@ -2193,6 +2193,7 @@ Vector<uint8_t> Image::get_data() const {
 Ref<Image> Image::create_empty(int p_width, int p_height, bool p_use_mipmaps, Format p_format) {
 	Ref<Image> image;
 	image.instantiate();
+	ERR_FAIL_COND_V(image.is_null(), Ref<Image>());
 	image->initialize_data(p_width, p_height, p_use_mipmaps, p_format);
 	return image;
 }
@@ -2200,6 +2201,7 @@ Ref<Image> Image::create_empty(int p_width, int p_height, bool p_use_mipmaps, Fo
 Ref<Image> Image::create_from_data(int p_width, int p_height, bool p_use_mipmaps, Format p_format, const Vector<uint8_t> &p_data) {
 	Ref<Image> image;
 	image.instantiate();
+	ERR_FAIL_COND_V(image.is_null(), Ref<Image>());
 	image->initialize_data(p_width, p_height, p_use_mipmaps, p_format, p_data);
 	return image;
 }
@@ -2552,6 +2554,7 @@ Ref<Image> Image::load_from_file(const String &p_path) {
 #endif
 	Ref<Image> image;
 	image.instantiate();
+	ERR_FAIL_COND_V(image.is_null(), Ref<Image>());
 	Error err = ImageLoader::load_image(path, image);
 	if (err != OK) {
 		ERR_FAIL_V_MSG(Ref<Image>(), vformat("Failed to load image. Error %d", err));
@@ -3736,6 +3739,7 @@ Ref<Image> Image::get_image_from_mipmap(int p_mipmap) const {
 
 	Ref<Image> image;
 	image.instantiate();
+	ERR_FAIL_COND_V(image.is_null(), Ref<Image>());
 	image->width = w;
 	image->height = h;
 	image->format = format;
@@ -4266,6 +4270,7 @@ Image::Image(const uint8_t *p_mem_png_jpg, int p_len) {
 Ref<Resource> Image::duplicate(bool p_subresources) const {
 	Ref<Image> copy;
 	copy.instantiate();
+	ERR_FAIL_COND_V(copy.is_null(), Ref<Resource>());
 	copy->_copy_internals_from(*this);
 	return copy;
 }

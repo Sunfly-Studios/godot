@@ -69,7 +69,10 @@ void RemoteDebuggerPeerTCP::close() {
 	if (thread.is_started()) {
 		thread.wait_to_finish();
 	}
-	tcp_client->disconnect_from_host();
+
+	if (tcp_client.is_valid()) {
+		tcp_client->disconnect_from_host();
+	}
 	out_buf.clear();
 	in_buf.clear();
 }
@@ -93,6 +96,7 @@ RemoteDebuggerPeerTCP::~RemoteDebuggerPeerTCP() {
 }
 
 void RemoteDebuggerPeerTCP::_write_out() {
+	ERR_FAIL_COND(tcp_client.is_null());
 	while (tcp_client->get_status() == StreamPeerTCP::STATUS_CONNECTED && tcp_client->wait(NetSocket::POLL_TYPE_OUT) == OK) {
 		uint8_t *buf = out_buf.ptrw();
 		if (out_left <= 0) {
@@ -119,6 +123,7 @@ void RemoteDebuggerPeerTCP::_write_out() {
 }
 
 void RemoteDebuggerPeerTCP::_read_in() {
+	ERR_FAIL_COND(tcp_client.is_null());
 	while (tcp_client->get_status() == StreamPeerTCP::STATUS_CONNECTED && tcp_client->wait(NetSocket::POLL_TYPE_IN) == OK) {
 		uint8_t *buf = in_buf.ptrw();
 		if (in_left <= 0) {
@@ -163,6 +168,7 @@ Error RemoteDebuggerPeerTCP::connect_to_host(const String &p_host, uint16_t p_po
 	const int tries = 6;
 	const int waits[tries] = { 1, 10, 100, 1000, 1000, 1000 };
 
+	ERR_FAIL_COND_V(tcp_client.is_null(), ERR_OUT_OF_MEMORY);
 	tcp_client->connect_to_host(ip, port);
 
 	for (int i = 0; i < tries; i++) {
@@ -191,6 +197,7 @@ void RemoteDebuggerPeerTCP::_thread_func(void *p_ud) {
 	// Update in time for 144hz monitors
 	const uint64_t min_tick = 6900;
 	RemoteDebuggerPeerTCP *peer = static_cast<RemoteDebuggerPeerTCP *>(p_ud);
+	ERR_FAIL_NULL(peer);
 	while (peer->running && peer->is_peer_connected()) {
 		uint64_t ticks_usec = OS::get_singleton()->get_ticks_usec();
 		peer->_poll();
@@ -209,6 +216,7 @@ void RemoteDebuggerPeerTCP::poll() {
 }
 
 void RemoteDebuggerPeerTCP::_poll() {
+	ERR_FAIL_COND(tcp_client.is_null());
 	tcp_client->poll();
 	if (connected) {
 		_write_out();

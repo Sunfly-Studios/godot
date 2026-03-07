@@ -785,10 +785,12 @@ Dictionary OS_Unix::execute_with_pipe(const String &p_path, const List<String> &
 
 	Ref<FileAccessUnixPipe> main_pipe;
 	main_pipe.instantiate();
+	ERR_FAIL_COND(main_pipe.is_null());
 	main_pipe->open_existing(pipe_out[0], pipe_in[1], p_blocking);
 
 	Ref<FileAccessUnixPipe> err_pipe;
 	err_pipe.instantiate();
+	ERR_FAIL_COND(err_pipe.is_null());
 	err_pipe->open_existing(pipe_err[0], 0, p_blocking);
 
 	ProcessInfo pi;

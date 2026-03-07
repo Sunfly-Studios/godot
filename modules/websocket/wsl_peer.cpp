@@ -145,12 +145,14 @@ Error WSLPeer::accept_stream(Ref<StreamPeer> p_stream) {
 	is_server = true;
 	tcp->set_no_delay(true);
 	ready_state = STATE_CONNECTING;
+	ERR_FAIL_COND_V(handshake_buffer.is_null(), ERR_INVALID_PARAMETER);
 	handshake_buffer->resize(WSL_MAX_HEADER_SIZE);
 	handshake_buffer->seek(0);
 	return OK;
 }
 
 bool WSLPeer::_parse_client_request() {
+	ERR_FAIL_COND_V(handshake_buffer.is_null(), false);
 	Vector<String> psa = String((const char *)handshake_buffer->get_data_array().ptr(), handshake_buffer->get_position() - 4).split("\r\n");
 	int len = psa.size();
 	ERR_FAIL_COND_V_MSG(len < 4, false, "Not enough response headers, got: " + itos(len) + ", expected >= 4.");
@@ -214,6 +216,8 @@ bool WSLPeer::_parse_client_request() {
 }
 
 Error WSLPeer::_do_server_handshake() {
+	ERR_FAIL_COND_V(handshake_buffer.is_null(), ERR_OUT_OF_MEMORY);
+
 	if (use_tls) {
 		Ref<StreamPeerTLS> tls = static_cast<Ref<StreamPeerTLS>>(connection);
 		if (tls.is_null()) {
@@ -311,6 +315,7 @@ Error WSLPeer::_do_server_handshake() {
 ///
 void WSLPeer::_do_client_handshake() {
 	ERR_FAIL_COND(tcp.is_null());
+	ERR_FAIL_COND(handshake_buffer.is_null());
 
 	// Try to connect to candidates.
 	if (resolver.has_more_candidates() || tcp->get_status() == StreamPeerTCP::STATUS_CONNECTING) {
@@ -416,6 +421,7 @@ void WSLPeer::_do_client_handshake() {
 }
 
 bool WSLPeer::_verify_server_response() {
+	ERR_FAIL_COND_V(handshake_buffer.is_null(), false);
 	Vector<String> psa = String((const char *)handshake_buffer->get_data_array().ptr(), handshake_buffer->get_position() - 4).split("\r\n");
 	int len = psa.size();
 	ERR_FAIL_COND_V_MSG(len < 4, false, "Not enough response headers. Got: " + itos(len) + ", expected >= 4.");
@@ -475,6 +481,7 @@ bool WSLPeer::_verify_server_response() {
 }
 
 Error WSLPeer::connect_to_url(const String &p_url, Ref<TLSOptions> p_options) {
+	ERR_FAIL_COND_V(handshake_buffer.is_null(), ERR_OUT_OF_MEMORY);
 	ERR_FAIL_COND_V(p_url.is_empty(), ERR_INVALID_PARAMETER);
 	ERR_FAIL_COND_V(p_options.is_valid() && p_options->is_server(), ERR_INVALID_PARAMETER);
 	ERR_FAIL_COND_V(ready_state != STATE_CLOSED && ready_state != STATE_CLOSING, ERR_ALREADY_IN_USE);
@@ -516,6 +523,7 @@ Error WSLPeer::connect_to_url(const String &p_url, Ref<TLSOptions> p_options) {
 	}
 
 	tcp.instantiate();
+	ERR_FAIL_COND_V(tcp.is_null(), ERR_OUT_OF_MEMORY);
 
 	resolver.start(host, port);
 	resolver.try_next_candidate(tcp);

@@ -178,10 +178,10 @@ public:
 	_FORCE_INLINE_ static void free(void *p_ptr) { Memory::free_static(p_ptr, false); }
 };
 
-void *operator new(size_t p_size, const char *p_description); ///< operator new that takes a description and uses MemoryStaticPool
-void *operator new(size_t p_size, void *(*p_allocfunc)(size_t p_size)); ///< operator new that takes a description and uses MemoryStaticPool
+void *operator new(size_t p_size, const char *p_description) noexcept; ///< operator new that takes a description and uses MemoryStaticPool
+void *operator new(size_t p_size, void *(*p_allocfunc)(size_t p_size)) noexcept; ///< operator new that takes a description and uses MemoryStaticPool
 
-void *operator new(size_t p_size, void *p_pointer, size_t check, const char *p_description); ///< operator new that takes a description and uses a pointer to the preallocated memory
+void *operator new(size_t p_size, void *p_pointer, size_t check, const char *p_description) noexcept; ///< operator new that takes a description and uses a pointer to the preallocated memory
 
 #ifdef _MSC_VER
 // When compiling with VC++ 2017, the above declarations of placement new generate many irrelevant warnings (C4291).

@@ -1289,6 +1289,7 @@ TypedArray<Dictionary> ProjectSettings::get_global_class_list() {
 
 	Ref<ConfigFile> cf;
 	cf.instantiate();
+	ERR_FAIL_COND_V(cf.is_null(), TypedArray<Dictionary>());
 	if (cf->load(get_global_class_list_path()) == OK) {
 		global_class_list = cf->get_value("", "list", Array());
 	} else {
@@ -1312,6 +1313,7 @@ String ProjectSettings::get_global_class_list_path() const {
 void ProjectSettings::store_global_class_list(const Array &p_classes) {
 	Ref<ConfigFile> cf;
 	cf.instantiate();
+	ERR_FAIL_COND(cf.is_null());
 	cf->set_value("", "list", p_classes);
 	cf->save(get_global_class_list_path());
 
@@ -1380,6 +1382,7 @@ void ProjectSettings::add_scene_groups_cache(const StringName &p_path, const Has
 void ProjectSettings::save_scene_groups_cache() {
 	Ref<ConfigFile> cf;
 	cf.instantiate();
+	ERR_FAIL_COND(cf.is_null());
 	for (const KeyValue<StringName, HashSet<StringName>> &E : scene_groups_cache) {
 		if (E.value.is_empty()) {
 			continue;
@@ -1400,6 +1403,7 @@ String ProjectSettings::get_scene_groups_cache_path() const {
 void ProjectSettings::load_scene_groups_cache() {
 	Ref<ConfigFile> cf;
 	cf.instantiate();
+	ERR_FAIL_COND(cf.is_null());
 	if (cf->load(get_scene_groups_cache_path()) == OK) {
 		List<String> scene_paths;
 		cf->get_sections(&scene_paths);

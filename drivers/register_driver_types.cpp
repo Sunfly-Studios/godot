@@ -38,18 +38,24 @@ static Ref<ResourceSaverPNG> resource_saver_png;
 
 void register_core_driver_types() {
 	image_loader_png.instantiate();
+	ERR_FAIL_COND(image_loader_png.is_null());
 	ImageLoader::add_image_format_loader(image_loader_png);
 
 	resource_saver_png.instantiate();
+	ERR_FAIL_COND(resource_saver_png.is_null());
 	ResourceSaver::add_resource_format_saver(resource_saver_png);
 }
 
 void unregister_core_driver_types() {
-	ImageLoader::remove_image_format_loader(image_loader_png);
-	image_loader_png.unref();
+	if (image_loader_png.is_valid()) {
+		ImageLoader::remove_image_format_loader(image_loader_png);
+		image_loader_png.unref();
+	}
 
-	ResourceSaver::remove_resource_format_saver(resource_saver_png);
-	resource_saver_png.unref();
+	if (resource_saver_png.is_valid()) {
+		ResourceSaver::remove_resource_format_saver(resource_saver_png);
+		resource_saver_png.unref();
+	}
 }
 
 void register_driver_types() {

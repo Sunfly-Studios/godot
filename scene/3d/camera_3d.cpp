@@ -217,6 +217,8 @@ void Camera3D::_notification(int p_what) {
 			}
 			_request_camera_update();
 			if (doppler_tracking != DOPPLER_TRACKING_DISABLED) {
+				
+				ERR_FAIL_COND(velocity_tracker.is_null());
 				velocity_tracker->update_position(get_global_transform().origin);
 			}
 			// Allow auto-reset when first adding to the tree, as a convenience.
@@ -632,6 +634,7 @@ void Camera3D::set_doppler_tracking(DopplerTracking p_tracking) {
 
 	doppler_tracking = p_tracking;
 	if (p_tracking != DOPPLER_TRACKING_DISABLED) {
+		ERR_FAIL_COND(velocity_tracker.is_null());
 		velocity_tracker->set_track_physics_step(doppler_tracking == DOPPLER_TRACKING_PHYSICS_STEP);
 		if (is_inside_tree()) {
 			velocity_tracker->reset(get_global_transform().origin);
@@ -847,6 +850,7 @@ real_t Camera3D::get_h_offset() const {
 }
 
 Vector3 Camera3D::get_doppler_tracked_velocity() const {
+	ERR_FAIL_COND_V(velocity_tracker.is_null(), Vector3());
 	if (doppler_tracking != DOPPLER_TRACKING_DISABLED) {
 		return velocity_tracker->get_tracked_linear_velocity();
 	} else {

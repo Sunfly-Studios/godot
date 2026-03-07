@@ -1379,13 +1379,16 @@ Error CodeSign::_codesign_file(bool p_use_hardened_runtime, bool p_force, const 
 			ERR_FAIL_V_MSG(FAILED, "CodeSign: Invalid entitlements file.");
 		}
 		cet.instantiate(entitlements);
+		ERR_FAIL_COND_V(cet.is_null(), ERR_OUT_OF_MEMORY);
 		ceb.instantiate(entitlements);
+		ERR_FAIL_COND_V(ceb.is_null(), ERR_OUT_OF_MEMORY);
 	}
 
 	print_verbose("CodeSign: Generating requirements...");
 	Ref<CodeSignRequirements> rq;
 	String team_id = "";
 	rq.instantiate();
+	ERR_FAIL_COND_V(rq.is_null(), ERR_OUT_OF_MEMORY);
 
 	// Sign executables.
 	for (int i = 0; i < files_to_sign.size(); i++) {
@@ -1485,6 +1488,7 @@ Error CodeSign::_codesign_file(bool p_use_hardened_runtime, bool p_force, const 
 		print_verbose("CodeSign: Generating signature...");
 		Ref<CodeSignSignature> cs;
 		cs.instantiate();
+		ERR_FAIL_COND_V(cs.is_null(), ERR_OUT_OF_MEMORY);
 
 		print_verbose("CodeSign: Writing signature superblob...");
 		// Write signature data to the executable.

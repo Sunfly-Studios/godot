@@ -818,6 +818,7 @@ void GridMap::_octant_enter_world(const OctantKey &p_key) {
 			}
 			if (g.navigation_debug_edge_connections_mesh.is_null()) {
 				g.navigation_debug_edge_connections_mesh.instantiate();
+				ERR_FAIL_COND(g.navigation_debug_edge_connections_mesh.is_null());
 			}
 
 			_update_octant_navigation_debug_edge_connections_mesh(p_key);
@@ -1288,6 +1289,7 @@ void GridMap::make_baked_meshes(bool p_gen_lightmap_uv, float p_lightmap_uv_texe
 			if (!mat_map.has(surf_mat)) {
 				Ref<SurfaceTool> st;
 				st.instantiate();
+				ERR_FAIL_COND(st.is_null());
 				st->begin(Mesh::PRIMITIVE_TRIANGLES);
 				st->set_material(surf_mat);
 				mat_map[surf_mat] = st;
@@ -1300,6 +1302,7 @@ void GridMap::make_baked_meshes(bool p_gen_lightmap_uv, float p_lightmap_uv_texe
 	for (KeyValue<OctantKey, HashMap<Ref<Material>, Ref<SurfaceTool>>> &E : surface_map) {
 		Ref<ArrayMesh> mesh;
 		mesh.instantiate();
+		ERR_FAIL_COND(mesh.is_null());
 		for (KeyValue<Ref<Material>, Ref<SurfaceTool>> &F : E.value) {
 			F.value->commit(mesh);
 		}
@@ -1540,6 +1543,7 @@ void GridMap::_update_octant_navigation_debug_edge_connections_mesh(const Octant
 
 	if (g.navigation_debug_edge_connections_mesh.is_null()) {
 		g.navigation_debug_edge_connections_mesh.instantiate();
+		ERR_FAIL_COND(g.navigation_debug_edge_connections_mesh.is_null());
 	}
 
 	g.navigation_debug_edge_connections_mesh->clear_surfaces();

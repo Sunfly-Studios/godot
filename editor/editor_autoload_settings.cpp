@@ -393,6 +393,7 @@ Node *EditorAutoloadSettings::_create_autoload(const String &p_path) {
 		// Cache the scene reference before loading it (for cyclic references)
 		Ref<PackedScene> scn;
 		scn.instantiate();
+		ERR_FAIL_COND_V(scn.is_null(), nullptr);
 		scn->set_path(p_path);
 		scn->reload_from_file();
 		ERR_FAIL_COND_V_MSG(scn.is_null(), nullptr, vformat("Failed to create an autoload, can't load from path: %s.", p_path));

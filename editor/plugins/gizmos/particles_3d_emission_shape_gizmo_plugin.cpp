@@ -122,6 +122,7 @@ void Particles3DEmissionShapeGizmoPlugin::redraw(EditorNode3DGizmo *p_gizmo) {
 				const Vector3 box_extents = mat->get_emission_box_extents();
 				Ref<BoxMesh> box;
 				box.instantiate();
+				ERR_FAIL_COND(box.is_null());
 				const AABB box_aabb = box->get_aabb();
 				Vector<Vector3> lines;
 
@@ -246,6 +247,7 @@ void Particles3DEmissionShapeGizmoPlugin::redraw(EditorNode3DGizmo *p_gizmo) {
 			const Vector3 box_extents = particles->get_emission_box_extents();
 			Ref<BoxMesh> box;
 			box.instantiate();
+			ERR_FAIL_COND(box.is_null());
 			const AABB box_aabb = box->get_aabb();
 			Vector<Vector3> lines;
 

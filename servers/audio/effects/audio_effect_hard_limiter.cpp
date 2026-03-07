@@ -102,6 +102,7 @@ void AudioEffectHardLimiterInstance::process(const AudioFrame *p_src_frames, Aud
 Ref<AudioEffectInstance> AudioEffectHardLimiter::instantiate() {
 	Ref<AudioEffectHardLimiterInstance> ins;
 	ins.instantiate();
+	ERR_FAIL_COND_V(ins.is_null(), Ref<AudioEffectInstance>());
 	ins->base = Ref<AudioEffectHardLimiter>(this);
 
 	float mix_rate = AudioServer::get_singleton()->get_mix_rate();

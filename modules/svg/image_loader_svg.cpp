@@ -70,6 +70,7 @@ void ImageLoaderSVG::_replace_color_property(const HashMap<Color, Color> &p_colo
 Ref<Image> ImageLoaderSVG::load_mem_svg(const uint8_t *p_svg, int p_size, float p_scale) {
 	Ref<Image> img;
 	img.instantiate();
+	ERR_FAIL_COND_V(img.is_null(), Ref<Image>());
 
 	Error err = create_image_from_utf8_buffer(img, p_svg, p_size, p_scale, false);
 	ERR_FAIL_COND_V_MSG(err != OK, Ref<Image>(), vformat("ImageLoaderSVG: Failed to create SVG from buffer, error code %d.", err));

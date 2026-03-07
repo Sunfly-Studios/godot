@@ -769,6 +769,7 @@ void Viewport::_process_picking() {
 		// If nothing changed, the event is discarded to avoid flooding with unnecessary motion events every frame.
 		Ref<InputEventMouseMotion> mm;
 		mm.instantiate();
+		ERR_FAIL_COND(mm.is_null());
 
 		mm->set_device(InputEvent::DEVICE_ID_INTERNAL);
 		mm->set_position(get_mouse_position());
@@ -1249,6 +1250,7 @@ void Viewport::set_world_2d(const Ref<World2D> &p_world_2d) {
 	} else {
 		WARN_PRINT("Invalid world_2d");
 		world_2d.instantiate();
+		ERR_FAIL_COND_MSG(world_2d.is_null(), "Could not instantiate world_2d");
 	}
 
 	world_2d->register_viewport(this);
@@ -2560,6 +2562,7 @@ void Viewport::_drop_mouse_focus() {
 		if ((int)mask & (1 << i)) {
 			Ref<InputEventMouseButton> mb;
 			mb.instantiate();
+			ERR_FAIL_COND(mb.is_null());
 			mb->set_position(c->get_local_mouse_position());
 			mb->set_global_position(c->get_local_mouse_position());
 			mb->set_button_index(MouseButton(i + 1));
@@ -2615,6 +2618,7 @@ void Viewport::_post_gui_grab_click_focus() {
 			if ((int)mask & (1 << i)) {
 				Ref<InputEventMouseButton> mb;
 				mb.instantiate();
+				ERR_FAIL_COND(mb.is_null());
 
 				// Send unclick.
 
@@ -2633,6 +2637,7 @@ void Viewport::_post_gui_grab_click_focus() {
 			if ((int)mask & (1 << i)) {
 				Ref<InputEventMouseButton> mb;
 				mb.instantiate();
+				ERR_FAIL_COND(mb.is_null());
 
 				// Send click.
 
@@ -4530,6 +4535,7 @@ void Viewport::set_world_3d(const Ref<World3D> &p_world_3d) {
 			world_3d->connect_changed(callable_mp(this, &Viewport::_own_world_3d_changed));
 		} else {
 			own_world_3d.instantiate();
+			ERR_FAIL_COND(own_world_3d.is_null());
 		}
 	}
 
@@ -4581,6 +4587,7 @@ void Viewport::set_use_own_world_3d(bool p_use_own_world_3d) {
 			world_3d->connect_changed(callable_mp(this, &Viewport::_own_world_3d_changed));
 		} else {
 			own_world_3d.instantiate();
+			ERR_FAIL_COND(own_world_3d.is_null());
 		}
 	} else {
 		own_world_3d = Ref<World3D>();
@@ -5138,12 +5145,14 @@ void Viewport::_validate_property(PropertyInfo &p_property) const {
 
 Viewport::Viewport() {
 	world_2d.instantiate();
+	ERR_FAIL_COND(world_2d.is_null());
 	world_2d->register_viewport(this);
 
 	viewport = RenderingServer::get_singleton()->viewport_create();
 	texture_rid = RenderingServer::get_singleton()->viewport_get_texture(viewport);
 
 	default_texture.instantiate();
+	ERR_FAIL_COND(default_texture.is_null());
 	default_texture->vp = this;
 	viewport_textures.insert(default_texture.ptr());
 	default_texture->proxy = RS::get_singleton()->texture_proxy_create(texture_rid);

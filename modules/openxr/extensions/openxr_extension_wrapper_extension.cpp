@@ -312,6 +312,7 @@ void *OpenXRExtensionWrapperExtension::set_android_surface_swapchain_create_info
 }
 
 Ref<OpenXRAPIExtension> OpenXRExtensionWrapperExtension::get_openxr_api() {
+	ERR_FAIL_COND_V(openxr_api.is_null(), Ref<OpenXRAPIExtension>());
 	return openxr_api;
 }
 

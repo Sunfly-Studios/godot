@@ -122,9 +122,11 @@ void Texture3DEditor::_update_material(bool p_texture_changed) {
 
 void Texture3DEditor::_make_shaders() {
 	shader.instantiate();
+	ERR_FAIL_COND(shader.is_null());
 	shader->set_code(texture_3d_shader);
 
 	material.instantiate();
+	ERR_FAIL_COND(material.is_null());
 	material->set_shader(shader);
 }
 
@@ -302,5 +304,6 @@ void EditorInspectorPlugin3DTexture::parse_begin(Object *p_object) {
 Texture3DEditorPlugin::Texture3DEditorPlugin() {
 	Ref<EditorInspectorPlugin3DTexture> plugin;
 	plugin.instantiate();
+	ERR_FAIL_COND(plugin.is_null());
 	add_inspector_plugin(plugin);
 }

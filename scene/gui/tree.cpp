@@ -2872,6 +2872,7 @@ void Tree::_range_click_timeout() {
 		click_handled = false;
 		Ref<InputEventMouseButton> mb;
 		mb.instantiate();
+		ERR_FAIL_COND(mb.is_null());
 
 		int x_limit = _get_content_rect().size.x;
 

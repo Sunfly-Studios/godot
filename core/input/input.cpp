@@ -715,6 +715,7 @@ void Input::_parse_input_event_impl(const Ref<InputEvent> &p_event, bool p_is_em
 		if (event_dispatch_function && emulate_touch_from_mouse && !p_is_emulated && mb->get_button_index() == MouseButton::LEFT) {
 			Ref<InputEventScreenTouch> touch_event;
 			touch_event.instantiate();
+			ERR_FAIL_COND(touch_event.is_null());
 			touch_event->set_pressed(mb->is_pressed());
 			touch_event->set_canceled(mb->is_canceled());
 			touch_event->set_position(mb->get_position());
@@ -741,6 +742,7 @@ void Input::_parse_input_event_impl(const Ref<InputEvent> &p_event, bool p_is_em
 		if (event_dispatch_function && emulate_touch_from_mouse && !p_is_emulated && mm->get_button_mask().has_flag(MouseButtonMask::LEFT)) {
 			Ref<InputEventScreenDrag> drag_event;
 			drag_event.instantiate();
+			ERR_FAIL_COND(drag_event.is_null());
 
 			drag_event->set_position(position);
 			drag_event->set_relative(relative);
@@ -787,6 +789,7 @@ void Input::_parse_input_event_impl(const Ref<InputEvent> &p_event, bool p_is_em
 			if (translate) {
 				Ref<InputEventMouseButton> button_event;
 				button_event.instantiate();
+				ERR_FAIL_COND(button_event.is_null());
 
 				button_event->set_device(InputEvent::DEVICE_ID_EMULATION);
 				button_event->set_position(st->get_position());
@@ -821,6 +824,7 @@ void Input::_parse_input_event_impl(const Ref<InputEvent> &p_event, bool p_is_em
 		if (emulate_mouse_from_touch && sd->get_index() == mouse_from_touch_index) {
 			Ref<InputEventMouseMotion> motion_event;
 			motion_event.instantiate();
+			ERR_FAIL_COND(motion_event.is_null());
 
 			motion_event->set_device(InputEvent::DEVICE_ID_EMULATION);
 			motion_event->set_tilt(sd->get_tilt());
@@ -1070,6 +1074,7 @@ void Input::ensure_touch_mouse_raised() {
 
 		Ref<InputEventMouseButton> button_event;
 		button_event.instantiate();
+		ERR_FAIL_COND(button_event.is_null());
 
 		button_event->set_device(InputEvent::DEVICE_ID_EMULATION);
 		button_event->set_position(mouse_pos);
@@ -1106,6 +1111,7 @@ void Input::set_default_cursor_shape(CursorShape p_shape) {
 	// see the shape in the viewport we need to trigger a mouse motion event.
 	Ref<InputEventMouseMotion> mm;
 	mm.instantiate();
+	ERR_FAIL_COND(mm.is_null());
 	mm->set_position(mouse_pos);
 	mm->set_global_position(mouse_pos);
 	mm->set_device(InputEvent::DEVICE_ID_INTERNAL);
@@ -1369,6 +1375,7 @@ void Input::joy_hat(int p_device, BitField<HatMask> p_val) {
 void Input::_button_event(int p_device, JoyButton p_index, bool p_pressed) {
 	Ref<InputEventJoypadButton> ievent;
 	ievent.instantiate();
+	ERR_FAIL_COND(ievent.is_null());
 	ievent->set_device(p_device);
 	ievent->set_button_index(p_index);
 	ievent->set_pressed(p_pressed);
@@ -1379,6 +1386,7 @@ void Input::_button_event(int p_device, JoyButton p_index, bool p_pressed) {
 void Input::_axis_event(int p_device, JoyAxis p_axis, float p_value) {
 	Ref<InputEventJoypadMotion> ievent;
 	ievent.instantiate();
+	ERR_FAIL_COND(ievent.is_null());
 	ievent->set_device(p_device);
 	ievent->set_axis(p_axis);
 	ievent->set_axis_value(p_value);

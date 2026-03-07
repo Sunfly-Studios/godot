@@ -67,6 +67,7 @@ int VoxelGIGizmoPlugin::get_priority() const {
 }
 
 String VoxelGIGizmoPlugin::get_handle_name(const EditorNode3DGizmo *p_gizmo, int p_id, bool p_secondary) const {
+	ERR_FAIL_COND_V(helper.is_null(), String());
 	return helper->box_get_handle_name(p_id);
 }
 
@@ -76,10 +77,12 @@ Variant VoxelGIGizmoPlugin::get_handle_value(const EditorNode3DGizmo *p_gizmo, i
 }
 
 void VoxelGIGizmoPlugin::begin_handle_action(const EditorNode3DGizmo *p_gizmo, int p_id, bool p_secondary) {
+	ERR_FAIL_COND(helper.is_null());
 	helper->initialize_handle_action(get_handle_value(p_gizmo, p_id, p_secondary), p_gizmo->get_node_3d()->get_global_transform());
 }
 
 void VoxelGIGizmoPlugin::set_handle(const EditorNode3DGizmo *p_gizmo, int p_id, bool p_secondary, Camera3D *p_camera, const Point2 &p_point) {
+	ERR_FAIL_COND(helper.is_null());
 	VoxelGI *probe = Object::cast_to<VoxelGI>(p_gizmo->get_node_3d());
 
 	Vector3 sg[2];
@@ -93,6 +96,7 @@ void VoxelGIGizmoPlugin::set_handle(const EditorNode3DGizmo *p_gizmo, int p_id, 
 }
 
 void VoxelGIGizmoPlugin::commit_handle(const EditorNode3DGizmo *p_gizmo, int p_id, bool p_secondary, const Variant &p_restore, bool p_cancel) {
+	ERR_FAIL_COND(helper.is_null());
 	helper->box_commit_handle(TTR("Change Probe Size"), p_cancel, p_gizmo->get_node_3d());
 }
 

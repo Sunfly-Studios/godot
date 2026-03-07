@@ -68,6 +68,7 @@ void X509Certificate::_bind_methods() {
 Ref<TLSOptions> TLSOptions::client(Ref<X509Certificate> p_trusted_chain, const String &p_common_name_override) {
 	Ref<TLSOptions> opts;
 	opts.instantiate();
+	ERR_FAIL_COND_V(opts.is_null(), Ref<TLSOptions>());
 	opts->mode = MODE_CLIENT;
 	opts->trusted_ca_chain = p_trusted_chain;
 	opts->common_name = p_common_name_override;
@@ -77,6 +78,7 @@ Ref<TLSOptions> TLSOptions::client(Ref<X509Certificate> p_trusted_chain, const S
 Ref<TLSOptions> TLSOptions::client_unsafe(Ref<X509Certificate> p_trusted_chain) {
 	Ref<TLSOptions> opts;
 	opts.instantiate();
+	ERR_FAIL_COND_V(opts.is_null(), Ref<TLSOptions>());
 	opts->mode = MODE_CLIENT_UNSAFE;
 	opts->trusted_ca_chain = p_trusted_chain;
 	return opts;
@@ -85,6 +87,7 @@ Ref<TLSOptions> TLSOptions::client_unsafe(Ref<X509Certificate> p_trusted_chain) 
 Ref<TLSOptions> TLSOptions::server(Ref<CryptoKey> p_own_key, Ref<X509Certificate> p_own_certificate) {
 	Ref<TLSOptions> opts;
 	opts.instantiate();
+	ERR_FAIL_COND_V(opts.is_null(), Ref<TLSOptions>());
 	opts->mode = MODE_SERVER;
 	opts->own_certificate = p_own_certificate;
 	opts->private_key = p_own_key;

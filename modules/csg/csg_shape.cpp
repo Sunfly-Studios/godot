@@ -86,6 +86,7 @@ void CSGShape3D::set_use_collision(bool p_enable) {
 
 	if (use_collision) {
 		root_collision_shape.instantiate();
+		ERR_FAIL_COND(root_collision_shape.is_null());
 		root_collision_instance = PhysicsServer3D::get_singleton()->body_create();
 		PhysicsServer3D::get_singleton()->body_set_mode(root_collision_instance, PhysicsServer3D::BODY_MODE_STATIC);
 		PhysicsServer3D::get_singleton()->body_set_state(root_collision_instance, PhysicsServer3D::BODY_STATE_TRANSFORM, get_global_transform());
@@ -668,6 +669,7 @@ void CSGShape3D::_update_shape() {
 	}
 
 	root_mesh.instantiate();
+	ERR_FAIL_COND(root_mesh.is_null());
 	//create surfaces
 
 	for (int i = 0; i < surfaces.size(); i++) {
@@ -758,9 +760,11 @@ Ref<ConcavePolygonShape3D> CSGShape3D::bake_collision_shape() {
 	Ref<ConcavePolygonShape3D> baked_collision_shape;
 	if (is_root_shape() && root_collision_shape.is_valid()) {
 		baked_collision_shape.instantiate();
+		ERR_FAIL_COND_V(root_collision_shape.is_null(), Ref<ConcavePolygonShape3D>());
 		baked_collision_shape->set_faces(root_collision_shape->get_faces());
 	} else if (is_root_shape()) {
 		baked_collision_shape.instantiate();
+		ERR_FAIL_COND_V(baked_collision_shape.is_null(), Ref<ConcavePolygonShape3D>());
 		baked_collision_shape->set_faces(_get_brush_collision_faces());
 	}
 	return baked_collision_shape;
@@ -875,6 +879,7 @@ void CSGShape3D::_notification(int p_what) {
 		case NOTIFICATION_ENTER_TREE: {
 			if (use_collision && is_root_shape()) {
 				root_collision_shape.instantiate();
+				ERR_FAIL_COND(root_collision_shape.is_null());
 				root_collision_instance = PhysicsServer3D::get_singleton()->body_create();
 				PhysicsServer3D::get_singleton()->body_set_mode(root_collision_instance, PhysicsServer3D::BODY_MODE_STATIC);
 				PhysicsServer3D::get_singleton()->body_set_state(root_collision_instance, PhysicsServer3D::BODY_STATE_TRANSFORM, get_global_transform());

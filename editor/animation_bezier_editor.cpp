@@ -1985,6 +1985,7 @@ void AnimationBezierTrackEdit::_bind_methods() {
 
 AnimationBezierTrackEdit::AnimationBezierTrackEdit() {
 	panner.instantiate();
+	ERR_FAIL_COND(panner.is_null());
 	panner->set_callbacks(callable_mp(this, &AnimationBezierTrackEdit::_pan_callback), callable_mp(this, &AnimationBezierTrackEdit::_zoom_callback));
 
 	play_position = memnew(Control);

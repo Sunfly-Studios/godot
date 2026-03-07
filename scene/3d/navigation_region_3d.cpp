@@ -248,6 +248,7 @@ void NavigationRegion3D::bake_navigation_mesh(bool p_on_thread) {
 
 	Ref<NavigationMeshSourceGeometryData3D> source_geometry_data;
 	source_geometry_data.instantiate();
+	ERR_FAIL_COND(source_geometry_data.is_null());
 
 	NavigationServer3D::get_singleton()->parse_source_geometry_data(navigation_mesh, source_geometry_data, this);
 
@@ -498,6 +499,7 @@ void NavigationRegion3D::_update_debug_mesh() {
 
 	if (debug_mesh.is_null()) {
 		debug_mesh.instantiate();
+		ERR_FAIL_COND(debug_mesh.is_null());
 	}
 
 	debug_mesh->clear_surfaces();
@@ -675,6 +677,7 @@ void NavigationRegion3D::_update_debug_edge_connections_mesh() {
 
 	if (debug_edge_connections_mesh.is_null()) {
 		debug_edge_connections_mesh.instantiate();
+		ERR_FAIL_COND(debug_edge_connections_mesh.is_null());
 	}
 
 	debug_edge_connections_mesh->clear_surfaces();

@@ -56,6 +56,7 @@ Ref<OpenXRAction> OpenXRAction::new_action(const char *p_name, const char *p_loc
 
 	Ref<OpenXRAction> action;
 	action.instantiate();
+	ERR_FAIL_COND_V(action.is_null(), Ref<OpenXRAction>());
 	action->set_name(String(p_name));
 	action->set_localized_name(String(p_localized_name));
 	action->set_action_type(p_action_type);

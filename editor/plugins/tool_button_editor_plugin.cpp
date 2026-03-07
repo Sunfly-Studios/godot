@@ -78,5 +78,6 @@ bool EditorInspectorToolButtonPlugin::parse_property(Object *p_object, const Var
 ToolButtonEditorPlugin::ToolButtonEditorPlugin() {
 	Ref<EditorInspectorToolButtonPlugin> plugin;
 	plugin.instantiate();
+	ERR_FAIL_COND(plugin.is_null());
 	add_inspector_plugin(plugin);
 }

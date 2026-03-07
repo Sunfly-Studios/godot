@@ -91,7 +91,7 @@ void AndroidInputHandler::process_key_event(int p_physical_keycode, int p_unicod
 	Ref<InputEventKey> ev;
 	ev.instantiate();
 
-	ERR_FAIL_NULL(ev);
+	ERR_FAIL_COND(ev.is_null());
 
 	Key physical_keycode = godot_code_from_android_code(p_physical_keycode);
 	Key keycode;
@@ -157,7 +157,7 @@ void AndroidInputHandler::_parse_all_touch(bool p_pressed, bool p_canceled, bool
 			Ref<InputEventScreenTouch> ev;
 			ev.instantiate();
 
-			ERR_FAIL_NULL(ev);
+			ERR_FAIL_COND(ev.is_null());
 			ev->set_index(touch[i].id);
 			ev->set_pressed(p_pressed);
 			ev->set_canceled(p_canceled);
@@ -215,7 +215,7 @@ void AndroidInputHandler::process_touch_event(int p_event, int p_pointer, const 
 				Ref<InputEventScreenDrag> ev;
 				ev.instantiate();
 
-				ERR_FAIL_NULL(ev);
+				ERR_FAIL_COND(ev.is_null());
 				ev->set_index(touch[i].id);
 				ev->set_position(p_points[idx].pos);
 				ev->set_relative(p_points[idx].pos - touch[i].pos);
@@ -246,7 +246,7 @@ void AndroidInputHandler::process_touch_event(int p_event, int p_pointer, const 
 					Ref<InputEventScreenTouch> ev;
 					ev.instantiate();
 
-					ERR_FAIL_NULL(ev);
+					ERR_FAIL_COND(ev.is_null());
 					ev->set_index(tp.id);
 					ev->set_pressed(true);
 					ev->set_position(tp.pos);
@@ -264,7 +264,7 @@ void AndroidInputHandler::process_touch_event(int p_event, int p_pointer, const 
 				if (touch[i].id == p_pointer) {
 					Ref<InputEventScreenTouch> ev;
 					ev.instantiate();
-					ERR_FAIL_NULL(ev);
+					ERR_FAIL_COND(ev.is_null());
 					ev->set_index(touch[i].id);
 					ev->set_pressed(false);
 					ev->set_position(touch[i].pos);
@@ -295,7 +295,7 @@ void AndroidInputHandler::_parse_mouse_event_info(BitField<MouseButtonMask> even
 	Input *input = Input::get_singleton();
 	Ref<InputEventMouseButton> ev;
 	ev.instantiate();
-	ERR_FAIL_NULL(ev);
+	ERR_FAIL_COND(ev.is_null());
 	_set_key_modifier_state(ev, Key::NONE);
 	if (p_source_mouse_relative) {
 		ev->set_position(hover_prev_pos);
@@ -336,7 +336,7 @@ void AndroidInputHandler::process_mouse_event(int p_event_action, int p_event_an
 			// https://developer.android.com/reference/android/view/MotionEvent.html#ACTION_HOVER_ENTER
 			Ref<InputEventMouseMotion> ev;
 			ev.instantiate();
-			ERR_FAIL_NULL(ev);
+			ERR_FAIL_COND(ev.is_null());
 			_set_key_modifier_state(ev, Key::NONE);
 			ev->set_position(p_event_pos);
 			ev->set_global_position(p_event_pos);
@@ -373,7 +373,7 @@ void AndroidInputHandler::process_mouse_event(int p_event_action, int p_event_an
 
 			Ref<InputEventMouseMotion> ev;
 			ev.instantiate();
-			ERR_FAIL_NULL(ev);
+			ERR_FAIL_COND(ev.is_null());
 			_set_key_modifier_state(ev, Key::NONE);
 			if (p_source_mouse_relative) {
 				ev->set_position(hover_prev_pos);
@@ -397,7 +397,7 @@ void AndroidInputHandler::process_mouse_event(int p_event_action, int p_event_an
 		case AMOTION_EVENT_ACTION_SCROLL: {
 			Ref<InputEventMouseButton> ev;
 			ev.instantiate();
-			ERR_FAIL_NULL(ev);
+			ERR_FAIL_COND(ev.is_null());
 			_set_key_modifier_state(ev, Key::NONE);
 			if (p_source_mouse_relative) {
 				ev->set_position(hover_prev_pos);
@@ -443,7 +443,7 @@ void AndroidInputHandler::process_magnify(Point2 p_pos, float p_factor) {
 	Ref<InputEventMagnifyGesture> magnify_event;
 	Input *input = Input::get_singleton();
 	magnify_event.instantiate();
-	ERR_FAIL_NULL(magnify_event);
+	ERR_FAIL_COND(magnify_event.is_null());
 	_set_key_modifier_state(magnify_event, Key::NONE);
 	magnify_event->set_position(p_pos);
 	magnify_event->set_factor(p_factor);
@@ -454,7 +454,7 @@ void AndroidInputHandler::process_pan(Point2 p_pos, Vector2 p_delta) {
 	Ref<InputEventPanGesture> pan_event;
 	Input *input = Input::get_singleton();
 	pan_event.instantiate();
-	ERR_FAIL_NULL(pan_event);
+	ERR_FAIL_COND(pan_event.is_null());
 	_set_key_modifier_state(pan_event, Key::NONE);
 	pan_event->set_position(p_pos);
 	pan_event->set_delta(p_delta);

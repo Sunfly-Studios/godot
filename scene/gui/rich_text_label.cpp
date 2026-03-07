@@ -54,8 +54,12 @@ RichTextLabel::ItemCustomFX::ItemCustomFX() {
 RichTextLabel::ItemCustomFX::~ItemCustomFX() {
 	_clear_children();
 
-	char_fx_transform.unref();
-	custom_effect.unref();
+	if (char_fx_transform.is_valid()) {
+		char_fx_transform.unref();
+	}
+	if (custom_effect.is_valid()) {
+		custom_effect.unref();
+	}
 }
 
 RichTextLabel::Item *RichTextLabel::_get_next_item(Item *p_item, bool p_free) const {
@@ -301,6 +305,7 @@ void RichTextLabel::_update_line_font(ItemFrame *p_frame, int p_line, const Ref<
 					list_index.write[0] = index;
 					String prefix = _get_prefix(list_l.from, list_index, list_items);
 					list_l.text_prefix.instantiate();
+					ERR_FAIL_COND(list_l.text_prefix.is_null());
 					list_l.text_prefix->set_direction(_find_direction(list_l.from));
 					list_l.text_prefix->add_string(prefix, font, font_size);
 					list_items.write[0]->max_width = MAX(list_items[0]->max_width, list_l.text_prefix->get_size().x);
@@ -492,6 +497,7 @@ float RichTextLabel::_shape_line(ItemFrame *p_frame, int p_line, const Ref<Font>
 					list_index.write[0] = index;
 					String prefix = _get_prefix(list_l.from, list_index, list_items);
 					list_l.text_prefix.instantiate();
+					ERR_FAIL_COND_V(list_l.text_prefix.is_null(), 0.0);
 					list_l.text_prefix->set_direction(_find_direction(list_l.from));
 					list_l.text_prefix->add_string(prefix, font, font_size);
 					list_items.write[0]->max_width = MAX(list_items[0]->max_width, list_l.text_prefix->get_size().x);
@@ -5174,6 +5180,7 @@ void RichTextLabel::append_text(const String &p_bbcode) {
 
 				Ref<FontVariation> fc;
 				fc.instantiate();
+				ERR_FAIL_COND(fc.is_null());
 
 				fc->set_base_font(font);
 				fc->set_opentype_features(features);
@@ -5214,6 +5221,7 @@ void RichTextLabel::append_text(const String &p_bbcode) {
 			Ref<FontVariation> fc;
 			fc.instantiate();
 
+			ERR_FAIL_COND(fc.is_null());
 			OptionMap::Iterator name_option = bbcode_options.find("name");
 			if (!name_option) {
 				name_option = bbcode_options.find("n");

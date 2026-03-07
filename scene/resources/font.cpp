@@ -305,6 +305,7 @@ Size2 Font::get_string_size(const String &p_text, HorizontalAlignment p_alignmen
 		buffer = cache.get(key);
 	} else {
 		buffer.instantiate();
+		ERR_FAIL_COND_V(buffer.is_null(), Size2());
 		buffer->set_direction(p_direction);
 		buffer->set_orientation(p_orientation);
 		buffer->set_text_overrun_behavior(TextServer::OVERRUN_TRIM_CHAR);
@@ -329,6 +330,7 @@ Size2 Font::get_multiline_string_size(const String &p_text, HorizontalAlignment 
 		lines_buffer = cache_wrap.get(key);
 	} else {
 		lines_buffer.instantiate();
+		ERR_FAIL_COND_V(lines_buffer.is_null(), Size2());
 		lines_buffer->set_direction(p_direction);
 		lines_buffer->set_orientation(p_orientation);
 		lines_buffer->add_string(p_text, Ref<Font>(this), p_font_size);
@@ -354,6 +356,7 @@ void Font::draw_string(RID p_canvas_item, const Point2 &p_pos, const String &p_t
 		buffer = cache.get(key);
 	} else {
 		buffer.instantiate();
+		ERR_FAIL_COND(buffer.is_null());
 		buffer->set_direction(p_direction);
 		buffer->set_orientation(p_orientation);
 		buffer->set_text_overrun_behavior(TextServer::OVERRUN_TRIM_CHAR);
@@ -385,6 +388,7 @@ void Font::draw_multiline_string(RID p_canvas_item, const Point2 &p_pos, const S
 		lines_buffer = cache_wrap.get(key);
 	} else {
 		lines_buffer.instantiate();
+		ERR_FAIL_COND(lines_buffer.is_null());
 		lines_buffer->set_direction(p_direction);
 		lines_buffer->set_orientation(p_orientation);
 		lines_buffer->add_string(p_text, Ref<Font>(this), p_font_size);
@@ -417,6 +421,7 @@ void Font::draw_string_outline(RID p_canvas_item, const Point2 &p_pos, const Str
 		buffer = cache.get(key);
 	} else {
 		buffer.instantiate();
+		ERR_FAIL_COND(buffer.is_null());
 		buffer->set_direction(p_direction);
 		buffer->set_orientation(p_orientation);
 		buffer->set_text_overrun_behavior(TextServer::OVERRUN_TRIM_CHAR);
@@ -448,6 +453,7 @@ void Font::draw_multiline_string_outline(RID p_canvas_item, const Point2 &p_pos,
 		lines_buffer = cache_wrap.get(key);
 	} else {
 		lines_buffer.instantiate();
+		ERR_FAIL_COND(lines_buffer.is_null());
 		lines_buffer->set_direction(p_direction);
 		lines_buffer->set_orientation(p_orientation);
 		lines_buffer->add_string(p_text, Ref<Font>(this), p_font_size);
@@ -1587,6 +1593,7 @@ Error FontFile::_load_bitmap_font(const String &p_path, List<String> *r_image_fi
 							if (RenderingServer::get_singleton() != nullptr) {
 								Ref<Image> img;
 								img.instantiate();
+								ERR_FAIL_COND_V(img.is_null(), ERR_CANT_CREATE);
 								Error err = ImageLoader::load_image(file, img);
 								ERR_FAIL_COND_V_MSG(err != OK, ERR_FILE_CANT_READ, vformat("Can't load font texture: %s.", file));
 								if (r_image_files) {
@@ -1884,6 +1891,7 @@ Error FontFile::_load_bitmap_font(const String &p_path, List<String> *r_image_fi
 					if (RenderingServer::get_singleton() != nullptr) {
 						Ref<Image> img;
 						img.instantiate();
+						ERR_FAIL_COND_V(img.is_null(), ERR_CANT_CREATE);
 						Error err = ImageLoader::load_image(file, img);
 						ERR_FAIL_COND_V_MSG(err != OK, ERR_FILE_CANT_READ, vformat("Can't load font texture: %s.", file));
 						if (r_image_files) {
@@ -3191,6 +3199,7 @@ void SystemFont::_update_base_font() {
 		}
 		Ref<FontFile> file;
 		file.instantiate();
+		ERR_FAIL_COND(file.is_null());
 		Error err = file->load_dynamic_font(path);
 		if (err != OK) {
 			continue;

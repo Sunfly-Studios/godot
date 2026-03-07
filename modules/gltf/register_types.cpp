@@ -52,6 +52,7 @@
 static void _editor_init() {
 	Ref<EditorSceneFormatImporterGLTF> import_gltf;
 	import_gltf.instantiate();
+	ERR_FAIL_COND(import_gltf.is_null());
 	ResourceImporterScene::add_scene_importer(import_gltf);
 
 	// Blend to glTF importer.
@@ -84,10 +85,12 @@ static void _editor_init() {
 	if (blend_enabled) {
 		Ref<EditorSceneFormatImporterBlend> importer;
 		importer.instantiate();
+		ERR_FAIL_COND(importer.is_null());
 		ResourceImporterScene::add_scene_importer(importer);
 
 		Ref<EditorFileSystemImportFormatSupportQueryBlend> blend_import_query;
 		blend_import_query.instantiate();
+		ERR_FAIL_COND(blend_import_query.is_null());
 		EditorFileSystem::get_singleton()->add_import_format_support_query(blend_import_query);
 	}
 	memnew(EditorImportBlendRunner);
@@ -98,6 +101,7 @@ static void _editor_init() {
 #define GLTF_REGISTER_DOCUMENT_EXTENSION(m_doc_ext_class) \
 	Ref<m_doc_ext_class> extension_##m_doc_ext_class;     \
 	extension_##m_doc_ext_class.instantiate();            \
+	ERR_FAIL_COND(extension_##m_doc_ext_class.is_null()); \
 	GLTFDocument::register_gltf_document_extension(extension_##m_doc_ext_class);
 
 void initialize_gltf_module(ModuleInitializationLevel p_level) {

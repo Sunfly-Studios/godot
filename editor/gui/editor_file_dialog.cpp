@@ -2543,6 +2543,7 @@ EditorFileDialog::EditorFileDialog() {
 
 	Ref<ButtonGroup> view_mode_group;
 	view_mode_group.instantiate();
+	ERR_FAIL_COND(view_mode_group.is_null());
 
 	mode_thumbnails = memnew(Button);
 	mode_thumbnails->set_theme_type_variation(SceneStringName(FlatButton));

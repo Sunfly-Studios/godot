@@ -73,6 +73,7 @@ void ColorPicker::_notification(int p_what) {
 
 		case NOTIFICATION_TRANSLATION_CHANGED: {
 			List<BaseButton *> buttons;
+			ERR_FAIL_COND(preset_group.is_null());
 			preset_group->get_buttons(&buttons);
 			for (List<BaseButton *>::Element *E = buttons.front(); E; E = E->next()) {
 				Color preset_color = ((ColorPresetButton *)E->get())->get_preset_color();
@@ -80,6 +81,7 @@ void ColorPicker::_notification(int p_what) {
 			}
 
 			buttons.clear();
+			ERR_FAIL_COND(recent_preset_group.is_null());
 			recent_preset_group->get_buttons(&buttons);
 			for (List<BaseButton *>::Element *E = buttons.front(); E; E = E->next()) {
 				Color preset_color = ((ColorPresetButton *)E->get())->get_preset_color();
@@ -192,6 +194,7 @@ void ColorPicker::_update_theme_item_cache() {
 
 void ColorPicker::init_shaders() {
 	wheel_shader.instantiate();
+	ERR_FAIL_COND(wheel_shader.is_null());
 	wheel_shader->set_code(R"(
 // ColorPicker wheel shader.
 
@@ -218,6 +221,7 @@ void fragment() {
 )");
 
 	circle_shader.instantiate();
+	ERR_FAIL_COND(circle_shader.is_null());
 	circle_shader->set_code(R"(
 // ColorPicker circle shader.
 
@@ -243,6 +247,7 @@ void fragment() {
 })");
 
 	circle_ok_color_shader.instantiate();
+	ERR_FAIL_COND(circle_ok_color_shader.is_null());
 	circle_ok_color_shader->set_code(OK_COLOR_SHADER + R"(
 // ColorPicker ok color hsv circle shader.
 
@@ -570,6 +575,7 @@ void ColorPicker::_copy_hsv_to_color() {
 }
 
 void ColorPicker::_select_from_preset_container(const Color &p_color) {
+	ERR_FAIL_COND(preset_group.is_null());
 	if (preset_group->get_pressed_button()) {
 		preset_group->get_pressed_button()->set_pressed(false);
 	}
@@ -921,6 +927,7 @@ void ColorPicker::_palette_file_selected(const String &p_path) {
 		case FileDialog::FileMode::FILE_MODE_SAVE_FILE: {
 			Ref<ColorPalette> palette;
 			palette.instantiate();
+			ERR_FAIL_COND(palette.is_null());
 			palette->set_colors(get_presets());
 			Error error = ResourceSaver::save(palette, p_path);
 			ERR_FAIL_COND_MSG(error != Error::OK, vformat("Cannot open color palette file for writing at: %s", p_path));
@@ -1741,9 +1748,11 @@ void ColorPicker::_pick_button_pressed() {
 		}
 
 		picker_preview_style_box.instantiate();
+		ERR_FAIL_COND(picker_preview_style_box.is_null());
 		picker_preview->add_theme_style_override(SceneStringName(panel), picker_preview_style_box);
 
 		picker_preview_style_box_color.instantiate();
+		ERR_FAIL_COND(picker_preview_style_box_color.is_null());
 		picker_preview_color->add_theme_style_override(SceneStringName(panel), picker_preview_style_box_color);
 
 		add_child(picker_window, false, INTERNAL_MODE_FRONT);
@@ -1924,9 +1933,11 @@ void ColorPicker::_pick_button_pressed_legacy() {
 		picker_preview->add_child(picker_texture_zoom);
 
 		picker_preview_style_box.instantiate();
+		ERR_FAIL_COND(picker_preview_style_box.is_null());
 		picker_preview->add_theme_style_override(SceneStringName(panel), picker_preview_style_box);
 
 		picker_preview_style_box_color.instantiate();
+		ERR_FAIL_COND(picker_preview_style_box_color.is_null());
 		picker_preview_color->add_theme_style_override(SceneStringName(panel), picker_preview_style_box_color);
 	}
 
@@ -1945,6 +1956,7 @@ void ColorPicker::_pick_button_pressed_legacy() {
 
 		Ref<AtlasTexture> atlas;
 		atlas.instantiate();
+		ERR_FAIL_COND(atlas.is_null());
 		atlas->set_atlas(tx);
 		atlas->set_region(Rect2i(ofs.x - 8, ofs.y - 8, 17, 17));
 		picker_texture_zoom->set_texture(atlas);
@@ -1980,6 +1992,7 @@ void ColorPicker::_pick_button_pressed_legacy() {
 
 		Ref<AtlasTexture> atlas;
 		atlas.instantiate();
+		ERR_FAIL_COND(atlas.is_null());
 		atlas->set_atlas(tx);
 		atlas->set_region(Rect2i(ofs.x - 8, ofs.y - 8, 17, 17));
 		picker_texture_zoom->set_texture(atlas);
@@ -2259,6 +2272,7 @@ ColorPicker::ColorPicker() {
 	real_vbox->add_child(mode_hbc);
 
 	mode_group.instantiate();
+	ERR_FAIL_COND(mode_group.is_null());
 
 	for (int i = 0; i < MODE_BUTTON_COUNT; i++) {
 		mode_btns[i] = memnew(Button);
@@ -2336,9 +2350,11 @@ ColorPicker::ColorPicker() {
 	hb_edit->add_child(wheel_edit);
 
 	wheel_mat.instantiate();
+	ERR_FAIL_COND(wheel_mat.is_null());
 	wheel_mat->set_shader(wheel_shader);
 	wheel_mat->set_shader_parameter("wheel_radius", WHEEL_RADIUS);
 	circle_mat.instantiate();
+	ERR_FAIL_COND(circle_mat.is_null());
 	circle_mat->set_shader(circle_shader);
 
 	wheel_margin = memnew(MarginContainer);

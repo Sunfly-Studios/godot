@@ -110,6 +110,7 @@ void EditorInspectorPluginInputEvent::parse_begin(Object *p_object) {
 	Ref<InputEvent> ie = Ref<InputEvent>(p_object);
 
 	InputEventConfigContainer *picker_controls = memnew(InputEventConfigContainer);
+	ERR_FAIL_NULL(picker_controls);
 	picker_controls->set_event(ie);
 	add_custom_control(picker_controls);
 }
@@ -119,5 +120,6 @@ void EditorInspectorPluginInputEvent::parse_begin(Object *p_object) {
 InputEventEditorPlugin::InputEventEditorPlugin() {
 	Ref<EditorInspectorPluginInputEvent> plugin;
 	plugin.instantiate();
+	ERR_FAIL_COND(plugin.is_null());
 	add_inspector_plugin(plugin);
 }

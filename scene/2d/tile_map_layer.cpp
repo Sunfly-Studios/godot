@@ -163,6 +163,7 @@ void TileMapLayer::_debug_quadrants_update_cell(CellData &r_cell_data, SelfList<
 		// Create a new quadrant and add it to the quadrant map.
 		Ref<DebugQuadrant> new_quadrant;
 		new_quadrant.instantiate();
+		ERR_FAIL_COND(new_quadrant.is_null());
 		new_quadrant->quadrant_coords = quadrant_coords;
 		debug_quadrant_map[quadrant_coords] = new_quadrant;
 	}
@@ -512,6 +513,7 @@ void TileMapLayer::_rendering_quadrants_update_cell(CellData &r_cell_data, SelfL
 		} else {
 			// Create a new rendering quadrant.
 			rendering_quadrant.instantiate();
+			ERR_FAIL_COND(rendering_quadrant.is_null());
 			rendering_quadrant->quadrant_coords = quadrant_coords;
 			rendering_quadrant->canvas_items_position = canvas_items_position;
 			rendering_quadrant_map[quadrant_coords] = rendering_quadrant;
@@ -2559,6 +2561,7 @@ Ref<TileMapPattern> TileMapLayer::get_pattern(TypedArray<Vector2i> p_coords_arra
 
 	Ref<TileMapPattern> output;
 	output.instantiate();
+	ERR_FAIL_COND_V(output.is_null(), nullptr);
 	if (p_coords_array.is_empty()) {
 		return output;
 	}

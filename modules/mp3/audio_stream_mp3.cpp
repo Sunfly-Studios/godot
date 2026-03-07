@@ -195,6 +195,7 @@ Ref<AudioStreamPlayback> AudioStreamMP3::instantiate_playback() {
 			"inspector or with `.new()`. Instead, load an audio file.");
 
 	mp3s.instantiate();
+	ERR_FAIL_COND_V(mp3s.is_null(), Ref<AudioStreamPlayback>());
 	mp3s->mp3_stream = Ref<AudioStreamMP3>(this);
 
 	int success = drmp3_init_memory(&mp3s->mp3d, data.ptr(), data_len, (drmp3_allocation_callbacks *)&dr_alloc_calls);
@@ -302,6 +303,7 @@ int AudioStreamMP3::get_bar_beats() const {
 Ref<AudioSample> AudioStreamMP3::generate_sample() const {
 	Ref<AudioSample> sample;
 	sample.instantiate();
+	ERR_FAIL_COND_V(sample.is_null(), Ref<AudioSample>());
 	sample->stream = this;
 	sample->loop_mode = loop
 			? AudioSample::LoopMode::LOOP_FORWARD
@@ -314,6 +316,7 @@ Ref<AudioSample> AudioStreamMP3::generate_sample() const {
 Ref<AudioStreamMP3> AudioStreamMP3::load_from_buffer(const Vector<uint8_t> &p_stream_data) {
 	Ref<AudioStreamMP3> mp3_stream;
 	mp3_stream.instantiate();
+	ERR_FAIL_COND_V(mp3_stream.is_null(), Ref<AudioStreamMP3>());
 	mp3_stream->set_data(p_stream_data);
 	ERR_FAIL_COND_V_MSG(mp3_stream->get_data().is_empty(), Ref<AudioStreamMP3>(), "MP3 decoding failed. Check that your data is a valid MP3 audio stream.");
 	return mp3_stream;

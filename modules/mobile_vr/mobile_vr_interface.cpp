@@ -373,6 +373,7 @@ bool MobileVRInterface::initialize() {
 
 		// we must create a tracker for our head
 		head.instantiate();
+		ERR_FAIL_COND_V(head.is_null(), false);
 		head->set_tracker_type(XRServer::TRACKER_HEAD);
 		head->set_tracker_name("head");
 		head->set_tracker_desc("Players head");

@@ -135,6 +135,7 @@ void Camera3DEditorPlugin::make_visible(bool p_visible) {
 Camera3DEditorPlugin::Camera3DEditorPlugin() {
 	Ref<EditorInspectorPluginCamera3DPreview> plugin;
 	plugin.instantiate();
+	ERR_FAIL_COND(plugin.is_null());
 	add_inspector_plugin(plugin);
 }
 

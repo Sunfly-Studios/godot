@@ -318,6 +318,7 @@ Ref<Texture2D> EditorPackedScenePreviewPlugin::generate_from_path(const String &
 
 	Ref<Image> img;
 	img.instantiate();
+	ERR_FAIL_COND_V(img.is_null(), Ref<Texture2D>());
 	Error err = img->load(path);
 	if (err == OK) {
 		post_process_preview(img);
@@ -949,6 +950,7 @@ Ref<Texture2D> EditorGradientPreviewPlugin::generate(const Ref<Resource> &p_from
 	if (gradient.is_valid()) {
 		Ref<GradientTexture1D> ptex;
 		ptex.instantiate();
+		ERR_FAIL_COND_V(ptex.is_null(), Ref<Texture2D>());
 		ptex->set_width(p_size.width * GRADIENT_PREVIEW_TEXTURE_SCALE_FACTOR * EDSCALE);
 		ptex->set_gradient(gradient);
 		return ImageTexture::create_from_image(ptex->get_image());

@@ -39,6 +39,7 @@ constexpr uint64_t INDEX_SHIFT = 32;
 Ref<AudioStreamPlayback> AudioStreamPolyphonic::instantiate_playback() {
 	Ref<AudioStreamPlaybackPolyphonic> playback;
 	playback.instantiate();
+	ERR_FAIL_COND_V(playback.is_null(), Ref<AudioStreamPlayback>());
 	playback->streams.resize(polyphony);
 	return playback;
 }
@@ -238,6 +239,7 @@ AudioStreamPlaybackPolyphonic::ID AudioStreamPlaybackPolyphonic::play_stream(con
 				float linear_volume = Math::db_to_linear(p_volume_db);
 				Ref<AudioSamplePlayback> sp;
 				sp.instantiate();
+				ERR_FAIL_COND_V(sp.is_null(), INVALID_ID);
 				sp->stream = streams[i].stream;
 				sp->offset = p_from_offset;
 				sp->volume_vector.resize(4);

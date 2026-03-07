@@ -38,6 +38,7 @@ AudioStreamInteractive::AudioStreamInteractive() {
 Ref<AudioStreamPlayback> AudioStreamInteractive::instantiate_playback() {
 	Ref<AudioStreamPlaybackInteractive> playback_transitioner;
 	playback_transitioner.instantiate();
+	ERR_FAIL_COND_V(playback_transitioner.is_null(), Ref<AudioStreamPlayback>());
 	playback_transitioner->stream = Ref<AudioStreamInteractive>(this);
 	return playback_transitioner;
 }

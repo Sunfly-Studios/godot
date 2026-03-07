@@ -38,6 +38,7 @@
 static Ref<Image> _webp_mem_loader_func(const uint8_t *p_webp_data, int p_size) {
 	Ref<Image> img;
 	img.instantiate();
+	ERR_FAIL_COND_V(img.is_null(), Ref<Image>());
 	Error err = WebPCommon::webp_load_image_from_buffer(img.ptr(), p_webp_data, p_size);
 	ERR_FAIL_COND_V(err, Ref<Image>());
 	return img;

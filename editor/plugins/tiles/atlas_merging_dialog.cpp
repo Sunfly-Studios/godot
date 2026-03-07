@@ -43,6 +43,7 @@ void AtlasMergingDialog::_property_changed(const StringName &p_property, const V
 
 void AtlasMergingDialog::_generate_merged(const Vector<Ref<TileSetAtlasSource>> &p_atlas_sources, int p_max_columns) {
 	merged.instantiate();
+	ERR_FAIL_COND(merged.is_null());
 	merged_mapping.clear();
 
 	if (p_atlas_sources.size() >= 2) {

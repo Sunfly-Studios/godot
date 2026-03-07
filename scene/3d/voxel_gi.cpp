@@ -57,6 +57,7 @@ void VoxelGIData::_set_data(const Dictionary &p_data) {
 		Vector<uint8_t> octree_df_png = p_data["octree_df_png"];
 		Ref<Image> img;
 		img.instantiate();
+		ERR_FAIL_COND(img.is_null());
 		Error err = img->load_png_from_buffer(octree_df_png);
 		ERR_FAIL_COND(err != OK);
 		ERR_FAIL_COND(img->get_format() != Image::FORMAT_L8);
@@ -490,6 +491,7 @@ void VoxelGI::bake(Node *p_from_node, bool p_create_visual_debug) {
 
 		if (probe_data_new.is_null()) {
 			probe_data_new.instantiate();
+			ERR_FAIL_COND(probe_data_new.is_null());
 		}
 
 		if (bake_step_function) {

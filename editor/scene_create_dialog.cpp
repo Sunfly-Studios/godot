@@ -201,6 +201,7 @@ SceneCreateDialog::SceneCreateDialog() {
 		gc->add_child(vb);
 
 		node_type_group.instantiate();
+		ERR_FAIL_COND(node_type_group.is_null());
 
 		node_type_2d = memnew(CheckBox);
 		vb->add_child(node_type_2d);

@@ -129,6 +129,7 @@ Error GLTFDocumentExtensionPhysics::parse_node_extensions(Ref<GLTFState> p_state
 				// then it's a trigger body, what Godot calls an Area3D node.
 				Ref<GLTFPhysicsBody> trigger_body;
 				trigger_body.instantiate();
+				ERR_FAIL_COND_V(trigger_body.is_null(), Error::ERR_OUT_OF_MEMORY);
 				trigger_body->set_body_type("trigger");
 				p_gltf_node->set_additional_data(StringName("GLTFPhysicsBody"), trigger_body);
 			}
@@ -217,6 +218,7 @@ Ref<GLTFObjectModelProperty> GLTFDocumentExtensionPhysics::import_object_model_p
 		return ret;
 	}
 	ret.instantiate();
+	ERR_FAIL_COND_V(ret.is_null(), Ref<GLTFObjectModelProperty>());
 	const String &prop_name = p_split_json_pointer[5];
 	if (p_split_json_pointer[0] == "extensions" && p_split_json_pointer[2] == "shapes") {
 		if (p_split_json_pointer[1] == "OMI_physics_shape" || p_split_json_pointer[1] == "KHR_collision_shapes") {
@@ -518,6 +520,7 @@ GLTFMeshIndex _get_or_insert_mesh_in_state(Ref<GLTFState> p_state, Ref<ImporterM
 	// meshes in the state. So we insert a new mesh into the state mesh array.
 	Ref<GLTFMesh> gltf_mesh;
 	gltf_mesh.instantiate();
+	ERR_FAIL_COND_V(gltf_mesh.is_null(), -1);
 	gltf_mesh->set_mesh(p_mesh);
 	GLTFMeshIndex mesh_index = state_meshes.size();
 	state_meshes.push_back(gltf_mesh);
@@ -620,6 +623,7 @@ Ref<GLTFObjectModelProperty> GLTFDocumentExtensionPhysics::export_object_model_p
 		return ret;
 	}
 	ret.instantiate();
+	ERR_FAIL_COND_V(ret.is_null(), Ref<GLTFObjectModelProperty>());
 	const StringName &node_prop = path_subnames[0];
 	if (Object::cast_to<RigidBody3D>(p_target_object)) {
 		if (path_subnames.size() != 1) {

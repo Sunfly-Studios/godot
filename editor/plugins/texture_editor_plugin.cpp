@@ -238,9 +238,11 @@ TexturePreview::TexturePreview(Ref<Texture2D> p_texture, bool p_show_metadata) {
 	{
 		Ref<Shader> shader;
 		shader.instantiate();
+		ERR_FAIL_COND(shader.is_null());
 		shader->set_code(texture_2d_shader);
 
 		material.instantiate();
+		ERR_FAIL_COND(material.is_null());
 		material->set_shader(shader);
 		material->set_shader_parameter("u_channel_factors", Vector4(1, 1, 1, 1));
 	}
@@ -319,5 +321,6 @@ void EditorInspectorPluginTexture::parse_begin(Object *p_object) {
 TextureEditorPlugin::TextureEditorPlugin() {
 	Ref<EditorInspectorPluginTexture> plugin;
 	plugin.instantiate();
+	ERR_FAIL_COND(plugin.is_null());
 	add_inspector_plugin(plugin);
 }

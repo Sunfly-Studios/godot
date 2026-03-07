@@ -35,11 +35,11 @@
 #include <stdlib.h>
 #include <string.h>
 
-void *operator new(size_t p_size, const char *p_description) {
+void *operator new(size_t p_size, const char *p_description) noexcept {
 	return Memory::alloc_static(p_size, false);
 }
 
-void *operator new(size_t p_size, void *(*p_allocfunc)(size_t p_size)) {
+void *operator new(size_t p_size, void *(*p_allocfunc)(size_t p_size)) noexcept {
 	return p_allocfunc(p_size);
 }
 

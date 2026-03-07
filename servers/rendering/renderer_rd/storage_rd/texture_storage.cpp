@@ -544,6 +544,8 @@ TextureStorage::TextureStorage() {
 
 	Ref<Image> texture_2d_placeholder_rotated;
 	texture_2d_placeholder_rotated.instantiate();
+	
+	ERR_FAIL_COND(texture_2d_placeholder_rotated.is_null());
 	texture_2d_placeholder_rotated->copy_from(texture_2d_placeholder);
 	texture_2d_placeholder_rotated->rotate_90(CLOCKWISE);
 	for (int i = 0; i < 4; i++) {

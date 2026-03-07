@@ -474,6 +474,7 @@ Ref<Image> DisplayServerWayland::clipboard_get_image() const {
 
 	Ref<Image> image;
 	image.instantiate();
+	ERR_FAIL_COND(image.is_null());
 
 	Error err = OK;
 
@@ -1247,6 +1248,7 @@ void DisplayServerWayland::process_events() {
 
 				Ref<InputEventKey> ke;
 				ke.instantiate();
+				ERR_FAIL_COND(ke.is_null());
 				ke->set_window_id(MAIN_WINDOW_ID);
 				ke->set_pressed(true);
 				ke->set_echo(false);

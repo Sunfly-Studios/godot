@@ -40,6 +40,7 @@ void initialize_ktx_module(ModuleInitializationLevel p_level) {
 	}
 
 	resource_loader_ktx.instantiate();
+	ERR_FAIL_COND(resource_loader_ktx.is_null());
 	ResourceLoader::add_resource_format_loader(resource_loader_ktx);
 }
 
@@ -48,6 +49,8 @@ void uninitialize_ktx_module(ModuleInitializationLevel p_level) {
 		return;
 	}
 
-	ResourceLoader::remove_resource_format_loader(resource_loader_ktx);
-	resource_loader_ktx.unref();
+	if (resource_loader_ktx.is_valid()) {
+		ResourceLoader::remove_resource_format_loader(resource_loader_ktx);
+		resource_loader_ktx.unref();
+	}
 }

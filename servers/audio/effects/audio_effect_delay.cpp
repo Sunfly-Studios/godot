@@ -112,6 +112,7 @@ void AudioEffectDelayInstance::_process_chunk(const AudioFrame *p_src_frames, Au
 Ref<AudioEffectInstance> AudioEffectDelay::instantiate() {
 	Ref<AudioEffectDelayInstance> ins;
 	ins.instantiate();
+	ERR_FAIL_COND_V(ins.is_null(), Ref<AudioEffectInstance>());
 	ins->base = Ref<AudioEffectDelay>(this);
 
 	float ring_buffer_max_size = MAX_DELAY_MS + 100; //add 100ms of extra room, just in case

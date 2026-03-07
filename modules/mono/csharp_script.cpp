@@ -363,7 +363,7 @@ bool CSharpLanguage::is_using_templates() {
 Ref<Script> CSharpLanguage::make_template(const String &p_template, const String &p_class_name, const String &p_base_class_name) const {
 	Ref<CSharpScript> scr;
 	scr.instantiate();
-
+	ERR_FAIL_COND_V(scr.is_null(), Ref<Script>());
 	String class_name_no_spaces = p_class_name.replace(" ", "_");
 	String base_class_name = get_base_class_name(p_base_class_name, class_name_no_spaces);
 	String processed_template = p_template;
@@ -2825,6 +2825,7 @@ Ref<Resource> ResourceFormatLoaderCSharpScript::load(const String &p_path, const
 		ERR_FAIL_COND_V_MSG(scr.is_null(), Ref<Resource>(), "Could not create C# script '" + real_path + "'.");
 	} else {
 		scr.instantiate();
+		ERR_FAIL_COND_V_MSG(scr.is_null(), Ref<Resource>(), "Cannot instantiate C# script file '" + real_path + "'.");
 	}
 
 #if defined(DEBUG_ENABLED) || defined(TOOLS_ENABLED)

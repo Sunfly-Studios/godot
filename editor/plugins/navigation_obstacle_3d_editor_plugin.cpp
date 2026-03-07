@@ -829,6 +829,7 @@ NavigationObstacle3DEditorPlugin::NavigationObstacle3DEditorPlugin() {
 
 	Ref<ButtonGroup> bg;
 	bg.instantiate();
+	ERR_FAIL_COND(bg.is_null());
 
 	button_create = memnew(Button);
 	button_create->set_theme_type_variation(SceneStringName(FlatButton));

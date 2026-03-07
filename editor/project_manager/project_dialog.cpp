@@ -970,6 +970,7 @@ ProjectDialog::ProjectDialog() {
 	HBoxContainer *rshc = memnew(HBoxContainer);
 	renderer_container->add_child(rshc);
 	renderer_button_group.instantiate();
+	ERR_FAIL_COND(renderer_button_group.is_null());
 
 	// Left hand side, used for checkboxes to select renderer.
 	Container *rvb = memnew(VBoxContainer);

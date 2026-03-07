@@ -653,6 +653,7 @@ TileAtlasView::TileAtlasView() {
 	add_child(button_center_view);
 
 	panner.instantiate();
+	ERR_FAIL_COND(panner.is_null());
 	panner->set_callbacks(callable_mp(this, &TileAtlasView::_pan_callback), callable_mp(this, &TileAtlasView::_zoom_callback));
 	panner->set_enable_rmb(true);
 

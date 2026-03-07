@@ -300,6 +300,7 @@ Node *MeshInstance3D::create_multiple_convex_collisions_node(const Ref<MeshConve
 		settings = p_settings;
 	} else {
 		settings.instantiate();
+		ERR_FAIL_COND_V(settings.is_null(), nullptr);
 	}
 
 	Vector<Ref<Shape3D>> shapes = mesh->convex_decompose(settings);
@@ -464,6 +465,7 @@ MeshInstance3D *MeshInstance3D::create_debug_tangents_node() {
 	if (lines.size()) {
 		Ref<StandardMaterial3D> sm;
 		sm.instantiate();
+		ERR_FAIL_COND_V(sm.is_null(), nullptr);
 
 		sm->set_shading_mode(StandardMaterial3D::SHADING_MODE_UNSHADED);
 		sm->set_flag(StandardMaterial3D::FLAG_SRGB_VERTEX_COLOR, true);
@@ -472,6 +474,7 @@ MeshInstance3D *MeshInstance3D::create_debug_tangents_node() {
 
 		Ref<ArrayMesh> am;
 		am.instantiate();
+		ERR_FAIL_COND_V(am.is_null(), nullptr);
 		Array a;
 		a.resize(Mesh::ARRAY_MAX);
 		a[Mesh::ARRAY_VERTEX] = lines;
@@ -533,6 +536,7 @@ Ref<ArrayMesh> MeshInstance3D::bake_mesh_from_current_blend_shape_mix(Ref<ArrayM
 		bake_mesh = p_existing;
 	} else {
 		bake_mesh.instantiate();
+		ERR_FAIL_COND_V_MSG(bake_mesh.is_null(), Ref<ArrayMesh>(), "Could not instantiate ArrayMesh");
 	}
 
 	Mesh::BlendShapeMode blend_shape_mode = source_mesh->get_blend_shape_mode();
@@ -688,6 +692,7 @@ Ref<ArrayMesh> MeshInstance3D::bake_mesh_from_current_skeleton_pose(Ref<ArrayMes
 		bake_mesh = p_existing;
 	} else {
 		bake_mesh.instantiate();
+		ERR_FAIL_COND_V_MSG(bake_mesh.is_null(), Ref<ArrayMesh>(), "Could not instantiate ArrayMesh");
 	}
 
 	ERR_FAIL_COND_V_MSG(skin_ref.is_null(), Ref<ArrayMesh>(), "The source mesh must have a valid skin.");

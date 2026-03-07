@@ -149,6 +149,7 @@ void GPUParticlesCollisionSDF3DEditorPlugin::_sdf_save_path_and_bake(const Strin
 		Ref<ConfigFile> config;
 
 		config.instantiate();
+		ERR_FAIL_COND(config.is_null());
 		if (FileAccess::exists(p_path + ".import")) {
 			config->load(p_path + ".import");
 		}

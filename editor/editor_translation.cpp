@@ -66,6 +66,7 @@ void load_editor_translations(const String &p_locale) {
 
 			Ref<FileAccessMemory> fa;
 			fa.instantiate();
+			ERR_FAIL_COND(fa.is_null());
 			fa->open_custom(data.ptr(), data.size());
 
 			Ref<Translation> tr = TranslationLoaderPO::load_translation(fa);
@@ -94,6 +95,7 @@ void load_property_translations(const String &p_locale) {
 
 			Ref<FileAccessMemory> fa;
 			fa.instantiate();
+			ERR_FAIL_COND(fa.is_null());
 			fa->open_custom(data.ptr(), data.size());
 
 			Ref<Translation> tr = TranslationLoaderPO::load_translation(fa);
@@ -122,6 +124,7 @@ void load_doc_translations(const String &p_locale) {
 
 			Ref<FileAccessMemory> fa;
 			fa.instantiate();
+			ERR_FAIL_COND(fa.is_null());
 			fa->open_custom(data.ptr(), data.size());
 
 			Ref<Translation> tr = TranslationLoaderPO::load_translation(fa);
@@ -150,6 +153,7 @@ void load_extractable_translations(const String &p_locale) {
 
 			Ref<FileAccessMemory> fa;
 			fa.instantiate();
+			ERR_FAIL_COND(fa.is_null());
 			fa->open_custom(data.ptr(), data.size());
 
 			Ref<Translation> tr = TranslationLoaderPO::load_translation(fa);
@@ -182,6 +186,7 @@ Vector<Vector<String>> get_extractable_message_list() {
 
 		Ref<FileAccessMemory> fa;
 		fa.instantiate();
+		ERR_FAIL_COND_V(fa.is_null(), Vector<Vector<String>>());
 		fa->open_custom(data.ptr(), data.size());
 
 		// Taken from TranslationLoaderPO, modified to work specifically with POTs.

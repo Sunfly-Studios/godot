@@ -173,8 +173,14 @@ void SceneMultiplayer::clear() {
 	pending_peers.clear();
 	connected_peers.clear();
 	packet_cache.clear();
+
+	ERR_FAIL_COND(replicator.is_null());
 	replicator->on_reset();
+
+	ERR_FAIL_COND(cache.is_null());
 	cache->clear();
+
+	ERR_FAIL_COND(relay_buffer.is_null());
 	relay_buffer->clear();
 }
 
@@ -223,14 +229,17 @@ void SceneMultiplayer::_process_packet(int p_from, const uint8_t *p_packet, int 
 
 	switch (packet_type) {
 		case NETWORK_COMMAND_SIMPLIFY_PATH: {
+			ERR_FAIL_COND(cache.is_null());
 			cache->process_simplify_path(p_from, p_packet, p_packet_len);
 		} break;
 
 		case NETWORK_COMMAND_CONFIRM_PATH: {
+			ERR_FAIL_COND(cache.is_null());
 			cache->process_confirm_path(p_from, p_packet, p_packet_len);
 		} break;
 
 		case NETWORK_COMMAND_REMOTE_CALL: {
+			ERR_FAIL_COND(rpc.is_null());
 			rpc->process_rpc(p_from, p_packet, p_packet_len);
 		} break;
 
@@ -238,12 +247,15 @@ void SceneMultiplayer::_process_packet(int p_from, const uint8_t *p_packet, int 
 			_process_raw(p_from, p_packet, p_packet_len);
 		} break;
 		case NETWORK_COMMAND_SPAWN: {
+			ERR_FAIL_COND(replicator.is_null());
 			replicator->on_spawn_receive(p_from, p_packet, p_packet_len);
 		} break;
 		case NETWORK_COMMAND_DESPAWN: {
+			ERR_FAIL_COND(replicator.is_null());
 			replicator->on_despawn_receive(p_from, p_packet, p_packet_len);
 		} break;
 		case NETWORK_COMMAND_SYNC: {
+			ERR_FAIL_COND(replicator.is_null());
 			replicator->on_sync_receive(p_from, p_packet, p_packet_len);
 		} break;
 		default: {
@@ -262,6 +274,7 @@ _FORCE_INLINE_ Error SceneMultiplayer::_send(const uint8_t *p_packet, int p_pack
 Error SceneMultiplayer::send_command(int p_to, const uint8_t *p_packet, int p_packet_len) {
 	if (server_relay && get_unique_id() != 1 && p_to != 1 && multiplayer_peer->is_server_relay_supported()) {
 		// Send relay packet.
+		ERR_FAIL_COND_V(relay_buffer.is_null(), ERR_OUT_OF_MEMORY);
 		relay_buffer->seek(0);
 		relay_buffer->put_u8(NETWORK_COMMAND_SYS);
 		relay_buffer->put_u8(SYS_COMMAND_RELAY);
@@ -312,6 +325,7 @@ void SceneMultiplayer::_process_sys(int p_from, const uint8_t *p_packet, int p_p
 					return;
 				}
 				// Send relay packet.
+				ERR_FAIL_COND(relay_buffer.is_null());
 				relay_buffer->seek(0);
 				relay_buffer->put_u8(NETWORK_COMMAND_SYS);
 				relay_buffer->put_u8(SYS_COMMAND_RELAY);
@@ -387,6 +401,8 @@ void SceneMultiplayer::_admit_peer(int p_id) {
 		}
 	}
 
+	ERR_FAIL_COND(cache.is_null());
+	ERR_FAIL_COND(replicator.is_null());
 	connected_peers.insert(p_id);
 	cache->on_peer_change(p_id, true);
 	replicator->on_peer_change(p_id, true);
@@ -422,6 +438,8 @@ void SceneMultiplayer::_del_peer(int p_id) {
 		}
 	}
 
+	ERR_FAIL_COND(cache.is_null());
+	ERR_FAIL_COND(replicator.is_null());
 	replicator->on_peer_change(p_id, false);
 	cache->on_peer_change(p_id, false);
 	connected_peers.erase(p_id);
@@ -574,10 +592,12 @@ bool SceneMultiplayer::is_object_decoding_allowed() const {
 }
 
 String SceneMultiplayer::get_rpc_md5(const Node *p_node) {
+	ERR_FAIL_COND_V(rpc.is_null(), String());
 	return rpc->get_rpc_md5(p_node);
 }
 
 Error SceneMultiplayer::rpcp(Object *p_obj, int p_peer_id, const StringName &p_method, const Variant **p_arg, int p_argcount) {
+	ERR_FAIL_COND_V(rpc.is_null(), ERR_OUT_OF_MEMORY);
 	return rpc->rpcp(p_obj, p_peer_id, p_method, p_arg, p_argcount);
 }
 
@@ -589,8 +609,10 @@ Error SceneMultiplayer::object_configuration_add(Object *p_obj, Variant p_config
 	MultiplayerSpawner *spawner = Object::cast_to<MultiplayerSpawner>(p_config.get_validated_object());
 	MultiplayerSynchronizer *sync = Object::cast_to<MultiplayerSynchronizer>(p_config.get_validated_object());
 	if (spawner) {
+		ERR_FAIL_COND_V(replicator.is_null(), ERR_OUT_OF_MEMORY);
 		return replicator->on_spawn(p_obj, p_config);
 	} else if (sync) {
+		ERR_FAIL_COND_V(replicator.is_null(), ERR_OUT_OF_MEMORY);
 		return replicator->on_replication_start(p_obj, p_config);
 	}
 	return ERR_INVALID_PARAMETER;
@@ -605,9 +627,11 @@ Error SceneMultiplayer::object_configuration_remove(Object *p_obj, Variant p_con
 	MultiplayerSpawner *spawner = Object::cast_to<MultiplayerSpawner>(p_config.get_validated_object());
 	MultiplayerSynchronizer *sync = Object::cast_to<MultiplayerSynchronizer>(p_config.get_validated_object());
 	if (spawner) {
+		ERR_FAIL_COND_V(replicator.is_null(), ERR_OUT_OF_MEMORY);
 		return replicator->on_despawn(p_obj, p_config);
 	}
 	if (sync) {
+		ERR_FAIL_COND_V(replicator.is_null(), ERR_OUT_OF_MEMORY);
 		return replicator->on_replication_stop(p_obj, p_config);
 	}
 	return ERR_INVALID_PARAMETER;
@@ -693,7 +717,15 @@ SceneMultiplayer::SceneMultiplayer() {
 SceneMultiplayer::~SceneMultiplayer() {
 	clear();
 	// Ensure unref in reverse order for safety (we shouldn't use those pointers in the deconstructors anyway).
-	rpc.unref();
-	replicator.unref();
-	cache.unref();
+	if (rpc.is_valid()) {
+		rpc.unref();
+	}
+
+	if (replicator.is_valid()) {
+		replicator.unref();
+	}
+
+	if (cache.is_valid()) {
+		cache.unref();
+	}
 }

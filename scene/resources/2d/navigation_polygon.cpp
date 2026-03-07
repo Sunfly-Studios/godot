@@ -223,6 +223,7 @@ Ref<NavigationMesh> NavigationPolygon::get_navigation_mesh() {
 
 	if (navigation_mesh.is_null()) {
 		navigation_mesh.instantiate();
+		ERR_FAIL_COND_V(navigation_mesh.is_null(), Ref<NavigationMesh>());
 		Vector<Vector3> verts;
 		Vector<Vector<int>> polys;
 		{

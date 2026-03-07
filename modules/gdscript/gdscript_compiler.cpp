@@ -3122,6 +3122,7 @@ void GDScriptCompiler::make_scripts(GDScript *p_script, const GDScriptParser::Cl
 
 		if (subclass.is_null()) {
 			subclass.instantiate();
+			ERR_FAIL_COND(subclass.is_null());
 		}
 
 		subclass->_owner = p_script;

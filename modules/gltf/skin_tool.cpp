@@ -290,6 +290,7 @@ Error SkinTool::_determine_skeletons(
 	if (!p_single_skeleton_roots.is_empty()) {
 		Ref<GLTFSkin> skin;
 		skin.instantiate();
+		ERR_FAIL_COND_V(skin.is_null(), FAILED);
 		skin->set_name("godot_single_skeleton_root");
 		for (GLTFNodeIndex i = 0; i < p_single_skeleton_roots.size(); i++) {
 			skin->joints.push_back(p_single_skeleton_roots[i]);
@@ -382,7 +383,11 @@ Error SkinTool::_determine_skeletons(
 	for (SkinSkeletonIndex skel_i = 0; skel_i < skeleton_owners.size(); ++skel_i) {
 		const SkinNodeIndex skeleton_owner = skeleton_owners[skel_i];
 		Ref<GLTFSkeleton> skeleton;
+		
+		// We fail here because we're out of memory.
+		// Continuing would be useless.
 		skeleton.instantiate();
+		ERR_FAIL_COND_V(skeleton.is_null(), ERR_OUT_OF_MEMORY);
 
 		Vector<SkinNodeIndex> skeleton_nodes;
 		skeleton_sets.get_members(skeleton_nodes, skeleton_owner);
@@ -653,6 +658,10 @@ Error SkinTool::_create_skins(Vector<Ref<GLTFSkin>> &skins, Vector<Ref<GLTFNode>
 
 		Ref<Skin> skin;
 		skin.instantiate();
+
+		// We fail here because we're out of memory.
+		// Continuing would be useless.
+		ERR_FAIL_COND_V(skin.is_null(), FAILED);
 
 		// Some skins don't have IBM's! What absolute monsters!
 		const bool has_ibms = !gltf_skin->inverse_binds.is_empty();

@@ -229,6 +229,7 @@ Ref<InputEventKey> WaylandThread::_seat_state_get_key_event(SeatState *p_ss, xkb
 	}
 
 	event.instantiate();
+	ERR_FAIL_COND(event.is_null());
 
 	event->set_window_id(DisplayServer::MAIN_WINDOW_ID);
 
@@ -1216,6 +1217,7 @@ void WaylandThread::_xdg_toplevel_on_close(void *data, struct xdg_toplevel *xdg_
 
 	Ref<WindowEventMessage> msg;
 	msg.instantiate();
+	ERR_FAIL_COND(msg.is_null());
 	msg->event = DisplayServer::WINDOW_EVENT_CLOSE_REQUEST;
 	ws->wayland_thread->push_message(msg);
 }
@@ -1333,6 +1335,7 @@ void WaylandThread::libdecor_frame_on_close(struct libdecor_frame *frame, void *
 
 	Ref<WindowEventMessage> winevent_msg;
 	winevent_msg.instantiate();
+	ERR_FAIL_COND(winevent_msg.is_null());
 	winevent_msg->event = DisplayServer::WINDOW_EVENT_CLOSE_REQUEST;
 
 	ws->wayland_thread->push_message(winevent_msg);
@@ -1481,6 +1484,7 @@ void WaylandThread::_wl_pointer_on_enter(void *data, struct wl_pointer *wl_point
 
 	Ref<WindowEventMessage> msg;
 	msg.instantiate();
+	ERR_FAIL_COND(msg.is_null());
 	msg->event = DisplayServer::WINDOW_EVENT_MOUSE_ENTER;
 
 	ss->wayland_thread->push_message(msg);
@@ -1505,6 +1509,7 @@ void WaylandThread::_wl_pointer_on_leave(void *data, struct wl_pointer *wl_point
 
 	Ref<WindowEventMessage> msg;
 	msg.instantiate();
+	ERR_FAIL_COND(msg.is_null());
 	msg->event = DisplayServer::WINDOW_EVENT_MOUSE_EXIT;
 
 	wayland_thread->push_message(msg);
@@ -1629,6 +1634,7 @@ void WaylandThread::_wl_pointer_on_frame(void *data, struct wl_pointer *wl_point
 	if (old_pd.motion_time != pd.motion_time || old_pd.relative_motion_time != pd.relative_motion_time) {
 		Ref<InputEventMouseMotion> mm;
 		mm.instantiate();
+		ERR_FAIL_COND(mm.is_null());
 
 		// Set all pressed modifiers.
 		mm->set_shift_pressed(ss->shift_pressed);
@@ -1663,6 +1669,7 @@ void WaylandThread::_wl_pointer_on_frame(void *data, struct wl_pointer *wl_point
 
 		Ref<InputEventMessage> msg;
 		msg.instantiate();
+		ERR_FAIL_COND(msg.is_null());
 
 		msg->event = mm;
 
@@ -1686,6 +1693,7 @@ void WaylandThread::_wl_pointer_on_frame(void *data, struct wl_pointer *wl_point
 			// This is a continuous scroll, so we'll emit a pan gesture.
 			Ref<InputEventPanGesture> pg;
 			pg.instantiate();
+			ERR_FAIL_COND(pg.is_null());
 
 			// Set all pressed modifiers.
 			pg->set_shift_pressed(ss->shift_pressed);
@@ -1701,6 +1709,7 @@ void WaylandThread::_wl_pointer_on_frame(void *data, struct wl_pointer *wl_point
 
 			Ref<InputEventMessage> msg;
 			msg.instantiate();
+			ERR_FAIL_COND(msg.is_null());
 
 			msg->event = pg;
 
@@ -1728,6 +1737,7 @@ void WaylandThread::_wl_pointer_on_frame(void *data, struct wl_pointer *wl_point
 			if (pressed_mask_delta.has_flag(test_button_mask)) {
 				Ref<InputEventMouseButton> mb;
 				mb.instantiate();
+				ERR_FAIL_COND(mb.is_null());
 
 				// Set all pressed modifiers.
 				mb->set_shift_pressed(ss->shift_pressed);
@@ -1770,6 +1780,7 @@ void WaylandThread::_wl_pointer_on_frame(void *data, struct wl_pointer *wl_point
 
 				Ref<InputEventMessage> msg;
 				msg.instantiate();
+				ERR_FAIL_COND(msg.is_null());
 
 				msg->event = mb;
 
@@ -1784,6 +1795,7 @@ void WaylandThread::_wl_pointer_on_frame(void *data, struct wl_pointer *wl_point
 					// This works for now, despite being horrible.
 					Ref<InputEventMouseButton> wh_up;
 					wh_up.instantiate();
+					ERR_FAIL_COND(wh_up.is_null());
 
 					wh_up->set_window_id(DisplayServer::MAIN_WINDOW_ID);
 					wh_up->set_position(pd.position);
@@ -1798,6 +1810,7 @@ void WaylandThread::_wl_pointer_on_frame(void *data, struct wl_pointer *wl_point
 
 					Ref<InputEventMessage> msg_up;
 					msg_up.instantiate();
+					ERR_FAIL_COND(msg_up.is_null());
 					msg_up->event = wh_up;
 					wayland_thread->push_message(msg_up);
 				}
@@ -1915,6 +1928,7 @@ void WaylandThread::_wl_keyboard_on_enter(void *data, struct wl_keyboard *wl_key
 
 	Ref<WindowEventMessage> msg;
 	msg.instantiate();
+	ERR_FAIL_COND(msg.is_null());
 	msg->event = DisplayServer::WINDOW_EVENT_FOCUS_IN;
 	wayland_thread->push_message(msg);
 }
@@ -1930,6 +1944,7 @@ void WaylandThread::_wl_keyboard_on_leave(void *data, struct wl_keyboard *wl_key
 
 	Ref<WindowEventMessage> msg;
 	msg.instantiate();
+	ERR_FAIL_COND(msg.is_null());
 	msg->event = DisplayServer::WINDOW_EVENT_FOCUS_OUT;
 	wayland_thread->push_message(msg);
 }
@@ -1966,12 +1981,14 @@ void WaylandThread::_wl_keyboard_on_key(void *data, struct wl_keyboard *wl_keybo
 	if (uk.is_valid()) {
 		Ref<InputEventMessage> u_msg;
 		u_msg.instantiate();
+		ERR_FAIL_COND(u_msg.is_null());
 		u_msg->event = uk;
 		wayland_thread->push_message(u_msg);
 	}
 
 	Ref<InputEventMessage> msg;
 	msg.instantiate();
+	ERR_FAIL_COND(msg.is_null());
 	msg->event = k;
 	wayland_thread->push_message(msg);
 }
@@ -2043,6 +2060,7 @@ void WaylandThread::_wl_data_device_on_drop(void *data, struct wl_data_device *w
 	if (os) {
 		Ref<DropFilesEventMessage> msg;
 		msg.instantiate();
+		ERR_FAIL_COND(msg.is_null());
 
 		Vector<uint8_t> list_data = _wl_data_offer_read(wayland_thread->wl_display, "text/uri-list", ss->wl_data_offer_dnd);
 
@@ -2206,6 +2224,7 @@ void WaylandThread::_wp_pointer_gesture_pinch_on_update(void *data, struct zwp_p
 	if (ss->active_gesture == Gesture::MAGNIFY) {
 		Ref<InputEventMagnifyGesture> mg;
 		mg.instantiate();
+		ERR_FAIL_COND(mg.is_null());
 
 		mg->set_window_id(DisplayServer::MAIN_WINDOW_ID);
 
@@ -2222,6 +2241,7 @@ void WaylandThread::_wp_pointer_gesture_pinch_on_update(void *data, struct zwp_p
 
 		Ref<InputEventMessage> magnify_msg;
 		magnify_msg.instantiate();
+		ERR_FAIL_COND(magnify_msg.is_null());
 		magnify_msg->event = mg;
 
 		// Since Wayland allows only one gesture at a time and godot instead expects
@@ -2230,6 +2250,7 @@ void WaylandThread::_wp_pointer_gesture_pinch_on_update(void *data, struct zwp_p
 
 		Ref<InputEventPanGesture> pg;
 		pg.instantiate();
+		ERR_FAIL_COND(pg.is_null());
 
 		pg->set_window_id(DisplayServer::MAIN_WINDOW_ID);
 
@@ -2244,6 +2265,7 @@ void WaylandThread::_wp_pointer_gesture_pinch_on_update(void *data, struct zwp_p
 
 		Ref<InputEventMessage> pan_msg;
 		pan_msg.instantiate();
+		ERR_FAIL_COND(pan_msg.is_null());
 		pan_msg->event = pg;
 
 		wayland_thread->push_message(magnify_msg);
@@ -2421,6 +2443,7 @@ void WaylandThread::_wp_tablet_tool_on_proximity_in(void *data, struct zwp_table
 
 	Ref<WindowEventMessage> msg;
 	msg.instantiate();
+	ERR_FAIL_COND(msg.is_null());
 	msg->event = DisplayServer::WINDOW_EVENT_MOUSE_ENTER;
 	wayland_thread->push_message(msg);
 
@@ -2446,6 +2469,7 @@ void WaylandThread::_wp_tablet_tool_on_proximity_out(void *data, struct zwp_tabl
 
 	Ref<WindowEventMessage> msg;
 	msg.instantiate();
+	ERR_FAIL_COND(msg.is_null());
 	msg->event = DisplayServer::WINDOW_EVENT_MOUSE_EXIT;
 
 	wayland_thread->push_message(msg);
@@ -2602,6 +2626,7 @@ void WaylandThread::_wp_tablet_tool_on_frame(void *data, struct zwp_tablet_tool_
 	if (old_td.position != td.position || old_td.tilt != td.tilt || old_td.pressure != td.pressure) {
 		Ref<InputEventMouseMotion> mm;
 		mm.instantiate();
+		ERR_FAIL_COND(mm.is_null());
 
 		mm->set_window_id(DisplayServer::MAIN_WINDOW_ID);
 
@@ -2641,6 +2666,7 @@ void WaylandThread::_wp_tablet_tool_on_frame(void *data, struct zwp_tablet_tool_
 
 		Ref<InputEventMessage> inputev_msg;
 		inputev_msg.instantiate();
+		ERR_FAIL_COND(inputev_msg.is_null());
 
 		inputev_msg->event = mm;
 
@@ -2656,6 +2682,7 @@ void WaylandThread::_wp_tablet_tool_on_frame(void *data, struct zwp_tablet_tool_
 			if (pressed_mask_delta.has_flag(test_button_mask)) {
 				Ref<InputEventMouseButton> mb;
 				mb.instantiate();
+				ERR_FAIL_COND(mb.is_null());
 
 				// Set all pressed modifiers.
 				mb->set_shift_pressed(ss->shift_pressed);
@@ -2685,6 +2712,7 @@ void WaylandThread::_wp_tablet_tool_on_frame(void *data, struct zwp_tablet_tool_
 
 				Ref<InputEventMessage> msg;
 				msg.instantiate();
+				ERR_FAIL_COND(msg.is_null());
 
 				msg->event = mb;
 
@@ -2725,6 +2753,7 @@ void WaylandThread::_wp_text_input_on_leave(void *data, struct zwp_text_input_v3
 
 	Ref<IMEUpdateEventMessage> msg;
 	msg.instantiate();
+	ERR_FAIL_COND(msg.is_null());
 	msg->text = String();
 	msg->selection = Vector2i();
 	ss->wayland_thread->push_message(msg);
@@ -2800,11 +2829,13 @@ void WaylandThread::_wp_text_input_on_done(void *data, struct zwp_text_input_v3 
 	if (!ss->ime_text_commit.is_empty()) {
 		Ref<IMECommitEventMessage> msg;
 		msg.instantiate();
+		ERR_FAIL_COND(msg.is_null());
 		msg->text = ss->ime_text_commit;
 		ss->wayland_thread->push_message(msg);
 	} else {
 		Ref<IMEUpdateEventMessage> msg;
 		msg.instantiate();
+		ERR_FAIL_COND(msg.is_null());
 		msg->text = ss->ime_text;
 		msg->selection = ss->ime_cursor;
 		ss->wayland_thread->push_message(msg);
@@ -3093,6 +3124,7 @@ void WaylandThread::window_state_update_size(WindowState *p_ws, int p_width, int
 
 		Ref<WindowRectMessage> rect_msg;
 		rect_msg.instantiate();
+		ERR_FAIL_COND(rect_msg.is_null());
 		rect_msg->rect = p_ws->rect;
 		rect_msg->rect.size = scaled_size;
 		p_ws->wayland_thread->push_message(rect_msg);
@@ -3101,6 +3133,7 @@ void WaylandThread::window_state_update_size(WindowState *p_ws, int p_width, int
 	if (scale_changed) {
 		Ref<WindowEventMessage> dpi_msg;
 		dpi_msg.instantiate();
+		ERR_FAIL_COND(dpi_msg.is_null());
 		dpi_msg->event = DisplayServer::WINDOW_EVENT_DPI_CHANGE;
 		p_ws->wayland_thread->push_message(dpi_msg);
 	}

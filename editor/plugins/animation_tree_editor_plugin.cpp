@@ -93,6 +93,7 @@ void AnimationTreeEditor::_update_path() {
 
 	Ref<ButtonGroup> group;
 	group.instantiate();
+	ERR_FAIL_COND(group.is_null());
 
 	Button *b = memnew(Button);
 	b->set_text(TTR("Root"));

@@ -5379,6 +5379,7 @@ CanvasItemEditor::CanvasItemEditor() {
 	controls_hb->add_child(translation_preview_button);
 
 	panner.instantiate();
+	ERR_FAIL_COND(panner.is_null());
 	panner->set_callbacks(callable_mp(this, &CanvasItemEditor::_pan_callback), callable_mp(this, &CanvasItemEditor::_zoom_callback));
 
 	viewport = memnew(CanvasItemEditorViewport(this));
@@ -5724,6 +5725,7 @@ CanvasItemEditor::CanvasItemEditor() {
 	add_child(snap_dialog);
 
 	select_sb.instantiate();
+	ERR_FAIL_COND(select_sb.is_null());
 
 	selection_menu = memnew(PopupMenu);
 	add_child(selection_menu);
@@ -6391,6 +6393,7 @@ CanvasItemEditorViewport::CanvasItemEditorViewport(CanvasItemEditor *p_canvas_it
 	btn_group->set_h_size_flags(SIZE_EXPAND_FILL);
 
 	button_group.instantiate();
+	ERR_FAIL_COND(button_group.is_null());
 	for (int i = 0; i < texture_node_types.size(); i++) {
 		CheckBox *check = memnew(CheckBox);
 		btn_group->add_child(check);

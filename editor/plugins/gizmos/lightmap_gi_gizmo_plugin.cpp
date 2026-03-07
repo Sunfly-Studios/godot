@@ -209,6 +209,7 @@ void LightmapGIGizmoPlugin::redraw(EditorNode3DGizmo *p_gizmo) {
 
 	Ref<ArrayMesh> mesh;
 	mesh.instantiate();
+	ERR_FAIL_COND(mesh.is_null());
 	mesh->add_surface_from_arrays(Mesh::PRIMITIVE_TRIANGLES, array, Array(), Dictionary(), 0); //no compression
 	mesh->surface_set_material(0, material_probes);
 

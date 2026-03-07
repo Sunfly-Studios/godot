@@ -1155,6 +1155,7 @@ Error EditorExportPlatformIOS::_export_loading_screen_file(const Ref<EditorExpor
 
 		if (err != OK || splash.is_null() || splash->is_empty()) {
 			splash.instantiate(boot_splash_png);
+			ERR_FAIL_COND_V(splash.is_null(), ERR_OUT_OF_MEMORY);
 		}
 
 		// Using same image for both @2x and @3x
@@ -1294,6 +1295,7 @@ struct ExportLibsData {
 void EditorExportPlatformIOS::_check_xcframework_content(const String &p_path, int &r_total_libs, int &r_static_libs, int &r_dylibs, int &r_frameworks) const {
 	Ref<PList> plist;
 	plist.instantiate();
+	ERR_FAIL_COND(plist.is_null());
 	plist->load_file(p_path.path_join("Info.plist"));
 	Ref<PListNode> root_node = plist->get_root();
 	if (root_node.is_null()) {
@@ -1357,6 +1359,7 @@ Error EditorExportPlatformIOS::_convert_to_framework(const String &p_source, con
 	if (asset.ends_with(".xcframework")) {
 		Ref<PList> plist;
 		plist.instantiate();
+		ERR_FAIL_COND_V(plist.is_null(), ERR_OUT_OF_MEMORY);
 		plist->load_file(p_source.path_join("Info.plist"));
 		Ref<PListNode> root_node = plist->get_root();
 		if (root_node.is_null()) {
@@ -2566,6 +2569,7 @@ bool EditorExportPlatformIOS::has_valid_export_configuration(const Ref<EditorExp
 		String plist_err;
 		Ref<PList> plist_parser;
 		plist_parser.instantiate();
+		ERR_FAIL_COND_V(plist_parser.is_null(), false);
 		if (!plist_parser->load_string(plist, plist_err)) {
 			err += TTR("Invalid additional PList content: ") + plist_err + "\n";
 			valid = false;
@@ -2746,6 +2750,7 @@ void EditorExportPlatformIOS::_check_for_changes_poll_thread(void *ud) {
 			if (err == OK && ec == 0) {
 				Ref<JSON> json;
 				json.instantiate();
+				ERR_FAIL_COND(json.is_null());
 				devices = "{ \"devices\":[" + devices.replace("}{", "},{") + "]}";
 				err = json->parse(devices);
 				if (err == OK) {
@@ -2782,6 +2787,7 @@ void EditorExportPlatformIOS::_check_for_changes_poll_thread(void *ud) {
 			if (err == OK && ec == 0) {
 				Ref<JSON> json;
 				json.instantiate();
+				ERR_FAIL_COND(json.is_null());
 				err = json->parse(devices);
 				if (err == OK) {
 					const Dictionary &data = json->get_data();

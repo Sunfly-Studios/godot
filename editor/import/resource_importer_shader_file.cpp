@@ -101,6 +101,7 @@ Error ResourceImporterShaderFile::import(ResourceUID::ID p_source_id, const Stri
 	String file_txt = file->get_as_utf8_string();
 	Ref<RDShaderFile> shader_file;
 	shader_file.instantiate();
+	ERR_FAIL_COND_V(shader_file.is_null(), ERR_CANT_CREATE);
 	String base_path = p_source_file.get_base_dir();
 	err = shader_file->parse_versions_from_text(file_txt, "", _include_function, &base_path);
 

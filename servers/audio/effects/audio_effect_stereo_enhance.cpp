@@ -78,6 +78,7 @@ AudioEffectStereoEnhanceInstance::~AudioEffectStereoEnhanceInstance() {
 Ref<AudioEffectInstance> AudioEffectStereoEnhance::instantiate() {
 	Ref<AudioEffectStereoEnhanceInstance> ins;
 	ins.instantiate();
+	ERR_FAIL_COND_V(ins.is_null(), Ref<AudioEffectInstance>());
 
 	ins->base = Ref<AudioEffectStereoEnhance>(this);
 

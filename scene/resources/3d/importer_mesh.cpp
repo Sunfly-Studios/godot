@@ -533,6 +533,7 @@ Ref<ArrayMesh> ImporterMesh::get_mesh(const Ref<ArrayMesh> &p_base) {
 		}
 		if (mesh.is_null()) {
 			mesh.instantiate();
+			ERR_FAIL_COND_V(mesh.is_null(), Ref<ArrayMesh>());
 		}
 		mesh->set_name(get_name());
 		if (has_meta("import_id")) {
@@ -602,6 +603,7 @@ void ImporterMesh::create_shadow_mesh() {
 	}
 
 	shadow_mesh.instantiate();
+	ERR_FAIL_COND(shadow_mesh.is_null());
 
 	for (int i = 0; i < surfaces.size(); i++) {
 		LocalVector<int> vertex_remap;
@@ -827,6 +829,7 @@ Vector<Ref<Shape3D>> ImporterMesh::convex_decompose(const Ref<MeshConvexDecompos
 	for (int i = 0; i < decomposed.size(); i++) {
 		Ref<ConvexPolygonShape3D> shape;
 		shape.instantiate();
+		ERR_FAIL_COND_V(shape.is_null(), Vector<Ref<Shape3D>>());
 		shape->set_points(decomposed[i]);
 		ret.push_back(shape);
 	}
@@ -838,6 +841,7 @@ Ref<ConvexPolygonShape3D> ImporterMesh::create_convex_shape(bool p_clean, bool p
 	if (p_simplify) {
 		Ref<MeshConvexDecompositionSettings> settings;
 		settings.instantiate();
+		ERR_FAIL_COND_V(settings.is_null(), Ref<ConvexPolygonShape3D>());
 		settings->set_max_convex_hulls(1);
 		Vector<Ref<Shape3D>> decomposed = convex_decompose(settings);
 		if (decomposed.size() == 1) {
@@ -928,6 +932,7 @@ Ref<NavigationMesh> ImporterMesh::create_navigation_mesh() {
 
 	Ref<NavigationMesh> nm;
 	nm.instantiate();
+	ERR_FAIL_COND_V(nm.is_null(), Ref<NavigationMesh>());
 	nm->set_data(vertices, face_polygons);
 
 	return nm;
@@ -1071,6 +1076,7 @@ Error ImporterMesh::lightmap_unwrap_cached(const Transform3D &p_base_transform, 
 	for (int i = 0; i < lightmap_surfaces.size(); i++) {
 		Ref<SurfaceTool> st;
 		st.instantiate();
+		ERR_FAIL_COND_V(st.is_null(), ERR_CANT_CREATE);
 		st->set_skin_weight_count((lightmap_surfaces[i].format & Mesh::ARRAY_FLAG_USE_8_BONE_WEIGHTS) ? SurfaceTool::SKIN_8_WEIGHTS : SurfaceTool::SKIN_4_WEIGHTS);
 		st->begin(Mesh::PRIMITIVE_TRIANGLES);
 		st->set_material(lightmap_surfaces[i].material);

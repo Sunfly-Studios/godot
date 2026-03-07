@@ -104,6 +104,7 @@ void ResourceImporterTexture::update_imports() {
 	for (const KeyValue<StringName, MakeInfo> &E : make_flags) {
 		Ref<ConfigFile> cf;
 		cf.instantiate();
+		ERR_FAIL_COND(cf.is_null());
 		String src_path = String(E.key) + ".import";
 
 		Error err = cf->load(src_path);
@@ -558,6 +559,7 @@ Error ResourceImporterTexture::import(ResourceUID::ID p_source_id, const String 
 
 	if (mipmaps && roughness > 1 && FileAccess::exists(normal_map)) {
 		normal_image.instantiate();
+		ERR_FAIL_COND_V(normal_image.is_null(), ERR_OUT_OF_MEMORY);
 		if (ImageLoader::load_image(normal_map, normal_image) == OK) {
 			roughness_channel = Image::RoughnessChannel(roughness - 2);
 		}
@@ -566,6 +568,7 @@ Error ResourceImporterTexture::import(ResourceUID::ID p_source_id, const String 
 	// Load the main image.
 	Ref<Image> image;
 	image.instantiate();
+	ERR_FAIL_COND_V(image.is_null(), ERR_OUT_OF_MEMORY);
 	Error err = ImageLoader::load_image(p_source_file, image, nullptr, loader_flags, scale);
 	if (err != OK) {
 		return err;
@@ -585,6 +588,7 @@ Error ResourceImporterTexture::import(ResourceUID::ID p_source_id, const String 
 		}
 
 		editor_image.instantiate();
+		ERR_FAIL_COND_V(editor_image.is_null(), ERR_OUT_OF_MEMORY);
 		err = ImageLoader::load_image(p_source_file, editor_image, nullptr, editor_loader_flags, editor_scale);
 
 		if (err != OK) {

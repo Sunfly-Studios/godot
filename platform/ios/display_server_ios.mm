@@ -293,7 +293,7 @@ void DisplayServerIOS::_window_callback(const Callable &p_callable, const Varian
 void DisplayServerIOS::touch_press(int p_idx, int p_x, int p_y, bool p_pressed, bool p_double_click) {
 	Ref<InputEventScreenTouch> ev;
 	ev.instantiate();
-	ERR_FAIL_NULL(ev);
+	ERR_FAIL_COND(ev.is_null());
 
 	ev->set_index(p_idx);
 	ev->set_pressed(p_pressed);
@@ -305,7 +305,7 @@ void DisplayServerIOS::touch_press(int p_idx, int p_x, int p_y, bool p_pressed, 
 void DisplayServerIOS::touch_drag(int p_idx, int p_prev_x, int p_prev_y, int p_x, int p_y, float p_pressure, Vector2 p_tilt) {
 	Ref<InputEventScreenDrag> ev;
 	ev.instantiate();
-	ERR_FAIL_NULL(ev);
+	ERR_FAIL_COND(ev.is_null());
 	ev->set_index(p_idx);
 	ev->set_pressure(p_pressure);
 	ev->set_tilt(p_tilt);
@@ -334,7 +334,7 @@ void DisplayServerIOS::key(Key p_key, char32_t p_char, Key p_unshifted, Key p_ph
 	Ref<InputEventKey> ev;
 	ev.instantiate();
 
-	ERR_FAIL_NULL(ev);
+	ERR_FAIL_COND(ev.is_null());
 
 	ev->set_echo(false);
 	ev->set_pressed(p_pressed);

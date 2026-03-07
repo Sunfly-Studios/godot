@@ -378,6 +378,7 @@
 
 	Ref<InputEventMouseButton> mb;
 	mb.instantiate();
+	ERR_FAIL_COND(mb.is_null());
 	mb->set_window_id(window_id);
 	if (outofstream) {
 		ds->update_mouse_pos(wd, [wd.window_object mouseLocationOutsideOfEventStream]);
@@ -496,6 +497,7 @@
 
 	Ref<InputEventMouseMotion> mm;
 	mm.instantiate();
+	ERR_FAIL_COND(mm.is_null());
 
 	mm->set_window_id(window_id);
 	mm->set_button_mask(ds->mouse_get_button_state());
@@ -612,6 +614,7 @@
 
 	Ref<InputEventMagnifyGesture> ev;
 	ev.instantiate();
+	ERR_FAIL_COND(ev.is_null());
 	ev->set_window_id(window_id);
 	ds->get_key_modifier_state([event modifierFlags], ev);
 	ds->update_mouse_pos(wd, [event locationInWindow]);
@@ -803,6 +806,7 @@
 
 	Ref<InputEventMouseButton> sc;
 	sc.instantiate();
+	ERR_FAIL_COND(sc.is_null());
 
 	sc->set_window_id(window_id);
 	ds->get_key_modifier_state([event modifierFlags], sc);
@@ -818,6 +822,7 @@
 	Input::get_singleton()->parse_input_event(sc);
 
 	sc.instantiate();
+	ERR_FAIL_COND(sc.is_null());
 	sc->set_window_id(window_id);
 	sc->set_button_index(button);
 	sc->set_factor(factor);
@@ -840,6 +845,7 @@
 
 	Ref<InputEventPanGesture> pg;
 	pg.instantiate();
+	ERR_FAIL_COND(pg.is_null());
 
 	pg->set_window_id(window_id);
 	ds->get_key_modifier_state([event modifierFlags], pg);

@@ -36,6 +36,7 @@ Ref<OccluderPolygon2D> LightOccluder2DEditor::_ensure_occluder() const {
 	Ref<OccluderPolygon2D> occluder = node->get_occluder_polygon();
 	if (occluder.is_null()) {
 		occluder.instantiate();
+		ERR_FAIL_COND_V(occluder.is_null(), Ref<OccluderPolygon2D>());
 		node->set_occluder_polygon(occluder);
 	}
 	return occluder;

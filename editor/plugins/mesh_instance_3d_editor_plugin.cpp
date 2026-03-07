@@ -268,8 +268,8 @@ Vector<Ref<Shape3D>> MeshInstance3DEditor::create_shape_from_mesh(Ref<Mesh> p_me
 			const Ref<SphereMesh> sphere_mesh = p_mesh;
 			if (sphere_mesh.is_valid()) {
 				Ref<SphereShape3D> sphere_shape;
-				ERR_FAIL_COND_V_MSG(sphere_shape.is_null(), Vector<Ref<Shape3D>>(), "Could not create Sphere Mesh");
 				sphere_shape.instantiate();
+				ERR_FAIL_COND_V_MSG(sphere_shape.is_null(), Vector<Ref<Shape3D>>(), "Could not create Sphere Mesh");
 				sphere_shape->set_radius(MAX(sphere_mesh->get_radius(), 0.001));
 				shapes.push_back(sphere_shape);
 			}

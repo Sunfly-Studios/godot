@@ -816,6 +816,7 @@ void OS::benchmark_dump() {
 
 			Ref<JSON> json;
 			json.instantiate();
+			ERR_FAIL_COND(json.is_null());
 			f->store_string(json->stringify(benchmark_marks, "\t", false, true));
 		}
 	} else {

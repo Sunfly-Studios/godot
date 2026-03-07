@@ -1390,9 +1390,11 @@ void godotsharp_weakref(Object *p_ptr, Ref<RefCounted> *r_weak_ref) {
 		}
 
 		wref.instantiate();
+		ERR_FAIL_COND(wref.is_null());
 		wref->set_ref(r);
 	} else {
 		wref.instantiate();
+		ERR_FAIL_COND(wref.is_null());
 		wref->set_obj(p_ptr);
 	}
 

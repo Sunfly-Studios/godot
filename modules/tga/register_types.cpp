@@ -40,6 +40,7 @@ void initialize_tga_module(ModuleInitializationLevel p_level) {
 	}
 
 	image_loader_tga.instantiate();
+	ERR_FAIL_COND(image_loader_tga.is_null());
 	ImageLoader::add_image_format_loader(image_loader_tga);
 }
 
@@ -48,6 +49,8 @@ void uninitialize_tga_module(ModuleInitializationLevel p_level) {
 		return;
 	}
 
-	ImageLoader::remove_image_format_loader(image_loader_tga);
-	image_loader_tga.unref();
+	if (image_loader_tga.is_valid()) {
+		ImageLoader::remove_image_format_loader(image_loader_tga);
+		image_loader_tga.unref();
+	}
 }

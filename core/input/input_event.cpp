@@ -517,6 +517,7 @@ String InputEventKey::to_string() {
 Ref<InputEventKey> InputEventKey::create_reference(Key p_keycode, bool p_physical) {
 	Ref<InputEventKey> ie;
 	ie.instantiate();
+	ERR_FAIL_COND_V(ie.is_null(), Ref<InputEventKey>());
 	if (p_physical) {
 		ie->set_physical_keycode(p_keycode & KeyModifierMask::CODE_MASK);
 	} else {
@@ -739,6 +740,7 @@ Ref<InputEvent> InputEventMouseButton::xformed_by(const Transform2D &p_xform, co
 
 	Ref<InputEventMouseButton> mb;
 	mb.instantiate();
+	ERR_FAIL_COND_V(mb.is_null(), Ref<InputEvent>());
 
 	mb->set_device(get_device());
 	mb->set_window_id(get_window_id());
@@ -958,6 +960,7 @@ Vector2 InputEventMouseMotion::get_screen_velocity() const {
 Ref<InputEvent> InputEventMouseMotion::xformed_by(const Transform2D &p_xform, const Vector2 &p_local_ofs) const {
 	Ref<InputEventMouseMotion> mm;
 	mm.instantiate();
+	ERR_FAIL_COND_V(mm.is_null(), Ref<InputEvent>());
 
 	mm->set_device(get_device());
 	mm->set_window_id(get_window_id());
@@ -1188,6 +1191,7 @@ String InputEventJoypadMotion::to_string() {
 Ref<InputEventJoypadMotion> InputEventJoypadMotion::create_reference(JoyAxis p_axis, float p_value) {
 	Ref<InputEventJoypadMotion> ie;
 	ie.instantiate();
+	ERR_FAIL_COND_V(ie.is_null(), Ref<InputEventJoypadButton>());
 	ie->set_axis(p_axis);
 	ie->set_axis_value(p_value);
 
@@ -1307,6 +1311,7 @@ String InputEventJoypadButton::to_string() {
 Ref<InputEventJoypadButton> InputEventJoypadButton::create_reference(JoyButton p_btn_index) {
 	Ref<InputEventJoypadButton> ie;
 	ie.instantiate();
+	ERR_FAIL_COND_V(ie.is_null(), Ref<InputEventJoypadButton>());
 	ie->set_button_index(p_btn_index);
 
 	return ie;
@@ -1362,6 +1367,7 @@ bool InputEventScreenTouch::is_double_tap() const {
 Ref<InputEvent> InputEventScreenTouch::xformed_by(const Transform2D &p_xform, const Vector2 &p_local_ofs) const {
 	Ref<InputEventScreenTouch> st;
 	st.instantiate();
+	ERR_FAIL_COND_V(st.is_null(), Ref<InputEvent>());
 	st->set_device(get_device());
 	st->set_window_id(get_window_id());
 	st->set_index(index);
@@ -1486,6 +1492,7 @@ Ref<InputEvent> InputEventScreenDrag::xformed_by(const Transform2D &p_xform, con
 	Ref<InputEventScreenDrag> sd;
 
 	sd.instantiate();
+	ERR_FAIL_COND_V(sd.is_null(), Ref<InputEvent>());
 
 	sd->set_device(get_device());
 	sd->set_window_id(get_window_id());
@@ -1704,6 +1711,7 @@ real_t InputEventMagnifyGesture::get_factor() const {
 Ref<InputEvent> InputEventMagnifyGesture::xformed_by(const Transform2D &p_xform, const Vector2 &p_local_ofs) const {
 	Ref<InputEventMagnifyGesture> ev;
 	ev.instantiate();
+	ERR_FAIL_COND_V(ev.is_null(), Ref<InputEvent>());
 
 	ev->set_device(get_device());
 	ev->set_window_id(get_window_id());
@@ -1746,6 +1754,7 @@ Vector2 InputEventPanGesture::get_delta() const {
 Ref<InputEvent> InputEventPanGesture::xformed_by(const Transform2D &p_xform, const Vector2 &p_local_ofs) const {
 	Ref<InputEventPanGesture> ev;
 	ev.instantiate();
+	ERR_FAIL_COND_V(ev.is_null(), Ref<InputEvent>());
 
 	ev->set_device(get_device());
 	ev->set_window_id(get_window_id());

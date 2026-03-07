@@ -348,6 +348,7 @@ void CameraMacOS::update_feeds() {
 		if (!found) {
 			Ref<CameraFeedMacOS> newfeed;
 			newfeed.instantiate();
+			ERR_FAIL_COND(newfeed.is_null());
 			newfeed->set_device(device);
 
 			// assume display camera so inverse

@@ -631,6 +631,7 @@ void Path2DEditor::_create_curve() {
 
 	Ref<Curve2D> new_curve;
 	new_curve.instantiate();
+	ERR_FAIL_COND(new_curve.is_null());
 
 	EditorUndoRedoManager *undo_redo = EditorUndoRedoManager::get_singleton();
 	undo_redo->create_action(TTR("Create Curve in Path2D"));

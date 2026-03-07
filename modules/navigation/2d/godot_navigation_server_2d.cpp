@@ -487,6 +487,7 @@ void GodotNavigationServer2D::query_path(const Ref<NavigationPathQueryParameters
 
 	Ref<NavigationPathQueryParameters3D> query_parameters;
 	query_parameters.instantiate();
+	ERR_FAIL_COND(query_parameters.is_null());
 
 	query_parameters->set_map(p_query_parameters->get_map());
 	query_parameters->set_start_position(v2_to_v3(p_query_parameters->get_start_position()));
@@ -516,6 +517,7 @@ void GodotNavigationServer2D::query_path(const Ref<NavigationPathQueryParameters
 
 	Ref<NavigationPathQueryResult3D> query_result;
 	query_result.instantiate();
+	ERR_FAIL_COND(query_result.is_null());
 
 	NavigationServer3D::get_singleton()->query_path(query_parameters, query_result, p_callback);
 

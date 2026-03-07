@@ -156,6 +156,7 @@ void Path3D::_update_debug_mesh() {
 
 	_update_debug_path_material();
 
+	ERR_FAIL_COND(debug_mesh.is_null());
 	debug_mesh->clear_surfaces();
 	debug_mesh->add_surface_from_arrays(Mesh::PRIMITIVE_LINE_STRIP, ribbon_array);
 	debug_mesh->add_surface_from_arrays(Mesh::PRIMITIVE_LINES, bone_array);

@@ -910,6 +910,7 @@ Ref<ArrayMesh> SceneTree::get_debug_contact_mesh() {
 	}
 
 	debug_contact_mesh.instantiate();
+	ERR_FAIL_COND_V(debug_contact_mesh.is_null(), Ref<ArrayMesh>());
 
 	Ref<StandardMaterial3D> mat = Ref<StandardMaterial3D>(memnew(StandardMaterial3D));
 	mat->set_shading_mode(StandardMaterial3D::SHADING_MODE_UNSHADED);
@@ -1579,6 +1580,7 @@ Ref<SceneTreeTimer> SceneTree::create_timer(double p_delay_sec, bool p_process_a
 	_THREAD_SAFE_METHOD_
 	Ref<SceneTreeTimer> stt;
 	stt.instantiate();
+	ERR_FAIL_COND_V(stt.is_null(), Ref<SceneTreeTimer>());
 	stt->set_process_always(p_process_always);
 	stt->set_time_left(p_delay_sec);
 	stt->set_process_in_physics(p_process_in_physics);
@@ -1591,6 +1593,7 @@ Ref<Tween> SceneTree::create_tween() {
 	_THREAD_SAFE_METHOD_
 	Ref<Tween> tween;
 	tween.instantiate(this);
+	ERR_FAIL_COND_V(tween.is_null(), Ref<Tween>());
 	tweens.push_back(tween);
 	return tween;
 }
@@ -1933,12 +1936,14 @@ SceneTree::SceneTree() {
 	if (vrs_mode == 1 && !vrs_texture_path.is_empty()) {
 		Ref<Image> vrs_image;
 		vrs_image.instantiate();
+		ERR_FAIL_COND(vrs_image.is_null());
 		Error load_err = ImageLoader::load_image(vrs_texture_path, vrs_image);
 		if (load_err) {
 			ERR_PRINT("Non-existing or invalid VRS texture at '" + vrs_texture_path + "'.");
 		} else {
 			Ref<ImageTexture> vrs_texture;
 			vrs_texture.instantiate();
+			ERR_FAIL_COND(vrs_texture.is_null());
 			vrs_texture->create_from_image(vrs_image);
 			root->set_vrs_texture(vrs_texture);
 		}

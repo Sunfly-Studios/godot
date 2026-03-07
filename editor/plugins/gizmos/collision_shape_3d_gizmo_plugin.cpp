@@ -70,6 +70,7 @@ void CollisionShape3DGizmoPlugin::create_collision_material(const String &p_name
 		bool instantiated = i < 2;
 
 		Ref<StandardMaterial3D> material = memnew(StandardMaterial3D);
+		ERR_FAIL_COND(material.is_null());
 
 		Color color = collision_color;
 		color.a *= instantiated ? 0.25 : 1.0;
@@ -114,6 +115,7 @@ String CollisionShape3DGizmoPlugin::get_handle_name(const EditorNode3DGizmo *p_g
 	}
 
 	if (Object::cast_to<BoxShape3D>(*s)) {
+		ERR_FAIL_COND_V(helper.is_null(), String());
 		return helper->box_get_handle_name(p_id);
 	}
 
@@ -122,6 +124,7 @@ String CollisionShape3DGizmoPlugin::get_handle_name(const EditorNode3DGizmo *p_g
 	}
 
 	if (Object::cast_to<CylinderShape3D>(*s)) {
+		ERR_FAIL_COND_V(helper.is_null(), String());
 		return helper->cylinder_get_handle_name(p_id);
 	}
 
@@ -169,10 +172,12 @@ Variant CollisionShape3DGizmoPlugin::get_handle_value(const EditorNode3DGizmo *p
 }
 
 void CollisionShape3DGizmoPlugin::begin_handle_action(const EditorNode3DGizmo *p_gizmo, int p_id, bool p_secondary) {
+	ERR_FAIL_COND(helper.is_null());
 	helper->initialize_handle_action(get_handle_value(p_gizmo, p_id, p_secondary), p_gizmo->get_node_3d()->get_global_transform());
 }
 
 void CollisionShape3DGizmoPlugin::set_handle(const EditorNode3DGizmo *p_gizmo, int p_id, bool p_secondary, Camera3D *p_camera, const Point2 &p_point) {
+	ERR_FAIL_COND(helper.is_null());
 	CollisionShape3D *cs = Object::cast_to<CollisionShape3D>(p_gizmo->get_node_3d());
 
 	Ref<Shape3D> s = cs->get_shape();
@@ -261,6 +266,7 @@ void CollisionShape3DGizmoPlugin::set_handle(const EditorNode3DGizmo *p_gizmo, i
 }
 
 void CollisionShape3DGizmoPlugin::commit_handle(const EditorNode3DGizmo *p_gizmo, int p_id, bool p_secondary, const Variant &p_restore, bool p_cancel) {
+	ERR_FAIL_COND(helper.is_null());
 	CollisionShape3D *cs = Object::cast_to<CollisionShape3D>(p_gizmo->get_node_3d());
 
 	Ref<Shape3D> s = cs->get_shape();
@@ -331,6 +337,7 @@ void CollisionShape3DGizmoPlugin::commit_handle(const EditorNode3DGizmo *p_gizmo
 }
 
 void CollisionShape3DGizmoPlugin::redraw(EditorNode3DGizmo *p_gizmo) {
+	ERR_FAIL_COND(helper.is_null());
 	CollisionShape3D *cs = Object::cast_to<CollisionShape3D>(p_gizmo->get_node_3d());
 
 	p_gizmo->clear();

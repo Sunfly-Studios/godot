@@ -1256,6 +1256,7 @@ LightmapperRD::BakeError LightmapperRD::bake(BakeQuality p_quality, bool p_use_d
 				panorama_tex->convert(Image::FORMAT_RGBAF);
 			} else {
 				panorama_tex.instantiate();
+				ERR_FAIL_COND_V(panorama_tex.is_null(), BAKE_ERROR_LIGHTMAP_CANT_PRE_BAKE_MESHES);
 				panorama_tex->initialize_data(8, 8, false, Image::FORMAT_RGBAF);
 				panorama_tex->fill(Color(0, 0, 0, 1));
 			}
@@ -1361,6 +1362,7 @@ LightmapperRD::BakeError LightmapperRD::bake(BakeQuality p_quality, bool p_use_d
 	//shaders
 	Ref<RDShaderFile> raster_shader;
 	raster_shader.instantiate();
+	ERR_FAIL_COND_V(raster_shader.is_null(), BAKE_ERROR_LIGHTMAP_CANT_PRE_BAKE_MESHES);
 	err = raster_shader->parse_versions_from_text(lm_raster_shader_glsl);
 	if (err != OK) {
 		raster_shader->print_errors("raster_shader");
@@ -1544,6 +1546,7 @@ LightmapperRD::BakeError LightmapperRD::bake(BakeQuality p_quality, bool p_use_d
 	}
 
 	compute_shader.instantiate();
+	ERR_FAIL_COND_V(compute_shader.is_null(), BAKE_ERROR_LIGHTMAP_CANT_PRE_BAKE_MESHES);
 	err = compute_shader->parse_versions_from_text(lm_compute_shader_glsl, defines);
 	if (err != OK) {
 		FREE_TEXTURES
@@ -2130,6 +2133,7 @@ LightmapperRD::BakeError LightmapperRD::bake(BakeQuality p_quality, bool p_use_d
 	//shaders
 	Ref<RDShaderFile> blendseams_shader;
 	blendseams_shader.instantiate();
+	ERR_FAIL_COND_V(blendseams_shader.is_null(), BAKE_ERROR_LIGHTMAP_CANT_PRE_BAKE_MESHES);
 	err = blendseams_shader->parse_versions_from_text(lm_blendseams_shader_glsl);
 	if (err != OK) {
 		FREE_TEXTURES

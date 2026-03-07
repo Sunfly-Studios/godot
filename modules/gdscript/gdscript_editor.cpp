@@ -74,6 +74,7 @@ bool GDScriptLanguage::is_using_templates() {
 Ref<Script> GDScriptLanguage::make_template(const String &p_template, const String &p_class_name, const String &p_base_class_name) const {
 	Ref<GDScript> scr;
 	scr.instantiate();
+	ERR_FAIL_COND_V(scr.is_null(), Ref<Script>());
 	String processed_template = p_template;
 	bool type_hints = false;
 #ifdef TOOLS_ENABLED

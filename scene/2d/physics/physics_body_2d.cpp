@@ -56,6 +56,7 @@ Ref<KinematicCollision2D> PhysicsBody2D::_move(const Vector2 &p_motion, bool p_t
 		// Create a new instance when the cached reference is invalid or still in use in script.
 		if (motion_cache.is_null() || motion_cache->get_reference_count() > 1) {
 			motion_cache.instantiate();
+			ERR_FAIL_COND_V(motion_cache.is_null(), Ref<KinematicCollision2D>());
 			motion_cache->owner_id = get_instance_id();
 		}
 

@@ -47,6 +47,7 @@ void GDExtensionExportPlugin::_export_file(const String &p_path, const String &p
 
 	Ref<ConfigFile> config;
 	config.instantiate();
+	ERR_FAIL_COND(config.is_null());
 
 	Error err = config->load(p_path);
 	ERR_FAIL_COND_MSG(err, "Failed to load GDExtension file: " + p_path);

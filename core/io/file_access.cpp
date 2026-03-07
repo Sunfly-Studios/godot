@@ -207,6 +207,7 @@ Ref<FileAccess> FileAccess::open_encrypted(const String &p_path, ModeFlags p_mod
 
 	Ref<FileAccessEncrypted> fae;
 	fae.instantiate();
+	ERR_FAIL_COND_V(fae.is_null(), Ref<FileAccess>());
 	Error err = fae->open_and_parse(fa, p_key, (p_mode_flags == WRITE) ? FileAccessEncrypted::MODE_WRITE_AES256 : FileAccessEncrypted::MODE_READ, true, p_iv);
 	last_file_open_error = err;
 	if (err) {
@@ -223,6 +224,7 @@ Ref<FileAccess> FileAccess::open_encrypted_pass(const String &p_path, ModeFlags 
 
 	Ref<FileAccessEncrypted> fae;
 	fae.instantiate();
+	ERR_FAIL_COND_V(fae.is_null(), Ref<FileAccess>());
 	Error err = fae->open_and_parse_password(fa, p_pass, (p_mode_flags == WRITE) ? FileAccessEncrypted::MODE_WRITE_AES256 : FileAccessEncrypted::MODE_READ);
 	last_file_open_error = err;
 	if (err) {
@@ -234,6 +236,7 @@ Ref<FileAccess> FileAccess::open_encrypted_pass(const String &p_path, ModeFlags 
 Ref<FileAccess> FileAccess::open_compressed(const String &p_path, ModeFlags p_mode_flags, CompressionMode p_compress_mode) {
 	Ref<FileAccessCompressed> fac;
 	fac.instantiate();
+	ERR_FAIL_COND_V(fac.is_null(), Ref<FileAccess>());
 	fac->configure("GCPF", (Compression::Mode)p_compress_mode);
 	Error err = fac->open_internal(p_path, p_mode_flags);
 	last_file_open_error = err;

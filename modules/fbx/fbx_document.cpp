@@ -336,6 +336,7 @@ Error FBXDocument::_parse_nodes(Ref<FBXState> p_state) {
 
 		Ref<GLTFNode> node;
 		node.instantiate();
+		ERR_FAIL_COND_V(node.is_null(), ERR_OUT_OF_MEMORY);
 
 		node->height = int(fbx_node->node_depth);
 
@@ -471,6 +472,7 @@ Error FBXDocument::_parse_meshes(Ref<FBXState> p_state) {
 
 		Ref<ImporterMesh> import_mesh;
 		import_mesh.instantiate();
+		ERR_FAIL_COND_V(import_mesh.is_null(), ERR_OUT_OF_MEMORY);
 		String mesh_name = "mesh";
 		String original_name;
 		if (fbx_mesh->name.length > 0) {
@@ -757,6 +759,7 @@ Error FBXDocument::_parse_meshes(Ref<FBXState> p_state) {
 
 				Ref<SurfaceTool> mesh_surface_tool;
 				mesh_surface_tool.instantiate();
+				ERR_FAIL_COND_V(mesh_surface_tool.is_null(), ERR_OUT_OF_MEMORY);
 				mesh_surface_tool->create_from_triangle_arrays(array);
 				mesh_surface_tool->set_skin_weight_count(num_skin_weights == 8 ? SurfaceTool::SKIN_8_WEIGHTS : SurfaceTool::SKIN_4_WEIGHTS);
 				mesh_surface_tool->index();
@@ -828,6 +831,7 @@ Error FBXDocument::_parse_meshes(Ref<FBXState> p_state) {
 
 							Ref<SurfaceTool> blend_surface_tool;
 							blend_surface_tool.instantiate();
+							ERR_FAIL_COND_V(blend_surface_tool.is_null(), ERR_OUT_OF_MEMORY);
 							blend_surface_tool->create_from_triangle_arrays(array_copy);
 							blend_surface_tool->set_skin_weight_count(num_skin_weights == 8 ? SurfaceTool::SKIN_8_WEIGHTS : SurfaceTool::SKIN_4_WEIGHTS);
 							if (generate_tangents) {
@@ -882,6 +886,7 @@ Error FBXDocument::_parse_meshes(Ref<FBXState> p_state) {
 					} else {
 						Ref<StandardMaterial3D> mat3d;
 						mat3d.instantiate();
+						ERR_FAIL_COND_V(mat3d.is_null(), ERR_OUT_OF_MEMORY);
 						if (has_vertex_color) {
 							mat3d->set_flag(StandardMaterial3D::FLAG_ALBEDO_FROM_VERTEX_COLOR, true);
 						}
@@ -897,6 +902,7 @@ Error FBXDocument::_parse_meshes(Ref<FBXState> p_state) {
 
 		Ref<GLTFMesh> mesh;
 		mesh.instantiate();
+		ERR_FAIL_COND_V(mesh.is_null(), ERR_OUT_OF_MEMORY);
 		Dictionary additional_data;
 		additional_data["blend_channels"] = blend_channels;
 		mesh->set_additional_data("GODOT_mesh_blend_channels", additional_data);
@@ -916,6 +922,7 @@ Error FBXDocument::_parse_meshes(Ref<FBXState> p_state) {
 Ref<Image> FBXDocument::_parse_image_bytes_into_image(Ref<FBXState> p_state, const Vector<uint8_t> &p_bytes, const String &p_filename, int p_index) {
 	Ref<Image> r_image;
 	r_image.instantiate();
+	ERR_FAIL_COND_V(r_image.is_null(), Ref<Image>());
 	// Try to import first based on filename.
 	String filename_lower = p_filename.to_lower();
 	if (filename_lower.ends_with(".png")) {
@@ -976,6 +983,7 @@ GLTFImageIndex FBXDocument::_parse_image_save_image(Ref<FBXState> p_state, const
 			if (FileAccess::exists(file_path + ".import")) {
 				Ref<ConfigFile> config;
 				config.instantiate();
+				ERR_FAIL_COND_V(config.is_null(), -1);
 				config->load(file_path + ".import");
 				if (config->has_section_key("remap", "generator_parameters")) {
 					generator_parameters = (Dictionary)config->get_value("remap", "generator_parameters");
@@ -1033,6 +1041,7 @@ GLTFImageIndex FBXDocument::_parse_image_save_image(Ref<FBXState> p_state, const
 	if (handling == FBXState::HANDLE_BINARY_EMBED_AS_BASISU) {
 		Ref<PortableCompressedTexture2D> tex;
 		tex.instantiate();
+		ERR_FAIL_COND_V(tex.is_null(), -1);
 		tex->set_name(p_image->get_name());
 		tex->set_keep_compressed_buffer(true);
 		tex->create_from_image(p_image, PortableCompressedTexture2D::COMPRESSION_MODE_BASIS_UNIVERSAL);
@@ -1044,6 +1053,7 @@ GLTFImageIndex FBXDocument::_parse_image_save_image(Ref<FBXState> p_state, const
 	// as a fallback for HANDLE_BINARY_EXTRACT_TEXTURES when this is not the editor.
 	Ref<ImageTexture> tex;
 	tex.instantiate();
+	ERR_FAIL_COND_V(tex.is_null(), -1);
 	tex->set_name(p_image->get_name());
 	tex->set_image(p_image);
 	p_state->images.push_back(tex);
@@ -1099,6 +1109,7 @@ Error FBXDocument::_parse_images(Ref<FBXState> p_state, const String &p_base_pat
 	for (int texture_file_i = 0; texture_file_i < static_cast<int>(fbx_scene->texture_files.count); texture_file_i++) {
 		Ref<GLTFTexture> texture;
 		texture.instantiate();
+		ERR_FAIL_COND_V(texture.is_null(), ERR_OUT_OF_MEMORY);
 		texture->set_src_image(GLTFImageIndex(texture_file_i));
 		p_state->textures.push_back(texture);
 	}
@@ -1116,6 +1127,7 @@ Ref<Texture2D> FBXDocument::_get_texture(Ref<FBXState> p_state, const GLTFTextur
 		ERR_FAIL_INDEX_V(image, p_state->source_images.size(), Ref<Texture2D>());
 		Ref<PortableCompressedTexture2D> portable_texture;
 		portable_texture.instantiate();
+		ERR_FAIL_COND_V(portable_texture.is_null(), Ref<Texture2D>());
 		portable_texture->set_keep_compressed_buffer(true);
 		Ref<Image> new_img = p_state->source_images[image]->duplicate();
 		ERR_FAIL_COND_V(new_img.is_null(), Ref<Texture2D>());
@@ -1138,6 +1150,7 @@ Error FBXDocument::_parse_materials(Ref<FBXState> p_state) {
 
 		Ref<StandardMaterial3D> material;
 		material.instantiate();
+		ERR_FAIL_COND_V(material.is_null(), ERR_OUT_OF_MEMORY);
 		if (fbx_material->name.length > 0) {
 			material->set_name(_as_string(fbx_material->name));
 		} else {
@@ -1211,6 +1224,7 @@ Error FBXDocument::_parse_materials(Ref<FBXState> p_state) {
 						if (new_image >= 0) {
 							Ref<GLTFTexture> new_texture;
 							new_texture.instantiate();
+							ERR_FAIL_COND_V(new_texture.is_null(), ERR_OUT_OF_MEMORY);
 							new_texture->set_src_image(GLTFImageIndex(new_image));
 							p_state->textures.push_back(new_texture);
 
@@ -1332,6 +1346,7 @@ Error FBXDocument::_parse_cameras(Ref<FBXState> p_state) {
 
 		Ref<GLTFCamera> camera;
 		camera.instantiate();
+		ERR_FAIL_COND_V(camera.is_null(), ERR_OUT_OF_MEMORY);
 		camera->set_name(_as_string(fbx_camera->name));
 		if (fbx_camera->projection_mode == UFBX_PROJECTION_MODE_PERSPECTIVE) {
 			camera->set_perspective(true);
@@ -1361,6 +1376,7 @@ Error FBXDocument::_parse_animations(Ref<FBXState> p_state) {
 
 		Ref<GLTFAnimation> animation;
 		animation.instantiate();
+		ERR_FAIL_COND_V(animation.is_null(), ERR_OUT_OF_MEMORY);
 
 		if (fbx_anim_stack->name.length > 0) {
 			const String anim_name = _as_string(fbx_anim_stack->name);
@@ -1770,6 +1786,7 @@ void FBXDocument::_import_animation(Ref<FBXState> p_state, AnimationPlayer *p_an
 
 	Ref<Animation> animation;
 	animation.instantiate();
+	ERR_FAIL_COND(animation.is_null());
 	animation->set_name(anim_name);
 	animation->set_step(1.0 / p_state->get_bake_fps());
 
@@ -1971,6 +1988,7 @@ void FBXDocument::_import_animation(Ref<FBXState> p_state, AnimationPlayer *p_an
 	Ref<AnimationLibrary> library;
 	if (!p_animation_player->has_animation_library("")) {
 		library.instantiate();
+		ERR_FAIL_COND(library.is_null());
 		p_animation_player->add_animation_library("", library);
 	} else {
 		library = p_animation_player->get_animation_library("");
@@ -2146,6 +2164,7 @@ Error FBXDocument::append_from_buffer(PackedByteArray p_bytes, String p_base_pat
 
 	Ref<FileAccessMemory> file_access;
 	file_access.instantiate();
+	ERR_FAIL_COND_V(file_access.is_null(), ERR_OUT_OF_MEMORY);
 	file_access->open_custom(p_bytes.ptr(), p_bytes.size());
 	state->base_path = p_base_path.get_base_dir();
 	err = _parse(state, state->base_path, file_access);
@@ -2234,6 +2253,7 @@ Error FBXDocument::append_from_file(String p_path, Ref<GLTFState> p_state, uint3
 	ERR_FAIL_COND_V(p_path.is_empty(), ERR_FILE_NOT_FOUND);
 	if (p_state == Ref<FBXState>()) {
 		p_state.instantiate();
+		ERR_FAIL_COND_V(p_state.is_null(), ERR_OUT_OF_MEMORY);
 	}
 	state->filename = p_path.get_file().get_basename();
 	state->use_named_skin_binds = p_flags & FBX_IMPORT_USE_NAMED_SKIN_BINDS;
@@ -2281,6 +2301,7 @@ Error FBXDocument::_parse_lights(Ref<FBXState> p_state) {
 		const ufbx_light *fbx_light = fbx_scene->lights.data[i];
 		Ref<GLTFLight> light;
 		light.instantiate();
+		ERR_FAIL_COND_V(light.is_null(), ERR_OUT_OF_MEMORY);
 		light->set_name(_as_string(fbx_light->name));
 		light->set_color(Color(fbx_light->color.x, fbx_light->color.y, fbx_light->color.z));
 		light->set_intensity(fbx_light->intensity);
@@ -2379,6 +2400,7 @@ Error FBXDocument::_parse_skins(Ref<FBXState> p_state) {
 
 		Ref<GLTFSkin> skin;
 		skin.instantiate();
+		ERR_FAIL_COND_V(skin.is_null(), ERR_OUT_OF_MEMORY);
 
 		skin->inverse_binds.resize(fbx_skin->clusters.count);
 		for (int skin_i = 0; skin_i < static_cast<int>(fbx_skin->clusters.count); skin_i++) {
@@ -2409,6 +2431,7 @@ Error FBXDocument::_parse_skins(Ref<FBXState> p_state) {
 				if (!(fbx_node->parent && fbx_node->parent->attrib_type == UFBX_ELEMENT_BONE)) {
 					Ref<GLTFSkin> skin;
 					skin.instantiate();
+					ERR_FAIL_COND_V(skin.is_null(), ERR_OUT_OF_MEMORY);
 					skin->joints.push_back(node);
 					skin->joints_original.push_back(node);
 					skin->set_name(vformat("skin_%s", itos(p_state->skins.size())));

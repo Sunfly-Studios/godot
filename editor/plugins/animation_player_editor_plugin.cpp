@@ -670,6 +670,7 @@ void AnimationPlayerEditor::_animation_name_edited() {
 			bool lib_added = false;
 			if (al.is_null()) {
 				al.instantiate();
+				ERR_FAIL_COND(al.is_null());
 				lib_added = true;
 				undo_redo->add_do_method(fetch_mixer_for_library(), "add_animation_library", "", al);
 				library_name = "";
@@ -726,6 +727,7 @@ void AnimationPlayerEditor::_animation_name_edited() {
 			bool lib_added = false;
 			if (al.is_null()) {
 				al.instantiate();
+				ERR_FAIL_COND(al.is_null());
 				lib_added = true;
 				undo_redo->add_do_method(player, "add_animation_library", "", al);
 				library_name = "";
@@ -2217,8 +2219,10 @@ AnimationPlayerEditor::AnimationPlayerEditor(AnimationPlayerEditorPlugin *p_plug
 	RS::get_singleton()->canvas_item_set_parent(onion.capture.canvas_item, onion.capture.canvas);
 
 	onion.capture.material.instantiate();
+	ERR_FAIL_COND(onion.capture.material.is_null());
 
 	onion.capture.shader.instantiate();
+	ERR_FAIL_COND(onion.capture.shader.is_null());
 	onion.capture.shader->set_code(R"(
 // Animation editor onion skinning shader.
 

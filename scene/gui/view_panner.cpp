@@ -230,5 +230,6 @@ ViewPanner::ViewPanner() {
 	inputs.append(InputEventKey::create_reference(Key::SPACE));
 
 	pan_view_shortcut.instantiate();
+	ERR_FAIL_COND(pan_view_shortcut.is_null());
 	pan_view_shortcut->set_events(inputs);
 }

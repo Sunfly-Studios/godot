@@ -1320,6 +1320,7 @@ void GDExtensionAPIDump::generate_extension_json_file(const String &p_path, bool
 	Dictionary api = generate_extension_api(p_include_docs);
 	Ref<JSON> json;
 	json.instantiate();
+	ERR_FAIL_COND(json.is_null());
 
 	String text = json->stringify(api, "\t", false) + "\n";
 	Ref<FileAccess> fa = FileAccess::open(p_path, FileAccess::WRITE);
@@ -1586,6 +1587,7 @@ Error GDExtensionAPIDump::validate_extension_json_file(const String &p_path) {
 
 	Ref<JSON> json;
 	json.instantiate();
+	ERR_FAIL_COND_V(json.is_null(), ERR_OUT_OF_MEMORY);
 	error = json->parse(text);
 	if (error != OK) {
 		ERR_PRINT(vformat("Validate extension JSON: Error parsing '%s' at line %d: %s", p_path, json->get_error_line(), json->get_error_message()));

@@ -2964,6 +2964,7 @@ void EditorHelp::_gen_doc_thread(void *p_udata) {
 
 	Ref<Resource> cache_res;
 	cache_res.instantiate();
+	ERR_FAIL_COND(cache_res.is_null());
 	cache_res->set_meta("version_hash", doc_version_hash);
 	Array classes;
 	for (const KeyValue<String, DocData::ClassDoc> &E : doc->class_list) {
@@ -4535,9 +4536,11 @@ EditorHelpHighlighter::EditorHelpHighlighter() {
 
 	Ref<GDScript> gdscript;
 	gdscript.instantiate();
+	ERR_FAIL_COND(gdscript.is_null());
 
 	Ref<GDScriptSyntaxHighlighter> gdscript_highlighter;
 	gdscript_highlighter.instantiate();
+	ERR_FAIL_COND(gdscript_highlighter.is_null());
 	gdscript_highlighter->set_text_edit(gdscript_text_edit);
 	gdscript_highlighter->_set_edited_resource(gdscript);
 
@@ -4556,6 +4559,7 @@ EditorHelpHighlighter::EditorHelpHighlighter() {
 
 	Ref<EditorStandardSyntaxHighlighter> csharp_highlighter;
 	csharp_highlighter.instantiate();
+	ERR_FAIL_COND(csharp_highlighter.is_null());
 	csharp_highlighter->set_text_edit(csharp_text_edit);
 	//csharp_highlighter->_set_edited_resource(csharp);
 	csharp_highlighter->_set_script_language(CSharpLanguage::get_singleton());

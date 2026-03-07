@@ -92,6 +92,7 @@ Variant PListNode::get_value() const {
 Ref<PListNode> PListNode::new_node(const Variant &p_value) {
 	Ref<PListNode> node;
 	node.instantiate();
+	ERR_FAIL_COND_V(node.is_null(), Ref<PListNode>());
 
 	switch (p_value.get_type()) {
 		case Variant::NIL: {
@@ -497,6 +498,7 @@ uint64_t PList::read_bplist_var_size_int(Ref<FileAccess> p_file, uint8_t p_size)
 Ref<PListNode> PList::read_bplist_obj(Ref<FileAccess> p_file, uint64_t p_offset_idx) {
 	Ref<PListNode> node;
 	node.instantiate();
+	ERR_FAIL_COND_V(node.is_null(), Ref<PListNode>());
 
 	uint64_t ot_off = trailer.offset_table_start + p_offset_idx * trailer.offset_size;
 	p_file->seek(ot_off);

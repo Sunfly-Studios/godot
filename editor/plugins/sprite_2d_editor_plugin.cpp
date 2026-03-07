@@ -177,6 +177,7 @@ void Sprite2DEditor::_update_mesh_data() {
 
 	Ref<BitMap> bm;
 	bm.instantiate();
+	ERR_FAIL_COND(bm.is_null());
 	bm->create_from_image_alpha(image);
 
 	int shrink = shrink_pixels->get_value();
@@ -309,6 +310,7 @@ void Sprite2DEditor::_convert_to_mesh_2d_node() {
 
 	Ref<ArrayMesh> mesh;
 	mesh.instantiate();
+	ERR_FAIL_COND(mesh.is_null());
 
 	Array a;
 	a.resize(Mesh::ARRAY_MAX);
@@ -416,6 +418,7 @@ void Sprite2DEditor::_create_light_occluder_2d_node() {
 
 		Ref<OccluderPolygon2D> polygon;
 		polygon.instantiate();
+		ERR_FAIL_COND(polygon.is_null());
 
 		PackedVector2Array a;
 		a.resize(outline.size());
@@ -609,6 +612,7 @@ Sprite2DEditor::Sprite2DEditor() {
 	vb->add_margin_child(TTR("Preview:"), debug_uv, true);
 
 	panner.instantiate();
+	ERR_FAIL_COND(panner.is_null());
 	panner->set_callbacks(callable_mp(this, &Sprite2DEditor::_pan_callback), callable_mp(this, &Sprite2DEditor::_zoom_callback));
 
 	zoom_widget = memnew(EditorZoomWidget);

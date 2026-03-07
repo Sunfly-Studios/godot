@@ -159,6 +159,7 @@ void EditorLog::_start_state_save_timer() {
 void EditorLog::_save_state() {
 	Ref<ConfigFile> config;
 	config.instantiate();
+	ERR_FAIL_COND(config.is_null());
 	// Load and amend existing config if it exists.
 	config->load(EditorPaths::get_singleton()->get_project_settings_dir().path_join("editor_layout.cfg"));
 
@@ -178,6 +179,7 @@ void EditorLog::_load_state() {
 
 	Ref<ConfigFile> config;
 	config.instantiate();
+	ERR_FAIL_COND(config.is_null());
 	config->load(EditorPaths::get_singleton()->get_project_settings_dir().path_join("editor_layout.cfg"));
 
 	// Run the below code even if config->load returns an error, since we want the defaults to be set even if the file does not exist yet.

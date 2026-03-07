@@ -127,6 +127,7 @@ void EditorAssetLibraryItem::_bind_methods() {
 EditorAssetLibraryItem::EditorAssetLibraryItem(bool p_clickable) {
 	Ref<StyleBoxEmpty> border;
 	border.instantiate();
+	ERR_FAIL_COND(border.is_null());
 	border->set_content_margin_all(5 * EDSCALE);
 	add_theme_style_override(SceneStringName(panel), border);
 
@@ -179,6 +180,7 @@ EditorAssetLibraryItem::EditorAssetLibraryItem(bool p_clickable) {
 
 	Ref<StyleBoxEmpty> label_margin;
 	label_margin.instantiate();
+	ERR_FAIL_COND(label_margin.is_null());
 	label_margin->set_content_margin_all(0);
 
 	price = memnew(Label);

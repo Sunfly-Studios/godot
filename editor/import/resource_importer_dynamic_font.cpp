@@ -166,6 +166,7 @@ Error ResourceImporterDynamicFont::import(ResourceUID::ID p_source_id, const Str
 	// Create font.
 	Ref<FontFile> font;
 	font.instantiate();
+	ERR_FAIL_COND_V(font.is_null(), ERR_OUT_OF_MEMORY);
 	font->set_data(data);
 	font->set_antialiasing((TextServer::FontAntialiasing)antialiasing);
 	font->set_disable_embedded_bitmaps(disable_embedded_bitmaps);

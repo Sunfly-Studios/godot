@@ -62,6 +62,7 @@ Error HTTPClientTCP::connect_to_host(const String &p_host, int p_port, Ref<TLSOp
 	ERR_FAIL_COND_V(tls_options.is_valid() && tls_options->is_server(), ERR_INVALID_PARAMETER);
 	ERR_FAIL_COND_V_MSG(tls_options.is_valid() && !StreamPeerTLS::is_available(), ERR_UNAVAILABLE, "HTTPS is not available in this build.");
 	ERR_FAIL_COND_V(conn_host.length() < HOST_MIN_LEN, ERR_INVALID_PARAMETER);
+	ERR_FAIL_COND_V(proxy_client.is_null(), ERR_INVALID_DATA);
 
 	if (conn_port < 0) {
 		if (tls_options.is_valid()) {
@@ -204,6 +205,7 @@ Error HTTPClientTCP::request(Method p_method, const String &p_url, const Vector<
 	request += "\r\n";
 	CharString cs = request.utf8();
 
+	ERR_FAIL_COND_V(request_buffer.is_null(), ERR_INVALID_DATA);
 	request_buffer->clear();
 	request_buffer->put_data((const uint8_t *)cs.get_data(), cs.length());
 	if (p_body_size > 0) {
@@ -244,12 +246,17 @@ Error HTTPClientTCP::get_response_headers(List<String> *r_response) {
 }
 
 void HTTPClientTCP::close() {
-	if (tcp_connection->get_status() != StreamPeerTCP::STATUS_NONE) {
+	if (tcp_connection.is_valid() && tcp_connection->get_status() != StreamPeerTCP::STATUS_NONE) {
 		tcp_connection->disconnect_from_host();
 	}
 
-	connection.unref();
-	proxy_client.unref();
+	if (connection.is_valid()) {
+		connection.unref();
+	}
+
+	if (proxy_client.is_valid()) {
+		proxy_client.unref();
+	}
 	status = STATUS_DISCONNECTED;
 	head_request = false;
 	if (resolving != IP::RESOLVER_INVALID_ID) {
@@ -274,6 +281,8 @@ Error HTTPClientTCP::poll() {
 	if (tcp_connection.is_valid()) {
 		tcp_connection->poll();
 	}
+	// Still check to be sure.
+	ERR_FAIL_COND_V(tcp_connection.is_null(), ERR_CANT_RESOLVE);
 	switch (status) {
 		case STATUS_RESOLVING: {
 			ERR_FAIL_COND_V(resolving == IP::RESOLVER_INVALID_ID, ERR_BUG);
@@ -438,7 +447,7 @@ Error HTTPClientTCP::poll() {
 			return OK;
 		} break;
 		case STATUS_REQUESTING: {
-			if (request_buffer->get_available_bytes()) {
+			if (request_buffer.is_valid() && request_buffer->get_available_bytes()) {
 				int avail = request_buffer->get_available_bytes();
 				int pos = request_buffer->get_position();
 				const Vector<uint8_t> data = request_buffer->get_data_array();

@@ -138,6 +138,7 @@ Ref<Luminance::LuminanceBuffers> Luminance::get_luminance_buffers(Ref<RenderScen
 
 	Ref<LuminanceBuffers> buffers;
 	buffers.instantiate();
+	ERR_FAIL_COND_V(buffers.is_null(), Ref<Luminance::LuminanceBuffers>());
 	buffers->set_prefer_raster_effects(prefer_raster_effects);
 	buffers->configure(p_render_buffers.ptr());
 

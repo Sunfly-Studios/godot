@@ -916,6 +916,7 @@ GenericTilePolygonEditor::GenericTilePolygonEditor() {
 	add_child(toolbar);
 
 	tools_button_group.instantiate();
+	ERR_FAIL_COND(tools_button_group.is_null());
 
 	button_expand = memnew(Button);
 	button_expand->set_theme_type_variation(SceneStringName(FlatButton));
@@ -1500,6 +1501,7 @@ Variant TileDataOcclusionShapeEditor::_get_painted_value() {
 	for (int i = 0; i < polygon_editor->get_polygon_count(); i++) {
 		Ref<OccluderPolygon2D> occluder_polygon;
 		occluder_polygon.instantiate();
+		ERR_FAIL_COND_V(occluder_polygon.is_null(), Variant());
 		occluder_polygon->set_polygon(polygon_editor->get_polygon(i));
 		polygons.push_back(occluder_polygon);
 	}
@@ -2915,9 +2917,11 @@ Variant TileDataNavigationEditor::_get_painted_value() {
 	Ref<NavigationPolygon> nav_polygon;
 	nav_polygon.instantiate();
 
+	ERR_FAIL_COND_V(nav_polygon.is_null(), Variant());
 	if (polygon_editor->get_polygon_count() > 0) {
 		Ref<NavigationMeshSourceGeometryData2D> source_geometry_data;
 		source_geometry_data.instantiate();
+		ERR_FAIL_COND_V(source_geometry_data.is_null(), Variant());
 		for (int i = 0; i < polygon_editor->get_polygon_count(); i++) {
 			Vector<Vector2> polygon = polygon_editor->get_polygon(i);
 			nav_polygon->add_outline(polygon);

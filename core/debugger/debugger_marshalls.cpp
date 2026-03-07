@@ -178,6 +178,7 @@ Ref<Shortcut> DebuggerMarshalls::deserialize_key_shortcut(const Array &p_keys) {
 	}
 	Ref<Shortcut> shortcut;
 	shortcut.instantiate();
+	ERR_FAIL_COND_V(shortcut.is_null(), Ref<Shortcut>());
 	shortcut->set_events(key_events);
 	return shortcut;
 }

@@ -2008,6 +2008,7 @@ void ScriptTextEditor::drop_data_fw(const Point2 &p_point, const Variant &p_data
 				if (resource.is_null()) {
 					// Resource exists, but failed to load. We need only path and name, so we can use a dummy Resource instead.
 					resource.instantiate();
+					ERR_FAIL_COND(resource.is_null());
 					resource->set_path_cache(path);
 				}
 				parts.append(_get_dropped_resource_line(resource, is_empty_line));
@@ -2566,10 +2567,12 @@ ScriptTextEditor::ScriptTextEditor() {
 
 	Ref<EditorPlainTextSyntaxHighlighter> plain_highlighter;
 	plain_highlighter.instantiate();
+	ERR_FAIL_COND(plain_highlighter.is_null());
 	add_syntax_highlighter(plain_highlighter);
 
 	Ref<EditorStandardSyntaxHighlighter> highlighter;
 	highlighter.instantiate();
+	ERR_FAIL_COND(highlighter.is_null());
 	add_syntax_highlighter(highlighter);
 	set_syntax_highlighter(highlighter);
 

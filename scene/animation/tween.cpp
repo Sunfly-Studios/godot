@@ -128,6 +128,7 @@ Ref<PropertyTweener> Tween::tween_property(const Object *p_target, const NodePat
 
 	Ref<PropertyTweener> tweener;
 	tweener.instantiate(p_target, property_subnames, p_to, p_duration);
+	ERR_FAIL_COND_V(tweener.is_null(), Ref<PropertyTweener>());
 	append(tweener);
 	return tweener;
 }
@@ -137,6 +138,7 @@ Ref<IntervalTweener> Tween::tween_interval(double p_time) {
 
 	Ref<IntervalTweener> tweener;
 	tweener.instantiate(p_time);
+	ERR_FAIL_COND_V(tweener.is_null(), Ref<IntervalTweener>());
 	append(tweener);
 	return tweener;
 }
@@ -146,6 +148,7 @@ Ref<CallbackTweener> Tween::tween_callback(const Callable &p_callback) {
 
 	Ref<CallbackTweener> tweener;
 	tweener.instantiate(p_callback);
+	ERR_FAIL_COND_V(tweener.is_null(), Ref<CallbackTweener>());
 	append(tweener);
 	return tweener;
 }
@@ -159,6 +162,7 @@ Ref<MethodTweener> Tween::tween_method(const Callable &p_callback, const Variant
 
 	Ref<MethodTweener> tweener;
 	tweener.instantiate(p_callback, p_from, p_to, p_duration);
+	ERR_FAIL_COND_V(tweener.is_null(), Ref<MethodTweener>());
 	append(tweener);
 	return tweener;
 }
@@ -171,6 +175,7 @@ Ref<SubtweenTweener> Tween::tween_subtween(const Ref<Tween> &p_subtween) {
 
 	Ref<SubtweenTweener> tweener;
 	tweener.instantiate(p_subtween);
+	ERR_FAIL_COND_V(tweener.is_null(), Ref<SubtweenTweener>());
 
 	// Remove the tween from its parent tree, if it has one.
 	// If the user created this tween without a parent tree attached,

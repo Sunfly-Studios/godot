@@ -133,5 +133,6 @@ void EditorInspectorPluginStyleBox::parse_begin(Object *p_object) {
 StyleBoxEditorPlugin::StyleBoxEditorPlugin() {
 	Ref<EditorInspectorPluginStyleBox> inspector_plugin;
 	inspector_plugin.instantiate();
+	ERR_FAIL_COND(inspector_plugin.is_null());
 	add_inspector_plugin(inspector_plugin);
 }

@@ -135,6 +135,7 @@ void EditorHTTPServer::_send_response() {
 }
 
 void EditorHTTPServer::_poll() {
+	ERR_FAIL_COND(server.is_null());
 	if (!server->is_listening()) {
 		return;
 	}
@@ -215,6 +216,8 @@ void EditorHTTPServer::stop() {
 
 Error EditorHTTPServer::listen(int p_port, IPAddress p_address, bool p_use_tls, String p_tls_key, String p_tls_cert) {
 	MutexLock lock(server_lock);
+	ERR_FAIL_COND_V(server.is_null(), ERR_UNAVAILABLE);
+
 	if (server->is_listening()) {
 		return ERR_ALREADY_IN_USE;
 	}
@@ -245,6 +248,7 @@ Error EditorHTTPServer::listen(int p_port, IPAddress p_address, bool p_use_tls, 
 
 bool EditorHTTPServer::is_listening() const {
 	MutexLock lock(server_lock);
+	ERR_FAIL_COND_V(server.is_null(), false);
 	return server->is_listening();
 }
 

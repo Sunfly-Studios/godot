@@ -68,6 +68,7 @@ int GPUParticlesCollision3DGizmoPlugin::get_priority() const {
 }
 
 String GPUParticlesCollision3DGizmoPlugin::get_handle_name(const EditorNode3DGizmo *p_gizmo, int p_id, bool p_secondary) const {
+	ERR_FAIL_COND_V(helper.is_null(), String());
 	const Node3D *cs = p_gizmo->get_node_3d();
 
 	if (Object::cast_to<GPUParticlesCollisionSphere3D>(cs) || Object::cast_to<GPUParticlesAttractorSphere3D>(cs)) {
@@ -100,6 +101,7 @@ void GPUParticlesCollision3DGizmoPlugin::begin_handle_action(const EditorNode3DG
 }
 
 void GPUParticlesCollision3DGizmoPlugin::set_handle(const EditorNode3DGizmo *p_gizmo, int p_id, bool p_secondary, Camera3D *p_camera, const Point2 &p_point) {
+	ERR_FAIL_COND(helper.is_null());
 	Node3D *sn = p_gizmo->get_node_3d();
 
 	Vector3 sg[2];
@@ -130,6 +132,7 @@ void GPUParticlesCollision3DGizmoPlugin::set_handle(const EditorNode3DGizmo *p_g
 }
 
 void GPUParticlesCollision3DGizmoPlugin::commit_handle(const EditorNode3DGizmo *p_gizmo, int p_id, bool p_secondary, const Variant &p_restore, bool p_cancel) {
+	ERR_FAIL_COND(helper.is_null());
 	Node3D *sn = p_gizmo->get_node_3d();
 
 	if (Object::cast_to<GPUParticlesCollisionSphere3D>(sn) || Object::cast_to<GPUParticlesAttractorSphere3D>(sn)) {

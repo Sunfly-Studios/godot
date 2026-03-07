@@ -769,6 +769,7 @@ void EditorResourcePicker::drop_data_fw(const Point2 &p_point, const Variant &p_
 					Ref<StandardMaterial3D> mat = edited_resource;
 					if (mat.is_null()) {
 						mat.instantiate();
+						ERR_FAIL_COND(mat.is_null());
 					}
 					mat->set_texture(StandardMaterial3D::TextureParam::TEXTURE_ALBEDO, dropped_resource);
 					dropped_resource = mat;
@@ -779,6 +780,7 @@ void EditorResourcePicker::drop_data_fw(const Point2 &p_point, const Variant &p_
 					Ref<ShaderMaterial> mat = edited_resource;
 					if (mat.is_null()) {
 						mat.instantiate();
+						ERR_FAIL_COND(mat.is_null());
 					}
 					mat->set_shader(dropped_resource);
 					dropped_resource = mat;
@@ -789,6 +791,7 @@ void EditorResourcePicker::drop_data_fw(const Point2 &p_point, const Variant &p_
 					Ref<ImageTexture> texture = edited_resource;
 					if (texture.is_null()) {
 						texture.instantiate();
+						ERR_FAIL_COND(texture.is_null());
 					}
 					texture->set_image(dropped_resource);
 					dropped_resource = texture;

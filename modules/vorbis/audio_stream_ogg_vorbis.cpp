@@ -412,6 +412,7 @@ Ref<AudioStreamPlayback> AudioStreamOggVorbis::instantiate_playback() {
 	ERR_FAIL_COND_V(packet_sequence.is_null(), nullptr);
 
 	ovs.instantiate();
+	ERR_FAIL_COND_V(ovs.is_null(), Ref<AudioStreamPlayback>());
 	ovs->vorbis_stream = Ref<AudioStreamOggVorbis>(this);
 	ovs->vorbis_data = packet_sequence;
 	ovs->frames_mixed = 0;
@@ -535,6 +536,7 @@ void AudioStreamOggVorbis::get_parameter_list(List<Parameter> *r_parameters) {
 Ref<AudioSample> AudioStreamOggVorbis::generate_sample() const {
 	Ref<AudioSample> sample;
 	sample.instantiate();
+	ERR_FAIL_COND_V(sample.is_null(), Ref<AudioSample>());
 	sample->stream = this;
 	sample->loop_mode = loop
 			? AudioSample::LoopMode::LOOP_FORWARD
@@ -547,9 +549,11 @@ Ref<AudioSample> AudioStreamOggVorbis::generate_sample() const {
 Ref<AudioStreamOggVorbis> AudioStreamOggVorbis::load_from_buffer(const Vector<uint8_t> &p_stream_data) {
 	Ref<AudioStreamOggVorbis> ogg_vorbis_stream;
 	ogg_vorbis_stream.instantiate();
+	ERR_FAIL_COND_V(ogg_vorbis_stream.is_null(), Ref<AudioStreamOggVorbis>());
 
 	Ref<OggPacketSequence> ogg_packet_sequence;
 	ogg_packet_sequence.instantiate();
+	ERR_FAIL_COND_V(ogg_packet_sequence.is_null(), Ref<AudioStreamOggVorbis>());
 
 	ogg_stream_state stream_state;
 	ogg_sync_state sync_state;

@@ -1213,11 +1213,14 @@ GameViewPlugin::GameViewPlugin() {
 	debugger.instantiate();
 
 #ifndef ANDROID_ENABLED
+	ERR_FAIL_COND(debugger.is_null());
 	window_wrapper = memnew(WindowWrapper);
+	ERR_FAIL_NULL(window_wrapper);
 	window_wrapper->set_window_title(vformat(TTR("%s - Godot Engine"), TTR("Game Workspace")));
 	window_wrapper->set_margins_enabled(true);
 
 	game_view = memnew(GameView(debugger, window_wrapper));
+	ERR_FAIL_NULL(game_view);
 	game_view->set_v_size_flags(Control::SIZE_EXPAND_FILL);
 
 	window_wrapper->set_wrapped_control(game_view, nullptr);

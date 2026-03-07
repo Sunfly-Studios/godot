@@ -436,6 +436,7 @@ void DisplayServerOpenHarmony::_finish_text_preview(InputMethod_TextEditorProxy 
 void DisplayServerOpenHarmony::_input_text_key(Key p_key, char32_t p_char, Key p_unshifted, Key p_physical, int p_modifier, bool p_pressed, KeyLocation p_location) {
 	Ref<InputEventKey> ev;
 	ev.instantiate();
+	ERR_FAIL_COND(ev.is_null());
 	ev->set_echo(false);
 	ev->set_pressed(p_pressed);
 	ev->set_keycode(fix_keycode(p_char, p_key));

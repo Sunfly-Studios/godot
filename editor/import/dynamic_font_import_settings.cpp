@@ -182,8 +182,8 @@ void DynamicFontImportSettingsDialog::_variation_add() {
 
 	Ref<DynamicFontImportSettingsData> import_variation_data;
 	import_variation_data.instantiate();
-	import_variation_data->owner = this;
 	ERR_FAIL_COND(import_variation_data.is_null());
+	import_variation_data->owner = this;
 
 	for (List<ResourceImporter::ImportOption>::Element *E = options_variations.front(); E; E = E->next()) {
 		import_variation_data->defaults[E->get().option.name] = E->get().default_value;
@@ -319,6 +319,7 @@ void DynamicFontImportSettingsDialog::_change_text_opts() {
 
 	Ref<FontVariation> font_main_text;
 	font_main_text.instantiate();
+	ERR_FAIL_COND(font_main_text.is_null());
 	font_main_text->set_base_font(font_main);
 	font_main_text->set_opentype_features(text_settings_data->get("opentype_features"));
 	font_main_text->set_variation_opentype(import_variation_data->get("variation_opentype"));
@@ -755,6 +756,7 @@ void DynamicFontImportSettingsDialog::open_settings(const String &p_path) {
 
 	// Load font for preview.
 	font_preview.instantiate();
+	ERR_FAIL_COND(font_preview.is_null());
 	font_preview->set_data(font_data);
 
 	Array rids = font_preview->get_rids();
@@ -806,6 +808,7 @@ void DynamicFontImportSettingsDialog::open_settings(const String &p_path) {
 
 	// Load second copy of font with MSDF disabled for the glyph table and metadata extraction.
 	font_main.instantiate();
+	ERR_FAIL_COND(font_main.is_null());
 	font_main->set_data(font_data);
 	font_main->set_multichannel_signed_distance_field(false);
 
@@ -1265,6 +1268,7 @@ DynamicFontImportSettingsDialog::DynamicFontImportSettingsDialog() {
 	// Common
 
 	import_settings_data.instantiate();
+	ERR_FAIL_COND(import_settings_data.is_null());
 	import_settings_data->owner = this;
 
 	set_ok_button_text(TTR("Reimport"));

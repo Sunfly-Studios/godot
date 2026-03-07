@@ -53,6 +53,7 @@ static Error _parse_material_library(const String &p_path, HashMap<String, Ref<S
 
 			current_name = l.replace("newmtl", "").strip_edges();
 			current.instantiate();
+			ERR_FAIL_COND_V(current.is_null(), ERR_OUT_OF_MEMORY);
 			current->set_name(current_name);
 			material_map[current_name] = current;
 		} else if (l.begins_with("Ka ")) {
@@ -217,6 +218,7 @@ static Error _parse_obj(const String &p_path, List<Ref<ImporterMesh>> &r_meshes,
 
 	Ref<ImporterMesh> mesh;
 	mesh.instantiate();
+	ERR_FAIL_COND_V(mesh.is_null(), ERR_OUT_OF_MEMORY);
 
 	bool generate_tangents = p_generate_tangents;
 	Vector3 scale_mesh = p_scale_mesh;
@@ -464,6 +466,7 @@ static Error _parse_obj(const String &p_path, List<Ref<ImporterMesh>> &r_meshes,
 						mesh->set_name(name);
 						r_meshes.push_back(mesh);
 						mesh.instantiate();
+						ERR_FAIL_COND_V(mesh.is_null(), ERR_OUT_OF_MEMORY);
 					}
 					name = default_name;
 					current_group = "";

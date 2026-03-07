@@ -962,6 +962,7 @@ bool EditorExportPlatformWindows::poll_export() {
 }
 
 Ref<ImageTexture> EditorExportPlatformWindows::get_option_icon(int p_index) const {
+	ERR_FAIL_COND_V(stop_icon.is_null(), Ref<ImageTexture>());
 	return p_index == 1 ? stop_icon : EditorExportPlatform::get_option_icon(p_index);
 }
 

@@ -165,6 +165,7 @@ void RegEx::_pattern_info(uint32_t what, void *where) const {
 Ref<RegEx> RegEx::create_from_string(const String &p_pattern, bool p_show_error) {
 	Ref<RegEx> ret;
 	ret.instantiate();
+	ERR_FAIL_COND_V(ret.is_null(), Ref<RegEx>());
 	ret->compile(p_pattern, p_show_error);
 	return ret;
 }

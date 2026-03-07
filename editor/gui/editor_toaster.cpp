@@ -543,13 +543,16 @@ EditorToaster::EditorToaster() {
 
 	// Theming (background).
 	info_panel_style_background.instantiate();
+	ERR_FAIL_COND(info_panel_style_background.is_null());
 	info_panel_style_background->set_corner_radius_all(stylebox_radius * EDSCALE);
 
 	warning_panel_style_background.instantiate();
+	ERR_FAIL_COND(warning_panel_style_background.is_null());
 	warning_panel_style_background->set_border_width(SIDE_LEFT, stylebox_radius * EDSCALE);
 	warning_panel_style_background->set_corner_radius_all(stylebox_radius * EDSCALE);
 
 	error_panel_style_background.instantiate();
+	ERR_FAIL_COND(error_panel_style_background.is_null());
 	error_panel_style_background->set_border_width(SIDE_LEFT, stylebox_radius * EDSCALE);
 	error_panel_style_background->set_corner_radius_all(stylebox_radius * EDSCALE);
 
@@ -560,13 +563,16 @@ EditorToaster::EditorToaster() {
 
 	// Theming (progress).
 	info_panel_style_progress.instantiate();
+	ERR_FAIL_COND(info_panel_style_progress.is_null());
 	info_panel_style_progress->set_corner_radius_all(stylebox_radius * EDSCALE);
 
 	warning_panel_style_progress.instantiate();
+	ERR_FAIL_COND(warning_panel_style_progress.is_null());
 	warning_panel_style_progress->set_border_width(SIDE_LEFT, stylebox_radius * EDSCALE);
 	warning_panel_style_progress->set_corner_radius_all(stylebox_radius * EDSCALE);
 
 	error_panel_style_progress.instantiate();
+	ERR_FAIL_COND(error_panel_style_progress.is_null());
 	error_panel_style_progress->set_border_width(SIDE_LEFT, stylebox_radius * EDSCALE);
 	error_panel_style_progress->set_corner_radius_all(stylebox_radius * EDSCALE);
 

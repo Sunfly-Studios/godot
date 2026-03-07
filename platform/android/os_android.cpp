@@ -461,6 +461,7 @@ void OS_Android::_load_system_font_config() const {
 
 	Ref<XMLParser> parser;
 	parser.instantiate();
+	ERR_FAIL_COND(parser.is_null());
 
 	Error err = parser->open(String(getenv("ANDROID_ROOT")).path_join("/etc/fonts.xml"));
 	if (err == OK) {

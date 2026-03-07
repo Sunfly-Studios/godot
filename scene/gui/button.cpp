@@ -495,6 +495,7 @@ Size2 Button::get_minimum_size_for_text_and_icon(const String &p_text, Ref<Textu
 		paragraph = text_buf;
 	} else {
 		paragraph.instantiate();
+		ERR_FAIL_COND_V(paragraph.is_null(), Size2());
 		_shape(paragraph, p_text);
 	}
 
@@ -846,6 +847,7 @@ void Button::_bind_methods() {
 
 Button::Button(const String &p_text) {
 	text_buf.instantiate();
+	ERR_FAIL_COND(text_buf.is_null());
 	text_buf->set_break_flags(TextServer::BREAK_MANDATORY | TextServer::BREAK_TRIM_EDGE_SPACES);
 	set_mouse_filter(MOUSE_FILTER_STOP);
 

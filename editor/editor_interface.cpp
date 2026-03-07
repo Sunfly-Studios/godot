@@ -244,15 +244,18 @@ void EditorInterface::make_scene_preview(const String &p_path, Node *p_scene, in
 	sub_viewport_node->set_transparent_background(false);
 	Ref<World3D> world;
 	world.instantiate();
+	ERR_FAIL_COND(world.is_null());
 	sub_viewport_node->set_world_3d(world);
 
 	EditorNode::get_singleton()->add_child(sub_viewport_node);
 	Ref<Environment> env;
 	env.instantiate();
+	ERR_FAIL_COND(env.is_null());
 	env->set_background(Environment::BG_CLEAR_COLOR);
 
 	Ref<CameraAttributesPractical> camera_attributes;
 	camera_attributes.instantiate();
+	ERR_FAIL_COND(camera_attributes.is_null());
 
 	Node3D *root = memnew(Node3D);
 	root->set_name("Root");

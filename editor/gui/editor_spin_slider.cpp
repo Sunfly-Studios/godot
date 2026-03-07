@@ -558,6 +558,7 @@ String EditorSpinSlider::get_suffix() const {
 void EditorSpinSlider::_evaluate_input_text() {
 	Ref<Expression> expr;
 	expr.instantiate();
+	ERR_FAIL_COND(expr.is_null());
 
 	// Convert commas ',' to dots '.' for French/German etc. keyboard layouts.
 	String text = value_input->get_text().replace(",", ".");

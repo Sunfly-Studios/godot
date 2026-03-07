@@ -2527,6 +2527,7 @@ Error EditorFileSystem::_reimport_group(const String &p_group_file, const Vector
 	for (int i = 0; i < p_files.size(); i++) {
 		Ref<ConfigFile> config;
 		config.instantiate();
+		ERR_FAIL_COND_V(config.is_null(), ERR_OUT_OF_MEMORY);
 		Error err = config->load(p_files[i] + ".import");
 		ERR_CONTINUE(err != OK);
 		ERR_CONTINUE(!config->has_section_key("remap", "importer"));
@@ -2745,6 +2746,7 @@ Error EditorFileSystem::_reimport_file(const String &p_file, const HashMap<Strin
 		//use existing
 		Ref<ConfigFile> cf;
 		cf.instantiate();
+		ERR_FAIL_COND_V(cf.is_null(), ERR_OUT_OF_MEMORY);
 		Error err = cf->load(p_file + ".import");
 		if (err == OK) {
 			if (cf->has_section("params")) {
@@ -3027,6 +3029,7 @@ Error EditorFileSystem::_copy_file(const String &p_from, const String &p_to) {
 		// Remove uid from .import file to avoid conflict.
 		Ref<ConfigFile> cfg;
 		cfg.instantiate();
+		ERR_FAIL_COND_V(cfg.is_null(), ERR_OUT_OF_MEMORY);
 		cfg->load(p_from + ".import");
 		cfg->erase_section_key("remap", "uid");
 		err = cfg->save(p_to + ".import");
@@ -3380,6 +3383,7 @@ void EditorFileSystem::_move_group_files(EditorFileSystemDirectory *efd, const S
 
 			Ref<ConfigFile> config;
 			config.instantiate();
+			ERR_FAIL_COND(config.is_null());
 			String path = efd->get_file_path(i) + ".import";
 			Error err = config->load(path);
 			if (err != OK) {

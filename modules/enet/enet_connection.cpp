@@ -114,6 +114,7 @@ Ref<ENetPacketPeer> ENetConnection::connect_to_host(const String &p_address, int
 		return nullptr;
 	}
 	out.instantiate(peer);
+	ERR_FAIL_COND_V(out.is_null(), Ref<ENetPacketPeer>());
 	peers.push_back(out);
 	return out;
 }

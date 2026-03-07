@@ -551,10 +551,12 @@ Polygon3DEditor::Polygon3DEditor() {
 	wip_active = false;
 	imgeom = memnew(MeshInstance3D);
 	imesh.instantiate();
+	ERR_FAIL_COND(imesh.is_null());
 	imgeom->set_mesh(imesh);
 	imgeom->set_transform(Transform3D(Basis(), Vector3(0, 0, 0.00001)));
 
 	line_material.instantiate();
+	ERR_FAIL_COND(line_material.is_null());
 	line_material->set_shading_mode(StandardMaterial3D::SHADING_MODE_UNSHADED);
 	line_material->set_transparency(StandardMaterial3D::TRANSPARENCY_ALPHA);
 	line_material->set_flag(StandardMaterial3D::FLAG_ALBEDO_FROM_VERTEX_COLOR, true);
@@ -563,6 +565,7 @@ Polygon3DEditor::Polygon3DEditor() {
 	line_material->set_albedo(Color(1, 1, 1));
 
 	handle_material.instantiate();
+	ERR_FAIL_COND(handle_material.is_null());
 	handle_material->set_shading_mode(StandardMaterial3D::SHADING_MODE_UNSHADED);
 	handle_material->set_flag(StandardMaterial3D::FLAG_USE_POINT_SIZE, true);
 	handle_material->set_transparency(StandardMaterial3D::TRANSPARENCY_ALPHA);
@@ -576,6 +579,7 @@ Polygon3DEditor::Polygon3DEditor() {
 	pointsm = memnew(MeshInstance3D);
 	imgeom->add_child(pointsm);
 	m.instantiate();
+	ERR_FAIL_COND(m.is_null());
 	pointsm->set_mesh(m);
 	pointsm->set_transform(Transform3D(Basis(), Vector3(0, 0, 0.00001)));
 

@@ -2719,6 +2719,8 @@ EditorInspectorArray::EditorInspectorArray(bool p_read_only) {
 
 	odd_style.instantiate();
 	even_style.instantiate();
+	ERR_FAIL_COND(odd_style.is_null());
+	ERR_FAIL_COND(even_style.is_null());
 
 	rmb_popup = memnew(PopupMenu);
 	rmb_popup->add_item(TTR("Move Up"), OPTION_MOVE_UP);

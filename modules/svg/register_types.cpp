@@ -54,6 +54,7 @@ void initialize_svg_module(ModuleInitializationLevel p_level) {
 	}
 
 	image_loader_svg.instantiate();
+	ERR_FAIL_COND(image_loader_svg.is_null());
 	ImageLoader::add_image_format_loader(image_loader_svg);
 }
 

@@ -329,6 +329,7 @@ void EditorFeatureProfileManager::_notification(int p_what) {
 			current_profile = EDITOR_GET("_default_feature_profile");
 			if (!current_profile.is_empty()) {
 				current.instantiate();
+				ERR_FAIL_COND(current.is_null());
 				Error err = current->load_from_file(EditorPaths::get_singleton()->get_feature_profiles_dir().path_join(current_profile + ".profile"));
 				if (err != OK) {
 					ERR_PRINT("Error loading default feature profile: " + current_profile);
@@ -485,6 +486,7 @@ void EditorFeatureProfileManager::_create_new_profile() {
 
 	Ref<EditorFeatureProfile> new_profile;
 	new_profile.instantiate();
+	ERR_FAIL_COND(new_profile.is_null());
 	new_profile->save_to_file(file);
 
 	_update_profile_list(name);
@@ -761,6 +763,7 @@ void EditorFeatureProfileManager::_update_selected_profile() {
 	} else {
 		//reload edited, if different from current
 		edited.instantiate();
+		ERR_FAIL_COND(edited.is_null());
 		Error err = edited->load_from_file(EditorPaths::get_singleton()->get_feature_profiles_dir().path_join(profile + ".profile"));
 		ERR_FAIL_COND_MSG(err != OK, "Error when loading editor feature profile from file '" + EditorPaths::get_singleton()->get_feature_profiles_dir().path_join(profile + ".profile") + "'.");
 	}
@@ -810,6 +813,7 @@ void EditorFeatureProfileManager::_import_profiles(const Vector<String> &p_paths
 	for (int i = 0; i < p_paths.size(); i++) {
 		Ref<EditorFeatureProfile> profile;
 		profile.instantiate();
+		ERR_FAIL_COND(profile.is_null());
 		Error err = profile->load_from_file(p_paths[i]);
 		String basefile = p_paths[i].get_file();
 		if (err != OK) {
@@ -829,6 +833,7 @@ void EditorFeatureProfileManager::_import_profiles(const Vector<String> &p_paths
 	for (int i = 0; i < p_paths.size(); i++) {
 		Ref<EditorFeatureProfile> profile;
 		profile.instantiate();
+		ERR_FAIL_COND(profile.is_null());
 		Error err = profile->load_from_file(p_paths[i]);
 		ERR_CONTINUE(err != OK);
 		String basefile = p_paths[i].get_file();

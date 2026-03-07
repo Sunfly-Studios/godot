@@ -105,6 +105,8 @@ void SeparateYuyvBufferDecoder::decode(StreamingBuffer p_buffer) {
 		cbcr_image.instantiate(width, height, false, Image::FORMAT_RGB8, cbcr_image_data);
 	}
 
+	ERR_FAIL_COND(cbcr_image.is_null());
+	ERR_FAIL_COND(y_image.is_null());
 	camera_feed->set_ycbcr_images(y_image, cbcr_image);
 }
 
@@ -133,6 +135,7 @@ void YuyvToGrayscaleBufferDecoder::decode(StreamingBuffer p_buffer) {
 		image.instantiate(width, height, false, Image::FORMAT_RGB8, image_data);
 	}
 
+	ERR_FAIL_COND(image.is_null());
 	camera_feed->set_rgb_image(image);
 }
 
@@ -176,6 +179,7 @@ void YuyvToRgbBufferDecoder::decode(StreamingBuffer p_buffer) {
 		image.instantiate(width, height, false, Image::FORMAT_RGB8, image_data);
 	}
 
+	ERR_FAIL_COND(image.is_null());
 	camera_feed->set_rgb_image(image);
 }
 
@@ -195,6 +199,7 @@ void CopyBufferDecoder::decode(StreamingBuffer p_buffer) {
 		image.instantiate(width, height, false, rgba ? Image::FORMAT_RGBA8 : Image::FORMAT_LA8, image_data);
 	}
 
+	ERR_FAIL_COND(image.is_null());
 	camera_feed->set_rgb_image(image);
 }
 

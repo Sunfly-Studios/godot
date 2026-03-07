@@ -115,6 +115,7 @@ void AudioEffectCompressorInstance::process(const AudioFrame *p_src_frames, Audi
 Ref<AudioEffectInstance> AudioEffectCompressor::instantiate() {
 	Ref<AudioEffectCompressorInstance> ins;
 	ins.instantiate();
+	ERR_FAIL_COND_V(ins.is_null(), Ref<AudioEffectInstance>());
 	ins->base = Ref<AudioEffectCompressor>(this);
 	ins->rundb = 0;
 	ins->runratio = 0;

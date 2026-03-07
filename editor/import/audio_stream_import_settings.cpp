@@ -427,6 +427,7 @@ void AudioStreamImportSettingsDialog::edit(const String &p_path, const String &p
 	if (stream.is_valid()) {
 		Ref<ConfigFile> config_file;
 		config_file.instantiate();
+		ERR_FAIL_COND(config_file.is_null());
 		Error err = config_file->load(p_path + ".import");
 		updating_settings = true;
 		if (err == OK) {

@@ -394,6 +394,7 @@ Ref<ArrayMesh> NavigationMesh::get_debug_mesh() {
 
 	if (debug_mesh.is_null()) {
 		debug_mesh.instantiate();
+		ERR_FAIL_COND_V(debug_mesh.is_null(), Ref<ArrayMesh>());
 	} else {
 		debug_mesh->clear_surfaces();
 	}

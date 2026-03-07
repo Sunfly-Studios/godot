@@ -272,6 +272,7 @@ ShaderFileEditor::ShaderFileEditor() {
 
 	Ref<ButtonGroup> bg;
 	bg.instantiate();
+	ERR_FAIL_COND(bg.is_null());
 	for (int i = 0; i < RD::SHADER_STAGE_MAX; i++) {
 		Button *button = memnew(Button(stage_str[i]));
 		button->set_toggle_mode(true);

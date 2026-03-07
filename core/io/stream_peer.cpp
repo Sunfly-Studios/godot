@@ -719,6 +719,7 @@ void StreamPeerBuffer::clear() {
 Ref<StreamPeerBuffer> StreamPeerBuffer::duplicate() const {
 	Ref<StreamPeerBuffer> spb;
 	spb.instantiate();
+	ERR_FAIL_COND_V(spb.is_null(), Ref<StreamPeerBuffer>());
 	spb->data = data;
 	return spb;
 }

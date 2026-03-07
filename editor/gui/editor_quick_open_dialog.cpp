@@ -189,6 +189,7 @@ QuickOpenResultContainer::QuickOpenResultContainer() {
 	set_v_size_flags(Control::SIZE_EXPAND_FILL);
 	add_theme_constant_override("separation", 0);
 	history_file.instantiate();
+	ERR_FAIL_COND(history_file.is_null());
 
 	{
 		// Results section

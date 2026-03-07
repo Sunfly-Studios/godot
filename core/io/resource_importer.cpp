@@ -550,6 +550,7 @@ void ResourceImporter::_bind_methods() {
 Error ResourceFormatImporterSaver::set_uid(const String &p_path, ResourceUID::ID p_uid) {
 	Ref<ConfigFile> cf;
 	cf.instantiate();
+	ERR_FAIL_COND_V(cf.is_null(), ERR_OUT_OF_MEMORY);
 	Error err = cf->load(p_path + ".import");
 	if (err != OK) {
 		return err;

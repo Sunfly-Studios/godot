@@ -366,11 +366,13 @@ void ImageLoaderTGA::get_recognized_extensions(List<String> *p_extensions) const
 static Ref<Image> _tga_mem_loader_func(const uint8_t *p_tga, int p_size) {
 	Ref<FileAccessMemory> memfile;
 	memfile.instantiate();
+	ERR_FAIL_COND_V(memfile.is_null(), Ref<Image>());
 	Error open_memfile_error = memfile->open_custom(p_tga, p_size);
 	ERR_FAIL_COND_V_MSG(open_memfile_error, Ref<Image>(), "Could not create memfile for TGA image buffer.");
 
 	Ref<Image> img;
 	img.instantiate();
+	ERR_FAIL_COND_V(img.is_null(), Ref<Image>());
 	Error load_error = ImageLoaderTGA().load_image(img, memfile, false, 1.0f);
 	ERR_FAIL_COND_V_MSG(load_error, Ref<Image>(), "Failed to load TGA image.");
 	return img;

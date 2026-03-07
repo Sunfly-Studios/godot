@@ -1124,10 +1124,12 @@ ControlEditorToolbar *ControlEditorToolbar::singleton = nullptr;
 
 ControlEditorPlugin::ControlEditorPlugin() {
 	toolbar = memnew(ControlEditorToolbar);
+	ERR_FAIL_NULL(toolbar);
 	toolbar->hide();
 	add_control_to_container(CONTAINER_CANVAS_EDITOR_MENU, toolbar);
 
 	Ref<EditorInspectorPluginControl> plugin;
 	plugin.instantiate();
+	ERR_FAIL_COND(plugin.is_null());
 	add_inspector_plugin(plugin);
 }

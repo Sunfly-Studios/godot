@@ -62,6 +62,7 @@ Error ENetMultiplayerPeer::create_server(int p_port, int p_max_clients, int p_ma
 	set_refuse_new_connections(false);
 	Ref<ENetConnection> host;
 	host.instantiate();
+	ERR_FAIL_COND_V(host.is_null(), ERR_OUT_OF_MEMORY);
 	Error err = host->create_host_bound(bind_ip, p_port, p_max_clients, 0, p_max_channels > 0 ? p_max_channels + SYSCH_MAX : 0, p_out_bandwidth);
 	if (err != OK) {
 		return err;
@@ -79,6 +80,7 @@ Error ENetMultiplayerPeer::create_client(const String &p_address, int p_port, in
 	set_refuse_new_connections(false);
 	Ref<ENetConnection> host;
 	host.instantiate();
+	ERR_FAIL_COND_V(host.is_null(), ERR_OUT_OF_MEMORY);
 	Error err;
 	if (p_local_port) {
 		err = host->create_host_bound(bind_ip, p_local_port, 1, 0, p_in_bandwidth, p_out_bandwidth);

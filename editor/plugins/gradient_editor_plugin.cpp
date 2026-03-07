@@ -581,6 +581,7 @@ GradientEdit::GradientEdit() {
 	popup->add_child(picker);
 
 	preview_texture.instantiate();
+	ERR_FAIL_COND(preview_texture.is_null());
 	preview_texture->set_width(1024);
 }
 
@@ -663,6 +664,7 @@ void EditorInspectorPluginGradient::parse_begin(Object *p_object) {
 	Ref<Gradient> g(gradient);
 
 	GradientEditor *editor = memnew(GradientEditor);
+	ERR_FAIL_NULL(editor);
 	editor->set_gradient(g);
 	add_custom_control(editor);
 }
@@ -672,5 +674,6 @@ void EditorInspectorPluginGradient::parse_begin(Object *p_object) {
 GradientEditorPlugin::GradientEditorPlugin() {
 	Ref<EditorInspectorPluginGradient> plugin;
 	plugin.instantiate();
+	ERR_FAIL_COND(plugin.is_null());
 	add_inspector_plugin(plugin);
 }

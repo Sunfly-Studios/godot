@@ -287,6 +287,7 @@ void EditorCommandPalette::register_shortcuts_as_command() {
 		Ref<Shortcut> shortcut = E.value.second;
 		Ref<InputEventShortcut> ev;
 		ev.instantiate();
+		ERR_FAIL_COND(ev.is_null());
 		ev->set_shortcut(shortcut);
 		add_command(command_name, E.key, callable_mp(EditorNode::get_singleton()->get_viewport(), &Viewport::push_input), varray(ev, false), shortcut);
 	}
@@ -307,6 +308,7 @@ Ref<Shortcut> EditorCommandPalette::add_shortcut_command(const String &p_command
 	if (is_inside_tree()) {
 		Ref<InputEventShortcut> ev;
 		ev.instantiate();
+		ERR_FAIL_COND_V(ev.is_null(), Ref<Shortcut>());
 		ev->set_shortcut(p_shortcut);
 		add_command(p_command, p_key, callable_mp(EditorNode::get_singleton()->get_viewport(), &Viewport::push_input), varray(ev, false), p_shortcut);
 	} else {

@@ -113,6 +113,7 @@ Ref<ArrayMesh> Occluder3D::get_debug_mesh() const {
 	arrays[Mesh::ARRAY_INDEX] = indices;
 
 	debug_mesh.instantiate();
+	ERR_FAIL_COND_V(debug_mesh.is_null(), Ref<ArrayMesh>());
 	debug_mesh->add_surface_from_arrays(Mesh::PRIMITIVE_TRIANGLES, arrays);
 	return debug_mesh;
 }
@@ -674,6 +675,7 @@ OccluderInstance3D::BakeError OccluderInstance3D::bake_scene(Node *p_from_node, 
 
 	if (occ.is_null()) {
 		occ.instantiate();
+		ERR_FAIL_COND_V(occ.is_null(), BAKE_ERROR_CANT_SAVE);
 	}
 
 	occ->set_arrays(vertices, indices);

@@ -41,6 +41,7 @@
 Ref<FontFile> load_external_font(const String &p_path, TextServer::Hinting p_hinting, TextServer::FontAntialiasing p_aa, bool p_autohint, TextServer::SubpixelPositioning p_font_subpixel_positioning, bool p_font_disable_embedded_bitmaps, bool p_msdf = false, TypedArray<Font> *r_fallbacks = nullptr) {
 	Ref<FontFile> font;
 	font.instantiate();
+	ERR_FAIL_COND_V(font.is_null(), Ref<FontFile>());
 
 	Vector<uint8_t> data = FileAccess::get_file_as_bytes(p_path);
 
@@ -81,6 +82,7 @@ Ref<SystemFont> load_system_font(const PackedStringArray &p_names, TextServer::H
 Ref<FontFile> load_internal_font(const uint8_t *p_data, size_t p_size, TextServer::Hinting p_hinting, TextServer::FontAntialiasing p_aa, bool p_autohint, TextServer::SubpixelPositioning p_font_subpixel_positioning, bool p_font_disable_embedded_bitmaps, bool p_msdf = false, TypedArray<Font> *r_fallbacks = nullptr) {
 	Ref<FontFile> font;
 	font.instantiate();
+	ERR_FAIL_COND_V(font.is_null(), Ref<FontFile>());
 
 	font->set_data_ptr(p_data, p_size);
 	font->set_multichannel_signed_distance_field(p_msdf);
@@ -100,6 +102,7 @@ Ref<FontFile> load_internal_font(const uint8_t *p_data, size_t p_size, TextServe
 Ref<FontVariation> make_bold_font(const Ref<Font> &p_font, double p_embolden, TypedArray<Font> *r_fallbacks = nullptr) {
 	Ref<FontVariation> font_var;
 	font_var.instantiate();
+	ERR_FAIL_COND_V(font_var.is_null(), Ref<FontVariation>());
 	font_var->set_base_font(p_font);
 	font_var->set_variation_embolden(p_embolden);
 
@@ -235,6 +238,7 @@ void editor_register_fonts(const Ref<Theme> &p_theme) {
 
 	Ref<FontVariation> default_fc;
 	default_fc.instantiate();
+	ERR_FAIL_COND(default_fc.is_null());
 	if (custom_font_path.length() > 0 && dir->file_exists(custom_font_path)) {
 		Ref<FontFile> custom_font = load_external_font(custom_font_path, font_hinting, font_antialiasing, true, font_subpixel_positioning, font_disable_embedded_bitmaps);
 		{
@@ -252,6 +256,7 @@ void editor_register_fonts(const Ref<Theme> &p_theme) {
 
 	Ref<FontVariation> default_fc_msdf;
 	default_fc_msdf.instantiate();
+	ERR_FAIL_COND(default_fc_msdf.is_null());
 	if (custom_font_path.length() > 0 && dir->file_exists(custom_font_path)) {
 		Ref<FontFile> custom_font = load_external_font(custom_font_path, font_hinting, font_antialiasing, true, font_subpixel_positioning, font_disable_embedded_bitmaps, font_allow_msdf);
 		{
@@ -269,6 +274,7 @@ void editor_register_fonts(const Ref<Theme> &p_theme) {
 
 	Ref<FontVariation> bold_fc;
 	bold_fc.instantiate();
+	ERR_FAIL_COND(bold_fc.is_null());
 	if (custom_font_path_bold.length() > 0 && dir->file_exists(custom_font_path_bold)) {
 		Ref<FontFile> custom_font = load_external_font(custom_font_path_bold, font_hinting, font_antialiasing, true, font_subpixel_positioning, font_disable_embedded_bitmaps);
 		{
@@ -295,6 +301,7 @@ void editor_register_fonts(const Ref<Theme> &p_theme) {
 
 	Ref<FontVariation> bold_fc_msdf;
 	bold_fc_msdf.instantiate();
+	ERR_FAIL_COND(bold_fc_msdf.is_null());
 	if (custom_font_path_bold.length() > 0 && dir->file_exists(custom_font_path_bold)) {
 		Ref<FontFile> custom_font = load_external_font(custom_font_path_bold, font_hinting, font_antialiasing, true, font_subpixel_positioning, font_disable_embedded_bitmaps, font_allow_msdf);
 		{
@@ -321,6 +328,7 @@ void editor_register_fonts(const Ref<Theme> &p_theme) {
 
 	Ref<FontVariation> mono_fc;
 	mono_fc.instantiate();
+	ERR_FAIL_COND(mono_fc.is_null());
 	if (custom_font_path_source.length() > 0 && dir->file_exists(custom_font_path_source)) {
 		Ref<FontFile> custom_font = load_external_font(custom_font_path_source, font_mono_hinting, font_antialiasing, true, font_subpixel_positioning, font_disable_embedded_bitmaps);
 		{

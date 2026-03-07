@@ -244,6 +244,7 @@ void AudioStreamPlayer3D::_notification(int p_what) {
 	internal->notification(p_what);
 	switch (p_what) {
 		case NOTIFICATION_ENTER_TREE: {
+			ERR_FAIL_COND(velocity_tracker.is_null());
 			velocity_tracker->reset(get_global_transform().origin);
 			AudioServer::get_singleton()->add_listener_changed_callback(_listener_changed_cb, this);
 		} break;
@@ -254,6 +255,7 @@ void AudioStreamPlayer3D::_notification(int p_what) {
 
 		case NOTIFICATION_TRANSFORM_CHANGED: {
 			if (doppler_tracking != DOPPLER_TRACKING_DISABLED) {
+				ERR_FAIL_COND(velocity_tracker.is_null());
 				velocity_tracker->update_position(get_global_transform().origin);
 			}
 		} break;
@@ -342,6 +344,7 @@ Vector<AudioFrame> AudioStreamPlayer3D::_update_panning() {
 	if (!internal->active.is_set() || internal->stream.is_null()) {
 		return output_volume_vector;
 	}
+	ERR_FAIL_COND_V(velocity_tracker.is_null(), output_volume_vector);
 
 	Vector3 linear_velocity;
 
@@ -697,6 +700,7 @@ void AudioStreamPlayer3D::set_doppler_tracking(DopplerTracking p_tracking) {
 
 	if (doppler_tracking != DOPPLER_TRACKING_DISABLED) {
 		set_notify_transform(true);
+		ERR_FAIL_COND(velocity_tracker.is_null());
 		velocity_tracker->set_track_physics_step(doppler_tracking == DOPPLER_TRACKING_PHYSICS_STEP);
 		if (is_inside_tree()) {
 			velocity_tracker->reset(get_global_transform().origin);

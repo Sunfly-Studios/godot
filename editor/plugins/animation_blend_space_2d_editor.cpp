@@ -374,6 +374,7 @@ void AnimationNodeBlendSpace2DEditor::_add_menu_type(int p_index) {
 void AnimationNodeBlendSpace2DEditor::_add_animation_type(int p_index) {
 	Ref<AnimationNodeAnimation> anim;
 	anim.instantiate();
+	ERR_FAIL_COND(anim.is_null());
 
 	anim->set_animation(animations_to_add[p_index]);
 
@@ -878,6 +879,7 @@ AnimationNodeBlendSpace2DEditor::AnimationNodeBlendSpace2DEditor() {
 
 	Ref<ButtonGroup> bg;
 	bg.instantiate();
+	ERR_FAIL_COND(bg.is_null());
 
 	tool_blend = memnew(Button);
 	tool_blend->set_theme_type_variation(SceneStringName(FlatButton));

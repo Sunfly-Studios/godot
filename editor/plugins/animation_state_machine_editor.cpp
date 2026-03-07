@@ -830,6 +830,7 @@ void AnimationNodeStateMachineEditor::_add_menu_type(int p_index) {
 void AnimationNodeStateMachineEditor::_add_animation_type(int p_index) {
 	Ref<AnimationNodeAnimation> anim;
 	anim.instantiate();
+	ERR_FAIL_COND(anim.is_null());
 
 	anim->set_animation(animations_to_add[p_index]);
 
@@ -869,6 +870,7 @@ void AnimationNodeStateMachineEditor::_add_transition(const bool p_nested_action
 
 		Ref<AnimationNodeStateMachineTransition> tr;
 		tr.instantiate();
+		ERR_FAIL_COND(tr.is_null());
 		tr->set_advance_mode(auto_advance->is_pressed() ? AnimationNodeStateMachineTransition::AdvanceMode::ADVANCE_MODE_AUTO : AnimationNodeStateMachineTransition::AdvanceMode::ADVANCE_MODE_ENABLED);
 		tr->set_switch_mode(AnimationNodeStateMachineTransition::SwitchMode(switch_mode->get_selected()));
 
@@ -1814,6 +1816,7 @@ AnimationNodeStateMachineEditor::AnimationNodeStateMachineEditor() {
 
 	Ref<ButtonGroup> bg;
 	bg.instantiate();
+	ERR_FAIL_COND(bg.is_null());
 
 	tool_select = memnew(Button);
 	tool_select->set_theme_type_variation(SceneStringName(FlatButton));

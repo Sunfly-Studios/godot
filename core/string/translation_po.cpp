@@ -218,8 +218,10 @@ void TranslationPO::_cache_plural_tests(const String &p_plural_rule, Ref<EQNode>
 	p_node->regex = rule.substr(0, first_ques_mark).strip_edges();
 
 	p_node->left.instantiate();
+	ERR_FAIL_COND(p_node->left.is_null());
 	_cache_plural_tests(rule.substr(first_ques_mark + 1, first_colon - first_ques_mark - 1).strip_edges(), p_node->left);
 	p_node->right.instantiate();
+	ERR_FAIL_COND(p_node->right.is_null());
 	_cache_plural_tests(rule.substr(first_colon + 1).strip_edges(), p_node->right);
 }
 
@@ -236,9 +238,11 @@ void TranslationPO::set_plural_rule(const String &p_plural_rule) {
 
 	// Setup the cache to make evaluating plural rule faster later on.
 	equi_tests.instantiate();
+	ERR_FAIL_COND(equi_tests.is_null());
 	_cache_plural_tests(plural_rule, equi_tests);
 
 	expr.instantiate();
+	ERR_FAIL_COND(expr.is_null());
 	input_name.push_back("n");
 }
 

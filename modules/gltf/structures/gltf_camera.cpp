@@ -62,12 +62,14 @@ void GLTFCamera::set_fov_conversion_expressions(Ref<GLTFObjectModelProperty> &r_
 	// Expression to convert glTF yfov in radians to Godot fov in degrees.
 	Ref<Expression> gltf_to_godot_expr;
 	gltf_to_godot_expr.instantiate();
+	ERR_FAIL_COND(gltf_to_godot_expr.is_null());
 	PackedStringArray gltf_to_godot_args = { "yfov_rad" };
 	gltf_to_godot_expr->parse("rad_to_deg(yfov_rad)", gltf_to_godot_args);
 	r_obj_model_prop->set_gltf_to_godot_expression(gltf_to_godot_expr);
 	// Expression to convert Godot fov in degrees to glTF yfov in radians.
 	Ref<Expression> godot_to_gltf_expr;
 	godot_to_gltf_expr.instantiate();
+	ERR_FAIL_COND(godot_to_gltf_expr.is_null());
 	PackedStringArray godot_to_gltf_args = { "fov_deg" };
 	godot_to_gltf_expr->parse("deg_to_rad(fov_deg)", godot_to_gltf_args);
 	r_obj_model_prop->set_godot_to_gltf_expression(godot_to_gltf_expr);
@@ -76,6 +78,7 @@ void GLTFCamera::set_fov_conversion_expressions(Ref<GLTFObjectModelProperty> &r_
 Ref<GLTFCamera> GLTFCamera::from_node(const Camera3D *p_camera) {
 	Ref<GLTFCamera> c;
 	c.instantiate();
+	ERR_FAIL_COND_V(c.is_null(), Ref<GLTFCamera>());
 	ERR_FAIL_NULL_V_MSG(p_camera, c, "Tried to create a GLTFCamera from a Camera3D node, but the given node was null.");
 	c->set_perspective(p_camera->get_projection() == Camera3D::ProjectionType::PROJECTION_PERSPECTIVE);
 	// glTF spec (yfov) is in radians, Godot's camera (fov) is in degrees.
@@ -103,6 +106,7 @@ Ref<GLTFCamera> GLTFCamera::from_dictionary(const Dictionary p_dictionary) {
 	ERR_FAIL_COND_V_MSG(!p_dictionary.has("type"), Ref<GLTFCamera>(), "Failed to parse glTF camera, missing required field 'type'.");
 	Ref<GLTFCamera> camera;
 	camera.instantiate();
+	ERR_FAIL_COND_V(camera.is_null(), Ref<GLTFCamera>());
 	const String &type = p_dictionary["type"];
 	if (type == "perspective") {
 		camera->set_perspective(true);

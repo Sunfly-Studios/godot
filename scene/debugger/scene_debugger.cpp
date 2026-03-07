@@ -1247,6 +1247,7 @@ void RuntimeNodeSelect::_setup(const Dictionary &p_settings) {
 	root->connect("size_changed", callable_mp(this, &RuntimeNodeSelect::_queue_selection_update), CONNECT_DEFERRED);
 
 	panner.instantiate();
+	ERR_FAIL_COND(panner.is_null());
 	panner->set_callbacks(callable_mp(this, &RuntimeNodeSelect::_pan_callback), callable_mp(this, &RuntimeNodeSelect::_zoom_callback));
 
 	ViewPanner::ControlScheme panning_scheme = (ViewPanner::ControlScheme)p_settings.get("editors/panning/2d_editor_panning_scheme", 0).operator int();

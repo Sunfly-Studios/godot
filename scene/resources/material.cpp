@@ -148,6 +148,7 @@ bool Material::_can_use_render_priority() const {
 Ref<Resource> Material::create_placeholder() const {
 	Ref<PlaceholderMaterial> placeholder;
 	placeholder.instantiate();
+	ERR_FAIL_COND_V(placeholder.is_null(), Ref<Resource>());
 	return placeholder;
 }
 
@@ -2833,6 +2834,7 @@ Ref<Material> BaseMaterial3D::get_material_for_2d(bool p_shaded, Transparency p_
 
 	Ref<StandardMaterial3D> material;
 	material.instantiate();
+	ERR_FAIL_COND_V(material.is_null(), Ref<Material>());
 
 	material->set_shading_mode(p_shaded ? SHADING_MODE_PER_PIXEL : SHADING_MODE_UNSHADED);
 	material->set_transparency(p_transparency);

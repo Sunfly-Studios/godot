@@ -370,6 +370,7 @@ void EditorBuildProfileManager::_notification(int p_what) {
 			}
 			if (edited.is_null()) {
 				edited.instantiate();
+				ERR_FAIL_COND(edited.is_null());
 				_update_edited_profile();
 			}
 
@@ -570,6 +571,7 @@ void EditorBuildProfileManager::_action_confirm() {
 	switch (last_action) {
 		case ACTION_RESET: {
 			edited.instantiate();
+			ERR_FAIL_COND(edited.is_null());
 			_update_edited_profile();
 		} break;
 		case ACTION_LOAD: {
@@ -581,6 +583,7 @@ void EditorBuildProfileManager::_action_confirm() {
 		case ACTION_NEW: {
 			profile_path->set_text("");
 			edited.instantiate();
+			ERR_FAIL_COND(edited.is_null());
 			_update_edited_profile();
 		} break;
 		case ACTION_DETECT: {
@@ -768,6 +771,7 @@ void EditorBuildProfileManager::_force_detect_classes_changed(const String &p_te
 void EditorBuildProfileManager::_import_profile(const String &p_path) {
 	Ref<EditorBuildProfile> profile;
 	profile.instantiate();
+	ERR_FAIL_COND(profile.is_null());
 	Error err = profile->load_from_file(p_path);
 	String basefile = p_path.get_file();
 	if (err != OK) {

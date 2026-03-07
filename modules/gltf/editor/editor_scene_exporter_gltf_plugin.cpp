@@ -51,6 +51,7 @@ bool SceneExporterGLTFPlugin::has_main_screen() const {
 
 SceneExporterGLTFPlugin::SceneExporterGLTFPlugin() {
 	_gltf_document.instantiate();
+	ERR_FAIL_COND(_gltf_document.is_null());
 	// Set up the file dialog.
 	_file_dialog = memnew(EditorFileDialog);
 	_file_dialog->connect("file_selected", callable_mp(this, &SceneExporterGLTFPlugin::_export_scene_as_gltf));
@@ -64,6 +65,7 @@ SceneExporterGLTFPlugin::SceneExporterGLTFPlugin() {
 	EditorNode::get_singleton()->get_gui_base()->add_child(_file_dialog);
 	// Set up the export settings menu.
 	_export_settings.instantiate();
+	ERR_FAIL_COND(_export_settings.is_null());
 	_export_settings->generate_property_list(_gltf_document);
 	_settings_inspector = memnew(EditorInspector);
 	_settings_inspector->set_custom_minimum_size(Size2(350, 300) * EDSCALE);
@@ -104,6 +106,7 @@ void SceneExporterGLTFPlugin::_export_scene_as_gltf(const String &p_file_path) {
 	List<String> deps;
 	Ref<GLTFState> state;
 	state.instantiate();
+	ERR_FAIL_COND(state.is_null());
 	state->set_copyright(_export_settings->get_copyright());
 	int32_t flags = 0;
 	flags |= EditorSceneFormatImporter::IMPORT_USE_NAMED_SKIN_BINDS;

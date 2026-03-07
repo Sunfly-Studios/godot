@@ -90,6 +90,7 @@ PackedStringArray EditorSyntaxHighlighter::_get_supported_languages() const {
 Ref<EditorSyntaxHighlighter> EditorSyntaxHighlighter::_create() const {
 	Ref<EditorSyntaxHighlighter> syntax_highlighter;
 	syntax_highlighter.instantiate();
+	ERR_FAIL_COND_V(syntax_highlighter.is_null(), Ref<EditorSyntaxHighlighter>());
 	if (get_script_instance()) {
 		syntax_highlighter->set_script(get_script_instance()->get_script());
 	}
@@ -232,6 +233,7 @@ void EditorStandardSyntaxHighlighter::_update_cache() {
 Ref<EditorSyntaxHighlighter> EditorStandardSyntaxHighlighter::_create() const {
 	Ref<EditorStandardSyntaxHighlighter> syntax_highlighter;
 	syntax_highlighter.instantiate();
+	ERR_FAIL_COND_V(syntax_highlighter.is_null(), Ref<EditorSyntaxHighlighter>());
 	return syntax_highlighter;
 }
 
@@ -240,6 +242,7 @@ Ref<EditorSyntaxHighlighter> EditorStandardSyntaxHighlighter::_create() const {
 Ref<EditorSyntaxHighlighter> EditorPlainTextSyntaxHighlighter::_create() const {
 	Ref<EditorPlainTextSyntaxHighlighter> syntax_highlighter;
 	syntax_highlighter.instantiate();
+	ERR_FAIL_COND_V(syntax_highlighter.is_null(), Ref<EditorSyntaxHighlighter>());
 	return syntax_highlighter;
 }
 
@@ -261,6 +264,7 @@ void EditorJSONSyntaxHighlighter::_update_cache() {
 Ref<EditorSyntaxHighlighter> EditorJSONSyntaxHighlighter::_create() const {
 	Ref<EditorJSONSyntaxHighlighter> syntax_highlighter;
 	syntax_highlighter.instantiate();
+	ERR_FAIL_COND_V(syntax_highlighter.is_null(), Ref<EditorSyntaxHighlighter>());
 	return syntax_highlighter;
 }
 
@@ -307,6 +311,7 @@ void EditorMarkdownSyntaxHighlighter::_update_cache() {
 Ref<EditorSyntaxHighlighter> EditorMarkdownSyntaxHighlighter::_create() const {
 	Ref<EditorMarkdownSyntaxHighlighter> syntax_highlighter;
 	syntax_highlighter.instantiate();
+	ERR_FAIL_COND_V(syntax_highlighter.is_null(), Ref<EditorSyntaxHighlighter>());
 	return syntax_highlighter;
 }
 
@@ -4157,6 +4162,7 @@ ScriptEditor::ScriptEditor(WindowWrapper *p_wrapper) {
 	current_theme = "";
 
 	script_editor_cache.instantiate();
+	ERR_FAIL_COND(script_editor_cache.is_null());
 	script_editor_cache->load(EditorPaths::get_singleton()->get_project_settings_dir().path_join("script_editor_cache.cfg"));
 
 	completion_cache = memnew(EditorScriptCodeCompletionCache);
@@ -4510,10 +4516,12 @@ ScriptEditor::ScriptEditor(WindowWrapper *p_wrapper) {
 
 	Ref<EditorJSONSyntaxHighlighter> json_syntax_highlighter;
 	json_syntax_highlighter.instantiate();
+	ERR_FAIL_COND(json_syntax_highlighter.is_null());
 	register_syntax_highlighter(json_syntax_highlighter);
 
 	Ref<EditorMarkdownSyntaxHighlighter> markdown_syntax_highlighter;
 	markdown_syntax_highlighter.instantiate();
+	ERR_FAIL_COND(markdown_syntax_highlighter.is_null());
 	register_syntax_highlighter(markdown_syntax_highlighter);
 
 	_update_online_doc();

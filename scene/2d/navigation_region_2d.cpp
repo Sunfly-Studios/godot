@@ -249,6 +249,7 @@ void NavigationRegion2D::bake_navigation_polygon(bool p_on_thread) {
 
 	Ref<NavigationMeshSourceGeometryData2D> source_geometry_data;
 	source_geometry_data.instantiate();
+	ERR_FAIL_COND(source_geometry_data.is_null());
 
 	NavigationServer2D::get_singleton()->parse_source_geometry_data(navigation_polygon, source_geometry_data, this);
 

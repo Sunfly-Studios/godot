@@ -146,6 +146,7 @@ String DAPeer::format_output(const Dictionary &p_params) const {
 }
 
 Error DebugAdapterProtocol::on_client_connected() {
+	ERR_FAIL_COND_V(server.is_null(), ERR_OUT_OF_MEMORY);
 	ERR_FAIL_COND_V_MSG(clients.size() >= DAP_MAX_CLIENTS, FAILED, "Max client limits reached");
 
 	Ref<StreamPeerTCP> tcp_peer = server->take_connection();
@@ -1189,6 +1190,7 @@ void DebugAdapterProtocol::on_debug_data(const String &p_msg, const Array &p_dat
 }
 
 void DebugAdapterProtocol::poll() {
+	ERR_FAIL_COND(server.is_null());
 	if (server->is_connection_available()) {
 		on_client_connected();
 	}
@@ -1219,6 +1221,7 @@ void DebugAdapterProtocol::poll() {
 }
 
 Error DebugAdapterProtocol::start(int p_port, const IPAddress &p_bind_ip) {
+	ERR_FAIL_COND_V(server.is_null(), ERR_OUT_OF_MEMORY);
 	_request_timeout = (uint64_t)_EDITOR_GET("network/debug_adapter/request_timeout");
 	_sync_breakpoints = (bool)_EDITOR_GET("network/debug_adapter/sync_breakpoints");
 	_initialized = true;
@@ -1226,6 +1229,7 @@ Error DebugAdapterProtocol::start(int p_port, const IPAddress &p_bind_ip) {
 }
 
 void DebugAdapterProtocol::stop() {
+	ERR_FAIL_COND(server.is_null());
 	for (List<Ref<DAPeer>>::Element *E = clients.front(); E; E = E->next()) {
 		E->get()->connection->disconnect_from_host();
 	}

@@ -850,6 +850,7 @@ void Window::update_mouse_cursor_state() {
 	Vector2 pos = get_mouse_position();
 	Transform2D xform = get_global_canvas_transform().affine_inverse();
 	mm.instantiate();
+	ERR_FAIL_COND(mm.is_null());
 	mm->set_position(pos);
 	mm->set_global_position(xform.xform(pos));
 	mm->set_device(InputEvent::DEVICE_ID_INTERNAL);

@@ -208,6 +208,7 @@ Error ResourceImporterTextureAtlas::import_group_file(const String &p_group_file
 
 		Ref<Image> image;
 		image.instantiate();
+		ERR_FAIL_COND_V(image.is_null(), ERR_CANT_CREATE);
 		Error err = ImageLoader::load_image(source, image);
 		ERR_CONTINUE(err != OK);
 
@@ -251,6 +252,7 @@ Error ResourceImporterTextureAtlas::import_group_file(const String &p_group_file
 
 			Ref<BitMap> bit_map;
 			bit_map.instantiate();
+			ERR_FAIL_COND_V(bit_map.is_null(), ERR_CANT_CREATE);
 			bit_map->create_from_image_alpha(image);
 			Vector<Vector<Vector2>> polygons = bit_map->clip_opaque_to_polygons(Rect2(Vector2(), image->get_size()));
 
@@ -333,6 +335,7 @@ Error ResourceImporterTextureAtlas::import_group_file(const String &p_group_file
 			//region
 			Ref<AtlasTexture> atlas_texture;
 			atlas_texture.instantiate();
+			ERR_FAIL_COND_V(atlas_texture.is_null(), ERR_CANT_CREATE);
 			atlas_texture->set_atlas(cache);
 			atlas_texture->set_region(Rect2(offset, pack_data.region.size));
 
@@ -344,6 +347,7 @@ Error ResourceImporterTextureAtlas::import_group_file(const String &p_group_file
 		} else {
 			Ref<ArrayMesh> mesh;
 			mesh.instantiate();
+			ERR_FAIL_COND_V(mesh.is_null(), ERR_CANT_CREATE);
 
 			for (int i = 0; i < pack_data.chart_pieces.size(); i++) {
 				const EditorAtlasPacker::Chart &chart = charts[pack_data.chart_pieces[i]];
@@ -390,6 +394,7 @@ Error ResourceImporterTextureAtlas::import_group_file(const String &p_group_file
 
 			Ref<MeshTexture> mesh_texture;
 			mesh_texture.instantiate();
+			ERR_FAIL_COND_V(mesh_texture.is_null(), ERR_CANT_CREATE);
 			mesh_texture->set_base_texture(cache);
 			mesh_texture->set_image_size(pack_data.image->get_size());
 			mesh_texture->set_mesh(mesh);

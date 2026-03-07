@@ -1107,6 +1107,7 @@ Ref<EditorNode3DGizmo> EditorNode3DGizmoPlugin::create_gizmo(Node3D *p_spatial) 
 	Ref<EditorNode3DGizmo> ref;
 	if (has_gizmo(p_spatial)) {
 		ref.instantiate();
+		ERR_FAIL_COND_V(ref.is_null(), Ref<EditorNode3DGizmo>());
 	}
 	return ref;
 }

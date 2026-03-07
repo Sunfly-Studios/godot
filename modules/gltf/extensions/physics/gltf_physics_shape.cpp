@@ -154,6 +154,7 @@ Ref<ImporterMesh> _convert_hull_points_to_mesh(const Vector<Vector3> &p_hull_poi
 	}
 	// Create an ImporterMesh from the faces.
 	importer_mesh.instantiate();
+	ERR_FAIL_COND_V(importer_mesh.is_null(), Ref<ImporterMesh>());
 	Array surface_array;
 	surface_array.resize(Mesh::ArrayType::ARRAY_MAX);
 	surface_array[Mesh::ArrayType::ARRAY_VERTEX] = face_vertices;
@@ -185,6 +186,7 @@ CollisionShape3D *GLTFPhysicsShape::to_node(bool p_cache_shapes) {
 Ref<GLTFPhysicsShape> GLTFPhysicsShape::from_resource(const Ref<Shape3D> &p_shape_resource) {
 	Ref<GLTFPhysicsShape> gltf_shape;
 	gltf_shape.instantiate();
+	ERR_FAIL_COND_V(gltf_shape.is_null(), Ref<GLTFPhysicsShape>());
 	ERR_FAIL_COND_V_MSG(p_shape_resource.is_null(), gltf_shape, "Tried to create a GLTFPhysicsShape from a Shape3D resource, but the given resource was null.");
 	if (cast_to<BoxShape3D>(p_shape_resource.ptr())) {
 		gltf_shape->shape_type = "box";
@@ -216,6 +218,7 @@ Ref<GLTFPhysicsShape> GLTFPhysicsShape::from_resource(const Ref<Shape3D> &p_shap
 		Ref<ConcavePolygonShape3D> concave = p_shape_resource;
 		Ref<ImporterMesh> importer_mesh;
 		importer_mesh.instantiate();
+		ERR_FAIL_COND_V(importer_mesh.is_null(), Ref<GLTFPhysicsShape>());
 		Array surface_array;
 		surface_array.resize(Mesh::ArrayType::ARRAY_MAX);
 		surface_array[Mesh::ArrayType::ARRAY_VERTEX] = concave->get_faces();
@@ -234,23 +237,27 @@ Ref<Shape3D> GLTFPhysicsShape::to_resource(bool p_cache_shapes) {
 		if (shape_type == "box") {
 			Ref<BoxShape3D> box;
 			box.instantiate();
+			ERR_FAIL_COND_V(box.is_null(), Ref<Shape3D>());
 			box->set_size(size);
 			_shape_cache = box;
 		} else if (shape_type == "capsule") {
 			Ref<CapsuleShape3D> capsule;
 			capsule.instantiate();
+			ERR_FAIL_COND_V(capsule.is_null(), Ref<Shape3D>());
 			capsule->set_radius(radius);
 			capsule->set_height(height);
 			_shape_cache = capsule;
 		} else if (shape_type == "cylinder") {
 			Ref<CylinderShape3D> cylinder;
 			cylinder.instantiate();
+			ERR_FAIL_COND_V(cylinder.is_null(), Ref<Shape3D>());
 			cylinder->set_radius(radius);
 			cylinder->set_height(height);
 			_shape_cache = cylinder;
 		} else if (shape_type == "sphere") {
 			Ref<SphereShape3D> sphere;
 			sphere.instantiate();
+			ERR_FAIL_COND_V(sphere.is_null(), Ref<Shape3D>());
 			sphere->set_radius(radius);
 			_shape_cache = sphere;
 		} else if (shape_type == "convex") {
@@ -274,6 +281,7 @@ Ref<GLTFPhysicsShape> GLTFPhysicsShape::from_dictionary(const Dictionary p_dicti
 	ERR_FAIL_COND_V_MSG(!p_dictionary.has("type"), Ref<GLTFPhysicsShape>(), "Failed to parse GLTFPhysicsShape, missing required field 'type'.");
 	Ref<GLTFPhysicsShape> gltf_shape;
 	gltf_shape.instantiate();
+	ERR_FAIL_COND_V(gltf_shape.is_null(), Ref<GLTFPhysicsShape>());
 	String shape_type = p_dictionary["type"];
 	if (shape_type == "hull") {
 		shape_type = "convex";

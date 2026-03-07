@@ -98,6 +98,7 @@ Ref<Image> EditorExportPlatform::_load_icon_or_splash_image(const String &p_path
 	}
 	if (image.is_null()) {
 		image.instantiate();
+		ERR_FAIL_COND_V(image.is_null(), Ref<Image>());
 		Error err = ImageLoader::load_image(p_path, image);
 		if (r_error) {
 			*r_error = err;
@@ -427,6 +428,7 @@ bool EditorExportPlatform::exists_export_template(const String &template_file_na
 Ref<EditorExportPreset> EditorExportPlatform::create_preset() {
 	Ref<EditorExportPreset> preset;
 	preset.instantiate();
+	ERR_FAIL_COND_V(preset.is_null(), Ref<EditorExportPreset>());
 	preset->platform = Ref<EditorExportPlatform>(this);
 
 	List<ExportOption> options;
@@ -893,6 +895,7 @@ String EditorExportPlatform::_export_customize(const String &p_path, LocalVector
 
 			Ref<PackedScene> s;
 			s.instantiate();
+			ERR_FAIL_COND_V(s.is_null(), String());
 			s->pack(node);
 			Error err = ResourceSaver::save(s, save_path);
 			ERR_FAIL_COND_V_MSG(err != OK, p_path, "Unable to save export scene file to: " + save_path);
@@ -1347,6 +1350,7 @@ Error EditorExportPlatform::export_project_files(const Ref<EditorExportPreset> &
 		Ref<ConfigFile> config;
 		if (has_import_file) {
 			config.instantiate();
+			ERR_FAIL_COND_V(config.is_null(), ERR_OUT_OF_MEMORY);
 			err = config->load(path + ".import");
 			if (err != OK) {
 				ERR_PRINT("Could not parse: '" + path + "', not exported.");

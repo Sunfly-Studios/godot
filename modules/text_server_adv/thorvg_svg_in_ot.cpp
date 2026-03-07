@@ -128,6 +128,7 @@ FT_Error tvg_svg_in_ot_preset_slot(FT_GlyphSlot p_slot, FT_Bool p_cache, FT_Poin
 	if (!gl_state.ready) {
 		Ref<XMLParser> parser;
 		parser.instantiate();
+		ERR_FAIL_COND_V(parser.is_null(), FT_Err_Invalid_SVG_Document);
 		parser->_open_buffer((const uint8_t *)document->svg_document, document->svg_document_length);
 
 		String xml_body;

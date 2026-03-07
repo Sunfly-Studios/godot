@@ -45,6 +45,7 @@ void initialize_vorbis_module(ModuleInitializationLevel p_level) {
 	if (Engine::get_singleton()->is_editor_hint()) {
 		Ref<ResourceImporterOggVorbis> ogg_vorbis_importer;
 		ogg_vorbis_importer.instantiate();
+		ERR_FAIL_COND(ogg_vorbis_importer.is_null());
 		ResourceFormatImporter::get_singleton()->add_importer(ogg_vorbis_importer);
 	}
 

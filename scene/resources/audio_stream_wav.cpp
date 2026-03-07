@@ -679,6 +679,7 @@ Error AudioStreamWAV::save_to_wav(const String &p_path) {
 Ref<AudioStreamPlayback> AudioStreamWAV::instantiate_playback() {
 	Ref<AudioStreamPlaybackWAV> sample;
 	sample.instantiate();
+	ERR_FAIL_COND_V(sample.is_null(), Ref<AudioStreamPlayback>());
 	sample->base = Ref<AudioStreamWAV>(this);
 
 	if (format == AudioStreamWAV::FORMAT_QOA) {
@@ -700,6 +701,7 @@ String AudioStreamWAV::get_stream_name() const {
 Ref<AudioSample> AudioStreamWAV::generate_sample() const {
 	Ref<AudioSample> sample;
 	sample.instantiate();
+	ERR_FAIL_COND_V(sample.is_null(), Ref<AudioSample>());
 	sample->stream = this;
 	switch (loop_mode) {
 		case AudioStreamWAV::LoopMode::LOOP_DISABLED: {
@@ -729,6 +731,7 @@ Ref<AudioStreamWAV> AudioStreamWAV::load_from_buffer(const Vector<uint8_t> &p_st
 
 	Ref<FileAccessMemory> file;
 	file.instantiate();
+	ERR_FAIL_COND_V(file.is_null(), Ref<AudioStreamWAV>());
 	Error err = file->open_custom(p_stream_data.ptr(), p_stream_data.size());
 	ERR_FAIL_COND_V_MSG(err != OK, Ref<AudioStreamWAV>(), "Cannot create memfile for WAV file buffer.");
 
@@ -1167,6 +1170,7 @@ Ref<AudioStreamWAV> AudioStreamWAV::load_from_buffer(const Vector<uint8_t> &p_st
 
 	Ref<AudioStreamWAV> sample;
 	sample.instantiate();
+	ERR_FAIL_COND_V(sample.is_null(), Ref<AudioStreamWAV>());
 	sample->set_data(dst_data);
 	sample->set_format(dst_format);
 	sample->set_mix_rate(rate);

@@ -240,7 +240,7 @@ int DisplayServerWeb::_mouse_button_callback(int p_pressed, int p_button, double
 	Point2 pos(p_x, p_y);
 	Ref<InputEventMouseButton> ev;
 	ev.instantiate();
-	ERR_FAIL_NULL_V(ev, 0);
+	ERR_FAIL_COND_V(ev.is_null(), 0);
 	ev->set_position(pos);
 	ev->set_global_position(pos);
 	ev->set_pressed(p_pressed);
@@ -336,7 +336,7 @@ void DisplayServerWeb::_mouse_move_callback(double p_x, double p_y, double p_rel
 	Point2 pos(p_x, p_y);
 	Ref<InputEventMouseMotion> ev;
 	ev.instantiate();
-	ERR_FAIL_NULL(ev);
+	ERR_FAIL_COND(ev.is_null());
 	dom2godot_mod(ev, p_modifiers, Key::NONE);
 	ev->set_button_mask(input_mask);
 
@@ -682,7 +682,7 @@ int DisplayServerWeb::_mouse_wheel_callback(double p_delta_x, double p_delta_y) 
 	Input *input = Input::get_singleton();
 	Ref<InputEventMouseButton> ev;
 	ev.instantiate();
-	ERR_FAIL_NULL_V(ev, 0);
+	ERR_FAIL_COND_V(ev.is_null(), 0);
 	ev->set_position(input->get_mouse_position());
 	ev->set_global_position(ev->get_position());
 
@@ -745,7 +745,7 @@ void DisplayServerWeb::_touch_callback(int p_type, int p_count) {
 			// touchmove
 			Ref<InputEventScreenDrag> ev;
 			ev.instantiate();
-			ERR_FAIL_NULL(ev);
+			ERR_FAIL_COND(ev.is_null());
 			ev->set_index(touch_event.identifier[i]);
 			ev->set_position(point);
 
@@ -766,7 +766,7 @@ void DisplayServerWeb::_touch_callback(int p_type, int p_count) {
 			}
 
 			ev.instantiate();
-			ERR_FAIL_NULL(ev);
+			ERR_FAIL_COND(ev.is_null());
 			ev->set_index(touch_event.identifier[i]);
 			ev->set_position(point);
 			ev->set_pressed(p_type == 0);
@@ -810,7 +810,7 @@ void DisplayServerWeb::_vk_input_text_callback(const String &p_text, int p_curso
 	Ref<InputEventKey> k;
 	for (int i = 0; i < p_cursor; i++) {
 		k.instantiate();
-		ERR_FAIL_NULL(k);
+		ERR_FAIL_COND(k.is_null());
 		k->set_pressed(true);
 		k->set_echo(false);
 		k->set_keycode(Key::RIGHT);
@@ -1460,7 +1460,7 @@ void DisplayServerWeb::process_keys() {
 
 		Ref<InputEventKey> ev;
 		ev.instantiate();
-		ERR_FAIL_NULL(ev);
+		ERR_FAIL_COND(ev.is_null());
 		ev->set_pressed(ke.pressed);
 		ev->set_echo(ke.echo);
 		ev->set_keycode(ke.keycode);

@@ -2390,18 +2390,22 @@ SceneState::SceneState() {
 ////////////////
 
 void PackedScene::_set_bundled_scene(const Dictionary &p_scene) {
+	ERR_FAIL_COND(state.is_null());
 	state->set_bundled_scene(p_scene);
 }
 
 Dictionary PackedScene::_get_bundled_scene() const {
+	ERR_FAIL_COND_V(state.is_null(), Dictionary());
 	return state->get_bundled_scene();
 }
 
 Error PackedScene::pack(Node *p_scene) {
+	ERR_FAIL_COND_V(state.is_null(), ERR_OUT_OF_MEMORY);
 	return state->pack(p_scene);
 }
 
 void PackedScene::clear() {
+	ERR_FAIL_COND(state.is_null());
 	state->clear();
 }
 
@@ -2428,6 +2432,7 @@ void PackedScene::reload_from_file() {
 }
 
 bool PackedScene::can_instantiate() const {
+	ERR_FAIL_COND_V(state.is_null(), false);
 	return state->can_instantiate();
 }
 
@@ -2456,6 +2461,7 @@ Node *PackedScene::instantiate(GenEditState p_edit_state) const {
 
 void PackedScene::replace_state(Ref<SceneState> p_by) {
 	state = p_by;
+	ERR_FAIL_COND(state.is_null());
 	state->set_path(get_path());
 #ifdef TOOLS_ENABLED
 	state->set_last_modified_time(get_last_modified_time());
@@ -2464,6 +2470,7 @@ void PackedScene::replace_state(Ref<SceneState> p_by) {
 
 void PackedScene::recreate_state() {
 	state.instantiate();
+	ERR_FAIL_COND(state.is_null());
 	state->set_path(get_path());
 #ifdef TOOLS_ENABLED
 	state->set_last_modified_time(get_last_modified_time());
@@ -2525,11 +2532,13 @@ Ref<SceneState> PackedScene::get_state() const {
 }
 
 void PackedScene::set_path(const String &p_path, bool p_take_over) {
+	ERR_FAIL_COND(state.is_null());
 	state->set_path(p_path);
 	Resource::set_path(p_path, p_take_over);
 }
 
 void PackedScene::set_path_cache(const String &p_path) {
+	ERR_FAIL_COND(state.is_null());
 	state->set_path(p_path);
 	Resource::set_path_cache(p_path);
 }

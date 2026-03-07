@@ -657,6 +657,7 @@ void fill_default_theme(Ref<Theme> &theme, const Ref<Font> &default_font, const 
 
 	Ref<StyleBoxEmpty> empty;
 	empty.instantiate();
+	ERR_FAIL_COND(empty.is_null());
 	theme->set_stylebox(SceneStringName(panel), "ScrollContainer", empty);
 
 	const Ref<StyleBoxFlat> focus_style = make_flat_stylebox(style_focus_color);
@@ -1060,6 +1061,7 @@ void fill_default_theme(Ref<Theme> &theme, const Ref<Font> &default_font, const 
 
 		Ref<Gradient> hue_gradient;
 		hue_gradient.instantiate();
+		ERR_FAIL_COND(hue_gradient.is_null());
 		PackedFloat32Array offsets;
 		offsets.resize(precision);
 		PackedColorArray colors;
@@ -1075,6 +1077,7 @@ void fill_default_theme(Ref<Theme> &theme, const Ref<Font> &default_font, const 
 
 		Ref<GradientTexture2D> hue_texture;
 		hue_texture.instantiate();
+		ERR_FAIL_COND(hue_texture.is_null());
 		hue_texture->set_width(800);
 		hue_texture->set_height(6);
 		hue_texture->set_gradient(hue_gradient);
@@ -1259,6 +1262,7 @@ void fill_default_theme(Ref<Theme> &theme, const Ref<Font> &default_font, const 
 void make_default_theme(float p_scale, Ref<Font> p_font, TextServer::SubpixelPositioning p_font_subpixel, TextServer::Hinting p_font_hinting, TextServer::FontAntialiasing p_font_antialiasing, bool p_font_msdf, bool p_font_generate_mipmaps) {
 	Ref<Theme> t;
 	t.instantiate();
+	ERR_FAIL_COND(t.is_null());
 
 	Ref<StyleBox> default_style;
 	Ref<Texture2D> default_icon;
@@ -1277,6 +1281,7 @@ void make_default_theme(float p_scale, Ref<Font> p_font, TextServer::SubpixelPos
 		// embedded in both editor and export template binaries.
 		Ref<FontFile> dynamic_font;
 		dynamic_font.instantiate();
+		ERR_FAIL_COND(dynamic_font.is_null());
 		dynamic_font->set_data_ptr(_font_OpenSans_SemiBold, _font_OpenSans_SemiBold_size);
 		dynamic_font->set_subpixel_positioning(p_font_subpixel);
 		dynamic_font->set_hinting(p_font_hinting);
@@ -1289,15 +1294,18 @@ void make_default_theme(float p_scale, Ref<Font> p_font, TextServer::SubpixelPos
 
 	if (default_font.is_valid()) {
 		bold_font.instantiate();
+		ERR_FAIL_COND(bold_font.is_null());
 		bold_font->set_base_font(default_font);
 		bold_font->set_variation_embolden(1.2);
 
 		bold_italics_font.instantiate();
+		ERR_FAIL_COND(bold_italics_font.is_null());
 		bold_italics_font->set_base_font(default_font);
 		bold_italics_font->set_variation_embolden(1.2);
 		bold_italics_font->set_variation_transform(Transform2D(1.0, 0.2, 0.0, 1.0, 0.0, 0.0));
 
 		italics_font.instantiate();
+		ERR_FAIL_COND(italics_font.is_null());
 		italics_font->set_base_font(default_font);
 		italics_font->set_variation_transform(Transform2D(1.0, 0.2, 0.0, 1.0, 0.0, 0.0));
 	}

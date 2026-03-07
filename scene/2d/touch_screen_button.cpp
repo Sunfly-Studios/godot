@@ -273,6 +273,7 @@ bool TouchScreenButton::_is_point_inside(const Point2 &p_point) {
 			pos = texture_normal->get_size() * 0.5;
 		}
 
+		ERR_FAIL_COND_V(unit_rect.is_null(), touched);
 		touched = shape->collide(Transform2D().translated_local(pos), unit_rect, Transform2D(0, coord + Vector2(0.5, 0.5)));
 	}
 
@@ -301,6 +302,7 @@ void TouchScreenButton::_press(int p_finger_pressed) {
 		Input::get_singleton()->action_press(action);
 		Ref<InputEventAction> iea;
 		iea.instantiate();
+		ERR_FAIL_COND(iea.is_null());
 		iea->set_action(action);
 		iea->set_pressed(true);
 		get_viewport()->push_input(iea, true);
@@ -318,6 +320,7 @@ void TouchScreenButton::_release(bool p_exiting_tree) {
 		if (!p_exiting_tree) {
 			Ref<InputEventAction> iea;
 			iea.instantiate();
+			ERR_FAIL_COND(iea.is_null());
 			iea->set_action(action);
 			iea->set_pressed(false);
 			get_viewport()->push_input(iea, true);

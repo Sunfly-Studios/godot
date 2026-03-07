@@ -182,6 +182,7 @@ Ref<Resource> ResourceFormatLoaderImage::load(const String &p_path, const String
 
 	Ref<Image> image;
 	image.instantiate();
+	ERR_FAIL_COND_V(image.is_null(), Ref<Resource>());
 
 	Error err = ImageLoader::loader.write[idx]->load_image(image, f);
 

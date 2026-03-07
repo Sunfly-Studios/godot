@@ -52,6 +52,7 @@ void OpenXRCompositionLayerQuad::_bind_methods() {
 Ref<Mesh> OpenXRCompositionLayerQuad::_create_fallback_mesh() {
 	Ref<QuadMesh> mesh;
 	mesh.instantiate();
+	ERR_FAIL_COND_V(mesh.is_null(), Ref<Mesh>());
 	mesh->set_size(quad_size);
 	return mesh;
 }

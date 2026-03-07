@@ -36,6 +36,7 @@
 
 Marker3DGizmoPlugin::Marker3DGizmoPlugin() {
 	pos3d_mesh.instantiate();
+	ERR_FAIL_COND(pos3d_mesh.is_null());
 
 	Vector<Vector3> cursor_points;
 	Vector<Color> cursor_colors;

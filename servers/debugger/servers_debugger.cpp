@@ -462,10 +462,12 @@ ServersDebugger::ServersDebugger() {
 
 	// Generic servers profiler (audio/physics/...)
 	servers_profiler.instantiate();
+	ERR_FAIL_COND(servers_profiler.is_null());
 	servers_profiler->bind("servers");
 
 	// Visual Profiler (cpu/gpu times)
 	visual_profiler.instantiate();
+	ERR_FAIL_COND(visual_profiler.is_null());
 	visual_profiler->bind("visual");
 
 	EngineDebugger::Capture servers_cap(nullptr, &_capture);

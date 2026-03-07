@@ -49,6 +49,7 @@ Node *EditorSceneFormatImporterFBX2GLTF::import_scene(const String &p_path, uint
 	if (p_options.has("fbx/importer") && int(p_options["fbx/importer"]) == EditorSceneFormatImporterUFBX::FBX_IMPORTER_UFBX) {
 		Ref<EditorSceneFormatImporterUFBX> fbx2gltf_importer;
 		fbx2gltf_importer.instantiate();
+		ERR_FAIL_COND_V(fbx2gltf_importer.is_null(), nullptr);
 		Node *scene = fbx2gltf_importer->import_scene(p_path, p_flags, p_options, r_missing_deps, r_err);
 		if (r_err && *r_err == OK) {
 			return scene;
@@ -98,8 +99,10 @@ Node *EditorSceneFormatImporterFBX2GLTF::import_scene(const String &p_path, uint
 	// Use GLTFDocument instead of glTF importer to keep image references.
 	Ref<GLTFDocument> gltf;
 	gltf.instantiate();
+	ERR_FAIL_COND_V(gltf.is_null(), nullptr);
 	Ref<GLTFState> state;
 	state.instantiate();
+	ERR_FAIL_COND_V(state.is_null(), nullptr);
 	if (p_options.has(SNAME("nodes/import_as_skeleton_bones")) ? (bool)p_options[SNAME("nodes/import_as_skeleton_bones")] : false) {
 		state->set_import_as_skeleton_bones(true);
 	}

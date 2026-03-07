@@ -217,6 +217,7 @@ Ref<Shader> GraphEdit::default_connections_shader;
 
 void GraphEdit::init_shaders() {
 	default_connections_shader.instantiate();
+	ERR_FAIL_COND(default_connections_shader.is_null());
 	default_connections_shader->set_code(R"(
 // Connection lines shader.
 shader_type canvas_item;
@@ -267,6 +268,7 @@ Error GraphEdit::connect_node(const StringName &p_from, int p_from_port, const S
 	}
 	Ref<Connection> c;
 	c.instantiate();
+	ERR_FAIL_COND_V(c.is_null(), FAILED);
 	c->from_node = p_from;
 	c->from_port = p_from_port;
 	c->to_node = p_to;
@@ -282,6 +284,7 @@ Error GraphEdit::connect_node(const StringName &p_from, int p_from_port, const S
 
 	Ref<ShaderMaterial> line_material;
 	line_material.instantiate();
+	ERR_FAIL_COND_V(line_material.is_null(), FAILED);
 	line_material->set_shader(connections_shader);
 
 	float line_width = _get_shader_line_width();
@@ -1414,6 +1417,7 @@ void GraphEdit::_update_connections() {
 			Ref<ShaderMaterial> line_material = conn->_cache.line->get_material();
 			if (line_material.is_null()) {
 				line_material.instantiate();
+				ERR_FAIL_COND(line_material.is_null());
 				conn->_cache.line->set_material(line_material);
 			}
 
@@ -1545,6 +1549,7 @@ void GraphEdit::_update_top_connection_layer() {
 	Ref<ShaderMaterial> line_material = dragged_connection_line->get_material();
 	if (line_material.is_null()) {
 		line_material.instantiate();
+		ERR_FAIL_COND(line_material.is_null());
 		line_material->set_shader(connections_shader);
 		dragged_connection_line->set_material(line_material);
 	}
@@ -2677,6 +2682,7 @@ void GraphEdit::update_warped_panning() {
 }
 
 void GraphEdit::arrange_nodes() {
+	ERR_FAIL_COND(arranger.is_null());
 	arranger->arrange_nodes();
 }
 
@@ -2887,6 +2893,7 @@ GraphEdit::GraphEdit() {
 	zoom_max = (1 * Math::pow(zoom_step, 4));
 
 	panner.instantiate();
+	ERR_FAIL_COND(panner.is_null());
 	panner->set_callbacks(callable_mp(this, &GraphEdit::_pan_callback), callable_mp(this, &GraphEdit::_zoom_callback));
 
 	top_layer = memnew(Control);

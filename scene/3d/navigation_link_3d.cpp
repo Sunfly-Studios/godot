@@ -57,6 +57,7 @@ void NavigationLink3D::_update_debug_mesh() {
 
 	if (debug_mesh.is_null()) {
 		debug_mesh.instantiate();
+		ERR_FAIL_COND(debug_mesh.is_null());
 	}
 
 	RID nav_map = get_world_3d()->get_navigation_map();

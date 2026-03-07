@@ -40,6 +40,7 @@ void initialize_dds_module(ModuleInitializationLevel p_level) {
 	}
 
 	resource_loader_dds.instantiate();
+	ERR_FAIL_COND(resource_loader_dds.is_null());
 	ResourceLoader::add_resource_format_loader(resource_loader_dds);
 }
 
@@ -48,6 +49,8 @@ void uninitialize_dds_module(ModuleInitializationLevel p_level) {
 		return;
 	}
 
-	ResourceLoader::remove_resource_format_loader(resource_loader_dds);
-	resource_loader_dds.unref();
+	if (resource_loader_dds.is_valid()) {
+		ResourceLoader::remove_resource_format_loader(resource_loader_dds);
+		resource_loader_dds.unref();
+	}
 }

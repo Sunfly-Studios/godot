@@ -87,12 +87,14 @@ Variant ReflectionProbeGizmoPlugin::get_handle_value(const EditorNode3DGizmo *p_
 }
 
 void ReflectionProbeGizmoPlugin::begin_handle_action(const EditorNode3DGizmo *p_gizmo, int p_id, bool p_secondary) {
+	ERR_FAIL_COND(helper.is_null());
 	// The initial value is only used for resizing the box, so we only need AABB size.
 	AABB aabb = get_handle_value(p_gizmo, p_id, p_secondary);
 	helper->initialize_handle_action(aabb.size, p_gizmo->get_node_3d()->get_global_transform());
 }
 
 void ReflectionProbeGizmoPlugin::set_handle(const EditorNode3DGizmo *p_gizmo, int p_id, bool p_secondary, Camera3D *p_camera, const Point2 &p_point) {
+	ERR_FAIL_COND(helper.is_null());
 	ReflectionProbe *probe = Object::cast_to<ReflectionProbe>(p_gizmo->get_node_3d());
 
 	Vector3 sg[2];
@@ -127,6 +129,7 @@ void ReflectionProbeGizmoPlugin::set_handle(const EditorNode3DGizmo *p_gizmo, in
 }
 
 void ReflectionProbeGizmoPlugin::commit_handle(const EditorNode3DGizmo *p_gizmo, int p_id, bool p_secondary, const Variant &p_restore, bool p_cancel) {
+	ERR_FAIL_COND(helper.is_null());
 	ReflectionProbe *probe = Object::cast_to<ReflectionProbe>(p_gizmo->get_node_3d());
 
 	if (p_id < 6) {

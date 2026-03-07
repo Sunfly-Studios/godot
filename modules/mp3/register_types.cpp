@@ -49,6 +49,7 @@ void initialize_mp3_module(ModuleInitializationLevel p_level) {
 	if (Engine::get_singleton()->is_editor_hint()) {
 		Ref<ResourceImporterMP3> mp3_import;
 		mp3_import.instantiate();
+		ERR_FAIL_COND(mp3_import.is_null());
 		ResourceFormatImporter::get_singleton()->add_importer(mp3_import);
 	}
 

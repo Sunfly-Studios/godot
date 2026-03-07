@@ -122,6 +122,7 @@ void LightmapGIData::set_lightmap_textures(const TypedArray<TextureLayered> &p_d
 
 		Ref<Texture2DArray> combined_texture;
 		combined_texture.instantiate();
+		ERR_FAIL_COND(combined_texture.is_null());
 
 		combined_texture->create_from_images(images);
 		combined_light_texture = combined_texture;
@@ -157,6 +158,7 @@ void LightmapGIData::set_shadowmask_textures(const TypedArray<TextureLayered> &p
 
 		Ref<Texture2DArray> combined_texture;
 		combined_texture.instantiate();
+		ERR_FAIL_COND(combined_texture.is_null());
 
 		combined_texture->create_from_images(images);
 		combined_shadowmask_texture = combined_texture;
@@ -851,6 +853,7 @@ LightmapGI::BakeError LightmapGI::_save_and_reimport_atlas_textures(const Ref<Li
 
 		Ref<ConfigFile> config;
 		config.instantiate();
+		ERR_FAIL_COND_V(config.is_null(), BAKE_ERROR_CANT_CREATE_IMAGE);
 
 		// Load an import configuration if present.
 		if (FileAccess::exists(config_path)) {
@@ -1313,6 +1316,7 @@ LightmapGI::BakeError LightmapGI::bake(Node *p_from_node, String p_image_data_pa
 			} break;
 			case ENVIRONMENT_MODE_CUSTOM_COLOR: {
 				environment_image.instantiate();
+				ERR_FAIL_COND_V(environment_image.is_null(), BAKE_ERROR_CANT_CREATE_IMAGE);
 				environment_image->initialize_data(128, 64, false, Image::FORMAT_RGBAF);
 				Color c = environment_custom_color;
 				c.r *= environment_custom_energy;
@@ -1390,6 +1394,7 @@ LightmapGI::BakeError LightmapGI::bake(Node *p_from_node, String p_image_data_pa
 
 	} else {
 		gi_data.instantiate();
+		ERR_FAIL_COND_V(gi_data.is_null(), BAKE_ERROR_CANT_CREATE_IMAGE);
 	}
 
 	gi_data->set_lightmap_textures(lightmap_textures);

@@ -304,6 +304,7 @@ bool WebXRInterfaceJS::initialize() {
 		head_transform.basis = Basis();
 		head_transform.origin = Vector3();
 		head_tracker.instantiate();
+		ERR_FAIL_COND_V(head_tracker.is_null(), false);
 		head_tracker->set_tracker_type(XRServer::TRACKER_HEAD);
 		head_tracker->set_tracker_name("head");
 		head_tracker->set_tracker_desc("Players head");
@@ -661,6 +662,7 @@ void WebXRInterfaceJS::_update_input_source(int p_input_source_id) {
 
 	if (tracker.is_null()) {
 		tracker.instantiate();
+		ERR_FAIL_COND(tracker.is_null());
 
 		StringName tracker_name;
 		if (input_source.target_ray_mode == WebXRInterface::TargetRayMode::TARGET_RAY_MODE_SCREEN) {
@@ -731,6 +733,7 @@ void WebXRInterfaceJS::_update_input_source(int p_input_source_id) {
 				if (abs(delta.x) >= 1.0 || abs(delta.y) >= 1.0) {
 					Ref<InputEventScreenDrag> event;
 					event.instantiate();
+					ERR_FAIL_COND(event.is_null());
 					event->set_index(touch_index);
 					event->set_position(position);
 					event->set_relative(delta);
@@ -754,6 +757,7 @@ void WebXRInterfaceJS::_update_input_source(int p_input_source_id) {
 
 			if (unlikely(hand_tracker.is_null())) {
 				hand_tracker.instantiate();
+				ERR_FAIL_COND(hand_tracker.is_null());
 				hand_tracker->set_tracker_hand(p_input_source_id == 0 ? XRPositionalTracker::TRACKER_HAND_LEFT : XRPositionalTracker::TRACKER_HAND_RIGHT);
 				hand_tracker->set_tracker_name(p_input_source_id == 0 ? "/user/hand_tracker/left" : "/user/hand_tracker/right");
 
@@ -819,6 +823,7 @@ void WebXRInterfaceJS::_on_input_event(int p_event_type, int p_input_source_id) 
 
 				Ref<InputEventScreenTouch> event;
 				event.instantiate();
+				ERR_FAIL_COND(event.is_null());
 				event->set_index(touch_index);
 				event->set_position(touches[touch_index].position);
 				event->set_pressed(p_event_type == WEBXR_INPUT_EVENT_SELECTSTART);

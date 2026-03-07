@@ -57,6 +57,7 @@ void EditorFileServer::_scan_files_changed(EditorFileSystemDirectory *efd, const
 			// Todo the modified times of remapped files should most likely be kept in EditorFileSystem to speed this up in the future.
 			Ref<ConfigFile> cf;
 			cf.instantiate();
+			ERR_FAIL_COND(cf.is_null());
 			Error err = cf->load(f + ".import");
 
 			ERR_CONTINUE(err != OK);
@@ -105,6 +106,7 @@ static void _add_custom_file(const String &f, HashMap<String, uint64_t> &files_t
 }
 
 void EditorFileServer::poll() {
+	ERR_FAIL_COND(server.is_null());
 	if (!active) {
 		return;
 	}
@@ -247,6 +249,7 @@ void EditorFileServer::poll() {
 }
 
 void EditorFileServer::start() {
+	ERR_FAIL_COND(server.is_null());
 	if (active) {
 		stop();
 	}
@@ -262,6 +265,7 @@ bool EditorFileServer::is_active() const {
 }
 
 void EditorFileServer::stop() {
+	ERR_FAIL_COND(server.is_null());
 	if (active) {
 		server->stop();
 		active = false;

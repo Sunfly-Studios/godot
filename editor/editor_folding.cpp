@@ -52,6 +52,7 @@ Vector<String> EditorFolding::_get_unfolds(const Object *p_object) {
 void EditorFolding::save_resource_folding(const Ref<Resource> &p_resource, const String &p_path) {
 	Ref<ConfigFile> config;
 	config.instantiate();
+	ERR_FAIL_COND(config.is_null());
 	Vector<String> unfolds = _get_unfolds(p_resource.ptr());
 	config->set_value("folding", "sections_unfolded", unfolds);
 
@@ -72,6 +73,7 @@ void EditorFolding::_set_unfolds(Object *p_object, const Vector<String> &p_unfol
 void EditorFolding::load_resource_folding(Ref<Resource> p_resource, const String &p_path) {
 	Ref<ConfigFile> config;
 	config.instantiate();
+	ERR_FAIL_COND(config.is_null());
 
 	String file = p_path.get_file() + "-folding-" + p_path.md5_text() + ".cfg";
 	file = EditorPaths::get_singleton()->get_project_settings_dir().path_join(file);
@@ -139,6 +141,7 @@ void EditorFolding::save_scene_folding(const Node *p_scene, const String &p_path
 
 	Ref<ConfigFile> config;
 	config.instantiate();
+	ERR_FAIL_COND(config.is_null());
 
 	Array unfolds, res_unfolds;
 	HashSet<Ref<Resource>> resources;
@@ -157,6 +160,7 @@ void EditorFolding::save_scene_folding(const Node *p_scene, const String &p_path
 void EditorFolding::load_scene_folding(Node *p_scene, const String &p_path) {
 	Ref<ConfigFile> config;
 	config.instantiate();
+	ERR_FAIL_COND(config.is_null());
 
 	String path = EditorPaths::get_singleton()->get_project_settings_dir();
 	String file = p_path.get_file() + "-folding-" + p_path.md5_text() + ".cfg";

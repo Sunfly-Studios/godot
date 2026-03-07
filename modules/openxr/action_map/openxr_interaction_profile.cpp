@@ -63,6 +63,7 @@ Ref<OpenXRIPBinding> OpenXRIPBinding::new_binding(const Ref<OpenXRAction> p_acti
 
 	Ref<OpenXRIPBinding> binding;
 	binding.instantiate();
+	ERR_FAIL_COND_V(binding.is_null(), Ref<OpenXRIPBinding>());
 	binding->set_action(p_action);
 	binding->set_binding_path(p_binding_path);
 
@@ -234,6 +235,7 @@ void OpenXRInteractionProfile::_bind_methods() {
 Ref<OpenXRInteractionProfile> OpenXRInteractionProfile::new_profile(const char *p_input_profile_path) {
 	Ref<OpenXRInteractionProfile> profile;
 	profile.instantiate();
+	ERR_FAIL_COND_V(profile.is_null(), Ref<OpenXRInteractionProfile>());
 	profile->set_interaction_profile_path(String(p_input_profile_path));
 
 	return profile;

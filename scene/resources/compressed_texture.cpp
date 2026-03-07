@@ -133,6 +133,7 @@ Error CompressedTexture2D::load(const String &p_path) {
 	int lw, lh;
 	Ref<Image> image;
 	image.instantiate();
+	ERR_FAIL_COND_V(image.is_null(), ERR_CANT_OPEN);
 
 	bool request_3d;
 	bool request_normal;
@@ -259,6 +260,7 @@ bool CompressedTexture2D::is_pixel_opaque(int p_x, int p_y) const {
 			}
 
 			alpha_cache.instantiate();
+			ERR_FAIL_COND_V(alpha_cache.is_null(), false);
 			alpha_cache->create_from_image_alpha(img);
 		}
 	}
@@ -369,6 +371,7 @@ Ref<Image> CompressedTexture2D::load_image_from_file(Ref<FileAccess> f, int p_si
 
 		Ref<Image> image;
 		image.instantiate();
+		ERR_FAIL_COND_V(image.is_null(), Ref<Image>());
 
 		if (mipmap_images.size() == 1) {
 			//only one image (which will most likely be the case anyway for this format)
@@ -473,6 +476,7 @@ CompressedTexture2D::~CompressedTexture2D() {
 Ref<Resource> ResourceFormatLoaderCompressedTexture2D::load(const String &p_path, const String &p_original_path, Error *r_error, bool p_use_sub_threads, float *r_progress, CacheMode p_cache_mode) {
 	Ref<CompressedTexture2D> st;
 	st.instantiate();
+	ERR_FAIL_COND_V(st.is_null(), Ref<Resource>());
 	Error err = st->load(p_path);
 	if (r_error) {
 		*r_error = err;
@@ -665,6 +669,7 @@ CompressedTexture3D::~CompressedTexture3D() {
 Ref<Resource> ResourceFormatLoaderCompressedTexture3D::load(const String &p_path, const String &p_original_path, Error *r_error, bool p_use_sub_threads, float *r_progress, CacheMode p_cache_mode) {
 	Ref<CompressedTexture3D> st;
 	st.instantiate();
+	ERR_FAIL_COND_V(st.is_null(), Ref<Resource>());
 	Error err = st->load(p_path);
 	if (r_error) {
 		*r_error = err;
@@ -868,14 +873,17 @@ Ref<Resource> ResourceFormatLoaderCompressedTextureLayered::load(const String &p
 	if (p_path.get_extension().to_lower() == "ctexarray") {
 		Ref<CompressedTexture2DArray> c;
 		c.instantiate();
+		ERR_FAIL_COND_V(c.is_null(), Ref<Resource>());
 		ct = c;
 	} else if (p_path.get_extension().to_lower() == "ccube") {
 		Ref<CompressedCubemap> c;
 		c.instantiate();
+		ERR_FAIL_COND_V(c.is_null(), Ref<Resource>());
 		ct = c;
 	} else if (p_path.get_extension().to_lower() == "ccubearray") {
 		Ref<CompressedCubemapArray> c;
 		c.instantiate();
+		ERR_FAIL_COND_V(c.is_null(), Ref<Resource>());
 		ct = c;
 	} else {
 		if (r_error) {

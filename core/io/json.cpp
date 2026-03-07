@@ -571,6 +571,7 @@ String JSON::get_parsed_text() const {
 String JSON::stringify(const Variant &p_var, const String &p_indent, bool p_sort_keys, bool p_full_precision) {
 	Ref<JSON> json;
 	json.instantiate();
+	ERR_FAIL_COND_V(json.is_null(), String());
 	HashSet<const void *> markers;
 	return json->_stringify(p_var, p_indent, 0, p_sort_keys, markers, p_full_precision);
 }
@@ -578,6 +579,7 @@ String JSON::stringify(const Variant &p_var, const String &p_indent, bool p_sort
 Variant JSON::parse_string(const String &p_json_string) {
 	Ref<JSON> json;
 	json.instantiate();
+	ERR_FAIL_COND_V(json.is_null(), Variant());
 	Error error = json->parse(p_json_string);
 	ERR_FAIL_COND_V_MSG(error != Error::OK, Variant(), vformat("Parse JSON failed. Error at line %d: %s", json->get_error_line(), json->get_error_message()));
 	return json->get_data();
@@ -1620,6 +1622,7 @@ Ref<Resource> ResourceFormatLoaderJSON::load(const String &p_path, const String 
 
 	Ref<JSON> json;
 	json.instantiate();
+	ERR_FAIL_COND_V(json.is_null(), Ref<Resource>());
 
 	Error err = json->parse(FileAccess::get_file_as_string(p_path), Engine::get_singleton()->is_editor_hint());
 	if (err != OK) {

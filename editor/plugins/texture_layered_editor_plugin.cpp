@@ -437,5 +437,6 @@ void EditorInspectorPluginLayeredTexture::parse_begin(Object *p_object) {
 TextureLayeredEditorPlugin::TextureLayeredEditorPlugin() {
 	Ref<EditorInspectorPluginLayeredTexture> plugin;
 	plugin.instantiate();
+	ERR_FAIL_COND(plugin.is_null());
 	add_inspector_plugin(plugin);
 }

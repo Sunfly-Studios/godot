@@ -1193,7 +1193,9 @@ Skeleton3DEditor::Skeleton3DEditor(EditorInspectorPluginSkeleton *e_plugin, Skel
 
 	// Handle.
 	handle_material.instantiate();
+	ERR_FAIL_COND(handle_material.is_null());
 	handle_shader.instantiate();
+	ERR_FAIL_COND(handle_shader.is_null());
 	handle_shader->set_code(R"(
 // Skeleton 3D gizmo handle shader.
 
@@ -1235,6 +1237,7 @@ void fragment() {
 	handles_mesh_instance = memnew(MeshInstance3D);
 	handles_mesh_instance->set_cast_shadows_setting(GeometryInstance3D::SHADOW_CASTING_SETTING_OFF);
 	handles_mesh.instantiate();
+	ERR_FAIL_COND(handles_mesh.is_null());
 	handles_mesh_instance->set_mesh(handles_mesh);
 
 	create_editors();
@@ -1472,6 +1475,7 @@ Skeleton3DGizmoPlugin::SelectionMaterials Skeleton3DGizmoPlugin::selection_mater
 
 Skeleton3DGizmoPlugin::Skeleton3DGizmoPlugin() {
 	selection_materials.unselected_mat.instantiate();
+	ERR_FAIL_COND(selection_materials.unselected_mat.is_null());
 	selection_materials.unselected_mat->set_shading_mode(StandardMaterial3D::SHADING_MODE_UNSHADED);
 	selection_materials.unselected_mat->set_transparency(StandardMaterial3D::TRANSPARENCY_ALPHA);
 	selection_materials.unselected_mat->set_flag(StandardMaterial3D::FLAG_ALBEDO_FROM_VERTEX_COLOR, true);
@@ -1479,7 +1483,9 @@ Skeleton3DGizmoPlugin::Skeleton3DGizmoPlugin() {
 	selection_materials.unselected_mat->set_flag(StandardMaterial3D::FLAG_DISABLE_FOG, true);
 
 	selection_materials.selected_mat.instantiate();
+	ERR_FAIL_COND(selection_materials.selected_mat.is_null());
 	Ref<Shader> selected_sh = Ref<Shader>(memnew(Shader));
+	ERR_FAIL_COND(selected_sh.is_null());
 	selected_sh->set_code(R"(
 // Skeleton 3D gizmo bones shader.
 

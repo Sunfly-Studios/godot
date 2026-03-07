@@ -315,6 +315,7 @@ void MeshLibrary::_set_item_shapes(int p_item, const Array &p_shapes) {
 			if (shape.is_null()) {
 				Ref<BoxShape3D> box_shape;
 				box_shape.instantiate();
+				ERR_FAIL_COND(box_shape.is_null());
 				arr_shapes[size - 1] = box_shape;
 			}
 

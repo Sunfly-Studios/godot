@@ -361,11 +361,13 @@ void ResourceImporterScene::_pre_fix_global(Node *p_scene, const HashMap<StringN
 		if (reset_anim.is_null()) {
 			AnimationPlayer *anim_player = cast_to<AnimationPlayer>(anim_players[0]);
 			reset_anim.instantiate();
+			ERR_FAIL_COND(reset_anim.is_null());
 			Ref<AnimationLibrary> anim_library;
 			if (anim_player->has_animation_library(StringName())) {
 				anim_library = anim_player->get_animation_library(StringName());
 			} else {
 				anim_library.instantiate();
+				ERR_FAIL_COND(anim_library.is_null());
 				anim_player->add_animation_library(StringName(), anim_library);
 			}
 			anim_library->add_animation(SceneStringName(RESET), reset_anim);
@@ -2015,6 +2017,7 @@ void ResourceImporterScene::get_internal_import_options(InternalImportCategory p
 			// Decomposition
 			Ref<MeshConvexDecompositionSettings> decomposition_default = Ref<MeshConvexDecompositionSettings>();
 			decomposition_default.instantiate();
+			ERR_FAIL_COND(decomposition_default.is_null());
 			r_options->push_back(ImportOption(PropertyInfo(Variant::BOOL, "decomposition/advanced", PROPERTY_HINT_NONE, "", PROPERTY_USAGE_DEFAULT | PROPERTY_USAGE_UPDATE_ALL_IF_MODIFIED), false));
 			r_options->push_back(ImportOption(PropertyInfo(Variant::INT, "decomposition/precision", PROPERTY_HINT_RANGE, "1,10,1"), 5));
 			r_options->push_back(ImportOption(PropertyInfo(Variant::FLOAT, "decomposition/max_concavity", PROPERTY_HINT_RANGE, "0.0,1.0,0.001", PROPERTY_USAGE_DEFAULT), decomposition_default->get_max_concavity()));
@@ -3111,6 +3114,7 @@ Error ResourceImporterScene::import(ResourceUID::ID p_source_id, const String &p
 			EditorNode::add_io_error(TTR("Couldn't load post-import script:") + " " + post_import_script_path);
 		} else {
 			post_import_script.instantiate();
+			ERR_FAIL_COND_V(post_import_script.is_null(), ERR_OUT_OF_MEMORY);
 			post_import_script->set_script(scr);
 			if (!post_import_script->get_script_instance()) {
 				EditorNode::add_io_error(TTR("Invalid/broken script for post-import (check console):") + " " + post_import_script_path);
@@ -3171,6 +3175,7 @@ Error ResourceImporterScene::import(ResourceUID::ID p_source_id, const String &p
 
 		if (library.is_null()) {
 			library.instantiate(); // Will be empty
+			ERR_FAIL_COND_V(library.is_null(), ERR_OUT_OF_MEMORY);
 		}
 
 		print_verbose("Saving animation to: " + p_save_path + ".res");
@@ -3284,6 +3289,7 @@ Node *EditorSceneFormatImporterESCN::import_scene(const String &p_path, uint32_t
 		MeshInstance3D *mesh_3d = cast_to<MeshInstance3D>(nodes[node_i]);
 		Ref<ImporterMesh> mesh;
 		mesh.instantiate();
+		ERR_FAIL_COND_V(mesh.is_null(), nullptr);
 		// Ignore the aabb, it will be recomputed.
 		ImporterMeshInstance3D *importer_mesh_3d = memnew(ImporterMeshInstance3D);
 		importer_mesh_3d->set_name(mesh_3d->get_name());

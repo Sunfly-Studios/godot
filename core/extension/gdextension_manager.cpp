@@ -90,6 +90,7 @@ GDExtensionManager::LoadStatus GDExtensionManager::load_extension(const String &
 
 	Ref<GDExtensionLibraryLoader> loader;
 	loader.instantiate();
+	ERR_FAIL_COND_V(loader.is_null(), LOAD_STATUS_FAILED);
 	return GDExtensionManager::get_singleton()->load_extension_with_loader(p_path, loader);
 }
 
@@ -102,6 +103,7 @@ GDExtensionManager::LoadStatus GDExtensionManager::load_extension_with_loader(co
 
 	Ref<GDExtension> extension;
 	extension.instantiate();
+	ERR_FAIL_COND_V(extension.is_null(), LOAD_STATUS_FAILED);
 	Error err = extension->open_library(p_path, p_loader);
 	if (err != OK) {
 		return LOAD_STATUS_FAILED;

@@ -48,6 +48,7 @@ Node *EditorSceneFormatImporterUFBX::import_scene(const String &p_path, uint32_t
 	if (p_options.has("fbx/importer") && int(p_options["fbx/importer"]) == FBX_IMPORTER_FBX2GLTF && GLOBAL_GET("filesystem/import/fbx2gltf/enabled")) {
 		Ref<EditorSceneFormatImporterFBX2GLTF> fbx2gltf_importer;
 		fbx2gltf_importer.instantiate();
+		ERR_FAIL_COND_V(fbx2gltf_importer.is_null(), nullptr);
 		Node *scene = fbx2gltf_importer->import_scene(p_path, p_flags, p_options, r_missing_deps, r_err);
 		if (r_err && *r_err == OK) {
 			return scene;
@@ -57,8 +58,10 @@ Node *EditorSceneFormatImporterUFBX::import_scene(const String &p_path, uint32_t
 	}
 	Ref<FBXDocument> fbx;
 	fbx.instantiate();
+	ERR_FAIL_COND_V(fbx.is_null(), nullptr);
 	Ref<FBXState> state;
 	state.instantiate();
+	ERR_FAIL_COND_V(state.is_null(), nullptr);
 	print_verbose(vformat("FBX path: %s", p_path));
 	String path = ProjectSettings::get_singleton()->globalize_path(p_path);
 	bool allow_geometry_helper_nodes = p_options.has("fbx/allow_geometry_helper_nodes") ? (bool)p_options["fbx/allow_geometry_helper_nodes"] : false;

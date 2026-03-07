@@ -152,6 +152,7 @@ PhysicsDirectBodyState2D::PhysicsDirectBodyState2D() {}
 Ref<PhysicsRayQueryParameters2D> PhysicsRayQueryParameters2D::create(Vector2 p_from, Vector2 p_to, uint32_t p_mask, const TypedArray<RID> &p_exclude) {
 	Ref<PhysicsRayQueryParameters2D> params;
 	params.instantiate();
+	ERR_FAIL_COND_V(params.is_null(), Ref<PhysicsRayQueryParameters2D>());
 	params->set_from(p_from);
 	params->set_to(p_to);
 	params->set_collision_mask(p_mask);

@@ -3017,6 +3017,7 @@ Ref<GDScript> GDScriptLanguage::get_script_by_fully_qualified_name(const String 
 
 	Ref<GDScript> scr;
 	scr.instantiate();
+	ERR_FAIL_COND_V(scr.is_null(), Ref<GDScript>());
 	scr->fully_qualified_name = p_name;
 	return scr;
 }

@@ -146,6 +146,7 @@ void ShaderCreateDialog::_create_new() {
 		case SHADER_TYPE_TEXT: {
 			Ref<Shader> text_shader;
 			text_shader.instantiate();
+			ERR_FAIL_COND(text_shader.is_null());
 			shader = text_shader;
 
 			StringBuilder code;
@@ -219,12 +220,14 @@ void fog() {
 		case SHADER_TYPE_VISUAL: {
 			Ref<VisualShader> visual_shader;
 			visual_shader.instantiate();
+			ERR_FAIL_COND(visual_shader.is_null());
 			shader = visual_shader;
 			visual_shader->set_mode(Shader::Mode(current_mode));
 		} break;
 		case SHADER_TYPE_INC: {
 			Ref<ShaderInclude> include;
 			include.instantiate();
+			ERR_FAIL_COND(include.is_null());
 			shader_inc = include;
 		} break;
 		default: {

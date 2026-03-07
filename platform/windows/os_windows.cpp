@@ -1498,10 +1498,12 @@ Dictionary OS_Windows::execute_with_pipe(const String &p_path, const List<String
 
 	Ref<FileAccessWindowsPipe> main_pipe;
 	main_pipe.instantiate();
+	ERR_FAIL_COND_V(main_pipe.is_null(), Dictionary());
 	main_pipe->open_existing(pipe_out[0], pipe_in[1], p_blocking);
 
 	Ref<FileAccessWindowsPipe> err_pipe;
 	err_pipe.instantiate();
+	ERR_FAIL_COND_V(err_pipe.is_null(), Dictionary());
 	err_pipe->open_existing(pipe_err[0], nullptr, p_blocking);
 
 	ret["stdio"] = main_pipe;

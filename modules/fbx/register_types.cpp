@@ -42,12 +42,14 @@
 static void _editor_init() {
 	Ref<EditorSceneFormatImporterUFBX> import_fbx;
 	import_fbx.instantiate();
+	ERR_FAIL_COND(import_fbx.is_null());
 	ResourceImporterScene::add_scene_importer(import_fbx);
 
 	bool fbx2gltf_enabled = GLOBAL_GET("filesystem/import/fbx2gltf/enabled");
 	if (fbx2gltf_enabled) {
 		Ref<EditorSceneFormatImporterFBX2GLTF> importer;
 		importer.instantiate();
+		ERR_FAIL_COND(importer.is_null());
 		ResourceImporterScene::add_scene_importer(importer);
 	}
 }

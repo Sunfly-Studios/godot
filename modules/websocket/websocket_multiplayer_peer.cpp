@@ -183,6 +183,7 @@ Error WebSocketMultiplayerPeer::create_server(int p_port, IPAddress p_bind_ip, R
 	ERR_FAIL_COND_V(p_options.is_valid() && !p_options->is_server(), ERR_INVALID_PARAMETER);
 	_clear();
 	tcp_server.instantiate();
+	ERR_FAIL_COND_V(tcp_server.is_null(), ERR_OUT_OF_MEMORY);
 	Error err = tcp_server->listen(p_port, p_bind_ip);
 	if (err != OK) {
 		tcp_server.unref();

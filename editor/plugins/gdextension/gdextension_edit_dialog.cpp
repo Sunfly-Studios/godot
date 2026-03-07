@@ -41,6 +41,7 @@
 void GDExtensionEditDialog::load_gdextension_config(const String &p_path) {
 	Ref<ConfigFile> config;
 	config.instantiate();
+	ERR_FAIL_COND(config.is_null());
 	Error err = config->load(p_path);
 	ERR_FAIL_COND_MSG(err != OK, "Error loading GDExtension configuration file: " + p_path);
 	gdextension_path->set_text(p_path);
@@ -68,6 +69,7 @@ void GDExtensionEditDialog::_on_confirmed() {
 	const String gdext_res_path = gdextension_path->get_text();
 	Ref<ConfigFile> config;
 	config.instantiate();
+	ERR_FAIL_COND(config.is_null());
 	Error err = config->load(gdext_res_path);
 	ERR_FAIL_COND_MSG(err != OK, "Error loading GDExtension configuration file: " + gdext_res_path);
 	// Set configuration keys.

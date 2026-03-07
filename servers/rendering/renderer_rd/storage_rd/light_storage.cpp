@@ -1491,6 +1491,7 @@ bool LightStorage::reflection_probe_instance_begin_render(RID p_instance, RID p_
 
 	if (atlas->render_buffers.is_null()) {
 		atlas->render_buffers.instantiate();
+		ERR_FAIL_COND_V_MSG(atlas->render_buffers.is_null(), false, "Could not instantiate atlas render buffers");
 	}
 
 	RD::get_singleton()->draw_command_begin_label("Reflection probe render");

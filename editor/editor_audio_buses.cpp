@@ -1273,6 +1273,7 @@ void EditorAudioBuses::_file_dialog_callback(const String &p_string) {
 		if (new_layout) {
 			Ref<AudioBusLayout> empty_state;
 			empty_state.instantiate();
+			ERR_FAIL_COND(empty_state.is_null());
 			AudioServer::get_singleton()->set_bus_layout(empty_state);
 		}
 

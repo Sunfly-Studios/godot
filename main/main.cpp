@@ -698,6 +698,7 @@ Error Main::test_setup() {
 	if (tsman) {
 		Ref<TextServerDummy> ts;
 		ts.instantiate();
+		ERR_FAIL_COND_V(ts.is_null(), ERR_OUT_OF_MEMORY);
 		tsman->add_interface(ts);
 	}
 
@@ -3002,6 +3003,7 @@ Error Main::setup2(bool p_show_boot_logo) {
 		if (editor && !has_command_line_window_override && restore_editor_window_layout) {
 			Ref<ConfigFile> config;
 			config.instantiate();
+			ERR_FAIL_COND_V(config.is_null(), ERR_OUT_OF_MEMORY);
 			// Load and amend existing config if it exists.
 			Error err = config->load(EditorPaths::get_singleton()->get_project_settings_dir().path_join("editor_layout.cfg"));
 			if (err == OK) {
@@ -3040,6 +3042,7 @@ Error Main::setup2(bool p_show_boot_logo) {
 	if (tsman) {
 		Ref<TextServerDummy> ts;
 		ts.instantiate();
+		ERR_FAIL_COND_V(ts.is_null(), ERR_OUT_OF_MEMORY);
 		tsman->add_interface(ts);
 	}
 
@@ -3666,8 +3669,10 @@ void Main::setup_boot_logo() {
 		} else {
 			// Create a 1×1 transparent image. This will effectively hide the splash image.
 			boot_logo.instantiate();
-			boot_logo->initialize_data(1, 1, false, Image::FORMAT_RGBA8);
-			boot_logo->set_pixel(0, 0, Color(0, 0, 0, 0));
+			if (boot_logo.is_valid()) {
+				boot_logo->initialize_data(1, 1, false, Image::FORMAT_RGBA8);
+				boot_logo->set_pixel(0, 0, Color(0, 0, 0, 0));
+			}
 		}
 
 		Color boot_bg_color = GLOBAL_GET("application/boot_splash/bg_color");
@@ -3722,7 +3727,7 @@ static MainTimerSync main_timer_sync;
 int Main::start() {
 	OS::get_singleton()->benchmark_begin_measure("Startup", "Main::Start");
 
-	ERR_FAIL_COND_V(!_start_success, false);
+	ERR_FAIL_COND_V(!_start_success, EXIT_FAILURE);
 
 	bool has_icon = false;
 	String positional_arg;
@@ -4171,13 +4176,11 @@ int Main::start() {
 						// Cache the scene reference before loading it (for cyclic references)
 						Ref<PackedScene> scn;
 						scn.instantiate();
+						ERR_CONTINUE_MSG(scn.is_null(), vformat("Failed to instantiate an autoload, can't load from path: %s.", info.path));
 						scn->set_path(info.path);
 						scn->reload_from_file();
-						ERR_CONTINUE_MSG(scn.is_null(), vformat("Failed to instantiate an autoload, can't load from path: %s.", info.path));
 
-						if (scn.is_valid()) {
-							n = scn->instantiate();
-						}
+						n = scn->instantiate();
 					} else {
 						Ref<Resource> res = ResourceLoader::load(info.path);
 						ERR_CONTINUE_MSG(res.is_null(), vformat("Failed to instantiate an autoload, can't load from path: %s.", info.path));
@@ -4440,6 +4443,7 @@ int Main::start() {
 				if (DisplayServer::get_singleton()->has_feature(DisplayServer::FEATURE_ICON) && !icon_path.is_empty() && !has_icon) {
 					Ref<Image> icon;
 					icon.instantiate();
+					ERR_FAIL_COND_V(icon.is_null(), ERR_OUT_OF_MEMORY);
 					if (ImageLoader::load_image(icon_path, icon) == OK) {
 						DisplayServer::get_singleton()->set_icon(icon);
 						has_icon = true;

@@ -2523,6 +2523,7 @@ TileSetAtlasSourceEditor::TileSetAtlasSourceEditor() {
 
 	// -- Toolbox --
 	tools_button_group.instantiate();
+	ERR_FAIL_COND(tools_button_group.is_null());
 	tools_button_group->connect(SceneStringName(pressed), callable_mp(this, &TileSetAtlasSourceEditor::_update_fix_selected_and_hovered_tiles).unbind(1));
 	tools_button_group->connect(SceneStringName(pressed), callable_mp(this, &TileSetAtlasSourceEditor::_update_tile_id_label).unbind(1));
 	tools_button_group->connect(SceneStringName(pressed), callable_mp(this, &TileSetAtlasSourceEditor::_update_atlas_source_inspector).unbind(1));
@@ -2782,10 +2783,12 @@ void EditorPropertyTilePolygon::_polygons_changed() {
 			Ref<NavigationPolygon> navigation_polygon;
 			if (generic_tile_polygon_editor->get_polygon_count() >= 1) {
 				navigation_polygon.instantiate();
+				ERR_FAIL_COND(navigation_polygon.is_null());
 
 				if (generic_tile_polygon_editor->get_polygon_count() > 0) {
 					Ref<NavigationMeshSourceGeometryData2D> source_geometry_data;
 					source_geometry_data.instantiate();
+					ERR_FAIL_COND(source_geometry_data.is_null());
 					for (int i = 0; i < generic_tile_polygon_editor->get_polygon_count(); i++) {
 						Vector<Vector2> polygon = generic_tile_polygon_editor->get_polygon(i);
 						navigation_polygon->add_outline(polygon);
@@ -2813,6 +2816,7 @@ void EditorPropertyTilePolygon::_polygons_changed() {
 			} else if (base_type == "OccluderPolygon2D") {
 				Ref<OccluderPolygon2D> occluder;
 				occluder.instantiate();
+				ERR_FAIL_COND(occluder.is_null());
 				occluder->set_polygon(generic_tile_polygon_editor->get_polygon(i));
 				values.push_back(occluder);
 			}

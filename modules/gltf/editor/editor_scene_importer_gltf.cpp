@@ -45,8 +45,10 @@ Node *EditorSceneFormatImporterGLTF::import_scene(const String &p_path, uint32_t
 		List<String> *r_missing_deps, Error *r_err) {
 	Ref<GLTFDocument> gltf;
 	gltf.instantiate();
+	ERR_FAIL_COND_V(gltf.is_null(), nullptr);
 	Ref<GLTFState> state;
 	state.instantiate();
+	ERR_FAIL_COND_V(state.is_null(), nullptr);
 	if (p_options.has("gltf/naming_version")) {
 		int naming_version = p_options["gltf/naming_version"];
 		gltf->set_naming_version(naming_version);

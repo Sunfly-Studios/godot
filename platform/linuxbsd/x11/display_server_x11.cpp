@@ -1006,6 +1006,7 @@ Ref<Image> DisplayServerX11::clipboard_get_image() const {
 
 			if (success && (data_size > 0)) {
 				ret.instantiate();
+				ERR_FAIL_COND(ret.is_null());
 				PNGDriverCommon::png_to_image(incr_data.ptr(), incr_data.size(), false, ret);
 			}
 		} else if (bytes_left > 0) {
@@ -1020,6 +1021,7 @@ Ref<Image> DisplayServerX11::clipboard_get_image() const {
 					&len, &dummy, &data);
 			if (result == Success) {
 				ret.instantiate();
+				ERR_FAIL_COND(ret.is_null());
 				PNGDriverCommon::png_to_image((uint8_t *)data, bytes_left, false, ret);
 			} else {
 				print_verbose("Failed to get selection data.");
@@ -3645,6 +3647,7 @@ void DisplayServerX11::_handle_key_event(WindowID p_window, XKeyEvent *p_event, 
 			for (int i = 0; i < tmp.length(); i++) {
 				Ref<InputEventKey> k;
 				k.instantiate();
+				ERR_FAIL_COND(k.is_null());
 				if (physical_keycode == Key::NONE && keycode == Key::NONE && tmp[i] == 0) {
 					continue;
 				}
@@ -3726,6 +3729,7 @@ void DisplayServerX11::_handle_key_event(WindowID p_window, XKeyEvent *p_event, 
 				for (int i = 0; i < tmp.length(); i++) {
 					Ref<InputEventKey> k;
 					k.instantiate();
+					ERR_FAIL_COND(k.is_null());
 					if (physical_keycode == Key::NONE && keycode == Key::NONE && tmp[i] == 0) {
 						continue;
 					}
@@ -3824,6 +3828,7 @@ void DisplayServerX11::_handle_key_event(WindowID p_window, XKeyEvent *p_event, 
 
 	Ref<InputEventKey> k;
 	k.instantiate();
+	ERR_FAIL_COND(k.is_null());
 	k->set_window_id(p_window);
 
 	_get_key_modifier_state(xkeyevent->state, k);
@@ -4700,6 +4705,7 @@ void DisplayServerX11::process_events() {
 
 						Ref<InputEventScreenTouch> st;
 						st.instantiate();
+						ERR_FAIL_COND(st.is_null());
 						st->set_window_id(window_id);
 						st->set_index(index);
 						st->set_position(pos);
@@ -4741,6 +4747,7 @@ void DisplayServerX11::process_events() {
 						if (curr_pos_elem->value != pos) {
 							Ref<InputEventScreenDrag> sd;
 							sd.instantiate();
+							ERR_FAIL_COND(sd.is_null());
 							sd->set_window_id(window_id);
 							sd->set_index(index);
 							sd->set_position(pos);
@@ -4932,6 +4939,7 @@ void DisplayServerX11::process_events() {
 				for (const KeyValue<int, Vector2> &E : xi.state) {
 					Ref<InputEventScreenTouch> st;
 					st.instantiate();
+					ERR_FAIL_COND(st.is_null());
 					st->set_index(E.key);
 					st->set_window_id(window_id);
 					st->set_position(E.value);
@@ -4964,6 +4972,7 @@ void DisplayServerX11::process_events() {
 
 				Ref<InputEventMouseButton> mb;
 				mb.instantiate();
+				ERR_FAIL_COND(mb.is_null());
 
 				mb->set_window_id(window_id);
 				_get_key_modifier_state(event.xbutton.state, mb);
@@ -5164,6 +5173,7 @@ void DisplayServerX11::process_events() {
 
 				Ref<InputEventMouseMotion> mm;
 				mm.instantiate();
+				ERR_FAIL_COND(mm.is_null());
 
 				mm->set_window_id(window_id);
 				if (xi.pressure_supported) {

@@ -989,6 +989,7 @@ Ref<Skin> Skeleton3D::create_skin_from_rest_transforms() {
 	Ref<Skin> skin;
 
 	skin.instantiate();
+	ERR_FAIL_COND_V(skin.is_null(), Ref<Skin>());
 	skin->set_bind_count(bones.size());
 
 	// Pose changed, rebuild cache of inverses.
@@ -1037,6 +1038,7 @@ Ref<SkinReference> Skeleton3D::register_skin(const Ref<Skin> &p_skin) {
 
 	Ref<SkinReference> skin_ref;
 	skin_ref.instantiate();
+	ERR_FAIL_COND_V(skin_ref.is_null(), Ref<SkinReference>());
 
 	skin_ref->skeleton_node = this;
 	skin_ref->bind_count = 0;

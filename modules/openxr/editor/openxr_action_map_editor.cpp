@@ -147,6 +147,7 @@ OpenXRActionSetEditor *OpenXRActionMapEditor::_add_action_set(String p_name) {
 
 	// add our new action set
 	new_action_set.instantiate();
+	ERR_FAIL_COND_V(new_action_set.is_null(), nullptr);
 	new_action_set->set_name(p_name);
 	new_action_set->set_localized_name(p_name);
 	action_map->add_action_set(new_action_set);
@@ -258,6 +259,7 @@ void OpenXRActionMapEditor::_on_interaction_profile_selected(const String p_path
 
 	Ref<OpenXRInteractionProfile> new_profile;
 	new_profile.instantiate();
+	ERR_FAIL_COND(new_profile.is_null());
 	new_profile->set_interaction_profile_path(p_path);
 	action_map->add_interaction_profile(new_profile);
 	action_map->set_edited(true);
@@ -286,6 +288,7 @@ void OpenXRActionMapEditor::_load_action_map(const String p_path, bool p_create_
 		}
 	} else if (p_create_new_if_missing) {
 		action_map.instantiate();
+		ERR_FAIL_COND(action_map.is_null());
 		action_map->create_default_action_sets();
 
 		// Save it immediately
@@ -325,6 +328,7 @@ void OpenXRActionMapEditor::_on_reset_to_default_layout() {
 	// create a new one
 	action_map.unref();
 	action_map.instantiate();
+	ERR_FAIL_COND(action_map.is_null());
 	action_map->create_default_action_sets();
 	action_map->set_edited(true);
 

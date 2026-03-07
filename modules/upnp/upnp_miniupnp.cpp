@@ -101,6 +101,7 @@ int UPNPMiniUPNP::discover(int timeout, int ttl, const String &device_filter) {
 void UPNPMiniUPNP::add_device_to_list(UPNPDev *dev, UPNPDev *devlist) {
 	Ref<UPNPDeviceMiniUPNP> new_device;
 	new_device.instantiate();
+	ERR_FAIL_COND(new_device.is_null());
 
 	new_device->set_description_url(dev->descURL);
 	new_device->set_service_type(dev->st);

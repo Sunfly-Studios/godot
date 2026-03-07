@@ -203,6 +203,7 @@ Ref<AudioStreamPreview> AudioStreamPreviewGenerator::generate_preview(const Ref<
 	}
 
 	preview->preview.instantiate();
+	ERR_FAIL_COND_V(preview->preview.is_null(), Ref<AudioStreamPreview>());
 	preview->preview->preview = maxmin;
 	preview->preview->length = len_s;
 

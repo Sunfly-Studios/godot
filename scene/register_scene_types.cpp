@@ -340,30 +340,39 @@ void register_scene_types() {
 	Node::init_node_hrcr();
 
 	resource_loader_stream_texture.instantiate();
+	ERR_FAIL_COND(resource_loader_stream_texture.is_null());
 	ResourceLoader::add_resource_format_loader(resource_loader_stream_texture);
 
 	resource_loader_texture_layered.instantiate();
+	ERR_FAIL_COND(resource_loader_texture_layered.is_null());
 	ResourceLoader::add_resource_format_loader(resource_loader_texture_layered);
 
 	resource_loader_texture_3d.instantiate();
+	ERR_FAIL_COND(resource_loader_texture_3d.is_null());
 	ResourceLoader::add_resource_format_loader(resource_loader_texture_3d);
 
 	resource_saver_text.instantiate();
+	ERR_FAIL_COND(resource_saver_text.is_null());
 	ResourceSaver::add_resource_format_saver(resource_saver_text, true);
 
 	resource_loader_text.instantiate();
+	ERR_FAIL_COND(resource_loader_text.is_null());
 	ResourceLoader::add_resource_format_loader(resource_loader_text, true);
 
 	resource_saver_shader.instantiate();
+	ERR_FAIL_COND(resource_saver_shader.is_null());
 	ResourceSaver::add_resource_format_saver(resource_saver_shader, true);
 
 	resource_loader_shader.instantiate();
+	ERR_FAIL_COND(resource_loader_shader.is_null());
 	ResourceLoader::add_resource_format_loader(resource_loader_shader, true);
 
 	resource_saver_shader_include.instantiate();
+	ERR_FAIL_COND(resource_saver_shader_include.is_null());
 	ResourceSaver::add_resource_format_saver(resource_saver_shader_include, true);
 
 	resource_loader_shader_include.instantiate();
+	ERR_FAIL_COND(resource_loader_shader_include.is_null());
 	ResourceLoader::add_resource_format_loader(resource_loader_shader_include, true);
 
 	OS::get_singleton()->yield(); // may take time to init

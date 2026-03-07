@@ -386,30 +386,37 @@ String TranslationServer::get_fallback_locale() const {
 }
 
 PackedStringArray TranslationServer::get_loaded_locales() const {
+	ERR_FAIL_COND_V(main_domain.is_null(), PackedStringArray());
 	return main_domain->get_loaded_locales();
 }
 
 void TranslationServer::add_translation(const Ref<Translation> &p_translation) {
+	ERR_FAIL_COND(main_domain.is_null());
 	main_domain->add_translation(p_translation);
 }
 
 void TranslationServer::remove_translation(const Ref<Translation> &p_translation) {
+	ERR_FAIL_COND(main_domain.is_null());
 	main_domain->remove_translation(p_translation);
 }
 
 Ref<Translation> TranslationServer::get_translation_object(const String &p_locale) {
+	ERR_FAIL_COND_V(main_domain.is_null(), Ref<Translation>());
 	return main_domain->get_translation_object(p_locale);
 }
 
 void TranslationServer::clear() {
+	ERR_FAIL_COND(main_domain.is_null());
 	main_domain->clear();
 }
 
 StringName TranslationServer::translate(const StringName &p_message, const StringName &p_context) const {
+	ERR_FAIL_COND_V(main_domain.is_null(), StringName());
 	return main_domain->translate(p_message, p_context);
 }
 
 StringName TranslationServer::translate_plural(const StringName &p_message, const StringName &p_message_plural, int p_n, const StringName &p_context) const {
+	ERR_FAIL_COND_V(main_domain.is_null(), StringName());
 	return main_domain->translate_plural(p_message, p_message_plural, p_n, p_context);
 }
 
@@ -473,6 +480,7 @@ void TranslationServer::setup() {
 	}
 
 	fallback = GLOBAL_DEF("internationalization/locale/fallback", "en");
+	ERR_FAIL_COND(main_domain.is_null());
 	main_domain->set_pseudolocalization_enabled(GLOBAL_DEF("internationalization/pseudolocalization/use_pseudolocalization", false));
 	main_domain->set_pseudolocalization_accents_enabled(GLOBAL_DEF("internationalization/pseudolocalization/replace_with_accents", true));
 	main_domain->set_pseudolocalization_double_vowels_enabled(GLOBAL_DEF("internationalization/pseudolocalization/double_vowels", false));
@@ -502,6 +510,7 @@ String TranslationServer::get_tool_locale() {
 	{
 #endif
 		// Look for best matching loaded translation.
+		ERR_FAIL_COND_V(main_domain.is_null(), fallback);
 		Ref<Translation> t = main_domain->get_translation_object(locale);
 		if (t.is_null()) {
 			return fallback;
@@ -511,30 +520,37 @@ String TranslationServer::get_tool_locale() {
 }
 
 StringName TranslationServer::tool_translate(const StringName &p_message, const StringName &p_context) const {
+	ERR_FAIL_COND_V(editor_domain.is_null(), StringName());
 	return editor_domain->translate(p_message, p_context);
 }
 
 StringName TranslationServer::tool_translate_plural(const StringName &p_message, const StringName &p_message_plural, int p_n, const StringName &p_context) const {
+	ERR_FAIL_COND_V(editor_domain.is_null(), StringName());
 	return editor_domain->translate_plural(p_message, p_message_plural, p_n, p_context);
 }
 
 StringName TranslationServer::property_translate(const StringName &p_message, const StringName &p_context) const {
+	ERR_FAIL_COND_V(property_domain.is_null(), StringName());
 	return property_domain->translate(p_message, p_context);
 }
 
 StringName TranslationServer::doc_translate(const StringName &p_message, const StringName &p_context) const {
+	ERR_FAIL_COND_V(doc_domain.is_null(), StringName());
 	return doc_domain->translate(p_message, p_context);
 }
 
 StringName TranslationServer::doc_translate_plural(const StringName &p_message, const StringName &p_message_plural, int p_n, const StringName &p_context) const {
+	ERR_FAIL_COND_V(doc_domain.is_null(), StringName());
 	return doc_domain->translate_plural(p_message, p_message_plural, p_n, p_context);
 }
 
 bool TranslationServer::is_pseudolocalization_enabled() const {
+	ERR_FAIL_COND_V(main_domain.is_null(), false);
 	return main_domain->is_pseudolocalization_enabled();
 }
 
 void TranslationServer::set_pseudolocalization_enabled(bool p_enabled) {
+	ERR_FAIL_COND(main_domain.is_null());
 	main_domain->set_pseudolocalization_enabled(p_enabled);
 
 	ResourceLoader::reload_translation_remaps();
@@ -545,6 +561,7 @@ void TranslationServer::set_pseudolocalization_enabled(bool p_enabled) {
 }
 
 void TranslationServer::reload_pseudolocalization() {
+	ERR_FAIL_COND(main_domain.is_null());
 	main_domain->set_pseudolocalization_accents_enabled(GLOBAL_GET("internationalization/pseudolocalization/replace_with_accents"));
 	main_domain->set_pseudolocalization_double_vowels_enabled(GLOBAL_GET("internationalization/pseudolocalization/double_vowels"));
 	main_domain->set_pseudolocalization_fake_bidi_enabled(GLOBAL_GET("internationalization/pseudolocalization/fake_bidi"));
@@ -562,6 +579,7 @@ void TranslationServer::reload_pseudolocalization() {
 }
 
 StringName TranslationServer::pseudolocalize(const StringName &p_message) const {
+	ERR_FAIL_COND_V(main_domain.is_null(), StringName());
 	return main_domain->pseudolocalize(p_message);
 }
 

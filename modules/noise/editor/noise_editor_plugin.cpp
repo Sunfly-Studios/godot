@@ -107,6 +107,7 @@ private:
 		if (MIN(_preview_texture_size.width, _preview_texture_size.height) > 0) {
 			Ref<NoiseTexture2D> tex;
 			tex.instantiate();
+			ERR_FAIL_COND(tex.is_null());
 			tex->set_width(_preview_texture_size.width);
 			tex->set_height(_preview_texture_size.height);
 			tex->set_in_3d_space(_3d_space_switch->is_pressed());
@@ -146,6 +147,7 @@ String NoiseEditorPlugin::get_plugin_name() const {
 NoiseEditorPlugin::NoiseEditorPlugin() {
 	Ref<NoiseEditorInspectorPlugin> plugin;
 	plugin.instantiate();
+	ERR_FAIL_COND(plugin.is_null());
 	add_inspector_plugin(plugin);
 }
 

@@ -64,6 +64,7 @@ bool AnimationMixer::_set(const StringName &p_name, const Variant &p_value) {
 		Ref<AnimationLibrary> al;
 		if (!has_animation_library(StringName())) {
 			al.instantiate();
+			ERR_FAIL_COND_V(al.is_null(), false);
 			add_animation_library(StringName(), al);
 		} else {
 			al = get_animation_library(StringName());
@@ -873,9 +874,11 @@ bool AnimationMixer::_update_caches() {
 					} break;
 					case Animation::TYPE_AUDIO: {
 						TrackCacheAudio *track_audio = memnew(TrackCacheAudio);
-
+						
+						ERR_FAIL_NULL_V(track_audio, false);
 						track_audio->object_id = child->get_instance_id();
 						track_audio->audio_stream.instantiate();
+						ERR_FAIL_COND_V(track_audio->audio_stream.is_null(), false);
 						track_audio->audio_stream->set_polyphony(audio_max_polyphony);
 						track_audio->playback_type = (AudioServer::PlaybackType)(int)(child->call(SNAME("get_playback_type")));
 						track_audio->bus = (StringName)(child->call(SNAME("get_bus")));
@@ -1752,6 +1755,7 @@ void AnimationMixer::_blend_process(double p_delta, bool p_update_only) {
 							}
 							Ref<AudioSamplePlayback> sample_playback;
 							sample_playback.instantiate();
+							ERR_FAIL_COND(sample_playback.is_null());
 							sample_playback->stream = stream;
 							t->audio_stream_playback->set_sample_playback(sample_playback);
 							AudioServer::get_singleton()->start_sample_playback(sample_playback);
@@ -2205,6 +2209,7 @@ void AnimationMixer::_build_backup_track_cache() {
 Ref<AnimatedValuesBackup> AnimationMixer::make_backup() {
 	Ref<AnimatedValuesBackup> backup;
 	backup.instantiate();
+	ERR_FAIL_COND_V(backup.is_null(), Ref<AnimatedValuesBackup>());
 
 	Ref<Animation> reset_anim = animation_set[SceneStringName(RESET)].animation;
 	ERR_FAIL_COND_V(reset_anim.is_null(), Ref<AnimatedValuesBackup>());
@@ -2239,6 +2244,7 @@ void AnimationMixer::reset() {
 	root_node_object->add_child(aux_player);
 	Ref<AnimationLibrary> al;
 	al.instantiate();
+	ERR_FAIL_COND(al.is_null());
 	al->add_animation(SceneStringName(RESET), reset_anim);
 	aux_player->set_reset_on_save_enabled(false);
 	aux_player->set_root_node(aux_player->get_path_to(root_node_object));
@@ -2303,6 +2309,7 @@ void AnimationMixer::capture(const StringName &p_name, double p_duration, Tween:
 		animation_track_num_to_track_cache.erase(capture_cache.animation);
 	}
 	capture_cache.animation.instantiate();
+	ERR_FAIL_COND(capture_cache.animation.is_null());
 
 	bool is_valid = false;
 	for (int i = 0; i < reference_animation->get_track_count(); i++) {

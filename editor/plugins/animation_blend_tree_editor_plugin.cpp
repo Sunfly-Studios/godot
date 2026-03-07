@@ -1268,6 +1268,7 @@ AnimationNodeBlendTreeEditor::AnimationNodeBlendTreeEditor() {
 	open_file->connect("file_selected", callable_mp(this, &AnimationNodeBlendTreeEditor::_file_opened));
 
 	animation_node_inspector_plugin.instantiate();
+	ERR_FAIL_COND(animation_node_inspector_plugin.is_null());
 	EditorInspector::add_inspector_plugin(animation_node_inspector_plugin);
 }
 

@@ -2378,6 +2378,7 @@ void TileSet::draw_terrains(CanvasItem *p_canvas_item, Transform2D p_transform, 
 			{
 				Ref<ArrayMesh> mesh;
 				mesh.instantiate();
+				ERR_FAIL_COND(mesh.is_null());
 				Vector<Vector2> uvs;
 				uvs.resize(polygon.size());
 				Vector<Color> colors;
@@ -2436,6 +2437,7 @@ void TileSet::draw_terrains(CanvasItem *p_canvas_item, Transform2D p_transform, 
 					{
 						Ref<ArrayMesh> mesh;
 						mesh.instantiate();
+						ERR_FAIL_COND(mesh.is_null());
 						Vector<Vector2> uvs;
 						uvs.resize(polygon.size());
 						Vector<Color> colors;
@@ -2558,6 +2560,7 @@ Vector<Vector<Ref<Texture2D>>> TileSet::generate_terrains_icons(Size2i p_size) {
 		for (int terrain = 0; terrain < get_terrains_count(terrain_set); terrain++) {
 			Ref<Image> dst_image;
 			dst_image.instantiate();
+			ERR_FAIL_COND_V(dst_image.is_null(), Vector<Vector<Ref<Texture2D>>>());
 			if (counts[terrain_set][terrain].count > 0) {
 				// Get the best tile.
 				Ref<Texture2D> src_texture = counts[terrain_set][terrain].texture;
@@ -3235,7 +3238,9 @@ void TileSet::reset_state() {
 	// Rendering
 	occlusion_layers.clear();
 	tile_lines_mesh.instantiate();
+	ERR_FAIL_COND(tile_lines_mesh.is_null());
 	tile_filled_mesh.instantiate();
+	ERR_FAIL_COND(tile_filled_mesh.is_null());
 	tile_meshes_dirty = true;
 
 	// Physics
@@ -4441,7 +4446,9 @@ void TileSet::_bind_methods() {
 TileSet::TileSet() {
 	// Instantiate the tile meshes.
 	tile_lines_mesh.instantiate();
+	ERR_FAIL_COND(tile_lines_mesh.is_null());
 	tile_filled_mesh.instantiate();
+	ERR_FAIL_COND(tile_filled_mesh.is_null());
 }
 
 TileSet::~TileSet() {
@@ -5645,6 +5652,7 @@ Ref<ImageTexture> TileSetAtlasSource::_create_padded_image_texture(const Ref<Tex
 	if (src_image.is_null()) {
 		Ref<ImageTexture> ret;
 		ret.instantiate();
+		ERR_FAIL_COND_V(ret.is_null(), Ref<ImageTexture>());
 		return ret;
 	}
 	if (src_image->is_compressed()) {
@@ -5710,6 +5718,7 @@ void TileSetAtlasSource::_update_padded_texture() {
 	}
 
 	padded_texture.instantiate();
+	ERR_FAIL_COND(padded_texture.is_null());
 
 	Ref<CanvasTexture> src_canvas_texture = texture;
 	if (src_canvas_texture.is_valid()) {
@@ -6340,6 +6349,7 @@ Ref<OccluderPolygon2D> TileData::get_occluder_polygon(int p_layer_id, int p_poly
 	if (!I) {
 		Ref<OccluderPolygon2D> transformed_polygon;
 		transformed_polygon.instantiate();
+		ERR_FAIL_COND_V(transformed_polygon.is_null(), Ref<OccluderPolygon2D>());
 		transformed_polygon->set_polygon(get_transformed_vertices(occluder_polygon->get_polygon(), p_flip_h, p_flip_v, p_transpose));
 		layer_tile_data.polygons[p_polygon_index].transformed_polygon_occluders[key] = transformed_polygon;
 		return transformed_polygon;
@@ -6418,6 +6428,7 @@ void TileData::set_collision_polygon_points(int p_layer_id, int p_polygon_index,
 		for (int i = 0; i < decomp.size(); i++) {
 			Ref<ConvexPolygonShape2D> shape;
 			shape.instantiate();
+			ERR_FAIL_COND(shape.is_null());
 			shape->set_points(decomp[i]);
 			polygon_shape_tile_data.shapes[i] = shape;
 		}
@@ -6488,6 +6499,7 @@ Ref<ConvexPolygonShape2D> TileData::get_collision_polygon_shape(int p_layer_id, 
 		for (int i = 0; i < size; i++) {
 			Ref<ConvexPolygonShape2D> transformed_polygon;
 			transformed_polygon.instantiate();
+			ERR_FAIL_COND_V(transformed_polygon.is_null(), Ref<NavigationPolygon>());
 			transformed_polygon->set_points(get_transformed_vertices(shapes_data.shapes[i]->get_points(), p_flip_h, p_flip_v, p_transpose));
 			shapes_data.transformed_shapes[key][i] = transformed_polygon;
 		}
@@ -6595,6 +6607,7 @@ Ref<NavigationPolygon> TileData::get_navigation_polygon(int p_layer_id, bool p_f
 	if (!I) {
 		Ref<NavigationPolygon> transformed_polygon;
 		transformed_polygon.instantiate();
+		ERR_FAIL_COND_V(transformed_polygon.is_null(), Ref<NavigationPolygon>());
 
 		PackedVector2Array new_points = get_transformed_vertices(layer_tile_data.navigation_polygon->get_vertices(), p_flip_h, p_flip_v, p_transpose);
 

@@ -243,6 +243,7 @@ Vector<Vector3> GodotNavigationServer3D::map_get_path(RID p_map, Vector3 p_origi
 
 	Ref<NavigationPathQueryParameters3D> query_parameters;
 	query_parameters.instantiate();
+	ERR_FAIL_COND_V(query_parameters.is_null(), Vector<Vector3>());
 
 	query_parameters->set_map(p_map);
 	query_parameters->set_start_position(p_origin);
@@ -256,6 +257,7 @@ Vector<Vector3> GodotNavigationServer3D::map_get_path(RID p_map, Vector3 p_origi
 
 	Ref<NavigationPathQueryResult3D> query_result;
 	query_result.instantiate();
+	ERR_FAIL_COND_V(query_result.is_null(), Vector<Vector3>());
 
 	query_path(query_parameters, query_result);
 
@@ -531,6 +533,7 @@ void GodotNavigationServer3D::region_bake_navigation_mesh(Ref<NavigationMesh> p_
 	p_navigation_mesh->clear();
 	Ref<NavigationMeshSourceGeometryData3D> source_geometry_data;
 	source_geometry_data.instantiate();
+	ERR_FAIL_COND(source_geometry_data.is_null());
 	parse_source_geometry_data(p_navigation_mesh, source_geometry_data, p_root_node);
 	bake_from_source_geometry_data(p_navigation_mesh, source_geometry_data);
 #endif

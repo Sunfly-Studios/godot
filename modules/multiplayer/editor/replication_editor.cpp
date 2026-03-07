@@ -130,6 +130,7 @@ void ReplicationEditor::_add_sync_property(String p_path) {
 
 	if (config.is_null()) {
 		config.instantiate();
+		ERR_FAIL_COND(config.is_null());
 		current->set_replication_config(config);
 		undo_redo->add_do_method(current, "set_replication_config", config);
 		undo_redo->add_undo_method(current, "set_replication_config", Ref<SceneReplicationConfig>());

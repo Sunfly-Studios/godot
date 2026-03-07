@@ -3656,6 +3656,7 @@ void GI::free() {
 Ref<GI::SDFGI> GI::create_sdfgi(RID p_env, const Vector3 &p_world_position, uint32_t p_requested_history_size) {
 	Ref<SDFGI> sdfgi;
 	sdfgi.instantiate();
+	ERR_FAIL_COND_V_MSG(sdfgi.is_null(), Ref<GI::SDFGI>(), "Could not instantiate SDFGI");
 
 	sdfgi->create(p_env, p_world_position, p_requested_history_size, this);
 

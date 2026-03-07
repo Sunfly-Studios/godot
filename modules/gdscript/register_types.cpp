@@ -119,11 +119,13 @@ public:
 static void _editor_init() {
 	Ref<EditorExportGDScript> gd_export;
 	gd_export.instantiate();
+	ERR_FAIL_COND(gd_export.is_null());
 	EditorExport::get_singleton()->add_export_plugin(gd_export);
 
 #ifdef TOOLS_ENABLED
 	Ref<GDScriptSyntaxHighlighter> gdscript_syntax_highlighter;
 	gdscript_syntax_highlighter.instantiate();
+	ERR_FAIL_COND(gdscript_syntax_highlighter.is_null());
 	ScriptEditor::get_singleton()->register_syntax_highlighter(gdscript_syntax_highlighter);
 #endif
 
@@ -145,9 +147,11 @@ void initialize_gdscript_module(ModuleInitializationLevel p_level) {
 		ScriptServer::register_language(script_language_gd);
 
 		resource_loader_gd.instantiate();
+		ERR_FAIL_COND(resource_loader_gd.is_null());
 		ResourceLoader::add_resource_format_loader(resource_loader_gd);
 
 		resource_saver_gd.instantiate();
+		ERR_FAIL_COND(resource_saver_gd.is_null());
 		ResourceSaver::add_resource_format_saver(resource_saver_gd);
 
 		gdscript_cache = memnew(GDScriptCache);
@@ -160,6 +164,7 @@ void initialize_gdscript_module(ModuleInitializationLevel p_level) {
 		EditorNode::add_init_callback(_editor_init);
 
 		gdscript_translation_parser_plugin.instantiate();
+		ERR_FAIL_COND(gdscript_translation_parser_plugin.is_null());
 		EditorTranslationParser::get_singleton()->add_parser(gdscript_translation_parser_plugin, EditorTranslationParser::STANDARD);
 	} else if (p_level == MODULE_INITIALIZATION_LEVEL_EDITOR) {
 		ClassDB::APIType prev_api = ClassDB::get_current_api();
@@ -184,11 +189,15 @@ void uninitialize_gdscript_module(ModuleInitializationLevel p_level) {
 			memdelete(script_language_gd);
 		}
 
-		ResourceLoader::remove_resource_format_loader(resource_loader_gd);
-		resource_loader_gd.unref();
+		if (resource_loader_gd.is_valid()) {
+			ResourceLoader::remove_resource_format_loader(resource_loader_gd);
+			resource_loader_gd.unref();
+		}
 
-		ResourceSaver::remove_resource_format_saver(resource_saver_gd);
-		resource_saver_gd.unref();
+		if (resource_saver_gd.is_valid()) {
+			ResourceSaver::remove_resource_format_saver(resource_saver_gd);
+			resource_saver_gd.unref();
+		}
 
 		GDScriptParser::cleanup();
 		GDScriptUtilityFunctions::unregister_functions();
@@ -196,8 +205,10 @@ void uninitialize_gdscript_module(ModuleInitializationLevel p_level) {
 
 #ifdef TOOLS_ENABLED
 	if (p_level == MODULE_INITIALIZATION_LEVEL_EDITOR) {
-		EditorTranslationParser::get_singleton()->remove_parser(gdscript_translation_parser_plugin, EditorTranslationParser::STANDARD);
-		gdscript_translation_parser_plugin.unref();
+		if (gdscript_translation_parser_plugin.is_valid()) {
+			EditorTranslationParser::get_singleton()->remove_parser(gdscript_translation_parser_plugin, EditorTranslationParser::STANDARD);
+			gdscript_translation_parser_plugin.unref();
+		}
 	}
 #endif // TOOLS_ENABLED
 }

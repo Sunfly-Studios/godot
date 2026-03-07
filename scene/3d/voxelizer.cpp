@@ -1183,6 +1183,7 @@ Ref<MultiMesh> Voxelizer::create_debug_multimesh() {
 	Ref<MultiMesh> mm;
 
 	mm.instantiate();
+	ERR_FAIL_COND_V(mm.is_null(), Ref<MultiMesh>());
 
 	mm->set_transform_format(MultiMesh::TRANSFORM_3D);
 	mm->set_use_colors(true);
@@ -1190,6 +1191,7 @@ Ref<MultiMesh> Voxelizer::create_debug_multimesh() {
 
 	Ref<ArrayMesh> mesh;
 	mesh.instantiate();
+	ERR_FAIL_COND_V(mesh.is_null(), Ref<MultiMesh>());
 
 	{
 		Array arr;
@@ -1237,6 +1239,7 @@ Ref<MultiMesh> Voxelizer::create_debug_multimesh() {
 	{
 		Ref<StandardMaterial3D> fsm;
 		fsm.instantiate();
+		ERR_FAIL_COND_V(fsm.is_null(), Ref<MultiMesh>());
 		fsm->set_flag(StandardMaterial3D::FLAG_SRGB_VERTEX_COLOR, true);
 		fsm->set_flag(StandardMaterial3D::FLAG_ALBEDO_FROM_VERTEX_COLOR, true);
 		fsm->set_shading_mode(StandardMaterial3D::SHADING_MODE_UNSHADED);

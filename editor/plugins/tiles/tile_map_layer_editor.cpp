@@ -310,6 +310,7 @@ void TileMapLayerEditorTilesPlugin::_patterns_item_list_gui_input(const Ref<Inpu
 		select_last_pattern = true;
 		int new_pattern_index = tile_set->get_patterns_count();
 		EditorUndoRedoManager *undo_redo = EditorUndoRedoManager::get_singleton();
+		ERR_FAIL_COND(tile_map_clipboard.is_null());
 		undo_redo->create_action(TTR("Add TileSet pattern"));
 		undo_redo->add_do_method(*tile_set, "add_pattern", tile_map_clipboard, new_pattern_index);
 		undo_redo->add_undo_method(*tile_set, "remove_pattern", new_pattern_index);
@@ -497,6 +498,7 @@ void TileMapLayerEditorTilesPlugin::_scenes_list_lmb_empty_clicked(const Vector2
 	tile_set_selection.clear();
 	tile_map_selection.clear();
 	selection_pattern.instantiate();
+	ERR_FAIL_COND(selection_pattern.is_null());
 	_update_selection_pattern_from_tileset_tiles_selection();
 }
 
@@ -547,6 +549,7 @@ bool TileMapLayerEditorTilesPlugin::forward_canvas_gui_input(const Ref<InputEven
 		// Fill in the clipboard.
 		if (!tile_map_selection.is_empty()) {
 			tile_map_clipboard.instantiate();
+			ERR_FAIL_COND_V(tile_map_clipboard.is_null(), false);
 			TypedArray<Vector2i> coords_array;
 			for (const Vector2i &E : tile_map_selection) {
 				coords_array.push_back(E);
@@ -814,6 +817,7 @@ void TileMapLayerEditorTilesPlugin::forward_canvas_draw_over_viewport(Control *p
 		}
 	}
 
+	ERR_FAIL_COND(tile_map_clipboard.is_null());
 	// Handle the preview of the tiles to be placed.
 	if ((tiles_bottom_panel->is_visible_in_tree() || patterns_bottom_panel->is_visible_in_tree()) && CanvasItemEditor::get_singleton()->get_current_tool() == CanvasItemEditor::TOOL_SELECT && has_mouse) { // Only if the tilemap editor is opened and the viewport is hovered.
 		HashMap<Vector2i, TileMapCell> preview;
@@ -1299,6 +1303,8 @@ void TileMapLayerEditorTilesPlugin::_stop_dragging() {
 	Vector2 mpos = xform.affine_inverse().xform(CanvasItemEditor::get_singleton()->get_viewport_control()->get_local_mouse_position());
 
 	EditorUndoRedoManager *undo_redo = EditorUndoRedoManager::get_singleton();
+	
+	ERR_FAIL_COND(tile_map_clipboard.is_null());
 	switch (drag_type) {
 		case DRAG_TYPE_SELECT: {
 			undo_redo->create_action_for_history(TTR("Change selection"), EditorNode::get_editor_data().get_current_edited_scene_history_id());
@@ -1507,6 +1513,7 @@ void TileMapLayerEditorTilesPlugin::_apply_transform(int p_type) {
 
 	Ref<TileMapPattern> transformed_pattern;
 	transformed_pattern.instantiate();
+	ERR_FAIL_COND(transformed_pattern.is_null());
 	bool keep_shape = selection_pattern->get_size() == Vector2i(1, 1);
 
 	Vector2i size = selection_pattern->get_size();
@@ -1698,6 +1705,7 @@ void TileMapLayerEditorTilesPlugin::_update_selection_pattern_from_tilemap_selec
 	}
 
 	selection_pattern.instantiate();
+	ERR_FAIL_COND(selection_pattern.is_null());
 
 	TypedArray<Vector2i> coords_array;
 	for (const Vector2i &E : tile_map_selection) {
@@ -2198,6 +2206,7 @@ TileMapLayerEditorTilesPlugin::TileMapLayerEditorTilesPlugin() {
 	selection_pattern.instantiate();
 
 	erase_pattern.instantiate();
+	ERR_FAIL_COND(erase_pattern.is_null());
 	erase_pattern->set_cell(Vector2i(0, 0), TileSet::INVALID_SOURCE, TileSetSource::INVALID_ATLAS_COORDS, TileSetSource::INVALID_TILE_ALTERNATIVE);
 
 	// --- Toolbar ---
@@ -2206,6 +2215,7 @@ TileMapLayerEditorTilesPlugin::TileMapLayerEditorTilesPlugin() {
 	HBoxContainer *tilemap_tiles_tools_buttons = memnew(HBoxContainer);
 
 	tool_buttons_group.instantiate();
+	ERR_FAIL_COND(tool_buttons_group.is_null());
 
 	select_tool_button = memnew(Button);
 	select_tool_button->set_theme_type_variation(SceneStringName(FlatButton));
@@ -3553,6 +3563,7 @@ TileMapLayerEditorTerrainsPlugin::TileMapLayerEditorTerrainsPlugin() {
 	HBoxContainer *tilemap_tiles_tools_buttons = memnew(HBoxContainer);
 
 	tool_buttons_group.instantiate();
+	ERR_FAIL_COND(tool_buttons_group.is_null());
 
 	paint_tool_button = memnew(Button);
 	paint_tool_button->set_theme_type_variation(SceneStringName(FlatButton));

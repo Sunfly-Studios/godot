@@ -1279,6 +1279,7 @@ EditorExportPlatformOpenHarmony::EditorExportPlatformOpenHarmony() {
 	if (EditorNode::get_singleton()) {
 		Ref<Image> img;
 		img.instantiate();
+		ERR_FAIL_COND(img.is_null());
 		const bool upsample = !Math::is_equal_approx(Math::round(EDSCALE), EDSCALE);
 
 		ImageLoaderSVG::create_image_from_string(img, _openharmony_logo_svg, EDSCALE, upsample, false);

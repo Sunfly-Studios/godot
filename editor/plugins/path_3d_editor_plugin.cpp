@@ -299,6 +299,7 @@ void Path3DGizmo::redraw() {
 	Color path_color = path->get_debug_custom_color();
 	if (path_color != Color(0.0, 0.0, 0.0)) {
 		debug_material.instantiate();
+		ERR_FAIL_COND(debug_material.is_null());
 		debug_material->set_albedo(path_color);
 		debug_material->set_shading_mode(StandardMaterial3D::SHADING_MODE_UNSHADED);
 		debug_material->set_transparency(StandardMaterial3D::TRANSPARENCY_ALPHA);
@@ -810,6 +811,7 @@ void Path3DEditorPlugin::_create_curve() {
 
 	Ref<Curve3D> new_curve;
 	new_curve.instantiate();
+	ERR_FAIL_COND(new_curve.is_null());
 
 	EditorUndoRedoManager *undo_redo = EditorUndoRedoManager::get_singleton();
 	undo_redo->create_action(TTR("Create Curve in Path3D"));
@@ -996,8 +998,8 @@ Ref<EditorNode3DGizmo> Path3DGizmoPlugin::create_gizmo(Node3D *p_spatial) {
 	Path3D *path = Object::cast_to<Path3D>(p_spatial);
 	if (path) {
 		ref.instantiate(path, disk_size);
+		ERR_FAIL_COND_V(ref.is_null(), Ref<EditorNode3DGizmo>());
 	}
-
 	return ref;
 }
 

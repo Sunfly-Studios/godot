@@ -38,6 +38,7 @@ AudioStreamSynchronized::AudioStreamSynchronized() {
 Ref<AudioStreamPlayback> AudioStreamSynchronized::instantiate_playback() {
 	Ref<AudioStreamPlaybackSynchronized> playback_playlist;
 	playback_playlist.instantiate();
+	ERR_FAIL_COND_V(playback_playlist.is_null(), Ref<AudioStreamPlayback>());
 	playback_playlist->stream = Ref<AudioStreamSynchronized>(this);
 	playback_playlist->_update_playback_instances();
 	playbacks.insert(playback_playlist.operator->());

@@ -1143,6 +1143,7 @@ TextureRegionEditor::TextureRegionEditor() {
 	snap_mode = (SnapMode)(int)EditorSettings::get_singleton()->get_project_metadata("texture_region_editor", "snap_mode", SNAP_NONE);
 
 	panner.instantiate();
+	ERR_FAIL_COND(panner.is_null());
 	panner->set_callbacks(callable_mp(this, &TextureRegionEditor::_pan_callback), callable_mp(this, &TextureRegionEditor::_zoom_callback));
 
 	VBoxContainer *vb = memnew(VBoxContainer);
@@ -1307,5 +1308,6 @@ EditorInspectorPluginTextureRegion::EditorInspectorPluginTextureRegion() {
 TextureRegionEditorPlugin::TextureRegionEditorPlugin() {
 	Ref<EditorInspectorPluginTextureRegion> inspector_plugin;
 	inspector_plugin.instantiate();
+	ERR_FAIL_COND(inspector_plugin.is_null());
 	add_inspector_plugin(inspector_plugin);
 }

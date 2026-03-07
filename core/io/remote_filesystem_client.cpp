@@ -149,6 +149,7 @@ Error RemoteFilesystemClient::_synchronize_with_server(const String &p_host, int
 
 	Ref<StreamPeerTCP> tcp_client;
 	tcp_client.instantiate();
+	ERR_FAIL_COND_V(tcp_client.is_null(), ERR_OUT_OF_MEMORY);
 
 	IPAddress ip = p_host.is_valid_ip_address() ? IPAddress(p_host) : IP::get_singleton()->resolve_hostname(p_host);
 	ERR_FAIL_COND_V_MSG(!ip.is_valid(), ERR_INVALID_PARAMETER, vformat("Unable to resolve remote filesystem server hostname: '%s'.", p_host));

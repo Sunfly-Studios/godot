@@ -1382,6 +1382,7 @@ Error EditorExportPlatformMacOS::_copy_and_sign_files(Ref<DirAccess> &dir_access
 		bool plist_missing = false;
 		Ref<PList> plist;
 		plist.instantiate();
+		ERR_FAIL_COND_V(plist.is_null(), ERR_OUT_OF_MEMORY);
 		plist->load_file(p_src_path.path_join("Resources").path_join("Info.plist"));
 
 		Ref<PListNode> root_node = plist->get_root();
@@ -2515,6 +2516,7 @@ bool EditorExportPlatformMacOS::has_valid_project_configuration(const Ref<Editor
 		String plist_err;
 		Ref<PList> plist_parser;
 		plist_parser.instantiate();
+		ERR_FAIL_COND_V(plist_parser.is_null(), false);
 		if (!plist_parser->load_string(plist, plist_err)) {
 			err += TTR("Invalid additional PList content: ") + plist_err + "\n";
 			valid = false;

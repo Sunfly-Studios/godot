@@ -64,6 +64,7 @@ void OpenXRCompositionLayerCylinder::_bind_methods() {
 Ref<Mesh> OpenXRCompositionLayerCylinder::_create_fallback_mesh() {
 	Ref<ArrayMesh> mesh;
 	mesh.instantiate();
+	ERR_FAIL_COND_V(mesh.is_null(), Ref<Mesh>());
 
 	float arc_length = radius * central_angle;
 	float half_height = ((1.0 / aspect_ratio) * arc_length) / 2.0;

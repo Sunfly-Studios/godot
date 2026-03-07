@@ -902,6 +902,7 @@ bool EditorPropertyArray::is_colored(ColorationMode p_mode) {
 
 EditorPropertyArray::EditorPropertyArray() {
 	object.instantiate();
+	ERR_FAIL_COND(object.is_null());
 	page_length = int(EDITOR_GET("interface/inspector/max_array_dictionary_items_per_page"));
 
 	edit = memnew(Button);
@@ -1430,6 +1431,7 @@ bool EditorPropertyDictionary::is_colored(ColorationMode p_mode) {
 
 EditorPropertyDictionary::EditorPropertyDictionary() {
 	object.instantiate();
+	ERR_FAIL_COND(object.is_null());
 	page_length = int(EDITOR_GET("interface/inspector/max_array_dictionary_items_per_page"));
 
 	edit = memnew(Button);
@@ -1650,6 +1652,7 @@ void EditorPropertyLocalizableString::_page_changed(int p_page) {
 
 EditorPropertyLocalizableString::EditorPropertyLocalizableString() {
 	object.instantiate();
+	ERR_FAIL_COND(object.is_null());
 	page_length = int(EDITOR_GET("interface/inspector/max_array_dictionary_items_per_page"));
 
 	edit = memnew(Button);

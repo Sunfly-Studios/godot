@@ -76,6 +76,8 @@ void VideoStreamPlaybackTheora::video_write(th_ycbcr_buffer yuv) {
 
 	Ref<Image> img;
 	img.instantiate(region.size.x, region.size.y, false, Image::FORMAT_RGBA8, frame_data); //zero copy image creation
+	ERR_FAIL_COND(img.is_null());
+	ERR_FAIL_COND(texture.is_null());
 
 	texture->update(img); //zero copy send to rendering server
 }
@@ -287,6 +289,9 @@ void VideoStreamPlaybackTheora::set_file(const String &p_file) {
 		region.size.y = ti.pic_height;
 
 		Ref<Image> img = Image::create_empty(region.size.x, region.size.y, false, Image::FORMAT_RGBA8);
+		ERR_FAIL_COND(texture.is_null());
+		ERR_FAIL_COND(img.is_null());
+		
 		texture->set_image(img);
 		frame_data.resize(region.size.x * region.size.y * 4);
 

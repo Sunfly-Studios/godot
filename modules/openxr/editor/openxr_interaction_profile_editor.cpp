@@ -72,6 +72,7 @@ void OpenXRInteractionProfileEditorBase::_add_binding(const String p_action, con
 	if (binding.is_null()) {
 		// create a new binding
 		binding.instantiate();
+		ERR_FAIL_COND(binding.is_null());
 		binding->set_action(action);
 		binding->set_binding_path(p_path);
 

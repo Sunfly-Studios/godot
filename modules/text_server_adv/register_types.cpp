@@ -42,6 +42,7 @@ void initialize_text_server_adv_module(ModuleInitializationLevel p_level) {
 	if (tsman) {
 		Ref<TextServerAdvanced> ts;
 		ts.instantiate();
+		ERR_FAIL_COND(ts.is_null());
 		tsman->add_interface(ts);
 	}
 }

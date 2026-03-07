@@ -198,6 +198,7 @@ String CSGShape3DGizmoPlugin::get_handle_name(const EditorNode3DGizmo *p_gizmo, 
 	}
 
 	if (Object::cast_to<CSGBox3D>(cs)) {
+		ERR_FAIL_COND_V(helper.is_null(), "");
 		return helper->box_get_handle_name(p_id);
 	}
 
@@ -239,10 +240,12 @@ Variant CSGShape3DGizmoPlugin::get_handle_value(const EditorNode3DGizmo *p_gizmo
 }
 
 void CSGShape3DGizmoPlugin::begin_handle_action(const EditorNode3DGizmo *p_gizmo, int p_id, bool p_secondary) {
+	ERR_FAIL_COND(helper.is_null());
 	helper->initialize_handle_action(get_handle_value(p_gizmo, p_id, p_secondary), p_gizmo->get_node_3d()->get_global_transform());
 }
 
 void CSGShape3DGizmoPlugin::set_handle(const EditorNode3DGizmo *p_gizmo, int p_id, bool p_secondary, Camera3D *p_camera, const Point2 &p_point) {
+	ERR_FAIL_COND(helper.is_null());
 	CSGShape3D *cs = Object::cast_to<CSGShape3D>(p_gizmo->get_node_3d());
 
 	Vector3 sg[2];
@@ -313,6 +316,8 @@ void CSGShape3DGizmoPlugin::set_handle(const EditorNode3DGizmo *p_gizmo, int p_i
 void CSGShape3DGizmoPlugin::commit_handle(const EditorNode3DGizmo *p_gizmo, int p_id, bool p_secondary, const Variant &p_restore, bool p_cancel) {
 	CSGShape3D *cs = Object::cast_to<CSGShape3D>(p_gizmo->get_node_3d());
 
+	ERR_FAIL_COND(helper.is_null());
+
 	if (Object::cast_to<CSGSphere3D>(cs)) {
 		CSGSphere3D *s = Object::cast_to<CSGSphere3D>(cs);
 		if (p_cancel) {
@@ -378,6 +383,7 @@ bool CSGShape3DGizmoPlugin::is_selectable_when_hidden() const {
 }
 
 void CSGShape3DGizmoPlugin::redraw(EditorNode3DGizmo *p_gizmo) {
+	ERR_FAIL_COND(helper.is_null());
 	p_gizmo->clear();
 
 	CSGShape3D *cs = Object::cast_to<CSGShape3D>(p_gizmo->get_node_3d());
@@ -422,6 +428,7 @@ void CSGShape3DGizmoPlugin::redraw(EditorNode3DGizmo *p_gizmo) {
 
 	Ref<ArrayMesh> collision_mesh;
 	collision_mesh.instantiate();
+	ERR_FAIL_COND(collision_mesh.is_null());
 	Array collision_array;
 	collision_array.resize(Mesh::ARRAY_MAX);
 	collision_array[Mesh::ARRAY_VERTEX] = faces;

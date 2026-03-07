@@ -1131,6 +1131,7 @@ void TextEdit::_notification(int p_what) {
 
 									Ref<TextLine> tl;
 									tl.instantiate();
+									ERR_FAIL_COND(tl.is_null());
 									tl->add_string(txt, theme_cache.font, theme_cache.font_size);
 
 									int yofs = ofs_y + (row_height - tl->get_size().y) / 2;
@@ -8626,6 +8627,7 @@ void TextEdit::_base_remove_text(int p_from_line, int p_from_column, int p_to_li
 
 TextEdit::TextEdit(const String &p_placeholder) {
 	placeholder_data_buf.instantiate();
+	ERR_FAIL_COND(placeholder_data_buf.is_null());
 	carets.push_back(Caret());
 
 	clear();

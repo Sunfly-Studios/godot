@@ -980,5 +980,6 @@ void GDScriptSyntaxHighlighter::add_color_region(ColorRegion::Type p_type, const
 Ref<EditorSyntaxHighlighter> GDScriptSyntaxHighlighter::_create() const {
 	Ref<GDScriptSyntaxHighlighter> syntax_highlighter;
 	syntax_highlighter.instantiate();
+	ERR_FAIL_COND_V(syntax_highlighter.is_null(), Ref<EditorSyntaxHighlighter>());
 	return syntax_highlighter;
 }

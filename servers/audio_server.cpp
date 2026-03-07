@@ -1796,6 +1796,7 @@ void AudioServer::set_bus_layout(const Ref<AudioBusLayout> &p_bus_layout) {
 Ref<AudioBusLayout> AudioServer::generate_bus_layout() const {
 	Ref<AudioBusLayout> state;
 	state.instantiate();
+	ERR_FAIL_COND_V(state.is_null(), Ref<AudioBusLayout>());
 
 	state->buses.resize(buses.size());
 

@@ -82,6 +82,7 @@ AudioEffectReverbInstance::AudioEffectReverbInstance() {
 Ref<AudioEffectInstance> AudioEffectReverb::instantiate() {
 	Ref<AudioEffectReverbInstance> ins;
 	ins.instantiate();
+	ERR_FAIL_COND_V(ins.is_null(), Ref<AudioEffectInstance>());
 	ins->base = Ref<AudioEffectReverb>(this);
 	return ins;
 }

@@ -248,6 +248,7 @@ MaterialEditor::MaterialEditor() {
 	viewport = memnew(SubViewport);
 	Ref<World3D> world_3d;
 	world_3d.instantiate();
+	ERR_FAIL_COND(world_3d.is_null());
 	viewport->set_world_3d(world_3d); // Use own world.
 	vc->add_child(viewport);
 	viewport->set_disable_input(true);
@@ -262,6 +263,7 @@ MaterialEditor::MaterialEditor() {
 	camera->make_current();
 	if (GLOBAL_GET("rendering/lights_and_shadows/use_physical_light_units")) {
 		camera_attributes.instantiate();
+		ERR_FAIL_COND(camera_attributes.is_null());
 		camera->set_attributes(camera_attributes);
 	}
 	viewport->add_child(camera);
@@ -292,10 +294,13 @@ MaterialEditor::MaterialEditor() {
 	quad_instance->set_transform(Transform3D() * 0.375);
 
 	sphere_mesh.instantiate();
+	ERR_FAIL_COND(sphere_mesh.is_null());
 	sphere_instance->set_mesh(sphere_mesh);
 	box_mesh.instantiate();
+	ERR_FAIL_COND(box_mesh.is_null());
 	box_instance->set_mesh(box_mesh);
 	quad_mesh.instantiate();
+	ERR_FAIL_COND(quad_mesh.is_null());
 	quad_instance->set_mesh(quad_mesh);
 
 	set_custom_minimum_size(Size2(1, 150) * EDSCALE);
@@ -423,7 +428,9 @@ void EditorInspectorPluginMaterial::_undo_redo_inspector_callback(Object *p_undo
 
 EditorInspectorPluginMaterial::EditorInspectorPluginMaterial() {
 	env.instantiate();
+	ERR_FAIL_COND(env.is_null());
 	Ref<Sky> sky = memnew(Sky());
+	ERR_FAIL_COND(sky.is_null());
 	env->set_sky(sky);
 	env->set_background(Environment::BG_COLOR);
 	env->set_ambient_source(Environment::AMBIENT_SOURCE_SKY);
@@ -435,6 +442,7 @@ EditorInspectorPluginMaterial::EditorInspectorPluginMaterial() {
 MaterialEditorPlugin::MaterialEditorPlugin() {
 	Ref<EditorInspectorPluginMaterial> plugin;
 	plugin.instantiate();
+	ERR_FAIL_COND(plugin.is_null());
 	add_inspector_plugin(plugin);
 }
 
@@ -454,9 +462,11 @@ Ref<Resource> StandardMaterial3DConversionPlugin::convert(const Ref<Resource> &p
 
 	Ref<ShaderMaterial> smat;
 	smat.instantiate();
+	ERR_FAIL_COND_V(smat.is_null(), Ref<Resource>());
 
 	Ref<Shader> shader;
 	shader.instantiate();
+	ERR_FAIL_COND_V(shader.is_null(), Ref<Resource>());
 
 	String code = RS::get_singleton()->shader_get_code(mat->get_shader_rid());
 
@@ -501,9 +511,11 @@ Ref<Resource> ORMMaterial3DConversionPlugin::convert(const Ref<Resource> &p_reso
 
 	Ref<ShaderMaterial> smat;
 	smat.instantiate();
+	ERR_FAIL_COND_V(smat.is_null(), Ref<Resource>());
 
 	Ref<Shader> shader;
 	shader.instantiate();
+	ERR_FAIL_COND_V(shader.is_null(), Ref<Resource>());
 
 	String code = RS::get_singleton()->shader_get_code(mat->get_shader_rid());
 
@@ -548,9 +560,11 @@ Ref<Resource> ParticleProcessMaterialConversionPlugin::convert(const Ref<Resourc
 
 	Ref<ShaderMaterial> smat;
 	smat.instantiate();
+	ERR_FAIL_COND_V(smat.is_null(), Ref<Resource>());
 
 	Ref<Shader> shader;
 	shader.instantiate();
+	ERR_FAIL_COND_V(shader.is_null(), Ref<Resource>());
 
 	String code = RS::get_singleton()->shader_get_code(mat->get_shader_rid());
 
@@ -588,9 +602,11 @@ Ref<Resource> CanvasItemMaterialConversionPlugin::convert(const Ref<Resource> &p
 
 	Ref<ShaderMaterial> smat;
 	smat.instantiate();
+	ERR_FAIL_COND_V(smat.is_null(), Ref<Resource>());
 
 	Ref<Shader> shader;
 	shader.instantiate();
+	ERR_FAIL_COND_V(shader.is_null(), Ref<Resource>());
 
 	String code = RS::get_singleton()->shader_get_code(mat->get_shader_rid());
 
@@ -628,9 +644,11 @@ Ref<Resource> ProceduralSkyMaterialConversionPlugin::convert(const Ref<Resource>
 
 	Ref<ShaderMaterial> smat;
 	smat.instantiate();
+	ERR_FAIL_COND_V(smat.is_null(), Ref<Resource>());
 
 	Ref<Shader> shader;
 	shader.instantiate();
+	ERR_FAIL_COND_V(shader.is_null(), Ref<Resource>());
 
 	String code = RS::get_singleton()->shader_get_code(mat->get_shader_rid());
 
@@ -668,9 +686,11 @@ Ref<Resource> PanoramaSkyMaterialConversionPlugin::convert(const Ref<Resource> &
 
 	Ref<ShaderMaterial> smat;
 	smat.instantiate();
+	ERR_FAIL_COND_V(smat.is_null(), Ref<Resource>());
 
 	Ref<Shader> shader;
 	shader.instantiate();
+	ERR_FAIL_COND_V(shader.is_null(), Ref<Resource>());
 
 	String code = RS::get_singleton()->shader_get_code(mat->get_shader_rid());
 
@@ -708,9 +728,11 @@ Ref<Resource> PhysicalSkyMaterialConversionPlugin::convert(const Ref<Resource> &
 
 	Ref<ShaderMaterial> smat;
 	smat.instantiate();
+	ERR_FAIL_COND_V(smat.is_null(), Ref<Resource>());
 
 	Ref<Shader> shader;
 	shader.instantiate();
+	ERR_FAIL_COND_V(shader.is_null(), Ref<Resource>());
 
 	String code = RS::get_singleton()->shader_get_code(mat->get_shader_rid());
 
@@ -748,9 +770,11 @@ Ref<Resource> FogMaterialConversionPlugin::convert(const Ref<Resource> &p_resour
 
 	Ref<ShaderMaterial> smat;
 	smat.instantiate();
+	ERR_FAIL_COND_V(smat.is_null(), Ref<Resource>());
 
 	Ref<Shader> shader;
 	shader.instantiate();
+	ERR_FAIL_COND_V(shader.is_null(), Ref<Resource>());
 
 	String code = RS::get_singleton()->shader_get_code(mat->get_shader_rid());
 

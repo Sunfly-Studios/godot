@@ -103,6 +103,7 @@ AudioEffectFilterInstance::AudioEffectFilterInstance() {
 Ref<AudioEffectInstance> AudioEffectFilter::instantiate() {
 	Ref<AudioEffectFilterInstance> ins;
 	ins.instantiate();
+	ERR_FAIL_COND_V(ins.is_null(), Ref<AudioEffectInstance>());
 	ins->base = Ref<AudioEffectFilter>(this);
 
 	return ins;

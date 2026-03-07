@@ -1477,17 +1477,21 @@ void EditorInspectorPluginBoneMap::parse_begin(Object *p_object) {
 BoneMapEditorPlugin::BoneMapEditorPlugin() {
 	Ref<EditorInspectorPluginBoneMap> inspector_plugin;
 	inspector_plugin.instantiate();
+	ERR_FAIL_COND(inspector_plugin.is_null());
 	add_inspector_plugin(inspector_plugin);
 
 	Ref<PostImportPluginSkeletonTrackOrganizer> post_import_plugin_track_organizer;
 	post_import_plugin_track_organizer.instantiate();
+	ERR_FAIL_COND(post_import_plugin_track_organizer.is_null());
 	add_scene_post_import_plugin(post_import_plugin_track_organizer);
 
 	Ref<PostImportPluginSkeletonRenamer> post_import_plugin_renamer;
 	post_import_plugin_renamer.instantiate();
+	ERR_FAIL_COND(post_import_plugin_renamer.is_null());
 	add_scene_post_import_plugin(post_import_plugin_renamer);
 
 	Ref<PostImportPluginSkeletonRestFixer> post_import_plugin_rest_fixer;
 	post_import_plugin_rest_fixer.instantiate();
+	ERR_FAIL_COND(post_import_plugin_rest_fixer.is_null());
 	add_scene_post_import_plugin(post_import_plugin_rest_fixer);
 }

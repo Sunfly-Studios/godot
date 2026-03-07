@@ -427,6 +427,7 @@ void NavigationAgent2D::set_pathfinding_algorithm(const NavigationPathQueryParam
 	if (pathfinding_algorithm == p_pathfinding_algorithm) {
 		return;
 	}
+	ERR_FAIL_COND(navigation_query.is_null());
 
 	pathfinding_algorithm = p_pathfinding_algorithm;
 
@@ -437,6 +438,7 @@ void NavigationAgent2D::set_path_postprocessing(const NavigationPathQueryParamet
 	if (path_postprocessing == p_path_postprocessing) {
 		return;
 	}
+	ERR_FAIL_COND(navigation_query.is_null());
 
 	path_postprocessing = p_path_postprocessing;
 
@@ -444,6 +446,7 @@ void NavigationAgent2D::set_path_postprocessing(const NavigationPathQueryParamet
 }
 
 void NavigationAgent2D::set_simplify_path(bool p_enabled) {
+	ERR_FAIL_COND(navigation_query.is_null());
 	simplify_path = p_enabled;
 	navigation_query->set_simplify_path(simplify_path);
 }
@@ -453,6 +456,7 @@ bool NavigationAgent2D::get_simplify_path() const {
 }
 
 void NavigationAgent2D::set_simplify_epsilon(real_t p_epsilon) {
+	ERR_FAIL_COND(navigation_query.is_null());
 	simplify_epsilon = MAX(0.0, p_epsilon);
 	navigation_query->set_simplify_epsilon(simplify_epsilon);
 }
@@ -593,6 +597,7 @@ Vector2 NavigationAgent2D::get_target_position() const {
 Vector2 NavigationAgent2D::get_next_path_position() {
 	_update_navigation();
 
+	ERR_FAIL_COND_V(navigation_result.is_null(), Vector2());
 	const Vector<Vector2> &navigation_path = navigation_result->get_path();
 	if (navigation_path.size() == 0) {
 		ERR_FAIL_NULL_V_MSG(agent_parent, Vector2(), "The agent has no parent.");
@@ -631,6 +636,7 @@ Vector2 NavigationAgent2D::get_final_position() {
 }
 
 Vector2 NavigationAgent2D::_get_final_position() const {
+	ERR_FAIL_COND_V(navigation_result.is_null(), Vector2());
 	const Vector<Vector2> &navigation_path = navigation_result->get_path();
 	if (navigation_path.size() == 0) {
 		return Vector2();
@@ -678,6 +684,8 @@ void NavigationAgent2D::_update_navigation() {
 	if (!target_position_submitted) {
 		return;
 	}
+	ERR_FAIL_COND(navigation_query.is_null());
+	ERR_FAIL_COND(navigation_result.is_null());
 
 	Vector2 origin = agent_parent->get_global_position();
 
@@ -769,6 +777,7 @@ void NavigationAgent2D::_advance_waypoints(const Vector2 &p_origin) {
 }
 
 void NavigationAgent2D::_request_repath() {
+	ERR_FAIL_COND(navigation_result.is_null());
 	navigation_result->reset();
 	target_reached = false;
 	navigation_finished = false;
@@ -776,6 +785,7 @@ void NavigationAgent2D::_request_repath() {
 }
 
 bool NavigationAgent2D::_is_last_waypoint() const {
+	ERR_FAIL_COND_V(navigation_result.is_null(), false);
 	return navigation_path_index == navigation_result->get_path().size() - 1;
 }
 
@@ -784,6 +794,7 @@ void NavigationAgent2D::_move_to_next_waypoint() {
 }
 
 bool NavigationAgent2D::_is_within_waypoint_distance(const Vector2 &p_origin) const {
+	ERR_FAIL_COND_V(navigation_result.is_null(), false);
 	const Vector<Vector2> &navigation_path = navigation_result->get_path();
 	return p_origin.distance_to(navigation_path[navigation_path_index]) < path_desired_distance;
 }
@@ -793,6 +804,7 @@ bool NavigationAgent2D::_is_within_target_distance(const Vector2 &p_origin) cons
 }
 
 void NavigationAgent2D::_trigger_waypoint_reached() {
+	ERR_FAIL_COND(navigation_result.is_null());
 	const Vector<Vector2> &navigation_path = navigation_result->get_path();
 	const Vector<int32_t> &navigation_path_types = navigation_result->get_path_types();
 	const TypedArray<RID> &navigation_path_rids = navigation_result->get_path_rids();
@@ -1040,6 +1052,7 @@ void NavigationAgent2D::_update_debug_path() {
 	RenderingServer::get_singleton()->canvas_item_set_z_index(debug_path_instance, RS::CANVAS_ITEM_Z_MAX - 1);
 	RenderingServer::get_singleton()->canvas_item_set_visible(debug_path_instance, agent_parent->is_visible_in_tree());
 
+	ERR_FAIL_COND(navigation_result.is_null());
 	const Vector<Vector2> &navigation_path = navigation_result->get_path();
 
 	if (navigation_path.size() <= 1) {

@@ -182,6 +182,7 @@ RID RendererSceneOcclusionCull::HZBuffer::get_debug_texture() {
 
 	if (debug_image.is_null()) {
 		debug_image.instantiate();
+		ERR_FAIL_COND_V(debug_image.is_null(), RID());
 	}
 
 	unsigned char *ptrw = debug_data.ptrw();

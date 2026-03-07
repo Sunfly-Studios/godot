@@ -97,6 +97,7 @@ static void _attach_meta_to_extras(Ref<Resource> p_node, Dictionary &p_json) {
 static Ref<ImporterMesh> _mesh_to_importer_mesh(Ref<Mesh> p_mesh) {
 	Ref<ImporterMesh> importer_mesh;
 	importer_mesh.instantiate();
+	ERR_FAIL_COND_V(importer_mesh.is_null(), Ref<ImporterMesh>());
 	if (p_mesh.is_null()) {
 		return importer_mesh;
 	}
@@ -121,6 +122,7 @@ static Ref<ImporterMesh> _mesh_to_importer_mesh(Ref<Mesh> p_mesh) {
 		} else {
 			// Assign default material when no material is assigned.
 			mat.instantiate();
+			ERR_FAIL_COND_V(mat.is_null(), Ref<ImporterMesh>());
 		}
 		importer_mesh->add_surface(p_mesh->surface_get_primitive_type(surface_i),
 				array, p_mesh->surface_get_blend_shape_arrays(surface_i), p_mesh->surface_get_lods(surface_i), mat,
@@ -589,6 +591,7 @@ Error GLTFDocument::_parse_nodes(Ref<GLTFState> p_state) {
 	for (int i = 0; i < nodes.size(); i++) {
 		Ref<GLTFNode> node;
 		node.instantiate();
+		ERR_FAIL_COND_V(node.is_null(), ERR_OUT_OF_MEMORY);
 		const Dictionary &n = nodes[i];
 
 		if (n.has("name")) {
@@ -866,6 +869,7 @@ Error GLTFDocument::_parse_buffer_views(Ref<GLTFState> p_state) {
 
 		Ref<GLTFBufferView> buffer_view;
 		buffer_view.instantiate();
+		ERR_FAIL_COND_V(buffer_view.is_null(), ERR_OUT_OF_MEMORY);
 
 		ERR_FAIL_COND_V(!d.has("buffer"), ERR_PARSE_ERROR);
 		buffer_view->buffer = d["buffer"];
@@ -1014,6 +1018,7 @@ Error GLTFDocument::_parse_accessors(Ref<GLTFState> p_state) {
 
 		Ref<GLTFAccessor> accessor;
 		accessor.instantiate();
+		ERR_FAIL_COND_V(accessor.is_null(), ERR_OUT_OF_MEMORY);
 
 		ERR_FAIL_COND_V(!d.has("componentType"), ERR_PARSE_ERROR);
 		accessor->component_type = (GLTFAccessor::GLTFComponentType)(int32_t)d["componentType"];
@@ -1156,6 +1161,7 @@ Error GLTFDocument::_encode_accessor_into_buffer_view(Ref<GLTFState> p_state, co
 
 	Ref<GLTFBufferView> bv;
 	bv.instantiate();
+	ERR_FAIL_COND_V(bv.is_null(), ERR_OUT_OF_MEMORY);
 	const GLTFBufferIndex buffer0 = 0;
 	bv->buffer = buffer0;
 	bv->byte_offset = offset;
@@ -1183,7 +1189,7 @@ Error GLTFDocument::_encode_accessor_into_buffer_view(Ref<GLTFState> p_state, co
 	switch (p_component_type) {
 		case GLTFAccessor::COMPONENT_TYPE_NONE: {
 			ERR_FAIL_V_MSG(ERR_INVALID_DATA, "glTF: Failed to encode buffer view, component type not set.");
-		}
+		} break;
 		case GLTFAccessor::COMPONENT_TYPE_SIGNED_BYTE: {
 			Vector<int8_t> encoded_data;
 			encoded_data.resize(p_count * component_count);
@@ -1542,6 +1548,7 @@ int GLTFDocument::_get_component_type_size(const GLTFAccessor::GLTFComponentType
 	switch (p_component_type) {
 		case GLTFAccessor::COMPONENT_TYPE_NONE:
 			ERR_FAIL_V(0);
+			break;
 		case GLTFAccessor::COMPONENT_TYPE_SIGNED_BYTE:
 		case GLTFAccessor::COMPONENT_TYPE_UNSIGNED_BYTE:
 			return 1;
@@ -1684,6 +1691,7 @@ GLTFAccessorIndex GLTFDocument::_encode_accessor_as_ints(Ref<GLTFState> p_state,
 
 	Ref<GLTFAccessor> accessor;
 	accessor.instantiate();
+	ERR_FAIL_COND_V(accessor.is_null(), -1);
 	GLTFBufferIndex buffer_view_i;
 	if (p_state->buffers.is_empty()) {
 		p_state->buffers.push_back(Vector<uint8_t>());
@@ -1798,6 +1806,7 @@ GLTFAccessorIndex GLTFDocument::_encode_accessor_as_vec2(Ref<GLTFState> p_state,
 
 	Ref<GLTFAccessor> accessor;
 	accessor.instantiate();
+	ERR_FAIL_COND_V(accessor.is_null(), -1);
 	GLTFBufferIndex buffer_view_i;
 	if (p_state->buffers.is_empty()) {
 		p_state->buffers.push_back(Vector<uint8_t>());
@@ -1851,6 +1860,7 @@ GLTFAccessorIndex GLTFDocument::_encode_accessor_as_color(Ref<GLTFState> p_state
 
 	Ref<GLTFAccessor> accessor;
 	accessor.instantiate();
+	ERR_FAIL_COND_V(accessor.is_null(), -1);
 	GLTFBufferIndex buffer_view_i;
 	if (p_state->buffers.is_empty()) {
 		p_state->buffers.push_back(Vector<uint8_t>());
@@ -1918,6 +1928,7 @@ GLTFAccessorIndex GLTFDocument::_encode_accessor_as_weights(Ref<GLTFState> p_sta
 
 	Ref<GLTFAccessor> accessor;
 	accessor.instantiate();
+	ERR_FAIL_COND_V(accessor.is_null(), -1);
 	GLTFBufferIndex buffer_view_i;
 	if (p_state->buffers.is_empty()) {
 		p_state->buffers.push_back(Vector<uint8_t>());
@@ -1969,6 +1980,7 @@ GLTFAccessorIndex GLTFDocument::_encode_accessor_as_joints(Ref<GLTFState> p_stat
 
 	Ref<GLTFAccessor> accessor;
 	accessor.instantiate();
+	ERR_FAIL_COND_V(accessor.is_null(), -1);
 	GLTFBufferIndex buffer_view_i;
 	if (p_state->buffers.is_empty()) {
 		p_state->buffers.push_back(Vector<uint8_t>());
@@ -2022,6 +2034,7 @@ GLTFAccessorIndex GLTFDocument::_encode_accessor_as_quaternions(Ref<GLTFState> p
 
 	Ref<GLTFAccessor> accessor;
 	accessor.instantiate();
+	ERR_FAIL_COND_V(accessor.is_null(), -1);
 	GLTFBufferIndex buffer_view_i;
 	if (p_state->buffers.is_empty()) {
 		p_state->buffers.push_back(Vector<uint8_t>());
@@ -2097,6 +2110,7 @@ GLTFAccessorIndex GLTFDocument::_encode_accessor_as_floats(Ref<GLTFState> p_stat
 
 	Ref<GLTFAccessor> accessor;
 	accessor.instantiate();
+	ERR_FAIL_COND_V(accessor.is_null(), -1);
 	GLTFBufferIndex buffer_view_i;
 	if (p_state->buffers.is_empty()) {
 		p_state->buffers.push_back(Vector<uint8_t>());
@@ -2147,6 +2161,7 @@ GLTFAccessorIndex GLTFDocument::_encode_accessor_as_vec3(Ref<GLTFState> p_state,
 
 	Ref<GLTFAccessor> accessor;
 	accessor.instantiate();
+	ERR_FAIL_COND_V(accessor.is_null(), -1);
 	GLTFBufferIndex buffer_view_i;
 	if (p_state->buffers.is_empty()) {
 		p_state->buffers.push_back(Vector<uint8_t>());
@@ -2224,6 +2239,7 @@ GLTFAccessorIndex GLTFDocument::_encode_sparse_accessor_as_vec3(Ref<GLTFState> p
 
 	Ref<GLTFAccessor> sparse_accessor;
 	sparse_accessor.instantiate();
+	ERR_FAIL_COND_V(sparse_accessor.is_null(), -1);
 	if (p_state->buffers.is_empty()) {
 		p_state->buffers.push_back(Vector<uint8_t>());
 	}
@@ -2328,6 +2344,7 @@ GLTFAccessorIndex GLTFDocument::_encode_accessor_as_xform(Ref<GLTFState> p_state
 
 	Ref<GLTFAccessor> accessor;
 	accessor.instantiate();
+	ERR_FAIL_COND_V(accessor.is_null(), -1);
 	GLTFBufferIndex buffer_view_i;
 	if (p_state->buffers.is_empty()) {
 		p_state->buffers.push_back(Vector<uint8_t>());
@@ -2790,6 +2807,7 @@ GLTFAccessorIndex GLTFDocument::_encode_accessor_as_variant(Ref<GLTFState> p_sta
 	// Create the accessor and fill it with the data.
 	Ref<GLTFAccessor> accessor;
 	accessor.instantiate();
+	ERR_FAIL_COND_V(accessor.is_null(), -1);
 	accessor->max = type_max;
 	accessor->min = type_min;
 	accessor->count = p_attribs.size();
@@ -3081,6 +3099,7 @@ Error GLTFDocument::_serialize_meshes(Ref<GLTFState> p_state) {
 						const Vector<Vector3> &vertices = array[Mesh::ARRAY_VERTEX];
 						Ref<SurfaceTool> st;
 						st.instantiate();
+						ERR_FAIL_COND_V(st.is_null(), ERR_OUT_OF_MEMORY);
 						st->create_from_triangle_arrays(array);
 						st->index();
 						Vector<int32_t> generated_indices = st->commit_to_arrays()[Mesh::ARRAY_INDEX];
@@ -3241,6 +3260,7 @@ Error GLTFDocument::_parse_meshes(Ref<GLTFState> p_state) {
 
 		Ref<GLTFMesh> mesh;
 		mesh.instantiate();
+		ERR_FAIL_COND_V(mesh.is_null(), ERR_OUT_OF_MEMORY);
 		bool has_vertex_color = false;
 
 		ERR_FAIL_COND_V(!mesh_dict.has("primitives"), ERR_PARSE_ERROR);
@@ -3250,6 +3270,7 @@ Error GLTFDocument::_parse_meshes(Ref<GLTFState> p_state) {
 		_attach_extras_to_meta(extras, mesh);
 		Ref<ImporterMesh> import_mesh;
 		import_mesh.instantiate();
+		ERR_FAIL_COND_V(import_mesh.is_null(), ERR_OUT_OF_MEMORY);
 		String mesh_name = "mesh";
 		if (mesh_dict.has("name") && !String(mesh_dict["name"]).is_empty()) {
 			mesh_name = mesh_dict["name"];
@@ -3569,6 +3590,7 @@ Error GLTFDocument::_parse_meshes(Ref<GLTFState> p_state) {
 
 			Ref<SurfaceTool> mesh_surface_tool;
 			mesh_surface_tool.instantiate();
+			ERR_FAIL_COND_V(mesh_surface_tool.is_null(), ERR_OUT_OF_MEMORY);
 			mesh_surface_tool->create_from_triangle_arrays(array);
 			if (a.has("JOINTS_0") && a.has("JOINTS_1")) {
 				mesh_surface_tool->set_skin_weight_count(SurfaceTool::SKIN_8_WEIGHTS);
@@ -3704,6 +3726,7 @@ Error GLTFDocument::_parse_meshes(Ref<GLTFState> p_state) {
 
 					Ref<SurfaceTool> blend_surface_tool;
 					blend_surface_tool.instantiate();
+					ERR_FAIL_COND_V(blend_surface_tool.is_null(), ERR_OUT_OF_MEMORY);
 					blend_surface_tool->create_from_triangle_arrays(array_copy);
 					if (a.has("JOINTS_0") && a.has("JOINTS_1")) {
 						blend_surface_tool->set_skin_weight_count(SurfaceTool::SKIN_8_WEIGHTS);
@@ -3743,6 +3766,7 @@ Error GLTFDocument::_parse_meshes(Ref<GLTFState> p_state) {
 				} else {
 					Ref<StandardMaterial3D> mat3d;
 					mat3d.instantiate();
+					ERR_FAIL_COND_V(mat3d.is_null(), ERR_OUT_OF_MEMORY);
 					if (has_vertex_color) {
 						mat3d->set_flag(StandardMaterial3D::FLAG_ALBEDO_FROM_VERTEX_COLOR, true);
 					}
@@ -3866,6 +3890,7 @@ Error GLTFDocument::_serialize_images(Ref<GLTFState> p_state) {
 
 			Ref<GLTFBufferView> bv;
 			bv.instantiate();
+			ERR_FAIL_COND_V(bv.is_null(), ERR_OUT_OF_MEMORY);
 
 			const GLTFBufferIndex bi = 0;
 			bv->buffer = bi;
@@ -3917,6 +3942,7 @@ Error GLTFDocument::_serialize_images(Ref<GLTFState> p_state) {
 Ref<Image> GLTFDocument::_parse_image_bytes_into_image(Ref<GLTFState> p_state, const Vector<uint8_t> &p_bytes, const String &p_mime_type, int p_index, String &r_file_extension) {
 	Ref<Image> r_image;
 	r_image.instantiate();
+	ERR_FAIL_COND_V(r_image.is_null(), Ref<Image>());
 	// Check if any GLTFDocumentExtensions want to import this data as an image.
 	for (Ref<GLTFDocumentExtension> ext : document_extensions) {
 		ERR_CONTINUE(ext.is_null());
@@ -3990,6 +4016,7 @@ void GLTFDocument::_parse_image_save_image(Ref<GLTFState> p_state, const Vector<
 				if (FileAccess::exists(file_path + ".import")) {
 					Ref<ConfigFile> config;
 					config.instantiate();
+					ERR_FAIL_COND(config.is_null());
 					config->load(file_path + ".import");
 					if (config->has_section_key("remap", "generator_parameters")) {
 						generator_parameters = (Dictionary)config->get_value("remap", "generator_parameters");
@@ -4049,6 +4076,7 @@ void GLTFDocument::_parse_image_save_image(Ref<GLTFState> p_state, const Vector<
 	if (handling == GLTFState::GLTFHandleBinary::HANDLE_BINARY_EMBED_AS_BASISU) {
 		Ref<PortableCompressedTexture2D> tex;
 		tex.instantiate();
+		ERR_FAIL_COND(tex.is_null());
 		tex->set_name(p_image->get_name());
 		tex->set_keep_compressed_buffer(true);
 		tex->create_from_image(p_image, PortableCompressedTexture2D::COMPRESSION_MODE_BASIS_UNIVERSAL);
@@ -4060,6 +4088,7 @@ void GLTFDocument::_parse_image_save_image(Ref<GLTFState> p_state, const Vector<
 	// as a fallback for HANDLE_BINARY_EXTRACT_TEXTURES when this is not the editor.
 	Ref<ImageTexture> tex;
 	tex.instantiate();
+	ERR_FAIL_COND(tex.is_null());
 	tex->set_name(p_image->get_name());
 	tex->set_image(p_image);
 	p_state->images.push_back(tex);
@@ -4228,6 +4257,7 @@ Error GLTFDocument::_parse_textures(Ref<GLTFState> p_state) {
 		const Dictionary &texture_dict = textures[i];
 		Ref<GLTFTexture> gltf_texture;
 		gltf_texture.instantiate();
+		ERR_FAIL_COND_V(gltf_texture.is_null(), ERR_OUT_OF_MEMORY);
 		// Check if any GLTFDocumentExtensions want to handle this texture JSON.
 		for (Ref<GLTFDocumentExtension> ext : document_extensions) {
 			ERR_CONTINUE(ext.is_null());
@@ -4256,6 +4286,7 @@ GLTFTextureIndex GLTFDocument::_set_texture(Ref<GLTFState> p_state, Ref<Texture2
 	ERR_FAIL_COND_V(p_texture.is_null(), -1);
 	Ref<GLTFTexture> gltf_texture;
 	gltf_texture.instantiate();
+	ERR_FAIL_COND_V(gltf_texture.is_null(), -1);
 	ERR_FAIL_COND_V(p_texture->get_image().is_null(), -1);
 	GLTFImageIndex gltf_src_image_i = p_state->images.size();
 	p_state->images.push_back(p_texture);
@@ -4275,6 +4306,7 @@ Ref<Texture2D> GLTFDocument::_get_texture(Ref<GLTFState> p_state, const GLTFText
 		ERR_FAIL_INDEX_V(image, p_state->source_images.size(), Ref<Texture2D>());
 		Ref<PortableCompressedTexture2D> portable_texture;
 		portable_texture.instantiate();
+		ERR_FAIL_COND_V(portable_texture.is_null(), Ref<Texture2D>());
 		portable_texture->set_keep_compressed_buffer(true);
 		Ref<Image> new_img = p_state->source_images[image]->duplicate();
 		ERR_FAIL_COND_V(new_img.is_null(), Ref<Texture2D>());
@@ -4300,6 +4332,7 @@ GLTFTextureSamplerIndex GLTFDocument::_set_sampler_for_mode(Ref<GLTFState> p_sta
 	GLTFTextureSamplerIndex gltf_sampler_i = p_state->texture_samplers.size();
 	Ref<GLTFTextureSampler> gltf_sampler;
 	gltf_sampler.instantiate();
+	ERR_FAIL_COND_V(gltf_sampler.is_null(), -1);
 	gltf_sampler->set_filter_mode(p_filter_mode);
 	gltf_sampler->set_wrap_mode(p_repeats);
 	p_state->texture_samplers.push_back(gltf_sampler);
@@ -4341,6 +4374,7 @@ Error GLTFDocument::_serialize_texture_samplers(Ref<GLTFState> p_state) {
 
 Error GLTFDocument::_parse_texture_samplers(Ref<GLTFState> p_state) {
 	p_state->default_texture_sampler.instantiate();
+	ERR_FAIL_COND_V(p_state->default_texture_sampler.is_null(), ERR_OUT_OF_MEMORY);
 	p_state->default_texture_sampler->set_min_filter(GLTFTextureSampler::FilterMode::LINEAR_MIPMAP_LINEAR);
 	p_state->default_texture_sampler->set_mag_filter(GLTFTextureSampler::FilterMode::LINEAR);
 	p_state->default_texture_sampler->set_wrap_s(GLTFTextureSampler::WrapMode::REPEAT);
@@ -4356,6 +4390,7 @@ Error GLTFDocument::_parse_texture_samplers(Ref<GLTFState> p_state) {
 
 		Ref<GLTFTextureSampler> sampler;
 		sampler.instantiate();
+		ERR_FAIL_COND_V(sampler.is_null(), ERR_OUT_OF_MEMORY);
 
 		if (d.has("minFilter")) {
 			sampler->set_min_filter(d["minFilter"]);
@@ -4451,8 +4486,10 @@ Error GLTFDocument::_serialize_materials(Ref<GLTFState> p_state) {
 				BaseMaterial3D::TextureChannel ao_channel = base_material->get_ao_texture_channel();
 				Ref<ImageTexture> orm_texture;
 				orm_texture.instantiate();
+				ERR_FAIL_COND_V(orm_texture.is_null(), ERR_OUT_OF_MEMORY);
 				Ref<Image> orm_image;
 				orm_image.instantiate();
+				ERR_FAIL_COND_V(orm_image.is_null(), ERR_OUT_OF_MEMORY);
 				int32_t height = 0;
 				int32_t width = 0;
 				Ref<Image> ao_image;
@@ -4577,6 +4614,7 @@ Error GLTFDocument::_serialize_materials(Ref<GLTFState> p_state) {
 			Dictionary nt;
 			Ref<ImageTexture> tex;
 			tex.instantiate();
+			ERR_FAIL_COND_V(tex.is_null(), ERR_OUT_OF_MEMORY);
 			{
 				Ref<Texture2D> normal_texture = base_material->get_texture(BaseMaterial3D::TEXTURE_NORMAL);
 				if (normal_texture.is_valid()) {
@@ -4691,6 +4729,7 @@ Error GLTFDocument::_parse_materials(Ref<GLTFState> p_state) {
 
 		Ref<StandardMaterial3D> material;
 		material.instantiate();
+		ERR_FAIL_COND_V(material.is_null(), ERR_OUT_OF_MEMORY);
 		if (material_dict.has("name") && !String(material_dict["name"]).is_empty()) {
 			material->set_name(material_dict["name"]);
 		} else {
@@ -4718,6 +4757,7 @@ Error GLTFDocument::_parse_materials(Ref<GLTFState> p_state) {
 
 			Ref<GLTFSpecGloss> spec_gloss;
 			spec_gloss.instantiate();
+			ERR_FAIL_COND_V(spec_gloss.is_null(), ERR_OUT_OF_MEMORY);
 			if (sgm.has("diffuseTexture")) {
 				const Dictionary &diffuse_texture_dict = sgm["diffuseTexture"];
 				if (diffuse_texture_dict.has("index")) {
@@ -5001,6 +5041,7 @@ Error GLTFDocument::_parse_skins(Ref<GLTFState> p_state) {
 
 		Ref<GLTFSkin> skin;
 		skin.instantiate();
+		ERR_FAIL_COND_V(skin.is_null(), ERR_OUT_OF_MEMORY);
 
 		ERR_FAIL_COND_V(!d.has("joints"), ERR_PARSE_ERROR);
 
@@ -5072,6 +5113,7 @@ Error GLTFDocument::_create_skins(Ref<GLTFState> p_state) {
 
 		Ref<Skin> skin;
 		skin.instantiate();
+		ERR_FAIL_COND_V(skin.is_null(), ERR_OUT_OF_MEMORY);
 
 		// Some skins don't have IBM's! What absolute monsters!
 		const bool has_ibms = !gltf_skin->inverse_binds.is_empty();
@@ -5474,6 +5516,7 @@ Error GLTFDocument::_parse_animations(Ref<GLTFState> p_state) {
 
 		Ref<GLTFAnimation> animation;
 		animation.instantiate();
+		ERR_FAIL_COND_V(animation.is_null(), ERR_OUT_OF_MEMORY);
 
 		if (!anim_dict.has("channels") || !anim_dict.has("samplers")) {
 			continue;
@@ -5762,6 +5805,7 @@ GLTFMeshIndex GLTFDocument::_convert_mesh_to_gltf(Ref<GLTFState> p_state, MeshIn
 
 	Ref<GLTFMesh> gltf_mesh;
 	gltf_mesh.instantiate();
+	ERR_FAIL_COND_V(gltf_mesh.is_null(), -1);
 	gltf_mesh->set_instance_materials(instance_materials);
 	gltf_mesh->set_mesh(current_mesh);
 	gltf_mesh->set_blend_weights(blend_weights);
@@ -5860,6 +5904,7 @@ void GLTFDocument::_convert_scene_node(Ref<GLTFState> p_state, Node *p_current, 
 #endif // TOOLS_ENABLED
 	Ref<GLTFNode> gltf_node;
 	gltf_node.instantiate();
+	ERR_FAIL_COND(gltf_node.is_null());
 	gltf_node->set_original_name(p_current->get_name());
 	gltf_node->set_name(_gen_unique_name(p_state, p_current->get_name()));
 	gltf_node->merge_meta_from(p_current);
@@ -5936,6 +5981,7 @@ void GLTFDocument::_convert_csg_shape_to_gltf(CSGShape3D *p_current, GLTFNodeInd
 
 	Ref<ImporterMesh> mesh;
 	mesh.instantiate();
+	ERR_FAIL_COND(mesh.is_null());
 	{
 		Ref<ArrayMesh> csg_mesh = csg->get_meshes()[1];
 		for (int32_t surface_i = 0; surface_i < csg_mesh->get_surface_count(); surface_i++) {
@@ -5959,6 +6005,7 @@ void GLTFDocument::_convert_csg_shape_to_gltf(CSGShape3D *p_current, GLTFNodeInd
 			} else {
 				// Assign default material when no material is assigned.
 				mat.instantiate();
+				ERR_FAIL_COND(mesh.is_null());
 			}
 
 			mesh->add_surface(csg_mesh->surface_get_primitive_type(surface_i),
@@ -5969,6 +6016,7 @@ void GLTFDocument::_convert_csg_shape_to_gltf(CSGShape3D *p_current, GLTFNodeInd
 
 	Ref<GLTFMesh> gltf_mesh;
 	gltf_mesh.instantiate();
+	ERR_FAIL_COND(gltf_mesh.is_null());
 	gltf_mesh->set_mesh(mesh);
 	gltf_mesh->set_original_name(csg->get_name());
 	GLTFMeshIndex mesh_i = p_state->meshes.size();
@@ -6030,6 +6078,7 @@ void GLTFDocument::_convert_grid_map_to_gltf(GridMap *p_grid_map, GLTFNodeIndex 
 				Vector3(cell_location.x, cell_location.y, cell_location.z)));
 		Ref<GLTFMesh> gltf_mesh;
 		gltf_mesh.instantiate();
+		ERR_FAIL_COND(gltf_mesh.is_null());
 		gltf_mesh->set_mesh(_mesh_to_importer_mesh(p_grid_map->get_mesh_library()->get_item_mesh(cell)));
 		gltf_mesh->set_original_name(p_grid_map->get_mesh_library()->get_item_name(cell));
 		new_gltf_node->mesh = p_state->meshes.size();
@@ -6053,6 +6102,7 @@ void GLTFDocument::_convert_multi_mesh_instance_to_gltf(
 	}
 	Ref<GLTFMesh> gltf_mesh;
 	gltf_mesh.instantiate();
+	ERR_FAIL_COND(gltf_mesh.is_null());
 	Ref<Mesh> mesh = multi_mesh->get_mesh();
 	if (mesh.is_null()) {
 		return;
@@ -6061,6 +6111,7 @@ void GLTFDocument::_convert_multi_mesh_instance_to_gltf(
 	gltf_mesh->set_name(multi_mesh->get_name());
 	Ref<ImporterMesh> importer_mesh;
 	importer_mesh.instantiate();
+	ERR_FAIL_COND(importer_mesh.is_null());
 	Ref<ArrayMesh> array_mesh = multi_mesh->get_mesh();
 	if (array_mesh.is_valid()) {
 		importer_mesh->set_blend_shape_mode(array_mesh->get_blend_shape_mode());
@@ -6103,6 +6154,7 @@ void GLTFDocument::_convert_multi_mesh_instance_to_gltf(
 		}
 		Ref<GLTFNode> new_gltf_node;
 		new_gltf_node.instantiate();
+		ERR_FAIL_COND(new_gltf_node.is_null());
 		new_gltf_node->mesh = mesh_index;
 		new_gltf_node->transform = transform;
 		new_gltf_node->set_original_name(p_multi_mesh_instance->get_name());
@@ -6116,6 +6168,7 @@ void GLTFDocument::_convert_skeleton_to_gltf(Skeleton3D *p_skeleton3d, Ref<GLTFS
 	Skeleton3D *skeleton = p_skeleton3d;
 	Ref<GLTFSkeleton> gltf_skeleton;
 	gltf_skeleton.instantiate();
+	ERR_FAIL_COND(gltf_skeleton.is_null());
 	// GLTFSkeleton is only used to hold internal p_state data. It will not be written to the document.
 	//
 	gltf_skeleton->godot_skeleton = skeleton;
@@ -6127,6 +6180,7 @@ void GLTFDocument::_convert_skeleton_to_gltf(Skeleton3D *p_skeleton3d, Ref<GLTFS
 	for (BoneId bone_i = 0; bone_i < bone_count; bone_i++) {
 		Ref<GLTFNode> joint_node;
 		joint_node.instantiate();
+		ERR_FAIL_COND(joint_node.is_null());
 		// Note that we cannot use _gen_unique_bone_name here, because glTF spec requires all node
 		// names to be unique regardless of whether or not they are used as joints.
 		joint_node->set_original_name(skeleton->get_bone_name(bone_i));
@@ -6355,7 +6409,9 @@ void GLTFDocument::_generate_skeleton_bone_node(Ref<GLTFState> p_state, const GL
 			p_scene_parent->add_child(bone_attachment, true);
 
 			// Find the correct bone_idx so we can properly serialize it.
-			bone_attachment->set_bone_idx(active_skeleton->find_bone(gltf_node->get_name()));
+			if (bone_attachment) {
+				bone_attachment->set_bone_idx(active_skeleton->find_bone(gltf_node->get_name()));
+			}
 
 			bone_attachment->set_owner(p_scene_root);
 
@@ -6560,6 +6616,7 @@ Ref<GLTFObjectModelProperty> GLTFDocument::import_object_model_property(Ref<GLTF
 	const PackedStringArray split = p_json_pointer.split("/", false);
 	ERR_FAIL_COND_V_MSG(split.size() < 3, ret, "glTF: Cannot use JSON pointer '" + p_json_pointer + "' because it does not contain enough elements. The only animatable properties are at least 3 levels deep (ex: '/nodes/0/translation' or '/materials/0/emissiveFactor').");
 	ret.instantiate();
+	ERR_FAIL_COND_V(ret.is_null(), Ref<GLTFObjectModelProperty>());
 	ret->set_json_pointers({ split });
 	// Partial paths are passed to GLTFDocumentExtension classes if GLTFDocument cannot handle a given JSON pointer.
 	TypedArray<NodePath> partial_paths;
@@ -6786,6 +6843,7 @@ Ref<GLTFObjectModelProperty> GLTFDocument::export_object_model_property(Ref<GLTF
 	}
 	const String &target_prop = subpath[target_prop_depth];
 	ret.instantiate();
+	ERR_FAIL_COND_V(ret.is_null(), Ref<GLTFObjectModelProperty>());
 	ret->set_node_paths({ p_node_path });
 	Vector<PackedStringArray> split_json_pointers;
 	PackedStringArray split_json_pointer;
@@ -6965,6 +7023,7 @@ void GLTFDocument::_import_animation(Ref<GLTFState> p_state, AnimationPlayer *p_
 
 	Ref<Animation> animation;
 	animation.instantiate();
+	ERR_FAIL_COND(animation.is_null());
 	animation->set_name(anim_name);
 	animation->set_step(1.0 / p_state->get_bake_fps());
 
@@ -7282,6 +7341,7 @@ void GLTFDocument::_import_animation(Ref<GLTFState> p_state, AnimationPlayer *p_
 	Ref<AnimationLibrary> library;
 	if (!p_animation_player->has_animation_library("")) {
 		library.instantiate();
+		ERR_FAIL_COND(library.is_null());
 		p_animation_player->add_animation_library("", library);
 	} else {
 		library = p_animation_player->get_animation_library("");
@@ -7315,6 +7375,7 @@ void GLTFDocument::_convert_mesh_instances(Ref<GLTFState> p_state) {
 		Ref<Skin> skin = mi->get_skin();
 		Ref<GLTFSkin> gltf_skin;
 		gltf_skin.instantiate();
+		ERR_FAIL_COND(gltf_skin.is_null());
 		Array json_joints;
 		if (p_state->skeleton3d_to_gltf_skeleton.has(godot_skeleton->get_instance_id())) {
 			// This is a skinned mesh. If the mesh has no ARRAY_WEIGHTS or ARRAY_BONES, it will be invisible.
@@ -7341,6 +7402,7 @@ void GLTFDocument::_convert_mesh_instances(Ref<GLTFState> p_state) {
 					skin = godot_skeleton->create_skin_from_rest_transforms();
 				}
 				gltf_skin.instantiate();
+				ERR_FAIL_COND(gltf_skin.is_null());
 				gltf_skin->godot_skin = skin;
 				gltf_skin->set_name(skin->get_name());
 				gltf_skin->skeleton = skeleton_gltf_i;
@@ -7866,6 +7928,7 @@ void GLTFDocument::_convert_animation(Ref<GLTFState> p_state, AnimationPlayer *p
 	Ref<Animation> animation = p_animation_player->get_animation(p_animation_track_name);
 	Ref<GLTFAnimation> gltf_animation;
 	gltf_animation.instantiate();
+	ERR_FAIL_COND(gltf_animation.is_null());
 	gltf_animation->set_original_name(p_animation_track_name);
 	gltf_animation->set_name(_gen_unique_name(p_state, p_animation_track_name));
 	HashMap<int, GLTFAnimation::NodeTrack> &node_tracks = gltf_animation->get_node_tracks();
@@ -8294,6 +8357,7 @@ PackedByteArray GLTFDocument::_serialize_glb_buffer(Ref<GLTFState> p_state, Erro
 
 	Ref<StreamPeerBuffer> buffer;
 	buffer.instantiate();
+	ERR_FAIL_COND_V(buffer.is_null(), PackedByteArray());
 	buffer->put_32(magic);
 	buffer->put_32(p_state->major_version); // version
 	buffer->put_32(header_size + chunk_header_size + text_chunk_length + chunk_header_size + binary_data_length); // length
@@ -8326,7 +8390,7 @@ Node *GLTFDocument::_generate_scene_node_tree(Ref<GLTFState> p_state) {
 		ERR_CONTINUE(err != OK);
 	}
 	// Generate the node tree.
-	Node *single_root;
+	Node *single_root = nullptr;
 	if (p_state->extensions_used.has("GODOT_single_root")) {
 		_generate_scene_node(p_state, 0, nullptr, nullptr);
 		single_root = p_state->scene_nodes[0];
@@ -8583,6 +8647,7 @@ Error GLTFDocument::append_from_buffer(PackedByteArray p_bytes, String p_base_pa
 
 	Ref<FileAccessMemory> file_access;
 	file_access.instantiate();
+	ERR_FAIL_COND_V(file_access.is_null(), ERR_OUT_OF_MEMORY);
 	file_access->open_custom(p_bytes.ptr(), p_bytes.size());
 	state->set_base_path(p_base_path.get_base_dir());
 	err = _parse(p_state, state->base_path, file_access);
@@ -8600,6 +8665,7 @@ Error GLTFDocument::append_from_file(String p_path, Ref<GLTFState> p_state, uint
 	// TODO Add missing texture and missing .bin file paths to r_missing_deps 2021-09-10 fire
 	if (state == Ref<GLTFState>()) {
 		state.instantiate();
+		ERR_FAIL_COND_V(state.is_null(), ERR_OUT_OF_MEMORY);
 	}
 	state->set_filename(p_path.get_file().get_basename());
 	state->use_named_skin_binds = p_flags & GLTF_IMPORT_USE_NAMED_SKIN_BINDS;

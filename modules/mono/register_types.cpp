@@ -54,9 +54,11 @@ void initialize_mono_module(ModuleInitializationLevel p_level) {
 	ScriptServer::register_language(script_language_cs);
 
 	resource_loader_cs.instantiate();
+	ERR_FAIL_COND(resource_loader_cs.is_null());
 	ResourceLoader::add_resource_format_loader(resource_loader_cs);
 
 	resource_saver_cs.instantiate();
+	ERR_FAIL_COND(resource_saver_cs.is_null());
 	ResourceSaver::add_resource_format_saver(resource_saver_cs);
 }
 
@@ -70,12 +72,16 @@ void uninitialize_mono_module(ModuleInitializationLevel p_level) {
 	if (script_language_cs) {
 		memdelete(script_language_cs);
 	}
+	
+	if (resource_loader_cs.is_valid()) {
+		ResourceLoader::remove_resource_format_loader(resource_loader_cs);
+		resource_loader_cs.unref();
+	}
 
-	ResourceLoader::remove_resource_format_loader(resource_loader_cs);
-	resource_loader_cs.unref();
-
-	ResourceSaver::remove_resource_format_saver(resource_saver_cs);
-	resource_saver_cs.unref();
+	if (resource_saver_cs.is_valid()) {
+		ResourceSaver::remove_resource_format_saver(resource_saver_cs);
+		resource_saver_cs.unref();
+	}
 
 	if (_godotsharp) {
 		memdelete(_godotsharp);

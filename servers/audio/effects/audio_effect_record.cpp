@@ -120,6 +120,7 @@ void AudioEffectRecordInstance::finish() {
 Ref<AudioEffectInstance> AudioEffectRecord::instantiate() {
 	Ref<AudioEffectRecordInstance> ins;
 	ins.instantiate();
+	ERR_FAIL_COND_V(ins.is_null(), Ref<AudioEffectInstance>());
 	ins->is_recording = false;
 
 	// Reusing the buffer size calculations from audio_effect_delay.cpp.
@@ -264,6 +265,7 @@ Ref<AudioStreamWAV> AudioEffectRecord::get_recording() const {
 
 	Ref<AudioStreamWAV> sample;
 	sample.instantiate();
+	ERR_FAIL_COND_V(sample.is_null(), Ref<AudioStreamWAV>());
 	sample->set_data(dst_data);
 	sample->set_format(dst_format);
 	sample->set_mix_rate(AudioServer::get_singleton()->get_mix_rate());

@@ -67,12 +67,14 @@ void GLTFLight::set_cone_inner_attenuation_conversion_expressions(Ref<GLTFObject
 	// Expression to convert glTF innerConeAngle to Godot spot_angle_attenuation.
 	Ref<Expression> gltf_to_godot_expr;
 	gltf_to_godot_expr.instantiate();
+	ERR_FAIL_COND(gltf_to_godot_expr.is_null());
 	PackedStringArray gltf_to_godot_args = { "inner_cone_angle" };
 	gltf_to_godot_expr->parse("0.2 / (1.0 - inner_cone_angle / spot_angle) - 0.1", gltf_to_godot_args);
 	r_obj_model_prop->set_gltf_to_godot_expression(gltf_to_godot_expr);
 	// Expression to convert Godot spot_angle_attenuation to glTF innerConeAngle.
 	Ref<Expression> godot_to_gltf_expr;
 	godot_to_gltf_expr.instantiate();
+	ERR_FAIL_COND(godot_to_gltf_expr.is_null());
 	PackedStringArray godot_to_gltf_args = { "godot_spot_angle_att" };
 	godot_to_gltf_expr->parse("spot_angle * maxf(0.0, 1.0 - (0.2 / (0.1 + godot_spot_angle_att)))", godot_to_gltf_args);
 	r_obj_model_prop->set_godot_to_gltf_expression(godot_to_gltf_expr);
@@ -129,6 +131,7 @@ void GLTFLight::set_outer_cone_angle(float p_outer_cone_angle) {
 Ref<GLTFLight> GLTFLight::from_node(const Light3D *p_light) {
 	Ref<GLTFLight> l;
 	l.instantiate();
+	ERR_FAIL_COND_V(l.is_null(), Ref<GLTFLight>());
 	ERR_FAIL_NULL_V_MSG(p_light, l, "Tried to create a GLTFLight from a Light3D node, but the given node was null.");
 	l->color = p_light->get_color();
 	if (cast_to<DirectionalLight3D>(p_light)) {
@@ -189,6 +192,7 @@ Ref<GLTFLight> GLTFLight::from_dictionary(const Dictionary p_dictionary) {
 	ERR_FAIL_COND_V_MSG(!p_dictionary.has("type"), Ref<GLTFLight>(), "Failed to parse glTF light, missing required field 'type'.");
 	Ref<GLTFLight> light;
 	light.instantiate();
+	ERR_FAIL_COND_V(light.is_null(), Ref<GLTFLight>());
 	const String &type = p_dictionary["type"];
 	light->light_type = type;
 

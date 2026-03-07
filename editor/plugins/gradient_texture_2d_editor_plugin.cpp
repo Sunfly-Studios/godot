@@ -320,6 +320,7 @@ void EditorInspectorPluginGradientTexture2D::parse_begin(Object *p_object) {
 	Ref<GradientTexture2D> t(texture);
 
 	GradientTexture2DEditor *editor = memnew(GradientTexture2DEditor);
+	ERR_FAIL_NULL(editor);
 	editor->set_texture(t);
 	add_custom_control(editor);
 }
@@ -329,5 +330,6 @@ void EditorInspectorPluginGradientTexture2D::parse_begin(Object *p_object) {
 GradientTexture2DEditorPlugin::GradientTexture2DEditorPlugin() {
 	Ref<EditorInspectorPluginGradientTexture2D> plugin;
 	plugin.instantiate();
+	ERR_FAIL_COND(plugin.is_null());
 	add_inspector_plugin(plugin);
 }

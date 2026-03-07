@@ -35,6 +35,7 @@
 Ref<AudioStreamPlayback> AudioStreamPlaylist::instantiate_playback() {
 	Ref<AudioStreamPlaybackPlaylist> playback_playlist;
 	playback_playlist.instantiate();
+	ERR_FAIL_COND_V(playback_playlist.is_null(), Ref<AudioStreamPlayback>());
 	playback_playlist->playlist = Ref<AudioStreamPlaylist>(this);
 	playback_playlist->_update_playback_instances();
 	playbacks.insert(playback_playlist.operator->());

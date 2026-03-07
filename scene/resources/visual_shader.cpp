@@ -3056,12 +3056,14 @@ VisualShader::VisualShader() {
 		if (i > (int)TYPE_LIGHT && i < (int)TYPE_SKY) {
 			Ref<VisualShaderNodeParticleOutput> output;
 			output.instantiate();
+			ERR_FAIL_COND(output.is_null());
 			output->shader_type = Type(i);
 			output->shader_mode = shader_mode;
 			graph[i].nodes[NODE_ID_OUTPUT].node = output;
 		} else {
 			Ref<VisualShaderNodeOutput> output;
 			output.instantiate();
+			ERR_FAIL_COND(output.is_null());
 			output->shader_type = Type(i);
 			output->shader_mode = shader_mode;
 			graph[i].nodes[NODE_ID_OUTPUT].node = output;

@@ -169,6 +169,7 @@ Error ResourceLoaderText::_parse_ext_resource(VariantParser::Stream *p_stream, R
 		if (r_res.is_null()) {
 			// Hack to allow checking original path.
 			r_res.instantiate();
+			ERR_FAIL_COND_V(r_res.is_null(), ERR_PARSE_ERROR);
 			r_res->set_meta("__load_path__", ext_resources[id].path);
 		}
 #endif
@@ -187,6 +188,7 @@ Ref<PackedScene> ResourceLoaderText::_parse_node_tag(VariantParser::ResourcePars
 	Ref<PackedScene> packed_scene = ResourceLoader::get_resource_ref_override(local_path);
 	if (packed_scene.is_null()) {
 		packed_scene.instantiate();
+		ERR_FAIL_COND_V_MSG(packed_scene.is_null(), Ref<PackedScene>(), "Could not parse node tag.");
 	}
 
 	while (true) {

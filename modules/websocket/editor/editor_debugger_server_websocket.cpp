@@ -39,6 +39,7 @@
 #include "editor/editor_settings.h"
 
 void EditorDebuggerServerWebSocket::poll() {
+	ERR_FAIL_COND(tcp_server.is_null());
 	if (pending_peer.is_null() && tcp_server->is_connection_available()) {
 		Ref<WebSocketPeer> peer = Ref<WebSocketPeer>(WebSocketPeer::create());
 		ERR_FAIL_COND(peer.is_null()); // Bug.
@@ -82,6 +83,7 @@ Error EditorDebuggerServerWebSocket::start(const String &p_uri) {
 		ERR_FAIL_COND_V(!bind_host.is_valid_ip_address() && bind_host != "*", ERR_INVALID_PARAMETER);
 	}
 
+	ERR_FAIL_COND_V(tcp_server.is_null(), ERR_OUT_OF_MEMORY);
 	// Try listening on ports
 	const int max_attempts = 5;
 	for (int attempt = 1;; ++attempt) {
@@ -104,11 +106,17 @@ Error EditorDebuggerServerWebSocket::start(const String &p_uri) {
 }
 
 void EditorDebuggerServerWebSocket::stop() {
-	pending_peer.unref();
-	tcp_server->stop();
+	if (pending_peer.is_valid()) {
+		pending_peer.unref();
+	}
+
+	if (tcp_server.is_valid()) {
+		tcp_server->stop();
+	}
 }
 
 bool EditorDebuggerServerWebSocket::is_active() const {
+	ERR_FAIL_COND_V(tcp_server.is_null(), false);
 	return tcp_server->is_listening();
 }
 

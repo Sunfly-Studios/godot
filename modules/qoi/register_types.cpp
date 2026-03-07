@@ -42,9 +42,11 @@ void initialize_qoi_module(ModuleInitializationLevel p_level) {
 	}
 
 	image_loader_qoi.instantiate();
+	ERR_FAIL_COND(image_loader_qoi.is_null());
 	ImageLoader::add_image_format_loader(image_loader_qoi);
 
 	resource_saver_qoi.instantiate();
+	ERR_FAIL_COND(resource_saver_qoi.is_null());
 	ResourceSaver::add_resource_format_saver(resource_saver_qoi);
 }
 
@@ -53,9 +55,13 @@ void uninitialize_qoi_module(ModuleInitializationLevel p_level) {
 		return;
 	}
 
-	ImageLoader::remove_image_format_loader(image_loader_qoi);
-	image_loader_qoi.unref();
-
-	ResourceSaver::remove_resource_format_saver(resource_saver_qoi);
-	resource_saver_qoi.unref();
+	if (image_loader_qoi.is_valid()) {
+		ImageLoader::remove_image_format_loader(image_loader_qoi);
+		image_loader_qoi.unref();
+	}
+	
+	if (resource_saver_qoi.is_valid()) {
+		ResourceSaver::remove_resource_format_saver(resource_saver_qoi);
+		resource_saver_qoi.unref();
+	}
 }

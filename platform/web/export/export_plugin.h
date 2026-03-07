@@ -85,6 +85,7 @@ class EditorExportPlatformWeb : public EditorExportPlatform {
 		Error err = OK;
 		Ref<Image> icon;
 		icon.instantiate();
+		ERR_FAIL_COND_V(icon.is_null(), Ref<Image>());
 		const String icon_path = String(GLOBAL_GET("application/config/icon")).strip_edges();
 		if (!icon_path.is_empty()) {
 			icon = _load_icon_or_splash_image(icon_path, &err);
@@ -99,6 +100,7 @@ class EditorExportPlatformWeb : public EditorExportPlatform {
 		Error err = OK;
 		Ref<Image> splash;
 		splash.instantiate();
+		ERR_FAIL_COND_V(splash.is_null(), Ref<Image>());
 		const String splash_path = String(GLOBAL_GET("application/boot_splash/image")).strip_edges();
 		if (!splash_path.is_empty()) {
 			splash = _load_icon_or_splash_image(splash_path, &err);

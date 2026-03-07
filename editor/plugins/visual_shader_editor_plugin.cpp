@@ -572,6 +572,8 @@ void VisualShaderGraphPlugin::update_theme() {
 
 	Ref<Font> label_font = EditorNode::get_singleton()->get_editor_theme()->get_font("main_msdf", EditorStringName(EditorFonts));
 	Ref<Font> label_bold_font = EditorNode::get_singleton()->get_editor_theme()->get_font("main_bold_msdf", EditorStringName(EditorFonts));
+	
+	ERR_FAIL_COND(vs_msdf_fonts_theme.is_null());
 	vs_msdf_fonts_theme->set_font(SceneStringName(font), "Label", label_font);
 	vs_msdf_fonts_theme->set_font(SceneStringName(font), "GraphNodeTitleLabel", label_bold_font);
 	if (!EditorThemeManager::is_dark_theme()) {
@@ -1376,6 +1378,7 @@ void VisualShaderGraphPlugin::add_node(VisualShader::Type p_type, int p_id, bool
 		CodeEdit *expression_box = memnew(CodeEdit);
 		Ref<CodeHighlighter> expression_syntax_highlighter;
 		expression_syntax_highlighter.instantiate();
+		ERR_FAIL_COND(expression_syntax_highlighter.is_null());
 		expression_node->set_ctrl_pressed(expression_box, 0);
 		expression_box->set_v_size_flags(Control::SIZE_EXPAND_FILL);
 		node->add_child(expression_box);
@@ -1697,6 +1700,7 @@ void VisualShaderEditor::_script_created(const Ref<Script> &p_script) {
 	}
 	Ref<VisualShaderNodeCustom> ref;
 	ref.instantiate();
+	ERR_FAIL_COND(ref.is_null());
 	ref->set_script(p_script);
 
 	Dictionary dict = get_custom_node_data(ref);
@@ -1712,6 +1716,7 @@ void VisualShaderEditor::_update_custom_script(const Ref<Script> &p_script) {
 
 	Ref<VisualShaderNodeCustom> ref;
 	ref.instantiate();
+	ERR_FAIL_COND(ref.is_null());
 	ref->set_script(p_script);
 	if (!ref->is_available(visual_shader->get_mode(), visual_shader->get_shader_type())) {
 		for (int i = 0; i < add_options.size(); i++) {
@@ -2129,6 +2134,7 @@ void VisualShaderEditor::_update_nodes() {
 
 				Ref<VisualShaderNodeCustom> ref;
 				ref.instantiate();
+				ERR_FAIL_COND(ref.is_null());
 				ref->set_script(scr);
 				if (!ref->is_available(visual_shader->get_mode(), visual_shader->get_shader_type())) {
 					continue;
@@ -6615,6 +6621,7 @@ VisualShaderEditor::VisualShaderEditor() {
 
 	preview_text = memnew(CodeEdit);
 	syntax_highlighter.instantiate();
+	ERR_FAIL_COND(syntax_highlighter.is_null());
 	code_preview_vbox->add_child(preview_text);
 	preview_text->set_v_size_flags(Control::SIZE_EXPAND_FILL);
 	preview_text->set_syntax_highlighter(syntax_highlighter);
@@ -6668,6 +6675,7 @@ VisualShaderEditor::VisualShaderEditor() {
 	// Initialize material editor.
 	{
 		env.instantiate();
+		ERR_FAIL_COND(env.is_null());
 		Ref<Sky> sky = memnew(Sky());
 		env->set_sky(sky);
 		env->set_background(Environment::BG_COLOR);
@@ -6675,6 +6683,7 @@ VisualShaderEditor::VisualShaderEditor() {
 		env->set_reflection_source(Environment::REFLECTION_SOURCE_SKY);
 
 		preview_material.instantiate();
+		ERR_FAIL_COND(preview_material.is_null());
 		preview_material->connect(CoreStringName(property_list_changed), callable_mp(this, &VisualShaderEditor::_update_preview_parameter_list));
 
 		material_editor = memnew(MaterialEditor);
@@ -7599,10 +7608,13 @@ VisualShaderEditor::VisualShaderEditor() {
 
 	Ref<VisualShaderNodePluginDefault> default_plugin;
 	default_plugin.instantiate();
+	ERR_FAIL_COND(default_plugin.is_null());
+
 	default_plugin->set_editor(this);
 	add_plugin(default_plugin);
 
 	graph_plugin.instantiate();
+	ERR_FAIL_COND(graph_plugin.is_null());
 	graph_plugin->set_editor(this);
 
 	property_editor_popup = memnew(PopupPanel);
@@ -8166,6 +8178,7 @@ void VisualShaderNodePortPreview::_shader_changed() {
 
 	Ref<Shader> preview_shader;
 	preview_shader.instantiate();
+	ERR_FAIL_COND(preview_shader.is_null());
 	preview_shader->set_code(shader_code);
 	for (int i = 0; i < default_textures.size(); i++) {
 		int j = 0;
@@ -8176,6 +8189,7 @@ void VisualShaderNodePortPreview::_shader_changed() {
 
 	Ref<ShaderMaterial> mat;
 	mat.instantiate();
+	ERR_FAIL_COND(mat.is_null());
 	mat->set_shader(preview_shader);
 
 	if (preview_mat.is_valid() && preview_mat->get_shader().is_valid()) {
@@ -8276,6 +8290,7 @@ Ref<Resource> VisualShaderConversionPlugin::convert(const Ref<Resource> &p_resou
 
 	Ref<Shader> shader;
 	shader.instantiate();
+	ERR_FAIL_COND_V(shader.is_null(), Ref<Resource>());
 
 	String code = vshader->get_code();
 	shader->set_code(code);

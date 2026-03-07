@@ -69,6 +69,7 @@ String EditorDebuggerServerTCP::get_uri() const {
 }
 
 Error EditorDebuggerServerTCP::start(const String &p_uri) {
+	ERR_FAIL_COND_V(server.is_null(), ERR_OUT_OF_MEMORY);
 	// Default host and port
 	String bind_host = (String)EDITOR_GET("network/debug/remote_host");
 	int bind_port = (int)EDITOR_GET("network/debug/remote_port");
@@ -103,19 +104,23 @@ Error EditorDebuggerServerTCP::start(const String &p_uri) {
 }
 
 void EditorDebuggerServerTCP::stop() {
+	ERR_FAIL_COND(server.is_null());
 	server->stop();
 }
 
 bool EditorDebuggerServerTCP::is_active() const {
+	ERR_FAIL_COND_V(server.is_null(), false);
 	return server->is_listening();
 }
 
 bool EditorDebuggerServerTCP::is_connection_available() const {
+	ERR_FAIL_COND_V(server.is_null(), false);
 	return server->is_listening() && server->is_connection_available();
 }
 
 Ref<RemoteDebuggerPeer> EditorDebuggerServerTCP::take_connection() {
 	ERR_FAIL_COND_V(!is_connection_available(), Ref<RemoteDebuggerPeer>());
+	ERR_FAIL_COND_V(server.is_null(), Ref<RemoteDebuggerPeer>());
 	return memnew(RemoteDebuggerPeerTCP(server->take_connection()));
 }
 

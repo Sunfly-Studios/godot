@@ -284,6 +284,7 @@ RID RenderForwardMobile::reflection_probe_create_framebuffer(RID p_color, RID p_
 void RenderForwardMobile::setup_render_buffer_data(Ref<RenderSceneBuffersRD> p_render_buffers) {
 	Ref<RenderBufferDataForwardMobile> data;
 	data.instantiate();
+	ERR_FAIL_COND(data.is_null());
 
 	p_render_buffers->set_custom_data(RB_SCOPE_MOBILE, data);
 }

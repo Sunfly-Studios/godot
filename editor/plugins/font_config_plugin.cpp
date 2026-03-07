@@ -346,9 +346,11 @@ EditorPropertyFontMetaOverride::EditorPropertyFontMetaOverride(bool p_script) {
 	script_editor = p_script;
 
 	object.instantiate();
+	ERR_FAIL_COND(object.is_null());
 	page_length = int(EDITOR_GET("interface/inspector/max_array_dictionary_items_per_page"));
 
 	edit = memnew(Button);
+	ERR_FAIL_NULL(edit);
 	edit->set_h_size_flags(SIZE_EXPAND_FILL);
 	edit->set_clip_text(true);
 	edit->connect(SceneStringName(pressed), callable_mp(this, &EditorPropertyFontMetaOverride::_edit_pressed));
@@ -357,6 +359,7 @@ EditorPropertyFontMetaOverride::EditorPropertyFontMetaOverride(bool p_script) {
 	add_focusable(edit);
 
 	menu = memnew(PopupMenu);
+	ERR_FAIL_NULL(menu);
 	if (script_editor) {
 		script_codes = TranslationServer::get_singleton()->get_all_scripts();
 		for (int i = 0; i < script_codes.size(); i++) {
@@ -532,9 +535,11 @@ void EditorPropertyOTVariation::_page_changed(int p_page) {
 
 EditorPropertyOTVariation::EditorPropertyOTVariation() {
 	object.instantiate();
+	ERR_FAIL_COND(object.is_null());
 	page_length = int(EDITOR_GET("interface/inspector/max_array_dictionary_items_per_page"));
 
 	edit = memnew(Button);
+	ERR_FAIL_NULL(edit);
 	edit->set_h_size_flags(SIZE_EXPAND_FILL);
 	edit->set_clip_text(true);
 	edit->connect(SceneStringName(pressed), callable_mp(this, &EditorPropertyOTVariation::_edit_pressed));
@@ -835,9 +840,11 @@ void EditorPropertyOTFeatures::_page_changed(int p_page) {
 
 EditorPropertyOTFeatures::EditorPropertyOTFeatures() {
 	object.instantiate();
+	ERR_FAIL_COND(object.is_null());
 	page_length = int(EDITOR_GET("interface/inspector/max_array_dictionary_items_per_page"));
 
 	edit = memnew(Button);
+	ERR_FAIL_NULL(edit);
 	edit->set_h_size_flags(SIZE_EXPAND_FILL);
 	edit->set_clip_text(true);
 	edit->connect(SceneStringName(pressed), callable_mp(this, &EditorPropertyOTFeatures::_edit_pressed));
@@ -846,6 +853,7 @@ EditorPropertyOTFeatures::EditorPropertyOTFeatures() {
 	add_focusable(edit);
 
 	menu = memnew(PopupMenu);
+	ERR_FAIL_NULL(menu);
 	add_child(menu);
 	menu->connect(SceneStringName(id_pressed), callable_mp(this, &EditorPropertyOTFeatures::_add_feature));
 
@@ -1070,13 +1078,16 @@ bool EditorInspectorPluginSystemFont::parse_property(Object *p_object, const Var
 FontEditorPlugin::FontEditorPlugin() {
 	Ref<EditorInspectorPluginFontVariation> fc_plugin;
 	fc_plugin.instantiate();
+	ERR_FAIL_COND(fc_plugin.is_null());
 	EditorInspector::add_inspector_plugin(fc_plugin);
 
 	Ref<EditorInspectorPluginSystemFont> fs_plugin;
 	fs_plugin.instantiate();
+	ERR_FAIL_COND(fs_plugin.is_null());
 	EditorInspector::add_inspector_plugin(fs_plugin);
 
 	Ref<EditorInspectorPluginFontPreview> fp_plugin;
 	fp_plugin.instantiate();
+	ERR_FAIL_COND(fp_plugin.is_null());
 	EditorInspector::add_inspector_plugin(fp_plugin);
 }

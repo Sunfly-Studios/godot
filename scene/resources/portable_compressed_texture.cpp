@@ -267,6 +267,7 @@ bool PortableCompressedTexture2D::is_pixel_opaque(int p_x, int p_y) const {
 				img = decom;
 			}
 			alpha_cache.instantiate();
+			ERR_FAIL_COND_V(alpha_cache.is_null(), false);
 			alpha_cache->create_from_image_alpha(img);
 		}
 	}

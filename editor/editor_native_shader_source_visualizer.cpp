@@ -38,6 +38,7 @@
 #include "servers/rendering/shader_language.h"
 
 void EditorNativeShaderSourceVisualizer::_load_theme_settings() {
+	ERR_FAIL_COND(syntax_highlighter.is_null());
 	syntax_highlighter->set_number_color(EDITOR_GET("text_editor/theme/highlighting/number_color"));
 	syntax_highlighter->set_symbol_color(EDITOR_GET("text_editor/theme/highlighting/symbol_color"));
 	syntax_highlighter->set_function_color(EDITOR_GET("text_editor/theme/highlighting/function_color"));

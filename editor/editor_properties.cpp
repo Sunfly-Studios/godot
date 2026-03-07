@@ -245,6 +245,7 @@ EditorPropertyMultilineText::EditorPropertyMultilineText(bool p_expression) {
 		expression = true;
 		Ref<EditorStandardSyntaxHighlighter> highlighter;
 		highlighter.instantiate();
+		ERR_FAIL_COND(highlighter.is_null());
 		text->set_syntax_highlighter(highlighter);
 	}
 }
@@ -3231,6 +3232,7 @@ void EditorPropertyResource::_viewport_selected(const NodePath &p_path) {
 
 	Ref<ViewportTexture> vt;
 	vt.instantiate();
+	ERR_FAIL_COND(vt.is_null());
 	vt->set_viewport_path_in_scene(get_tree()->get_edited_scene_root()->get_path_to(to_node));
 
 	emit_changed(get_edited_property(), vt);

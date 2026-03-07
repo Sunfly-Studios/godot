@@ -109,6 +109,7 @@ MeshEditor::MeshEditor() {
 	viewport = memnew(SubViewport);
 	Ref<World3D> world_3d;
 	world_3d.instantiate();
+	ERR_FAIL_COND(world_3d.is_null());
 	viewport->set_world_3d(world_3d); // Use own world.
 	add_child(viewport);
 	viewport->set_disable_input(true);
@@ -121,6 +122,7 @@ MeshEditor::MeshEditor() {
 
 	if (GLOBAL_GET("rendering/lights_and_shadows/use_physical_light_units")) {
 		camera_attributes.instantiate();
+		ERR_FAIL_COND(camera_attributes.is_null());
 		camera->set_attributes(camera_attributes);
 	}
 
@@ -178,6 +180,7 @@ void EditorInspectorPluginMesh::parse_begin(Object *p_object) {
 	Ref<Mesh> m(mesh);
 
 	MeshEditor *editor = memnew(MeshEditor);
+	ERR_FAIL_NULL(editor);
 	editor->edit(m);
 	add_custom_control(editor);
 }
@@ -185,5 +188,6 @@ void EditorInspectorPluginMesh::parse_begin(Object *p_object) {
 MeshEditorPlugin::MeshEditorPlugin() {
 	Ref<EditorInspectorPluginMesh> plugin;
 	plugin.instantiate();
+	ERR_FAIL_COND(plugin.is_null());
 	add_inspector_plugin(plugin);
 }

@@ -79,6 +79,7 @@ void AnimationNodeStateMachineTransition::set_advance_expression(const String &p
 
 	if (expression.is_null()) {
 		expression.instantiate();
+		ERR_FAIL_COND(expression.is_null());
 	}
 
 	expression->parse(advance_expression_stripped);
@@ -1199,6 +1200,7 @@ void AnimationNodeStateMachinePlayback::_bind_methods() {
 AnimationNodeStateMachinePlayback::AnimationNodeStateMachinePlayback() {
 	set_local_to_scene(true); // Only one per instantiated scene.
 	default_transition.instantiate();
+	ERR_FAIL_COND(default_transition.is_null());
 	default_transition->set_xfade_time(0);
 	default_transition->set_reset(true);
 	default_transition->set_advance_mode(AnimationNodeStateMachineTransition::ADVANCE_MODE_AUTO);
@@ -1233,6 +1235,7 @@ Variant AnimationNodeStateMachine::get_parameter_default_value(const StringName 
 	if (p_parameter == playback) {
 		Ref<AnimationNodeStateMachinePlayback> p;
 		p.instantiate();
+		ERR_FAIL_COND_V(p.is_null(), Variant());
 		return p;
 	} else {
 		return false; // Advance condition.
@@ -1731,6 +1734,7 @@ void AnimationNodeStateMachine::reset_state() {
 
 	Ref<AnimationNodeStartState> s;
 	s.instantiate();
+	ERR_FAIL_COND(s.is_null());
 	State start;
 	start.node = s;
 	start.position = Vector2(200, 100);
@@ -1738,6 +1742,7 @@ void AnimationNodeStateMachine::reset_state() {
 
 	Ref<AnimationNodeEndState> e;
 	e.instantiate();
+	ERR_FAIL_COND(e.is_null());
 	State end;
 	end.node = e;
 	end.position = Vector2(900, 100);
@@ -1853,6 +1858,7 @@ Vector<StringName> AnimationNodeStateMachine::get_nodes_with_transitions_to(cons
 AnimationNodeStateMachine::AnimationNodeStateMachine() {
 	Ref<AnimationNodeStartState> s;
 	s.instantiate();
+	ERR_FAIL_COND(s.is_null());
 	State start;
 	start.node = s;
 	start.position = Vector2(200, 100);
@@ -1860,6 +1866,7 @@ AnimationNodeStateMachine::AnimationNodeStateMachine() {
 
 	Ref<AnimationNodeEndState> e;
 	e.instantiate();
+	ERR_FAIL_COND(e.is_null());
 	State end;
 	end.node = e;
 	end.position = Vector2(900, 100);

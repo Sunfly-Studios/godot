@@ -74,6 +74,7 @@ void SpinBox::_text_submitted(const String &p_string) {
 
 	Ref<Expression> expr;
 	expr.instantiate();
+	ERR_FAIL_COND(expr.is_null());
 
 	// Convert commas ',' to dots '.' for French/German etc. keyboard layouts.
 	String text = p_string.replace(",", ".");

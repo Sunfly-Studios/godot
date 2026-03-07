@@ -50,6 +50,7 @@ Ref<PacketPeerDTLS> DTLSServerMbedTLS::take_connection(Ref<PacketPeerUDP> p_udp_
 	ERR_FAIL_COND_V(p_udp_peer.is_null(), out);
 
 	out.instantiate();
+	ERR_FAIL_COND_V(out.is_null(), Ref<PacketPeerDTLS>());
 	out->accept_peer(p_udp_peer, tls_options, cookies);
 	return out;
 }

@@ -54,6 +54,7 @@ BitMapEditor::BitMapEditor() {
 	// Reduce extra padding on top and bottom of size label.
 	Ref<StyleBoxEmpty> stylebox;
 	stylebox.instantiate();
+	ERR_FAIL_COND(stylebox.is_null());
 	stylebox->set_content_margin(SIDE_RIGHT, 4 * EDSCALE);
 	size_label->add_theme_style_override(CoreStringName(normal), stylebox);
 }
@@ -81,5 +82,6 @@ void EditorInspectorPluginBitMap::parse_begin(Object *p_object) {
 BitMapEditorPlugin::BitMapEditorPlugin() {
 	Ref<EditorInspectorPluginBitMap> plugin;
 	plugin.instantiate();
+	ERR_FAIL_COND(plugin.is_null());
 	add_inspector_plugin(plugin);
 }

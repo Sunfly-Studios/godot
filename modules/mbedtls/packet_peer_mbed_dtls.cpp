@@ -75,12 +75,14 @@ int PacketPeerMbedDTLS::bio_recv(void *ctx, unsigned char *buf, size_t len) {
 }
 
 void PacketPeerMbedDTLS::_cleanup() {
+	ERR_FAIL_COND(tls_ctx.is_null());
 	tls_ctx->clear();
 	base = Ref<PacketPeer>();
 	status = STATUS_DISCONNECTED;
 }
 
 int PacketPeerMbedDTLS::_set_cookie() {
+	ERR_FAIL_COND_V(tls_ctx.is_null(), 0);
 	// Setup DTLS session cookie for this client
 	uint8_t client_id[18];
 	IPAddress addr = base->get_packet_address();
@@ -92,6 +94,7 @@ int PacketPeerMbedDTLS::_set_cookie() {
 
 Error PacketPeerMbedDTLS::_do_handshake() {
 	int ret = 0;
+	ERR_FAIL_COND_V(tls_ctx.is_null(), FAILED);
 	while ((ret = mbedtls_ssl_handshake(tls_ctx->get_context())) != 0) {
 		if (ret != MBEDTLS_ERR_SSL_WANT_READ && ret != MBEDTLS_ERR_SSL_WANT_WRITE) {
 			if (ret != MBEDTLS_ERR_SSL_HELLO_VERIFY_REQUIRED) {
@@ -112,6 +115,7 @@ Error PacketPeerMbedDTLS::_do_handshake() {
 
 Error PacketPeerMbedDTLS::connect_to_peer(Ref<PacketPeerUDP> p_base, const String &p_hostname, Ref<TLSOptions> p_options) {
 	ERR_FAIL_COND_V(p_base.is_null() || !p_base->is_socket_connected(), ERR_INVALID_PARAMETER);
+	ERR_FAIL_COND_V(tls_ctx.is_null(), FAILED);
 
 	Error err = tls_ctx->init_client(MBEDTLS_SSL_TRANSPORT_DATAGRAM, p_hostname, p_options.is_valid() ? p_options : TLSOptions::client());
 	ERR_FAIL_COND_V(err != OK, err);
@@ -133,6 +137,7 @@ Error PacketPeerMbedDTLS::connect_to_peer(Ref<PacketPeerUDP> p_base, const Strin
 
 Error PacketPeerMbedDTLS::accept_peer(Ref<PacketPeerUDP> p_base, Ref<TLSOptions> p_options, Ref<CookieContextMbedTLS> p_cookies) {
 	ERR_FAIL_COND_V(p_base.is_null() || !p_base->is_socket_connected(), ERR_INVALID_PARAMETER);
+	ERR_FAIL_COND_V(tls_ctx.is_null(), FAILED);
 
 	Error err = tls_ctx->init_server(MBEDTLS_SSL_TRANSPORT_DATAGRAM, p_options, p_cookies);
 	ERR_FAIL_COND_V(err != OK, err);
@@ -163,6 +168,7 @@ Error PacketPeerMbedDTLS::accept_peer(Ref<PacketPeerUDP> p_base, Ref<TLSOptions>
 
 Error PacketPeerMbedDTLS::put_packet(const uint8_t *p_buffer, int p_bytes) {
 	ERR_FAIL_COND_V(status != STATUS_CONNECTED, ERR_UNCONFIGURED);
+	ERR_FAIL_COND_V(tls_ctx.is_null(), FAILED);
 
 	if (p_bytes == 0) {
 		return OK;
@@ -182,6 +188,7 @@ Error PacketPeerMbedDTLS::put_packet(const uint8_t *p_buffer, int p_bytes) {
 
 Error PacketPeerMbedDTLS::get_packet(const uint8_t **r_buffer, int &r_bytes) {
 	ERR_FAIL_COND_V(status != STATUS_CONNECTED, ERR_UNCONFIGURED);
+	ERR_FAIL_COND_V(tls_ctx.is_null(), FAILED);
 
 	r_bytes = 0;
 
@@ -214,6 +221,7 @@ void PacketPeerMbedDTLS::poll() {
 	}
 
 	ERR_FAIL_COND(base.is_null());
+	ERR_FAIL_COND(tls_ctx.is_null());
 
 	int ret = mbedtls_ssl_read(tls_ctx->get_context(), nullptr, 0);
 
@@ -231,6 +239,7 @@ void PacketPeerMbedDTLS::poll() {
 
 int PacketPeerMbedDTLS::get_available_packet_count() const {
 	ERR_FAIL_COND_V(status != STATUS_CONNECTED, 0);
+	ERR_FAIL_COND_V(tls_ctx.is_null(), 0);
 
 	return mbedtls_ssl_get_bytes_avail(&(tls_ctx->tls)) > 0 ? 1 : 0;
 }
@@ -255,6 +264,7 @@ void PacketPeerMbedDTLS::disconnect_from_peer() {
 	if (status == STATUS_CONNECTED) {
 		int ret = 0;
 		// Send SSL close notification, blocking, but ignore other errors.
+		ERR_FAIL_COND(tls_ctx.is_null());
 		do {
 			ret = mbedtls_ssl_close_notify(tls_ctx->get_context());
 		} while (ret == MBEDTLS_ERR_SSL_WANT_WRITE);

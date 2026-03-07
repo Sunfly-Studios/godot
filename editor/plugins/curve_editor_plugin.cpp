@@ -1042,6 +1042,7 @@ void EditorInspectorPluginCurve::parse_begin(Object *p_object) {
 CurveEditorPlugin::CurveEditorPlugin() {
 	Ref<EditorInspectorPluginCurve> plugin;
 	plugin.instantiate();
+	ERR_FAIL_COND(plugin.is_null());
 	add_inspector_plugin(plugin);
 
 	EditorInterface::get_singleton()->get_resource_previewer()->add_preview_generator(memnew(CurvePreviewGenerator));
@@ -1061,6 +1062,7 @@ Ref<Texture2D> CurvePreviewGenerator::generate(const Ref<Resource> &p_from, cons
 
 	Ref<Image> img_ref;
 	img_ref.instantiate();
+	ERR_FAIL_COND_V(img_ref.is_null(), Ref<Texture2D>());
 	Image &im = **img_ref;
 	im.initialize_data(p_size.x, p_size.y, false, Image::FORMAT_RGBA8);
 

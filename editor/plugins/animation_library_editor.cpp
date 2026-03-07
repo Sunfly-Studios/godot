@@ -109,6 +109,7 @@ void AnimationLibraryEditor::_add_library_confirm() {
 
 		Ref<Animation> anim;
 		anim.instantiate();
+		ERR_FAIL_COND(anim.is_null());
 
 		undo_redo->create_action(vformat(TTR("Add Animation to Library: %s"), anim_name));
 		undo_redo->add_do_method(al.ptr(), "add_animation", anim_name, anim);
@@ -123,6 +124,7 @@ void AnimationLibraryEditor::_add_library_confirm() {
 
 		Ref<AnimationLibrary> al;
 		al.instantiate();
+		ERR_FAIL_COND(al.is_null());
 
 		undo_redo->create_action(vformat(TTR("Add Animation Library: %s"), lib_name));
 		undo_redo->add_do_method(mixer, "add_animation_library", lib_name, al);
@@ -793,6 +795,7 @@ void AnimationLibraryEditor::_save_mixer_lib_folding(TreeItem *p_item) {
 
 	Ref<ConfigFile> config;
 	config.instantiate();
+	ERR_FAIL_COND(config.is_null());
 
 	String path = EditorPaths::get_singleton()->get_project_settings_dir().path_join("lib_folding.cfg");
 	Error err = config->load(path);
@@ -869,6 +872,7 @@ void AnimationLibraryEditor::_save_mixer_lib_folding(TreeItem *p_item) {
 Vector<uint64_t> AnimationLibraryEditor::_load_mixer_libs_folding() {
 	Ref<ConfigFile> config;
 	config.instantiate();
+	ERR_FAIL_COND_V(config.is_null(), Vector<uint64_t>());
 
 	String path = EditorPaths::get_singleton()->get_project_settings_dir().path_join("lib_folding.cfg");
 	Error err = config->load(path);

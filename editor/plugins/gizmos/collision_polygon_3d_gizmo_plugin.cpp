@@ -51,6 +51,7 @@ void CollisionPolygon3DGizmoPlugin::create_collision_material(const String &p_na
 
 		Ref<StandardMaterial3D> material;
 		material.instantiate();
+		ERR_FAIL_COND(material.is_null());
 
 		Color color = collision_color;
 		color.a *= instantiated ? 0.25 : 1.0;
@@ -113,6 +114,7 @@ void CollisionPolygon3DGizmoPlugin::redraw(EditorNode3DGizmo *p_gizmo) {
 	if (polygon->get_debug_fill_enabled()) {
 		Ref<ArrayMesh> array_mesh;
 		array_mesh.instantiate();
+		ERR_FAIL_COND(array_mesh.is_null());
 
 		Vector<Vector3> verts;
 		Vector<Color> colors;

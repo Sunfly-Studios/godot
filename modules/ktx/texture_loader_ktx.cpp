@@ -536,6 +536,7 @@ Ref<Resource> ResourceFormatKTX::load(const String &p_path, const String &p_orig
 static Ref<Image> _ktx_mem_loader_func(const uint8_t *p_ktx, int p_size) {
 	Ref<FileAccessMemory> f;
 	f.instantiate();
+	ERR_FAIL_COND_V(f.is_null(), Ref<Image>());
 	f->open_custom(p_ktx, p_size);
 	Error err;
 	Ref<Image> img = load_from_file_access(f, &err);

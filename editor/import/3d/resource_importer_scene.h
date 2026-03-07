@@ -345,6 +345,7 @@ Vector<Ref<Shape3D>> ResourceImporterScene::get_collision_shapes(const Ref<Impor
 	if (generate_shape_type == SHAPE_TYPE_DECOMPOSE_CONVEX) {
 		Ref<MeshConvexDecompositionSettings> decomposition_settings = Ref<MeshConvexDecompositionSettings>();
 		decomposition_settings.instantiate();
+		ERR_FAIL_COND_V(decomposition_settings.is_null(), Vector<Ref<Shape3D>>());
 		bool advanced = false;
 		if (p_options.has(SNAME("decomposition/advanced"))) {
 			advanced = p_options[SNAME("decomposition/advanced")];
@@ -431,6 +432,7 @@ Vector<Ref<Shape3D>> ResourceImporterScene::get_collision_shapes(const Ref<Impor
 	} else if (generate_shape_type == SHAPE_TYPE_BOX) {
 		Ref<BoxShape3D> box;
 		box.instantiate();
+		ERR_FAIL_COND_V(box.is_null(), Vector<Ref<Shape3D>>());
 		if (p_options.has(SNAME("primitive/size"))) {
 			box->set_size(p_options[SNAME("primitive/size")].operator Vector3() * p_applied_root_scale);
 		} else {
@@ -444,6 +446,7 @@ Vector<Ref<Shape3D>> ResourceImporterScene::get_collision_shapes(const Ref<Impor
 	} else if (generate_shape_type == SHAPE_TYPE_SPHERE) {
 		Ref<SphereShape3D> sphere;
 		sphere.instantiate();
+		ERR_FAIL_COND_V(sphere.is_null(), Vector<Ref<Shape3D>>());
 		if (p_options.has(SNAME("primitive/radius"))) {
 			sphere->set_radius(p_options[SNAME("primitive/radius")].operator float() * p_applied_root_scale);
 		} else {
@@ -456,6 +459,7 @@ Vector<Ref<Shape3D>> ResourceImporterScene::get_collision_shapes(const Ref<Impor
 	} else if (generate_shape_type == SHAPE_TYPE_CYLINDER) {
 		Ref<CylinderShape3D> cylinder;
 		cylinder.instantiate();
+		ERR_FAIL_COND_V(cylinder.is_null(), Vector<Ref<Shape3D>>());
 		if (p_options.has(SNAME("primitive/height"))) {
 			cylinder->set_height(p_options[SNAME("primitive/height")].operator float() * p_applied_root_scale);
 		} else {
@@ -473,6 +477,7 @@ Vector<Ref<Shape3D>> ResourceImporterScene::get_collision_shapes(const Ref<Impor
 	} else if (generate_shape_type == SHAPE_TYPE_CAPSULE) {
 		Ref<CapsuleShape3D> capsule;
 		capsule.instantiate();
+		ERR_FAIL_COND_V(capsule.is_null(), Vector<Ref<Shape3D>>());
 		if (p_options.has(SNAME("primitive/height"))) {
 			capsule->set_height(p_options[SNAME("primitive/height")].operator float() * p_applied_root_scale);
 		} else {

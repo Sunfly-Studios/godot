@@ -115,6 +115,7 @@ void XRPositionalTracker::set_pose(const StringName &p_action_name, const Transf
 		new_pose = poses[p_action_name];
 	} else {
 		new_pose.instantiate();
+		ERR_FAIL_COND(new_pose.is_null());
 		poses[p_action_name] = new_pose;
 	}
 

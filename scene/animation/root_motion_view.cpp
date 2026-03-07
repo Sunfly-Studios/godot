@@ -198,6 +198,7 @@ RootMotionView::RootMotionView() {
 		set_process_internal(true);
 	}
 	immediate.instantiate();
+	ERR_FAIL_COND(immediate.is_null());
 	set_base(immediate->get_rid());
 }
 

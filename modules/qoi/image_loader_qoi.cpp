@@ -90,11 +90,13 @@ void ImageLoaderQOI::get_recognized_extensions(List<String> *p_extensions) const
 static Ref<Image> _qoi_mem_loader_func(const uint8_t *p_bmp, int p_size) {
 	Ref<FileAccessMemory> memfile;
 	memfile.instantiate();
+	ERR_FAIL_COND_V(memfile.is_null(), Ref<Image>());
 	Error open_memfile_error = memfile->open_custom(p_bmp, p_size);
 	ERR_FAIL_COND_V_MSG(open_memfile_error, Ref<Image>(), "Could not create memfile for QOI image buffer.");
 
 	Ref<Image> img;
 	img.instantiate();
+	ERR_FAIL_COND_V(img.is_null(), Ref<Image>());
 	Error load_error = ImageLoaderQOI().load_image(img, memfile, false, 1.0f);
 	ERR_FAIL_COND_V_MSG(load_error, Ref<Image>(), "Failed to load QOI image.");
 	return img;

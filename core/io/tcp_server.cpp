@@ -113,6 +113,7 @@ Ref<StreamPeerTCP> TCPServer::take_connection() {
 	}
 
 	conn.instantiate();
+	ERR_FAIL_COND_V(conn.is_null(), Ref<StreamPeerTCP>());
 	conn->accept_socket(ns, ip, port);
 	return conn;
 }

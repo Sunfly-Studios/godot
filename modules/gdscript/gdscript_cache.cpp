@@ -229,6 +229,7 @@ Ref<GDScriptParserRef> GDScriptCache::get_parser(const String &p_path, GDScriptP
 			return ref;
 		}
 		ref.instantiate();
+		ERR_FAIL_COND_V(ref.is_null(), Ref<GDScriptParserRef>());
 		ref->path = p_path;
 		singleton->parser_map[p_path] = ref.ptr();
 	}
@@ -312,6 +313,7 @@ Ref<GDScript> GDScriptCache::get_shallow_script(const String &p_path, Error &r_e
 
 	Ref<GDScript> script;
 	script.instantiate();
+	ERR_FAIL_COND_V(script.is_null(), Ref<GDScript>());
 	script->set_path(p_path, true);
 	if (remapped_path.get_extension().to_lower() == "gdc") {
 		Vector<uint8_t> buffer = get_binary_tokens(remapped_path);

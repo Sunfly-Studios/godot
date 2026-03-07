@@ -268,6 +268,7 @@ Error GDExtensionLibraryLoader::parse_gdextension_file(const String &p_path) {
 
 	Ref<ConfigFile> config;
 	config.instantiate();
+	ERR_FAIL_COND_V(config.is_null(), ERR_OUT_OF_MEMORY);
 
 	Error err = config->load(p_path);
 

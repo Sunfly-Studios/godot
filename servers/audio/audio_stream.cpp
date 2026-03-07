@@ -332,6 +332,7 @@ Ref<AudioSample> AudioStream::generate_sample() const {
 	ERR_FAIL_COND_V_MSG(!can_be_sampled(), nullptr, "Cannot generate a sample for a stream that cannot be sampled.");
 	Ref<AudioSample> sample;
 	sample.instantiate();
+	ERR_FAIL_COND_V(sample.is_null(), Ref<AudioSample>());
 	sample->stream = this;
 	return sample;
 }
@@ -362,6 +363,7 @@ void AudioStream::_bind_methods() {
 Ref<AudioStreamPlayback> AudioStreamMicrophone::instantiate_playback() {
 	Ref<AudioStreamPlaybackMicrophone> playback;
 	playback.instantiate();
+	ERR_FAIL_COND_V(playback.is_null(), Ref<AudioStreamPlayback>());
 
 	playbacks.insert(playback.ptr());
 
@@ -598,6 +600,7 @@ AudioStreamRandomizer::PlaybackMode AudioStreamRandomizer::get_playback_mode() c
 Ref<AudioStreamPlayback> AudioStreamRandomizer::instance_playback_random() {
 	Ref<AudioStreamPlaybackRandomizer> playback;
 	playback.instantiate();
+	ERR_FAIL_COND_V(playback.is_null(), Ref<AudioStreamPlayback>());
 	playbacks.insert(playback.ptr());
 	playback->randomizer = Ref<AudioStreamRandomizer>((AudioStreamRandomizer *)this);
 
@@ -652,6 +655,7 @@ Ref<AudioStreamPlayback> AudioStreamRandomizer::instance_playback_no_repeats() {
 	}
 
 	playback.instantiate();
+	ERR_FAIL_COND_V(playback.is_null(), Ref<AudioStreamPlayback>());
 	playbacks.insert(playback.ptr());
 	playback->randomizer = Ref<AudioStreamRandomizer>((AudioStreamRandomizer *)this);
 	double chosen_cumulative_weight = Math::random(0.0, total_weight);
@@ -675,6 +679,7 @@ Ref<AudioStreamPlayback> AudioStreamRandomizer::instance_playback_no_repeats() {
 Ref<AudioStreamPlayback> AudioStreamRandomizer::instance_playback_sequential() {
 	Ref<AudioStreamPlaybackRandomizer> playback;
 	playback.instantiate();
+	ERR_FAIL_COND_V(playback.is_null(), Ref<AudioStreamPlayback>());
 	playbacks.insert(playback.ptr());
 	playback->randomizer = Ref<AudioStreamRandomizer>((AudioStreamRandomizer *)this);
 

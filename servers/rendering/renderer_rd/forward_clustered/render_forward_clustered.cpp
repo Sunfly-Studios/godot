@@ -279,10 +279,12 @@ uint32_t RenderForwardClustered::RenderBufferDataForwardClustered::get_voxelgi_u
 void RenderForwardClustered::setup_render_buffer_data(Ref<RenderSceneBuffersRD> p_render_buffers) {
 	Ref<RenderBufferDataForwardClustered> data;
 	data.instantiate();
+	ERR_FAIL_COND(data.is_null());
 	p_render_buffers->set_custom_data(RB_SCOPE_FORWARD_CLUSTERED, data);
 
 	Ref<RendererRD::GI::RenderBuffersGI> rbgi;
 	rbgi.instantiate();
+	ERR_FAIL_COND(rbgi.is_null());
 	p_render_buffers->set_custom_data(RB_SCOPE_GI, rbgi);
 }
 
@@ -1321,6 +1323,7 @@ void RenderForwardClustered::_update_volumetric_fog(Ref<RenderSceneBuffersRD> p_
 		Ref<RendererRD::Fog::VolumetricFog> fog;
 
 		fog.instantiate();
+		ERR_FAIL_COND(fog.is_null());
 		fog->init(Vector3i(target_width, target_height, get_volumetric_fog_depth()), sky.sky_shader.default_shader_rd);
 
 		p_render_buffers->set_custom_data(RB_SCOPE_FOG, fog);

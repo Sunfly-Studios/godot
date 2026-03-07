@@ -91,6 +91,7 @@ Error ResourceImporterImageFont::import(ResourceUID::ID p_source_id, const Strin
 
 	Ref<Image> img;
 	img.instantiate();
+	ERR_FAIL_COND_V(img.is_null(), ERR_OUT_OF_MEMORY);
 	Error err = ImageLoader::load_image(p_source_file, img);
 	ERR_FAIL_COND_V_MSG(err != OK, ERR_FILE_CANT_READ, vformat("Can't load font texture: \"%s\".", p_source_file));
 
@@ -107,6 +108,7 @@ Error ResourceImporterImageFont::import(ResourceUID::ID p_source_id, const Strin
 
 	Ref<FontFile> font;
 	font.instantiate();
+	ERR_FAIL_COND_V(font.is_null(), ERR_OUT_OF_MEMORY);
 	font->set_antialiasing(TextServer::FONT_ANTIALIASING_NONE);
 	font->set_generate_mipmaps(false);
 	font->set_multichannel_signed_distance_field(false);

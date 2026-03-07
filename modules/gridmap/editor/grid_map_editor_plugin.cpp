@@ -1295,6 +1295,7 @@ void GridMapEditor::_notification(int p_what) {
 				// Simulate mouse released event to stop drawing when editor focus exists.
 				Ref<InputEventMouseButton> release;
 				release.instantiate();
+				ERR_FAIL_COND(release.is_null());
 				release->set_button_index(MouseButton::LEFT);
 				forward_spatial_input_event(nullptr, release);
 			}
@@ -1428,6 +1429,7 @@ GridMapEditor::GridMapEditor() {
 	HBoxContainer *mode_buttons = memnew(HBoxContainer);
 	toolbar->add_child(mode_buttons);
 	mode_buttons_group.instantiate();
+	ERR_FAIL_COND(mode_buttons_group.is_null());
 
 	transform_mode_button = memnew(Button);
 	transform_mode_button->set_theme_type_variation(SceneStringName(FlatButton));
@@ -1703,12 +1705,14 @@ GridMapEditor::GridMapEditor() {
 		pick_color = Color(1, 0.7, 0); // orange/yellow
 
 		cursor_inner_mat.instantiate();
+		ERR_FAIL_COND(cursor_inner_mat.is_null());
 		cursor_inner_mat->set_albedo(Color(default_color, 0.2));
 		cursor_inner_mat->set_shading_mode(StandardMaterial3D::SHADING_MODE_UNSHADED);
 		cursor_inner_mat->set_flag(StandardMaterial3D::FLAG_DISABLE_FOG, true);
 		cursor_inner_mat->set_transparency(StandardMaterial3D::TRANSPARENCY_ALPHA);
 
 		cursor_outer_mat.instantiate();
+		ERR_FAIL_COND(cursor_outer_mat.is_null());
 		cursor_outer_mat->set_albedo(Color(default_color, 0.8));
 		cursor_outer_mat->set_on_top_of_alpha();
 		cursor_outer_mat->set_shading_mode(StandardMaterial3D::SHADING_MODE_UNSHADED);
@@ -1716,12 +1720,14 @@ GridMapEditor::GridMapEditor() {
 		cursor_outer_mat->set_flag(StandardMaterial3D::FLAG_DISABLE_FOG, true);
 
 		inner_mat.instantiate();
+		ERR_FAIL_COND(inner_mat.is_null());
 		inner_mat->set_albedo(Color(default_color, 0.2));
 		inner_mat->set_shading_mode(StandardMaterial3D::SHADING_MODE_UNSHADED);
 		inner_mat->set_flag(StandardMaterial3D::FLAG_DISABLE_FOG, true);
 		inner_mat->set_transparency(StandardMaterial3D::TRANSPARENCY_ALPHA);
 
 		outer_mat.instantiate();
+		ERR_FAIL_COND(outer_mat.is_null());
 		outer_mat->set_albedo(Color(default_color, 0.8));
 		outer_mat->set_on_top_of_alpha();
 		outer_mat->set_shading_mode(StandardMaterial3D::SHADING_MODE_UNSHADED);
@@ -1729,6 +1735,7 @@ GridMapEditor::GridMapEditor() {
 		outer_mat->set_flag(StandardMaterial3D::FLAG_DISABLE_FOG, true);
 
 		selection_floor_mat.instantiate();
+		ERR_FAIL_COND(selection_floor_mat.is_null());
 		selection_floor_mat->set_albedo(Color(0.80, 0.80, 1.0, 1));
 		selection_floor_mat->set_on_top_of_alpha();
 		selection_floor_mat->set_shading_mode(StandardMaterial3D::SHADING_MODE_UNSHADED);
@@ -1769,6 +1776,7 @@ GridMapEditor::GridMapEditor() {
 	_set_selection(false);
 
 	indicator_mat.instantiate();
+	ERR_FAIL_COND(indicator_mat.is_null());
 	indicator_mat->set_shading_mode(StandardMaterial3D::SHADING_MODE_UNSHADED);
 	indicator_mat->set_transparency(StandardMaterial3D::TRANSPARENCY_ALPHA);
 	indicator_mat->set_flag(StandardMaterial3D::FLAG_SRGB_VERTEX_COLOR, true);

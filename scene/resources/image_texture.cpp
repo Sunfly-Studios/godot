@@ -42,6 +42,7 @@ void ImageTexture::reload_from_file() {
 
 	Ref<Image> img;
 	img.instantiate();
+	ERR_FAIL_COND(img.is_null());
 
 	if (ImageLoader::load_image(path, img) == OK) {
 		set_image(img);
@@ -78,6 +79,7 @@ Ref<ImageTexture> ImageTexture::create_from_image(const Ref<Image> &p_image) {
 
 	Ref<ImageTexture> image_texture;
 	image_texture.instantiate();
+	ERR_FAIL_COND_V(image_texture.is_null(), Ref<ImageTexture>());
 	image_texture->set_image(p_image);
 	return image_texture;
 }
@@ -183,6 +185,7 @@ bool ImageTexture::is_pixel_opaque(int p_x, int p_y) const {
 				img = decom;
 			}
 			alpha_cache.instantiate();
+			ERR_FAIL_COND_V(alpha_cache.is_null(), false);
 			alpha_cache->create_from_image_alpha(img);
 		}
 	}
@@ -533,6 +536,7 @@ void Texture2DArray::_bind_methods() {
 Ref<Resource> Texture2DArray::create_placeholder() const {
 	Ref<PlaceholderTexture2DArray> placeholder;
 	placeholder.instantiate();
+	ERR_FAIL_COND_V(placeholder.is_null(), Ref<Resource>());
 	placeholder->set_size(Size2i(get_width(), get_height()));
 	placeholder->set_layers(get_layers());
 	return placeholder;
@@ -545,6 +549,7 @@ void Cubemap::_bind_methods() {
 Ref<Resource> Cubemap::create_placeholder() const {
 	Ref<PlaceholderCubemap> placeholder;
 	placeholder.instantiate();
+	ERR_FAIL_COND_V(placeholder.is_null(), Ref<Resource>());
 	placeholder->set_size(Size2i(get_width(), get_height()));
 	placeholder->set_layers(get_layers());
 	return placeholder;
@@ -557,6 +562,7 @@ void CubemapArray::_bind_methods() {
 Ref<Resource> CubemapArray::create_placeholder() const {
 	Ref<PlaceholderCubemapArray> placeholder;
 	placeholder.instantiate();
+	ERR_FAIL_COND_V(placeholder.is_null(), Ref<Resource>());
 	placeholder->set_size(Size2i(get_width(), get_height()));
 	placeholder->set_layers(get_layers());
 	return placeholder;

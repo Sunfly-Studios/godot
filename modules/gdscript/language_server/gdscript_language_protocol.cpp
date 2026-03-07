@@ -124,6 +124,7 @@ Error GDScriptLanguageProtocol::LSPeer::send_data() {
 }
 
 Error GDScriptLanguageProtocol::on_client_connected() {
+	ERR_FAIL_COND_V(server.is_null(), ERR_OUT_OF_MEMORY);
 	Ref<StreamPeerTCP> tcp_peer = server->take_connection();
 	ERR_FAIL_COND_V_MSG(clients.size() >= LSP_MAX_CLIENTS, FAILED, "Max client limits reached");
 	Ref<LSPeer> peer = memnew(LSPeer);
@@ -176,6 +177,8 @@ Dictionary GDScriptLanguageProtocol::initialize(const Dictionary &p_params) {
 	String root_uri = p_params["rootUri"];
 	String root = p_params["rootPath"];
 	bool is_same_workspace;
+	ERR_FAIL_COND_V(workspace.is_null(), Dictionary());
+	ERR_FAIL_COND_V(text_document.is_null(), Dictionary());
 #ifndef WINDOWS_ENABLED
 	is_same_workspace = root.to_lower() == workspace->root.to_lower();
 #else
@@ -232,6 +235,7 @@ void GDScriptLanguageProtocol::initialized(const Variant &p_params) {
 void GDScriptLanguageProtocol::poll(int p_limit_usec) {
 	uint64_t target_ticks = OS::get_singleton()->get_ticks_usec() + p_limit_usec;
 
+	ERR_FAIL_COND(server.is_null());
 	if (server->is_connection_available()) {
 		on_client_connected();
 	}
@@ -273,10 +277,12 @@ void GDScriptLanguageProtocol::poll(int p_limit_usec) {
 }
 
 Error GDScriptLanguageProtocol::start(int p_port, const IPAddress &p_bind_ip) {
+	ERR_FAIL_COND_V(server.is_null(), ERR_OUT_OF_MEMORY);
 	return server->listen(p_port, p_bind_ip);
 }
 
 void GDScriptLanguageProtocol::stop() {
+	ERR_FAIL_COND(server.is_null());
 	for (const KeyValue<int, Ref<LSPeer>> &E : clients) {
 		Ref<LSPeer> peer = clients.get(E.key);
 		peer->connection->disconnect_from_host();
@@ -341,6 +347,8 @@ GDScriptLanguageProtocol::GDScriptLanguageProtocol() {
 	singleton = this;
 	workspace.instantiate();
 	text_document.instantiate();
+	ERR_FAIL_COND(text_document.is_null());
+	ERR_FAIL_COND(workspace.is_null());
 	set_scope("textDocument", text_document.ptr());
 	set_scope("completionItem", text_document.ptr());
 	set_scope("workspace", workspace.ptr());

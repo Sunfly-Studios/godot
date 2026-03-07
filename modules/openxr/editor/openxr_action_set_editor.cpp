@@ -149,6 +149,7 @@ void OpenXRActionSetEditor::_on_add_action() {
 	Ref<OpenXRAction> new_action;
 
 	new_action.instantiate();
+	ERR_FAIL_COND(new_action.is_null());
 	new_action->set_name("New");
 	new_action->set_localized_name("New");
 	action_set->add_action(new_action);

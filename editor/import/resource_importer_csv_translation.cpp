@@ -112,6 +112,7 @@ Error ResourceImporterCSVTranslation::import(ResourceUID::ID p_source_id, const 
 		locales.push_back(locale);
 		Ref<Translation> translation;
 		translation.instantiate();
+		ERR_FAIL_COND_V(translation.is_null(), ERR_OUT_OF_MEMORY);
 		translation->set_locale(locale);
 		translations.push_back(translation);
 	}

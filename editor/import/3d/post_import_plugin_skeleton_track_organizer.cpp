@@ -74,6 +74,7 @@ void PostImportPluginSkeletonTrackOrganizer::internal_process(InternalImportCate
 
 			Ref<AnimationLibrary> unmapped_al;
 			unmapped_al.instantiate();
+			ERR_FAIL_COND(unmapped_al.is_null());
 
 			for (const StringName &name : anims) {
 				Ref<Animation> anim = ap->get_animation(name);

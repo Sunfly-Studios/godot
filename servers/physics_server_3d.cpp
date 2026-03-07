@@ -234,6 +234,7 @@ void PhysicsRayQueryParameters3D::_bind_methods() {
 Ref<PhysicsRayQueryParameters3D> PhysicsRayQueryParameters3D::create(Vector3 p_from, Vector3 p_to, uint32_t p_mask, const TypedArray<RID> &p_exclude) {
 	Ref<PhysicsRayQueryParameters3D> params;
 	params.instantiate();
+	ERR_FAIL_COND_V(params.is_null(), Ref<PhysicsRayQueryParameters3D>());
 	params->set_from(p_from);
 	params->set_to(p_to);
 	params->set_collision_mask(p_mask);

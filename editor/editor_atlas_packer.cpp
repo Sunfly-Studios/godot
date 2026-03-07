@@ -60,6 +60,7 @@ void EditorAtlasPacker::chart_pack(Vector<Chart> &charts, int &r_width, int &r_h
 
 		Ref<BitMap> src_bitmap;
 		src_bitmap.instantiate();
+		ERR_FAIL_COND(src_bitmap.is_null());
 		src_bitmap->create((aabb.size + Vector2(divide_by - 1, divide_by - 1)) / divide_by);
 
 		int w = src_bitmap->get_size().width;

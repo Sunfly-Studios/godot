@@ -675,10 +675,12 @@ TextEditor::TextEditor() {
 
 	Ref<EditorPlainTextSyntaxHighlighter> plain_highlighter;
 	plain_highlighter.instantiate();
+	ERR_FAIL_COND(plain_highlighter.is_null());
 	add_syntax_highlighter(plain_highlighter);
 
 	Ref<EditorStandardSyntaxHighlighter> highlighter;
 	highlighter.instantiate();
+	ERR_FAIL_COND(highlighter.is_null());
 	add_syntax_highlighter(highlighter);
 	set_syntax_highlighter(plain_highlighter);
 

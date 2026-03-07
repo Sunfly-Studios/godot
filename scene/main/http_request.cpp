@@ -323,11 +323,11 @@ bool HTTPRequest::_handle_response(bool *ret_value) {
 	if (accept_gzip) {
 		content_encoding = get_header_value(response_headers, "Content-Encoding").to_lower();
 	}
+	decompressor.instantiate();
+	ERR_FAIL_COND_V(decompressor.is_null(), false);
 	if (content_encoding == "gzip") {
-		decompressor.instantiate();
 		decompressor->start_decompression(false, get_download_chunk_size());
 	} else if (content_encoding == "deflate") {
-		decompressor.instantiate();
 		decompressor->start_decompression(true, get_download_chunk_size());
 	}
 

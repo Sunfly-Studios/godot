@@ -306,6 +306,7 @@ void InputEventConfigurationDialog::_update_input_list() {
 		for (int i = 0; i < 9; i++) {
 			Ref<InputEventMouseButton> mb;
 			mb.instantiate();
+			ERR_FAIL_COND(mb.is_null());
 			mb->set_button_index(mouse_buttons[i]);
 			String desc = EventListenerLineEdit::get_event_text(mb, false);
 
@@ -329,6 +330,7 @@ void InputEventConfigurationDialog::_update_input_list() {
 		for (int i = 0; i < (int)JoyButton::MAX; i++) {
 			Ref<InputEventJoypadButton> joyb;
 			joyb.instantiate();
+			ERR_FAIL_COND(joyb.is_null());
 			joyb->set_button_index((JoyButton)i);
 			String desc = EventListenerLineEdit::get_event_text(joyb, false);
 
@@ -354,6 +356,7 @@ void InputEventConfigurationDialog::_update_input_list() {
 			int direction = (i & 1) ? 1 : -1;
 			Ref<InputEventJoypadMotion> joym;
 			joym.instantiate();
+			ERR_FAIL_COND(joym.is_null());
 			joym->set_axis((JoyAxis)axis);
 			joym->set_axis_value(direction);
 			String desc = EventListenerLineEdit::get_event_text(joym, false);
@@ -471,6 +474,7 @@ void InputEventConfigurationDialog::_input_list_item_selected() {
 			Key keycode = (Key)(int)selected->get_meta("__keycode");
 			Ref<InputEventKey> k;
 			k.instantiate();
+			ERR_FAIL_COND(k.is_null());
 
 			k->set_physical_keycode(keycode);
 			k->set_keycode(keycode);
@@ -508,6 +512,7 @@ void InputEventConfigurationDialog::_input_list_item_selected() {
 			MouseButton idx = (MouseButton)(int)selected->get_meta("__index");
 			Ref<InputEventMouseButton> mb;
 			mb.instantiate();
+			ERR_FAIL_COND(mb.is_null());
 			mb->set_button_index(idx);
 			// Maintain modifier state from checkboxes
 			mb->set_alt_pressed(mod_checkboxes[MOD_ALT]->is_pressed());
@@ -539,6 +544,7 @@ void InputEventConfigurationDialog::_input_list_item_selected() {
 
 			Ref<InputEventJoypadMotion> jm;
 			jm.instantiate();
+			ERR_FAIL_COND(jm.is_null());
 			jm->set_axis(axis);
 			jm->set_axis_value(value);
 

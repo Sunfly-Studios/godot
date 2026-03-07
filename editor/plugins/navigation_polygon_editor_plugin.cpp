@@ -40,6 +40,7 @@ Ref<NavigationPolygon> NavigationPolygonEditor::_ensure_navpoly() const {
 	Ref<NavigationPolygon> navpoly = node->get_navigation_polygon();
 	if (navpoly.is_null()) {
 		navpoly.instantiate();
+		ERR_FAIL_COND_V(navpoly.is_null(), Ref<NavigationPolygon>());
 		node->set_navigation_polygon(navpoly);
 	}
 	return navpoly;

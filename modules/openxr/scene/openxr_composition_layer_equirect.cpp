@@ -68,6 +68,7 @@ void OpenXRCompositionLayerEquirect::_bind_methods() {
 Ref<Mesh> OpenXRCompositionLayerEquirect::_create_fallback_mesh() {
 	Ref<ArrayMesh> mesh;
 	mesh.instantiate();
+	ERR_FAIL_COND_V(mesh.is_null(), Ref<Mesh>());
 
 	Array arrays;
 	arrays.resize(ArrayMesh::ARRAY_MAX);

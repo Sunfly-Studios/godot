@@ -591,6 +591,7 @@ void ProjectList::_load_project_icon(int p_index) {
 	if (!item.icon.is_empty()) {
 		Ref<Image> img;
 		img.instantiate();
+		ERR_FAIL_COND(img.is_null());
 		Error err = img->load(item.icon.replace_first("res://", item.path + "/"));
 		if (err == OK) {
 			img->resize(default_icon->get_width(), default_icon->get_height(), Image::INTERPOLATE_LANCZOS);

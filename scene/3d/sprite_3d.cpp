@@ -482,6 +482,7 @@ Ref<TriangleMesh> SpriteBase3D::generate_triangle_mesh() const {
 	}
 
 	triangle_mesh.instantiate();
+	ERR_FAIL_COND_V(triangle_mesh.is_null(), Ref<TriangleMesh>());
 	triangle_mesh->create(faces);
 
 	return triangle_mesh;

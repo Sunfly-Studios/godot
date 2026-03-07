@@ -85,6 +85,7 @@ bool EditorSettings::_set_only(const StringName &p_name, const Variant &p_value)
 
 			Ref<Shortcut> sc;
 			sc.instantiate();
+			ERR_FAIL_COND_V(sc.is_null(), false);
 			sc->set_events(shortcut_events);
 			add_shortcut(shortcut_name, sc);
 		}
@@ -1249,6 +1250,7 @@ fail:
 	}
 
 	singleton.instantiate();
+	ERR_FAIL_COND(singleton.is_null());
 	singleton->set_path(config_file_path, true);
 	singleton->save_changed_setting = true;
 	singleton->_load_defaults(extra_config);
@@ -1476,6 +1478,7 @@ void EditorSettings::set_project_metadata(const String &p_section, const String 
 
 	if (project_metadata.is_null()) {
 		project_metadata.instantiate();
+		ERR_FAIL_COND(project_metadata.is_null());
 
 		Error err = project_metadata->load(path);
 		if (err != OK && err != ERR_FILE_NOT_FOUND) {
@@ -1491,6 +1494,7 @@ void EditorSettings::set_project_metadata(const String &p_section, const String 
 Variant EditorSettings::get_project_metadata(const String &p_section, const String &p_key, const Variant &p_default) const {
 	if (project_metadata.is_null()) {
 		project_metadata.instantiate();
+		ERR_FAIL_COND_V(project_metadata.is_null(), p_default);
 
 		const String path = _get_project_metadata_path();
 		Error err = project_metadata->load(path);
@@ -1521,6 +1525,7 @@ void EditorSettings::set_favorite_properties(const HashMap<String, PackedStringA
 
 	Ref<ConfigFile> cf;
 	cf.instantiate();
+	ERR_FAIL_COND(cf.is_null());
 	for (const KeyValue<String, PackedStringArray> &kv : p_favorite_properties) {
 		cf->set_value(kv.key, "properties", kv.value);
 	}
@@ -1584,6 +1589,7 @@ void EditorSettings::load_favorites_and_recent_dirs() {
 
 	Ref<ConfigFile> cf;
 	cf.instantiate();
+	ERR_FAIL_COND(cf.is_null());
 	if (cf->load(favorite_properties_file) == OK) {
 		List<String> secs;
 		cf->get_sections(&secs);
@@ -1831,6 +1837,7 @@ Ref<Shortcut> EditorSettings::get_shortcut(const String &p_name) const {
 	HashMap<String, List<Ref<InputEvent>>>::ConstIterator builtin_override = builtin_action_overrides.find(p_name);
 	if (builtin_override) {
 		sc.instantiate();
+		ERR_FAIL_COND_V(sc.is_null(), Ref<Shortcut>());
 		sc->set_events_list(&builtin_override->value);
 		sc->set_name(InputMap::get_singleton()->get_builtin_display_name(p_name));
 	}
@@ -1840,6 +1847,7 @@ Ref<Shortcut> EditorSettings::get_shortcut(const String &p_name) const {
 		HashMap<String, List<Ref<InputEvent>>>::ConstIterator builtin_default = InputMap::get_singleton()->get_builtins_with_feature_overrides_applied().find(p_name);
 		if (builtin_default) {
 			sc.instantiate();
+			ERR_FAIL_COND_V(sc.is_null(), Ref<Shortcut>());
 			sc->set_events_list(&builtin_default->value);
 			sc->set_name(InputMap::get_singleton()->get_builtin_display_name(p_name));
 		}
@@ -1955,6 +1963,7 @@ Ref<Shortcut> ED_SHORTCUT_ARRAY(const String &p_path, const String &p_name, cons
 	if (!EditorSettings::get_singleton()) {
 		Ref<Shortcut> sc;
 		sc.instantiate();
+		ERR_FAIL_COND_V(sc.is_null(), Ref<Shortcut>());
 		sc->set_name(p_name);
 		sc->set_events(events);
 		sc->set_meta("original", events.duplicate(true));
@@ -1969,6 +1978,7 @@ Ref<Shortcut> ED_SHORTCUT_ARRAY(const String &p_path, const String &p_name, cons
 	}
 
 	sc.instantiate();
+	ERR_FAIL_COND_V(sc.is_null(), Ref<Shortcut>());
 	sc->set_name(p_name);
 	sc->set_events(events);
 	sc->set_meta("original", events.duplicate(true)); //to compare against changes

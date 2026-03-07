@@ -570,6 +570,7 @@ void SceneImportSettingsDialog::_update_view_gizmos() {
 			// This collider_view doesn't have a mesh so we need to generate a new one.
 			Ref<ImporterMesh> mesh;
 			mesh.instantiate();
+			ERR_FAIL_COND(mesh.is_null());
 			// ResourceImporterScene::get_collision_shapes() expects ImporterMesh, not Mesh.
 			// TODO: Duplicate code with EditorSceneFormatImporterESCN::import_scene()
 			// Consider making a utility function to convert from Mesh to ImporterMesh.
@@ -611,6 +612,7 @@ void SceneImportSettingsDialog::_update_view_gizmos() {
 
 			Ref<ArrayMesh> collider_view_mesh;
 			collider_view_mesh.instantiate();
+			ERR_FAIL_COND(collider_view_mesh.is_null());
 			for (Ref<Shape3D> shape : shapes) {
 				Ref<ArrayMesh> debug_shape_mesh;
 				if (shape.is_valid()) {
@@ -753,6 +755,7 @@ void SceneImportSettingsDialog::open_settings(const String &p_path, const String
 
 		Ref<ConfigFile> config;
 		config.instantiate();
+		ERR_FAIL_COND(config.is_null());
 		Error err = config->load(p_path + ".import");
 		if (err == OK) {
 			List<String> keys;
@@ -1788,6 +1791,7 @@ SceneImportSettingsDialog::SceneImportSettingsDialog() {
 
 	if (GLOBAL_GET("rendering/lights_and_shadows/use_physical_light_units")) {
 		camera_attributes.instantiate();
+		ERR_FAIL_COND(camera_attributes.is_null());
 		camera->set_attributes(camera_attributes);
 	}
 
@@ -1796,6 +1800,7 @@ SceneImportSettingsDialog::SceneImportSettingsDialog() {
 	// This also helps the user orient themselves in the preview, since the bottom of the sky is black
 	// and the top of the sky is white.
 	procedural_sky_material.instantiate();
+	ERR_FAIL_COND(procedural_sky_material.is_null());
 	procedural_sky_material->set_sky_top_color(Color(1, 1, 1));
 	procedural_sky_material->set_sky_horizon_color(Color(0.5, 0.5, 0.5));
 	procedural_sky_material->set_ground_horizon_color(Color(0.5, 0.5, 0.5));
@@ -1805,8 +1810,10 @@ SceneImportSettingsDialog::SceneImportSettingsDialog() {
 	// Hide the sun from the sky.
 	procedural_sky_material->set_sun_angle_max(0.0);
 	sky.instantiate();
+	ERR_FAIL_COND(sky.is_null());
 	sky->set_material(procedural_sky_material);
 	environment.instantiate();
+	ERR_FAIL_COND(environment.is_null());
 	environment->set_background(Environment::BG_SKY);
 	environment->set_sky(sky);
 	// A custom FOV must be specified, as an orthogonal camera is used for the preview.
@@ -1826,12 +1833,14 @@ SceneImportSettingsDialog::SceneImportSettingsDialog() {
 	{
 		Ref<StandardMaterial3D> selection_mat;
 		selection_mat.instantiate();
+		ERR_FAIL_COND(selection_mat.is_null());
 		selection_mat->set_shading_mode(StandardMaterial3D::SHADING_MODE_UNSHADED);
 		selection_mat->set_flag(StandardMaterial3D::FLAG_DISABLE_FOG, true);
 		selection_mat->set_albedo(Color(1, 0.8, 1.0));
 
 		Ref<SurfaceTool> st;
 		st.instantiate();
+		ERR_FAIL_COND(st.is_null());
 		st->begin(Mesh::PRIMITIVE_LINES);
 
 		AABB base_aabb;
@@ -1848,6 +1857,7 @@ SceneImportSettingsDialog::SceneImportSettingsDialog() {
 		}
 
 		selection_mesh.instantiate();
+		ERR_FAIL_COND(selection_mesh.is_null());
 		st->commit(selection_mesh);
 		selection_mesh->surface_set_material(0, selection_mat);
 
@@ -1864,10 +1874,12 @@ SceneImportSettingsDialog::SceneImportSettingsDialog() {
 		mesh_preview->hide();
 
 		material_preview.instantiate();
+		ERR_FAIL_COND(material_preview.is_null());
 	}
 
 	{
 		collider_mat.instantiate();
+		ERR_FAIL_COND(collider_mat.is_null());
 		collider_mat->set_shading_mode(StandardMaterial3D::SHADING_MODE_UNSHADED);
 		collider_mat->set_flag(StandardMaterial3D::FLAG_DISABLE_FOG, true);
 		collider_mat->set_albedo(Color(0.5, 0.5, 1.0));

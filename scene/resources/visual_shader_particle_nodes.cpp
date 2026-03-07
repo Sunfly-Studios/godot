@@ -460,6 +460,7 @@ Vector<VisualShader::DefaultTextureParam> VisualShaderNodeParticleMeshEmitter::g
 void VisualShaderNodeParticleMeshEmitter::_update_texture(const Vector<Vector2> &p_array, Ref<ImageTexture> &r_texture) {
 	Ref<Image> image;
 	image.instantiate();
+	ERR_FAIL_COND(image.is_null());
 
 	if (p_array.size() == 0) {
 		image->initialize_data(1, 1, false, Image::Format::FORMAT_RGBF);
@@ -481,6 +482,7 @@ void VisualShaderNodeParticleMeshEmitter::_update_texture(const Vector<Vector2> 
 void VisualShaderNodeParticleMeshEmitter::_update_texture(const Vector<Vector3> &p_array, Ref<ImageTexture> &r_texture) {
 	Ref<Image> image;
 	image.instantiate();
+	ERR_FAIL_COND(image.is_null());
 
 	if (p_array.size() == 0) {
 		image->initialize_data(1, 1, false, Image::Format::FORMAT_RGBF);
@@ -502,6 +504,7 @@ void VisualShaderNodeParticleMeshEmitter::_update_texture(const Vector<Vector3> 
 void VisualShaderNodeParticleMeshEmitter::_update_texture(const Vector<Color> &p_array, Ref<ImageTexture> &r_texture) {
 	Ref<Image> image;
 	image.instantiate();
+	ERR_FAIL_COND(image.is_null());
 
 	if (p_array.size() == 0) {
 		image->initialize_data(1, 1, false, Image::Format::FORMAT_RGBA8);
@@ -727,10 +730,15 @@ VisualShaderNodeParticleMeshEmitter::VisualShaderNodeParticleMeshEmitter() {
 	connect_changed(callable_mp(this, &VisualShaderNodeParticleMeshEmitter::_update_textures));
 
 	position_texture.instantiate();
+	ERR_FAIL_COND(position_texture.is_null());
 	normal_texture.instantiate();
+	ERR_FAIL_COND(normal_texture.is_null());
 	color_texture.instantiate();
+	ERR_FAIL_COND(color_texture.is_null());
 	uv_texture.instantiate();
+	ERR_FAIL_COND(uv_texture.is_null());
 	uv2_texture.instantiate();
+	ERR_FAIL_COND(uv2_texture.is_null());
 
 	simple_decl = false;
 }

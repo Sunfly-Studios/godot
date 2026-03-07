@@ -318,6 +318,7 @@ Ref<Resource> ResourceFormatLoaderShader::load(const String &p_path, const Strin
 
 	Ref<Shader> shader;
 	shader.instantiate();
+	ERR_FAIL_COND_V(shader.is_null(), Ref<Resource>());
 
 	shader->set_include_path(p_path);
 	shader->set_code(str);

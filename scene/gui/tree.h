@@ -119,6 +119,7 @@ private:
 
 		Cell() {
 			text_buf.instantiate();
+			ERR_FAIL_COND(text_buf.is_null());
 			text_buf->set_text_overrun_behavior(TextServer::OVERRUN_TRIM_ELLIPSIS);
 		}
 

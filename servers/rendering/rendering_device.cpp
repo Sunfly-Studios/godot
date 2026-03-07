@@ -8035,6 +8035,7 @@ RID RenderingDevice::_texture_create_shared_from_slice(const Ref<RDTextureView> 
 Ref<RDTextureFormat> RenderingDevice::_texture_get_format(RID p_rd_texture) {
 	Ref<RDTextureFormat> rtf;
 	rtf.instantiate();
+	ERR_FAIL_COND_V(rtf.is_null(), Ref<RDTextureFormat>());
 	rtf->base = texture_get_format(p_rd_texture);
 
 	return rtf;
@@ -8123,6 +8124,7 @@ Ref<RDShaderSPIRV> RenderingDevice::_shader_compile_spirv_from_source(const Ref<
 
 	Ref<RDShaderSPIRV> bytecode;
 	bytecode.instantiate();
+	ERR_FAIL_COND_V_MSG(bytecode.is_null(), Ref<RDShaderSPIRV>(), "Could not instantiate shader bytecode");
 	for (int i = 0; i < RD::SHADER_STAGE_MAX; i++) {
 		String error;
 

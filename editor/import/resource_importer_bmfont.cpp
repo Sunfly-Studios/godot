@@ -75,6 +75,7 @@ Error ResourceImporterBMFont::import(ResourceUID::ID p_source_id, const String &
 
 	Ref<FontFile> font;
 	font.instantiate();
+	ERR_FAIL_COND_V(font.is_null(), ERR_OUT_OF_MEMORY);
 
 	List<String> image_files;
 	Error err = font->_load_bitmap_font(p_source_file, &image_files);
@@ -84,6 +85,7 @@ Error ResourceImporterBMFont::import(ResourceUID::ID p_source_id, const String &
 	for (List<String>::Element *E = image_files.front(); E; E = E->next()) {
 		Ref<ConfigFile> config;
 		config.instantiate();
+		ERR_FAIL_COND_V(config.is_null(), ERR_OUT_OF_MEMORY);
 
 		err = config->load(E->get() + ".import");
 		if (err == OK) {

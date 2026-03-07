@@ -819,6 +819,7 @@ void CPUParticles2D::_particles_process(double p_delta) {
 			}
 
 			p.seed = seed + uint32_t(i) + i + cycle;
+			ERR_FAIL_COND(rng.is_null());
 			rng->set_seed(p.seed);
 
 			p.angle_rand = rng->randf();

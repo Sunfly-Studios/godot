@@ -73,6 +73,7 @@ void MeshInstance3DGizmoPlugin::redraw(EditorNode3DGizmo *p_gizmo) {
 		// For gizmo collision this is very much unnecessary since a PlaneMesh is always flat, 2 faces is enough.
 		Ref<PlaneMesh> simple_plane_mesh;
 		simple_plane_mesh.instantiate();
+		ERR_FAIL_COND(simple_plane_mesh.is_null());
 		simple_plane_mesh->set_orientation(plane_mesh->get_orientation());
 		simple_plane_mesh->set_size(plane_mesh->get_size());
 		simple_plane_mesh->set_center_offset(plane_mesh->get_center_offset());

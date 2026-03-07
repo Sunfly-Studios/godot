@@ -620,6 +620,7 @@ bool EditorExportPlatformWeb::poll_export() {
 	RemoteDebugState prev_remote_debug_state = remote_debug_state;
 	remote_debug_state = REMOTE_DEBUG_STATE_UNAVAILABLE;
 
+	ERR_FAIL_COND_V(server.is_null(), REMOTE_DEBUG_STATE_UNAVAILABLE);
 	if (preset.is_valid()) {
 		const bool debug = true;
 		// Throwaway variables to pass to `can_export`.
@@ -894,6 +895,7 @@ Error EditorExportPlatformWeb::_start_server(const String &p_bind_host, const ui
 	const String tls_cert = EDITOR_GET("export/web/tls_certificate");
 
 	// Restart server.
+	ERR_FAIL_COND_V(server.is_null(), FAILED);
 	server->stop();
 	Error err = server->listen(p_bind_port, bind_ip, p_use_tls, tls_key, tls_cert);
 	if (err != OK) {
@@ -903,6 +905,7 @@ Error EditorExportPlatformWeb::_start_server(const String &p_bind_host, const ui
 }
 
 Error EditorExportPlatformWeb::_stop_server() {
+	ERR_FAIL_COND_V(server.is_null(), FAILED);
 	server->stop();
 	return OK;
 }

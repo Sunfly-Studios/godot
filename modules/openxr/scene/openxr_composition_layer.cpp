@@ -357,9 +357,11 @@ void OpenXRCompositionLayer::_reset_fallback_material() {
 		if (material.is_null()) {
 			Ref<Shader> shader;
 			shader.instantiate();
+			ERR_FAIL_COND(shader.is_null());
 			shader->set_code(HOLE_PUNCH_SHADER_CODE);
 
 			material.instantiate();
+			ERR_FAIL_COND(material.is_null());
 			material->set_shader(shader);
 
 			fallback->set_surface_override_material(0, material);
@@ -368,6 +370,7 @@ void OpenXRCompositionLayer::_reset_fallback_material() {
 		Ref<StandardMaterial3D> material = fallback->get_surface_override_material(0);
 		if (material.is_null()) {
 			material.instantiate();
+			ERR_FAIL_COND(material.is_null());
 			material->set_shading_mode(StandardMaterial3D::SHADING_MODE_UNSHADED);
 			material->set_local_to_scene(true);
 			fallback->set_surface_override_material(0, material);

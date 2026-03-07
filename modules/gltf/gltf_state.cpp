@@ -456,6 +456,7 @@ GLTFBufferViewIndex GLTFState::append_data_to_buffers(const Vector<uint8_t> &p_d
 	Vector<uint8_t> &destination_buffer = buffers.write[0];
 	Ref<GLTFBufferView> buffer_view;
 	buffer_view.instantiate();
+	ERR_FAIL_COND_V(buffer_view.is_null(), -1);
 	buffer_view->set_buffer(0);
 	buffer_view->set_byte_offset(destination_buffer.size());
 	buffer_view->set_byte_length(p_data.size());

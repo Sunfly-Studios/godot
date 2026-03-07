@@ -90,6 +90,7 @@ bool Texture2D::get_rect_region(const Rect2 &p_rect, const Rect2 &p_src_rect, Re
 Ref<Resource> Texture2D::create_placeholder() const {
 	Ref<PlaceholderTexture2D> placeholder;
 	placeholder.instantiate();
+	ERR_FAIL_COND_V(placeholder.is_null(), Ref<Resource>());
 	placeholder->set_size(get_size());
 	return placeholder;
 }
@@ -192,6 +193,7 @@ void Texture3D::_bind_methods() {
 Ref<Resource> Texture3D::create_placeholder() const {
 	Ref<PlaceholderTexture3D> placeholder;
 	placeholder.instantiate();
+	ERR_FAIL_COND_V(placeholder.is_null(), Ref<Resource>());
 	placeholder->set_size(Vector3i(get_width(), get_height(), get_depth()));
 	return placeholder;
 }

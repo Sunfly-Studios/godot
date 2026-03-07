@@ -54,6 +54,8 @@ void initialize_theora_module(ModuleInitializationLevel p_level) {
 
 		case MODULE_INITIALIZATION_LEVEL_SCENE: {
 			resource_loader_theora.instantiate();
+			
+			ERR_FAIL_COND(resource_loader_theora.is_null());
 			ResourceLoader::add_resource_format_loader(resource_loader_theora, true);
 			GDREGISTER_CLASS(VideoStreamTheora);
 		} break;
@@ -65,8 +67,10 @@ void initialize_theora_module(ModuleInitializationLevel p_level) {
 void uninitialize_theora_module(ModuleInitializationLevel p_level) {
 	switch (p_level) {
 		case MODULE_INITIALIZATION_LEVEL_SCENE: {
-			ResourceLoader::remove_resource_format_loader(resource_loader_theora);
-			resource_loader_theora.unref();
+			if (resource_loader_theora.is_valid()) {
+				ResourceLoader::remove_resource_format_loader(resource_loader_theora);
+				resource_loader_theora.unref();
+			}
 		} break;
 
 		case MODULE_INITIALIZATION_LEVEL_SERVERS: {

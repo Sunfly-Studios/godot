@@ -36,6 +36,7 @@ void LinkButton::_shape() {
 	Ref<Font> font = theme_cache.font;
 	int font_size = theme_cache.font_size;
 
+	ERR_FAIL_COND(text_buf.is_null());
 	text_buf->clear();
 	if (text_direction == Control::TEXT_DIRECTION_INHERITED) {
 		text_buf->set_direction(is_layout_rtl() ? TextServer::DIRECTION_RTL : TextServer::DIRECTION_LTR);
@@ -142,6 +143,7 @@ void LinkButton::pressed() {
 }
 
 Size2 LinkButton::get_minimum_size() const {
+	ERR_FAIL_COND_V(text_buf.is_null(), Size2());
 	return text_buf->get_size();
 }
 
@@ -208,6 +210,7 @@ void LinkButton::_notification(int p_what) {
 				style->draw(ci, Rect2(Point2(), size));
 			}
 
+			ERR_FAIL_COND(text_buf.is_null());
 			int width = text_buf->get_line_width();
 
 			Color font_outline_color = theme_cache.font_outline_color;

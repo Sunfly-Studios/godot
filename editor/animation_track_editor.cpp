@@ -2035,6 +2035,7 @@ AnimationTimelineEdit::AnimationTimelineEdit() {
 	len_hb->hide();
 
 	panner.instantiate();
+	ERR_FAIL_COND(panner.is_null());
 	panner->set_scroll_zoom_factor(SCROLL_ZOOM_FACTOR_IN);
 	panner->set_callbacks(callable_mp(this, &AnimationTimelineEdit::_pan_callback), callable_mp(this, &AnimationTimelineEdit::_zoom_callback));
 	panner->set_pan_axis(ViewPanner::PAN_AXIS_HORIZONTAL);
@@ -4465,6 +4466,7 @@ Ref<Animation> AnimationTrackEditor::_create_and_get_reset_animation() {
 		if (mixer) {
 			if (!mixer->has_animation_library("")) {
 				al.instantiate();
+				ERR_FAIL_COND_V(al.is_null(), Ref<Animation>());
 				mixer->add_animation_library("", al);
 			} else {
 				al = mixer->get_animation_library("");
@@ -4472,6 +4474,7 @@ Ref<Animation> AnimationTrackEditor::_create_and_get_reset_animation() {
 		}
 		Ref<Animation> reset_anim;
 		reset_anim.instantiate();
+		ERR_FAIL_COND_V(reset_anim.is_null(), Ref<Animation>());
 		reset_anim->set_length(ANIM_MIN_LENGTH);
 		EditorUndoRedoManager *undo_redo = EditorUndoRedoManager::get_singleton();
 		undo_redo->add_do_method(al.ptr(), "add_animation", SceneStringName(RESET), reset_anim);
@@ -7564,6 +7567,7 @@ AnimationTrackEditor::AnimationTrackEditor() {
 	timeline->connect("length_changed", callable_mp(this, &AnimationTrackEditor::_update_length));
 
 	panner.instantiate();
+	ERR_FAIL_COND(panner.is_null());
 	panner->set_scroll_zoom_factor(AnimationTimelineEdit::SCROLL_ZOOM_FACTOR_IN);
 	panner->set_callbacks(callable_mp(this, &AnimationTrackEditor::_pan_callback), callable_mp(this, &AnimationTrackEditor::_zoom_callback));
 
@@ -7832,6 +7836,7 @@ AnimationTrackEditor::AnimationTrackEditor() {
 
 	Ref<AnimationTrackEditDefaultPlugin> def_plugin;
 	def_plugin.instantiate();
+	ERR_FAIL_COND(def_plugin.is_null());
 	add_track_edit_plugin(def_plugin);
 
 	// Dialogs.

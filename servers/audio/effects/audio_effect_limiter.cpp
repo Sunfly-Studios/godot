@@ -70,6 +70,7 @@ void AudioEffectLimiterInstance::process(const AudioFrame *p_src_frames, AudioFr
 Ref<AudioEffectInstance> AudioEffectLimiter::instantiate() {
 	Ref<AudioEffectLimiterInstance> ins;
 	ins.instantiate();
+	ERR_FAIL_COND_V(ins.is_null(), Ref<AudioEffectInstance>());
 	ins->base = Ref<AudioEffectLimiter>(this);
 
 	return ins;

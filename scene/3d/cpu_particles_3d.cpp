@@ -828,6 +828,8 @@ void CPUParticles3D::_particles_process(double p_delta) {
 			}
 
 			p.seed = seed + uint32_t(1) + i + cycle * pcount;
+			
+			ERR_FAIL_COND(rng.is_null());
 			rng->set_seed(p.seed);
 			p.angle_rand = rng->randf();
 			p.scale_rand = rng->randf();

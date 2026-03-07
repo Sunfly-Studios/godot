@@ -77,6 +77,7 @@ Error ResourceImporterBitMap::import(ResourceUID::ID p_source_id, const String &
 	float threshold = p_options["threshold"];
 	Ref<Image> image;
 	image.instantiate();
+	ERR_FAIL_COND_V(image.is_null(), ERR_OUT_OF_MEMORY);
 	Error err = ImageLoader::load_image(p_source_file, image);
 	if (err != OK) {
 		return err;
@@ -87,6 +88,7 @@ Error ResourceImporterBitMap::import(ResourceUID::ID p_source_id, const String &
 
 	Ref<BitMap> bitmap;
 	bitmap.instantiate();
+	ERR_FAIL_COND_V(bitmap.is_null(), ERR_OUT_OF_MEMORY);
 	bitmap->create(Size2(w, h));
 
 	for (int i = 0; i < h; i++) {

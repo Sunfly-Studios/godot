@@ -329,6 +329,7 @@ void EditorProfiler::_update_plot() {
 	if (reset_texture) {
 		if (graph_texture.is_null()) {
 			graph_texture.instantiate();
+			ERR_FAIL_COND(graph_texture.is_null());
 		}
 		graph_texture->set_image(img);
 	}

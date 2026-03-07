@@ -100,6 +100,7 @@ Ref<Resource> ResourceFormatLoaderShaderInclude::load(const String &p_path, cons
 
 	Ref<ShaderInclude> shader_inc;
 	shader_inc.instantiate();
+	ERR_FAIL_COND_V(shader_inc.is_null(), Ref<Resource>());
 
 	shader_inc->set_include_path(p_path);
 	shader_inc->set_code(str);

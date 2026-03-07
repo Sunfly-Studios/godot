@@ -138,20 +138,26 @@ void register_core_types() {
 	CoreStringNames::create();
 
 	resource_format_po.instantiate();
+	ERR_FAIL_COND(resource_format_po.is_null());
 	ResourceLoader::add_resource_format_loader(resource_format_po);
 
 	resource_saver_binary.instantiate();
+	ERR_FAIL_COND(resource_saver_binary.is_null());
 	ResourceSaver::add_resource_format_saver(resource_saver_binary);
 	resource_loader_binary.instantiate();
+	ERR_FAIL_COND(resource_loader_binary.is_null());
 	ResourceLoader::add_resource_format_loader(resource_loader_binary);
 
 	resource_format_importer.instantiate();
+	ERR_FAIL_COND(resource_format_importer.is_null());
 	ResourceLoader::add_resource_format_loader(resource_format_importer);
 
 	resource_format_importer_saver.instantiate();
+	ERR_FAIL_COND(resource_format_importer_saver.is_null());
 	ResourceSaver::add_resource_format_saver(resource_format_importer_saver);
 
 	resource_format_image.instantiate();
+	ERR_FAIL_COND(resource_format_image.is_null());
 	ResourceLoader::add_resource_format_loader(resource_format_image);
 
 	GDREGISTER_CLASS(Object);
@@ -220,14 +226,18 @@ void register_core_types() {
 	ClassDB::register_custom_instance_class<DTLSServer>();
 
 	resource_format_saver_crypto.instantiate();
+	ERR_FAIL_COND(resource_format_saver_crypto.is_null());
 	ResourceSaver::add_resource_format_saver(resource_format_saver_crypto);
 	resource_format_loader_crypto.instantiate();
+	ERR_FAIL_COND(resource_format_loader_crypto.is_null());
 	ResourceLoader::add_resource_format_loader(resource_format_loader_crypto);
 
 	resource_loader_json.instantiate();
+	ERR_FAIL_COND(resource_loader_json.is_null());
 	ResourceLoader::add_resource_format_loader(resource_loader_json);
 
 	resource_saver_json.instantiate();
+	ERR_FAIL_COND(resource_saver_json.is_null());
 	ResourceSaver::add_resource_format_saver(resource_saver_json);
 
 	GDREGISTER_CLASS(MainLoop);
@@ -278,6 +288,7 @@ void register_core_types() {
 	gdextension_manager = memnew(GDExtensionManager);
 
 	resource_loader_gdextension.instantiate();
+	ERR_FAIL_COND(resource_loader_gdextension.is_null());
 	ResourceLoader::add_resource_format_loader(resource_loader_gdextension);
 
 	ip = IP::create();

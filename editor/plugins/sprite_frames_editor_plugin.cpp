@@ -298,6 +298,7 @@ void SpriteFramesEditor::_sheet_add_frames() {
 
 		Ref<AtlasTexture> at;
 		at.instantiate();
+		ERR_FAIL_COND(at.is_null());
 		at->set_atlas(split_sheet_preview->get_texture());
 		at->set_region(Rect2(offset + frame_coords * (frame_size + separation), frame_size));
 

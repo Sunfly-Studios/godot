@@ -222,6 +222,7 @@ void Polygon2DEditor::_update_bone_list(const Polygon2D *p_for_node) {
 
 	Ref<ButtonGroup> bg;
 	bg.instantiate();
+	ERR_FAIL_COND(bg.is_null());
 	for (int i = 0; i < node->get_bone_count(); i++) {
 		CheckBox *cb = memnew(CheckBox);
 		NodePath np = node->get_bone_path(i);
@@ -1286,6 +1287,7 @@ Polygon2DEditor::Polygon2DEditor() {
 
 	Ref<ButtonGroup> mode_button_group;
 	mode_button_group.instantiate();
+	ERR_FAIL_COND(mode_button_group.is_null());
 	for (int i = 0; i < MODE_MAX; i++) {
 		mode_buttons[i] = memnew(Button);
 		toolbar->add_child(mode_buttons[i]);
@@ -1472,6 +1474,7 @@ Polygon2DEditor::Polygon2DEditor() {
 	bone_scroll->add_child(bone_scroll_vb);
 
 	panner.instantiate();
+	ERR_FAIL_COND(panner.is_null());
 	panner->set_callbacks(callable_mp(this, &Polygon2DEditor::_pan_callback), callable_mp(this, &Polygon2DEditor::_zoom_callback));
 
 	canvas->connect(SceneStringName(draw), callable_mp(this, &Polygon2DEditor::_canvas_draw));

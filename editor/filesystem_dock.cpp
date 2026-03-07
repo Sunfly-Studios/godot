@@ -1221,6 +1221,7 @@ void FileSystemDock::_select_file(const String &p_path, bool p_select_in_favorit
 		if (FileAccess::exists(fpath + ".import")) {
 			Ref<ConfigFile> config;
 			config.instantiate();
+			ERR_FAIL_COND(config.is_null());
 			Error err = config->load(fpath + ".import");
 			if (err == OK) {
 				if (config->has_section_key("remap", "importer")) {
@@ -3837,6 +3838,7 @@ void FileSystemDock::_update_import_dock() {
 		const String &fpath = efiles[i];
 		Ref<ConfigFile> cf;
 		cf.instantiate();
+		ERR_FAIL_COND(cf.is_null());
 		Error err = cf->load(fpath + ".import");
 		if (err != OK) {
 			imports.clear();

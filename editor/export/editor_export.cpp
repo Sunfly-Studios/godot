@@ -41,6 +41,8 @@ void EditorExport::_save() {
 	Ref<ConfigFile> credentials;
 	config.instantiate();
 	credentials.instantiate();
+	ERR_FAIL_COND(config.is_null());
+	ERR_FAIL_COND(credentials.is_null());
 	for (int i = 0; i < export_presets.size(); i++) {
 		Ref<EditorExportPreset> preset = export_presets[i];
 		String section = "preset." + itos(i);
@@ -222,6 +224,7 @@ void EditorExport::_notification(int p_what) {
 void EditorExport::load_config() {
 	Ref<ConfigFile> config;
 	config.instantiate();
+	ERR_FAIL_COND(config.is_null());
 	Error err = config->load("res://export_presets.cfg");
 	if (err != OK) {
 		return;
@@ -229,6 +232,7 @@ void EditorExport::load_config() {
 
 	Ref<ConfigFile> credentials;
 	credentials.instantiate();
+	ERR_FAIL_COND(credentials.is_null());
 	err = credentials->load("res://.godot/export_credentials.cfg");
 	if (!(err == OK || err == ERR_FILE_NOT_FOUND)) {
 		return;

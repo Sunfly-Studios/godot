@@ -90,7 +90,10 @@ public:
 
 	void _set_script_language(ScriptLanguage *p_script_language) { script_language = p_script_language; }
 
-	EditorStandardSyntaxHighlighter() { highlighter.instantiate(); }
+	EditorStandardSyntaxHighlighter() {
+		highlighter.instantiate();
+		ERR_FAIL_COND(highlighter.is_null());
+	}
 };
 
 class EditorPlainTextSyntaxHighlighter : public EditorSyntaxHighlighter {
@@ -117,7 +120,10 @@ public:
 
 	virtual Ref<EditorSyntaxHighlighter> _create() const override;
 
-	EditorJSONSyntaxHighlighter() { highlighter.instantiate(); }
+	EditorJSONSyntaxHighlighter() {
+		highlighter.instantiate();
+		ERR_FAIL_COND(highlighter.is_null());
+	}
 };
 
 class EditorMarkdownSyntaxHighlighter : public EditorSyntaxHighlighter {
@@ -135,7 +141,10 @@ public:
 
 	virtual Ref<EditorSyntaxHighlighter> _create() const override;
 
-	EditorMarkdownSyntaxHighlighter() { highlighter.instantiate(); }
+	EditorMarkdownSyntaxHighlighter() {
+		highlighter.instantiate();
+		ERR_FAIL_COND(highlighter.is_null());
+	}
 };
 
 ///////////////////////////////////////////////////////////////////////////////

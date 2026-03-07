@@ -239,6 +239,7 @@ void RendererSceneRenderRD::_debug_sdfgi_probes(Ref<RenderSceneBuffersRD> p_rend
 Ref<RenderSceneBuffers> RendererSceneRenderRD::render_buffers_create() {
 	Ref<RenderSceneBuffersRD> rb;
 	rb.instantiate();
+	ERR_FAIL_COND_V(rb.is_null(), Ref<RenderSceneBuffers>());
 
 	rb->set_can_be_storage(_render_buffers_can_be_storage());
 	rb->set_max_cluster_elements(max_cluster_elements);

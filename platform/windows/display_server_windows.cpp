@@ -1034,6 +1034,7 @@ Ref<Image> DisplayServerWindows::clipboard_get_image() const {
 			size_t png_size = GlobalSize(png_handle);
 			uint8_t *png_data = (uint8_t *)GlobalLock(png_handle);
 			image.instantiate();
+			ERR_FAIL_COND_V(image.is_null(), Ref<Image>());
 
 			PNGDriverCommon::png_to_image(png_data, png_size, false, image);
 
@@ -4266,6 +4267,7 @@ void DisplayServerWindows::_touch_event(WindowID p_window, bool p_pressed, float
 
 	Ref<InputEventScreenTouch> event;
 	event.instantiate();
+	ERR_FAIL_COND(event.is_null());
 	event->set_index(idx);
 	event->set_window_id(p_window);
 	event->set_pressed(p_pressed);
@@ -4286,6 +4288,7 @@ void DisplayServerWindows::_drag_event(WindowID p_window, float p_x, float p_y, 
 
 	Ref<InputEventScreenDrag> event;
 	event.instantiate();
+	ERR_FAIL_COND(event.is_null());
 	event->set_window_id(p_window);
 	event->set_index(idx);
 	event->set_position(Vector2(p_x, p_y));
@@ -4867,6 +4870,7 @@ LRESULT DisplayServerWindows::WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARA
 			} else if (mouse_mode == MOUSE_MODE_CAPTURED && raw->header.dwType == RIM_TYPEMOUSE) {
 				Ref<InputEventMouseMotion> mm;
 				mm.instantiate();
+				ERR_FAIL_COND_V(mm.is_null(), 0);
 
 				mm->set_window_id(window_id);
 				mm->set_ctrl_pressed(mods.has_flag(WinKeyModifierMask::CTRL));
@@ -4970,6 +4974,7 @@ LRESULT DisplayServerWindows::WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARA
 					const BitField<WinKeyModifierMask> &mods = _get_mods();
 					Ref<InputEventMouseMotion> mm;
 					mm.instantiate();
+					ERR_FAIL_COND_V(mm.is_null(), 0);
 					mm->set_window_id(window_id);
 					mm->set_ctrl_pressed(mods.has_flag(WinKeyModifierMask::CTRL));
 					mm->set_shift_pressed(mods.has_flag(WinKeyModifierMask::SHIFT));
@@ -5073,6 +5078,7 @@ LRESULT DisplayServerWindows::WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARA
 
 			Ref<InputEventMouseButton> mb;
 			mb.instantiate();
+			ERR_FAIL_COND_V(mb.is_null(), 0);
 			mb->set_window_id(window_id);
 
 			BitField<MouseButtonMask> last_button_state = 0;
@@ -5223,6 +5229,7 @@ LRESULT DisplayServerWindows::WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARA
 
 			Ref<InputEventMouseMotion> mm;
 			mm.instantiate();
+			ERR_FAIL_COND_V(mm.is_null(), 0);
 
 			mm->set_window_id(window_id);
 			if (pen_info.penMask & PEN_MASK_PRESSURE) {
@@ -5365,6 +5372,7 @@ LRESULT DisplayServerWindows::WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARA
 			const BitField<WinKeyModifierMask> &mods = _get_mods();
 			Ref<InputEventMouseMotion> mm;
 			mm.instantiate();
+			ERR_FAIL_COND_V(mm.is_null(), 0);
 			mm->set_window_id(receiving_window_id);
 			mm->set_ctrl_pressed(mods.has_flag(WinKeyModifierMask::CTRL));
 			mm->set_shift_pressed(mods.has_flag(WinKeyModifierMask::SHIFT));
@@ -5459,6 +5467,7 @@ LRESULT DisplayServerWindows::WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARA
 		case WM_XBUTTONUP: {
 			Ref<InputEventMouseButton> mb;
 			mb.instantiate();
+			ERR_FAIL_COND_V(mb.is_null(), 0);
 			mb->set_window_id(window_id);
 
 			switch (uMsg) {
@@ -6004,6 +6013,7 @@ void DisplayServerWindows::_process_key_events() {
 					}
 					Ref<InputEventKey> k;
 					k.instantiate();
+					ERR_FAIL_COND(k.is_null());
 
 					UINT vk = MapVirtualKey((ke.lParam >> 16) & 0xFF, MAPVK_VSC_TO_VK);
 					bool is_oem = (vk >= 0xB8) && (vk <= 0xE6);
@@ -6059,6 +6069,7 @@ void DisplayServerWindows::_process_key_events() {
 			case WM_KEYDOWN: {
 				Ref<InputEventKey> k;
 				k.instantiate();
+				ERR_FAIL_COND(k.is_null());
 
 				k->set_window_id(ke.window_id);
 				k->set_pressed(ke.uMsg == WM_KEYDOWN);
@@ -6842,6 +6853,7 @@ DisplayServerWindows::DisplayServerWindows(const String &p_rendering_driver, Win
 	if (FileAccess::exists(wacom_cfg)) {
 		Ref<XMLParser> parser;
 		parser.instantiate();
+		ERR_FAIL_COND(parser.is_null());
 		if (parser->open(wacom_cfg) == OK) {
 			while (parser->read() == OK) {
 				if (parser->get_node_type() != XMLParser::NODE_ELEMENT) {

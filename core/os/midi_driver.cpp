@@ -109,6 +109,7 @@ void MIDIDriver::send_event(int p_device_index, uint8_t p_status,
 
 	Ref<InputEventMIDI> event;
 	event.instantiate();
+	ERR_FAIL_COND(event.is_null());
 	event->set_device(p_device_index);
 	event->set_channel(Parser::channel(p_status));
 	event->set_message(msg);

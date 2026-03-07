@@ -41,16 +41,19 @@ List<Ref<EngineProfiler>> multiplayer_profilers;
 void MultiplayerDebugger::initialize() {
 	Ref<BandwidthProfiler> bandwidth;
 	bandwidth.instantiate();
+	ERR_FAIL_COND(bandwidth.is_null());
 	bandwidth->bind("multiplayer:bandwidth");
 	multiplayer_profilers.push_back(bandwidth);
 
 	Ref<RPCProfiler> rpc_profiler;
 	rpc_profiler.instantiate();
+	ERR_FAIL_COND(rpc_profiler.is_null());
 	rpc_profiler->bind("multiplayer:rpc");
 	multiplayer_profilers.push_back(rpc_profiler);
 
 	Ref<ReplicationProfiler> replication_profiler;
 	replication_profiler.instantiate();
+	ERR_FAIL_COND(replication_profiler.is_null());
 	replication_profiler->bind("multiplayer:replication");
 	multiplayer_profilers.push_back(replication_profiler);
 

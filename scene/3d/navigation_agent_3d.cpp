@@ -461,6 +461,7 @@ bool NavigationAgent3D::get_navigation_layer_value(int p_layer_number) const {
 }
 
 void NavigationAgent3D::set_pathfinding_algorithm(const NavigationPathQueryParameters3D::PathfindingAlgorithm p_pathfinding_algorithm) {
+	ERR_FAIL_COND(navigation_query.is_null());
 	if (pathfinding_algorithm == p_pathfinding_algorithm) {
 		return;
 	}
@@ -471,6 +472,7 @@ void NavigationAgent3D::set_pathfinding_algorithm(const NavigationPathQueryParam
 }
 
 void NavigationAgent3D::set_path_postprocessing(const NavigationPathQueryParameters3D::PathPostProcessing p_path_postprocessing) {
+	ERR_FAIL_COND(navigation_query.is_null());
 	if (path_postprocessing == p_path_postprocessing) {
 		return;
 	}
@@ -481,6 +483,7 @@ void NavigationAgent3D::set_path_postprocessing(const NavigationPathQueryParamet
 }
 
 void NavigationAgent3D::set_simplify_path(bool p_enabled) {
+	ERR_FAIL_COND(navigation_query.is_null());
 	simplify_path = p_enabled;
 	navigation_query->set_simplify_path(simplify_path);
 }
@@ -490,6 +493,7 @@ bool NavigationAgent3D::get_simplify_path() const {
 }
 
 void NavigationAgent3D::set_simplify_epsilon(real_t p_epsilon) {
+	ERR_FAIL_COND(navigation_query.is_null());
 	simplify_epsilon = MAX(0.0, p_epsilon);
 	navigation_query->set_simplify_epsilon(simplify_epsilon);
 }
@@ -657,6 +661,7 @@ Vector3 NavigationAgent3D::get_target_position() const {
 Vector3 NavigationAgent3D::get_next_path_position() {
 	_update_navigation();
 
+	ERR_FAIL_COND_V(navigation_result.is_null(), Vector3());
 	const Vector<Vector3> &navigation_path = navigation_result->get_path();
 	if (navigation_path.size() == 0) {
 		ERR_FAIL_NULL_V_MSG(agent_parent, Vector3(), "The agent has no parent.");
@@ -695,6 +700,7 @@ Vector3 NavigationAgent3D::get_final_position() {
 }
 
 Vector3 NavigationAgent3D::_get_final_position() const {
+	ERR_FAIL_COND_V(navigation_result.is_null(), Vector3());
 	const Vector<Vector3> &navigation_path = navigation_result->get_path();
 	if (navigation_path.size() == 0) {
 		return Vector3();
@@ -744,6 +750,8 @@ void NavigationAgent3D::_update_navigation() {
 	if (!target_position_submitted) {
 		return;
 	}
+	ERR_FAIL_COND(navigation_query.is_null());
+	ERR_FAIL_COND(navigation_result.is_null());
 
 	Vector3 origin = agent_parent->get_global_position();
 
@@ -837,6 +845,7 @@ void NavigationAgent3D::_advance_waypoints(const Vector3 &p_origin) {
 }
 
 void NavigationAgent3D::_request_repath() {
+	ERR_FAIL_COND(navigation_result.is_null());
 	navigation_result->reset();
 	target_reached = false;
 	navigation_finished = false;
@@ -844,6 +853,7 @@ void NavigationAgent3D::_request_repath() {
 }
 
 bool NavigationAgent3D::_is_last_waypoint() const {
+	ERR_FAIL_COND_V(navigation_result.is_null(), false);
 	return navigation_path_index == navigation_result->get_path().size() - 1;
 }
 
@@ -852,6 +862,7 @@ void NavigationAgent3D::_move_to_next_waypoint() {
 }
 
 bool NavigationAgent3D::_is_within_waypoint_distance(const Vector3 &p_origin) const {
+	ERR_FAIL_COND_V(navigation_result.is_null(), false);
 	const Vector<Vector3> &navigation_path = navigation_result->get_path();
 	Vector3 waypoint = navigation_path[navigation_path_index] - Vector3(0, path_height_offset, 0);
 	return p_origin.distance_to(waypoint) < path_desired_distance;
@@ -862,6 +873,7 @@ bool NavigationAgent3D::_is_within_target_distance(const Vector3 &p_origin) cons
 }
 
 void NavigationAgent3D::_trigger_waypoint_reached() {
+	ERR_FAIL_COND(navigation_result.is_null());
 	const Vector<Vector3> &navigation_path = navigation_result->get_path();
 	const Vector<int32_t> &navigation_path_types = navigation_result->get_path_types();
 	const TypedArray<RID> &navigation_path_rids = navigation_result->get_path_rids();
@@ -1083,6 +1095,7 @@ void NavigationAgent3D::_update_debug_path() {
 
 	if (debug_path_mesh.is_null()) {
 		debug_path_mesh.instantiate();
+		ERR_FAIL_COND(debug_path_mesh.is_null());
 	}
 
 	debug_path_mesh->clear_surfaces();
@@ -1095,6 +1108,7 @@ void NavigationAgent3D::_update_debug_path() {
 		return;
 	}
 
+	ERR_FAIL_COND(navigation_result.is_null());
 	const Vector<Vector3> &navigation_path = navigation_result->get_path();
 
 	if (navigation_path.size() <= 1) {

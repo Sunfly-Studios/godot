@@ -599,6 +599,7 @@ Ref<ResourceLoader::LoadToken> ResourceLoader::_load_start(const String &p_path,
 		}
 
 		load_token.instantiate();
+		ERR_FAIL_COND_V(load_token.is_null(), Ref<ResourceLoader::LoadToken>());
 		load_token->local_path = local_path;
 		if (p_for_user) {
 			_load_threaded_request_setup_user_token(load_token.ptr(), p_path);

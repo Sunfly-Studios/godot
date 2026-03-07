@@ -87,6 +87,7 @@ Ref<AudioEffectInstance> AudioEffectCapture::instantiate() {
 
 	Ref<AudioEffectCaptureInstance> ins;
 	ins.instantiate();
+	ERR_FAIL_COND_V(ins.is_null(), Ref<AudioEffectInstance>());
 	ins->base = Ref<AudioEffectCapture>(this);
 
 	return ins;

@@ -40,6 +40,7 @@ void initialize_jpg_module(ModuleInitializationLevel p_level) {
 	}
 
 	image_loader_jpg.instantiate();
+	ERR_FAIL_COND(image_loader_jpg.is_null());
 	ImageLoader::add_image_format_loader(image_loader_jpg);
 }
 
@@ -48,6 +49,8 @@ void uninitialize_jpg_module(ModuleInitializationLevel p_level) {
 		return;
 	}
 
-	ImageLoader::remove_image_format_loader(image_loader_jpg);
-	image_loader_jpg.unref();
+	if (image_loader_jpg.is_valid()) {
+		ImageLoader::remove_image_format_loader(image_loader_jpg);
+		image_loader_jpg.unref();
+	}
 }

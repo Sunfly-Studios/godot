@@ -331,6 +331,7 @@ Error ResourceImporterLayeredTexture::import(ResourceUID::ID p_source_id, const 
 
 	Ref<Image> image;
 	image.instantiate();
+	ERR_FAIL_COND_V(image.is_null(), ERR_CANT_CREATE);
 	Error err = ImageLoader::load_image(p_source_file, image);
 	if (err != OK) {
 		return err;
@@ -378,6 +379,7 @@ Error ResourceImporterLayeredTexture::import(ResourceUID::ID p_source_id, const 
 	Array formats_imported;
 	Ref<LayeredTextureImport> texture_import;
 	texture_import.instantiate();
+	ERR_FAIL_COND_V(texture_import.is_null(), ERR_CANT_CREATE);
 	texture_import->csource = &csource;
 	texture_import->save_path = p_save_path;
 	texture_import->options = p_options;

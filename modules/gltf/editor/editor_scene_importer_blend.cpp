@@ -303,8 +303,10 @@ Node *EditorSceneFormatImporterBlend::import_scene(const String &p_path, uint32_
 	// Use GLTFDocument instead of glTF importer to keep image references.
 	Ref<GLTFDocument> gltf;
 	gltf.instantiate();
+	ERR_FAIL_COND_V(gltf.is_null(), nullptr);
 	Ref<GLTFState> state;
 	state.instantiate();
+	ERR_FAIL_COND_V(state.is_null(), nullptr);
 
 	if (p_options.has(SNAME("nodes/import_as_skeleton_bones")) ? (bool)p_options[SNAME("nodes/import_as_skeleton_bones")] : false) {
 		state->set_import_as_skeleton_bones(true);

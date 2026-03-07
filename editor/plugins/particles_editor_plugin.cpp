@@ -149,6 +149,7 @@ void Particles2DEditorPlugin::_file_selected(const String &p_file) {
 void Particles2DEditorPlugin::_get_base_emission_mask(PackedVector2Array &r_valid_positions, PackedVector2Array &r_valid_normals, PackedByteArray &r_valid_colors, Vector2i &r_image_size) {
 	Ref<Image> img;
 	img.instantiate();
+	ERR_FAIL_COND(img.is_null());
 	Error err = ImageLoader::load_image(source_emission_file, img);
 	ERR_FAIL_COND_MSG(err != OK, "Error loading image '" + source_emission_file + "'.");
 
@@ -433,6 +434,7 @@ void GPUParticles2DEditorPlugin::_generate_emission_mask() {
 
 	Ref<Image> img;
 	img.instantiate();
+	ERR_FAIL_COND(img.is_null());
 	img->set_data(w, h, false, Image::FORMAT_RGF, texdata);
 	undo_redo->add_do_property(pmptr, "emission_point_texture", ImageTexture::create_from_image(img));
 	undo_redo->add_undo_property(pmptr, "emission_point_texture", pm->get_emission_point_texture());
@@ -451,6 +453,7 @@ void GPUParticles2DEditorPlugin::_generate_emission_mask() {
 		}
 
 		img.instantiate();
+		ERR_FAIL_COND(img.is_null());
 		img->set_data(w, h, false, Image::FORMAT_RGBA8, colordata);
 		undo_redo->add_do_property(pmptr, "emission_color_texture", ImageTexture::create_from_image(img));
 		undo_redo->add_undo_property(pmptr, "emission_color_texture", pm->get_emission_color_texture());
@@ -474,6 +477,7 @@ void GPUParticles2DEditorPlugin::_generate_emission_mask() {
 		}
 
 		img.instantiate();
+		ERR_FAIL_COND(img.is_null());
 		img->set_data(w, h, false, Image::FORMAT_RGF, normdata);
 		undo_redo->add_do_property(pmptr, "emission_normal_texture", ImageTexture::create_from_image(img));
 		undo_redo->add_undo_property(pmptr, "emission_normal_texture", pm->get_emission_normal_texture());

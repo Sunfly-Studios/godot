@@ -233,6 +233,7 @@ void GradientTexture2D::_update() const {
 	}
 	Ref<Image> image;
 	image.instantiate();
+	ERR_FAIL_COND(image.is_null());
 
 	if (gradient->get_point_count() <= 1) { // No need to interpolate.
 		image->initialize_data(width, height, false, (use_hdr) ? Image::FORMAT_RGBAF : Image::FORMAT_RGBA8);

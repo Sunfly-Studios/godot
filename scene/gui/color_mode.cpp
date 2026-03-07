@@ -403,6 +403,7 @@ void ColorModeOKHSL::slider_draw(int p_which) {
 
 		Ref<Gradient> hue_gradient;
 		hue_gradient.instantiate();
+		ERR_FAIL_COND(hue_gradient.is_null());
 		PackedFloat32Array offsets;
 		offsets.resize(precision);
 		PackedColorArray colors;
@@ -418,6 +419,7 @@ void ColorModeOKHSL::slider_draw(int p_which) {
 		hue_gradient->set_interpolation_color_space(Gradient::ColorSpace::GRADIENT_COLOR_SPACE_OKLAB);
 		if (hue_texture.is_null()) {
 			hue_texture.instantiate();
+			ERR_FAIL_COND(hue_texture.is_null());
 			hue_texture->set_width(800);
 			hue_texture->set_height(6);
 		}

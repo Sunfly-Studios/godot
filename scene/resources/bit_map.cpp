@@ -526,6 +526,7 @@ Vector<Vector<Vector2>> BitMap::clip_opaque_to_polygons(const Rect2i &p_rect, fl
 	Point2i from;
 	Ref<BitMap> fill;
 	fill.instantiate();
+	ERR_FAIL_COND_V(fill.is_null(), Vector<Vector<Vector2>>());
 	fill->create(get_size());
 
 	Vector<Vector<Vector2>> polygons;
@@ -564,6 +565,7 @@ void BitMap::grow_mask(int p_pixels, const Rect2i &p_rect) {
 
 	Ref<BitMap> copy;
 	copy.instantiate();
+	ERR_FAIL_COND(copy.is_null());
 	copy->create(get_size());
 	copy->bitmask = bitmask;
 
@@ -648,6 +650,7 @@ void BitMap::resize(const Size2i &p_new_size) {
 
 	Ref<BitMap> new_bitmap;
 	new_bitmap.instantiate();
+	ERR_FAIL_COND(new_bitmap.is_null());
 	new_bitmap->create(p_new_size);
 	// also allow for upscaling
 	int lw = (width == 0) ? 0 : p_new_size.width;

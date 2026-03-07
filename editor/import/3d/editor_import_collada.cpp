@@ -927,6 +927,7 @@ Error ColladaImport::_create_mesh_surfaces(bool p_optimize, Ref<ImporterMesh> &p
 
 			Ref<SurfaceTool> surftool;
 			surftool.instantiate();
+			ERR_FAIL_COND_V(surftool.is_null(), ERR_CANT_CREATE);
 			surftool->begin(Mesh::PRIMITIVE_TRIANGLES);
 
 			for (int k = 0; k < vertex_array.size(); k++) {
@@ -1261,6 +1262,7 @@ Error ColladaImport::_create_resources(Collada::Node *p_node, bool p_use_compres
 
 					ERR_FAIL_COND_V(!collada.state.mesh_data_map.has(meshid), ERR_INVALID_DATA);
 					mesh.instantiate();
+					ERR_FAIL_COND_V(mesh.is_null(), ERR_CANT_CREATE);
 					const Collada::MeshData &meshdata = collada.state.mesh_data_map[meshid];
 					String name = meshdata.name;
 					if (name.is_empty()) {
@@ -1843,6 +1845,7 @@ Node *EditorSceneFormatImporterCollada::import_scene(const String &p_path, uint3
 			Ref<AnimationLibrary> library;
 			if (!ap->has_animation_library("")) {
 				library.instantiate();
+				ERR_FAIL_COND_V(library.is_null(), nullptr);
 				ap->add_animation_library("", library);
 			} else {
 				library = ap->get_animation_library("");

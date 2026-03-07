@@ -151,6 +151,7 @@ void EditorHelpSearch::_update_results() {
 		}
 
 		search.instantiate(results_tree, results_tree, &tree_cache, term, search_flags);
+		ERR_FAIL_COND(search.is_null());
 
 		// Clear old search flags to force rebuild on short term.
 		old_search_flags = 0;
@@ -162,6 +163,7 @@ void EditorHelpSearch::_update_results() {
 
 		// Always show hierarchy for short searches.
 		search.instantiate(results_tree, results_tree, &tree_cache, term, search_flags | SEARCH_SHOW_HIERARCHY);
+		ERR_FAIL_COND(search.is_null());
 
 		old_search_flags = search_flags;
 		set_process(true);

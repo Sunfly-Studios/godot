@@ -387,6 +387,7 @@ RID RenderSceneBuffersRD::get_texture(const StringName &p_context, const StringN
 Ref<RDTextureFormat> RenderSceneBuffersRD::_get_texture_format(const StringName &p_context, const StringName &p_texture_name) const {
 	Ref<RDTextureFormat> tf;
 	tf.instantiate();
+	ERR_FAIL_COND_V(tf.is_null(), Ref<RDTextureFormat>());
 
 	tf->base = get_texture_format(p_context, p_texture_name);
 

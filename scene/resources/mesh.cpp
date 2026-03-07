@@ -386,6 +386,7 @@ Ref<TriangleMesh> Mesh::generate_triangle_mesh() const {
 	}
 
 	triangle_mesh.instantiate();
+	ERR_FAIL_COND_V(triangle_mesh.is_null(), Ref<TriangleMesh>());
 	triangle_mesh->create(faces);
 
 	return triangle_mesh;
@@ -526,6 +527,7 @@ Ref<ConvexPolygonShape3D> Mesh::create_convex_shape(bool p_clean, bool p_simplif
 	if (p_simplify) {
 		Ref<MeshConvexDecompositionSettings> settings = Ref<MeshConvexDecompositionSettings>();
 		settings.instantiate();
+		ERR_FAIL_COND_V(settings.is_null(), Ref<ConvexPolygonShape3D>());
 		settings->set_max_convex_hulls(1);
 		settings->set_max_concavity(1.0);
 		Vector<Ref<Shape3D>> decomposed = convex_decompose(settings);
@@ -793,6 +795,7 @@ Size2i Mesh::get_lightmap_size_hint() const {
 Ref<Resource> Mesh::create_placeholder() const {
 	Ref<PlaceholderMesh> placeholder;
 	placeholder.instantiate();
+	ERR_FAIL_COND_V(placeholder.is_null(), Ref<Resource>());
 	placeholder->set_aabb(get_aabb());
 	return placeholder;
 }
@@ -931,6 +934,7 @@ Vector<Ref<Shape3D>> Mesh::convex_decompose(const Ref<MeshConvexDecompositionSet
 	for (int i = 0; i < decomposed.size(); i++) {
 		Ref<ConvexPolygonShape3D> shape;
 		shape.instantiate();
+		ERR_FAIL_COND_V(shape.is_null(), Vector<Ref<Shape3D>>());
 		shape->set_points(decomposed[i]);
 		ret.push_back(shape);
 	}
@@ -2188,6 +2192,7 @@ Error ArrayMesh::lightmap_unwrap_cached(const Transform3D &p_base_transform, flo
 	for (int i = 0; i < lightmap_surfaces.size(); i++) {
 		Ref<SurfaceTool> st;
 		st.instantiate();
+		ERR_FAIL_COND_V(st.is_null(), ERR_CANT_CREATE);
 		st->begin(Mesh::PRIMITIVE_TRIANGLES);
 		st->set_material(lightmap_surfaces[i].material);
 		surfaces_tools.push_back(st); //stay there

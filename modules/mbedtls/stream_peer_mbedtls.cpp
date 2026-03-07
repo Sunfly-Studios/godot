@@ -73,12 +73,14 @@ int StreamPeerMbedTLS::bio_recv(void *ctx, unsigned char *buf, size_t len) {
 }
 
 void StreamPeerMbedTLS::_cleanup() {
+	ERR_FAIL_COND(tls_ctx.is_null());
 	tls_ctx->clear();
 	base = Ref<StreamPeer>();
 	status = STATUS_DISCONNECTED;
 }
 
 Error StreamPeerMbedTLS::_do_handshake() {
+	ERR_FAIL_COND_V(tls_ctx.is_null(), FAILED);
 	int ret = mbedtls_ssl_handshake(tls_ctx->get_context());
 	if (ret == MBEDTLS_ERR_SSL_WANT_READ || ret == MBEDTLS_ERR_SSL_WANT_WRITE) {
 		// Handshake is still in progress, will retry via poll later.
@@ -98,6 +100,7 @@ Error StreamPeerMbedTLS::_do_handshake() {
 
 Error StreamPeerMbedTLS::connect_to_stream(Ref<StreamPeer> p_base, const String &p_common_name, Ref<TLSOptions> p_options) {
 	ERR_FAIL_COND_V(p_base.is_null(), ERR_INVALID_PARAMETER);
+	ERR_FAIL_COND_V(tls_ctx.is_null(), FAILED);
 
 	Error err = tls_ctx->init_client(MBEDTLS_SSL_TRANSPORT_STREAM, p_common_name, p_options.is_valid() ? p_options : TLSOptions::client());
 	ERR_FAIL_COND_V(err != OK, err);
@@ -118,6 +121,7 @@ Error StreamPeerMbedTLS::connect_to_stream(Ref<StreamPeer> p_base, const String 
 Error StreamPeerMbedTLS::accept_stream(Ref<StreamPeer> p_base, Ref<TLSOptions> p_options) {
 	ERR_FAIL_COND_V(p_base.is_null(), ERR_INVALID_PARAMETER);
 	ERR_FAIL_COND_V(p_options.is_null() || !p_options->is_server(), ERR_INVALID_PARAMETER);
+	ERR_FAIL_COND_V(tls_ctx.is_null(), FAILED);
 
 	Error err = tls_ctx->init_server(MBEDTLS_SSL_TRANSPORT_STREAM, p_options);
 	ERR_FAIL_COND_V(err != OK, err);
@@ -165,6 +169,7 @@ Error StreamPeerMbedTLS::put_partial_data(const uint8_t *p_data, int p_bytes, in
 		return OK;
 	}
 
+	ERR_FAIL_COND_V(tls_ctx.is_null(), FAILED);
 	do {
 		int ret = mbedtls_ssl_write(tls_ctx->get_context(), &p_data[r_sent], p_bytes - r_sent);
 		if (ret == MBEDTLS_ERR_SSL_WANT_READ || ret == MBEDTLS_ERR_SSL_WANT_WRITE) {
@@ -211,6 +216,7 @@ Error StreamPeerMbedTLS::get_partial_data(uint8_t *p_buffer, int p_bytes, int &r
 
 	r_received = 0;
 
+	ERR_FAIL_COND_V(tls_ctx.is_null(), FAILED);
 	do {
 		int ret = mbedtls_ssl_read(tls_ctx->get_context(), &p_buffer[r_received], p_bytes - r_received);
 		if (ret == MBEDTLS_ERR_SSL_WANT_READ || ret == MBEDTLS_ERR_SSL_WANT_WRITE) {
@@ -236,6 +242,7 @@ Error StreamPeerMbedTLS::get_partial_data(uint8_t *p_buffer, int p_bytes, int &r
 void StreamPeerMbedTLS::poll() {
 	ERR_FAIL_COND(status != STATUS_CONNECTED && status != STATUS_HANDSHAKING);
 	ERR_FAIL_COND(base.is_null());
+	ERR_FAIL_COND(tls_ctx.is_null());
 
 	if (status == STATUS_HANDSHAKING) {
 		_do_handshake();
@@ -268,6 +275,7 @@ void StreamPeerMbedTLS::poll() {
 
 int StreamPeerMbedTLS::get_available_bytes() const {
 	ERR_FAIL_COND_V(status != STATUS_CONNECTED, 0);
+	ERR_FAIL_COND_V(tls_ctx.is_null(), 0);
 
 	return mbedtls_ssl_get_bytes_avail(&(tls_ctx->tls));
 }
@@ -286,6 +294,7 @@ void StreamPeerMbedTLS::disconnect_from_stream() {
 	}
 
 	Ref<StreamPeerTCP> tcp = base;
+	ERR_FAIL_COND(tls_ctx.is_null());
 	if (tcp.is_valid() && tcp->get_status() == StreamPeerTCP::STATUS_CONNECTED) {
 		// We are still connected on the socket, try to send close notify.
 		mbedtls_ssl_close_notify(tls_ctx->get_context());

@@ -41,6 +41,7 @@ void initialize_tinyexr_module(ModuleInitializationLevel p_level) {
 	}
 
 	image_loader_tinyexr.instantiate();
+	ERR_FAIL_COND(image_loader_tinyexr.is_null());
 	ImageLoader::add_image_format_loader(image_loader_tinyexr);
 
 	Image::save_exr_func = save_exr;
@@ -52,8 +53,10 @@ void uninitialize_tinyexr_module(ModuleInitializationLevel p_level) {
 		return;
 	}
 
-	ImageLoader::remove_image_format_loader(image_loader_tinyexr);
-	image_loader_tinyexr.unref();
+	if (image_loader_tinyexr.is_valid()) {
+		ImageLoader::remove_image_format_loader(image_loader_tinyexr);
+		image_loader_tinyexr.unref();
+	}
 
 	Image::save_exr_func = nullptr;
 }

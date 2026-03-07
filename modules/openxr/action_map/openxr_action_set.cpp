@@ -53,6 +53,7 @@ Ref<OpenXRActionSet> OpenXRActionSet::new_action_set(const char *p_name, const c
 
 	Ref<OpenXRActionSet> action_set;
 	action_set.instantiate();
+	ERR_FAIL_COND_V(action_set.is_null(), Ref<OpenXRActionSet>());
 	action_set->set_name(String(p_name));
 	action_set->set_localized_name(p_localized_name);
 	action_set->set_priority(p_priority);

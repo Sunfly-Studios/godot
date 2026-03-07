@@ -448,7 +448,7 @@ void DisplayServerMacOS::_process_key_events() {
 			if (ke.raw) {
 				// Non IME input - no composite characters, pass events as is.
 				k.instantiate();
-				ERR_FAIL_NULL(k);
+				ERR_FAIL_COND(k.is_null());
 
 				k->set_window_id(ke.window_id);
 				get_key_modifier_state(ke.macos_state, k);
@@ -465,7 +465,7 @@ void DisplayServerMacOS::_process_key_events() {
 				// IME input.
 				if ((i == 0 && ke.keycode == Key::NONE) || (i > 0 && key_event_buffer[i - 1].keycode == Key::NONE)) {
 					k.instantiate();
-					ERR_FAIL_NULL(k);
+					ERR_FAIL_COND(k.is_null());
 
 					k->set_window_id(ke.window_id);
 					get_key_modifier_state(ke.macos_state, k);
@@ -480,7 +480,7 @@ void DisplayServerMacOS::_process_key_events() {
 				}
 				if (ke.keycode != Key::NONE) {
 					k.instantiate();
-					ERR_FAIL_NULL(k);
+					ERR_FAIL_COND(k.is_null());
 
 					k->set_window_id(ke.window_id);
 					get_key_modifier_state(ke.macos_state, k);
@@ -639,7 +639,7 @@ void DisplayServerMacOS::send_event(NSEvent *p_event) {
 		if ((flags == NSEventModifierFlagCommand) && [p_event keyCode] == 0x2f) {
 			Ref<InputEventKey> k;
 			k.instantiate();
-			ERR_FAIL_NULL(k);
+			ERR_FAIL_COND(k.is_null());
 
 			get_key_modifier_state([p_event modifierFlags], k);
 			k->set_window_id(DisplayServerMacOS::INVALID_WINDOW_ID);
@@ -657,7 +657,7 @@ void DisplayServerMacOS::send_event(NSEvent *p_event) {
 		if (((flags == NSEventModifierFlagControl) || (flags == (NSEventModifierFlagControl | NSEventModifierFlagShift))) && [p_event keyCode] == 0x30) {
 			Ref<InputEventKey> k;
 			k.instantiate();
-			ERR_FAIL_NULL(k);
+			ERR_FAIL_COND(k.is_null());
 
 			get_key_modifier_state([p_event modifierFlags], k);
 			k->set_window_id(DisplayServerMacOS::INVALID_WINDOW_ID);
@@ -1615,7 +1615,7 @@ Ref<Image> DisplayServerMacOS::clipboard_get_image() const {
 		NSBitmapImageRep *bitmap = [NSBitmapImageRep imageRepWithData:data];
 		NSData *pngData = [bitmap representationUsingType:NSBitmapImageFileTypePNG properties:@{}];
 		image.instantiate();
-		ERR_FAIL_NULL_V(image, Ref<Image>());
+		ERR_FAIL_COND_V(image.is_null(), Ref<Image>());
 		PNGDriverCommon::png_to_image((const uint8_t *)pngData.bytes, pngData.length, false, image);
 	}
 	return image;

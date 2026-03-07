@@ -1001,6 +1001,7 @@ void ResourceLoaderBinary::open(Ref<FileAccess> p_f, bool p_no_resources, bool p
 		// Compressed.
 		Ref<FileAccessCompressed> fac;
 		fac.instantiate();
+		ERR_FAIL_COND(fac.is_null());
 		error = fac->open_after_magic(f);
 		if (error != OK) {
 			f.unref();
@@ -1139,6 +1140,7 @@ String ResourceLoaderBinary::recognize(Ref<FileAccess> p_f) {
 		// Compressed.
 		Ref<FileAccessCompressed> fac;
 		fac.instantiate();
+		ERR_FAIL_COND_V(fac.is_null(), String());
 		error = fac->open_after_magic(f);
 		if (error != OK) {
 			f.unref();
@@ -1180,6 +1182,7 @@ String ResourceLoaderBinary::recognize_script_class(Ref<FileAccess> p_f) {
 		// Compressed.
 		Ref<FileAccessCompressed> fac;
 		fac.instantiate();
+		ERR_FAIL_COND_V(fac.is_null(), String());
 		error = fac->open_after_magic(f);
 		if (error != OK) {
 			f.unref();
@@ -1328,12 +1331,14 @@ Error ResourceFormatLoaderBinary::rename_dependencies(const String &p_path, cons
 		// Compressed.
 		Ref<FileAccessCompressed> fac;
 		fac.instantiate();
+		ERR_FAIL_COND_V(fac.is_null(), ERR_OUT_OF_MEMORY);
 		Error err = fac->open_after_magic(f);
 		ERR_FAIL_COND_V_MSG(err != OK, err, vformat("Cannot open file '%s'.", p_path));
 		f = fac;
 
 		Ref<FileAccessCompressed> facw;
 		facw.instantiate();
+		ERR_FAIL_COND_V(facw.is_null(), ERR_OUT_OF_MEMORY);
 		facw->configure("RSCC");
 		err = facw->open_internal(p_path + ".depren", FileAccess::WRITE);
 		ERR_FAIL_COND_V_MSG(err, ERR_FILE_CORRUPT, vformat("Cannot create file '%s.depren'.", p_path));
@@ -2152,6 +2157,7 @@ Error ResourceFormatSaverBinaryInstance::save(const String &p_path, const Ref<Re
 	if (p_flags & ResourceSaver::FLAG_COMPRESS) {
 		Ref<FileAccessCompressed> fac;
 		fac.instantiate();
+		ERR_FAIL_COND_V(fac.is_null(), ERR_OUT_OF_MEMORY);
 		fac->configure("RSCC");
 		f = fac;
 		err = fac->open_internal(p_path, FileAccess::WRITE);
@@ -2402,12 +2408,14 @@ Error ResourceFormatSaverBinaryInstance::set_uid(const String &p_path, ResourceU
 		// Compressed.
 		Ref<FileAccessCompressed> fac;
 		fac.instantiate();
+		ERR_FAIL_COND_V(fac.is_null(), ERR_OUT_OF_MEMORY);
 		Error err = fac->open_after_magic(f);
 		ERR_FAIL_COND_V_MSG(err != OK, err, vformat("Cannot open file '%s'.", p_path));
 		f = fac;
 
 		Ref<FileAccessCompressed> facw;
 		facw.instantiate();
+		ERR_FAIL_COND_V(facw.is_null(), ERR_OUT_OF_MEMORY);
 		facw->configure("RSCC");
 		err = facw->open_internal(p_path + ".uidren", FileAccess::WRITE);
 		ERR_FAIL_COND_V_MSG(err, ERR_FILE_CORRUPT, vformat("Cannot create file '%s.uidren'.", p_path));

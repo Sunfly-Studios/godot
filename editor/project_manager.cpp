@@ -998,6 +998,7 @@ void ProjectManager::_minor_project_migrate() {
 		if (edscale != 1.0) {
 			Ref<ConfigFile> layout_file;
 			layout_file.instantiate();
+			ERR_FAIL_COND(layout_file.is_null());
 
 			const String layout_path = migrated_project.path.path_join(".godot/editor/editor_layout.cfg");
 			Error err = layout_file->load(layout_path);
@@ -1324,6 +1325,7 @@ ProjectManager::ProjectManager(bool p_custom_res) {
 		}
 
 		main_view_toggles_group.instantiate();
+		ERR_FAIL_COND(main_view_toggles_group.is_null());
 
 		HBoxContainer *right_hbox = memnew(HBoxContainer);
 		right_hbox->set_alignment(BoxContainer::ALIGNMENT_END);
