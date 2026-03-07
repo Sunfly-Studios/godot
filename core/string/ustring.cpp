@@ -5370,7 +5370,7 @@ String String::sprintf(const Array &values, bool *error) const {
 				case 'x': // Hexadecimal (lowercase)
 				case 'X': { // Hexadecimal (uppercase)
 					uint64_t index = (selected_index >= 0 ? selected_index : value_index);
-					if (index >= values.size()) {
+					if (index >= (uint64_t)values.size()) {
 						return "not enough arguments for format string";
 					}
 
@@ -5444,7 +5444,7 @@ String String::sprintf(const Array &values, bool *error) const {
 				}
 				case 'f': { // Float
 					uint64_t index = (selected_index >= 0 ? selected_index : value_index);
-					if (index >= values.size()) {
+					if (index >= (uint64_t)values.size()) {
 						return "not enough arguments for format string";
 					}
 
@@ -5493,7 +5493,7 @@ String String::sprintf(const Array &values, bool *error) const {
 				}
 				case 'v': { // Vector2/3/4/2i/3i/4i
 					uint64_t index = (selected_index >= 0 ? selected_index : value_index);
-					if (index >= values.size()) {
+					if (index >= (uint64_t)values.size()) {
 						return "not enough arguments for format string";
 					}
 
@@ -5567,7 +5567,7 @@ String String::sprintf(const Array &values, bool *error) const {
 				}
 				case 's': { // String
 					uint64_t index = (selected_index >= 0 ? selected_index : value_index);
-					if (index >= values.size()) {
+					if (index >= (uint64_t)values.size()) {
 						return "not enough arguments for format string";
 					}
 
@@ -5589,7 +5589,7 @@ String String::sprintf(const Array &values, bool *error) const {
 				}
 				case 'c': {
 					uint64_t index = (selected_index >= 0 ? selected_index : value_index);
-					if (index >= values.size()) {
+					if (index >= (uint64_t)values.size()) {
 						return "not enough arguments for format string";
 					}
 
@@ -5688,7 +5688,7 @@ String String::sprintf(const Array &values, bool *error) const {
 
 				case '*': { // Dynamic width, based on value.
 					uint64_t index = (selected_index >= 0 ? selected_index : value_index);
-					if (index >= values.size()) {
+					if (index >= (uint64_t)values.size()) {
 						return "not enough arguments for format string";
 					}
 
