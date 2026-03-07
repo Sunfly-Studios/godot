@@ -35,8 +35,6 @@
 #include "core/typedefs.h"
 #include "core/variant/variant.h"
 
-#include <string.h>
-
 template <typename T>
 struct PtrToArg {};
 

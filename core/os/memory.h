@@ -38,6 +38,7 @@
 #include <new>
 #include <type_traits>
 #include <cstdint> // for uintptr_t
+#include <string.h>
 
 #ifdef _WIN32
 	#include <malloc.h>

@@ -229,7 +229,7 @@ Ref<InputEventKey> WaylandThread::_seat_state_get_key_event(SeatState *p_ss, xkb
 	}
 
 	event.instantiate();
-	ERR_FAIL_COND(event.is_null());
+	ERR_FAIL_COND_V(event.is_null(), Ref<InputEventKey>());
 
 	event->set_window_id(DisplayServer::MAIN_WINDOW_ID);
 

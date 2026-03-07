@@ -1006,7 +1006,7 @@ Ref<Image> DisplayServerX11::clipboard_get_image() const {
 
 			if (success && (data_size > 0)) {
 				ret.instantiate();
-				ERR_FAIL_COND(ret.is_null());
+				ERR_FAIL_COND_V(ret.is_null(), Ref<Image>());
 				PNGDriverCommon::png_to_image(incr_data.ptr(), incr_data.size(), false, ret);
 			}
 		} else if (bytes_left > 0) {
@@ -1021,7 +1021,7 @@ Ref<Image> DisplayServerX11::clipboard_get_image() const {
 					&len, &dummy, &data);
 			if (result == Success) {
 				ret.instantiate();
-				ERR_FAIL_COND(ret.is_null());
+				ERR_FAIL_COND_V(ret.is_null(), Ref<Image>());
 				PNGDriverCommon::png_to_image((uint8_t *)data, bytes_left, false, ret);
 			} else {
 				print_verbose("Failed to get selection data.");

@@ -474,7 +474,7 @@ Ref<Image> DisplayServerWayland::clipboard_get_image() const {
 
 	Ref<Image> image;
 	image.instantiate();
-	ERR_FAIL_COND(image.is_null());
+	ERR_FAIL_COND_V(image.is_null(), Ref<Image>());
 
 	Error err = OK;
 
