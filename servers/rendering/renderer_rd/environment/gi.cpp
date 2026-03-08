@@ -3390,6 +3390,7 @@ void GI::init(SkyRD *p_sky) {
 		//kinda complicated to compute the amount of slots, we try to use as many as we can
 
 		voxel_gi_lights = memnew_arr(VoxelGILight, voxel_gi_max_lights);
+		ERR_FAIL_NULL_MSG(voxel_gi_lights, "Out of memory allocating VoxelGI light buffer.");
 		voxel_gi_lights_uniform = RD::get_singleton()->uniform_buffer_create(voxel_gi_max_lights * sizeof(VoxelGILight));
 		voxel_gi_quality = RS::VoxelGIQuality(CLAMP(int(GLOBAL_GET("rendering/global_illumination/voxel_gi/quality")), 0, 1));
 

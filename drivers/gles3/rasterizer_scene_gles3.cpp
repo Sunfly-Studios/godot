@@ -4226,31 +4226,92 @@ RasterizerSceneGLES3::RasterizerSceneGLES3() {
 
 		uint32_t light_buffer_size = config->max_renderable_lights * sizeof(LightData);
 		scene_state.omni_lights = memnew_arr(LightData, config->max_renderable_lights);
+		ERR_FAIL_NULL(scene_state.omni_lights);
 		scene_state.omni_light_sort = memnew_arr(InstanceSort<GLES3::LightInstance>, config->max_renderable_lights);
+		if (unlikely(!scene_state.omni_light_sort)) {
+			memdelete_arr(scene_state.omni_lights);
+			scene_state.omni_lights = nullptr;
+			ERR_FAIL_MSG("Out of memory in initialisation of RasterizerSceneGLES3");
+		}
 		glGenBuffers(1, &scene_state.omni_light_buffer);
 		glBindBuffer(GL_UNIFORM_BUFFER, scene_state.omni_light_buffer);
 		GLES3::Utilities::get_singleton()->buffer_allocate_data(GL_UNIFORM_BUFFER, scene_state.omni_light_buffer, light_buffer_size, nullptr, GL_STREAM_DRAW, "OmniLight UBO");
 
 		scene_state.spot_lights = memnew_arr(LightData, config->max_renderable_lights);
+		if (unlikely(!scene_state.spot_lights)) {
+			memdelete_arr(scene_state.omni_lights);
+			memdelete_arr(scene_state.omni_light_sort);
+			scene_state.omni_lights = nullptr;
+			scene_state.omni_light_sort = nullptr;
+			ERR_FAIL_MSG("Out of memory in initialisation of RasterizerSceneGLES3");
+		}
 		scene_state.spot_light_sort = memnew_arr(InstanceSort<GLES3::LightInstance>, config->max_renderable_lights);
+		if (unlikely(!scene_state.spot_light_sort)) {
+			memdelete_arr(scene_state.omni_lights);
+			memdelete_arr(scene_state.omni_light_sort);
+			memdelete_arr(scene_state.spot_lights);
+			scene_state.omni_lights = nullptr;
+			scene_state.omni_light_sort = nullptr;
+			scene_state.spot_lights = nullptr;
+			ERR_FAIL_MSG("Out of memory in initialisation of RasterizerSceneGLES3");
+		}
 		glGenBuffers(1, &scene_state.spot_light_buffer);
 		glBindBuffer(GL_UNIFORM_BUFFER, scene_state.spot_light_buffer);
 		GLES3::Utilities::get_singleton()->buffer_allocate_data(GL_UNIFORM_BUFFER, scene_state.spot_light_buffer, light_buffer_size, nullptr, GL_STREAM_DRAW, "SpotLight UBO");
 
 		uint32_t directional_light_buffer_size = MAX_DIRECTIONAL_LIGHTS * sizeof(DirectionalLightData);
 		scene_state.directional_lights = memnew_arr(DirectionalLightData, MAX_DIRECTIONAL_LIGHTS);
+		if (unlikely(!scene_state.directional_lights)) {
+			memdelete_arr(scene_state.omni_lights);
+			memdelete_arr(scene_state.omni_light_sort);
+			memdelete_arr(scene_state.spot_lights);
+			memdelete_arr(scene_state.spot_light_sort);
+			scene_state.omni_lights = nullptr;
+			scene_state.omni_light_sort = nullptr;
+			scene_state.spot_lights = nullptr;
+			scene_state.spot_light_sort = nullptr;
+			ERR_FAIL_MSG("Out of memory in initialisation of RasterizerSceneGLES3");
+		}
 		glGenBuffers(1, &scene_state.directional_light_buffer);
 		glBindBuffer(GL_UNIFORM_BUFFER, scene_state.directional_light_buffer);
 		GLES3::Utilities::get_singleton()->buffer_allocate_data(GL_UNIFORM_BUFFER, scene_state.directional_light_buffer, directional_light_buffer_size, nullptr, GL_STREAM_DRAW, "DirectionalLight UBO");
 
 		uint32_t shadow_buffer_size = config->max_renderable_lights * sizeof(ShadowData) * 2;
 		scene_state.positional_shadows = memnew_arr(ShadowData, config->max_renderable_lights * 2);
+		if (unlikely(!scene_state.positional_shadows)) {
+			memdelete_arr(scene_state.omni_lights);
+			memdelete_arr(scene_state.omni_light_sort);
+			memdelete_arr(scene_state.spot_lights);
+			memdelete_arr(scene_state.spot_light_sort);
+			memdelete_arr(scene_state.directional_lights);
+			scene_state.omni_lights = nullptr;
+			scene_state.omni_light_sort = nullptr;
+			scene_state.spot_lights = nullptr;
+			scene_state.spot_light_sort = nullptr;
+			scene_state.directional_lights = nullptr;
+			ERR_FAIL_MSG("Out of memory in initialisation of RasterizerSceneGLES3");
+		}
 		glGenBuffers(1, &scene_state.positional_shadow_buffer);
 		glBindBuffer(GL_UNIFORM_BUFFER, scene_state.positional_shadow_buffer);
 		GLES3::Utilities::get_singleton()->buffer_allocate_data(GL_UNIFORM_BUFFER, scene_state.positional_shadow_buffer, shadow_buffer_size, nullptr, GL_STREAM_DRAW, "Positional Shadow UBO");
 
 		uint32_t directional_shadow_buffer_size = MAX_DIRECTIONAL_LIGHTS * sizeof(DirectionalShadowData);
 		scene_state.directional_shadows = memnew_arr(DirectionalShadowData, MAX_DIRECTIONAL_LIGHTS);
+		if (unlikely(!scene_state.directional_shadows)) {
+			memdelete_arr(scene_state.omni_lights);
+			memdelete_arr(scene_state.omni_light_sort);
+			memdelete_arr(scene_state.spot_lights);
+			memdelete_arr(scene_state.spot_light_sort);
+			memdelete_arr(scene_state.directional_lights);
+			memdelete_arr(scene_state.positional_shadows);
+			scene_state.omni_lights = nullptr;
+			scene_state.omni_light_sort = nullptr;
+			scene_state.spot_lights = nullptr;
+			scene_state.spot_light_sort = nullptr;
+			scene_state.directional_lights = nullptr;
+			scene_state.positional_shadows = nullptr;
+			ERR_FAIL_MSG("Out of memory in initialisation of RasterizerSceneGLES3");
+		}
 		glGenBuffers(1, &scene_state.directional_shadow_buffer);
 		glBindBuffer(GL_UNIFORM_BUFFER, scene_state.directional_shadow_buffer);
 		GLES3::Utilities::get_singleton()->buffer_allocate_data(GL_UNIFORM_BUFFER, scene_state.directional_shadow_buffer, directional_shadow_buffer_size, nullptr, GL_STREAM_DRAW, "Directional Shadow UBO");
@@ -4262,7 +4323,13 @@ RasterizerSceneGLES3::RasterizerSceneGLES3() {
 		sky_globals.max_directional_lights = 4;
 		uint32_t directional_light_buffer_size = sky_globals.max_directional_lights * sizeof(DirectionalLightData);
 		sky_globals.directional_lights = memnew_arr(DirectionalLightData, sky_globals.max_directional_lights);
+		ERR_FAIL_NULL(sky_globals.directional_lights);
 		sky_globals.last_frame_directional_lights = memnew_arr(DirectionalLightData, sky_globals.max_directional_lights);
+		if (unlikely(!sky_globals.last_frame_directional_lights)) {
+			memdelete_arr(sky_globals.directional_lights);
+			sky_globals.directional_lights = nullptr;
+			ERR_FAIL_MSG("Out of memory in initialisation of RasterizerSceneGLES3");
+		}
 		sky_globals.last_frame_directional_light_count = sky_globals.max_directional_lights + 1;
 		glGenBuffers(1, &sky_globals.directional_light_buffer);
 		glBindBuffer(GL_UNIFORM_BUFFER, sky_globals.directional_light_buffer);

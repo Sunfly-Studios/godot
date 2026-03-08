@@ -106,10 +106,23 @@ void AudioDriverOpenSL::start() {
 
 	for (int i = 0; i < BUFFER_COUNT; i++) {
 		buffers[i] = memnew_arr(int16_t, buffer_size * 2);
+		if (unlikely(!buffers[i])) {
+			for (int j = 0; j < i; j++) {
+				memdelete_arr(buffers[j]);
+			}
+			ERR_FAIL_MSG("Out of memory allocating OpenSL audio buffers.");
+		}
+
 		memset(buffers[i], 0, buffer_size * 2 * sizeof(int16_t));
 	}
 
 	mixdown_buffer = memnew_arr(int32_t, buffer_size * 2);
+	if (unlikely(!mixdown_buffer)) {
+		for (int i = 0; i < BUFFER_COUNT; i++) {
+			memdelete_arr(buffers[i]);
+		}
+		ERR_FAIL_MSG("Out of memory allocating OpenSL mixdown buffer.");
+	}
 	/* Callback context for the buffer queue callback function */
 
 	/* Get the SL Engine Interface which is implicit */

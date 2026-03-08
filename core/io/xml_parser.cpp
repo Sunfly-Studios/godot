@@ -463,6 +463,7 @@ Error XMLParser::open_buffer(const Vector<uint8_t> &p_buffer) {
 
 	length = p_buffer.size();
 	data_copy = memnew_arr(char, length + 1);
+	ERR_FAIL_NULL_V(data_copy, ERR_OUT_OF_MEMORY);
 	memcpy(data_copy, p_buffer.ptr(), length);
 	data_copy[length] = 0;
 	data = data_copy;
@@ -504,6 +505,7 @@ Error XMLParser::open(const String &p_path) {
 	}
 
 	data_copy = memnew_arr(char, length + 1);
+	ERR_FAIL_NULL_V(data_copy, ERR_OUT_OF_MEMORY);
 	file->get_buffer((uint8_t *)data_copy, length);
 	data_copy[length] = 0;
 	data = data_copy;

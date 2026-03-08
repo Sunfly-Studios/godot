@@ -46,6 +46,7 @@ OH_AudioData_Callback_Result AudioDriverOpenHarmony::_buffer_callback(OH_AudioRe
 		mix = mutex.try_lock();
 	}
 
+	ERR_FAIL_NULL_V(mixdown_buffer, AUDIO_DATA_CALLBACK_RESULT_INVALID);
 	if (mix) {
 		audio_server_process(buffer_size, mixdown_buffer);
 	} else {

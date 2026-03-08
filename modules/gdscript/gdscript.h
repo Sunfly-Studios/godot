@@ -490,6 +490,7 @@ public:
 	_FORCE_INLINE_ void enter_function(GDScriptInstance *p_instance, GDScriptFunction *p_function, Variant *p_stack, int *p_ip, int *p_line) {
 		if (unlikely(_call_stack.levels == nullptr)) {
 			_call_stack.levels = memnew_arr(CallLevel, _debug_max_call_stack + 1);
+			ERR_FAIL_NULL_MSG(_call_stack.levels, "Out of memory allocating GDScript call stack.");
 		}
 
 		if (EngineDebugger::get_script_debugger()->get_lines_left() > 0 && EngineDebugger::get_script_debugger()->get_depth() >= 0) {

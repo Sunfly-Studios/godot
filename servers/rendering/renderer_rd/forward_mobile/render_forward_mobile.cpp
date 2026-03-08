@@ -1910,6 +1910,7 @@ _FORCE_INLINE_ static uint32_t _indices_to_primitives(RS::PrimitiveType p_primit
 }
 
 void RenderForwardMobile::_fill_render_list(RenderListType p_render_list, const RenderDataRD *p_render_data, PassMode p_pass_mode, bool p_append) {
+	ERR_FAIL_NULL(scene_state.lightmap_captures);
 	RendererRD::MeshStorage *mesh_storage = RendererRD::MeshStorage::get_singleton();
 
 	if (p_render_list == RENDER_LIST_OPAQUE) {
@@ -3251,6 +3252,7 @@ RenderForwardMobile::RenderForwardMobile() {
 		//captures
 		scene_state.max_lightmap_captures = 2048;
 		scene_state.lightmap_captures = memnew_arr(LightmapCaptureData, scene_state.max_lightmap_captures);
+		ERR_FAIL_NULL(scene_state.lightmap_captures);
 		scene_state.lightmap_capture_buffer = RD::get_singleton()->storage_buffer_create(sizeof(LightmapCaptureData) * scene_state.max_lightmap_captures);
 	}
 	{

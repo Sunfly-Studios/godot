@@ -1739,6 +1739,7 @@ RendererCanvasRenderRD::RendererCanvasRenderRD() {
 		global_defines += "\n#define SAMPLERS_BINDING_FIRST_INDEX " + itos(SAMPLERS_BINDING_FIRST_INDEX) + "\n";
 
 		state.light_uniforms = memnew_arr(LightUniform, state.max_lights_per_render);
+		ERR_FAIL_NULL(state.light_uniforms);
 		Vector<String> variants;
 		const uint32_t ubershader_iterations = 1;
 		for (uint32_t ubershader = 0; ubershader < ubershader_iterations; ubershader++) {
@@ -2069,6 +2070,7 @@ void fragment() {
 			db.instance_buffers.push_back(RD::get_singleton()->storage_buffer_create(state.max_instance_buffer_size));
 		}
 		state.instance_data_array = memnew_arr(InstanceData, state.max_instances_per_buffer);
+		ERR_FAIL_NULL(state.instance_data_array);
 	}
 }
 

@@ -287,6 +287,7 @@ void MeshStorage::mesh_add_surface(RID p_mesh, const RS::SurfaceData &p_surface)
 
 		if (new_surface.lods.size()) {
 			s->lods = memnew_arr(Mesh::Surface::LOD, new_surface.lods.size());
+			ERR_FAIL_NULL(s->lods);
 			s->lod_count = new_surface.lods.size();
 
 			for (int i = 0; i < new_surface.lods.size(); i++) {
@@ -429,6 +430,7 @@ void MeshStorage::mesh_add_surface(RID p_mesh, const RS::SurfaceData &p_surface)
 		if (mesh->blend_shape_count > 0) {
 			// Blend shapes are passed as one large array, for OpenGL, we need to split each of them into their own buffer
 			s->blend_shapes = memnew_arr(Mesh::Surface::BlendShape, mesh->blend_shape_count);
+			ERR_FAIL_NULL(s->blend_shapes);
 
 			for (uint32_t i = 0; i < mesh->blend_shape_count; i++) {
 				glGenVertexArrays(1, &s->blend_shapes[i].vertex_array);
@@ -1665,6 +1667,7 @@ void MeshStorage::_multimesh_make_local(MultiMesh *multimesh) const {
 	}
 	uint32_t data_cache_dirty_region_count = Math::division_round_up(multimesh->instances, MULTIMESH_DIRTY_REGION_SIZE);
 	multimesh->data_cache_dirty_regions = memnew_arr(bool, data_cache_dirty_region_count);
+	ERR_FAIL_NULL(multimesh->data_cache_dirty_regions);
 	for (uint32_t i = 0; i < data_cache_dirty_region_count; i++) {
 		multimesh->data_cache_dirty_regions[i] = false;
 	}

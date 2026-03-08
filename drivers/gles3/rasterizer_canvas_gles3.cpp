@@ -2809,7 +2809,14 @@ RasterizerCanvasGLES3::RasterizerCanvasGLES3() {
 	glBindBuffer(GL_UNIFORM_BUFFER, 0);
 
 	state.instance_data_array = memnew_arr(InstanceData, data.max_instances_per_buffer);
+	ERR_FAIL_NULL(state.instance_data_array);
 	state.light_uniforms = memnew_arr(LightUniform, data.max_lights_per_render);
+
+	if (unlikely(!state.light_uniforms)) {
+		memdelete_arr(state.instance_data_array);
+		state.instance_data_array = nullptr;
+		ERR_FAIL_MSG("Out of memory in initialisation of RasterizerCanvasGLES3");
+	}
 
 	{
 		const uint32_t indices[6] = { 0, 2, 1, 3, 2, 0 };

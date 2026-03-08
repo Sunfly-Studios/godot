@@ -734,6 +734,7 @@ public:
 		}
 
 		Element **aux_buffer = memnew_arr(Element *, s);
+		ERR_FAIL_NULL(aux_buffer);
 
 		int idx = 0;
 		for (Element *E = front(); E; E = E->next_ptr) {

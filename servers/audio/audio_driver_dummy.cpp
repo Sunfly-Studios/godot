@@ -55,6 +55,8 @@ Error AudioDriverDummy::init() {
 
 void AudioDriverDummy::thread_func(void *p_udata) {
 	AudioDriverDummy *ad = static_cast<AudioDriverDummy *>(p_udata);
+	ERR_FAIL_NULL(ad);
+	ERR_FAIL_NULL(ad->samples_in);
 
 	uint64_t usdelay = (ad->buffer_frames / float(ad->mix_rate)) * 1000000;
 
@@ -113,6 +115,7 @@ uint32_t AudioDriverDummy::get_channels() const {
 void AudioDriverDummy::mix_audio(int p_frames, int32_t *p_buffer) {
 	ERR_FAIL_COND(!active.is_set()); // If not active, should not mix.
 	ERR_FAIL_COND(use_threads == true); // If using threads, this will not work well.
+	ERR_FAIL_NULL(samples_in);
 
 	uint32_t todo = p_frames;
 	while (todo) {

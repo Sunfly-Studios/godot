@@ -1024,6 +1024,8 @@ static void _scale_lanczos(const uint8_t *__restrict p_src, uint8_t *__restrict 
 	uint32_t buffer_size = src_height * dst_width * CC;
 	float *buffer = memnew_arr(float, buffer_size); // Store the first pass in a buffer
 
+	ERR_FAIL_NULL(buffer);
+
 	{ // FIRST PASS (horizontal)
 
 		float x_scale = float(src_width) / float(dst_width);
@@ -1032,6 +1034,11 @@ static void _scale_lanczos(const uint8_t *__restrict p_src, uint8_t *__restrict 
 		int32_t half_kernel = LANCZOS_TYPE * scale_factor;
 
 		float *kernel = memnew_arr(float, half_kernel * 2);
+
+		if (unlikely(!kernel)) {
+            memdelete_arr(buffer);
+            ERR_FAIL_MSG("Out of memory allocating first pass Lanczos kernel.");
+        }
 
 		for (int32_t buffer_x = 0; buffer_x < dst_width; buffer_x++) {
 			// The corresponding point on the source image
@@ -1082,6 +1089,11 @@ static void _scale_lanczos(const uint8_t *__restrict p_src, uint8_t *__restrict 
 		int32_t half_kernel = LANCZOS_TYPE * scale_factor;
 
 		float *kernel = memnew_arr(float, half_kernel * 2);
+
+		if (unlikely(!kernel)) {
+            memdelete_arr(buffer);
+            ERR_FAIL_MSG("Out of memory allocating second pass Lanczos kernel.");
+        }
 
 		for (int32_t dst_y = 0; dst_y < dst_height; dst_y++) {
 			float buffer_y = (dst_y + 0.5f) * y_scale;

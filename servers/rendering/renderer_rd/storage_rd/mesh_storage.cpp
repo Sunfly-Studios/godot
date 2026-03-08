@@ -415,6 +415,7 @@ void MeshStorage::mesh_add_surface(RID p_mesh, const RS::SurfaceData &p_surface)
 		s->index_array = RD::get_singleton()->index_array_create(s->index_buffer, 0, s->index_count);
 		if (new_surface.lods.size()) {
 			s->lods = memnew_arr(Mesh::Surface::LOD, new_surface.lods.size());
+			ERR_FAIL_NULL(s->lods);
 			s->lod_count = new_surface.lods.size();
 
 			for (int i = 0; i < new_surface.lods.size(); i++) {
@@ -1690,10 +1691,18 @@ void MeshStorage::_multimesh_make_local(MultiMesh *multimesh) const {
 	}
 	uint32_t data_cache_dirty_region_count = Math::division_round_up(multimesh->instances, MULTIMESH_DIRTY_REGION_SIZE);
 	multimesh->data_cache_dirty_regions = memnew_arr(bool, data_cache_dirty_region_count);
+	ERR_FAIL_NULL(multimesh->data_cache_dirty_regions);
 	memset(multimesh->data_cache_dirty_regions, 0, data_cache_dirty_region_count * sizeof(bool));
 	multimesh->data_cache_dirty_region_count = 0;
 
 	multimesh->previous_data_cache_dirty_regions = memnew_arr(bool, data_cache_dirty_region_count);
+
+	if (unlikely(!multimesh->previous_data_cache_dirty_regions)) {
+		memdelete_arr(multimesh->data_cache_dirty_regions);
+		multimesh->data_cache_dirty_regions = nullptr;
+		ERR_FAIL_MSG("Out of memory on _multimesh_make_local");
+	}
+
 	memset(multimesh->previous_data_cache_dirty_regions, 0, data_cache_dirty_region_count * sizeof(bool));
 	multimesh->previous_data_cache_dirty_region_count = 0;
 }

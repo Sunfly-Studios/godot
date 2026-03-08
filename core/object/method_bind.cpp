@@ -102,6 +102,7 @@ void MethodBind::_generate_argument_types(int p_count) {
 	set_argument_count(p_count);
 
 	Variant::Type *argt = memnew_arr(Variant::Type, p_count + 1);
+	ERR_FAIL_NULL(argt);
 	argt[0] = _gen_argument_type(-1); // return type
 
 	for (int i = 0; i < p_count; i++) {

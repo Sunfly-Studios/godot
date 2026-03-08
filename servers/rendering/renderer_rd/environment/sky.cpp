@@ -733,7 +733,15 @@ void SkyRD::init() {
 		sky_scene_state.max_directional_lights = 4;
 		uint32_t directional_light_buffer_size = sky_scene_state.max_directional_lights * sizeof(SkyDirectionalLightData);
 		sky_scene_state.directional_lights = memnew_arr(SkyDirectionalLightData, sky_scene_state.max_directional_lights);
+		ERR_FAIL_NULL(sky_scene_state.directional_lights);
 		sky_scene_state.last_frame_directional_lights = memnew_arr(SkyDirectionalLightData, sky_scene_state.max_directional_lights);
+
+		if (unlikely(!sky_scene_state.last_frame_directional_lights)) {
+			memdelete_arr(sky_scene_state.directional_lights);
+			sky_scene_state.directional_lights = nullptr;
+			ERR_FAIL_MSG("Out of memory in initialisation of SkyRD");
+		}
+
 		sky_scene_state.last_frame_directional_light_count = sky_scene_state.max_directional_lights + 1;
 		sky_scene_state.directional_light_buffer = RD::get_singleton()->uniform_buffer_create(directional_light_buffer_size);
 

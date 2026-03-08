@@ -46,6 +46,9 @@ int AudioRBResampler::get_channel_count() const {
 // but it wasn't obvious to integrate that with VideoStreamPlayer
 template <int C>
 uint32_t AudioRBResampler::_resample(AudioFrame *p_dest, int p_todo, int32_t p_increment) {
+	if (!rb) {
+		return 0;
+	}
 	uint32_t read = offset & MIX_FRAC_MASK;
 
 	for (int i = 0; i < p_todo; i++) {
@@ -186,6 +189,9 @@ Error AudioRBResampler::setup(int p_channels, int p_src_mix_rate, int p_target_m
 	offset = 0;
 	rb_read_pos.set(0);
 	rb_write_pos.set(0);
+
+	ERR_FAIL_NULL_V(rb, ERR_OUT_OF_MEMORY);
+	ERR_FAIL_NULL_V(read_buf, ERR_OUT_OF_MEMORY);
 
 	//avoid maybe strange noises upon load
 	for (unsigned int i = 0; i < (rb_len * channels); i++) {

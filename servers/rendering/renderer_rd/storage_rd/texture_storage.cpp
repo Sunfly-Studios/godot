@@ -3077,7 +3077,15 @@ void TextureStorage::set_max_decals(const uint32_t p_max_decals) {
 	max_decals = p_max_decals;
 	uint32_t decal_buffer_size = max_decals * sizeof(DecalData);
 	decals = memnew_arr(DecalData, max_decals);
+	ERR_FAIL_NULL(decals);
 	decal_sort = memnew_arr(DecalInstanceSort, max_decals);
+
+	if (unlikely(!decal_sort)) {
+		memdelete_arr(decals);
+		decals = nullptr;
+		ERR_FAIL_MSG("Out of memory running set max decals");
+	}
+
 	decal_buffer = RD::get_singleton()->storage_buffer_create(decal_buffer_size);
 }
 

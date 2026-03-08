@@ -494,12 +494,46 @@ Vector<Face3> Geometry3D::wrap_geometry(const Vector<Face3> &p_array, real_t *p_
 	// Create and initialize cells to zero.
 
 	uint8_t ***cell_status = memnew_arr(uint8_t **, div_x);
+	ERR_FAIL_NULL_V(cell_status, Vector<Face3>());
+
 	for (int i = 0; i < div_x; i++) {
 		cell_status[i] = memnew_arr(uint8_t *, div_y);
 
+		if (unlikely(!cell_status[i])) {
+			// We failed at 'i'. We must delete all successfully built arrays from 0 to i-1.
+			for (int prev_i = 0; prev_i < i; prev_i++) {
+				for (int prev_j = 0; prev_j < div_y; prev_j++) {
+					memdelete_arr(cell_status[prev_i][prev_j]); // Delete Z leaves
+				}
+				memdelete_arr(cell_status[prev_i]); // Delete Y branches
+			}
+			memdelete_arr(cell_status); // Delete root
+			ERR_FAIL_V_MSG(Vector<Face3>(), "Out of memory allocating Y arrays for voxel grid.");
+		}
+
 		for (int j = 0; j < div_y; j++) {
 			cell_status[i][j] = memnew_arr(uint8_t, div_z);
+			
+			if (unlikely(!cell_status[i][j])) {
+				// Clean up the current 'i' branch up to the 'j' that failed.
+				for (int prev_j = 0; prev_j < j; prev_j++) {
+					memdelete_arr(cell_status[i][prev_j]);
+				}
+				memdelete_arr(cell_status[i]);
 
+				// Clean up all completely successful previous 'i' branches.
+				for (int prev_i = 0; prev_i < i; prev_i++) {
+					for (int prev_j = 0; prev_j < div_y; prev_j++) {
+						memdelete_arr(cell_status[prev_i][prev_j]);
+					}
+					memdelete_arr(cell_status[prev_i]);
+				}
+				memdelete_arr(cell_status); // Delete root
+				
+				ERR_FAIL_V_MSG(Vector<Face3>(), "Out of memory allocating Z arrays for voxel grid.");
+			}
+
+			// Initialize
 			for (int k = 0; k < div_z; k++) {
 				cell_status[i][j][k] = 0;
 			}
@@ -921,6 +955,7 @@ Vector<uint32_t> Geometry3D::generate_edf(const Vector<bool> &p_voxels, const Ve
 	ERR_FAIL_COND_V((uint32_t)p_voxels.size() != float_count, Vector<uint32_t>());
 
 	float *work_memory = memnew_arr(float, float_count);
+	ERR_FAIL_NULL_V(work_memory, Vector<uint32_t>());
 	for (uint32_t i = 0; i < float_count; i++) {
 		work_memory[i] = INF;
 	}

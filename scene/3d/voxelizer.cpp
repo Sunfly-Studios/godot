@@ -1053,6 +1053,7 @@ Voxelizer::BakeResult Voxelizer::get_sdf_3d_image(Vector<uint8_t> &r_image, Bake
 
 	uint32_t float_count = octree_size.x * octree_size.y * octree_size.z;
 	float *work_memory = memnew_arr(float, float_count);
+	ERR_FAIL_NULL_V(work_memory, BAKE_RESULT_CANCELLED); // Not really cancelled, but anyway.
 	for (uint32_t i = 0; i < float_count; i++) {
 		work_memory[i] = INF;
 	}

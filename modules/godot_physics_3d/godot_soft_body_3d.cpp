@@ -599,6 +599,7 @@ void GodotSoftBody3D::generate_bending_constraints(int p_distance) {
 		const uint32_t adj_size = n * n;
 		unsigned *adj = memnew_arr(unsigned, adj_size);
 
+		ERR_FAIL_NULL(adj);
 #define IDX(_x_, _y_) ((_y_) * n + (_x_))
 		for (j = 0; j < n; ++j) {
 			for (i = 0; i < n; ++i) {
@@ -730,14 +731,76 @@ void GodotSoftBody3D::reoptimize_link_order() {
 
 	// Allocate temporary buffers.
 	int *node_written_at = memnew_arr(int, node_count + 1); // What link calculation produced this node's current values?
+	ERR_FAIL_NULL(node_written_at);
 	int *link_dep_A = memnew_arr(int, link_count); // Link calculation input is dependent upon prior calculation #N
+
+	if (unlikely(!link_dep_A)) {
+		memdelete_arr(node_written_at);
+		node_written_at = nullptr;
+		ERR_FAIL_MSG("Out of memory allocating physics buffers");
+	}
 	int *link_dep_B = memnew_arr(int, link_count);
+	if (unlikely(!link_dep_B)) {
+		memdelete_arr(node_written_at);
+		memdelete_arr(link_dep_A);
+		node_written_at = nullptr;
+		link_dep_A = nullptr;
+		ERR_FAIL_MSG("Out of memory allocating physics buffers");
+	}
 	int *ready_list = memnew_arr(int, link_count); // List of ready-to-process link calculations (# of links, maximum)
+	if (unlikely(!ready_list)) {
+		memdelete_arr(node_written_at);
+		memdelete_arr(link_dep_A);
+		memdelete_arr(link_dep_B);
+		node_written_at = nullptr;
+		link_dep_A = nullptr;
+		link_dep_B = nullptr;
+		ERR_FAIL_MSG("Out of memory allocating physics buffers");
+	}
 	LinkDeps *link_dep_free_list = memnew_arr(LinkDeps, 2 * link_count); // Dependent-on-me list elements (2x# of links, maximum)
+	if (unlikely(!link_dep_free_list)) {
+		memdelete_arr(node_written_at);
+		memdelete_arr(link_dep_A);
+		memdelete_arr(link_dep_B);
+		memdelete_arr(ready_list);
+		node_written_at = nullptr;
+		link_dep_A = nullptr;
+		link_dep_B = nullptr;
+		ready_list = nullptr;
+		ERR_FAIL_MSG("Out of memory allocating physics buffers");
+	}
 	LinkDepsPtr *link_dep_list_starts = memnew_arr(LinkDepsPtr, link_count); // Start nodes of dependent-on-me lists, one for each link
+	if (unlikely(!link_dep_list_starts)) {
+		memdelete_arr(node_written_at);
+		memdelete_arr(link_dep_A);
+		memdelete_arr(link_dep_B);
+		memdelete_arr(ready_list);
+		memdelete_arr(link_dep_free_list);
+		node_written_at = nullptr;
+		link_dep_A = nullptr;
+		link_dep_B = nullptr;
+		ready_list = nullptr;
+		link_dep_free_list = nullptr;
+		ERR_FAIL_MSG("Out of memory allocating physics buffers");
+	}
 
 	// Copy the original, unsorted links to a side buffer.
 	Link *link_buffer = memnew_arr(Link, link_count);
+	if (unlikely(!link_buffer)) {
+		memdelete_arr(node_written_at);
+		memdelete_arr(link_dep_A);
+		memdelete_arr(link_dep_B);
+		memdelete_arr(ready_list);
+		memdelete_arr(link_dep_free_list);
+		memdelete_arr(link_dep_list_starts);
+		node_written_at = nullptr;
+		link_dep_A = nullptr;
+		link_dep_B = nullptr;
+		ready_list = nullptr;
+		link_dep_free_list = nullptr;
+		link_dep_list_starts = nullptr;
+		ERR_FAIL_MSG("Out of memory allocating physics buffers");
+	}
 	memcpy(link_buffer, &(links[0]), sizeof(Link) * link_count);
 
 	// Clear out the node setup and ready list.

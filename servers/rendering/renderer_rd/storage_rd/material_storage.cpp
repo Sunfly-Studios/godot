@@ -1263,9 +1263,23 @@ MaterialStorage::MaterialStorage() {
 
 	global_shader_uniforms.buffer_size = MAX(4096, (int)GLOBAL_GET("rendering/limits/global_shader_variables/buffer_size"));
 	global_shader_uniforms.buffer_values = memnew_arr(GlobalShaderUniforms::Value, global_shader_uniforms.buffer_size);
+	ERR_FAIL_NULL(global_shader_uniforms.buffer_values);
 	memset(global_shader_uniforms.buffer_values, 0, sizeof(GlobalShaderUniforms::Value) * global_shader_uniforms.buffer_size);
 	global_shader_uniforms.buffer_usage = memnew_arr(GlobalShaderUniforms::ValueUsage, global_shader_uniforms.buffer_size);
+	if (unlikely(!global_shader_uniforms.buffer_usage)) {
+		memdelete_arr(global_shader_uniforms.buffer_values);
+		global_shader_uniforms.buffer_values = nullptr;
+		ERR_FAIL_MSG("Out of memory for initialisation of MaterialStorage");
+	}
 	global_shader_uniforms.buffer_dirty_regions = memnew_arr(bool, 1 + (global_shader_uniforms.buffer_size / GlobalShaderUniforms::BUFFER_DIRTY_REGION_SIZE));
+	
+	if (unlikely(!global_shader_uniforms.buffer_dirty_regions)) {
+		memdelete_arr(global_shader_uniforms.buffer_values);
+		memdelete_arr(global_shader_uniforms.buffer_usage);
+		global_shader_uniforms.buffer_values = nullptr;
+		global_shader_uniforms.buffer_usage = nullptr;
+		ERR_FAIL_MSG("Out of memory for initialisation of MaterialStorage");
+	}
 	memset(global_shader_uniforms.buffer_dirty_regions, 0, sizeof(bool) * (1 + (global_shader_uniforms.buffer_size / GlobalShaderUniforms::BUFFER_DIRTY_REGION_SIZE)));
 	global_shader_uniforms.buffer = RD::get_singleton()->storage_buffer_create(sizeof(GlobalShaderUniforms::Value) * global_shader_uniforms.buffer_size);
 }

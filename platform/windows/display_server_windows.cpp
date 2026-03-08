@@ -5886,8 +5886,12 @@ LRESULT DisplayServerWindows::WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARA
 		case WM_TOUCH: {
 			BOOL bHandled = FALSE;
 			UINT cInputs = LOWORD(wParam);
+			if (cInputs == 0) {
+				break;
+			}
+
 			PTOUCHINPUT pInputs = memnew_arr(TOUCHINPUT, cInputs);
-			if (pInputs) {
+			if (likely(pInputs)) {
 				if (GetTouchInputInfo((HTOUCHINPUT)lParam, cInputs, pInputs, sizeof(TOUCHINPUT))) {
 					for (UINT i = 0; i < cInputs; i++) {
 						TOUCHINPUT ti = pInputs[i];
@@ -5905,17 +5909,16 @@ LRESULT DisplayServerWindows::WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARA
 					}
 					bHandled = TRUE;
 				} else {
-					// TODO: Handle the error here.
+					ERR_PRINT("GetTouchInputInfo failed. Win32 Error: " + itos(GetLastError()));
 				}
 				memdelete_arr(pInputs);
 			} else {
-				// TODO: Handle the error here, probably out of memory.
+				ERR_PRINT("Out of memory allocating TOUCHINPUT array for WM_TOUCH event.");
 			}
 			if (bHandled) {
 				CloseTouchInputHandle((HTOUCHINPUT)lParam);
 				return 0;
 			}
-
 		} break;
 		case WM_DESTROY: {
 			Input::get_singleton()->flush_buffered_events();

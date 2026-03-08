@@ -187,6 +187,7 @@ public:
 			method(p_method), method_info(p_method_info) {
 		set_argument_count(method_info.arguments.size());
 		Variant::Type *at = memnew_arr(Variant::Type, method_info.arguments.size() + 1);
+		ERR_FAIL_NULL(at);
 		at[0] = _gen_return_type_info().type;
 		if (method_info.arguments.size()) {
 #ifdef DEBUG_METHODS_ENABLED

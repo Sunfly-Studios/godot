@@ -948,6 +948,8 @@ void RendererSceneRenderRD::gi_set_use_half_resolution(bool p_enable) {
 
 void RendererSceneRenderRD::positional_soft_shadow_filter_set_quality(RS::ShadowQuality p_quality) {
 	ERR_FAIL_INDEX_MSG(p_quality, RS::SHADOW_QUALITY_MAX, "Shadow quality too high, please see RenderingServer's ShadowQuality enum");
+	ERR_FAIL_NULL(penumbra_shadow_kernel);
+	ERR_FAIL_NULL(soft_shadow_kernel);
 
 	if (shadows_quality != p_quality) {
 		shadows_quality = p_quality;
@@ -995,6 +997,8 @@ void RendererSceneRenderRD::positional_soft_shadow_filter_set_quality(RS::Shadow
 
 void RendererSceneRenderRD::directional_soft_shadow_filter_set_quality(RS::ShadowQuality p_quality) {
 	ERR_FAIL_INDEX_MSG(p_quality, RS::SHADOW_QUALITY_MAX, "Shadow quality too high, please see RenderingServer's ShadowQuality enum");
+	ERR_FAIL_NULL(directional_penumbra_shadow_kernel);
+	ERR_FAIL_NULL(directional_soft_shadow_kernel);
 
 	if (directional_shadow_quality != p_quality) {
 		directional_shadow_quality = p_quality;
@@ -1505,9 +1509,31 @@ void RendererSceneRenderRD::init() {
 	glow_bicubic_upscale = int(GLOBAL_GET("rendering/environment/glow/upscale_mode")) > 0;
 
 	directional_penumbra_shadow_kernel = memnew_arr(float, 128);
+	ERR_FAIL_NULL(directional_penumbra_shadow_kernel);
 	directional_soft_shadow_kernel = memnew_arr(float, 128);
+	if (unlikely(!directional_soft_shadow_kernel)) {
+		memdelete_arr(directional_penumbra_shadow_kernel);
+		directional_penumbra_shadow_kernel = nullptr;
+		ERR_FAIL_MSG("Out of memory in RendererSceneRenderRD constructor");
+	}
 	penumbra_shadow_kernel = memnew_arr(float, 128);
+	if (unlikely(!penumbra_shadow_kernel)) {
+		memdelete_arr(directional_penumbra_shadow_kernel);
+		memdelete_arr(directional_soft_shadow_kernel);
+		directional_penumbra_shadow_kernel = nullptr;
+		directional_soft_shadow_kernel = nullptr;
+		ERR_FAIL_MSG("Out of memory in RendererSceneRenderRD constructor");
+	}
 	soft_shadow_kernel = memnew_arr(float, 128);
+	if (unlikely(!soft_shadow_kernel)) {
+		memdelete_arr(directional_penumbra_shadow_kernel);
+		memdelete_arr(directional_soft_shadow_kernel);
+		memdelete_arr(penumbra_shadow_kernel);
+		directional_penumbra_shadow_kernel = nullptr;
+		directional_soft_shadow_kernel = nullptr;
+		penumbra_shadow_kernel = nullptr;
+		ERR_FAIL_MSG("Out of memory in RendererSceneRenderRD constructor");
+	}
 	positional_soft_shadow_filter_set_quality(RS::ShadowQuality(int(GLOBAL_GET("rendering/lights_and_shadows/positional_shadow/soft_shadow_filter_quality"))));
 	directional_soft_shadow_filter_set_quality(RS::ShadowQuality(int(GLOBAL_GET("rendering/lights_and_shadows/directional_shadow/soft_shadow_filter_quality"))));
 

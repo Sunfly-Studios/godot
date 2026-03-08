@@ -268,6 +268,8 @@ Error PCKPacker::flush_and_sign(const Ref<CryptoKey> &p_sign_key, bool p_verbose
 	const uint32_t buf_max = 65536;
 	uint8_t *buf = memnew_arr(uint8_t, buf_max);
 
+	ERR_FAIL_NULL_V(buf, ERR_OUT_OF_MEMORY);
+
 	int count = 0;
 	for (int i = 0; i < files.size(); i++) {
 		if (files[i].removal) {

@@ -584,16 +584,50 @@ void LightStorage::set_max_lights(const uint32_t p_max_lights) {
 
 	uint32_t light_buffer_size = max_lights * sizeof(LightData);
 	omni_lights = memnew_arr(LightData, max_lights);
+	ERR_FAIL_NULL(omni_lights);
 	omni_light_buffer = RD::get_singleton()->storage_buffer_create(light_buffer_size);
 	omni_light_sort = memnew_arr(LightInstanceDepthSort, max_lights);
+	if (unlikely(!omni_light_sort)) {
+		memdelete_arr(omni_lights);
+		omni_lights = nullptr;
+		ERR_FAIL_MSG("Out of memory creating lights for LightStorage");
+	}
+
 	spot_lights = memnew_arr(LightData, max_lights);
+	if (unlikely(!spot_lights)) {
+		memdelete_arr(omni_lights);
+		memdelete_arr(omni_light_sort);
+		omni_lights = nullptr;
+		omni_light_sort = nullptr;
+		ERR_FAIL_MSG("Out of memory creating lights for LightStorage");
+	}
 	spot_light_buffer = RD::get_singleton()->storage_buffer_create(light_buffer_size);
 	spot_light_sort = memnew_arr(LightInstanceDepthSort, max_lights);
+	if (unlikely(!spot_light_sort)) {
+		memdelete_arr(omni_lights);
+		memdelete_arr(omni_light_sort);
+		memdelete_arr(spot_lights);
+		omni_lights = nullptr;
+		omni_light_sort = nullptr;
+		spot_lights = nullptr;
+		ERR_FAIL_MSG("Out of memory creating lights for LightStorage");
+	}
 	//defines += "\n#define MAX_LIGHT_DATA_STRUCTS " + itos(max_lights) + "\n";
 
 	max_directional_lights = RendererSceneRender::MAX_DIRECTIONAL_LIGHTS;
 	uint32_t directional_light_buffer_size = max_directional_lights * sizeof(DirectionalLightData);
 	directional_lights = memnew_arr(DirectionalLightData, max_directional_lights);
+	if (unlikely(!directional_lights)) {
+		memdelete_arr(omni_lights);
+		memdelete_arr(omni_light_sort);
+		memdelete_arr(spot_lights);
+		memdelete_arr(spot_light_sort);
+		omni_lights = nullptr;
+		omni_light_sort = nullptr;
+		spot_lights = nullptr;
+		spot_light_sort = nullptr;
+		ERR_FAIL_MSG("Out of memory creating lights for LightStorage");
+	}
 	directional_light_buffer = RD::get_singleton()->uniform_buffer_create(directional_light_buffer_size);
 }
 
@@ -1715,7 +1749,15 @@ void LightStorage::free_reflection_data() {
 void LightStorage::set_max_reflection_probes(const uint32_t p_max_reflection_probes) {
 	max_reflections = p_max_reflection_probes;
 	reflections = memnew_arr(ReflectionData, max_reflections);
+	ERR_FAIL_NULL(reflections);
 	reflection_sort = memnew_arr(ReflectionProbeInstanceSort, max_reflections);
+
+	if (unlikely(!reflection_sort)) {
+		memdelete_arr(reflections);
+		reflections = nullptr;
+		ERR_FAIL_MSG("Out of memory for setting max reflection probes");
+	}
+
 	reflection_buffer = RD::get_singleton()->storage_buffer_create(sizeof(ReflectionData) * max_reflections);
 }
 

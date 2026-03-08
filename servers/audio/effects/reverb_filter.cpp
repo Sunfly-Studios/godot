@@ -56,6 +56,8 @@ const float Reverb::allpass_tunings[MAX_ALLPASS] = {
 };
 
 void Reverb::process(float *p_src, float *p_dst, int p_frames) {
+	ERR_FAIL_NULL(input_buffer);
+	ERR_FAIL_NULL(echo_buffer);
 	if (p_frames > INPUT_BUFFER_MAX_SIZE) {
 		p_frames = INPUT_BUFFER_MAX_SIZE;
 	}
@@ -241,6 +243,7 @@ void Reverb::configure_buffers() {
 		}
 
 		c.buffer = memnew_arr(float, len);
+		ERR_FAIL_NULL(c.buffer);
 		c.pos = 0;
 		for (int j = 0; j < len; j++) {
 			c.buffer[j] = 0;
@@ -259,6 +262,7 @@ void Reverb::configure_buffers() {
 		}
 
 		a.buffer = memnew_arr(float, len);
+		ERR_FAIL_NULL(a.buffer);
 		a.pos = 0;
 		for (int j = 0; j < len; j++) {
 			a.buffer[j] = 0;
@@ -268,6 +272,7 @@ void Reverb::configure_buffers() {
 
 	echo_buffer_size = (int)(((float)MAX_ECHO_MS / 1000.0) * params.mix_rate + 1.0);
 	echo_buffer = memnew_arr(float, echo_buffer_size);
+	ERR_FAIL_NULL(echo_buffer);
 	for (int i = 0; i < echo_buffer_size; i++) {
 		echo_buffer[i] = 0;
 	}

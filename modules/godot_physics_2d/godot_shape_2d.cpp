@@ -586,6 +586,7 @@ void GodotConvexPolygonShape2D::set_data(const Variant &p_data) {
 		ERR_FAIL_COND(arr.is_empty());
 		point_count = arr.size();
 		points = memnew_arr(Point, point_count);
+		ERR_FAIL_NULL(points);
 		const Vector2 *r = arr.ptr();
 
 		for (int i = 0; i < point_count; i++) {
@@ -603,6 +604,7 @@ void GodotConvexPolygonShape2D::set_data(const Variant &p_data) {
 		ERR_FAIL_COND(point_count == 0);
 
 		points = memnew_arr(Point, point_count);
+		ERR_FAIL_NULL(points);
 		const real_t *r = dvr.ptr();
 
 		for (int i = 0; i < point_count; i++) {

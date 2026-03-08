@@ -1215,6 +1215,8 @@ template <typename T>
 static void register_builtin_method(const Vector<String> &p_argnames, const Vector<Variant> &p_def_args) {
 	StringName name = T::get_name();
 
+	ERR_FAIL_NULL(builtin_method_info);
+	ERR_FAIL_NULL(builtin_method_names);
 	ERR_FAIL_COND(builtin_method_info[T::get_base_type()].has(name));
 
 	VariantBuiltInMethodInfo imi;
@@ -1261,6 +1263,7 @@ void Variant::callp(const StringName &p_method, const Variant **p_args, int p_ar
 	} else {
 		r_error.error = Callable::CallError::CALL_OK;
 
+		ERR_FAIL_NULL(builtin_method_info);
 		const VariantBuiltInMethodInfo *imf = builtin_method_info[type].lookup_ptr(p_method);
 
 		if (!imf) {
@@ -1293,6 +1296,7 @@ void Variant::call_const(const StringName &p_method, const Variant **p_args, int
 	} else {
 		r_error.error = Callable::CallError::CALL_OK;
 
+		ERR_FAIL_NULL(builtin_method_info);
 		const VariantBuiltInMethodInfo *imf = builtin_method_info[type].lookup_ptr(p_method);
 
 		if (!imf) {
@@ -1312,6 +1316,7 @@ void Variant::call_const(const StringName &p_method, const Variant **p_args, int
 void Variant::call_static(Variant::Type p_type, const StringName &p_method, const Variant **p_args, int p_argcount, Variant &r_ret, Callable::CallError &r_error) {
 	r_error.error = Callable::CallError::CALL_OK;
 
+	ERR_FAIL_NULL(builtin_method_info);
 	const VariantBuiltInMethodInfo *imf = builtin_method_info[p_type].lookup_ptr(p_method);
 
 	if (!imf) {
@@ -1337,16 +1342,19 @@ bool Variant::has_method(const StringName &p_method) const {
 		return obj->has_method(p_method);
 	}
 
+	ERR_FAIL_NULL_V(builtin_method_info, false);
 	return builtin_method_info[type].has(p_method);
 }
 
 bool Variant::has_builtin_method(Variant::Type p_type, const StringName &p_method) {
 	ERR_FAIL_INDEX_V(p_type, Variant::VARIANT_MAX, false);
+	ERR_FAIL_NULL_V(builtin_method_info, false);
 	return builtin_method_info[p_type].has(p_method);
 }
 
 Variant::ValidatedBuiltInMethod Variant::get_validated_builtin_method(Variant::Type p_type, const StringName &p_method) {
 	ERR_FAIL_INDEX_V(p_type, Variant::VARIANT_MAX, nullptr);
+	ERR_FAIL_NULL_V(builtin_method_info, nullptr);
 	const VariantBuiltInMethodInfo *method = builtin_method_info[p_type].lookup_ptr(p_method);
 	ERR_FAIL_NULL_V(method, nullptr);
 	return method->validated_call;
@@ -1354,6 +1362,7 @@ Variant::ValidatedBuiltInMethod Variant::get_validated_builtin_method(Variant::T
 
 Variant::PTRBuiltInMethod Variant::get_ptr_builtin_method(Variant::Type p_type, const StringName &p_method) {
 	ERR_FAIL_INDEX_V(p_type, Variant::VARIANT_MAX, nullptr);
+	ERR_FAIL_NULL_V(builtin_method_info, nullptr);
 	const VariantBuiltInMethodInfo *method = builtin_method_info[p_type].lookup_ptr(p_method);
 	ERR_FAIL_NULL_V(method, nullptr);
 	return method->ptrcall;
@@ -1361,6 +1370,7 @@ Variant::PTRBuiltInMethod Variant::get_ptr_builtin_method(Variant::Type p_type, 
 
 MethodInfo Variant::get_builtin_method_info(Variant::Type p_type, const StringName &p_method) {
 	ERR_FAIL_INDEX_V(p_type, Variant::VARIANT_MAX, MethodInfo());
+	ERR_FAIL_NULL_V(builtin_method_info, MethodInfo());
 	const VariantBuiltInMethodInfo *method = builtin_method_info[p_type].lookup_ptr(p_method);
 	ERR_FAIL_NULL_V(method, MethodInfo());
 	return method->get_method_info(p_method);
@@ -1368,6 +1378,7 @@ MethodInfo Variant::get_builtin_method_info(Variant::Type p_type, const StringNa
 
 int Variant::get_builtin_method_argument_count(Variant::Type p_type, const StringName &p_method) {
 	ERR_FAIL_INDEX_V(p_type, Variant::VARIANT_MAX, 0);
+	ERR_FAIL_NULL_V(builtin_method_info, 0);
 	const VariantBuiltInMethodInfo *method = builtin_method_info[p_type].lookup_ptr(p_method);
 	ERR_FAIL_NULL_V(method, 0);
 	return method->argument_count;
@@ -1375,6 +1386,7 @@ int Variant::get_builtin_method_argument_count(Variant::Type p_type, const Strin
 
 Variant::Type Variant::get_builtin_method_argument_type(Variant::Type p_type, const StringName &p_method, int p_argument) {
 	ERR_FAIL_INDEX_V(p_type, Variant::VARIANT_MAX, Variant::NIL);
+	ERR_FAIL_NULL_V(builtin_method_info, Variant::NIL);
 	const VariantBuiltInMethodInfo *method = builtin_method_info[p_type].lookup_ptr(p_method);
 	ERR_FAIL_NULL_V(method, Variant::NIL);
 	ERR_FAIL_INDEX_V(p_argument, method->argument_count, Variant::NIL);
@@ -1383,6 +1395,7 @@ Variant::Type Variant::get_builtin_method_argument_type(Variant::Type p_type, co
 
 String Variant::get_builtin_method_argument_name(Variant::Type p_type, const StringName &p_method, int p_argument) {
 	ERR_FAIL_INDEX_V(p_type, Variant::VARIANT_MAX, String());
+	ERR_FAIL_NULL_V(builtin_method_info, String());
 	const VariantBuiltInMethodInfo *method = builtin_method_info[p_type].lookup_ptr(p_method);
 	ERR_FAIL_NULL_V(method, String());
 #ifdef DEBUG_METHODS_ENABLED
@@ -1395,6 +1408,7 @@ String Variant::get_builtin_method_argument_name(Variant::Type p_type, const Str
 
 Vector<Variant> Variant::get_builtin_method_default_arguments(Variant::Type p_type, const StringName &p_method) {
 	ERR_FAIL_INDEX_V(p_type, Variant::VARIANT_MAX, Vector<Variant>());
+	ERR_FAIL_NULL_V(builtin_method_info, Vector<Variant>());
 	const VariantBuiltInMethodInfo *method = builtin_method_info[p_type].lookup_ptr(p_method);
 	ERR_FAIL_NULL_V(method, Vector<Variant>());
 	return method->default_arguments;
@@ -1402,6 +1416,7 @@ Vector<Variant> Variant::get_builtin_method_default_arguments(Variant::Type p_ty
 
 bool Variant::has_builtin_method_return_value(Variant::Type p_type, const StringName &p_method) {
 	ERR_FAIL_INDEX_V(p_type, Variant::VARIANT_MAX, false);
+	ERR_FAIL_NULL_V(builtin_method_info, false);
 	const VariantBuiltInMethodInfo *method = builtin_method_info[p_type].lookup_ptr(p_method);
 	ERR_FAIL_NULL_V(method, false);
 	return method->has_return_type;
@@ -1409,6 +1424,7 @@ bool Variant::has_builtin_method_return_value(Variant::Type p_type, const String
 
 void Variant::get_builtin_method_list(Variant::Type p_type, List<StringName> *p_list) {
 	ERR_FAIL_INDEX(p_type, Variant::VARIANT_MAX);
+	ERR_FAIL_NULL(builtin_method_names);
 	for (const StringName &E : builtin_method_names[p_type]) {
 		p_list->push_back(E);
 	}
@@ -1416,11 +1432,13 @@ void Variant::get_builtin_method_list(Variant::Type p_type, List<StringName> *p_
 
 int Variant::get_builtin_method_count(Variant::Type p_type) {
 	ERR_FAIL_INDEX_V(p_type, Variant::VARIANT_MAX, -1);
+	ERR_FAIL_NULL_V(builtin_method_names, -1);
 	return builtin_method_names[p_type].size();
 }
 
 Variant::Type Variant::get_builtin_method_return_type(Variant::Type p_type, const StringName &p_method) {
 	ERR_FAIL_INDEX_V(p_type, Variant::VARIANT_MAX, Variant::NIL);
+	ERR_FAIL_NULL_V(builtin_method_info, Variant::NIL);
 	const VariantBuiltInMethodInfo *method = builtin_method_info[p_type].lookup_ptr(p_method);
 	ERR_FAIL_NULL_V(method, Variant::NIL);
 	return method->return_type;
@@ -1428,6 +1446,7 @@ Variant::Type Variant::get_builtin_method_return_type(Variant::Type p_type, cons
 
 bool Variant::is_builtin_method_const(Variant::Type p_type, const StringName &p_method) {
 	ERR_FAIL_INDEX_V(p_type, Variant::VARIANT_MAX, false);
+	ERR_FAIL_NULL_V(builtin_method_info, Variant::NIL);
 	const VariantBuiltInMethodInfo *method = builtin_method_info[p_type].lookup_ptr(p_method);
 	ERR_FAIL_NULL_V(method, false);
 	return method->is_const;
@@ -1435,6 +1454,7 @@ bool Variant::is_builtin_method_const(Variant::Type p_type, const StringName &p_
 
 bool Variant::is_builtin_method_static(Variant::Type p_type, const StringName &p_method) {
 	ERR_FAIL_INDEX_V(p_type, Variant::VARIANT_MAX, false);
+	ERR_FAIL_NULL_V(builtin_method_info, Variant::NIL);
 	const VariantBuiltInMethodInfo *method = builtin_method_info[p_type].lookup_ptr(p_method);
 	ERR_FAIL_NULL_V(method, false);
 	return method->is_static;
@@ -1442,6 +1462,7 @@ bool Variant::is_builtin_method_static(Variant::Type p_type, const StringName &p
 
 bool Variant::is_builtin_method_vararg(Variant::Type p_type, const StringName &p_method) {
 	ERR_FAIL_INDEX_V(p_type, Variant::VARIANT_MAX, false);
+	ERR_FAIL_NULL_V(builtin_method_info, Variant::NIL);
 	const VariantBuiltInMethodInfo *method = builtin_method_info[p_type].lookup_ptr(p_method);
 	ERR_FAIL_NULL_V(method, false);
 	return method->is_vararg;
@@ -1449,6 +1470,7 @@ bool Variant::is_builtin_method_vararg(Variant::Type p_type, const StringName &p
 
 uint32_t Variant::get_builtin_method_hash(Variant::Type p_type, const StringName &p_method) {
 	ERR_FAIL_INDEX_V(p_type, Variant::VARIANT_MAX, 0);
+	ERR_FAIL_NULL_V(builtin_method_info, 0);
 	const VariantBuiltInMethodInfo *method = builtin_method_info[p_type].lookup_ptr(p_method);
 	ERR_FAIL_NULL_V(method, 0);
 	uint32_t hash = hash_murmur3_one_32(method->is_const);
@@ -1473,7 +1495,9 @@ void Variant::get_method_list(List<MethodInfo> *p_list) const {
 			obj->get_method_list(p_list);
 		}
 	} else {
+		ERR_FAIL_NULL(builtin_method_names);
 		for (const StringName &E : builtin_method_names[type]) {
+			ERR_FAIL_NULL(builtin_method_info);
 			const VariantBuiltInMethodInfo *method = builtin_method_info[type].lookup_ptr(E);
 			ERR_CONTINUE(!method);
 			p_list->push_back(method->get_method_info(E));
@@ -1483,7 +1507,7 @@ void Variant::get_method_list(List<MethodInfo> *p_list) const {
 
 void Variant::get_constants_for_type(Variant::Type p_type, List<StringName> *p_constants) {
 	ERR_FAIL_INDEX(p_type, Variant::VARIANT_MAX);
-
+	ERR_FAIL_NULL(_VariantCall::constant_data);
 	const _VariantCall::ConstantData &cd = _VariantCall::constant_data[p_type];
 
 #ifdef DEBUG_ENABLED
@@ -1507,6 +1531,7 @@ void Variant::get_constants_for_type(Variant::Type p_type, List<StringName> *p_c
 
 int Variant::get_constants_count_for_type(Variant::Type p_type) {
 	ERR_FAIL_INDEX_V(p_type, Variant::VARIANT_MAX, -1);
+	ERR_FAIL_NULL_V(_VariantCall::constant_data, -1);
 	_VariantCall::ConstantData &cd = _VariantCall::constant_data[p_type];
 
 	return cd.value.size() + cd.variant_value.size();
@@ -1514,6 +1539,7 @@ int Variant::get_constants_count_for_type(Variant::Type p_type) {
 
 bool Variant::has_constant(Variant::Type p_type, const StringName &p_value) {
 	ERR_FAIL_INDEX_V(p_type, Variant::VARIANT_MAX, false);
+	ERR_FAIL_NULL_V(_VariantCall::constant_data, false);
 	_VariantCall::ConstantData &cd = _VariantCall::constant_data[p_type];
 	return cd.value.has(p_value) || cd.variant_value.has(p_value);
 }
@@ -1524,6 +1550,7 @@ Variant Variant::get_constant_value(Variant::Type p_type, const StringName &p_va
 	}
 
 	ERR_FAIL_INDEX_V(p_type, Variant::VARIANT_MAX, 0);
+	ERR_FAIL_NULL_V(_VariantCall::constant_data, -1);
 	_VariantCall::ConstantData &cd = _VariantCall::constant_data[p_type];
 
 	HashMap<StringName, int64_t>::Iterator E = cd.value.find(p_value);
@@ -1547,6 +1574,7 @@ Variant Variant::get_constant_value(Variant::Type p_type, const StringName &p_va
 
 void Variant::get_enums_for_type(Variant::Type p_type, List<StringName> *p_enums) {
 	ERR_FAIL_INDEX(p_type, Variant::VARIANT_MAX);
+	ERR_FAIL_NULL(_VariantCall::enum_data);
 
 	_VariantCall::EnumData &enum_data = _VariantCall::enum_data[p_type];
 
@@ -1557,6 +1585,7 @@ void Variant::get_enums_for_type(Variant::Type p_type, List<StringName> *p_enums
 
 void Variant::get_enumerations_for_enum(Variant::Type p_type, const StringName &p_enum_name, List<StringName> *p_enumerations) {
 	ERR_FAIL_INDEX(p_type, Variant::VARIANT_MAX);
+	ERR_FAIL_NULL(_VariantCall::enum_data);
 
 	_VariantCall::EnumData &enum_data = _VariantCall::enum_data[p_type];
 
@@ -1573,6 +1602,7 @@ int Variant::get_enum_value(Variant::Type p_type, const StringName &p_enum_name,
 	}
 
 	ERR_FAIL_INDEX_V(p_type, Variant::VARIANT_MAX, -1);
+	ERR_FAIL_NULL_V(_VariantCall::enum_data, -1);
 
 	_VariantCall::EnumData &enum_data = _VariantCall::enum_data[p_type];
 
@@ -1595,6 +1625,7 @@ int Variant::get_enum_value(Variant::Type p_type, const StringName &p_enum_name,
 
 bool Variant::has_enum(Variant::Type p_type, const StringName &p_enum_name) {
 	ERR_FAIL_INDEX_V(p_type, Variant::VARIANT_MAX, false);
+	ERR_FAIL_NULL_V(_VariantCall::enum_data, false);
 
 	_VariantCall::EnumData &enum_data = _VariantCall::enum_data[p_type];
 
@@ -1603,6 +1634,7 @@ bool Variant::has_enum(Variant::Type p_type, const StringName &p_enum_name) {
 
 StringName Variant::get_enum_for_enumeration(Variant::Type p_type, const StringName &p_enumeration) {
 	ERR_FAIL_INDEX_V(p_type, Variant::VARIANT_MAX, StringName());
+	ERR_FAIL_NULL_V(_VariantCall::enum_data, StringName());
 
 	_VariantCall::EnumData &enum_data = _VariantCall::enum_data[p_type];
 

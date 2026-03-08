@@ -1373,7 +1373,7 @@ Error Thread::start(const Callable &p_callable, Priority p_priority) {
 	running.set();
 
 	Ref<Thread> *ud = memnew(Ref<Thread>(this));
-
+	
 	::Thread::Settings s;
 	s.priority = (::Thread::Priority)p_priority;
 	thread.start(_start_func, ud, s);
