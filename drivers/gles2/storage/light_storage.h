@@ -152,7 +152,7 @@ struct ReflectionAtlas {
 	};
 	Vector<Reflection> reflections;
 
-	Ref<RenderSceneBuffersGLES3> render_buffers; // Further render buffers used.
+	Ref<RenderSceneBuffersGLES2> render_buffers; // Further render buffers used.
 };
 
 /* REFLECTION PROBE INSTANCE */
@@ -402,7 +402,8 @@ public:
 		const Light *light = light_owner.get_or_null(p_light);
 		ERR_FAIL_NULL_V(light, RS::LIGHT_DIRECTIONAL);
 
-		return TextureStorage::get_singleton()->owns_texture(light->projector);
+		// return TextureStorage::get_singleton()->owns_texture(light->projector);
+		return false; // TODO (GLES2);
 	}
 
 	_FORCE_INLINE_ bool light_is_negative(RID p_light) const {
@@ -795,7 +796,7 @@ public:
 
 		glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, atlas->debug_texture, 0);
 
-		glBindFramebuffer(GL_FRAMEBUFFER, GLES3::TextureStorage::system_fbo);
+		glBindFramebuffer(GL_FRAMEBUFFER, GLES2::RasterizerStorageGLES2::system_fbo);
 
 		return atlas->debug_fbo;
 	}

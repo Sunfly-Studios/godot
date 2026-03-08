@@ -1816,7 +1816,7 @@ void DisplayServerWindows::delete_sub_window(WindowID p_window) {
 }
 
 void DisplayServerWindows::gl_window_make_current(DisplayServer::WindowID p_window_id) {
-#if defined(GLES3_ENABLED)
+#if defined(GLES3_ENABLED) || defined(GLES2_ENABLED)
 	if (gl_manager_angle) {
 		gl_manager_angle->window_make_current(p_window_id);
 	}
@@ -1869,12 +1869,6 @@ int64_t DisplayServerWindows::window_get_native_handle(HandleType p_handle_type,
 			return 0;
 		}
 	}
-}
-
-void DisplayServerWindows::gl_window_make_current(DisplayServer::WindowID p_window_id) {
-#if defined(GLES_WINDOWS_ENABLED)
-	gl_manager->window_make_current(p_window_id);
-#endif
 }
 
 void DisplayServerWindows::window_attach_instance_id(ObjectID p_instance, WindowID p_window) {
@@ -7253,8 +7247,8 @@ DisplayServerWindows::DisplayServerWindows(const String &p_rendering_driver, Win
 
 #if defined(GLES2_ENABLED)
 
-	bool fallback = GLOBAL_GET("rendering/gl_legacy/fallback_to_angle");
-	bool show_warning = true;
+	fallback = GLOBAL_GET("rendering/gl_legacy/fallback_to_angle");
+	show_warning = true;
 
 	if (rendering_driver == "opengl2") {
 		// There's no native OpenGL drivers on Windows for ARM, always enable fallback.
@@ -7279,12 +7273,12 @@ DisplayServerWindows::DisplayServerWindows(const String &p_rendering_driver, Win
 #endif
 	}
 
-	bool gl_supported = true;
+	gl_supported = true;
 	if (fallback && (rendering_driver == "opengl2")) {
 		Dictionary gl_info = detect_wgl();
 
 		bool force_angle = false;
-		gl_supported = gl_info["version"].operator int() >= 20000;
+		gl_supported = gl_info["version"].operator int() >= 21000;
 
 		Vector2i device_id = _get_device_ids(gl_info["name"]);
 		Array device_list = GLOBAL_GET("rendering/gl_legacy/force_angle_on_devices");
@@ -7305,10 +7299,10 @@ DisplayServerWindows::DisplayServerWindows(const String &p_rendering_driver, Win
 			}
 		}
 
-		if (force_angle || (gl_info["version"].operator int() < 20000)) {
-			tested_drivers.set_flag(DRIVER_ID_COMPAT_OPENGL3);
+		if (force_angle || (gl_info["version"].operator int() < 21000)) {
+			tested_drivers.set_flag(DRIVER_ID_COMPAT_OPENGL2);
 			if (show_warning) {
-				if (gl_info["version"].operator int() < 20000) {
+				if (gl_info["version"].operator int() < 21000) {
 					WARN_PRINT("Your video card drivers seem not to support the required OpenGL 2.0 version, switching to ANGLE.");
 				} else {
 					WARN_PRINT("Your video card drivers are known to have low quality OpenGL 2.0 support, switching to ANGLE.");
@@ -7403,7 +7397,6 @@ DisplayServerWindows::DisplayServerWindows(const String &p_rendering_driver, Win
 	}
 #endif
 	// Init context and rendering device
-#if defined(GLES_WINDOWS_ENABLED)
 
 	window_set_vsync_mode(p_vsync_mode, MAIN_WINDOW_ID);
 

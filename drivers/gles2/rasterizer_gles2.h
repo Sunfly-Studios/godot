@@ -32,10 +32,23 @@
 
 #ifdef GLES2_ENABLED
 
-#include "rasterizer_canvas_gles2.h"
-#include "rasterizer_scene_gles2.h"
-#include "rasterizer_storage_gles2.h"
 #include "servers/rendering/renderer_compositor.h"
+#include "drivers/gles2/effects/copy_effects.h"
+#include "drivers/gles2/effects/cubemap_filter.h"
+#include "drivers/gles2/effects/feed_effects.h"
+#include "drivers/gles2/effects/glow.h"
+#include "drivers/gles2/effects/post_effects.h"
+#include "drivers/gles2/environment/fog.h"
+#include "drivers/gles2/environment/gi.h"
+#include "drivers/gles2/rasterizer_canvas_gles2.h"
+#include "drivers/gles2/rasterizer_scene_gles2.h"
+#include "drivers/gles2/storage/texture_storage.h"
+#include "drivers/gles2/storage/config.h"
+#include "drivers/gles2/storage/light_storage.h"
+#include "drivers/gles2/storage/material_storage.h"
+#include "drivers/gles2/storage/mesh_storage.h"
+#include "drivers/gles2/storage/particles_storage.h"
+#include "drivers/gles2/storage/utilities.h"
 
 class RasterizerGLES2 : public RendererCompositor {
 private:
@@ -46,16 +59,38 @@ private:
 	double time_scale = 1.0;
 
 protected:
-	RasterizerCanvasGLES2 canvas;
-	RasterizerStorageGLES2 storage;
-	RasterizerSceneGLES2 scene;
+	GLES2::Config *config = nullptr;
+	GLES2::Utilities *utilities = nullptr;
+	GLES2::RasterizerStorageGLES2 *texture_storage = nullptr;
+	GLES2::MaterialStorage *material_storage = nullptr;
+	GLES2::MeshStorage *mesh_storage = nullptr;
+	GLES2::ParticlesStorage *particles_storage = nullptr;
+	GLES2::LightStorage *light_storage = nullptr;
+	GLES2::GI *gi = nullptr;
+	GLES2::Fog *fog = nullptr;
+	GLES2::CopyEffects *copy_effects = nullptr;
+	GLES2::CubemapFilter *cubemap_filter = nullptr;
+	GLES2::Glow *glow = nullptr;
+	GLES2::PostEffects *post_effects = nullptr;
+	GLES2::FeedEffects *feed_effects = nullptr;
+	RasterizerCanvasGLES2 *canvas = nullptr;
+	RasterizerSceneGLES2 *scene = nullptr;
+	static RasterizerGLES2 *singleton;
 
 	void _blit_render_target_to_screen(RID p_render_target, const Rect2 &p_screen_rect);
 
 public:
-	RendererStorage *get_storage() { return &storage; }
-	RendererCanvasRender *get_canvas() { return &canvas; }
-	RendererSceneRender *get_scene() { return &scene; }
+	RendererUtilities *get_utilities() { return utilities; }
+	RendererLightStorage *get_light_storage() { return light_storage; }
+	RendererMaterialStorage *get_material_storage() { return material_storage; }
+	RendererMeshStorage *get_mesh_storage() { return mesh_storage; }
+	RendererParticlesStorage *get_particles_storage() { return particles_storage; }
+	//RendererTextureStorage *get_texture_storage() { return texture_storage; }
+	RendererTextureStorage *get_texture_storage() { return nullptr; }
+	RendererGI *get_gi() { return gi; }
+	RendererFog *get_fog() { return fog; }
+	RendererCanvasRender *get_canvas() { return canvas; }
+	RendererSceneRender *get_scene() { return scene; }
 
 	void set_boot_image(const Ref<Image> &p_image, const Color &p_color, bool p_scale, bool p_use_filter = true);
 
@@ -80,6 +115,10 @@ public:
 	virtual bool is_low_end() const { return true; }
 	uint64_t get_frame_number() const { return frame; }
 	double get_frame_delta_time() const { return delta; }
+
+	virtual void gl_end_frame(bool p_swap_buffers) override {}
+	virtual double get_total_time() const override { return 0.0; }
+	virtual bool can_create_resources_async() const override { return false; }
 
 	RasterizerGLES2();
 	~RasterizerGLES2() {}

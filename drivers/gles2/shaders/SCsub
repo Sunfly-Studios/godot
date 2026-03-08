@@ -1,5 +1,4 @@
 #!/usr/bin/env python
-from misc.utility.scons_hints import *
 
 Import("env")
 
@@ -13,16 +12,19 @@ if "GLES2_GLSL" in env["BUILDERS"]:
     # make sure we recompile shaders if include files change
     env.Depends([f + ".gen.h" for f in glsl_files], gl_include_files + ["#gles2_builders.py"])
 
-    # TODO: this is an ugly ugly hack
-    # I only use this because scons just refuses to run the builder and I can't giure out why
-    import os, sys
+    # compile shaders
 
-    sys.path.append("../../..")
-    from gles2_builders import build_gles2_headers
-    
-    build_gles2_headers(0, glsl_files, 0)
+    # Include them all even if they don't work
+    env.GLES2_GLSL(source="canvas.glsl")
+    env.GLES2_GLSL(source="feed.glsl")
+    env.GLES2_GLSL(source="scene.glsl")
+    env.GLES2_GLSL(source="sky.glsl")
+    env.GLES2_GLSL(source="cube_to_dp.glsl")
+    env.GLES2_GLSL(source="effect_blur.glsl")
+    env.GLES2_GLSL(source="canvas_shadow.glsl")
+    env.GLES2_GLSL(source="lens_distorted.glsl")
+    env.GLES2_GLSL(source="tonemap.glsl")
+    env.GLES2_GLSL(source="skeleton.glsl")
+    env.GLES2_GLSL(source="particles.glsl")
 
-    for f in glsl_files:
-        env.GLES2_GLSL(f)
-        
 SConscript("effects/SCsub")

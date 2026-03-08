@@ -28,8 +28,8 @@
 /* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                 */
 /**************************************************************************/
 
-#ifndef CUBEMAP_FILTER_GLES3_H
-#define CUBEMAP_FILTER_GLES3_H
+#ifndef CUBEMAP_FILTER_GLES2_H
+#define CUBEMAP_FILTER_GLES2_H
 
 #ifdef GLES2_ENABLED
 
@@ -40,7 +40,7 @@ namespace GLES2 {
 class CubemapFilter {
 private:
 	struct CMF {
-		CubemapFilterShaderGLES3 shader;
+		CubemapFilterShaderGLES2 shader;
 		RID shader_version;
 	} cubemap_filter;
 

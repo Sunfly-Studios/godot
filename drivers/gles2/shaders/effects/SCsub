@@ -15,4 +15,4 @@ if "GLES2_GLSL" in env["BUILDERS"]:
 
     # compile shaders
     for glsl_file in glsl_files:
-        env.GLES2_GLSL(glsl_file)
+        env.GLES2_GLSL(source=glsl_file)

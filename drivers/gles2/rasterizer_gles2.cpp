@@ -277,7 +277,7 @@ void RasterizerGLES2::_blit_render_target_to_screen(RID p_render_target, const R
 
 	//	print_line("_blit_render_target_to_screen " + itos (p_screen) + ", rect " + String(Variant(p_screen_rect)));
 
-	RasterizerStorageGLES2::RenderTarget *rt = storage.render_target_owner.getornull(p_render_target);
+	RasterizerStorageGLES2::RenderTarget *rt = storage.render_target_owner.get_or_null(p_render_target);
 	ERR_FAIL_COND(!rt);
 
 	canvas._set_texture_rect_mode(true);
@@ -338,7 +338,7 @@ void RasterizerGLES2::set_boot_image(const Ref<Image> &p_image, const Color &p_c
 	canvas.canvas_begin();
 
 	RID texture = storage.texture_create();
-	//storage.texture_allocate(texture, p_image->get_width(), p_image->get_height(), 0, p_image->get_format(), VS::TEXTURE_TYPE_2D, p_use_filter ? VS::TEXTURE_FLAG_FILTER : 0);
+	//storage.texture_allocate(texture, p_image->get_width(), p_image->get_height(), 0, p_image->get_format(), RS::TEXTURE_TYPE_2D, p_use_filter ? RS::TEXTURE_FLAG_FILTER : 0);
 	storage._texture_allocate_internal(texture, p_image->get_width(), p_image->get_height(), 0, p_image->get_format(), RD::TEXTURE_TYPE_2D);
 	storage.texture_set_data(texture, p_image);
 
@@ -362,7 +362,7 @@ void RasterizerGLES2::set_boot_image(const Ref<Image> &p_image, const Color &p_c
 		screenrect.position += ((Size2(window_w, window_h) - screenrect.size) / 2.0).floor();
 	}
 
-	RasterizerStorageGLES2::Texture *t = storage.texture_owner.getornull(texture);
+	RasterizerStorageGLES2::Texture *t = storage.texture_owner.get_or_null(texture);
 	glActiveTexture(GL_TEXTURE0 + storage.config.max_texture_image_units - 1);
 	glBindTexture(GL_TEXTURE_2D, t->tex_id);
 	canvas.draw_generic_textured_rect(screenrect, Rect2(0, 0, 1, 1));

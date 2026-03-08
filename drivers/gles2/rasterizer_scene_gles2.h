@@ -36,45 +36,24 @@
 #include "core/math/projection.h"
 #include "core/templates/rid_owner.h"
 #include "core/templates/self_list.h"
-#include "drivers/gles2/rasterizer_common_stubs.h"
 #include "scene/resources/mesh.h"
 #include "servers/rendering/renderer_compositor.h"
+#include "servers/rendering/renderer_scene_render.h"
+#include "servers/rendering/renderer_scene_cull.h"
 #include "servers/rendering_server.h"
-#include "shaders/scene.glsl.gen.h"
+#include "drivers/gles2/common/stubs.h"
+#include "drivers/gles2/storage/config.h"
+#include "drivers/gles2/storage/texture_storage.h"
+#include "drivers/gles2/storage/light_storage.h"
 
-class RasterizerSceneGLES2 : public StubsScene {
-public:
-	struct State {
-		SceneShaderGLES2 scene_shader;
+#include "drivers/gles2/shaders/scene.glsl.gen.h"
+#include "drivers/gles2/shaders/cube_to_dp.glsl.gen.h"
+#include "drivers/gles2/shaders/effect_blur.glsl.gen.h"
+#include "drivers/gles2/shaders/scene.glsl.gen.h"
+#include "drivers/gles2/shaders/tonemap.glsl.gen.h"
 
-	} state;
+class RasterizerSceneGLES2 : public RendererSceneRender {
 
-public:
-	RasterizerSceneGLES2() {}
-	~RasterizerSceneGLES2() {}
-};
-
-/* Must come before shaders or the Windows build fails... */
-#include "rasterizer_storage_gles2.h"
-
-#include "shaders/cube_to_dp.glsl.gen.h"
-#include "shaders/effect_blur.glsl.gen.h"
-#include "shaders/scene.glsl.gen.h"
-#include "shaders/tonemap.glsl.gen.h"
-/*
-
-#include "drivers/gles3/shaders/exposure.glsl.gen.h"
-#include "drivers/gles3/shaders/resolve.glsl.gen.h"
-#include "drivers/gles3/shaders/scene.glsl.gen.h"
-#include "drivers/gles3/shaders/screen_space_reflection.glsl.gen.h"
-#include "drivers/gles3/shaders/ssao.glsl.gen.h"
-#include "drivers/gles3/shaders/ssao_blur.glsl.gen.h"
-#include "drivers/gles3/shaders/ssao_minify.glsl.gen.h"
-#include "drivers/gles3/shaders/subsurf_scattering.glsl.gen.h"
-
-*/
-
-class RasterizerSceneGLES2 : public RasterizerScene {
 public:
 	enum ShadowFilterMode {
 		SHADOW_FILTER_NEAREST,
@@ -223,7 +202,7 @@ public:
 		bool used_sss;
 		bool using_contact_shadows;
 
-		VS::ViewportDebugDraw debug_draw;
+		RS::ViewportDebugDraw debug_draw;
 		*/
 
 		bool cull_front;
@@ -245,7 +224,7 @@ public:
 
 	uint64_t shadow_atlas_realloc_tolerance_msec;
 
-	struct ShadowAtlas : public RID_Data {
+	struct ShadowAtlas {
 		enum {
 			QUADRANT_SHIFT = 27,
 			SHADOW_INDEX_MASK = (1 << QUADRANT_SHIFT) - 1,
@@ -324,8 +303,8 @@ public:
 
 	/* REFLECTION PROBE INSTANCE */
 
-	struct ReflectionProbeInstance : public RID_Data {
-		RasterizerStorageGLES2::ReflectionProbe *probe_ptr;
+	struct ReflectionProbeInstance {
+		GLES2::ReflectionProbe *probe_ptr;
 		RID probe;
 		RID self;
 		RID atlas;
@@ -364,8 +343,8 @@ public:
 
 	/* ENVIRONMENT API */
 
-	struct Environment : public RID_Data {
-		VS::EnvironmentBG bg_mode;
+	struct Environment {
+		RS::EnvironmentBG bg_mode;
 
 		RID sky;
 		float sky_custom_fov;
@@ -388,7 +367,7 @@ public:
 		float glow_intensity;
 		float glow_strength;
 		float glow_bloom;
-		VS::EnvironmentGlowBlendMode glow_blend_mode;
+		RS::EnvironmentGlowBlendMode glow_blend_mode;
 		float glow_hdr_bleed_threshold;
 		float glow_hdr_bleed_scale;
 		float glow_hdr_luminance_cap;
@@ -398,13 +377,13 @@ public:
 		float dof_blur_far_distance;
 		float dof_blur_far_transition;
 		float dof_blur_far_amount;
-		VS::EnvironmentDOFBlurQuality dof_blur_far_quality;
+		RS::DOFBlurQuality dof_blur_far_quality;
 
 		bool dof_blur_near_enabled;
 		float dof_blur_near_distance;
 		float dof_blur_near_transition;
 		float dof_blur_near_amount;
-		VS::EnvironmentDOFBlurQuality dof_blur_near_quality;
+		RS::DOFBlurQuality dof_blur_near_quality;
 
 		bool adjustments_enabled;
 		float adjustments_brightness;
@@ -442,7 +421,7 @@ public:
 				glow_intensity(0.8),
 				glow_strength(1.0),
 				glow_bloom(0.0),
-				glow_blend_mode(RS::GLOW_BLEND_MODE_SOFTLIGHT),
+				glow_blend_mode(RS::ENV_GLOW_BLEND_MODE_SOFTLIGHT),
 				glow_hdr_bleed_threshold(1.0),
 				glow_hdr_bleed_scale(2.0),
 				glow_hdr_luminance_cap(12.0),
@@ -451,12 +430,12 @@ public:
 				dof_blur_far_distance(10),
 				dof_blur_far_transition(5),
 				dof_blur_far_amount(0.1),
-				dof_blur_far_quality(RS::ENV_DOF_BLUR_QUALITY_MEDIUM),
+				dof_blur_far_quality(RS::DOF_BLUR_QUALITY_MEDIUM),
 				dof_blur_near_enabled(false),
 				dof_blur_near_distance(2),
 				dof_blur_near_transition(1),
 				dof_blur_near_amount(0.1),
-				dof_blur_near_quality(RS::ENV_DOF_BLUR_QUALITY_MEDIUM),
+				dof_blur_near_quality(RS::DOF_BLUR_QUALITY_MEDIUM),
 				adjustments_enabled(false),
 				adjustments_brightness(1.0),
 				adjustments_contrast(1.0),
@@ -492,14 +471,14 @@ public:
 	virtual void environment_set_ambient_light(RID p_env, const Color &p_color, float p_energy = 1.0, float p_sky_contribution = 0.0);
 	virtual void environment_set_camera_feed_id(RID p_env, int p_camera_feed_id);
 
-	virtual void environment_set_dof_blur_near(RID p_env, bool p_enable, float p_distance, float p_transition, float p_amount, RS::EnvironmentDOFBlurQuality p_quality);
-	virtual void environment_set_dof_blur_far(RID p_env, bool p_enable, float p_distance, float p_transition, float p_amount, RS::EnvironmentDOFBlurQuality p_quality);
+	virtual void environment_set_dof_blur_near(RID p_env, bool p_enable, float p_distance, float p_transition, float p_amount, RS::DOFBlurQuality p_quality);
+	virtual void environment_set_dof_blur_far(RID p_env, bool p_enable, float p_distance, float p_transition, float p_amount, RS::DOFBlurQuality p_quality);
 
 	virtual void environment_set_glow(RID p_env, bool p_enable, int p_level_flags, float p_intensity, float p_strength, float p_bloom_threshold, RS::EnvironmentGlowBlendMode p_blend_mode, float p_hdr_bleed_threshold, float p_hdr_bleed_scale, float p_hdr_luminance_cap, bool p_bicubic_upscale);
 	virtual void environment_set_fog(RID p_env, bool p_enable, float p_begin, float p_end, RID p_gradient_texture);
 
 	virtual void environment_set_ssr(RID p_env, bool p_enable, int p_max_steps, float p_fade_in, float p_fade_out, float p_depth_tolerance, bool p_roughness);
-	virtual void environment_set_ssao(RID p_env, bool p_enable, float p_radius, float p_intensity, float p_radius2, float p_intensity2, float p_bias, float p_light_affect, float p_ao_channel_affect, const Color &p_color, RS::EnvironmentSSAOQuality p_quality, RS::EnvironmentSSAOBlur p_blur, float p_bilateral_sharpness);
+	virtual void environment_set_ssao(RID p_env, bool p_enable, float p_radius, float p_intensity, float p_radius2, float p_intensity2, float p_bias, float p_light_affect, float p_ao_channel_affect, const Color &p_color, RS::EnvironmentSSAOQuality p_quality);
 
 	virtual void environment_set_tonemap(RID p_env, RS::EnvironmentToneMapper p_tone_mapper, float p_exposure, float p_white, bool p_auto_exposure, float p_min_luminance, float p_max_luminance, float p_auto_exp_speed, float p_auto_exp_scale);
 
@@ -516,7 +495,7 @@ public:
 
 	/* LIGHT INSTANCE */
 
-	struct LightInstance : public RID_Data {
+	struct LightInstance {
 		struct ShadowTransform {
 			Projection camera;
 			Transform3D transform;
@@ -530,7 +509,7 @@ public:
 		RID self;
 		RID light;
 
-		RasterizerStorageGLES2::Light *light_ptr;
+		GLES2::Light *light_ptr;
 		Transform3D transform;
 
 		Vector3 light_vector;
@@ -555,7 +534,10 @@ public:
 	virtual void light_instance_set_transform(RID p_light_instance, const Transform3D &p_transform);
 	virtual void light_instance_set_shadow_transform(RID p_light_instance, const Projection &p_projection, const Transform3D &p_transform, float p_far, float p_split, int p_pass, float p_bias_scale = 1.0);
 	virtual void light_instance_mark_visible(RID p_light_instance);
-	virtual bool light_instances_can_render_shadow_cube() const { return storage->config.support_shadow_cubemaps; }
+	virtual bool light_instances_can_render_shadow_cube() const {
+		// return storage->config.support_shadow_cubemaps;
+		return false;
+	}
 
 	LightInstance **render_light_instances;
 	int render_directional_lights;
@@ -587,11 +569,11 @@ public:
 		int max_elements;
 
 		struct Element {
-			InstanceBaseDependency *instance;
+			RendererSceneCull::Instance *instance;
 
-			RasterizerStorageGLES2::Geometry *geometry;
-			RasterizerStorageGLES2::Material *material;
-			RasterizerStorageGLES2::GeometryOwner *owner;
+			GLES2::RasterizerStorageGLES2::Geometry *geometry;
+			Material *material;
+			GLES2::RasterizerStorageGLES2::GeometryOwner *owner;
 
 			bool use_accum; //is this an add pass for multipass
 			bool *use_accum_ptr;
@@ -663,7 +645,7 @@ public:
 
 		struct SortByDepth {
 			_FORCE_INLINE_ bool operator()(const Element *A, const Element *B) const {
-				return A->instance->depth < B->instance->depth;
+				return A->depth_layer < B->depth_layer;
 			}
 		};
 
@@ -680,7 +662,7 @@ public:
 		struct SortByReverseDepthAndPriority {
 			_FORCE_INLINE_ bool operator()(const Element *A, const Element *B) const {
 				if (A->priority == B->priority) {
-					return A->instance->depth > B->instance->depth;
+					return A->depth_layer > B->depth_layer;
 				} else {
 					return A->priority < B->priority;
 				}
@@ -742,11 +724,11 @@ public:
 
 	RenderList render_list;
 
-	void _add_geometry(RasterizerStorageGLES2::Geometry *p_geometry, InstanceBase *p_instance, RasterizerStorageGLES2::GeometryOwner *p_owner, int p_material, bool p_depth_pass, bool p_shadow_pass);
-	void _add_geometry_with_material(RasterizerStorageGLES2::Geometry *p_geometry, InstanceBase *p_instance, RasterizerStorageGLES2::GeometryOwner *p_owner, RasterizerStorageGLES2::Material *p_material, bool p_depth_pass, bool p_shadow_pass);
+	void _add_geometry(GLES2::RasterizerStorageGLES2::Geometry *p_geometry, RendererSceneCull::Instance *p_instance, GLES2::RasterizerStorageGLES2::GeometryOwner *p_owner, int p_material, bool p_depth_pass, bool p_shadow_pass);
+	void _add_geometry_with_material(GLES2::RasterizerStorageGLES2::Geometry *p_geometry, RendererSceneCull::Instance *p_instance, GLES2::RasterizerStorageGLES2::GeometryOwner *p_owner, Material *p_material, bool p_depth_pass, bool p_shadow_pass);
 
 	void _copy_texture_to_buffer(GLuint p_texture, GLuint p_buffer);
-	void _fill_render_list(InstanceBase **p_cull_result, int p_cull_count, bool p_depth_pass, bool p_shadow_pass);
+	void _fill_render_list(RendererSceneCull::Instance **p_cull_result, int p_cull_count, bool p_depth_pass, bool p_shadow_pass);
 	void _render_render_list(RenderList::Element **p_elements, int p_element_count,
 			const Transform3D &p_view_transform,
 			const Projection &p_projection,
@@ -759,11 +741,11 @@ public:
 			bool p_alpha_pass,
 			bool p_shadow);
 
-	void _draw_sky(RasterizerStorageGLES2::Sky *p_sky, const Projection &p_projection, const Transform3D &p_transform, bool p_vflip, float p_custom_fov, float p_energy, const Basis &p_sky_orientation);
+	void _draw_sky(GLES2::RasterizerStorageGLES2::Sky *p_sky, const Projection &p_projection, const Transform3D &p_transform, bool p_vflip, float p_custom_fov, float p_energy, const Basis &p_sky_orientation);
 
 	_FORCE_INLINE_ void _set_cull(bool p_front, bool p_disabled, bool p_reverse_cull);
-	_FORCE_INLINE_ bool _setup_material(RasterizerStorageGLES2::Material *p_material, bool p_alpha_pass, Size2i p_skeleton_tex_size = Size2i(0, 0));
-	_FORCE_INLINE_ void _setup_geometry(RenderList::Element *p_element, RasterizerStorageGLES2::Skeleton *p_skeleton);
+	_FORCE_INLINE_ bool _setup_material(Material *p_material, bool p_alpha_pass, Size2i p_skeleton_tex_size = Size2i(0, 0));
+	_FORCE_INLINE_ void _setup_geometry(RenderList::Element *p_element, GLES2::RasterizerStorageGLES2::Skeleton *p_skeleton);
 	_FORCE_INLINE_ void _setup_light_type(LightInstance *p_light, ShadowAtlas *shadow_atlas);
 	_FORCE_INLINE_ void _setup_light(LightInstance *p_light, ShadowAtlas *shadow_atlas, const Transform3D &p_view_transform, bool accum_pass);
 	_FORCE_INLINE_ void _setup_refprobes(ReflectionProbeInstance *p_refprobe1, ReflectionProbeInstance *p_refprobe2, const Transform3D &p_view_transform, Environment *p_env);
@@ -771,8 +753,8 @@ public:
 
 	void _post_process(Environment *env, const Projection &p_cam_projection);
 
-	virtual void render_scene(const Transform3D &p_cam_transform, const Projection &p_cam_projection, bool p_cam_ortogonal, InstanceBase **p_cull_result, int p_cull_count, RID *p_light_cull_result, int p_light_cull_count, RID *p_reflection_probe_cull_result, int p_reflection_probe_cull_count, RID p_environment, RID p_shadow_atlas, RID p_reflection_atlas, RID p_reflection_probe, int p_reflection_probe_pass);
-	virtual void render_shadow(RID p_light, RID p_shadow_atlas, int p_pass, InstanceBase **p_cull_result, int p_cull_count);
+	virtual void render_scene(const Transform3D &p_cam_transform, const Projection &p_cam_projection, bool p_cam_ortogonal, RendererSceneCull::Instance **p_cull_result, int p_cull_count, RID *p_light_cull_result, int p_light_cull_count, RID *p_reflection_probe_cull_result, int p_reflection_probe_cull_count, RID p_environment, RID p_shadow_atlas, RID p_reflection_atlas, RID p_reflection_probe, int p_reflection_probe_pass);
+	virtual void render_shadow(RID p_light, RID p_shadow_atlas, int p_pass, RendererSceneCull::Instance **p_cull_result, int p_cull_count);
 	virtual bool free(RID p_rid);
 
 	virtual void set_scene_pass(uint64_t p_pass);
@@ -781,7 +763,10 @@ public:
 	void iteration();
 	void initialize();
 	void finalize();
-	RasterizerSceneGLES2();
+
+public:
+	RasterizerSceneGLES2() {}
+	~RasterizerSceneGLES2() {}
 };
 
 #endif // GLES2_ENABLED

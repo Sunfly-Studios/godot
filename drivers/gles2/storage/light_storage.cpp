@@ -405,7 +405,7 @@ void LightStorage::lightmap_set_baked_exposure_normalization(RID p_lightmap, flo
 }
 
 PackedVector3Array LightStorage::lightmap_get_probe_capture_points(RID p_lightmap) const {
-    return PackedColorArray();
+	return PackedVector3Array();
 }
 
 PackedColorArray LightStorage::lightmap_get_probe_capture_sh(RID p_lightmap) const {
@@ -485,7 +485,7 @@ void LightStorage::shadow_atlas_set_quadrant_subdivision(RID p_atlas, int p_quad
 }
 
 bool LightStorage::shadow_atlas_update_light(RID p_atlas, RID p_light_instance, float p_coverage, uint64_t p_light_version) {
-    return false
+	return false;
 }
 
 bool LightStorage::_shadow_atlas_find_shadow(ShadowAtlas *shadow_atlas, int *p_in_quadrants, int p_quadrant_count, int p_current_subdiv, uint64_t p_tick, bool is_omni, int &r_quadrant, int &r_shadow) {
@@ -524,7 +524,7 @@ Rect2i LightStorage::get_directional_shadow_rect() {
 }
 
 int LightStorage::get_directional_light_shadow_size(RID p_light_instance) {
-    return 0
+	return 0;
 }
 
 #endif // !GLES2_ENABLED

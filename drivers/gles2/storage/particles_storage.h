@@ -35,7 +35,7 @@
 
 #include "core/templates/rid_owner.h"
 #include "core/templates/self_list.h"
-#include "drivers/gles2/shaders/particles_copy.glsl.gen.h"
+#include "drivers/gles2/shaders/particles.glsl.gen.h"
 #include "servers/rendering/storage/particles_storage.h"
 #include "servers/rendering/storage/utilities.h"
 

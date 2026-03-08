@@ -34,8 +34,8 @@
 #include "core/os/os.h"
 #include "core/templates/local_vector.h"
 #include "rasterizer_array.h"
-#include "rasterizer_asserts.h"
-#include "rasterizer_storage_common.h"
+#include "drivers/gles2/assert/rasterizer_asserts.h"
+#include "drivers/gles2/common/storage_common.h"
 #include "core/config/project_settings.h"
 #include "servers/rendering/renderer_compositor.h"
 
@@ -604,7 +604,7 @@ protected:
 
 	typename T_STORAGE::Texture *_get_canvas_texture(const RID &p_texture) const {
 		if (p_texture.is_valid()) {
-			typename T_STORAGE::Texture *texture = get_storage()->texture_owner.getornull(p_texture);
+			typename T_STORAGE::Texture *texture = get_storage()->texture_owner.get_or_null(p_texture);
 
 			if (texture) {
 				return texture->get_ptr();
@@ -661,7 +661,7 @@ protected:
 
 	// no need to compile these in in release, they are unneeded outside the editor and only add to executable size
 #if defined(TOOLS_ENABLED) && defined(DEBUG_ENABLED)
-#include "batch_diagnose.inc"
+#include "drivers/gles2/batch/batch_diagnose.inc"
 #endif
 };
 

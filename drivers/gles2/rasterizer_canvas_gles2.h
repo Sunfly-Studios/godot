@@ -33,69 +33,39 @@
 
 #ifdef GLES2_ENABLED
 
-#include "drivers/gles2/rasterizer_canvas_batcher.h"
-#include "rasterizer_canvas_base_gles2.h"
+#include "drivers/gles2/batch/rasterizer_canvas_batcher.h"
+#include "drivers/gles2/base/rasterizer_canvas_base_gles2.h"
+#include "servers/rendering/renderer_canvas_render.h"
 
 class RasterizerSceneGLES2;
 
-class RasterizerCanvasGLES2 : public RasterizerCanvasBaseGLES2, public RasterizerCanvasBatcher<RasterizerCanvasGLES2, RasterizerStorageGLES2> {
-	friend class RasterizerCanvasBatcher<RasterizerCanvasGLES2, RasterizerStorageGLES2>;
+class RasterizerCanvasGLES2 : public RendererCanvasRender {
 
-public:
-	virtual void canvas_render_items_begin(const Color &p_modulate, Light *p_light, const Transform2D &p_base_transform);
-	virtual void canvas_render_items_end();
-	void canvas_render_items_internal(Item *p_item_list, int p_z, const Color &p_modulate, Light *p_light, const Transform2D &p_base_transform);
-	virtual void canvas_begin() override;
-	virtual void canvas_end() override;
+	PolygonID request_polygon(const Vector<int> &p_indices, const Vector<Point2> &p_points, const Vector<Color> &p_colors, const Vector<Point2> &p_uvs = Vector<Point2>(), const Vector<int> &p_bones = Vector<int>(), const Vector<float> &p_weights = Vector<float>()) override { return 0; }
+	void free_polygon(PolygonID p_polygon) override {}
 
-	void canvas_render_items(RID p_to_render_target, Item *p_item_list, const Color &p_modulate, Light *p_light_list, Light *p_directional_list, const Transform2D &p_canvas_transform, RS::CanvasItemTextureFilter p_default_filter, RS::CanvasItemTextureRepeat p_default_repeat, bool p_snap_2d_vertices_to_pixel, bool &r_sdf_used) override {
-		storage->frame.current_rt = nullptr;
+	void canvas_render_items(RID p_to_render_target, Item *p_item_list, const Color &p_modulate, Light *p_light_list, Light *p_directional_list, const Transform2D &p_canvas_transform, RS::CanvasItemTextureFilter p_default_filter, RS::CanvasItemTextureRepeat p_default_repeat, bool p_snap_2d_vertices_to_pixel, bool &r_sdf_used, RenderingMethod::RenderInfo *r_render_info = nullptr) override {}
 
-		//if (p_to_render_target.is_valid())
-		//		print_line("canvas_render_items " + itos(p_to_render_target.get_id()) );
-		//		print_line("canvas_render_items ");
+	RID light_create() override { return RID(); }
+	void light_set_texture(RID p_rid, RID p_texture) override {}
+	void light_set_use_shadow(RID p_rid, bool p_enable) override {}
+	void light_update_shadow(RID p_rid, int p_shadow_index, const Transform2D &p_light_xform, int p_light_mask, float p_near, float p_far, LightOccluderInstance *p_occluders, const Rect2 &p_light_rect) override {}
+	void light_update_directional_shadow(RID p_rid, int p_shadow_index, const Transform2D &p_light_xform, int p_light_mask, float p_cull_distance, const Rect2 &p_clip_rect, LightOccluderInstance *p_occluders) override {}
 
-		// first set the current render target
-		storage->_set_current_render_target(p_to_render_target);
+	void render_sdf(RID p_render_target, LightOccluderInstance *p_occluders) override {}
+	RID occluder_polygon_create() override { return RID(); }
+	void occluder_polygon_set_shape(RID p_occluder, const Vector<Vector2> &p_points, bool p_closed) override {}
+	void occluder_polygon_set_cull_mode(RID p_occluder, RS::CanvasOccluderPolygonCullMode p_mode) override {}
+	void set_shadow_texture_size(int p_size) override {}
 
-		// binds the render target (framebuffer)
-		canvas_begin();
+	bool free(RID p_rid) override { return true; }
+	void update() override {}
 
-		canvas_render_items_begin(p_modulate, p_light_list, p_canvas_transform);
-		canvas_render_items_internal(p_item_list, 0, p_modulate, p_light_list, p_canvas_transform);
-		canvas_render_items_end();
+	virtual void set_debug_redraw(bool p_enabled, double p_time, const Color &p_color) override {}
+	virtual uint32_t get_pipeline_compilations(RS::PipelineSource p_source) override { return 0; }
 
-		canvas_end();
-
-		// not sure why these are needed to get frame to render?
-		storage->_set_current_render_target(RID());
-		//		storage->frame.current_rt = nullptr;
-		//		canvas_begin();
-		//		canvas_end();
-	}
-
-private:
-	// legacy codepath .. to remove after testing
-	void _legacy_canvas_render_item(Item *p_ci, RenderItemState &r_ris);
-
-	// high level batch funcs
-	void canvas_render_items_implementation(Item *p_item_list, int p_z, const Color &p_modulate, Light *p_light, const Transform2D &p_base_transform);
-	//void render_joined_item(const BItemJoined &p_bij, RenderItemState &r_ris);
-	//bool try_join_item(Item *p_ci, RenderItemState &r_ris, bool &r_batch_break);
-	void render_batches(Item::Command *const *p_commands, Item *p_current_clip, bool &r_reclip, RasterizerStorageGLES2::Material *p_material);
-
-	// low level batch funcs
-	//	void _batch_upload_buffers();
-	//	void _batch_render_generic(const Batch &p_batch, RasterizerStorageGLES2::Material *p_material);
-	//	void _batch_render_lines(const Batch &p_batch, RasterizerStorageGLES2::Material *p_material, bool p_anti_alias);
-
-	// funcs used from rasterizer_canvas_batcher template
-	void gl_enable_scissor(int p_x, int p_y, int p_width, int p_height) const;
-	void gl_disable_scissor() const;
-
-public:
-	void initialize();
-	RasterizerCanvasGLES2();
+	RasterizerCanvasGLES2() {}
+	~RasterizerCanvasGLES2() {}
 };
 
 #endif // GLES2_ENABLED

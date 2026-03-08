@@ -34,7 +34,7 @@
 
 #include "core/os/os.h"
 #include "drivers/gles2/rasterizer_asserts.h"
-#include "rasterizer_scene_gles2.h"
+#include "drivers/gles2/rasterizer_scene_gles2.h"
 
 #include "core/config/project_settings.h"
 #include "servers/rendering/rendering_server_default.h"
@@ -222,7 +222,7 @@ RasterizerStorageGLES2::Texture *RasterizerCanvasBaseGLES2::_bind_canvas_texture
 	RasterizerStorageGLES2::Texture *tex_return = NULL;
 
 	if (p_texture.is_valid()) {
-		RasterizerStorageGLES2::Texture *texture = storage->texture_owner.getornull(p_texture);
+		RasterizerStorageGLES2::Texture *texture = storage->texture_owner.get_or_null(p_texture);
 
 		if (!texture) {
 			state.current_tex = RID();
@@ -267,7 +267,7 @@ RasterizerStorageGLES2::Texture *RasterizerCanvasBaseGLES2::_bind_canvas_texture
 		state.canvas_shader.set_uniform(CanvasShaderGLES2::USE_DEFAULT_NORMAL, state.current_normal.is_valid());
 
 	} else if (p_normal_map.is_valid()) {
-		RasterizerStorageGLES2::Texture *normal_map = storage->texture_owner.getornull(p_normal_map);
+		RasterizerStorageGLES2::Texture *normal_map = storage->texture_owner.get_or_null(p_normal_map);
 
 		if (!normal_map) {
 			state.current_normal = RID();
@@ -970,7 +970,7 @@ void RasterizerCanvasBaseGLES2::canvas_light_shadow_buffer_update(RID p_buffer, 
 		LightOccluderInstance *instance = p_occluders;
 
 		while (instance) {
-			RasterizerStorageGLES2::CanvasOccluder *cc = storage->canvas_occluder_owner.getornull(instance->polygon_buffer);
+			RasterizerStorageGLES2::CanvasOccluder *cc = storage->canvas_occluder_owner.get_or_null(instance->polygon_buffer);
 			if (!cc || cc->len == 0 || !(p_light_mask & instance->light_mask)) {
 				instance = instance->next;
 				continue;

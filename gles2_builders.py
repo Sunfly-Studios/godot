@@ -586,5 +586,5 @@ def build_legacygl_header(filename, include, class_suffix, output_attribs, gles2
 def build_gles2_headers(target, source, env):
     for x in source:
         build_legacygl_header(
-            str(x), include="drivers/gles2/shader_gles2.h", class_suffix="GLES2", output_attribs=True, gles2=True
+            str(x), include="drivers/gles2/compiler/shader_gles2.h", class_suffix="GLES2", output_attribs=True, gles2=True
         )

@@ -198,7 +198,7 @@ public:
 	}
 
 	void texture_allocate(RID p_texture, int p_width, int p_height, int p_depth_3d, Image::Format p_format, RenderingServer::TextureType p_type = RS::TEXTURE_TYPE_2D, uint32_t p_flags = RS::TEXTURE_FLAGS_DEFAULT) override {
-		DummyTexture *t = texture_owner.getornull(p_texture);
+		DummyTexture *t = texture_owner.get_or_null(p_texture);
 		ERR_FAIL_COND(!t);
 		t->width = p_width;
 		t->height = p_height;
@@ -208,7 +208,7 @@ public:
 		t->image->create(p_width, p_height, false, p_format);
 	}
 	void texture_set_data(RID p_texture, const Ref<Image> &p_image, int p_level) override {
-		DummyTexture *t = texture_owner.getornull(p_texture);
+		DummyTexture *t = texture_owner.get_or_null(p_texture);
 		ERR_FAIL_COND(!t);
 		t->width = p_image->get_width();
 		t->height = p_image->get_height();
@@ -217,7 +217,7 @@ public:
 	}
 
 	void texture_set_data_partial(RID p_texture, const Ref<Image> &p_image, int src_x, int src_y, int src_w, int src_h, int dst_x, int dst_y, int p_dst_mip, int p_level) override {
-		DummyTexture *t = texture_owner.getornull(p_texture);
+		DummyTexture *t = texture_owner.get_or_null(p_texture);
 
 		ERR_FAIL_COND(!t);
 		ERR_FAIL_COND_MSG(p_image.is_null(), "It's not a reference to a valid Image object.");
@@ -230,22 +230,22 @@ public:
 	}
 
 	Ref<Image> texture_get_data(RID p_texture, int p_level) const override {
-		DummyTexture *t = texture_owner.getornull(p_texture);
+		DummyTexture *t = texture_owner.get_or_null(p_texture);
 		ERR_FAIL_COND_V(!t, Ref<Image>());
 		return t->image;
 	}
 	void texture_set_flags(RID p_texture, uint32_t p_flags) override {
-		DummyTexture *t = texture_owner.getornull(p_texture);
+		DummyTexture *t = texture_owner.get_or_null(p_texture);
 		ERR_FAIL_COND(!t);
 		t->flags = p_flags;
 	}
 	uint32_t texture_get_flags(RID p_texture) const override {
-		DummyTexture *t = texture_owner.getornull(p_texture);
+		DummyTexture *t = texture_owner.get_or_null(p_texture);
 		ERR_FAIL_COND_V(!t, 0);
 		return t->flags;
 	}
 	Image::Format texture_get_format(RID p_texture) const override {
-		DummyTexture *t = texture_owner.getornull(p_texture);
+		DummyTexture *t = texture_owner.get_or_null(p_texture);
 		ERR_FAIL_COND_V(!t, Image::FORMAT_RGB8);
 		return t->format;
 	}
@@ -259,12 +259,12 @@ public:
 	void texture_bind(RID p_texture, uint32_t p_texture_no) override {}
 
 	void texture_set_path(RID p_texture, const String &p_path) override {
-		DummyTexture *t = texture_owner.getornull(p_texture);
+		DummyTexture *t = texture_owner.get_or_null(p_texture);
 		ERR_FAIL_COND(!t);
 		t->path = p_path;
 	}
 	String texture_get_path(RID p_texture) const override {
-		DummyTexture *t = texture_owner.getornull(p_texture);
+		DummyTexture *t = texture_owner.get_or_null(p_texture);
 		ERR_FAIL_COND_V(!t, String());
 		return t->path;
 	}
@@ -332,7 +332,7 @@ public:
 
 #if 0
 	void mesh_add_surface(RID p_mesh, uint32_t p_format, RS::PrimitiveType p_primitive, const Vector<uint8_t> &p_array, int p_vertex_count, const Vector<uint8_t> &p_index_array, int p_index_count, const AABB &p_aabb, const Vector<Vector<uint8_t> > &p_blend_shapes = Vector<Vector<uint8_t> >(), const Vector<AABB> &p_bone_aabbs = Vector<AABB>()) override {
-		DummyMesh *m = mesh_owner.getornull(p_mesh);
+		DummyMesh *m = mesh_owner.get_or_null(p_mesh);
 		ERR_FAIL_COND(!m);
 
 		m->surfaces.push_back(DummySurface());
@@ -349,25 +349,25 @@ public:
 	}
 
 	void mesh_set_blend_shape_count(RID p_mesh, int p_amount) override {
-		DummyMesh *m = mesh_owner.getornull(p_mesh);
+		DummyMesh *m = mesh_owner.get_or_null(p_mesh);
 		ERR_FAIL_COND(!m);
 		m->blend_shape_count = p_amount;
 	}
 #endif
 
 	int mesh_get_blend_shape_count(RID p_mesh) const override {
-		DummyMesh *m = mesh_owner.getornull(p_mesh);
+		DummyMesh *m = mesh_owner.get_or_null(p_mesh);
 		ERR_FAIL_COND_V(!m, 0);
 		return m->blend_shape_count;
 	}
 
 	void mesh_set_blend_shape_mode(RID p_mesh, RS::BlendShapeMode p_mode) override {
-		//		DummyMesh *m = mesh_owner.getornull(p_mesh);
+		//		DummyMesh *m = mesh_owner.get_or_null(p_mesh);
 		//		ERR_FAIL_COND(!m);
 		//		m->blend_shape_mode = p_mode;
 	}
 	RS::BlendShapeMode mesh_get_blend_shape_mode(RID p_mesh) const override {
-		DummyMesh *m = mesh_owner.getornull(p_mesh);
+		DummyMesh *m = mesh_owner.get_or_null(p_mesh);
 		ERR_FAIL_COND_V(!m, RS::BLEND_SHAPE_MODE_NORMALIZED);
 		return m->blend_shape_mode;
 	}
@@ -379,65 +379,65 @@ public:
 
 #if 0
 	int mesh_surface_get_array_len(RID p_mesh, int p_surface) const override {
-		DummyMesh *m = mesh_owner.getornull(p_mesh);
+		DummyMesh *m = mesh_owner.get_or_null(p_mesh);
 		ERR_FAIL_COND_V(!m, 0);
 
 		return m->surfaces[p_surface].vertex_count;
 	}
 	int mesh_surface_get_array_index_len(RID p_mesh, int p_surface) const override {
-		DummyMesh *m = mesh_owner.getornull(p_mesh);
+		DummyMesh *m = mesh_owner.get_or_null(p_mesh);
 		ERR_FAIL_COND_V(!m, 0);
 
 		return m->surfaces[p_surface].index_count;
 	}
 
 	Vector<uint8_t> mesh_surface_get_array(RID p_mesh, int p_surface) const override {
-		DummyMesh *m = mesh_owner.getornull(p_mesh);
+		DummyMesh *m = mesh_owner.get_or_null(p_mesh);
 		ERR_FAIL_COND_V(!m, Vector<uint8_t>());
 
 		return m->surfaces[p_surface].array;
 	}
 	Vector<uint8_t> mesh_surface_get_index_array(RID p_mesh, int p_surface) const override {
-		DummyMesh *m = mesh_owner.getornull(p_mesh);
+		DummyMesh *m = mesh_owner.get_or_null(p_mesh);
 		ERR_FAIL_COND_V(!m, Vector<uint8_t>());
 
 		return m->surfaces[p_surface].index_array;
 	}
 
 	uint32_t mesh_surface_get_format(RID p_mesh, int p_surface) const override {
-		DummyMesh *m = mesh_owner.getornull(p_mesh);
+		DummyMesh *m = mesh_owner.get_or_null(p_mesh);
 		ERR_FAIL_COND_V(!m, 0);
 
 		return m->surfaces[p_surface].format;
 	}
 	RS::PrimitiveType mesh_surface_get_primitive_type(RID p_mesh, int p_surface) const override {
-		DummyMesh *m = mesh_owner.getornull(p_mesh);
+		DummyMesh *m = mesh_owner.get_or_null(p_mesh);
 		ERR_FAIL_COND_V(!m, RS::PRIMITIVE_POINTS);
 
 		return m->surfaces[p_surface].primitive;
 	}
 
 	AABB mesh_surface_get_aabb(RID p_mesh, int p_surface) const override {
-		DummyMesh *m = mesh_owner.getornull(p_mesh);
+		DummyMesh *m = mesh_owner.get_or_null(p_mesh);
 		ERR_FAIL_COND_V(!m, AABB());
 
 		return m->surfaces[p_surface].aabb;
 	}
 	Vector<Vector<uint8_t> > mesh_surface_get_blend_shapes(RID p_mesh, int p_surface) const override {
-		DummyMesh *m = mesh_owner.getornull(p_mesh);
+		DummyMesh *m = mesh_owner.get_or_null(p_mesh);
 		ERR_FAIL_COND_V(!m, Vector<Vector<uint8_t> >());
 
 		return m->surfaces[p_surface].blend_shapes;
 	}
 	Vector<AABB> mesh_surface_get_skeleton_aabb(RID p_mesh, int p_surface) const override {
-		DummyMesh *m = mesh_owner.getornull(p_mesh);
+		DummyMesh *m = mesh_owner.get_or_null(p_mesh);
 		ERR_FAIL_COND_V(!m, Vector<AABB>());
 
 		return m->surfaces[p_surface].bone_aabbs;
 	}
 
 	void mesh_remove_surface(RID p_mesh, int p_index) override {
-		DummyMesh *m = mesh_owner.getornull(p_mesh);
+		DummyMesh *m = mesh_owner.get_or_null(p_mesh);
 		ERR_FAIL_COND(!m);
 		ERR_FAIL_COND(p_index >= m->surfaces.size());
 
@@ -447,7 +447,7 @@ public:
 
 	RS::SurfaceData mesh_get_surface(RID p_mesh, int p_surface) const override { return RS::SurfaceData(); }
 	int mesh_get_surface_count(RID p_mesh) const override {
-		DummyMesh *m = mesh_owner.getornull(p_mesh);
+		DummyMesh *m = mesh_owner.get_or_null(p_mesh);
 		ERR_FAIL_COND_V(!m, 0);
 		return m->surfaces.size();
 	}
@@ -700,7 +700,7 @@ public:
 		return lightmap_capture_data_owner.make_rid(capture);
 	}
 	Vector<uint8_t> lightmap_capture_get_octree(RID p_capture) const override {
-		const LightmapCapture *capture = lightmap_capture_data_owner.getornull(p_capture);
+		const LightmapCapture *capture = lightmap_capture_data_owner.get_or_null(p_capture);
 		ERR_FAIL_COND_V(!capture, Vector<uint8_t>());
 		return Vector<uint8_t>();
 	}
@@ -711,7 +711,7 @@ public:
 	void lightmap_capture_set_energy(RID p_capture, float p_energy) override {}
 	float lightmap_capture_get_energy(RID p_capture) const override { return 0.0; }
 	const Vector<LightmapCaptureOctree> *lightmap_capture_get_octree_ptr(RID p_capture) const override {
-		const LightmapCapture *capture = lightmap_capture_data_owner.getornull(p_capture);
+		const LightmapCapture *capture = lightmap_capture_data_owner.get_or_null(p_capture);
 		ERR_FAIL_COND_V(!capture, nullptr);
 		return &capture->octree;
 	}
@@ -849,14 +849,14 @@ public:
 	bool free(RID p_rid) override {
 		if (texture_owner.owns(p_rid)) {
 			// delete the texture
-			DummyTexture *texture = texture_owner.getornull(p_rid);
+			DummyTexture *texture = texture_owner.get_or_null(p_rid);
 			texture_owner.free(p_rid);
 			memdelete(texture);
 		}
 
 		if (mesh_owner.owns(p_rid)) {
 			// delete the mesh
-			DummyMesh *mesh = mesh_owner.getornull(p_rid);
+			DummyMesh *mesh = mesh_owner.get_or_null(p_rid);
 			mesh_owner.free(p_rid);
 			memdelete(mesh);
 		}
