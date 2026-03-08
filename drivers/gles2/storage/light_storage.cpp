@@ -28,15 +28,15 @@
 /* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                 */
 /**************************************************************************/
 
-#ifdef GLES3_ENABLED
+#ifdef GLES2_ENABLED
 
 #include "light_storage.h"
-#include "../rasterizer_gles3.h"
-#include "../rasterizer_scene_gles3.h"
+#include "../rasterizer_gles2.h"
+#include "../rasterizer_scene_gles2.h"
 #include "core/config/project_settings.h"
 #include "texture_storage.h"
 
-using namespace GLES3;
+using namespace GLES2;
 
 LightStorage *LightStorage::singleton = nullptr;
 

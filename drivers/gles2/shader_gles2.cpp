@@ -33,8 +33,8 @@
 #ifdef GLES2_ENABLED
 
 #include "core/os/memory.h"
-#include "rasterizer_gles2.h"
-#include "rasterizer_storage_gles2.h"
+#include "drivers/gles2/rasterizer_gles2.h"
+#include "drivers/gles2/storage/config.h"
 #include "core/config/project_settings.h"
 #include "core/string/print_string.h"
 #include "core/string/string_builder.h"
@@ -581,26 +581,23 @@ void ShaderGLES2::setup(
 void ShaderGLES2::finish() {
 	const VersionKey *V = NULL;
 
-	while ((V = version_map.next(V))) {
-		Version &v = version_map[*V];
-		glDeleteShader(v.vert_id);
-		glDeleteShader(v.frag_id);
-		glDeleteProgram(v.id);
+	for (const KeyValue<VersionKey, Version> &v : version_map) {
+		glDeleteShader(v.value.vert_id);
+		glDeleteShader(v.value.frag_id);
+		glDeleteProgram(v.value.id);
 
-		if (v.uniform_location)
-			memdelete_arr(v.uniform_location);
+		if (v.value.uniform_location) {
+			memdelete_arr(v.value.uniform_location);
+		}
 	}
 }
 
 void ShaderGLES2::clear_caches() {
-	const VersionKey *V = NULL;
-
-	while ((V = version_map.next(V))) {
-		Version &v = version_map[*V];
-		glDeleteShader(v.vert_id);
-		glDeleteShader(v.frag_id);
-		glDeleteProgram(v.id);
-		memdelete_arr(v.uniform_location);
+	for (const KeyValue<VersionKey, Version> &v : version_map) {
+		glDeleteShader(v.value.vert_id);
+		glDeleteShader(v.value.frag_id);
+		glDeleteProgram(v.value.id);
+		memdelete_arr(v.value.uniform_location);
 	}
 
 	version_map.clear();
@@ -671,7 +668,7 @@ void ShaderGLES2::free_custom_shader(uint32_t p_code_id) {
 }
 
 void ShaderGLES2::use_material(void *p_material) {
-	RasterizerStorageGLES2::Material *material = (RasterizerStorageGLES2::Material *)p_material;
+	GLES2::Material *material = (GLES2::Material *)p_material;
 
 	if (!material) {
 		return;
@@ -684,51 +681,55 @@ void ShaderGLES2::use_material(void *p_material) {
 	Version *v = version_map.getptr(conditional_version);
 
 	// bind uniforms
-	for (HashMap<StringName, ShaderLanguage::ShaderNode::Uniform>::Element *E = material->shader->uniforms.front(); E; E = E->next()) {
-		if (E->get().texture_order >= 0)
+	for (const KeyValue<StringName, ShaderLanguage::ShaderNode::Uniform> &E : material->shader->uniforms) {
+		if (E.value.texture_order >= 0) {
 			continue; // this is a texture, doesn't go here
+		}
 
-		HashMap<StringName, GLint>::Element *L = v->custom_uniform_locations.find(E->key());
-		if (!L || L->get() < 0)
-			continue; //uniform not valid
+		// In Godot 4, getptr() replaces the old find() pattern.
+		// It returns a direct pointer to the value, or nullptr if not found.
+		GLint *L = v->custom_uniform_locations.getptr(E.key);
+		if (!L || *L < 0) {
+			continue; // uniform not valid
+		}
 
-		GLuint location = L->get();
+		GLuint location = *L;
 
-		HashMap<StringName, Variant>::Element *V = material->params.find(E->key());
+		Variant *V = material->params.getptr(E.key);
 
 		if (V) {
-			switch (E->get().type) {
+			switch (E.value.type) {
 				case ShaderLanguage::TYPE_BOOL: {
-					bool boolean = V->get();
+					bool boolean = *V;
 					glUniform1i(location, boolean ? 1 : 0);
 				} break;
 
 				case ShaderLanguage::TYPE_BVEC2: {
-					int flags = V->get();
+					int flags = *V;
 					glUniform2i(location, (flags & 1) ? 1 : 0, (flags & 2) ? 1 : 0);
 				} break;
 
 				case ShaderLanguage::TYPE_BVEC3: {
-					int flags = V->get();
+					int flags = *V;
 					glUniform3i(location, (flags & 1) ? 1 : 0, (flags & 2) ? 1 : 0, (flags & 4) ? 1 : 0);
 
 				} break;
 
 				case ShaderLanguage::TYPE_BVEC4: {
-					int flags = V->get();
+					int flags = *V;
 					glUniform4i(location, (flags & 1) ? 1 : 0, (flags & 2) ? 1 : 0, (flags & 4) ? 1 : 0, (flags & 8) ? 1 : 0);
 
 				} break;
 
 				case ShaderLanguage::TYPE_INT:
 				case ShaderLanguage::TYPE_UINT: {
-					int value = V->get();
+					int value = *V;
 					glUniform1i(location, value);
 				} break;
 
 				case ShaderLanguage::TYPE_IVEC2:
 				case ShaderLanguage::TYPE_UVEC2: {
-					Array r = V->get();
+					Array r = *V;
 					const int count = 2;
 					if (r.size() == count) {
 						int values[count];
@@ -742,7 +743,7 @@ void ShaderGLES2::use_material(void *p_material) {
 
 				case ShaderLanguage::TYPE_IVEC3:
 				case ShaderLanguage::TYPE_UVEC3: {
-					Array r = V->get();
+					Array r = *V;
 					const int count = 3;
 					if (r.size() == count) {
 						int values[count];
@@ -756,7 +757,7 @@ void ShaderGLES2::use_material(void *p_material) {
 
 				case ShaderLanguage::TYPE_IVEC4:
 				case ShaderLanguage::TYPE_UVEC4: {
-					Array r = V->get();
+					Array r = *V;
 					const int count = 4;
 					if (r.size() == count) {
 						int values[count];
@@ -769,61 +770,61 @@ void ShaderGLES2::use_material(void *p_material) {
 				} break;
 
 				case ShaderLanguage::TYPE_FLOAT: {
-					float value = V->get();
+					float value = *V;
 					glUniform1f(location, value);
 
 				} break;
 
 				case ShaderLanguage::TYPE_VEC2: {
-					Vector2 value = V->get();
+					Vector2 value = *V;
 					glUniform2f(location, value.x, value.y);
 				} break;
 
 				case ShaderLanguage::TYPE_VEC3: {
-					Vector3 value = V->get();
+					Vector3 value = *V;
 					glUniform3f(location, value.x, value.y, value.z);
 				} break;
 
 				case ShaderLanguage::TYPE_VEC4: {
-					if (V->get().get_type() == Variant::COLOR) {
-						Color value = V->get();
+					if (V->get_type() == Variant::COLOR) {
+						Color value = *V;
 						glUniform4f(location, value.r, value.g, value.b, value.a);
-					} else if (V->get().get_type() == Variant::QUATERNION) {
-						Quaternion value = V->get();
+					} else if (V->get_type() == Variant::QUATERNION) {
+						Quaternion value = *V;
 						glUniform4f(location, value.x, value.y, value.z, value.w);
 					} else {
-						Plane value = V->get();
+						Plane value = *V;
 						glUniform4f(location, value.normal.x, value.normal.y, value.normal.z, value.d);
 					}
 
 				} break;
 
 				case ShaderLanguage::TYPE_MAT2: {
-					Transform2D tr = V->get();
+					Transform2D tr = *V;
 					GLfloat matrix[4] = {
 						/* build a 16x16 matrix */
-						tr.elements[0][0],
-						tr.elements[0][1],
-						tr.elements[1][0],
-						tr.elements[1][1],
+						tr.columns[0][0],
+						tr.columns[0][1],
+						tr.columns[1][0],
+						tr.columns[1][1],
 					};
 					glUniformMatrix2fv(location, 1, GL_FALSE, matrix);
 
 				} break;
 
 				case ShaderLanguage::TYPE_MAT3: {
-					Basis val = V->get();
+					Basis val = *V;
 
 					GLfloat mat[9] = {
-						val.elements[0][0],
-						val.elements[1][0],
-						val.elements[2][0],
-						val.elements[0][1],
-						val.elements[1][1],
-						val.elements[2][1],
-						val.elements[0][2],
-						val.elements[1][2],
-						val.elements[2][2],
+						val.rows[0][0],
+						val.rows[1][0],
+						val.rows[2][0],
+						val.rows[0][1],
+						val.rows[1][1],
+						val.rows[2][1],
+						val.rows[0][2],
+						val.rows[1][2],
+						val.rows[2][2],
 					};
 
 					glUniformMatrix3fv(location, 1, GL_FALSE, mat);
@@ -831,22 +832,22 @@ void ShaderGLES2::use_material(void *p_material) {
 				} break;
 
 				case ShaderLanguage::TYPE_MAT4: {
-					Transform2D tr = V->get();
+					Transform2D tr = *V;
 					GLfloat matrix[16] = { /* build a 16x16 matrix */
-						tr.elements[0][0],
-						tr.elements[0][1],
+						tr.columns[0][0],
+						tr.columns[0][1],
 						0,
 						0,
-						tr.elements[1][0],
-						tr.elements[1][1],
+						tr.columns[1][0],
+						tr.columns[1][1],
 						0,
 						0,
 						0,
 						0,
 						1,
 						0,
-						tr.elements[2][0],
-						tr.elements[2][1],
+						tr.columns[2][0],
+						tr.columns[2][1],
 						0,
 						1
 					};
@@ -859,9 +860,10 @@ void ShaderGLES2::use_material(void *p_material) {
 					ERR_PRINT("ShaderNode type missing, bug?");
 				} break;
 			}
-		} else if (E->get().default_value.size()) {
-			const Vector<ShaderLanguage::ConstantNode::Value> &values = E->get().default_value;
-			switch (E->get().type) {
+		} else if (E.value.default_value.size()) {
+			const Vector<ShaderLanguage::Scalar> &values = E.value.default_value;
+
+			switch (E.value.type) {
 				case ShaderLanguage::TYPE_BOOL: {
 					glUniform1i(location, values[0].boolean);
 				} break;
@@ -992,7 +994,8 @@ void ShaderGLES2::use_material(void *p_material) {
 			}
 		} else { //zero
 
-			switch (E->get().type) {
+			//switch (E->get().type) {
+			switch (E.value.type) {
 				case ShaderLanguage::TYPE_BOOL: {
 					glUniform1i(location, GL_FALSE);
 				} break;
