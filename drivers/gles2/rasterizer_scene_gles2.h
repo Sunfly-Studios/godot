@@ -44,16 +44,17 @@
 #include "drivers/gles2/common/stubs.h"
 #include "drivers/gles2/storage/config.h"
 #include "drivers/gles2/storage/texture_storage.h"
+#include "drivers/gles2/compiler/shader_gles2.h"
 #include "drivers/gles2/storage/light_storage.h"
 
 #include "drivers/gles2/shaders/scene.glsl.gen.h"
 #include "drivers/gles2/shaders/cube_to_dp.glsl.gen.h"
 #include "drivers/gles2/shaders/effect_blur.glsl.gen.h"
-#include "drivers/gles2/shaders/scene.glsl.gen.h"
 #include "drivers/gles2/shaders/tonemap.glsl.gen.h"
 
-class RasterizerSceneGLES2 : public RendererSceneRender {
+namespace GLES2 {
 
+class RasterizerSceneGLES2 : public RendererSceneRender {
 public:
 	enum ShadowFilterMode {
 		SHADOW_FILTER_NEAREST,
@@ -272,7 +273,7 @@ public:
 
 	Vector<ShadowCubeMap> shadow_cubemaps;
 
-	RID_Owner<ShadowAtlas> shadow_atlas_owner;
+	RID_PtrOwner<ShadowAtlas> shadow_atlas_owner;
 
 	RID shadow_atlas_create();
 	void shadow_atlas_set_size(RID p_atlas, int p_size);
@@ -304,7 +305,7 @@ public:
 	/* REFLECTION PROBE INSTANCE */
 
 	struct ReflectionProbeInstance {
-		GLES2::ReflectionProbe *probe_ptr;
+		ReflectionProbe *probe_ptr;
 		RID probe;
 		RID self;
 		RID atlas;
@@ -328,7 +329,7 @@ public:
 		Transform3D transform;
 	};
 
-	mutable RID_Owner<ReflectionProbeInstance> reflection_probe_instance_owner;
+	mutable RID_PtrOwner<ReflectionProbeInstance> reflection_probe_instance_owner;
 
 	ReflectionProbeInstance **reflection_probe_instances;
 	int reflection_probe_count;
@@ -457,7 +458,7 @@ public:
 		}
 	};
 
-	mutable RID_Owner<Environment> environment_owner;
+	mutable RID_PtrOwner<Environment> environment_owner;
 
 	virtual RID environment_create();
 
@@ -493,6 +494,8 @@ public:
 	virtual RS::EnvironmentBG environment_get_background(RID p_env);
 	virtual int environment_get_canvas_max_layer(RID p_env);
 
+
+
 	/* LIGHT INSTANCE */
 
 	struct LightInstance {
@@ -509,7 +512,7 @@ public:
 		RID self;
 		RID light;
 
-		GLES2::Light *light_ptr;
+		Light *light_ptr;
 		Transform3D transform;
 
 		Vector3 light_vector;
@@ -528,7 +531,7 @@ public:
 		RBSet<RID> shadow_atlases; // atlases where this light is registered
 	};
 
-	mutable RID_Owner<LightInstance> light_instance_owner;
+	mutable RID_PtrOwner<LightInstance> light_instance_owner;
 
 	virtual RID light_instance_create(RID p_light);
 	virtual void light_instance_set_transform(RID p_light_instance, const Transform3D &p_transform);
@@ -571,9 +574,9 @@ public:
 		struct Element {
 			RendererSceneCull::Instance *instance;
 
-			GLES2::RasterizerStorageGLES2::Geometry *geometry;
+			void *geometry;
 			Material *material;
-			GLES2::RasterizerStorageGLES2::GeometryOwner *owner;
+			void *owner;
 
 			bool use_accum; //is this an add pass for multipass
 			bool *use_accum_ptr;
@@ -682,8 +685,9 @@ public:
 		// element adding and stuff
 
 		_FORCE_INLINE_ Element *add_element() {
-			if (element_count + alpha_element_count >= max_elements)
+			if (element_count + alpha_element_count >= max_elements) {
 				return NULL;
+			}
 
 			elements[element_count] = &base_elements[element_count];
 			return elements[element_count++];
@@ -724,8 +728,8 @@ public:
 
 	RenderList render_list;
 
-	void _add_geometry(GLES2::RasterizerStorageGLES2::Geometry *p_geometry, RendererSceneCull::Instance *p_instance, GLES2::RasterizerStorageGLES2::GeometryOwner *p_owner, int p_material, bool p_depth_pass, bool p_shadow_pass);
-	void _add_geometry_with_material(GLES2::RasterizerStorageGLES2::Geometry *p_geometry, RendererSceneCull::Instance *p_instance, GLES2::RasterizerStorageGLES2::GeometryOwner *p_owner, Material *p_material, bool p_depth_pass, bool p_shadow_pass);
+	void _add_geometry(void *p_geometry, RendererSceneCull::Instance *p_instance, void *p_owner, int p_material, bool p_depth_pass, bool p_shadow_pass);
+	void _add_geometry_with_material(void *p_geometry, RendererSceneCull::Instance *p_instance, void *p_owner, Material *p_material, bool p_depth_pass, bool p_shadow_pass);
 
 	void _copy_texture_to_buffer(GLuint p_texture, GLuint p_buffer);
 	void _fill_render_list(RendererSceneCull::Instance **p_cull_result, int p_cull_count, bool p_depth_pass, bool p_shadow_pass);
@@ -741,11 +745,11 @@ public:
 			bool p_alpha_pass,
 			bool p_shadow);
 
-	void _draw_sky(GLES2::RasterizerStorageGLES2::Sky *p_sky, const Projection &p_projection, const Transform3D &p_transform, bool p_vflip, float p_custom_fov, float p_energy, const Basis &p_sky_orientation);
+	void _draw_sky(RasterizerStorageGLES2::Sky *p_sky, const Projection &p_projection, const Transform3D &p_transform, bool p_vflip, float p_custom_fov, float p_energy, const Basis &p_sky_orientation);
 
 	_FORCE_INLINE_ void _set_cull(bool p_front, bool p_disabled, bool p_reverse_cull);
 	_FORCE_INLINE_ bool _setup_material(Material *p_material, bool p_alpha_pass, Size2i p_skeleton_tex_size = Size2i(0, 0));
-	_FORCE_INLINE_ void _setup_geometry(RenderList::Element *p_element, GLES2::RasterizerStorageGLES2::Skeleton *p_skeleton);
+	_FORCE_INLINE_ void _setup_geometry(RenderList::Element *p_element, Skeleton *p_skeleton);
 	_FORCE_INLINE_ void _setup_light_type(LightInstance *p_light, ShadowAtlas *shadow_atlas);
 	_FORCE_INLINE_ void _setup_light(LightInstance *p_light, ShadowAtlas *shadow_atlas, const Transform3D &p_view_transform, bool accum_pass);
 	_FORCE_INLINE_ void _setup_refprobes(ReflectionProbeInstance *p_refprobe1, ReflectionProbeInstance *p_refprobe2, const Transform3D &p_view_transform, Environment *p_env);
@@ -753,7 +757,7 @@ public:
 
 	void _post_process(Environment *env, const Projection &p_cam_projection);
 
-	virtual void render_scene(const Transform3D &p_cam_transform, const Projection &p_cam_projection, bool p_cam_ortogonal, RendererSceneCull::Instance **p_cull_result, int p_cull_count, RID *p_light_cull_result, int p_light_cull_count, RID *p_reflection_probe_cull_result, int p_reflection_probe_cull_count, RID p_environment, RID p_shadow_atlas, RID p_reflection_atlas, RID p_reflection_probe, int p_reflection_probe_pass);
+	virtual void render_scene(const Ref<RenderSceneBuffers> &p_render_buffers, const RendererSceneRender::CameraData *p_camera_data, const RendererSceneRender::CameraData *p_prev_camera_data, const PagedArray<RenderGeometryInstance *> &p_instances, const PagedArray<RID> &p_lights, const PagedArray<RID> &p_directional_lights, const PagedArray<RID> &p_reflection_probes, const PagedArray<RID> &p_voxel_gi_instances, const PagedArray<RID> &p_decals, const PagedArray<RID> &p_lightmaps, RID p_environment, RID p_camera_attributes, RID p_shadow_atlas, RID p_occluder_debug_tex, RID p_reflection_atlas, RID p_reflection_probe, int p_reflection_probe_pass, float p_screen_mesh_lod_threshold, const RendererSceneRender::RenderShadowData *p_render_shadows, int p_render_shadow_count, const RendererSceneRender::RenderSDFGIData *p_render_sdfgi_regions, int p_render_sdfgi_region_count, const RendererSceneRender::RenderSDFGIUpdateData *p_sdfgi_update_data, RenderingMethod::RenderInfo *r_render_info);
 	virtual void render_shadow(RID p_light, RID p_shadow_atlas, int p_pass, RendererSceneCull::Instance **p_cull_result, int p_cull_count);
 	virtual bool free(RID p_rid);
 
@@ -764,9 +768,70 @@ public:
 	void initialize();
 	void finalize();
 
+	// Godot 4 stubs
+	virtual RenderGeometryInstance *geometry_instance_create(RID p_base) override;
+	virtual void geometry_instance_free(RenderGeometryInstance *p_geometry_instance) override;
+	virtual uint32_t geometry_instance_get_pair_mask() override;
+	virtual void mesh_generate_pipelines(RID p_mesh, bool p_current_formats) override;
+	virtual uint32_t get_pipeline_compilations(RenderingServer::PipelineSource p_source) override;
+
+	virtual void sdfgi_update(const Ref<RenderSceneBuffers> &p_buffers, RID p_environment, const Vector3 &p_cam_transform) override;
+	virtual int sdfgi_get_pending_region_count(const Ref<RenderSceneBuffers> &p_buffers) const override;
+	virtual AABB sdfgi_get_pending_region_bounds(const Ref<RenderSceneBuffers> &p_buffers, int p_region) const override;
+	virtual uint32_t sdfgi_get_pending_region_cascade(const Ref<RenderSceneBuffers> &p_buffers, int p_region) const override;
+	virtual void sdfgi_set_debug_probe_select(const Vector3 &p_position, const Vector3 &p_dir) override;
+
+	virtual RID sky_allocate() override;
+	virtual void sky_initialize(RID p_rid) override;
+	virtual void sky_set_radiance_size(RID p_sky, int p_radiance_size) override;
+	virtual void sky_set_mode(RID p_sky, RenderingServer::SkyMode p_mode) override;
+	virtual void sky_set_material(RID p_sky, RID p_material) override;
+	virtual Ref<Image> sky_bake_panorama(RID p_sky, float p_energy, bool p_bake_irradiance, const Size2i &p_size) override;
+
+	virtual void environment_set_volumetric_fog_volume_size(int p_size, int p_depth) override;
+	virtual void environment_set_volumetric_fog_filter_active(bool p_active) override;
+	virtual void environment_glow_set_use_bicubic_upscale(bool p_enable) override;
+	virtual void environment_set_ssr_roughness_quality(RenderingServer::EnvironmentSSRRoughnessQuality p_quality) override;
+	virtual void environment_set_ssao_quality(RenderingServer::EnvironmentSSAOQuality p_quality, bool p_half_size, float p_adaptive_target, int p_blur_passes, float p_fadeout_from, float p_fadeout_to) override;
+	virtual void environment_set_ssil_quality(RenderingServer::EnvironmentSSILQuality p_quality, bool p_half_size, float p_adaptive_target, int p_blur_passes, float p_fadeout_from, float p_fadeout_to) override;
+	virtual void environment_set_sdfgi_ray_count(RenderingServer::EnvironmentSDFGIRayCount p_ray_count) override;
+	virtual void environment_set_sdfgi_frames_to_converge(RenderingServer::EnvironmentSDFGIFramesToConverge p_frames) override;
+	virtual void environment_set_sdfgi_frames_to_update_light(RenderingServer::EnvironmentSDFGIFramesToUpdateLight p_update) override;
+	virtual Ref<Image> environment_bake_panorama(RID p_env, bool p_bake_irradiance, const Size2i &p_size) override;
+
+	virtual void positional_soft_shadow_filter_set_quality(RenderingServer::ShadowQuality p_quality) override;
+	virtual void directional_soft_shadow_filter_set_quality(RenderingServer::ShadowQuality p_quality) override;
+
+	virtual RID fog_volume_instance_create(RID p_base) override;
+	virtual void fog_volume_instance_set_transform(RID p_fog_volume, const Transform3D &p_transform) override;
+	virtual void fog_volume_instance_set_active(RID p_fog_volume, bool p_active) override;
+	virtual RID fog_volume_instance_get_volume(RID p_fog_volume) const override;
+	virtual Vector3 fog_volume_instance_get_position(RID p_fog_volume) const override;
+
+	virtual RID voxel_gi_instance_create(RID p_base) override;
+	virtual void voxel_gi_instance_set_transform_to_data(RID p_probe, const Transform3D &p_xform) override;
+	virtual bool voxel_gi_needs_update(RID p_probe) const override;
+	virtual void voxel_gi_update(RID p_probe, bool p_update_light_instances, const Vector<RID> &p_light_instances, const PagedArray<RenderGeometryInstance *> &p_dynamic_objects) override;
+	virtual void voxel_gi_set_quality(RenderingServer::VoxelGIQuality) override;
+
+	virtual void render_material(const Transform3D &p_cam_transform, const Projection &p_cam_projection, bool p_cam_orthogonal, const PagedArray<RenderGeometryInstance *> &p_instances, RID p_framebuffer, const Rect2i &p_region) override;
+	virtual void render_particle_collider_heightfield(RID p_collider, const Transform3D &p_transform, const PagedArray<RenderGeometryInstance *> &p_instances) override;
+	virtual void set_time(double p_time, double p_step) override;
+	virtual Ref<RenderSceneBuffers> render_buffers_create() override;
+	virtual void gi_set_use_half_resolution(bool p_enable) override;
+	virtual void screen_space_roughness_limiter_set_active(bool p_enable, float p_amount, float p_limit) override;
+	virtual bool screen_space_roughness_limiter_is_active() const override;
+	virtual void sub_surface_scattering_set_quality(RenderingServer::SubSurfaceScatteringQuality p_quality) override;
+	virtual void sub_surface_scattering_set_scale(float p_scale, float p_depth_scale) override;
+	virtual TypedArray<Image> bake_render_uv2(RID p_base, const TypedArray<RID> &p_material_overrides, const Size2i &p_image_size) override;
+	virtual void decals_set_filter(RenderingServer::DecalFilter p_filter) override;
+	virtual void light_projectors_set_filter(RenderingServer::LightProjectorFilter p_filter) override;
+	virtual void lightmaps_set_bicubic_filter(bool p_enable) override;
+	virtual void update() override;
+
 public:
 	RasterizerSceneGLES2() {}
 	~RasterizerSceneGLES2() {}
 };
-
+} //namespace GLES2
 #endif // GLES2_ENABLED

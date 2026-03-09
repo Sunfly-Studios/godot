@@ -59,6 +59,8 @@
 	T_PREAMBLE          \
 	RET_T C_PREAMBLE
 
+namespace GLES2 {
+
 template <class T, typename T_STORAGE>
 class RasterizerCanvasBatcher {
 public:
@@ -1671,7 +1673,7 @@ PREAMBLE(bool)::_disallow_item_join_if_batch_types_too_different(RenderItemState
 
 	return disallow;
 }
-
+} // namespace GLES2
 #undef PREAMBLE
 #undef T_PREAMBLE
 #undef C_PREAMBLE

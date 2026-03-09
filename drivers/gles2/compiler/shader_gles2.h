@@ -36,12 +36,13 @@
 #include "core/templates/hash_map.h"
 #include "core/templates/pair.h"
 #include "core/variant/variant.h"
+#include "core/templates/rb_set.h"
 #include "servers/rendering/shader_language.h"
 #include "thirdparty/glad/glad/gl.h"
 
 #include <stdio.h>
 
-class RasterizerStorageGLES2;
+namespace GLES2 {
 
 class ShaderGLES2 {
 protected:
@@ -219,7 +220,7 @@ public:
 
 	uint32_t get_version_key() const { return conditional_version.version; }
 
-	// this void* is actually a RasterizerStorageGLES2::Material, but C++ doesn't
+	// this void* is actually a GLES2::Material, but C++ doesn't
 	// like forward declared nested classes.
 	void use_material(void *p_material);
 
@@ -256,10 +257,12 @@ int ShaderGLES2::_get_uniform(int p_which) const {
 
 void ShaderGLES2::_set_conditional(int p_which, bool p_value) {
 	ERR_FAIL_INDEX(p_which, conditional_count);
-	if (p_value)
+	if (p_value) {
 		new_conditional_version.version |= (1 << p_which);
-	else
+	} else {
 		new_conditional_version.version &= ~(1 << p_which);
+	}
 }
 
+} //namespace GLES2
 #endif // GLES2_ENABLED

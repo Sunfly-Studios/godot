@@ -39,6 +39,8 @@
 #include "core/string/print_string.h"
 #include "core/string/string_builder.h"
 
+using namespace GLES2;
+
 // #define DEBUG_OPENGL
 
 // #include "shaders/copy.glsl.gen.h"
@@ -650,17 +652,17 @@ void ShaderGLES2::free_custom_shader(uint32_t p_code_id) {
 
 	VersionKey key;
 	key.code_version = p_code_id;
-	for (RBSet<uint32_t>::Element *E = custom_code_map[p_code_id].versions.front(); E; E = E->next()) {
-		key.version = E->get();
+	for (uint32_t version : custom_code_map[p_code_id].versions) {
+		key.version = version;
 		ERR_CONTINUE(!version_map.has(key));
 		Version &v = version_map[key];
-
+	
 		glDeleteShader(v.vert_id);
 		glDeleteShader(v.frag_id);
 		glDeleteProgram(v.id);
 		memdelete_arr(v.uniform_location);
 		v.id = 0;
-
+	
 		version_map.erase(key);
 	}
 
@@ -668,7 +670,7 @@ void ShaderGLES2::free_custom_shader(uint32_t p_code_id) {
 }
 
 void ShaderGLES2::use_material(void *p_material) {
-	GLES2::Material *material = (GLES2::Material *)p_material;
+	Material *material = (Material *)p_material;
 
 	if (!material) {
 		return;
@@ -681,7 +683,7 @@ void ShaderGLES2::use_material(void *p_material) {
 	Version *v = version_map.getptr(conditional_version);
 
 	// bind uniforms
-	for (const KeyValue<StringName, ShaderLanguage::ShaderNode::Uniform> &E : material->shader->uniforms) {
+	for (const KeyValue<StringName, ShaderLanguage::ShaderNode::Uniform> &E : material->shader->data->uniforms) {
 		if (E.value.texture_order >= 0) {
 			continue; // this is a texture, doesn't go here
 		}

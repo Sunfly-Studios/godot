@@ -265,7 +265,7 @@ private:
 		RID default_material;
 		RID default_shader_version;
 
-		ParticlesCopyShaderGLES3 copy_shader;
+		ParticlesShaderGLES2 copy_shader;
 		RID copy_shader_version;
 	} particles_shader;
 

@@ -31,7 +31,7 @@
 #include "rasterizer_gles2.h"
 
 #ifdef GLES2_ENABLED
-#include "shader_gles2.h"
+#include "drivers/gles2/compiler/shader_gles2.h"
 
 #include "core/config/project_settings.h"
 #include "core/os/os.h"
@@ -74,18 +74,11 @@
 #define CAN_DEBUG
 #endif
 
-#if !defined(GLES_OVER_GL) && defined(CAN_DEBUG)
-#include <GLES2/gl2.h>
-#include <GLES2/gl2ext.h>
-#include <GLES2/gl2platform.h>
-
-#include <EGL/egl.h>
-#include <EGL/eglext.h>
-#endif
-
 #if defined(MINGW_ENABLED) || defined(_MSC_VER)
 #define strcpy strcpy_s
 #endif
+
+using namespace GLES2;
 
 void RasterizerGLES2::begin_frame(double frame_step) {
 	frame++;
@@ -131,10 +124,11 @@ void RasterizerGLES2::end_frame(bool p_swap_buffers) {
 	//	glClearColor(1, 0, 0, 1);
 	//	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_ACCUM_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
 
-	if (p_swap_buffers)
+	if (p_swap_buffers) {
 		DisplayServer::get_singleton()->swap_buffers();
-	else
+	} else {
 		glFinish();
+	}
 }
 
 #ifdef CAN_DEBUG
@@ -196,13 +190,19 @@ typedef void (*DEBUGPROCARB)(GLenum source,
 
 typedef void (*DebugMessageCallbackARB)(DEBUGPROCARB callback, const void *userParam);
 
+#ifdef GLAD_ENABLED
+void *_egl_load_function_wrapper(const char *p_name) {
+	return (void *)eglGetProcAddress(p_name);
+}
+#endif
+
 void RasterizerGLES2::initialize() {
 	print_verbose("Using GLES2 video driver");
 
 	storage._main_thread_id = Thread::get_caller_id();
 
 #ifdef GLAD_ENABLED
-	if (!gladLoadGL()) {
+	if (!gladLoadGL((GLADloadfunc)_egl_load_function_wrapper)) {
 		ERR_PRINT("Error initializing GLAD");
 		return;
 	}

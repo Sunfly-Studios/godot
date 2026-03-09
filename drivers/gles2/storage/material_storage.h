@@ -40,6 +40,8 @@
 #include "servers/rendering/storage/material_storage.h"
 #include "servers/rendering/storage/utilities.h"
 
+#include "drivers/gles2/storage/texture_storage.h"
+
 #include "drivers/gles2/shaders/canvas.glsl.gen.h"
 #include "drivers/gles2/shaders/particles.glsl.gen.h"
 #include "drivers/gles2/shaders/scene.glsl.gen.h"
@@ -75,11 +77,15 @@ struct Material;
 
 struct Shader {
 	ShaderData *data = nullptr;
+	RasterizerStorageGLES2::Shader::Spatial spatial;
 	String code;
 	String path_hint;
 	RS::ShaderMode mode;
 	HashMap<StringName, HashMap<int, RID>> default_texture_parameter;
 	HashSet<Material *> owners;
+	bool valid = false;
+	int32_t index = 0;
+	int32_t custom_code_id = 0;
 };
 
 /* Material structs */
@@ -126,6 +132,8 @@ struct Material {
 	int32_t priority = 0;
 	RID next_pass;
 	SelfList<Material> update_element;
+	Texture textures;
+	int32_t index = 0;
 
 	Dependency dependency;
 
@@ -537,10 +545,10 @@ public:
 	}
 
 	struct Shaders {
-		CanvasShaderGLES3 canvas_shader;
-		SkyShaderGLES3 sky_shader;
-		SceneShaderGLES3 scene_shader;
-		ParticlesShaderGLES3 particles_process_shader;
+		CanvasShaderGLES2 canvas_shader;
+		SkyShaderGLES2 sky_shader;
+		SceneShaderGLES2 scene_shader;
+		ParticlesShaderGLES2 particles_process_shader;
 
 		ShaderCompiler compiler_canvas;
 		ShaderCompiler compiler_scene;

@@ -208,6 +208,7 @@ def build_legacygl_header(filename, include, class_suffix, output_attribs, gles2
     )
     fd.write("\n\n")
     fd.write('#include "' + include + '"\n\n\n')
+    fd.write("namespace GLES2 {\n\n")
     fd.write("class " + out_file_class + " : public Shader" + class_suffix + " {\n\n")
     fd.write('\t virtual String get_shader_name() const { return "' + out_file_class + '"; }\n')
 
@@ -580,6 +581,7 @@ def build_legacygl_header(filename, include, class_suffix, output_attribs, gles2
         fd.write("\tvoid set_enum_conditional(EnumConditionals p_cond) { _set_enum_conditional(p_cond); }\n")
 
     fd.write("};\n\n")
+    fd.write("}; // namespace GLES2\n\n")
     fd.write("#endif\n\n")
     fd.close()
 

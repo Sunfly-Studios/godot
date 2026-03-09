@@ -46,6 +46,18 @@ namespace GLES2 {
 
 struct MeshInstance;
 
+struct LightmapCapture {
+	Vector<Lightmap> octree;
+	AABB bounds;
+	Transform3D cell_xform;
+	int cell_subdiv;
+	float energy;
+	LightmapCapture() {
+		energy = 1.0;
+		cell_subdiv = 1;
+	}
+};
+
 struct Mesh {
 	struct Surface {
 		struct Attrib {
@@ -56,17 +68,25 @@ struct Mesh {
 			GLboolean normalized;
 			GLsizei stride;
 			uint32_t offset;
+			uint32_t index;
 		};
 		RS::PrimitiveType primitive = RS::PRIMITIVE_POINTS;
 		uint64_t format = 0;
 
+		Attrib attribs[RS::ARRAY_MAX];
+		Vector<uint8_t> data;
+
 		GLuint vertex_buffer = 0;
 		GLuint attribute_buffer = 0;
 		GLuint skin_buffer = 0;
+		uint32_t index_array_len = 0;
+		uint32_t index_id = 0;
+		uint32_t vertex_id = 0;
 		uint32_t vertex_count = 0;
 		uint32_t vertex_buffer_size = 0;
 		uint32_t attribute_buffer_size = 0;
 		uint32_t skin_buffer_size = 0;
+		uint32_t array_len;
 
 		// Cache vertex arrays so they can be created
 		struct Version {
@@ -200,6 +220,14 @@ struct MultiMesh {
 	bool *data_cache_dirty_regions = nullptr;
 	uint32_t data_cache_used_dirty_regions = 0;
 
+	int xform_floats = 0;
+	int color_floats = 0;
+	int custom_data_floats = 0;
+	int color_format = 0;
+	int custom_data_format = 0;
+	Vector<float> data;
+	Vector<float> data_cache;
+
 	GLuint buffer = 0;
 
 	bool dirty = false;
@@ -215,6 +243,7 @@ struct Skeleton {
 	int size = 0;
 	int height = 0;
 	LocalVector<float> data;
+	GLuint tex_id;
 
 	bool dirty = false;
 	Skeleton *dirty_list = nullptr;
@@ -232,7 +261,7 @@ private:
 	static MeshStorage *singleton;
 
 	struct {
-		SkeletonShaderGLES3 shader;
+		SkeletonShaderGLES2 shader;
 		RID shader_version;
 	} skeleton_shader;
 

@@ -42,6 +42,8 @@
 #include "drivers/gles2/common/stubs.h"
 #include "drivers/gles2/compiler/shader_compiler_gles2.h"
 #include "drivers/gles2/compiler/shader_gles2.h"
+#include "drivers/gles2/storage/material_storage.h"
+#include "drivers/gles2/storage/light_storage.h"
 
 #include "drivers/gles2/shaders/effects/copy.glsl.gen.h"
 #include "drivers/gles2/shaders/effects/cubemap_filter.glsl.gen.h"
@@ -49,11 +51,14 @@
 namespace GLES2 {
 	class RasterizerCanvasGLES2;
 	class RasterizerSceneGLES2;
+	struct Skeleton;
 	
 	class RasterizerStorageGLES2 {
 		friend class RasterizerGLES2;
-	
+
+	public:
 		Thread::ID _main_thread_id = 0;
+
 		bool _is_main_thread();
 	
 	public:
@@ -61,10 +66,6 @@ namespace GLES2 {
 		RasterizerSceneGLES2 *scene;
 	
 		static GLuint system_fbo;
-	
-		struct Skeleton {
-	
-		};
 	
 		struct Config {
 			bool shrink_textures_x2;
@@ -254,8 +255,6 @@ namespace GLES2 {
 			TEXTURE_FLAGS_DEFAULT = TEXTURE_FLAG_REPEAT | TEXTURE_FLAG_MIPMAPS | TEXTURE_FLAG_FILTER
 		};
 	
-		struct RenderTarget;
-	
 		struct Texture {
 			RID self;
 	
@@ -397,9 +396,9 @@ namespace GLES2 {
 			}
 			void destroy() {
 				images.clear();
-	
-				for (RBSet<Texture *>::Element *E = proxy_owners.front(); E; E = E->next()) {
-					E->get()->proxy = NULL;
+
+				for (Texture *texture : proxy_owners) {
+					texture->proxy = nullptr;
 				}
 	
 				if (proxy) {
@@ -458,6 +457,7 @@ namespace GLES2 {
 		};
 	
 		mutable RID_PtrOwner<Texture> texture_owner;
+		mutable RID_PtrOwner<LightmapCapture> lightmap_capture_data_owner;
 	
 		Ref<Image> _get_gl_image_and_format(const Ref<Image> &p_image, Image::Format p_format, uint32_t p_flags, Image::Format &r_real_format, GLenum &r_gl_format, GLenum &r_gl_internal_format, GLenum &r_gl_type, bool &r_compressed, bool p_force_decompress) const;
 	
@@ -494,14 +494,16 @@ namespace GLES2 {
 		// old
 		virtual uint32_t texture_get_width(RID p_texture) const;
 		virtual uint32_t texture_get_height(RID p_texture) const;
-	
-	private:
+
+	public:
 		virtual RID texture_create();
 	
 		//virtual void texture_allocate(RID p_texture, int p_width, int p_height, int p_depth_3d, Image::Format p_format, RD::TextureType p_type, uint32_t p_flags = TEXTURE_FLAGS_DEFAULT);
 		void _texture_allocate_internal(RID p_texture, int p_width, int p_height, int p_depth_3d, Image::Format p_format, RD::TextureType p_type, uint32_t p_flags = TEXTURE_FLAGS_DEFAULT);
 	
 		virtual void texture_set_data(RID p_texture, const Ref<Image> &p_image, int p_layer = 0);
+
+	private:
 		virtual void texture_set_data_partial(RID p_texture, const Ref<Image> &p_image, int src_x, int src_y, int src_w, int src_h, int dst_x, int dst_y, int p_dst_mip, int p_layer = 0);
 		//virtual Ref<Image> texture_get_data(RID p_texture, int p_layer = 0) const;
 		virtual void texture_set_flags(RID p_texture, uint32_t p_flags);
@@ -560,8 +562,6 @@ namespace GLES2 {
 		virtual void sky_set_texture(RID p_sky, RID p_panorama, int p_radiance_size);
 	
 		// SHADER API
-	
-		struct Material;
 	
 		struct Shader {
 			RID self;
@@ -723,39 +723,6 @@ namespace GLES2 {
 	
 		// COMMON MATERIAL API
 	
-		struct Material {
-			RID self;
-			Shader *shader;
-			HashMap<StringName, Variant> params;
-			SelfList<Material> list;
-			SelfList<Material> dirty_list;
-			Vector<Pair<StringName, RID>> textures;
-			float line_width;
-			int render_priority;
-	
-			RID next_pass;
-	
-			uint32_t index;
-			uint64_t last_pass;
-	
-			//		HashMap<Geometry *, int> geometry_owners;
-			//		HashMap<InstanceBaseDependency *, int> instance_owners;
-	
-			bool can_cast_shadow_cache;
-			bool is_animated_cache;
-	
-			Material() :
-					list(this),
-					dirty_list(this) {
-				can_cast_shadow_cache = false;
-				is_animated_cache = false;
-				shader = NULL;
-				line_width = 1.0;
-				last_pass = 0;
-				render_priority = 0;
-			}
-		};
-	
 		mutable SelfList<Material>::List _material_dirty_list;
 		void _material_make_dirty(Material *p_material) const;
 	
@@ -765,6 +732,9 @@ namespace GLES2 {
 		void _update_material(Material *p_material);
 	
 		mutable RID_PtrOwner<Material> material_owner;
+		mutable RID_PtrOwner<ReflectionProbe> reflection_probe_owner;
+		mutable RID_PtrOwner<Skeleton> skeleton_owner;
+		mutable RID_PtrOwner<Light> light_owner;
 	
 		// new
 		void material_get_instance_shader_parameters(RID p_material, List<RS::GlobalShaderParameterType> *r_parameters) {}
@@ -810,6 +780,9 @@ namespace GLES2 {
 			GLuint multisample_color;
 			GLuint multisample_depth;
 			bool multisample_active;
+
+			bool is_transparent = false;
+			bool is_direct_to_screen = false;
 	
 			struct Effect {
 				GLuint fbo;
@@ -1046,13 +1019,13 @@ namespace GLES2 {
 		}
 	
 		void bind_framebuffer_system() {
-			glBindFramebuffer(GL_FRAMEBUFFER, RasterizerStorageGLES2::system_fbo);
+			glBindFramebuffer(GL_FRAMEBUFFER, GLES2::RasterizerStorageGLES2::system_fbo);
 		}
 	
-		RasterizerStorageGLES2();
+		GLES2::RasterizerStorageGLES2();
 	};
 	
-	inline bool RasterizerStorageGLES2::safe_buffer_sub_data(unsigned int p_total_buffer_size, GLenum p_target, unsigned int p_offset, unsigned int p_data_size, const void *p_data, unsigned int &r_offset_after) const {
+	inline bool GLES2::RasterizerStorageGLES2::safe_buffer_sub_data(unsigned int p_total_buffer_size, GLenum p_target, unsigned int p_offset, unsigned int p_data_size, const void *p_data, unsigned int &r_offset_after) const {
 		r_offset_after = p_offset + p_data_size;
 	#ifdef DEBUG_ENABLED
 		// we are trying to write across the edge of the buffer
@@ -1065,7 +1038,7 @@ namespace GLES2 {
 	
 	// standardize the orphan / upload in one place so it can be changed per platform as necessary, and avoid future
 	// bugs causing pipeline stalls
-	inline void RasterizerStorageGLES2::buffer_orphan_and_upload(unsigned int p_buffer_size, unsigned int p_offset, unsigned int p_data_size, const void *p_data, GLenum p_target, GLenum p_usage, bool p_optional_orphan) const {
+	inline void GLES2::RasterizerStorageGLES2::buffer_orphan_and_upload(unsigned int p_buffer_size, unsigned int p_offset, unsigned int p_data_size, const void *p_data, GLenum p_target, GLenum p_usage, bool p_optional_orphan) const {
 		// Orphan the buffer to avoid CPU/GPU sync points caused by glBufferSubData
 		// Was previously #ifndef GLES_OVER_GL however this causes stalls on desktop mac also (and possibly other)
 		if (!p_optional_orphan || (config.should_orphan)) {

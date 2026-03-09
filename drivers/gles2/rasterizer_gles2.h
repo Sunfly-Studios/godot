@@ -50,6 +50,8 @@
 #include "drivers/gles2/storage/particles_storage.h"
 #include "drivers/gles2/storage/utilities.h"
 
+namespace GLES2 {
+
 class RasterizerGLES2 : public RendererCompositor {
 private:
 	uint64_t frame = 1;
@@ -59,22 +61,22 @@ private:
 	double time_scale = 1.0;
 
 protected:
-	GLES2::Config *config = nullptr;
-	GLES2::Utilities *utilities = nullptr;
-	GLES2::RasterizerStorageGLES2 *texture_storage = nullptr;
-	GLES2::MaterialStorage *material_storage = nullptr;
-	GLES2::MeshStorage *mesh_storage = nullptr;
-	GLES2::ParticlesStorage *particles_storage = nullptr;
-	GLES2::LightStorage *light_storage = nullptr;
-	GLES2::GI *gi = nullptr;
-	GLES2::Fog *fog = nullptr;
-	GLES2::CopyEffects *copy_effects = nullptr;
-	GLES2::CubemapFilter *cubemap_filter = nullptr;
-	GLES2::Glow *glow = nullptr;
-	GLES2::PostEffects *post_effects = nullptr;
-	GLES2::FeedEffects *feed_effects = nullptr;
-	RasterizerCanvasGLES2 *canvas = nullptr;
-	RasterizerSceneGLES2 *scene = nullptr;
+	Config *config = nullptr;
+	Utilities *utilities = nullptr;
+	MaterialStorage *material_storage = nullptr;
+	MeshStorage *mesh_storage = nullptr;
+	ParticlesStorage *particles_storage = nullptr;
+	LightStorage *light_storage = nullptr;
+	GI *gi = nullptr;
+	Fog *fog = nullptr;
+	CopyEffects *copy_effects = nullptr;
+	CubemapFilter *cubemap_filter = nullptr;
+	Glow *glow = nullptr;
+	PostEffects *post_effects = nullptr;
+	FeedEffects *feed_effects = nullptr;
+	RasterizerStorageGLES2 storage;
+	RasterizerCanvasGLES2 canvas;
+	RasterizerSceneGLES2 scene;
 	static RasterizerGLES2 *singleton;
 
 	void _blit_render_target_to_screen(RID p_render_target, const Rect2 &p_screen_rect);
@@ -89,8 +91,8 @@ public:
 	RendererTextureStorage *get_texture_storage() { return nullptr; }
 	RendererGI *get_gi() { return gi; }
 	RendererFog *get_fog() { return fog; }
-	RendererCanvasRender *get_canvas() { return canvas; }
-	RendererSceneRender *get_scene() { return scene; }
+	RendererCanvasRender *get_canvas() { return &canvas; }
+	RendererSceneRender *get_scene() { return &scene; }
 
 	void set_boot_image(const Ref<Image> &p_image, const Color &p_color, bool p_scale, bool p_use_filter = true);
 
@@ -112,6 +114,10 @@ public:
 		_create_func = _create_current;
 	}
 
+	static bool is_gles_over_gl() {
+		return false;// TODO(GLES2)
+	}
+
 	virtual bool is_low_end() const { return true; }
 	uint64_t get_frame_number() const { return frame; }
 	double get_frame_delta_time() const { return delta; }
@@ -123,5 +129,5 @@ public:
 	RasterizerGLES2();
 	~RasterizerGLES2() {}
 };
-
+} //namespace GLES2
 #endif // GLES2_ENABLED

@@ -63,10 +63,12 @@ struct Light {
 	real_t distance_fade_shadow = 50.0;
 	real_t distance_fade_length = 10.0;
 	RS::LightOmniShadowMode omni_shadow_mode = RS::LIGHT_OMNI_SHADOW_DUAL_PARABOLOID;
+	RS::LightOmniShadowMode omni_shadow_detail = RS::LIGHT_OMNI_SHADOW_CUBE;
 	RS::LightDirectionalShadowMode directional_shadow_mode = RS::LIGHT_DIRECTIONAL_SHADOW_ORTHOGONAL;
 	bool directional_blend_splits = false;
 	RS::LightDirectionalSkyMode directional_sky_mode = RS::LIGHT_DIRECTIONAL_SKY_MODE_LIGHT_AND_SKY;
 	uint64_t version = 0;
+	Color shadow_color;
 
 	Dependency dependency;
 };
@@ -796,7 +798,7 @@ public:
 
 		glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, atlas->debug_texture, 0);
 
-		glBindFramebuffer(GL_FRAMEBUFFER, GLES2::RasterizerStorageGLES2::system_fbo);
+		glBindFramebuffer(GL_FRAMEBUFFER, system_fbo);
 
 		return atlas->debug_fbo;
 	}

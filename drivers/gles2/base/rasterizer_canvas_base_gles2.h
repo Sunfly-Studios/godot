@@ -37,6 +37,7 @@
 #include "drivers/gles2/common/storage_common.h"
 #include "drivers/gles2/rasterizer_scene_gles2.h"
 #include "drivers/gles2/storage/light_storage.h"
+#include "drivers/gles2/storage/texture_storage.h"
 #include "drivers/gles2/storage/material_storage.h"
 #include "drivers/gles2/storage/mesh_storage.h"
 #include "drivers/gles2/storage/particles_storage.h"
@@ -45,6 +46,8 @@
 #include "drivers/gles2/shaders/canvas.glsl.gen.h"
 #include "drivers/gles2/shaders/canvas_shadow.glsl.gen.h"
 #include "drivers/gles2/shaders/lens_distorted.glsl.gen.h"
+
+namespace GLES2 {
 
 class RasterizerCanvasBaseGLES2 : public StubsCanvas {
 public:
@@ -97,7 +100,7 @@ public:
 
 		RID current_tex;
 		RID current_normal;
-		GLES2::RasterizerStorageGLES2::Texture *current_tex_ptr;
+		RasterizerStorageGLES2::Texture *current_tex_ptr;
 
 		Transform3D vp;
 		Light *using_light;
@@ -109,8 +112,6 @@ public:
 		RS::CanvasItemTextureFilter current_filter = RS::CANVAS_ITEM_TEXTURE_FILTER_LINEAR;
 		RS::CanvasItemTextureRepeat current_repeat = RS::CANVAS_ITEM_TEXTURE_REPEAT_DISABLED;
 	} state;
-
-	typedef void Texture;
 
 	RasterizerSceneGLES2 *scene_render;
 
@@ -129,9 +130,9 @@ public:
 	virtual void canvas_end();
 
 protected:
-	void _legacy_draw_primitive(Item::CommandPrimitive *p_pr, GLES2::RasterizerStorageGLES2::Material *p_material);
-	void _legacy_draw_line(Item::CommandPrimitive *p_pr, GLES2::RasterizerStorageGLES2::Material *p_material);
-	void _legacy_draw_poly_triangles(Item::CommandPolygon *p_poly, GLES2::RasterizerStorageGLES2::Material *p_material);
+	void _legacy_draw_primitive(Item::CommandPrimitive *p_pr, Material *p_material);
+	void _legacy_draw_line(Item::CommandPrimitive *p_pr, Material *p_material);
+	void _legacy_draw_poly_triangles(Item::CommandPolygon *p_poly, Material *p_material);
 
 public:
 	void _draw_gui_primitive(int p_points, const Vector2 *p_vertices, const Color *p_colors, const Vector2 *p_uvs, const float *p_light_angles = nullptr);
@@ -151,7 +152,7 @@ public:
 	virtual void canvas_light_shadow_buffer_update(RID p_buffer, const Transform2D &p_light_xform, int p_light_mask, float p_near, float p_far, LightOccluderInstance *p_occluders, Projection *p_xform_cache);
 	virtual void canvas_debug_viewport_shadows(Light *p_lights_with_shadow);
 
-	GLES2::RasterizerStorageGLES2::Texture *_bind_canvas_texture(const RID &p_texture, const RID &p_normal_map);
+	RasterizerStorageGLES2::Texture *_bind_canvas_texture(const RID &p_texture, const RID &p_normal_map);
 	void _set_texture_rect_mode(bool p_texture_rect, bool p_light_angle = false, bool p_modulate = false, bool p_large_vertex = false);
 
 	// NEW API
@@ -173,5 +174,5 @@ public:
 
 	RasterizerCanvasBaseGLES2();
 };
-
+} // namespace GLES2
 #endif // GLES2_ENABLED

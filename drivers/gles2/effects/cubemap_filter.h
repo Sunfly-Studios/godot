@@ -33,6 +33,7 @@
 
 #ifdef GLES2_ENABLED
 
+#include "drivers/gles2/compiler/shader_gles2.h"
 #include "drivers/gles2/shaders/effects/cubemap_filter.glsl.gen.h"
 
 namespace GLES2 {
