@@ -56,6 +56,28 @@ struct ShaderData {
 	HashMap<StringName, ShaderLanguage::ShaderNode::Uniform> uniforms;
 	HashMap<StringName, HashMap<int, RID>> default_texture_params;
 
+	// Dummy struct to get this going
+	struct Spatial {
+		int blend_mode = 0;
+		int depth_draw_mode = 0;
+		int cull_mode = 0;
+		bool uses_alpha = false;
+		bool uses_alpha_scissor = false;
+		bool uses_discard = false;
+		bool unshaded = false;
+		bool no_depth_test = false;
+		bool uses_sss = false;
+		bool uses_time = false;
+		bool uses_vertex_lighting = false;
+		bool uses_screen_texture = false;
+		bool uses_depth_texture = false;
+		bool uses_vertex = false;
+		bool uses_tangent = false;
+		bool uses_ensure_correct_normals = false;
+		bool writes_modelview_or_projection = false;
+		bool uses_world_coordinates = false;
+	};
+
 	virtual void set_path_hint(const String &p_hint);
 	virtual void set_default_texture_parameter(const StringName &p_name, RID p_texture, int p_index);
 	virtual Variant get_default_parameter(const StringName &p_parameter) const;
@@ -77,7 +99,7 @@ struct Material;
 
 struct Shader {
 	ShaderData *data = nullptr;
-	RasterizerStorageGLES2::Shader::Spatial spatial;
+	ShaderData::Spatial spatial;
 	String code;
 	String path_hint;
 	RS::ShaderMode mode;
@@ -86,6 +108,15 @@ struct Shader {
 	bool valid = false;
 	int32_t index = 0;
 	int32_t custom_code_id = 0;
+
+	bool uses_vertex_time = false;
+	bool uses_fragment_time = false;
+	HashMap<StringName, ShaderLanguage::ShaderNode::Uniform> uniforms;
+	uint32_t texture_count = 0;
+	RID self;
+	SelfList<Material>::List materials;
+	SelfList<Shader> dirty_list;
+	HashMap<StringName, RID> default_textures;
 };
 
 /* Material structs */
@@ -132,13 +163,19 @@ struct Material {
 	int32_t priority = 0;
 	RID next_pass;
 	SelfList<Material> update_element;
-	Texture textures;
 	int32_t index = 0;
+
+	int render_priority = 0;
+	SelfList<Material> list;
+	float line_width = 1.0f;
+	bool is_animated_cache = false;
+	bool can_cast_shadow_cache = false;
+	SelfList<Material> dirty_list;
+	Vector<Pair<StringName, RID>> textures;
 
 	Dependency dependency;
 
-	Material() :
-			update_element(this) {}
+	Material();
 };
 
 /* CanvasItem Materials */

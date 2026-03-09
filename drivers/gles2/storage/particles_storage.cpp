@@ -112,7 +112,7 @@ void ParticlesStorage::particles_set_emitting(RID p_particles, bool p_emitting) 
 }
 
 bool ParticlesStorage::particles_get_emitting(RID p_particles) {
-
+	return false;
 }
 
 void ParticlesStorage::_particles_free_data(Particles *particles) {

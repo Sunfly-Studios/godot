@@ -581,7 +581,7 @@ void ShaderGLES2::setup(
 }
 
 void ShaderGLES2::finish() {
-	const VersionKey *V = NULL;
+	//const VersionKey *V = NULL;
 
 	for (const KeyValue<VersionKey, Version> &v : version_map) {
 		glDeleteShader(v.value.vert_id);
@@ -652,8 +652,8 @@ void ShaderGLES2::free_custom_shader(uint32_t p_code_id) {
 
 	VersionKey key;
 	key.code_version = p_code_id;
-	for (uint32_t version : custom_code_map[p_code_id].versions) {
-		key.version = version;
+	for (uint32_t l_version : custom_code_map[p_code_id].versions) {
+		key.version = l_version;
 		ERR_CONTINUE(!version_map.has(key));
 		Version &v = version_map[key];
 	

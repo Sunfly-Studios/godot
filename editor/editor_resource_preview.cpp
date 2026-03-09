@@ -405,6 +405,8 @@ void EditorResourcePreview::_read_preview_cache(Ref<FileAccess> p_file, int *r_t
 	*r_outdated = p_file->get_line().to_int() < CURRENT_METADATA_VERSION;
 }
 
+/*
+This one is from lawnjelly's GLES2 code
 void EditorResourcePreview::_iterate() {
 	preview_mutex.lock();
 
@@ -523,14 +525,15 @@ void EditorResourcePreview::_iterate() {
 		preview_mutex.unlock();
 	}
 }
+*/
 
 void EditorResourcePreview::_thread() {
-	exited.clear();
+	exiting.clear();
 	while (!exiting.is_set()) {
 		preview_sem.wait();
 		_iterate();
 	}
-	exited.set();
+	exiting.set();
 }
 
 void EditorResourcePreview::_idle_callback() {
@@ -704,7 +707,7 @@ void EditorResourcePreview::stop() {
 				preview_generators.write[i]->abort();
 			}
 
-			while (!exited.is_set()) {
+			while (!exiting.is_set()) {
 				// Sync pending work.
 				OS::get_singleton()->delay_usec(10000);
 				RenderingServer::get_singleton()->sync();
@@ -729,7 +732,7 @@ void EditorResourcePreview::update() {
 		return;
 	}
 
-	if (!exit.is_set()) {
+	if (!exiting.is_set()) {
 		// no need to even lock the mutex if the size is zero
 		// there is no problem if queue.size() is wrong, even if
 		// there was a race condition.

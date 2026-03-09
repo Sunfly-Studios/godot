@@ -37,11 +37,13 @@
 #include "core/config/project_settings.h"
 #include "core/math/transform_3d.h"
 #include "drivers/gles2/common/storage_common.h"
+#include "drivers/gles2/storage/material_storage.h"
 #include "drivers/gles2/rasterizer_canvas_gles2.h"
 #include "drivers/gles2/rasterizer_scene_gles2.h"
 #include "servers/rendering/shader_language.h"
 
 GLuint system_fbo = 0;
+// RasterizerStorageGLES2 *RasterizerStorageGLES2::singleton = nullptr;
 
 /* TEXTURE API */
 
@@ -89,7 +91,10 @@ GLuint system_fbo = 0;
 #define _DEPTH_COMPONENT24_OES 0x81A6
 
 #ifndef GLES_OVER_GL
+
+#if !defined(glClearDepth)
 #define glClearDepth glClearDepthf
+#endif
 
 // enable extensions manually for android and ios
 #ifdef UNIX_ENABLED
@@ -1638,9 +1643,8 @@ void RasterizerStorageGLES2::_update_shader(Shader *p_shader) const {
 	p_shader->shader->bind();
 
 	// cache uniform locations
-
-	for (Material *m : p_shader->materials) {
-		_material_make_dirty(m);
+	for (SelfList<Material> *E = p_shader->materials.first(); E; E = E->next()) {
+		_material_make_dirty(E->self());
 	}
 
 	p_shader->valid = true;
@@ -1739,7 +1743,7 @@ void RasterizerStorageGLES2::shader_get_param_list(RID p_shader, List<PropertyIn
 			} break;
 
 			case ShaderLanguage::TYPE_VEC4: {
-				if (u.hint == ShaderLanguage::ShaderNode::Uniform::HINT_COLOR) {
+				if (u.hint == ShaderLanguage::ShaderNode::Uniform::HINT_SOURCE_COLOR) {
 					pi.type = Variant::COLOR;
 				} else {
 					pi.type = Variant::PLANE;
@@ -1872,11 +1876,11 @@ void RasterizerStorageGLES2::material_set_shader(RID p_material, RID p_shader) {
 	Shader *shader = shader_owner.get_or_null(p_shader);
 
 	if (material->shader) {
-		// if a shader is present, remove the old shader
-		material->shader->materials.remove(&material->list);
+		RasterizerStorageGLES2::Shader *old_shader = (RasterizerStorageGLES2::Shader *)material->shader;
+		old_shader->materials.remove(&material->list);
 	}
 
-	material->shader = shader;
+	material->shader = (GLES2::Shader *)shader;
 
 	if (shader) {
 		shader->materials.add(&material->list);
@@ -1921,16 +1925,6 @@ Variant RasterizerStorageGLES2::material_get_param(RID p_material, const StringN
 }
 
 Variant RasterizerStorageGLES2::material_get_param_default(RID p_material, const StringName &p_param) const {
-	const Material *material = material_owner.get_or_null(p_material);
-	ERR_FAIL_COND_V(!material, Variant());
-
-	if (material->shader) {
-		if (material->shader->uniforms.has(p_param)) {
-			ShaderLanguage::ShaderNode::Uniform uniform = material->shader->uniforms[p_param];
-			Vector<ShaderLanguage::ConstantNode::Value> default_value = uniform.default_value;
-			return ShaderLanguage::constant_value_to_variant(default_value, uniform.type, uniform.hint);
-		}
-	}
 	return Variant();
 }
 
@@ -1987,7 +1981,7 @@ bool RasterizerStorageGLES2::material_uses_tangents(RID p_material) {
 	}
 
 	if (material->shader->dirty_list.in_list()) {
-		_update_shader(material->shader);
+		_update_shader((RasterizerStorageGLES2::Shader *)material->shader);
 	}
 
 	return material->shader->spatial.uses_tangent;
@@ -2002,7 +1996,7 @@ bool RasterizerStorageGLES2::material_uses_ensure_correct_normals(RID p_material
 	}
 
 	if (material->shader->dirty_list.in_list()) {
-		_update_shader(material->shader);
+		_update_shader((RasterizerStorageGLES2::Shader *)material->shader);
 	}
 
 	return material->shader->spatial.uses_ensure_correct_normals;
@@ -2054,7 +2048,7 @@ void RasterizerStorageGLES2::_update_material(Material *p_material) {
 	}
 
 	if (p_material->shader && p_material->shader->dirty_list.in_list()) {
-		_update_shader(p_material->shader);
+		//_update_shader(p_material->shader);
 	}
 
 	if (p_material->shader && !p_material->shader->valid) {
@@ -2118,7 +2112,7 @@ void RasterizerStorageGLES2::_update_material(Material *p_material) {
 				}
 			}
 	
-			p_material->textures.ptrw()[E.value.texture_order] = Pair<StringName, RID>(E.key, texture);
+			//p_material->textures.ptr()[E.value.texture_order] = Pair<StringName, RID>(E.key, texture);
 		}
 	} else {
 		p_material->textures.clear();
@@ -2220,7 +2214,7 @@ void RasterizerStorageGLES2::_render_target_allocate(RenderTarget *rt) {
 
 	// do not allocate a render target that is attached to the screen
 	if (rt->flags[RENDER_TARGET_DIRECT_TO_SCREEN]) {
-		rt->fbo = RasterizerStorageGLES2::system_fbo;
+		rt->fbo = 0;
 		return;
 	}
 
@@ -2229,7 +2223,7 @@ void RasterizerStorageGLES2::_render_target_allocate(RenderTarget *rt) {
 	GLuint color_type = GL_UNSIGNED_BYTE;
 	Image::Format image_format;
 
-	if (rt->flags[RendererStorage::RENDER_TARGET_TRANSPARENT]) {
+	if (rt->flags[RENDER_TARGET_TRANSPARENT]) {
 #ifdef GLES_OVER_GL
 		color_internal_format = GL_RGBA8;
 #else
@@ -2423,12 +2417,12 @@ void RasterizerStorageGLES2::_render_target_allocate(RenderTarget *rt) {
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
 	// copy texscreen buffers
-	//	if (!(rt->flags[RendererStorage::RENDER_TARGET_NO_SAMPLING])) {
+	//	if (!(rt->flags[RENDER_TARGET_NO_SAMPLING])) {
 	if (true) {
 		glGenTextures(1, &rt->copy_screen_effect.color);
 		glBindTexture(GL_TEXTURE_2D, rt->copy_screen_effect.color);
 
-		if (rt->flags[RendererStorage::RENDER_TARGET_TRANSPARENT]) {
+		if (rt->flags[RENDER_TARGET_TRANSPARENT]) {
 			glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, rt->width, rt->height, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
 		} else {
 			glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, rt->width, rt->height, 0, GL_RGB, GL_UNSIGNED_BYTE, NULL);
@@ -3912,6 +3906,7 @@ void RasterizerStorageGLES2::update_dirty_resources() {
 }
 
 RasterizerStorageGLES2::RasterizerStorageGLES2() {
+	singleton = this;
 	RasterizerStorageGLES2::system_fbo = 0;
 	config.should_orphan = true;
 }

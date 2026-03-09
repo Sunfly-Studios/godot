@@ -41,7 +41,7 @@ namespace GLES2 {
 class FeedEffects {
 private:
 	struct Feed {
-		FeedShaderGLES3 shader;
+		FeedShaderGLES2 shader;
 		RID shader_version;
 	} feed;
 

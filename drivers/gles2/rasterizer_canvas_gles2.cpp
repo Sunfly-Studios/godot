@@ -1664,19 +1664,18 @@ void RasterizerCanvasGLES2::initialize() {
 		Vector<uint16_t> indices;
 		indices.resize(bdata.index_buffer_size_units);
 
-		// NEW: Grab the write pointer
-		uint16_t *indices_ptr = indices.ptrw();
+		uint16_t *inner_indices_ptr = indices.ptrw();
 
 		for (unsigned int q = 0; q < bdata.max_quads; q++) {
 			int i_pos = q * 6; //  6 inds per quad
 			int q_pos = q * 4; // 4 verts per quad
 
-			indices_ptr[i_pos] = q_pos;
-			indices_ptr[i_pos + 1] = q_pos + 1;
-			indices_ptr[i_pos + 2] = q_pos + 2;
-			indices_ptr[i_pos + 3] = q_pos;
-			indices_ptr[i_pos + 4] = q_pos + 2;
-			indices_ptr[i_pos + 5] = q_pos + 3;
+			inner_indices_ptr[i_pos] = q_pos;
+			inner_indices_ptr[i_pos + 1] = q_pos + 1;
+			inner_indices_ptr[i_pos + 2] = q_pos + 2;
+			inner_indices_ptr[i_pos + 3] = q_pos;
+			inner_indices_ptr[i_pos + 4] = q_pos + 2;
+			inner_indices_ptr[i_pos + 5] = q_pos + 3;
 
 			// we can only use 16 bit indices in GLES2!
 #ifdef DEBUG_ENABLED

@@ -30,7 +30,7 @@
 
 #ifdef GLES2_ENABLED
 
-#include "render_scene_buffers_GLES2.h"
+#include "render_scene_buffers_gles2.h"
 #include "config.h"
 #include "texture_storage.h"
 #include "utilities.h"

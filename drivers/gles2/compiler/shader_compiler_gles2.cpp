@@ -854,7 +854,8 @@ String ShaderCompilerGLES2::_dump_node_code(SL::Node *p_node, int p_level, Gener
 
 ShaderLanguage::DataType ShaderCompilerGLES2::_get_variable_type(const StringName &p_type) {
 	if (RS::get_singleton()) {
-		RS::GlobalShaderParameterType gvt = RS::get_singleton()->global_shader_parameter_get_type(p_type);
+		// RS::GlobalShaderParameterType gvt = RS::get_singleton()->global_shader_parameter_get_type(p_type);
+		return ShaderLanguage::TYPE_VOID;
 		// return RS::global_shader_parameter_get_type_internal(gvt);
 	}
 	return ShaderLanguage::TYPE_VOID;

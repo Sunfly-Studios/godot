@@ -41,7 +41,7 @@
 #include "servers/camera/camera_feed.h"
 #include "servers/rendering/rendering_server_default.h"
 
-#ifndef GLES_OVER_GL
+#if !defined(GLES_OVER_GL) && !defined(glClearDepth)
 #define glClearDepth glClearDepthf
 #endif
 
@@ -184,7 +184,7 @@ void RasterizerSceneGLES2::shadow_atlas_set_quadrant_subdivision(RID p_atlas, in
 		return;
 
 	// erase all data from the quadrant
-	for (int i = 0; i < shadow_atlas->quadrants[p_quadrant].shadows.size(); i++) {
+	for (int64_t i = 0; i < shadow_atlas->quadrants[p_quadrant].shadows.size(); i++) {
 		if (shadow_atlas->quadrants[p_quadrant].shadows[i].owner.is_valid()) {
 			shadow_atlas->shadow_owners.erase(shadow_atlas->quadrants[p_quadrant].shadows[i].owner);
 
@@ -574,7 +574,7 @@ bool RasterizerSceneGLES2::reflection_probe_instance_begin_render(RID p_instance
 		glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
 		glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 
-		glBindFramebuffer(GL_FRAMEBUFFER, RasterizerStorageGLES2::system_fbo);
+		glBindFramebuffer(GL_FRAMEBUFFER, 0);
 	}
 
 	return true;
@@ -660,7 +660,7 @@ bool RasterizerSceneGLES2::reflection_probe_instance_postprocess_step(RID p_inst
 	glBindTexture(GL_TEXTURE_2D, 0);
 	glActiveTexture(GL_TEXTURE1);
 	glBindTexture(GL_TEXTURE_2D, 0);
-	glBindFramebuffer(GL_FRAMEBUFFER, RasterizerStorageGLES2::system_fbo);
+	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
 	return true;
 }
@@ -1418,7 +1418,7 @@ void RasterizerSceneGLES2::_setup_geometry(RenderList::Element *p_element, Skele
 					}
 
 					// 3 * vec4 per vertex
-					if (transform_buffer.size() < s->array_len * 12) {
+					if (transform_buffer.size() < (uint32_t)s->array_len * 12) {
 						transform_buffer.resize(s->array_len * 12);
 					}
 
@@ -2230,10 +2230,10 @@ void RasterizerSceneGLES2::_render_render_list(RenderList::Element **p_elements,
 
 				lightmap_energy = 1.0;
 				if (lightmap) {
-					LightmapCapture *capture = storage->lightmap_capture_data_owner.get_or_null(e->instance->lightmap->base);
+					/*LightmapCapture *capture = storage->lightmap_capture_data_owner.get_or_null(e->instance->lightmap->base);
 					if (capture) {
 						lightmap_energy = capture->energy;
-					}
+					}*/
 				}
 			}
 
@@ -2767,7 +2767,7 @@ void RasterizerSceneGLES2::_post_process(Environment *env, const Projection &p_c
 	int glow_mask = 0;
 
 	if (env && env->glow_enabled) {
-		for (int i = 0; i < RS::MAX_GLOW_LEVELS; i++) {
+		for (int64_t i = 0; i < RS::MAX_GLOW_LEVELS; i++) {
 			if (env->glow_levels & (1 << i)) {
 				if (i >= storage->frame.current_rt->mip_maps[1].sizes.size()) {
 					max_glow_level = storage->frame.current_rt->mip_maps[1].sizes.size() - 1;
@@ -2977,7 +2977,32 @@ void RasterizerSceneGLES2::_post_process(Environment *env, const Projection &p_c
 	state.tonemap_shader.set_conditional(TonemapShaderGLES2::USE_COLOR_CORRECTION, false);
 }
 
-void render_scene(const Ref<RenderSceneBuffers> &p_render_buffers, const RendererSceneRender::CameraData *p_camera_data, const RendererSceneRender::CameraData *p_prev_camera_data, const PagedArray<RenderGeometryInstance *> &p_instances, const PagedArray<RID> &p_lights, const PagedArray<RID> &p_directional_lights, const PagedArray<RID> &p_reflection_probes, const PagedArray<RID> &p_voxel_gi_instances, const PagedArray<RID> &p_decals, const PagedArray<RID> &p_lightmaps, RID p_environment, RID p_camera_attributes, RID p_shadow_atlas, RID p_occluder_debug_tex, RID p_reflection_atlas, RID p_reflection_probe, int p_reflection_probe_pass, float p_screen_mesh_lod_threshold, const RendererSceneRender::RenderShadowData *p_render_shadows, int p_render_shadow_count, const RendererSceneRender::RenderSDFGIData *p_render_sdfgi_regions, int p_render_sdfgi_region_count, const RendererSceneRender::RenderSDFGIUpdateData *p_sdfgi_update_data, RenderingMethod::RenderInfo *r_render_info) {
+void render_scene(
+			const Ref<RenderSceneBuffers> &p_render_buffers,
+			const RendererSceneRender::CameraData *p_camera_data,
+			const RendererSceneRender::CameraData *p_prev_camera_data,
+			const PagedArray<RenderGeometryInstance *> &p_instances,
+			const PagedArray<RID> &p_lights,
+			const PagedArray<RID> &p_reflection_probes,
+			const PagedArray<RID> &p_vfx_nodes,
+			const PagedArray<RID> &p_decals,
+			const PagedArray<RID> &p_lightmaps,
+			const PagedArray<RID> &p_fog_volumes,
+			RID p_environment,
+			RID p_camera_effects,
+			RID p_shadow_atlas,
+			RID p_occluder_debug_tex,
+			RID p_reflection_atlas,
+			RID p_reflection_probes_buffer,
+			RID p_lightmap_buffer,
+			int p_viewport_usage,
+			float p_screen_mesh_lod_threshold,
+			const RendererSceneRender::RenderShadowData *p_render_shadow_data,
+			int p_render_shadow_count,
+			const RendererSceneRender::RenderSDFGIData *p_render_sdfgi_data,
+			int p_render_sdfgi_count,
+			const RendererSceneRender::RenderSDFGIUpdateData *p_render_sdfgi_update_data,
+			RenderingMethod::RenderInfo *r_render_info) {
 	/*
 	Transform3D cam_transform = p_cam_transform;
 
@@ -3475,7 +3500,7 @@ void RasterizerSceneGLES2::render_shadow(RID p_light, RID p_shadow_atlas, int p_
 				int cubemap_index = shadow_cubemaps.size() - 1;
 
 				// find an appropriate cubemap to render to
-				for (int i = shadow_cubemaps.size() - 1; i >= 0; i--) {
+				for (int64_t i = shadow_cubemaps.size() - 1; i >= 0; i--) {
 					if (shadow_cubemaps[i].size > shadow_size * 2) {
 						break;
 					}

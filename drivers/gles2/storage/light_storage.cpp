@@ -429,7 +429,7 @@ void LightStorage::lightmap_tap_sh_light(RID p_lightmap, const Vector3 &p_point,
 }
 
 bool LightStorage::lightmap_is_interior(RID p_lightmap) const {
-
+	return false;
 }
 
 void LightStorage::lightmap_set_probe_capture_update_speed(float p_speed) {
@@ -437,7 +437,7 @@ void LightStorage::lightmap_set_probe_capture_update_speed(float p_speed) {
 }
 
 float LightStorage::lightmap_get_probe_capture_update_speed() const {
-
+	return 0.0;
 }
 
 void LightStorage::lightmap_set_shadowmask_textures(RID p_lightmap, RID p_shadow) {
@@ -445,7 +445,7 @@ void LightStorage::lightmap_set_shadowmask_textures(RID p_lightmap, RID p_shadow
 }
 
 RS::ShadowmaskMode LightStorage::lightmap_get_shadowmask_mode(RID p_lightmap) {
-
+	return RS::ShadowmaskMode::SHADOWMASK_MODE_NONE;
 }
 
 void LightStorage::lightmap_set_shadowmask_mode(RID p_lightmap, RS::ShadowmaskMode p_mode) {
@@ -455,7 +455,7 @@ void LightStorage::lightmap_set_shadowmask_mode(RID p_lightmap, RS::ShadowmaskMo
 /* LIGHTMAP INSTANCE */
 
 RID LightStorage::lightmap_instance_create(RID p_lightmap) {
-
+	return RID();
 }
 
 void LightStorage::lightmap_instance_free(RID p_lightmap) {

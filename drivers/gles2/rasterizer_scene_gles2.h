@@ -757,7 +757,33 @@ public:
 
 	void _post_process(Environment *env, const Projection &p_cam_projection);
 
-	virtual void render_scene(const Ref<RenderSceneBuffers> &p_render_buffers, const RendererSceneRender::CameraData *p_camera_data, const RendererSceneRender::CameraData *p_prev_camera_data, const PagedArray<RenderGeometryInstance *> &p_instances, const PagedArray<RID> &p_lights, const PagedArray<RID> &p_directional_lights, const PagedArray<RID> &p_reflection_probes, const PagedArray<RID> &p_voxel_gi_instances, const PagedArray<RID> &p_decals, const PagedArray<RID> &p_lightmaps, RID p_environment, RID p_camera_attributes, RID p_shadow_atlas, RID p_occluder_debug_tex, RID p_reflection_atlas, RID p_reflection_probe, int p_reflection_probe_pass, float p_screen_mesh_lod_threshold, const RendererSceneRender::RenderShadowData *p_render_shadows, int p_render_shadow_count, const RendererSceneRender::RenderSDFGIData *p_render_sdfgi_regions, int p_render_sdfgi_region_count, const RendererSceneRender::RenderSDFGIUpdateData *p_sdfgi_update_data, RenderingMethod::RenderInfo *r_render_info);
+	virtual void render_scene(
+			const Ref<RenderSceneBuffers> &p_render_buffers,
+			const RendererSceneRender::CameraData *p_camera_data,
+			const RendererSceneRender::CameraData *p_prev_camera_data,
+			const PagedArray<RenderGeometryInstance *> &p_instances,
+			const PagedArray<RID> &p_lights,
+			const PagedArray<RID> &p_reflection_probes,
+			const PagedArray<RID> &p_vfx_nodes,
+			const PagedArray<RID> &p_decals,
+			const PagedArray<RID> &p_lightmaps,
+			const PagedArray<RID> &p_fog_volumes,
+			RID p_environment,
+			RID p_camera_effects,
+			RID p_shadow_atlas,
+			RID p_occluder_debug_tex,
+			RID p_reflection_atlas,
+			RID p_reflection_probes_buffer,
+			RID p_lightmap_buffer,
+			int p_viewport_usage,
+			float p_screen_mesh_lod_threshold,
+			const RendererSceneRender::RenderShadowData *p_render_shadow_data,
+			int p_render_shadow_count,
+			const RendererSceneRender::RenderSDFGIData *p_render_sdfgi_data,
+			int p_render_sdfgi_count,
+			const RendererSceneRender::RenderSDFGIUpdateData *p_render_sdfgi_update_data,
+			RenderingMethod::RenderInfo *r_render_info) override;
+
 	virtual void render_shadow(RID p_light, RID p_shadow_atlas, int p_pass, RendererSceneCull::Instance **p_cull_result, int p_cull_count);
 	virtual bool free(RID p_rid);
 
@@ -830,8 +856,8 @@ public:
 	virtual void update() override;
 
 public:
-	RasterizerSceneGLES2() {}
-	~RasterizerSceneGLES2() {}
+	RasterizerSceneGLES2();
+	~RasterizerSceneGLES2() = default;
 };
 } //namespace GLES2
 #endif // GLES2_ENABLED

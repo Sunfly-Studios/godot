@@ -167,14 +167,10 @@ RS::InstanceType Utilities::get_base_type(RID p_rid) const {
 }
 
 bool Utilities::free(RID p_rid) {
-	if (GLES2::TextureStorage::get_singleton()->owns_render_target(p_rid)) {
-		GLES2::TextureStorage::get_singleton()->render_target_free(p_rid);
+	if (GLES2::RasterizerStorageGLES2::get_singleton()->free(p_rid)) {
 		return true;
-	} else if (GLES2::TextureStorage::get_singleton()->owns_texture(p_rid)) {
-		GLES2::TextureStorage::get_singleton()->texture_free(p_rid);
-		return true;
-	} else if (GLES2::TextureStorage::get_singleton()->owns_canvas_texture(p_rid)) {
-		GLES2::TextureStorage::get_singleton()->canvas_texture_free(p_rid);
+	} else if (GLES2::MeshStorage::get_singleton()->owns_mesh(p_rid)) {
+		GLES2::MeshStorage::get_singleton()->mesh_free(p_rid);
 		return true;
 	} else if (GLES2::MaterialStorage::get_singleton()->owns_shader(p_rid)) {
 		GLES2::MaterialStorage::get_singleton()->shader_free(p_rid);

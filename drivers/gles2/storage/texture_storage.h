@@ -52,11 +52,19 @@ namespace GLES2 {
 	class RasterizerCanvasGLES2;
 	class RasterizerSceneGLES2;
 	struct Skeleton;
+	struct Lightmap;
+	struct Light;
+	struct ReflectionProbe;
+	struct Material;
 	
 	class RasterizerStorageGLES2 {
 		friend class RasterizerGLES2;
 
 	public:
+		using Material = GLES2::Material;
+		static RasterizerStorageGLES2 *singleton;
+		static RasterizerStorageGLES2 *get_singleton() { return singleton; }
+
 		Thread::ID _main_thread_id = 0;
 
 		bool _is_main_thread();
@@ -254,7 +262,14 @@ namespace GLES2 {
 			TEXTURE_FLAG_USED_FOR_STREAMING = 2048,
 			TEXTURE_FLAGS_DEFAULT = TEXTURE_FLAG_REPEAT | TEXTURE_FLAG_MIPMAPS | TEXTURE_FLAG_FILTER
 		};
-	
+
+		enum RenderTargetFlags {
+			RENDER_TARGET_TRANSPARENT,
+			RENDER_TARGET_DIRECT_TO_SCREEN,
+			RENDER_TARGET_NO_SAMPLING
+		};
+
+		struct RenderTarget;
 		struct Texture {
 			RID self;
 	
@@ -457,7 +472,7 @@ namespace GLES2 {
 		};
 	
 		mutable RID_PtrOwner<Texture> texture_owner;
-		mutable RID_PtrOwner<LightmapCapture> lightmap_capture_data_owner;
+		mutable RID_PtrOwner<Lightmap> lightmap_capture_data_owner;
 	
 		Ref<Image> _get_gl_image_and_format(const Ref<Image> &p_image, Image::Format p_format, uint32_t p_flags, Image::Format &r_real_format, GLenum &r_gl_format, GLenum &r_gl_internal_format, GLenum &r_gl_type, bool &r_compressed, bool p_force_decompress) const;
 	
@@ -894,7 +909,7 @@ namespace GLES2 {
 		virtual RID render_target_get_texture(RID p_render_target);
 		virtual void render_target_set_external_texture(RID p_render_target, unsigned int p_texture_id);
 	
-		virtual void render_target_set_flag(RID p_render_target, RS::RenderingInfo p_flag, bool p_value);
+		virtual void render_target_set_flag(RID p_render_target, RenderTargetFlags p_flag, bool p_value);
 		virtual bool render_target_was_used(RID p_render_target);
 		virtual void render_target_clear_used(RID p_render_target);
 		virtual void render_target_set_msaa(RID p_render_target, RS::ViewportMSAA p_msaa);
@@ -1019,7 +1034,7 @@ namespace GLES2 {
 		}
 	
 		void bind_framebuffer_system() {
-			glBindFramebuffer(GL_FRAMEBUFFER, GLES2::RasterizerStorageGLES2::system_fbo);
+			glBindFramebuffer(GL_FRAMEBUFFER, 0);
 		}
 	
 		GLES2::RasterizerStorageGLES2();

@@ -45,6 +45,10 @@
 namespace GLES2 {
 
 struct MeshInstance;
+struct Lightmap;
+struct Light;
+struct ReflectionProbe;
+struct Material;
 
 struct LightmapCapture {
 	Vector<Lightmap> octree;
@@ -79,6 +83,7 @@ struct Mesh {
 		GLuint vertex_buffer = 0;
 		GLuint attribute_buffer = 0;
 		GLuint skin_buffer = 0;
+		int32_t array_len = 0;
 		uint32_t index_array_len = 0;
 		uint32_t index_id = 0;
 		uint32_t vertex_id = 0;
@@ -86,7 +91,6 @@ struct Mesh {
 		uint32_t vertex_buffer_size = 0;
 		uint32_t attribute_buffer_size = 0;
 		uint32_t skin_buffer_size = 0;
-		uint32_t array_len;
 
 		// Cache vertex arrays so they can be created
 		struct Version {
@@ -226,7 +230,6 @@ struct MultiMesh {
 	int color_format = 0;
 	int custom_data_format = 0;
 	Vector<float> data;
-	Vector<float> data_cache;
 
 	GLuint buffer = 0;
 

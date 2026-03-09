@@ -39,7 +39,7 @@
 #include "core/config/project_settings.h"
 #include "servers/rendering/rendering_server_default.h"
 
-#ifndef GLES_OVER_GL
+#if !defined(GLES_OVER_GL) && !defined(glClearDepth)
 #define glClearDepth glClearDepthf
 #endif
 
@@ -1092,7 +1092,7 @@ void RasterizerCanvasBaseGLES2::initialize() {
 	{
 		uint32_t poly_size = GLOBAL_DEF("rendering/limits/buffers/canvas_polygon_buffer_size_kb", 128);
 		ProjectSettings::get_singleton()->set_custom_property_info(PropertyInfo(Variant::INT, "rendering/limits/buffers/canvas_polygon_buffer_size_kb", PROPERTY_HINT_RANGE, "0,256,1,or_greater"));
-		poly_size = MAX(poly_size, 128); // minimum 2k, may still see anomalies in editor
+		poly_size = MAX(poly_size, uint32_t(128)); // minimum 2k, may still see anomalies in editor
 		poly_size *= 1024;
 		glGenBuffers(1, &data.polygon_buffer);
 		glBindBuffer(GL_ARRAY_BUFFER, data.polygon_buffer);
@@ -1104,7 +1104,7 @@ void RasterizerCanvasBaseGLES2::initialize() {
 
 		uint32_t index_size = GLOBAL_DEF("rendering/limits/buffers/canvas_polygon_index_buffer_size_kb", 128);
 		ProjectSettings::get_singleton()->set_custom_property_info(PropertyInfo(Variant::INT, "rendering/limits/buffers/canvas_polygon_index_buffer_size_kb", PROPERTY_HINT_RANGE, "0,256,1,or_greater"));
-		index_size = MAX(index_size, 128);
+		index_size = MAX(index_size, uint32_t(128));
 		index_size *= 1024; // kb
 		glGenBuffers(1, &data.polygon_index_buffer);
 		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, data.polygon_index_buffer);
