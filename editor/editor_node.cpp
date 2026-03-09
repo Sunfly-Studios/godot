@@ -6746,9 +6746,17 @@ void EditorNode::_renderer_selected(int p_which) {
 	}
 
 	renderer_request = rendering_method;
-	video_restart_dialog->set_text(
-			vformat(TTR("Changing the renderer requires restarting the editor.\n\nChoosing Save & Restart will change the rendering method to:\n- Desktop platforms: %s\n- Mobile platforms: %s\n- Web platform: gl_compatibility.\n"),
-					renderer_request, renderer_request.replace("forward_plus", "mobile")));
+
+	if (renderer_request == "gl_legacy") {
+		video_restart_dialog->set_text(
+				vformat(TTR("Changing the renderer requires restarting the editor.\n\nChoosing Save & Restart will change the rendering method to:\n- Desktop platforms: %s\n- Mobile platforms: %s\n- Web platform: %s.\n"),
+						renderer_request, renderer_request.replace("forward_plus", "mobile"), renderer_request.replace("gl_compatibility", "gl_legacy")));
+	} else {
+		video_restart_dialog->set_text(
+				vformat(TTR("Changing the renderer requires restarting the editor.\n\nChoosing Save & Restart will change the rendering method to:\n- Desktop platforms: %s\n- Mobile platforms: %s\n- Web platform: gl_compatibility.\n"),
+						renderer_request, renderer_request.replace("forward_plus", "mobile")));
+	}
+
 	video_restart_dialog->popup_centered();
 	renderer->select(renderer_current);
 	_update_renderer_color();
@@ -6782,7 +6790,7 @@ void EditorNode::_set_renderer_name_save_and_restart() {
 		ProjectSettings::get_singleton()->set("rendering/renderer/rendering_method.mobile", renderer_request);
 	} else if (renderer_request == "forward_plus") {
 		// Use the equivalent mobile rendering method. This prevents the rendering method from staying
-		// on its old choice if moving from `gl_compatibility` to `forward_plus`.
+		// on its old choice if moving from `gl_compatibility`/`gl_legacy` to `forward_plus`.
 		ProjectSettings::get_singleton()->set("rendering/renderer/rendering_method.mobile", "mobile");
 	}
 
