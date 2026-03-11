@@ -62,7 +62,11 @@ void Compositor2D::disable_backbuffer() {
 PackedStringArray Compositor2D::get_configuration_warnings() const {
 	PackedStringArray warnings = Node2D::get_configuration_warnings();
 
-	if (OS::get_singleton()->get_current_rendering_method() == "gl_compatibility" || OS::get_singleton()->get_current_rendering_method() == "dummy") {
+	bool is_gl_render = (
+		OS::get_singleton()->get_current_rendering_method() == "gl_compatibility" ||
+		OS::get_singleton()->get_current_rendering_method() == "gl_legacy"
+	);
+	if (is_gl_render || OS::get_singleton()->get_current_rendering_method() == "dummy") {
 		warnings.push_back(RTR("Compositor2D only works when using the Forward+ or Mobile renderer."));
 	}
 

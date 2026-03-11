@@ -627,13 +627,17 @@ OmniLight3D::ShadowMode OmniLight3D::get_shadow_mode() const {
 
 PackedStringArray OmniLight3D::get_configuration_warnings() const {
 	PackedStringArray warnings = Light3D::get_configuration_warnings();
+	bool is_gl_renderer = (
+		OS::get_singleton()->get_current_rendering_method() == "gl_compatibility" ||
+		OS::get_singleton()->get_current_rendering_method() == "gl_legacy"
+	);
 
 	if (!has_shadow() && get_projector().is_valid()) {
 		warnings.push_back(RTR("Projector texture only works with shadows active."));
 	}
 
-	if (get_projector().is_valid() && OS::get_singleton()->get_current_rendering_method() == "gl_compatibility") {
-		warnings.push_back(RTR("Projector textures are not supported when using the Compatibility renderer yet. Support will be added in a future release."));
+	if (get_projector().is_valid() && is_gl_renderer) {
+		warnings.push_back(RTR("Projector textures are not supported when using the Compatibility or Legacy renderer yet. Support will be added in a future release."));
 	}
 
 	return warnings;

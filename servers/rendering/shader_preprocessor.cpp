@@ -1345,10 +1345,15 @@ Error ShaderPreprocessor::preprocess(const String &p_code, const String &p_filen
 			insert_builtin_define("CURRENT_RENDERER", _MKSTR(2), pp_state);
 		} else if (rendering_method == "mobile") {
 			insert_builtin_define("CURRENT_RENDERER", _MKSTR(1), pp_state);
-		} else { // gl_compatibility
+		} else if (rendering_method == "gl_compatibility") {
 			insert_builtin_define("CURRENT_RENDERER", _MKSTR(0), pp_state);
+		} else { // gl_legacy
+			// Set to -1 to still differ from the more capable
+			// GLES3 renderer.
+			insert_builtin_define("CURRENT_RENDERER", _MKSTR(-1), pp_state);
 		}
 
+		insert_builtin_define("RENDERER_LEGACY", _MKSTR(-1), pp_state);
 		insert_builtin_define("RENDERER_COMPATIBILITY", _MKSTR(0), pp_state);
 		insert_builtin_define("RENDERER_MOBILE", _MKSTR(1), pp_state);
 		insert_builtin_define("RENDERER_FORWARD_PLUS", _MKSTR(2), pp_state);
