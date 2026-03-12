@@ -155,6 +155,7 @@ void AnimationNodeBlendSpace1DEditor::_blend_space_gui_input(const Ref<InputEven
 				if (snap->is_pressed()) {
 					point = Math::snapped(point, blend_space->get_snap());
 				}
+				point = CLAMP(point, blend_space->get_min_space(), blend_space->get_max_space());
 
 				updating = true;
 				EditorUndoRedoManager *undo_redo = EditorUndoRedoManager::get_singleton();
@@ -278,6 +279,7 @@ void AnimationNodeBlendSpace1DEditor::_blend_space_draw() {
 					point = Math::snapped(point, blend_space->get_snap());
 				}
 			}
+			point = CLAMP(point, blend_space->get_min_space(), blend_space->get_max_space());
 		}
 
 		point = (point - blend_space->get_min_space()) / (blend_space->get_max_space() - blend_space->get_min_space());
@@ -493,6 +495,7 @@ void AnimationNodeBlendSpace1DEditor::_update_edited_point_pos() {
 			if (snap->is_pressed()) {
 				pos = Math::snapped(pos, blend_space->get_snap());
 			}
+			pos = CLAMP(pos, blend_space->get_min_space(), blend_space->get_max_space());
 		}
 
 		updating = true;
