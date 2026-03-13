@@ -31,32 +31,48 @@
 #ifndef UTIL_H
 #define UTIL_H
 
+template <typename T, typename V>
+struct _XrProcAddrWrapper {
+	T &out_ptr;
+	V tmp_ptr = nullptr;
+
+	explicit _XrProcAddrWrapper(T &p_out) : out_ptr(p_out) {}
+	~_XrProcAddrWrapper() {
+		out_ptr = reinterpret_cast<T>(tmp_ptr);
+	}
+	V *get_ptr() { return &tmp_ptr; }
+};
+
 #define UNPACK(...) __VA_ARGS__
 
-#define INIT_XR_FUNC_V(openxr_api, name)                                                                              \
-	if constexpr (true) {                                                                                             \
-		XrResult get_instance_proc_addr_result;                                                                       \
-		get_instance_proc_addr_result = openxr_api->get_instance_proc_addr(#name, (PFN_xrVoidFunction *)&name##_ptr); \
-		ERR_FAIL_COND_V(XR_FAILED(get_instance_proc_addr_result), false);                                             \
-	} else                                                                                                            \
+#define INIT_XR_FUNC_V(openxr_api, name)                                                                         \
+	if constexpr (true) {                                                                                        \
+		XrResult get_instance_proc_addr_result;                                                                  \
+		PFN_xrVoidFunction tmp_ptr = nullptr;                                                                    \
+		get_instance_proc_addr_result = openxr_api->get_instance_proc_addr(#name, &tmp_ptr);                     \
+		name##_ptr = reinterpret_cast<PFN_##name>(tmp_ptr);                                                      \
+		ERR_FAIL_COND_V(XR_FAILED(get_instance_proc_addr_result), false);                                        \
+	} else                                                                                                       \
 		((void)0)
 
 #define EXT_INIT_XR_FUNC_V(name) INIT_XR_FUNC_V(OpenXRAPI::get_singleton(), name)
 #define OPENXR_API_INIT_XR_FUNC_V(name) INIT_XR_FUNC_V(this, name)
 
-#define INIT_XR_FUNC(openxr_api, name)                                                                                \
-	if constexpr (true) {                                                                                             \
-		XrResult get_instance_proc_addr_result;                                                                       \
-		get_instance_proc_addr_result = openxr_api->get_instance_proc_addr(#name, (PFN_xrVoidFunction *)&name##_ptr); \
-		ERR_FAIL_COND(XR_FAILED(get_instance_proc_addr_result));                                                      \
-	} else                                                                                                            \
+#define INIT_XR_FUNC(openxr_api, name)                                                                           \
+	if constexpr (true) {                                                                                        \
+		XrResult get_instance_proc_addr_result;                                                                  \
+		PFN_xrVoidFunction tmp_ptr = nullptr;                                                                    \
+		get_instance_proc_addr_result = openxr_api->get_instance_proc_addr(#name, &tmp_ptr);                     \
+		name##_ptr = reinterpret_cast<PFN_##name>(tmp_ptr);                                                      \
+		ERR_FAIL_COND(XR_FAILED(get_instance_proc_addr_result));                                                 \
+	} else                                                                                                       \
 		((void)0)
 
 #define EXT_INIT_XR_FUNC(name) INIT_XR_FUNC(OpenXRAPI::get_singleton(), name)
 #define OPENXR_API_INIT_XR_FUNC(name) INIT_XR_FUNC(this, name)
 
 #define TRY_INIT_XR_FUNC(openxr_api, name) \
-	openxr_api->try_get_instance_proc_addr(#name, (PFN_xrVoidFunction *)&name##_ptr)
+	openxr_api->try_get_instance_proc_addr(#name, _XrProcAddrWrapper<PFN_##name, PFN_xrVoidFunction>(name##_ptr).get_ptr())
 
 #define EXT_TRY_INIT_XR_FUNC(name) TRY_INIT_XR_FUNC(OpenXRAPI::get_singleton(), name)
 #define OPENXR_TRY_API_INIT_XR_FUNC(name) TRY_INIT_XR_FUNC(this, name)

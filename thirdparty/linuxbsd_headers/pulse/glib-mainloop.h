@@ -23,9 +23,9 @@
 
 #include <glib.h>
 
-#include <pulse/mainloop-api.h>
-#include <pulse/cdecl.h>
-#include <pulse/version.h>
+#include "mainloop-api.h"
+#include "cdecl.h"
+#include "version.h"
 
 /** \page glib-mainloop GLIB Main Loop Bindings
  *

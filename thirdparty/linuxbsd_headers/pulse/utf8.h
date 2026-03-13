@@ -21,9 +21,9 @@
   License along with PulseAudio; if not, see <http://www.gnu.org/licenses/>.
 ***/
 
-#include <pulse/cdecl.h>
-#include <pulse/gccmacro.h>
-#include <pulse/version.h>
+#include "cdecl.h"
+#include "gccmacro.h"
+#include "version.h"
 
 /** \file
  * UTF-8 validation functions

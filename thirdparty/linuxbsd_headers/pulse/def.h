@@ -24,9 +24,9 @@
 #include <inttypes.h>
 #include <sys/time.h>
 
-#include <pulse/cdecl.h>
-#include <pulse/sample.h>
-#include <pulse/version.h>
+#include "cdecl.h"
+#include "sample.h"
+#include "version.h"
 
 /** \file
  * Global definitions */

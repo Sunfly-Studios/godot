@@ -68,16 +68,21 @@ uint32_t CallableCustomMethodPointerBase::hash() const {
 	return h;
 }
 
-void CallableCustomMethodPointerBase::_setup(uint32_t *p_base_ptr, uint32_t p_ptr_size) {
+void CallableCustomMethodPointerBase::_setup(const void *p_base_ptr, uint32_t p_ptr_size) {
 	comp_ptr = p_base_ptr;
 	comp_size = p_ptr_size / 4;
 
+	const uint8_t *bytes = static_cast<const uint8_t *>(p_base_ptr);
+
 	// Precompute hash.
 	for (uint32_t i = 0; i < comp_size; i++) {
+		uint32_t chunk;
+		memcpy(&chunk, bytes + (i * 4), sizeof(uint32_t));
+
 		if (i == 0) {
-			h = hash_murmur3_one_32(comp_ptr[i]);
+			h = hash_murmur3_one_32(chunk);
 		} else {
-			h = hash_murmur3_one_32(comp_ptr[i], h);
+			h = hash_murmur3_one_32(chunk, h);
 		}
 	}
 }

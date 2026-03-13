@@ -25,9 +25,9 @@
 #include <limits.h>
 #include <assert.h>
 
-#include <pulse/cdecl.h>
-#include <pulse/gccmacro.h>
-#include <pulse/version.h>
+#include "cdecl.h"
+#include "gccmacro.h"
+#include "version.h"
 
 /** \file
  * Memory allocation functions.

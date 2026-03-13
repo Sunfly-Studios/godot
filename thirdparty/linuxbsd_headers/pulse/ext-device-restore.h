@@ -21,9 +21,9 @@
   along with PulseAudio; if not, see <http://www.gnu.org/licenses/>.
 ***/
 
-#include <pulse/context.h>
-#include <pulse/format.h>
-#include <pulse/version.h>
+#include "context.h"
+#include "format.h"
+#include "version.h"
 
 /** \file
  *

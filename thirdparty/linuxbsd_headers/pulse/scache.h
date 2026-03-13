@@ -23,10 +23,10 @@
 
 #include <sys/types.h>
 
-#include <pulse/context.h>
-#include <pulse/stream.h>
-#include <pulse/cdecl.h>
-#include <pulse/version.h>
+#include "context.h"
+#include "stream.h"
+#include "cdecl.h"
+#include "version.h"
 
 /** \page scache Sample Cache
  *

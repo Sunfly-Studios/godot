@@ -806,15 +806,19 @@ Atom DisplayServerX11::_clipboard_get_image_target(Atom p_source, Window x11_win
 		Atom type;
 		int format, result;
 		unsigned long len, bytes_left, dummy;
+
+		unsigned char *prop_ret_1 = nullptr;
 		XGetWindowProperty(x11_display, x11_window,
-				selection, // Tricky..
-				0, 0, // offset - len
-				0, // Delete 0==FALSE
-				XA_ATOM, // flag
-				&type, // return type
-				&format, // return format
-				&len, &bytes_left, // data length
-				(unsigned char **)&valid_targets);
+					selection, // Tricky..
+					 0, 0, // offset - len
+					 0, // Delete 0==FALSE
+					 XA_ATOM, // flag
+					 &type, // return type
+					 &format, // return format
+					 &len, &bytes_left, // data length
+					 &prop_ret_1);
+
+		valid_targets = reinterpret_cast<Atom *>(prop_ret_1);
 
 		if (valid_targets) {
 			XFree(valid_targets);
@@ -823,10 +827,13 @@ Atom DisplayServerX11::_clipboard_get_image_target(Atom p_source, Window x11_win
 
 		if (type == XA_ATOM && bytes_left > 0) {
 			// Data is ready and can be processed all at once.
+			unsigned char *prop_ret_2 = nullptr;
 			result = XGetWindowProperty(x11_display, x11_window,
-					selection, 0, bytes_left / 4, 0,
-					XA_ATOM, &type, &format,
-					&len, &dummy, (unsigned char **)&valid_targets);
+							selection, 0, bytes_left / 4, 0,
+							XA_ATOM, &type, &format,
+							&len, &dummy, &prop_ret_2);
+
+			valid_targets = reinterpret_cast<Atom *>(prop_ret_2);
 			if (result == Success) {
 				atom_count = len;
 			} else {
@@ -2604,21 +2611,24 @@ bool DisplayServerX11::_window_minimize_check(WindowID p_window) const {
 	int format;
 	unsigned long len;
 	unsigned long remaining;
-	Atom *atoms = nullptr;
+
+	unsigned char *prop_ret = nullptr;
 
 	int result = XGetWindowProperty(
-			x11_display,
-			wd.x11_window,
-			property,
-			0,
-			32,
-			False,
-			XA_ATOM,
-			&type,
-			&format,
-			&len,
-			&remaining,
-			(unsigned char **)&atoms);
+		x11_display,
+		wd.x11_window,
+		property,
+		0,
+		32,
+		False,
+		XA_ATOM,
+		&type,
+		&format,
+		&len,
+		&remaining,
+		&prop_ret);
+
+	Atom *atoms = reinterpret_cast<Atom *>(prop_ret);
 
 	if (result == Success && atoms) {
 		for (unsigned int i = 0; i < len; i++) {

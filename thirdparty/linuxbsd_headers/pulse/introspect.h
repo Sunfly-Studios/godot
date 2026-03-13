@@ -23,15 +23,15 @@
 
 #include <inttypes.h>
 
-#include <pulse/operation.h>
-#include <pulse/context.h>
-#include <pulse/cdecl.h>
-#include <pulse/gccmacro.h>
-#include <pulse/channelmap.h>
-#include <pulse/volume.h>
-#include <pulse/proplist.h>
-#include <pulse/format.h>
-#include <pulse/version.h>
+#include "operation.h"
+#include "context.h"
+#include "cdecl.h"
+#include "gccmacro.h"
+#include "channelmap.h"
+#include "volume.h"
+#include "proplist.h"
+#include "format.h"
+#include "version.h"
 
 /** \page introspect Server Query and Control
  *

@@ -223,10 +223,12 @@ Projection XRInterfaceExtension::get_projection_for_view(uint32_t p_view, double
 
 	if (GDVIRTUAL_CALL(_get_projection_for_view, p_view, p_aspect, p_z_near, p_z_far, arr)) {
 		ERR_FAIL_COND_V_MSG(arr.size() != 16, Projection(), "Projection matrix must contain 16 floats");
-		real_t *m = (real_t *)cm.columns;
+
 		for (int i = 0; i < 16; i++) {
-			m[i] = arr[i];
+			// i / 4 gives the column (0-3), i % 4 gives the row/element (0-3)
+			cm.columns[i / 4][i % 4] = arr[i];
 		}
+
 		return cm;
 	}
 

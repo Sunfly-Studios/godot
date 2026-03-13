@@ -3521,7 +3521,11 @@ void RasterizerSceneGLES3::_render_list_template(RenderListParameters *p_params,
 						}
 
 					} else if (inst->lightmap_sh) {
-						glUniform4fv(material_storage->shaders.scene_shader.version_get_uniform(SceneShaderGLES3::LIGHTMAP_CAPTURES, shader->version, instance_variant, spec_constants), 9, reinterpret_cast<const GLfloat *>(inst->lightmap_sh->sh));
+						// 9 captures * 4 floats per capture (Color)
+						GLfloat sh_floats[36] = {};
+						memcpy(sh_floats, inst->lightmap_sh->sh, sizeof(sh_floats));
+
+						glUniform4fv(material_storage->shaders.scene_shader.version_get_uniform(SceneShaderGLES3::LIGHTMAP_CAPTURES, shader->version, instance_variant, spec_constants), 9, sh_floats);
 					}
 					prev_inst = inst;
 				}

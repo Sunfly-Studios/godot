@@ -27,9 +27,9 @@
 #ifndef DBUS_SIGNATURES_H
 #define DBUS_SIGNATURES_H
 
-#include <dbus/dbus-macros.h>
-#include <dbus/dbus-types.h>
-#include <dbus/dbus-errors.h>
+#include "dbus-macros.h"
+#include "dbus-types.h"
+#include "dbus-errors.h"
 
 DBUS_BEGIN_DECLS
 

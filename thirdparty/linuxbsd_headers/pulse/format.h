@@ -22,11 +22,11 @@
   along with PulseAudio; if not, see <http://www.gnu.org/licenses/>.
 ***/
 
-#include <pulse/cdecl.h>
-#include <pulse/gccmacro.h>
-#include <pulse/proplist.h>
-#include <pulse/sample.h>
-#include <pulse/channelmap.h>
+#include "cdecl.h"
+#include "gccmacro.h"
+#include "proplist.h"
+#include "sample.h"
+#include "channelmap.h"
 
 /** \file
  * Utility functions for handling a stream or sink format. */

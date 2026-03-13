@@ -25,9 +25,9 @@
 #include <sys/types.h>
 #include <sys/param.h>
 
-#include <pulse/gccmacro.h>
-#include <pulse/cdecl.h>
-#include <pulse/version.h>
+#include "gccmacro.h"
+#include "cdecl.h"
+#include "version.h"
 
 /** \page sample Sample Format Specifications
  *

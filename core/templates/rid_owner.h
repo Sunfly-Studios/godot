@@ -154,7 +154,8 @@ class RID_Alloc : public RID_AllocBase {
 
 			if constexpr (THREAD_SAFE) {
 				// Store atomically to avoid data race with the load in get_or_null().
-				((std::atomic<uint32_t> *)&max_alloc)->store(max_alloc + elements_in_chunk, std::memory_order_relaxed);
+				//((std::atomic<uint32_t> *)&max_alloc)->store(max_alloc + elements_in_chunk, std::memory_order_relaxed);
+				__atomic_store_n(&max_alloc, max_alloc + elements_in_chunk, __ATOMIC_RELAXED);
 			} else {
 				max_alloc += elements_in_chunk;
 			}
@@ -213,7 +214,8 @@ public:
 		uint32_t idx = uint32_t(id & 0xFFFFFFFF);
 		uint32_t ma;
 		if constexpr (THREAD_SAFE) { // Read atomically to avoid data race with the store in _allocate_rid().
-			ma = ((std::atomic<uint32_t> *)&max_alloc)->load(std::memory_order_relaxed);
+			// ma = ((std::atomic<uint32_t> *)&max_alloc)->load(std::memory_order_relaxed);
+			ma = __atomic_load_n(&max_alloc, __ATOMIC_RELAXED);
 		} else {
 			ma = max_alloc;
 		}

@@ -21,13 +21,13 @@
   along with PulseAudio; if not, see <http://www.gnu.org/licenses/>.
 ***/
 
-#include <pulse/sample.h>
-#include <pulse/def.h>
-#include <pulse/mainloop-api.h>
-#include <pulse/cdecl.h>
-#include <pulse/operation.h>
-#include <pulse/proplist.h>
-#include <pulse/version.h>
+#include "sample.h"
+#include "def.h"
+#include "mainloop-api.h"
+#include "cdecl.h"
+#include "operation.h"
+#include "proplist.h"
+#include "version.h"
 
 /** \page async Asynchronous API
  *

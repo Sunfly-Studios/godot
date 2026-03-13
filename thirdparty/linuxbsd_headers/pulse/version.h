@@ -23,7 +23,7 @@
 
 /* WARNING: Make sure to edit the real source file version.h.in! */
 
-#include <pulse/cdecl.h>
+#include "cdecl.h"
 
 /** \file
  * Define header version */

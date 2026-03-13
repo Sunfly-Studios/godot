@@ -27,11 +27,11 @@
 #ifndef DBUS_SERVER_H
 #define DBUS_SERVER_H
 
-#include <dbus/dbus-errors.h>
-#include <dbus/dbus-macros.h>
-#include <dbus/dbus-message.h>
-#include <dbus/dbus-connection.h>
-#include <dbus/dbus-protocol.h>
+#include "dbus-errors.h"
+#include "dbus-macros.h"
+#include "dbus-message.h"
+#include "dbus-connection.h"
+#include "dbus-protocol.h"
 
 DBUS_BEGIN_DECLS
 

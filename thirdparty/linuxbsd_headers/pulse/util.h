@@ -23,8 +23,8 @@
 
 #include <stddef.h>
 
-#include <pulse/cdecl.h>
-#include <pulse/version.h>
+#include "cdecl.h"
+#include "version.h"
 
 /** \file
  * Assorted utility functions */

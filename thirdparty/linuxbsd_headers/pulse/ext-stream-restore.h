@@ -20,11 +20,11 @@
   along with PulseAudio; if not, see <http://www.gnu.org/licenses/>.
 ***/
 
-#include <pulse/cdecl.h>
-#include <pulse/context.h>
-#include <pulse/version.h>
-#include <pulse/volume.h>
-#include <pulse/channelmap.h>
+#include "cdecl.h"
+#include "context.h"
+#include "version.h"
+#include "volume.h"
+#include "channelmap.h"
 
 /** \file
  *

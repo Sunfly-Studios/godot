@@ -28,9 +28,9 @@
 #ifndef DBUS_SYNTAX_H
 #define DBUS_SYNTAX_H
 
-#include <dbus/dbus-macros.h>
-#include <dbus/dbus-types.h>
-#include <dbus/dbus-errors.h>
+#include "dbus-macros.h"
+#include "dbus-types.h"
+#include "dbus-errors.h"
 
 DBUS_BEGIN_DECLS
 

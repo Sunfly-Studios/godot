@@ -37,6 +37,9 @@
 #include "core/math/transform_3d.h"
 #include "core/string/ustring.h"
 
+// i / 4 gives the column, i % 4 gives the row.
+#define MATRIX(i) columns[(i) / 4][(i) % 4]
+
 real_t Projection::determinant() const {
 	return columns[0][3] * columns[1][2] * columns[2][1] * columns[3][0] - columns[0][2] * columns[1][3] * columns[2][1] * columns[3][0] -
 			columns[0][3] * columns[1][1] * columns[2][2] * columns[3][0] + columns[0][1] * columns[1][3] * columns[2][2] * columns[3][0] +
@@ -169,64 +172,62 @@ Projection Projection::perspective_znear_adjusted(real_t p_new_znear) const {
 }
 
 Plane Projection::get_projection_plane(Planes p_plane) const {
-	const real_t *matrix = (const real_t *)columns;
-
 	switch (p_plane) {
 		case PLANE_NEAR: {
-			Plane new_plane = Plane(matrix[3] + matrix[2],
-					matrix[7] + matrix[6],
-					matrix[11] + matrix[10],
-					matrix[15] + matrix[14]);
+			Plane new_plane = Plane(MATRIX(3) + MATRIX(2),
+					MATRIX(7) + MATRIX(6),
+					MATRIX(11) + MATRIX(10),
+					MATRIX(15) + MATRIX(14));
 
 			new_plane.normal = -new_plane.normal;
 			new_plane.normalize();
 			return new_plane;
 		}
 		case PLANE_FAR: {
-			Plane new_plane = Plane(matrix[3] - matrix[2],
-					matrix[7] - matrix[6],
-					matrix[11] - matrix[10],
-					matrix[15] - matrix[14]);
+			Plane new_plane = Plane(MATRIX(3) - MATRIX(2),
+					MATRIX(7) - MATRIX(6),
+					MATRIX(11) - MATRIX(10),
+					MATRIX(15) - MATRIX(14));
 
 			new_plane.normal = -new_plane.normal;
 			new_plane.normalize();
 			return new_plane;
 		}
 		case PLANE_LEFT: {
-			Plane new_plane = Plane(matrix[3] + matrix[0],
-					matrix[7] + matrix[4],
-					matrix[11] + matrix[8],
-					matrix[15] + matrix[12]);
+			Plane new_plane = Plane(MATRIX(3) + MATRIX(0),
+					MATRIX(7) + MATRIX(4),
+					MATRIX(11) + MATRIX(8),
+					MATRIX(15) + MATRIX(12));
 
 			new_plane.normal = -new_plane.normal;
 			new_plane.normalize();
 			return new_plane;
 		}
 		case PLANE_TOP: {
-			Plane new_plane = Plane(matrix[3] - matrix[1],
-					matrix[7] - matrix[5],
-					matrix[11] - matrix[9],
-					matrix[15] - matrix[13]);
+			Plane new_plane = Plane(MATRIX(3) - MATRIX(1),
+					MATRIX(7) - MATRIX(5),
+					MATRIX(11) - MATRIX(9),
+					MATRIX(15) - MATRIX(13));
 
 			new_plane.normal = -new_plane.normal;
 			new_plane.normalize();
 			return new_plane;
 		}
 		case PLANE_RIGHT: {
-			Plane new_plane = Plane(matrix[3] - matrix[0],
-					matrix[7] - matrix[4],
-					matrix[11] - matrix[8],
-					matrix[15] - matrix[12]);
+			Plane new_plane = Plane(MATRIX(3) - MATRIX(0),
+					MATRIX(7) - MATRIX(4),
+					MATRIX(11) - MATRIX(8),
+					MATRIX(15) - MATRIX(12));
 
 			new_plane.normal = -new_plane.normal;
 			new_plane.normalize();
 			return new_plane;
 		}
 		case PLANE_BOTTOM: {
-			Plane new_plane = Plane(matrix[3] + matrix[1],
-					matrix[7] + matrix[5],
-					matrix[11] + matrix[9],
-					matrix[15] + matrix[13]);
+			Plane new_plane = Plane(MATRIX(3) + MATRIX(1),
+					MATRIX(7) + MATRIX(5),
+					MATRIX(11) + MATRIX(9),
+					MATRIX(15) + MATRIX(13));
 
 			new_plane.normal = -new_plane.normal;
 			new_plane.normalize();
@@ -402,11 +403,10 @@ void Projection::set_frustum(real_t p_size, real_t p_aspect, Vector2 p_offset, r
 }
 
 real_t Projection::get_z_far() const {
-	const real_t *matrix = (const real_t *)columns;
-	Plane new_plane = Plane(matrix[3] - matrix[2],
-			matrix[7] - matrix[6],
-			matrix[11] - matrix[10],
-			matrix[15] - matrix[14]);
+	Plane new_plane = Plane(MATRIX(3) - MATRIX(2),
+			MATRIX(7) - MATRIX(6),
+			MATRIX(11) - MATRIX(10),
+			MATRIX(15) - MATRIX(14));
 
 	new_plane.normalize();
 
@@ -414,36 +414,34 @@ real_t Projection::get_z_far() const {
 }
 
 real_t Projection::get_z_near() const {
-	const real_t *matrix = (const real_t *)columns;
-	Plane new_plane = Plane(matrix[3] + matrix[2],
-			matrix[7] + matrix[6],
-			matrix[11] + matrix[10],
-			-matrix[15] - matrix[14]);
+	Plane new_plane = Plane(MATRIX(3) + MATRIX(2),
+			MATRIX(7) + MATRIX(6),
+			MATRIX(11) + MATRIX(10),
+			-MATRIX(15) - MATRIX(14));
 
 	new_plane.normalize();
 	return new_plane.d;
 }
 
 Vector2 Projection::get_viewport_half_extents() const {
-	const real_t *matrix = (const real_t *)columns;
 	///////--- Near Plane ---///////
-	Plane near_plane = Plane(matrix[3] + matrix[2],
-			matrix[7] + matrix[6],
-			matrix[11] + matrix[10],
-			-matrix[15] - matrix[14]);
+	Plane near_plane = Plane(MATRIX(3) + MATRIX(2),
+			MATRIX(7) + MATRIX(6),
+			MATRIX(11) + MATRIX(10),
+			-MATRIX(15) - MATRIX(14));
 	near_plane.normalize();
 
 	///////--- Right Plane ---///////
-	Plane right_plane = Plane(matrix[3] - matrix[0],
-			matrix[7] - matrix[4],
-			matrix[11] - matrix[8],
-			-matrix[15] + matrix[12]);
+	Plane right_plane = Plane(MATRIX(3) - MATRIX(0),
+			MATRIX(7) - MATRIX(4),
+			MATRIX(11) - MATRIX(8),
+			-MATRIX(15) + MATRIX(12));
 	right_plane.normalize();
 
-	Plane top_plane = Plane(matrix[3] - matrix[1],
-			matrix[7] - matrix[5],
-			matrix[11] - matrix[9],
-			-matrix[15] + matrix[13]);
+	Plane top_plane = Plane(MATRIX(3) - MATRIX(1),
+			MATRIX(7) - MATRIX(5),
+			MATRIX(11) - MATRIX(9),
+			-MATRIX(15) + MATRIX(13));
 	top_plane.normalize();
 
 	Vector3 res;
@@ -453,25 +451,24 @@ Vector2 Projection::get_viewport_half_extents() const {
 }
 
 Vector2 Projection::get_far_plane_half_extents() const {
-	const real_t *matrix = (const real_t *)columns;
 	///////--- Far Plane ---///////
-	Plane far_plane = Plane(matrix[3] - matrix[2],
-			matrix[7] - matrix[6],
-			matrix[11] - matrix[10],
-			-matrix[15] + matrix[14]);
+	Plane far_plane = Plane(MATRIX(3) - MATRIX(2),
+			MATRIX(7) - MATRIX(6),
+			MATRIX(11) - MATRIX(10),
+			-MATRIX(15) + MATRIX(14));
 	far_plane.normalize();
 
 	///////--- Right Plane ---///////
-	Plane right_plane = Plane(matrix[3] - matrix[0],
-			matrix[7] - matrix[4],
-			matrix[11] - matrix[8],
-			-matrix[15] + matrix[12]);
+	Plane right_plane = Plane(MATRIX(3) - MATRIX(0),
+			MATRIX(7) - MATRIX(4),
+			MATRIX(11) - MATRIX(8),
+			-MATRIX(15) + MATRIX(12));
 	right_plane.normalize();
 
-	Plane top_plane = Plane(matrix[3] - matrix[1],
-			matrix[7] - matrix[5],
-			matrix[11] - matrix[9],
-			-matrix[15] + matrix[13]);
+	Plane top_plane = Plane(MATRIX(3) - MATRIX(1),
+			MATRIX(7) - MATRIX(5),
+			MATRIX(11) - MATRIX(9),
+			-MATRIX(15) + MATRIX(13));
 	top_plane.normalize();
 
 	Vector3 res;
@@ -516,15 +513,13 @@ Vector<Plane> Projection::get_projection_planes(const Transform3D &p_transform) 
 	Vector<Plane> planes;
 	planes.resize(6);
 
-	const real_t *matrix = (const real_t *)columns;
-
 	Plane new_plane;
 
 	///////--- Near Plane ---///////
-	new_plane = Plane(matrix[3] + matrix[2],
-			matrix[7] + matrix[6],
-			matrix[11] + matrix[10],
-			matrix[15] + matrix[14]);
+	new_plane = Plane(MATRIX(3) + MATRIX(2),
+			MATRIX(7) + MATRIX(6),
+			MATRIX(11) + MATRIX(10),
+			MATRIX(15) + MATRIX(14));
 
 	new_plane.normal = -new_plane.normal;
 	new_plane.normalize();
@@ -532,10 +527,10 @@ Vector<Plane> Projection::get_projection_planes(const Transform3D &p_transform) 
 	planes.write[0] = p_transform.xform(new_plane);
 
 	///////--- Far Plane ---///////
-	new_plane = Plane(matrix[3] - matrix[2],
-			matrix[7] - matrix[6],
-			matrix[11] - matrix[10],
-			matrix[15] - matrix[14]);
+	new_plane = Plane(MATRIX(3) - MATRIX(2),
+			MATRIX(7) - MATRIX(6),
+			MATRIX(11) - MATRIX(10),
+			MATRIX(15) - MATRIX(14));
 
 	new_plane.normal = -new_plane.normal;
 	new_plane.normalize();
@@ -543,10 +538,10 @@ Vector<Plane> Projection::get_projection_planes(const Transform3D &p_transform) 
 	planes.write[1] = p_transform.xform(new_plane);
 
 	///////--- Left Plane ---///////
-	new_plane = Plane(matrix[3] + matrix[0],
-			matrix[7] + matrix[4],
-			matrix[11] + matrix[8],
-			matrix[15] + matrix[12]);
+	new_plane = Plane(MATRIX(3) + MATRIX(0),
+			MATRIX(7) + MATRIX(4),
+			MATRIX(11) + MATRIX(8),
+			MATRIX(15) + MATRIX(12));
 
 	new_plane.normal = -new_plane.normal;
 	new_plane.normalize();
@@ -554,10 +549,10 @@ Vector<Plane> Projection::get_projection_planes(const Transform3D &p_transform) 
 	planes.write[2] = p_transform.xform(new_plane);
 
 	///////--- Top Plane ---///////
-	new_plane = Plane(matrix[3] - matrix[1],
-			matrix[7] - matrix[5],
-			matrix[11] - matrix[9],
-			matrix[15] - matrix[13]);
+	new_plane = Plane(MATRIX(3) - MATRIX(1),
+			MATRIX(7) - MATRIX(5),
+			MATRIX(11) - MATRIX(9),
+			MATRIX(15) - MATRIX(13));
 
 	new_plane.normal = -new_plane.normal;
 	new_plane.normalize();
@@ -565,10 +560,10 @@ Vector<Plane> Projection::get_projection_planes(const Transform3D &p_transform) 
 	planes.write[3] = p_transform.xform(new_plane);
 
 	///////--- Right Plane ---///////
-	new_plane = Plane(matrix[3] - matrix[0],
-			matrix[7] - matrix[4],
-			matrix[11] - matrix[8],
-			matrix[15] - matrix[12]);
+	new_plane = Plane(MATRIX(3) - MATRIX(0),
+			MATRIX(7) - MATRIX(4),
+			MATRIX(11) - MATRIX(8),
+			MATRIX(15) - MATRIX(12));
 
 	new_plane.normal = -new_plane.normal;
 	new_plane.normalize();
@@ -576,10 +571,10 @@ Vector<Plane> Projection::get_projection_planes(const Transform3D &p_transform) 
 	planes.write[4] = p_transform.xform(new_plane);
 
 	///////--- Bottom Plane ---///////
-	new_plane = Plane(matrix[3] + matrix[1],
-			matrix[7] + matrix[5],
-			matrix[11] + matrix[9],
-			matrix[15] + matrix[13]);
+	new_plane = Plane(MATRIX(3) + MATRIX(1),
+			MATRIX(7) + MATRIX(5),
+			MATRIX(11) + MATRIX(9),
+			MATRIX(15) + MATRIX(13));
 
 	new_plane.normal = -new_plane.normal;
 	new_plane.normalize();
@@ -599,14 +594,15 @@ void Projection::invert() {
 	// Adapted from Mesa's `src/util/u_math.c` `util_invert_mat4x4`.
 	// MIT licensed. Copyright 2008 VMware, Inc. Authored by Jacques Leroy.
 	Projection temp;
-	real_t *out = (real_t *)temp.columns;
-	real_t *m = (real_t *)columns;
+	Projection &out = temp;
+	const Projection &m = *this;
 
 	real_t wtmp[4][8];
 	real_t m0, m1, m2, m3, s;
 	real_t *r0, *r1, *r2, *r3;
 
-#define MAT(m, r, c) (m)[(c) * 4 + (r)]
+// (c = column, r = row)
+#define MAT(mat, r, c) (mat).columns[c][r]
 
 	r0 = wtmp[0];
 	r1 = wtmp[1];
@@ -934,22 +930,20 @@ bool Projection::is_orthogonal() const {
 }
 
 real_t Projection::get_fov() const {
-	const real_t *matrix = (const real_t *)columns;
-
-	Plane right_plane = Plane(matrix[3] - matrix[0],
-			matrix[7] - matrix[4],
-			matrix[11] - matrix[8],
-			-matrix[15] + matrix[12]);
+	Plane right_plane = Plane(MATRIX(3) - MATRIX(0),
+			MATRIX(7) - MATRIX(4),
+			MATRIX(11) - MATRIX(8),
+			-MATRIX(15) + MATRIX(12));
 	right_plane.normalize();
 
-	if ((matrix[8] == 0) && (matrix[9] == 0)) {
+	if ((MATRIX(8) == 0) && (MATRIX(9) == 0)) {
 		return Math::rad_to_deg(Math::acos(Math::abs(right_plane.normal.x))) * 2.0;
 	} else {
 		// our frustum is asymmetrical need to calculate the left planes angle separately..
-		Plane left_plane = Plane(matrix[3] + matrix[0],
-				matrix[7] + matrix[4],
-				matrix[11] + matrix[8],
-				matrix[15] + matrix[12]);
+		Plane left_plane = Plane(MATRIX(3) + MATRIX(0),
+				MATRIX(7) + MATRIX(4),
+				MATRIX(11) + MATRIX(8),
+				MATRIX(15) + MATRIX(12));
 		left_plane.normalize();
 
 		return Math::rad_to_deg(Math::acos(Math::abs(left_plane.normal.x))) + Math::rad_to_deg(Math::acos(Math::abs(right_plane.normal.x)));
@@ -1059,3 +1053,5 @@ Projection::Projection(const Transform3D &p_transform) {
 
 Projection::~Projection() {
 }
+
+#undef MATRIX

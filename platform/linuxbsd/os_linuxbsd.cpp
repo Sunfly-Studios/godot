@@ -697,7 +697,9 @@ Vector<String> OS_LinuxBSD::get_system_fonts() const {
 		if (font_set) {
 			for (int j = 0; j < font_set->nfont; j++) {
 				char *family_name = nullptr;
-				if (FcPatternGetString(font_set->fonts[j], FC_FAMILY, 0, reinterpret_cast<FcChar8 **>(&family_name)) == FcResultMatch) {
+				FcChar8 *tmp_family_name = nullptr;
+				if (FcPatternGetString(font_set->fonts[j], FC_FAMILY, 0, &tmp_family_name) == FcResultMatch) {
+					family_name = reinterpret_cast<char*>(tmp_family_name);
 					if (family_name) {
 						font_names.insert(String::utf8(family_name));
 					}
@@ -804,7 +806,9 @@ Vector<String> OS_LinuxBSD::get_system_font_path_for_text(const String &p_font_n
 			FcPattern *match = FcFontMatch(nullptr, pattern, &result);
 			if (match) {
 				char *file_name = nullptr;
-				if (FcPatternGetString(match, FC_FILE, 0, reinterpret_cast<FcChar8 **>(&file_name)) == FcResultMatch) {
+				FcChar8 *tmp_file_name = nullptr;
+				if (FcPatternGetString(match, FC_FILE, 0, &tmp_file_name) == FcResultMatch) {
+					file_name = reinterpret_cast<char*>(tmp_file_name);
 					if (file_name) {
 						ret.push_back(String::utf8(file_name));
 					}
@@ -850,7 +854,9 @@ String OS_LinuxBSD::get_system_font_path(const String &p_font_name, int p_weight
 			if (match) {
 				if (!allow_substitutes) {
 					char *family_name = nullptr;
-					if (FcPatternGetString(match, FC_FAMILY, 0, reinterpret_cast<FcChar8 **>(&family_name)) == FcResultMatch) {
+					FcChar8 *tmp_family_name = nullptr;
+					if (FcPatternGetString(match, FC_FAMILY, 0, &tmp_family_name) == FcResultMatch) {
+						family_name = reinterpret_cast<char*>(tmp_family_name);
 						if (family_name && String::utf8(family_name).to_lower() != p_font_name.to_lower()) {
 							FcPatternDestroy(match);
 							FcPatternDestroy(pattern);
@@ -859,7 +865,9 @@ String OS_LinuxBSD::get_system_font_path(const String &p_font_name, int p_weight
 					}
 				}
 				char *file_name = nullptr;
-				if (FcPatternGetString(match, FC_FILE, 0, reinterpret_cast<FcChar8 **>(&file_name)) == FcResultMatch) {
+				FcChar8 *tmp_file_name = nullptr;
+				if (FcPatternGetString(match, FC_FILE, 0, &tmp_file_name) == FcResultMatch) {
+					file_name = reinterpret_cast<char*>(tmp_file_name);
 					if (file_name) {
 						String ret = String::utf8(file_name);
 						FcPatternDestroy(match);

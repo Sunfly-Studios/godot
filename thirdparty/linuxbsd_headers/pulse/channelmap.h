@@ -21,10 +21,10 @@
   along with PulseAudio; if not, see <http://www.gnu.org/licenses/>.
 ***/
 
-#include <pulse/sample.h>
-#include <pulse/cdecl.h>
-#include <pulse/gccmacro.h>
-#include <pulse/version.h>
+#include "sample.h"
+#include "cdecl.h"
+#include "gccmacro.h"
+#include "version.h"
 
 /** \page channelmap Channel Maps
  *

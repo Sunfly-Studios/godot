@@ -142,10 +142,10 @@ public:
 	/// Get constraint Limits
 	float						GetLimitsMin(EAxis inAxis) const							{ return mLimitMin[inAxis]; }
 	float						GetLimitsMax(EAxis inAxis) const							{ return mLimitMax[inAxis]; }
-	Vec3						GetTranslationLimitsMin() const								{ return Vec3::sLoadFloat3Unsafe(*reinterpret_cast<const Float3 *>(&mLimitMin[EAxis::TranslationX])); }
-	Vec3						GetTranslationLimitsMax() const								{ return Vec3::sLoadFloat3Unsafe(*reinterpret_cast<const Float3 *>(&mLimitMax[EAxis::TranslationX])); }
-	Vec3						GetRotationLimitsMin() const								{ return Vec3::sLoadFloat3Unsafe(*reinterpret_cast<const Float3 *>(&mLimitMin[EAxis::RotationX])); }
-	Vec3						GetRotationLimitsMax() const								{ return Vec3::sLoadFloat3Unsafe(*reinterpret_cast<const Float3 *>(&mLimitMax[EAxis::RotationX])); }
+	Vec3						GetTranslationLimitsMin() const								{ return Vec3(mLimitMin[EAxis::TranslationX], mLimitMin[EAxis::TranslationY], mLimitMin[EAxis::TranslationZ]); }
+	Vec3						GetTranslationLimitsMax() const								{ return Vec3(mLimitMax[EAxis::TranslationX], mLimitMax[EAxis::TranslationY], mLimitMax[EAxis::TranslationZ]); }
+	Vec3						GetRotationLimitsMin() const								{ return Vec3(mLimitMin[EAxis::RotationX], mLimitMin[EAxis::RotationY], mLimitMin[EAxis::RotationZ]); }
+	Vec3						GetRotationLimitsMax() const								{ return Vec3(mLimitMax[EAxis::RotationX], mLimitMax[EAxis::RotationY], mLimitMax[EAxis::RotationZ]); }
 
 	/// Check which axis are fixed/free
 	inline bool					IsFixedAxis(EAxis inAxis) const								{ return (mFixedAxis & (1 << inAxis)) != 0; }

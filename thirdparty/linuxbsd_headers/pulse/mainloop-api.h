@@ -23,8 +23,8 @@
 
 #include <sys/time.h>
 
-#include <pulse/cdecl.h>
-#include <pulse/version.h>
+#include "cdecl.h"
+#include "version.h"
 
 /** \file
  *

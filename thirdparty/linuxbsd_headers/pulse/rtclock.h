@@ -20,8 +20,8 @@
   License along with PulseAudio; if not, see <http://www.gnu.org/licenses/>.
 ***/
 
-#include <pulse/cdecl.h>
-#include <pulse/sample.h>
+#include "cdecl.h"
+#include "sample.h"
 
 /** \file
  *  Monotonic clock utilities. */

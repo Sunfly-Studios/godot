@@ -21,30 +21,30 @@
   License along with PulseAudio; if not, see <http://www.gnu.org/licenses/>.
 ***/
 
-#include <pulse/direction.h>
-#include <pulse/mainloop-api.h>
-#include <pulse/sample.h>
-#include <pulse/format.h>
-#include <pulse/def.h>
-#include <pulse/context.h>
-#include <pulse/stream.h>
-#include <pulse/introspect.h>
-#include <pulse/subscribe.h>
-#include <pulse/scache.h>
-#include <pulse/version.h>
-#include <pulse/error.h>
-#include <pulse/operation.h>
-#include <pulse/channelmap.h>
-#include <pulse/volume.h>
-#include <pulse/xmalloc.h>
-#include <pulse/utf8.h>
-#include <pulse/thread-mainloop.h>
-#include <pulse/mainloop.h>
-#include <pulse/mainloop-signal.h>
-#include <pulse/util.h>
-#include <pulse/timeval.h>
-#include <pulse/proplist.h>
-#include <pulse/rtclock.h>
+#include "direction.h"
+#include "mainloop-api.h"
+#include "sample.h"
+#include "format.h"
+#include "def.h"
+#include "context.h"
+#include "stream.h"
+#include "introspect.h"
+#include "subscribe.h"
+#include "scache.h"
+#include "version.h"
+#include "error.h"
+#include "operation.h"
+#include "channelmap.h"
+#include "volume.h"
+#include "xmalloc.h"
+#include "utf8.h"
+#include "thread-mainloop.h"
+#include "mainloop.h"
+#include "mainloop-signal.h"
+#include "util.h"
+#include "timeval.h"
+#include "proplist.h"
+#include "rtclock.h"
 
 /** \file
  * Include all libpulse header files at once. The following files are

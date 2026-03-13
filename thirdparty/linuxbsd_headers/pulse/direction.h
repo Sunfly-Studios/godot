@@ -20,7 +20,7 @@
   along with PulseAudio; if not, see <http://www.gnu.org/licenses/>.
 ***/
 
-#include <pulse/def.h>
+#include "def.h"
 
 /** \file
  * Utility functions for \ref pa_direction_t. */

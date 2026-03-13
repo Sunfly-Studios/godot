@@ -21,9 +21,9 @@
   along with PulseAudio; if not, see <http://www.gnu.org/licenses/>.
 ***/
 
-#include <pulse/cdecl.h>
-#include <pulse/context.h>
-#include <pulse/version.h>
+#include "cdecl.h"
+#include "context.h"
+#include "version.h"
 
 /** \file
  *

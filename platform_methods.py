@@ -234,3 +234,9 @@ def detect_and_set_32_bit_arch(env):
     
     if arch.endswith("32") or arch in special_32_bit_archs:
         env.Append(CPPDEFINES=["IS_32_BIT"])
+
+def get_strict_archs():
+    return [
+        "arm32", "rv64", "ppc", "wasm", "mips",
+        "loongarch64", "sparc", "alpha", "hppa", "arc"
+    ]

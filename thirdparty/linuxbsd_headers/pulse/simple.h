@@ -23,11 +23,11 @@
 
 #include <sys/types.h>
 
-#include <pulse/sample.h>
-#include <pulse/channelmap.h>
-#include <pulse/def.h>
-#include <pulse/cdecl.h>
-#include <pulse/version.h>
+#include "sample.h"
+#include "channelmap.h"
+#include "def.h"
+#include "cdecl.h"
+#include "version.h"
 
 /** \page simple Simple API
  *

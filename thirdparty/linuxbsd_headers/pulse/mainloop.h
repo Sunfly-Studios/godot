@@ -21,8 +21,8 @@
   along with PulseAudio; if not, see <http://www.gnu.org/licenses/>.
 ***/
 
-#include <pulse/mainloop-api.h>
-#include <pulse/cdecl.h>
+#include "mainloop-api.h"
+#include "cdecl.h"
 
 PA_C_DECL_BEGIN
 

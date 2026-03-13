@@ -201,7 +201,7 @@ private:
 
 		_FORCE_INLINE_ _Data() {
 #ifdef GLOBALNIL_DISABLED
-			_nil = memnew_allocator(Element, A);
+			_nil = memnew_allocator(Element(KeyValue<K, V>(K(), V())), A);
 			_nil->parent = _nil->left = _nil->right = _nil;
 			_nil->color = BLACK;
 #else

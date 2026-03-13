@@ -106,11 +106,6 @@ def configure(env: "SConsEnvironment"):
     elif env["arch"] == "arm32":
         env.Append(CCFLAGS=["-march=armv7-a", "-mthumb", "-mfpu=vfpv3-d16", "-mfloat-abi=hard"])
     elif env["arch"] == "ppc32":
-        env.Append(CCFLAGS=[
-            # PPC GCC optimisation often breaks the refcounting logic
-            # just like in sparc64.
-            "-fno-strict-aliasing"
-        ])
         # By default the toolchain won't append
         # atomic functions at link time.
         env.Append(LINKFLAGS=["-latomic"])
@@ -119,15 +114,6 @@ def configure(env: "SConsEnvironment"):
             # MVP baseline for all capable SPARC systems.
             "-mcpu=ultrasparc",
             "-m64",
-
-            # On SPARC, the compiler usually assumes a perfect world
-            # were everything is aligned correctly. However, reality
-            # is of course not perfect.
-            # This flag tells GCC to NOT cheat and generate edge-cases
-            # for unaligned memory patterns that may be triggered by
-            # Godot's codebase.
-            # We're trading speed for stability.
-            "-fno-strict-aliasing"
         ])
         env.Append(LINKFLAGS=[
             "-m64",

@@ -23,10 +23,10 @@
 
 #include <inttypes.h>
 
-#include <pulse/def.h>
-#include <pulse/context.h>
-#include <pulse/cdecl.h>
-#include <pulse/version.h>
+#include "def.h"
+#include "context.h"
+#include "cdecl.h"
+#include "version.h"
 
 /** \page subscribe Event Subscription
  *
