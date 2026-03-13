@@ -120,18 +120,16 @@ Error RenderingContextDriverD3D12::_init_device_factory() {
 		return OK; // Fallback to the system loader.
 	}
 
-	ID3D12SDKConfiguration *sdk_config = nullptr;
+	ComPtr<ID3D12SDKConfiguration> sdk_config;
 	if (SUCCEEDED(d3d_D3D12GetInterface(CLSID_D3D12SDKConfigurationGodot, IID_PPV_ARGS(&sdk_config)))) {
-		ID3D12SDKConfiguration1 *sdk_config1 = nullptr;
-		if (SUCCEEDED(sdk_config->QueryInterface(&sdk_config1))) {
+		ComPtr<ID3D12SDKConfiguration1> sdk_config1;
+		if (SUCCEEDED(sdk_config.As(&sdk_config1))) {
 			if (SUCCEEDED(sdk_config1->CreateDeviceFactory(agility_sdk_version, agility_sdk_path.ascii().get_data(), IID_PPV_ARGS(device_factory.GetAddressOf())))) {
 				d3d_D3D12GetInterface(CLSID_D3D12DeviceFactoryGodot, IID_PPV_ARGS(device_factory.GetAddressOf()));
 			} else if (SUCCEEDED(sdk_config1->CreateDeviceFactory(agility_sdk_version, ".\\", IID_PPV_ARGS(device_factory.GetAddressOf())))) {
 				d3d_D3D12GetInterface(CLSID_D3D12DeviceFactoryGodot, IID_PPV_ARGS(device_factory.GetAddressOf()));
 			}
-			sdk_config1->Release();
 		}
-		sdk_config->Release();
 	}
 	return OK;
 }
@@ -197,8 +195,12 @@ Error RenderingContextDriverD3D12::_initialize_devices() {
 
 	// Release all created adapters.
 	for (uint32_t i = 0; i < adapters.size(); ++i) {
-		adapters[i]->Release();
+		if (adapters[i]) {
+			adapters[i]->Release();
+			adapters[i] = nullptr;
+		}
 	}
+	adapters.clear();
 
 	ComPtr<IDXGIFactory5> factory_5;
 	dxgi_factory.As(&factory_5);
@@ -258,6 +260,7 @@ void RenderingContextDriverD3D12::driver_free(RenderingDeviceDriver *p_driver) {
 }
 
 RenderingContextDriver::SurfaceID RenderingContextDriverD3D12::surface_create(const void *p_platform_data) {
+	ERR_FAIL_NULL_V(p_platform_data, SurfaceID(0));
 	const WindowPlatformData *wpd = (const WindowPlatformData *)(p_platform_data);
 	Surface *surface = memnew(Surface);
 	surface->hwnd = wpd->window;
@@ -265,6 +268,7 @@ RenderingContextDriver::SurfaceID RenderingContextDriverD3D12::surface_create(co
 }
 
 void RenderingContextDriverD3D12::surface_set_size(SurfaceID p_surface, uint32_t p_width, uint32_t p_height) {
+	ERR_FAIL_COND(p_surface == 0);
 	Surface *surface = (Surface *)(p_surface);
 	surface->width = p_width;
 	surface->height = p_height;
@@ -272,37 +276,44 @@ void RenderingContextDriverD3D12::surface_set_size(SurfaceID p_surface, uint32_t
 }
 
 void RenderingContextDriverD3D12::surface_set_vsync_mode(SurfaceID p_surface, DisplayServer::VSyncMode p_vsync_mode) {
+	ERR_FAIL_COND(p_surface == 0);
 	Surface *surface = (Surface *)(p_surface);
 	surface->vsync_mode = p_vsync_mode;
 	surface->needs_resize = true;
 }
 
 DisplayServer::VSyncMode RenderingContextDriverD3D12::surface_get_vsync_mode(SurfaceID p_surface) const {
+	ERR_FAIL_COND_V(p_surface == 0, DisplayServer::VSYNC_DISABLED);
 	Surface *surface = (Surface *)(p_surface);
 	return surface->vsync_mode;
 }
 
 uint32_t RenderingContextDriverD3D12::surface_get_width(SurfaceID p_surface) const {
+	ERR_FAIL_COND_V(p_surface == 0, 0);
 	Surface *surface = (Surface *)(p_surface);
 	return surface->width;
 }
 
 uint32_t RenderingContextDriverD3D12::surface_get_height(SurfaceID p_surface) const {
+	ERR_FAIL_COND_V(p_surface == 0, 0);
 	Surface *surface = (Surface *)(p_surface);
 	return surface->height;
 }
 
 void RenderingContextDriverD3D12::surface_set_needs_resize(SurfaceID p_surface, bool p_needs_resize) {
+	ERR_FAIL_COND(p_surface == 0);
 	Surface *surface = (Surface *)(p_surface);
 	surface->needs_resize = p_needs_resize;
 }
 
 bool RenderingContextDriverD3D12::surface_get_needs_resize(SurfaceID p_surface) const {
+	ERR_FAIL_COND_V(p_surface == 0, false);
 	Surface *surface = (Surface *)(p_surface);
 	return surface->needs_resize;
 }
 
 void RenderingContextDriverD3D12::surface_destroy(SurfaceID p_surface) {
+	ERR_FAIL_COND(p_surface == 0);
 	Surface *surface = (Surface *)(p_surface);
 	memdelete(surface);
 }

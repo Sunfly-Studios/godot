@@ -35,6 +35,7 @@
 #include "vk_enum_string_helper.h"
 
 #include "core/config/project_settings.h"
+#include "core/os/mutex.h"
 #include "core/version.h"
 
 #include "rendering_device_driver_vulkan.h"
@@ -192,12 +193,17 @@ uint64_t RenderingContextDriverVulkan::get_driver_allocs_by_object_type(uint32_t
 #endif
 
 #if defined(VK_TRACK_DEVICE_MEMORY)
+static Mutex memory_report_mutex;
+
 void RenderingContextDriverVulkan::memory_report_callback(const VkDeviceMemoryReportCallbackDataEXT *p_callback_data, void *p_user_data) {
 	if (!p_callback_data) {
 		return;
 	}
 	const RenderingContextDriverVulkan::VkTrackedObjectType obj_type = vk_object_to_tracked_object(p_callback_data->objectType);
 	uint64_t obj_id = p_callback_data->memoryObjectId;
+
+	// Lock the mutex to prevent concurrent modification crashes
+	MutexLock lock(memory_report_mutex);
 
 	if (p_callback_data->type == VK_DEVICE_MEMORY_REPORT_EVENT_TYPE_ALLOCATE_EXT) {
 		// Realloc, update size
@@ -290,8 +296,14 @@ VkAllocationCallbacks *RenderingContextDriverVulkan::get_allocation_callbacks(Vk
 				size_t size,
 				size_t alignment,
 				VkSystemAllocationScope allocation_scope) LAMBDA_VK_CALL_CONV -> void * {
+			VkObjectType type = static_cast<VkObjectType>(*reinterpret_cast<uint32_t *>(p_user_data));
+			// Fulfill the Vulkan spec requirement to free the memory if size is 0.
+			if (size == 0) {
+				get_allocation_callbacks(type)->pfnFree(p_user_data, p_original);
+				return nullptr;
+			}
+
 			if (p_original == nullptr) {
-				VkObjectType type = static_cast<VkObjectType>(*reinterpret_cast<uint32_t *>(p_user_data));
 				return get_allocation_callbacks(type)->pfnAllocation(p_user_data, size, alignment, allocation_scope);
 			}
 
@@ -301,16 +313,19 @@ VkAllocationCallbacks *RenderingContextDriverVulkan::get_allocation_callbacks(Vk
 			// Retrieve allocation data
 			TrackedMemHeader *header = reinterpret_cast<TrackedMemHeader *>(mem - alignment);
 
-			// Update allocation size
+			uint8_t *ret = reinterpret_cast<uint8_t *>(Memory::realloc_aligned_static(header, size + alignment, header->size + alignment, alignment));
+
+			// Do not mutate tracker state until we guarantee the reallocation succeeded.
+			if (ret == nullptr) {
+				return nullptr;
+			}
+
+			// Update allocation size tracking safely
 			driver_memory_total_memory.sub(header->size);
 			driver_memory_total_memory.add(size);
 			driver_memory_tracker[header->type][header->allocation_scope].sub(header->size);
 			driver_memory_tracker[header->type][header->allocation_scope].add(size);
 
-			uint8_t *ret = reinterpret_cast<uint8_t *>(Memory::realloc_aligned_static(header, size + alignment, header->size + alignment, alignment));
-			if (ret == nullptr) {
-				return nullptr;
-			}
 			// Update tracker
 			header = reinterpret_cast<TrackedMemHeader *>(ret);
 			header->size = size;
@@ -370,6 +385,9 @@ VkAllocationCallbacks *RenderingContextDriverVulkan::get_allocation_callbacks(Vk
 	}
 
 	uint32_t type_index = vk_object_to_tracked_object(p_type);
+	if (type_index >= VK_TRACKED_OBJECT_TYPE_COUNT) {
+		type_index = 0; // Fallback to UNKNOWN
+	}
 	return &object_callbacks[type_index];
 #endif
 }
@@ -548,6 +566,10 @@ Error RenderingContextDriverVulkan::_find_validation_layers(TightLocalVector<con
 }
 
 VKAPI_ATTR VkBool32 VKAPI_CALL RenderingContextDriverVulkan::_debug_messenger_callback(VkDebugUtilsMessageSeverityFlagBitsEXT p_message_severity, VkDebugUtilsMessageTypeFlagsEXT p_message_type, const VkDebugUtilsMessengerCallbackDataEXT *p_callback_data, void *p_user_data) {
+	// Defense against broken driver layers violating the Vulkan spec.
+	if (!p_callback_data || !p_callback_data->pMessage) {
+		return VK_FALSE;
+	}
 	// This error needs to be ignored because the AMD allocator will mix up memory types on IGP processors.
 	if (strstr(p_callback_data->pMessage, "Mapping an image with layout") != nullptr && strstr(p_callback_data->pMessage, "can result in undefined behavior if this memory is used by the device") != nullptr) {
 		return VK_FALSE;
@@ -974,6 +996,7 @@ RenderingContextDriver::SurfaceID RenderingContextDriverVulkan::surface_create(c
 }
 
 void RenderingContextDriverVulkan::surface_set_size(SurfaceID p_surface, uint32_t p_width, uint32_t p_height) {
+	ERR_FAIL_COND(p_surface == 0);
 	Surface *surface = (Surface *)(p_surface);
 	surface->width = p_width;
 	surface->height = p_height;
@@ -981,39 +1004,51 @@ void RenderingContextDriverVulkan::surface_set_size(SurfaceID p_surface, uint32_
 }
 
 void RenderingContextDriverVulkan::surface_set_vsync_mode(SurfaceID p_surface, DisplayServer::VSyncMode p_vsync_mode) {
+	ERR_FAIL_COND(p_surface == 0);
 	Surface *surface = (Surface *)(p_surface);
 	surface->vsync_mode = p_vsync_mode;
 	surface->needs_resize = true;
 }
 
 DisplayServer::VSyncMode RenderingContextDriverVulkan::surface_get_vsync_mode(SurfaceID p_surface) const {
+	ERR_FAIL_COND_V(p_surface == 0, DisplayServer::VSYNC_DISABLED);
 	Surface *surface = (Surface *)(p_surface);
 	return surface->vsync_mode;
 }
 
 uint32_t RenderingContextDriverVulkan::surface_get_width(SurfaceID p_surface) const {
+	ERR_FAIL_COND_V(p_surface == 0, 0);
 	Surface *surface = (Surface *)(p_surface);
 	return surface->width;
 }
 
 uint32_t RenderingContextDriverVulkan::surface_get_height(SurfaceID p_surface) const {
+	ERR_FAIL_COND_V(p_surface == 0, 0);
 	Surface *surface = (Surface *)(p_surface);
 	return surface->height;
 }
 
 void RenderingContextDriverVulkan::surface_set_needs_resize(SurfaceID p_surface, bool p_needs_resize) {
+	ERR_FAIL_COND(p_surface == 0);
 	Surface *surface = (Surface *)(p_surface);
 	surface->needs_resize = p_needs_resize;
 }
 
 bool RenderingContextDriverVulkan::surface_get_needs_resize(SurfaceID p_surface) const {
+	ERR_FAIL_COND_V(p_surface == 0, false);
 	Surface *surface = (Surface *)(p_surface);
 	return surface->needs_resize;
 }
 
 void RenderingContextDriverVulkan::surface_destroy(SurfaceID p_surface) {
+	ERR_FAIL_COND(p_surface == 0);
 	Surface *surface = (Surface *)(p_surface);
-	vkDestroySurfaceKHR(instance, surface->vk_surface, get_allocation_callbacks(VK_OBJECT_TYPE_SURFACE_KHR));
+
+	// Ensure handles actually exist before attempting to destroy them.
+	if (instance != VK_NULL_HANDLE && surface->vk_surface != VK_NULL_HANDLE) {
+		vkDestroySurfaceKHR(instance, surface->vk_surface, get_allocation_callbacks(VK_OBJECT_TYPE_SURFACE_KHR));
+	}
+
 	memdelete(surface);
 }
 
@@ -1043,10 +1078,23 @@ VkQueueFamilyProperties RenderingContextDriverVulkan::queue_family_get(uint32_t 
 
 bool RenderingContextDriverVulkan::queue_family_supports_present(VkPhysicalDevice p_physical_device, uint32_t p_queue_family_index, SurfaceID p_surface) const {
 	DEV_ASSERT(p_physical_device != VK_NULL_HANDLE);
-	DEV_ASSERT(p_surface != 0);
+	ERR_FAIL_COND_V(p_surface == 0, false);
 	Surface *surface = (Surface *)(p_surface);
+
+	// Cannot query support for a null surface.
+	ERR_FAIL_COND_V(surface->vk_surface == VK_NULL_HANDLE, false);
+
 	VkBool32 present_supported = false;
-	VkResult err = vkGetPhysicalDeviceSurfaceSupportKHR(p_physical_device, p_queue_family_index, surface->vk_surface, &present_supported);
+	VkResult err;
+
+	// Use the dynamically loaded function pointer if available, rather than assuming
+	// the statically linked symbol is valid for the current instance.
+	if (functions.GetPhysicalDeviceSurfaceSupportKHR) {
+		err = functions.GetPhysicalDeviceSurfaceSupportKHR(p_physical_device, p_queue_family_index, surface->vk_surface, &present_supported);
+	} else {
+		err = vkGetPhysicalDeviceSurfaceSupportKHR(p_physical_device, p_queue_family_index, surface->vk_surface, &present_supported);
+	}
+
 	return err == VK_SUCCESS && present_supported;
 }
 

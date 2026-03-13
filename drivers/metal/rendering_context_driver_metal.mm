@@ -46,6 +46,9 @@ RenderingContextDriverMetal::~RenderingContextDriverMetal() {
 
 Error RenderingContextDriverMetal::initialize() {
 	metal_device = MTLCreateSystemDefaultDevice();
+
+	ERR_FAIL_NULL_V_MSG(metal_device, ERR_CANT_CREATE, "Failed to create Metal device. Metal may not be supported on this system.");
+
 #if TARGET_OS_OSX
 	if (@available(macOS 13.3, *)) {
 		[id<MTLDeviceEx>(metal_device) setShouldMaximizeConcurrentCompilation:YES];
@@ -80,7 +83,9 @@ void RenderingContextDriverMetal::driver_free(RenderingDeviceDriver *p_driver) {
 }
 
 class API_AVAILABLE(macos(11.0), ios(14.0), tvos(14.0)) SurfaceLayer : public RenderingContextDriverMetal::Surface {
-	CAMetalLayer *__unsafe_unretained layer = nil;
+	// Use __strong (default in ARC) to retain the layer. Should prevent use-after-free 
+	// if the OS destroys the window view before the rendering context is torn down.
+	CAMetalLayer *__strong layer = nil; 
 	LocalVector<MDFrameBuffer> frame_buffers;
 	LocalVector<id<MTLDrawable>> drawables;
 	uint32_t rear = -1;
@@ -113,8 +118,7 @@ public:
 			layer.drawableSize = drawableSize;
 		}
 
-		// Metal supports a maximum of 3 drawables.
-		p_desired_framebuffer_count = MIN(3U, p_desired_framebuffer_count);
+		p_desired_framebuffer_count = CLAMP(p_desired_framebuffer_count, 2U, 3U);
 		layer.maximumDrawableCount = p_desired_framebuffer_count;
 
 #if TARGET_OS_OSX
@@ -145,14 +149,16 @@ public:
 			return RDD::FramebufferID();
 		}
 
+		// Fetch drawable first before mutating ring buffer state.
+		id<CAMetalDrawable> drawable = layer.nextDrawable;
+		ERR_FAIL_NULL_V_MSG(drawable, RDD::FramebufferID(), "no drawable available");
+
 		rear = (rear + 1) % frame_buffers.size();
 		count++;
 
 		MDFrameBuffer &frame_buffer = frame_buffers[rear];
 		frame_buffer.size = Size2i(width, height);
 
-		id<CAMetalDrawable> drawable = layer.nextDrawable;
-		ERR_FAIL_NULL_V_MSG(drawable, RDD::FramebufferID(), "no drawable available");
 		drawables[rear] = drawable;
 		frame_buffer.set_texture(0, drawable.texture);
 
@@ -181,13 +187,17 @@ public:
 };
 
 RenderingContextDriver::SurfaceID RenderingContextDriverMetal::surface_create(const void *p_platform_data) {
+	ERR_FAIL_NULL_V(p_platform_data, SurfaceID(0));
 	const WindowPlatformData *wpd = (const WindowPlatformData *)(p_platform_data);
+	ERR_FAIL_NULL_V(wpd->layer, SurfaceID(0));
+
 	Surface *surface = memnew(SurfaceLayer(wpd->layer, metal_device));
 
 	return SurfaceID(surface);
 }
 
 void RenderingContextDriverMetal::surface_set_size(SurfaceID p_surface, uint32_t p_width, uint32_t p_height) {
+	ERR_FAIL_COND(p_surface == 0);
 	Surface *surface = (Surface *)(p_surface);
 	if (surface->width == p_width && surface->height == p_height) {
 		return;
@@ -198,6 +208,7 @@ void RenderingContextDriverMetal::surface_set_size(SurfaceID p_surface, uint32_t
 }
 
 void RenderingContextDriverMetal::surface_set_vsync_mode(SurfaceID p_surface, DisplayServer::VSyncMode p_vsync_mode) {
+	ERR_FAIL_COND(p_surface == 0);
 	Surface *surface = (Surface *)(p_surface);
 	if (surface->vsync_mode == p_vsync_mode) {
 		return;
@@ -207,31 +218,37 @@ void RenderingContextDriverMetal::surface_set_vsync_mode(SurfaceID p_surface, Di
 }
 
 DisplayServer::VSyncMode RenderingContextDriverMetal::surface_get_vsync_mode(SurfaceID p_surface) const {
+	ERR_FAIL_COND_V(p_surface == 0, DisplayServer::VSYNC_DISABLED);
 	Surface *surface = (Surface *)(p_surface);
 	return surface->vsync_mode;
 }
 
 uint32_t RenderingContextDriverMetal::surface_get_width(SurfaceID p_surface) const {
+	ERR_FAIL_COND_V(p_surface == 0, 0);
 	Surface *surface = (Surface *)(p_surface);
 	return surface->width;
 }
 
 uint32_t RenderingContextDriverMetal::surface_get_height(SurfaceID p_surface) const {
+	ERR_FAIL_COND_V(p_surface == 0, 0);
 	Surface *surface = (Surface *)(p_surface);
 	return surface->height;
 }
 
 void RenderingContextDriverMetal::surface_set_needs_resize(SurfaceID p_surface, bool p_needs_resize) {
+	ERR_FAIL_COND(p_surface == 0);
 	Surface *surface = (Surface *)(p_surface);
 	surface->needs_resize = p_needs_resize;
 }
 
 bool RenderingContextDriverMetal::surface_get_needs_resize(SurfaceID p_surface) const {
+	ERR_FAIL_COND_V(p_surface == 0, false);
 	Surface *surface = (Surface *)(p_surface);
 	return surface->needs_resize;
 }
 
 void RenderingContextDriverMetal::surface_destroy(SurfaceID p_surface) {
+	ERR_FAIL_COND(p_surface == 0);
 	Surface *surface = (Surface *)(p_surface);
 	memdelete(surface);
 }
