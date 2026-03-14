@@ -107,6 +107,9 @@ const PackedStringArray ProjectSettings::_get_supported_features() {
 #ifdef GLES3_ENABLED
 	features.append("GL Compatibility");
 #endif
+#ifdef GLES2_ENABLED
+	features.append("GL Legacy");
+#endif
 	return features;
 }
 
