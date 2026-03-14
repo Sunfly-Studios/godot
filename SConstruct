@@ -58,7 +58,7 @@ import glsl_builders
 import methods
 import scu_builders
 from misc.utility.color import is_stderr_color, print_error, print_info, print_warning
-from platform_methods import get_strict_archs, architecture_aliases, architectures, compatibility_platform_aliases, detect_and_set_32_bit_arch
+from platform_methods import architecture_aliases, architectures, compatibility_platform_aliases, detect_and_set_32_bit_arch
 
 if ARGUMENTS.get("target", "editor") == "editor":
     _helper_module("editor.editor_builders", "editor/editor_builders.py")
@@ -622,16 +622,6 @@ if env["scu_build"]:
 
     methods.set_scu_folders(scu_builders.generate_scu_files(max_includes_per_scu))
 
-strict_aliasing_archs = get_strict_archs()
-
-is_production = env.get("production", False)
-is_strict_target = env["target"] in ["editor", "template_release"]
-is_strict_arch = env["arch"] in strict_aliasing_archs
-
-if is_production and is_strict_target and is_strict_arch:
-    # Apply the RBMap nil backdoor.
-    env.Append(CPPDEFINES=["GLOBALNIL_DISABLED"])
-
 # Must happen after the flags' definition, as configure is when most flags
 # are actually handled to change compile options, etc.
 detect.configure(env)
@@ -740,6 +730,21 @@ if env["arch"] == "x86_32":
         env.Append(CPPDEFINES=["NO_SSE2"])
 
 detect_and_set_32_bit_arch(env)
+
+is_production = env.get("production", False)
+is_strict_target = env["target"] in ["editor", "template_release"]
+
+if is_production and is_strict_target:
+    # Force every single RBMap instance to
+    # allocate its own distinct _nil node using memnew_allocator.
+    # This adds one extra heap allocation for every RBMap instantiated in the engine.
+    # Modern systems (even older RISC workstations) have more than enough RAM
+    # to absorb the overhead of a few thousand extra map nodes.
+    env.Append(CPPDEFINES=["GLOBALNIL_DISABLED"])
+
+    # MSVC doesn't have an equivalent (another reason why GCC/LLVM is better :)).
+    if not env.msvc:
+        env.Append(CCFLAGS=["-fstrict-aliasing"])
 
 # Explicitly specify colored output.
 if methods.using_gcc(env):
