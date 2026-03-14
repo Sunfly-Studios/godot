@@ -147,7 +147,8 @@ void _compress_astc(Image *r_img, Image::ASTCFormat p_format) {
 			image.data_type = ASTCENC_TYPE_F32;
 		}
 
-		image.data = (void **)(&mip_data);
+		void *slice_ptr = const_cast<void *>(static_cast<const void *>(mip_data));
+		image.data = &slice_ptr;
 
 		// Compute the number of ASTC blocks in each dimension.
 		unsigned int block_count_x = (src_mip_w + block_x - 1) / block_x;
