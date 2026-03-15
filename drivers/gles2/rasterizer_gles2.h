@@ -50,8 +50,6 @@
 #include "drivers/gles2/storage/particles_storage.h"
 #include "drivers/gles2/storage/utilities.h"
 
-namespace GLES2 {
-
 class RasterizerGLES2 : public RendererCompositor {
 private:
 	uint64_t frame = 1;
@@ -60,23 +58,24 @@ private:
 	double time_total = 0.0;
 	double time_scale = 1.0;
 
+	static bool gles_over_gl;
 protected:
-	Config *config = nullptr;
-	Utilities *utilities = nullptr;
-	MaterialStorage *material_storage = nullptr;
-	MeshStorage *mesh_storage = nullptr;
-	ParticlesStorage *particles_storage = nullptr;
-	LightStorage *light_storage = nullptr;
-	GI *gi = nullptr;
-	Fog *fog = nullptr;
-	CopyEffects *copy_effects = nullptr;
-	CubemapFilter *cubemap_filter = nullptr;
-	Glow *glow = nullptr;
-	PostEffects *post_effects = nullptr;
-	FeedEffects *feed_effects = nullptr;
-	RasterizerStorageGLES2 storage;
-	RasterizerCanvasGLES2 canvas;
-	RasterizerSceneGLES2 scene;
+	GLES2::Config *config = nullptr;
+	GLES2::Utilities *utilities = nullptr;
+	GLES2::MaterialStorage *material_storage = nullptr;
+	GLES2::MeshStorage *mesh_storage = nullptr;
+	GLES2::ParticlesStorage *particles_storage = nullptr;
+	GLES2::LightStorage *light_storage = nullptr;
+	GLES2::GI *gi = nullptr;
+	GLES2::Fog *fog = nullptr;
+	GLES2::CopyEffects *copy_effects = nullptr;
+	GLES2::CubemapFilter *cubemap_filter = nullptr;
+	GLES2::Glow *glow = nullptr;
+	GLES2::PostEffects *post_effects = nullptr;
+	GLES2::FeedEffects *feed_effects = nullptr;
+	GLES2::RasterizerStorageGLES2 storage;
+	GLES2::RasterizerCanvasGLES2 canvas;
+	GLES2::RasterizerSceneGLES2 scene;
 	static RasterizerGLES2 *singleton;
 
 	void _blit_render_target_to_screen(RID p_render_target, const Rect2 &p_screen_rect);
@@ -109,14 +108,15 @@ public:
 	static RendererCompositor *_create_current() {
 		return memnew(RasterizerGLES2);
 	}
-
-	static void make_current() {
+	
+	static void make_current(bool p_gles_over_gl) {
+		gles_over_gl = p_gles_over_gl;
+		OS::get_singleton()->set_gles_over_gl(gles_over_gl);
 		_create_func = _create_current;
+		low_end = true;
 	}
 
-	static bool is_gles_over_gl() {
-		return false;// TODO(GLES2)
-	}
+	static bool is_gles_over_gl() { return gles_over_gl; }
 
 	virtual bool is_low_end() const { return true; }
 	uint64_t get_frame_number() const { return frame; }
@@ -129,5 +129,4 @@ public:
 	RasterizerGLES2();
 	~RasterizerGLES2() {}
 };
-} //namespace GLES2
 #endif // GLES2_ENABLED

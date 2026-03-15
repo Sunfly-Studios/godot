@@ -1668,7 +1668,7 @@ DisplayServerWayland::DisplayServerWayland(const String &p_rendering_driver, Win
 					ERR_FAIL_MSG("Could not initialize OpenGL 2.0.");
 				}
 			} else {
-				// RasterizerGLES2::make_current(true); TODO(GLES2): Make this work
+				RasterizerGLES2::make_current(true);
 				driver_found = true;
 			}
 		}
@@ -1695,7 +1695,7 @@ DisplayServerWayland::DisplayServerWayland(const String &p_rendering_driver, Win
 				ERR_FAIL_MSG("Could not initialize OpenGL ES.");
 			}
 
-			// RasterizerGLES2::make_current(false); TODO(GLES2): Make this work
+			RasterizerGLES2::make_current(false);
 			driver_found = true;
 		}
 	}

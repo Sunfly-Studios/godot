@@ -4120,10 +4120,10 @@ DisplayServerMacOS::DisplayServerMacOS(const String &p_rendering_driver, WindowM
 #endif
 #if defined(GLES2_ENABLED) // TODO(GLES2)
 	if (rendering_driver == "opengl32") {
-		// RasterizerGLES2::make_current(true);
+		RasterizerGLES2::make_current(true);
 	}
 	if (rendering_driver == "opengl2_angle") {
-		// RasterizerGLES2::make_current(false);
+		RasterizerGLES2::make_current(false);
 	}
 #endif
 #if defined(RD_ENABLED)

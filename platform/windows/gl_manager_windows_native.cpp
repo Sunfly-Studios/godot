@@ -30,7 +30,7 @@
 
 #include "gl_manager_windows_native.h"
 
-#if defined(WINDOWS_ENABLED) && defined(GLES3_ENABLED)
+#if defined(WINDOWS_ENABLED) && (defined(GLES3_ENABLED) || defined(GLES2_ENABLED))
 
 #include "core/config/project_settings.h"
 #include "core/version.h"
@@ -438,26 +438,32 @@ Error GLManagerNative_Windows::_create_context(GLWindow &win, GLDisplay &gl_disp
 		ERR_PRINT("Could not attach OpenGL context to newly created window: " + format_error_message(GetLastError()));
 	}
 
-	int attribs[] = {
-		WGL_CONTEXT_MAJOR_VERSION_ARB, 3, //we want a 3.3 context
-		WGL_CONTEXT_MINOR_VERSION_ARB, 3,
-		//and it shall be forward compatible so that we can only use up to date functionality
-		WGL_CONTEXT_PROFILE_MASK_ARB, WGL_CONTEXT_CORE_PROFILE_BIT_ARB,
-		WGL_CONTEXT_FLAGS_ARB, WGL_CONTEXT_FORWARD_COMPATIBLE_BIT_ARB /*| _WGL_CONTEXT_DEBUG_BIT_ARB*/,
-		0
-	}; //zero indicates the end of the array
+	Vector<int> attribs;
+	attribs.push_back(WGL_CONTEXT_MAJOR_VERSION_ARB);
+	attribs.push_back(use_gles2 ? 2 : 3);
+	attribs.push_back(WGL_CONTEXT_MINOR_VERSION_ARB);
+	attribs.push_back(use_gles2 ? 1 : 3);
+
+	if (!use_gles2) {
+		// Only GLES3/GL3.3+ uses strict core and forward compatibility profiles
+		attribs.push_back(WGL_CONTEXT_PROFILE_MASK_ARB);
+		attribs.push_back(WGL_CONTEXT_CORE_PROFILE_BIT_ARB);
+		attribs.push_back(WGL_CONTEXT_FLAGS_ARB);
+		attribs.push_back(WGL_CONTEXT_FORWARD_COMPATIBLE_BIT_ARB);
+	}
+	attribs.push_back(0); // zero indicates the end of the array
 
 	PFNWGLCREATECONTEXTATTRIBSARBPROC wglCreateContextAttribsARB = nullptr; //pointer to the method
 	wglCreateContextAttribsARB = (PFNWGLCREATECONTEXTATTRIBSARBPROC)gd_wglGetProcAddress("wglCreateContextAttribsARB");
 
-	if (wglCreateContextAttribsARB == nullptr) //OpenGL 3.0 is not supported
+	if (wglCreateContextAttribsARB == nullptr) //OpenGL 3.0/2.0 is not supported
 	{
 		gd_wglDeleteContext(gl_display.hRC);
 		gl_display.hRC = nullptr;
 		return ERR_CANT_CREATE;
 	}
 
-	HGLRC new_hRC = wglCreateContextAttribsARB(win.hDC, nullptr, attribs);
+	HGLRC new_hRC = wglCreateContextAttribsARB(win.hDC, nullptr, attribs.ptr());
 	if (!new_hRC) {
 		gd_wglDeleteContext(gl_display.hRC);
 		gl_display.hRC = nullptr;
@@ -598,12 +604,6 @@ HGLRC GLManagerNative_Windows::get_hglrc(DisplayServer::WindowID p_window_id) {
 	const GLWindow &win = get_window(p_window_id);
 	const GLDisplay &disp = get_display(win.gldisplay_id);
 	return disp.hRC;
-}
-
-GLManagerNative_Windows::GLManagerNative_Windows() {
-	direct_render = false;
-	glx_minor = glx_major = 0;
-	_current_window = nullptr;
 }
 
 GLManagerNative_Windows::~GLManagerNative_Windows() {

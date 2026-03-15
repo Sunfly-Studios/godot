@@ -31,7 +31,7 @@
 #ifndef GL_MANAGER_WINDOWS_ANGLE_H
 #define GL_MANAGER_WINDOWS_ANGLE_H
 
-#if defined(WINDOWS_ENABLED) && defined(GLES3_ENABLED)
+#if defined(WINDOWS_ENABLED) && (defined(GLES3_ENABLED) || defined(GLES2_ENABLED))
 
 #include "core/error/error_list.h"
 #include "core/os/os.h"
@@ -43,6 +43,7 @@
 
 class GLManagerANGLE_Windows : public EGLManager {
 private:
+	bool use_gles2 = false;
 	virtual const char *_get_platform_extension_name() const override;
 	virtual EGLenum _get_platform_extension_enum() const override;
 	virtual EGLenum _get_platform_api_enum() const override;
@@ -52,7 +53,9 @@ private:
 public:
 	void window_resize(DisplayServer::WindowID p_window_id, int p_width, int p_height);
 
-	GLManagerANGLE_Windows() {}
+	GLManagerANGLE_Windows(bool p_use_gles2) {
+		use_gles2 = p_use_gles2;
+	}
 	~GLManagerANGLE_Windows() {}
 };
 

@@ -177,6 +177,7 @@ DisplayServerIOS::DisplayServerIOS(const String &p_rendering_driver, WindowMode 
 		// 	ERR_FAIL_MSG("Failed to create iOS OpenGLES rendering layer.");
 		// }
 
+		// TOOD(GLES2): This is now implemented. Fix the above
 		// RasterizerGLES2::make_current(false);
 	}
 #endif

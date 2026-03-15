@@ -762,8 +762,7 @@ DisplayServerAndroid::DisplayServerAndroid(const String &p_rendering_driver, Dis
 #endif
 #if defined(GLES2_ENABLED)
 	if (rendering_driver == "opengl2") {
-		// TODO(GLES2): Implement this make current method
-		// RasterizerGLES2::make_current(false);
+		RasterizerGLES2::make_current(false);
 	}
 #endif
 

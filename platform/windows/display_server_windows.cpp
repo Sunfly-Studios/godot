@@ -1794,17 +1794,12 @@ void DisplayServerWindows::delete_sub_window(WindowID p_window) {
 		rendering_context->window_destroy(p_window);
 	}
 #endif
-#ifdef GLES3_ENABLED
+#if defined(GLES3_ENABLED) || defined(GLES2_ENABLED)
 	if (gl_manager_angle) {
 		gl_manager_angle->window_destroy(p_window);
 	}
 	if (gl_manager_native) {
 		gl_manager_native->window_destroy(p_window);
-	}
-#endif
-#ifdef GLES_WINDOWS_ENABLED
-	if (rendering_driver == "GLES2") {
-		gl_manager->window_destroy(p_window);
 	}
 #endif
 
@@ -1835,7 +1830,7 @@ int64_t DisplayServerWindows::window_get_native_handle(HandleType p_handle_type,
 		case WINDOW_HANDLE: {
 			return (int64_t)windows[p_window].hWnd;
 		}
-#if defined(GLES3_ENABLED)
+#if defined(GLES3_ENABLED) || defined(GLES2_ENABLED)
 		case WINDOW_VIEW: {
 			if (gl_manager_native) {
 				return (int64_t)gl_manager_native->get_hdc(p_window);
@@ -3745,7 +3740,7 @@ void DisplayServerWindows::force_process_and_drop_events() {
 }
 
 void DisplayServerWindows::release_rendering_thread() {
-#if defined(GLES3_ENABLED)
+#if defined(GLES3_ENABLED) || defined(GLES2_ENABLED)
 	if (gl_manager_angle) {
 		gl_manager_angle->release_current();
 	}
@@ -3756,7 +3751,7 @@ void DisplayServerWindows::release_rendering_thread() {
 }
 
 void DisplayServerWindows::swap_buffers() {
-#if defined(GLES3_ENABLED)
+#if defined(GLES3_ENABLED) || defined(GLES2_ENABLED)
 	if (gl_manager_angle) {
 		gl_manager_angle->swap_buffers();
 	}
@@ -4142,7 +4137,7 @@ void DisplayServerWindows::window_set_vsync_mode(DisplayServer::VSyncMode p_vsyn
 	}
 #endif
 
-#if defined(GLES3_ENABLED)
+#if defined(GLES3_ENABLED) || defined(GLES2_ENABLED)
 	if (gl_manager_native) {
 		gl_manager_native->set_use_vsync(p_window, p_vsync_mode != DisplayServer::VSYNC_DISABLED);
 	}
@@ -4160,7 +4155,7 @@ DisplayServer::VSyncMode DisplayServerWindows::window_get_vsync_mode(WindowID p_
 	}
 #endif
 
-#if defined(GLES3_ENABLED)
+#if defined(GLES3_ENABLED) || defined(GLES2_ENABLED)
 	if (gl_manager_native) {
 		return gl_manager_native->is_using_vsync(p_window) ? DisplayServer::VSYNC_ENABLED : DisplayServer::VSYNC_DISABLED;
 	}
@@ -5714,7 +5709,7 @@ LRESULT DisplayServerWindows::WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARA
 					rendering_context->window_set_size(window_id, window.width + off_x, window.height);
 				}
 #endif
-#if defined(GLES3_ENABLED)
+#if defined(GLES3_ENABLED) || defined(GLES2_ENABLED)
 				if (window.create_completed && gl_manager_native && window.gl_native_window_created) {
 					gl_manager_native->window_resize(window_id, window.width + off_x, window.height);
 				}
@@ -6352,14 +6347,6 @@ Error DisplayServerWindows::_create_window(WindowID p_window_id, WindowMode p_mo
 			::DwmSetWindowAttribute(wd.hWnd, use_legacy_dark_mode_before_20H1 ? DWMWA_USE_IMMERSIVE_DARK_MODE_BEFORE_20H1 : DWMWA_USE_IMMERSIVE_DARK_MODE, &value, sizeof(value));
 		}
 
-#ifdef GLES_WINDOWS_ENABLED
-		print_line("rendering_driver " + rendering_driver);
-		if (rendering_driver == "GLES2") {
-			Error err = gl_manager->window_create(id, wd.hWnd, hInstance, WindowRect.right - WindowRect.left, WindowRect.bottom - WindowRect.top);
-			ERR_FAIL_COND_V_MSG(err != OK, INVALID_WINDOW_ID, "Can't create a GLES2 window");
-		}
-#endif
-
 		RegisterTouchWindow(wd.hWnd, 0);
 		DragAcceptFiles(wd.hWnd, true);
 
@@ -6543,7 +6530,7 @@ void DisplayServerWindows::_destroy_rendering_context_window(WindowID p_window_i
 }
 #endif
 
-#ifdef GLES3_ENABLED
+#if defined(GLES3_ENABLED) || defined(GLES2_ENABLED)
 Error DisplayServerWindows::_create_gl_window(WindowID p_window_id) {
 	if (gl_manager_native) {
 		WindowData &wd = windows[p_window_id];
@@ -7124,8 +7111,8 @@ DisplayServerWindows::DisplayServerWindows(const String &p_rendering_driver, Win
 
 #ifdef GLES2_ENABLED
 	if (rendering_driver_failed) {
-		bool fallback_to_opengl3 = GLOBAL_GET("rendering/rendering_device/fallback_to_opengl2");
-		if (fallback_to_opengl3) {
+		bool fallback_to_opengl2 = GLOBAL_GET("rendering/rendering_device/fallback_to_opengl2");
+		if (fallback_to_opengl2) {
 			tested_drivers.set_flag(DRIVER_ID_COMPAT_OPENGL3);
 			WARN_PRINT("Your video card drivers seem not to support Direct3D 12, Vulkan or OpenGL 3, switching to OpenGL 2.");
 			rendering_driver = "opengl2";
@@ -7211,7 +7198,7 @@ DisplayServerWindows::DisplayServerWindows(const String &p_rendering_driver, Win
 	}
 
 	if (rendering_driver == "opengl3_angle") {
-		gl_manager_angle = memnew(GLManagerANGLE_Windows);
+		gl_manager_angle = memnew(GLManagerANGLE_Windows(false));
 		tested_drivers.set_flag(DRIVER_ID_COMPAT_ANGLE_D3D11);
 
 		if (gl_manager_angle->initialize() != OK) {
@@ -7233,7 +7220,7 @@ DisplayServerWindows::DisplayServerWindows(const String &p_rendering_driver, Win
 		}
 	}
 	if (rendering_driver == "opengl3") {
-		gl_manager_native = memnew(GLManagerNative_Windows);
+		gl_manager_native = memnew(GLManagerNative_Windows(false));
 		tested_drivers.set_flag(DRIVER_ID_COMPAT_OPENGL3);
 
 		if (gl_manager_native->initialize() != OK) {
@@ -7275,10 +7262,11 @@ DisplayServerWindows::DisplayServerWindows(const String &p_rendering_driver, Win
 
 	gl_supported = true;
 	if (fallback && (rendering_driver == "opengl2")) {
-		Dictionary gl_info = detect_wgl();
+		Dictionary gl_info = detect_wgl(true);
 
+		constexpr int gl_version = 20000;
 		bool force_angle = false;
-		gl_supported = gl_info["version"].operator int() >= 21000;
+		gl_supported = gl_info["version"].operator int() >= gl_version;
 
 		Vector2i device_id = _get_device_ids(gl_info["name"]);
 		Array device_list = GLOBAL_GET("rendering/gl_legacy/force_angle_on_devices");
@@ -7299,10 +7287,10 @@ DisplayServerWindows::DisplayServerWindows(const String &p_rendering_driver, Win
 			}
 		}
 
-		if (force_angle || (gl_info["version"].operator int() < 21000)) {
+		if (force_angle || (gl_info["version"].operator int() < gl_version)) {
 			tested_drivers.set_flag(DRIVER_ID_COMPAT_OPENGL2);
 			if (show_warning) {
-				if (gl_info["version"].operator int() < 21000) {
+				if (gl_info["version"].operator int() < gl_version) {
 					WARN_PRINT("Your video card drivers seem not to support the required OpenGL 2.0 version, switching to ANGLE.");
 				} else {
 					WARN_PRINT("Your video card drivers are known to have low quality OpenGL 2.0 support, switching to ANGLE.");
@@ -7314,7 +7302,7 @@ DisplayServerWindows::DisplayServerWindows(const String &p_rendering_driver, Win
 	}
 
 	if (rendering_driver == "opengl2_angle") {
-		gl_manager_angle = memnew(GLManagerANGLE_Windows);
+		gl_manager_angle = memnew(GLManagerANGLE_Windows(true));
 		tested_drivers.set_flag(DRIVER_ID_COMPAT_ANGLE_D3D11);
 
 		if (gl_manager_angle->initialize() != OK) {
@@ -7335,7 +7323,7 @@ DisplayServerWindows::DisplayServerWindows(const String &p_rendering_driver, Win
 		}
 	}
 	if (rendering_driver == "opengl2") {
-		gl_manager_native = memnew(GLManagerNative_Windows);
+		gl_manager_native = memnew(GLManagerNative_Windows(true));
 		tested_drivers.set_flag(DRIVER_ID_COMPAT_OPENGL3);
 
 		if (gl_manager_native->initialize() != OK) {
@@ -7394,6 +7382,29 @@ DisplayServerWindows::DisplayServerWindows(const String &p_rendering_driver, Win
 			return;
 		}
 		RasterizerGLES3::make_current(false);
+	}
+#endif
+
+#ifdef GLES2_ENABLED
+	if (rendering_driver == "opengl2") {
+		if (_create_gl_window(MAIN_WINDOW_ID) != OK) {
+			memdelete(gl_manager_native);
+			gl_manager_native = nullptr;
+			windows.erase(MAIN_WINDOW_ID);
+			r_error = ERR_UNAVAILABLE;
+			return;
+		}
+		RasterizerGLES2::make_current(true);
+	}
+	if (rendering_driver == "opengl2_angle") {
+		if (_create_gl_window(MAIN_WINDOW_ID) != OK) {
+			memdelete(gl_manager_angle);
+			gl_manager_angle = nullptr;
+			windows.erase(MAIN_WINDOW_ID);
+			r_error = ERR_UNAVAILABLE;
+			return;
+		}
+		RasterizerGLES2::make_current(false);
 	}
 #endif
 	// Init context and rendering device
@@ -7504,6 +7515,9 @@ DisplayServer *DisplayServerWindows::create_func(const String &p_rendering_drive
 			Vector<String> drivers;
 			if (tested_drivers.has_flag(DRIVER_ID_COMPAT_OPENGL3)) {
 				drivers.push_back("OpenGL 3.3");
+			}
+			if (tested_drivers.has_flag(DRIVER_ID_COMPAT_OPENGL2)) {
+				drivers.push_back("OpenGL 2.0");
 			}
 			if (tested_drivers.has_flag(DRIVER_ID_COMPAT_ANGLE_D3D11)) {
 				drivers.push_back("Direct3D 11");
