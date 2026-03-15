@@ -410,9 +410,10 @@ class DisplayServerWindows : public DisplayServer {
 
 	enum DriverID {
 		DRIVER_ID_COMPAT_OPENGL3 = 1 << 0,
-		DRIVER_ID_COMPAT_ANGLE_D3D11 = 1 << 1,
-		DRIVER_ID_RD_VULKAN = 1 << 2,
-		DRIVER_ID_RD_D3D12 = 1 << 3,
+		DRIVER_ID_COMPAT_OPENGL2 = 1 << 1,
+		DRIVER_ID_COMPAT_ANGLE_D3D11 = 1 << 2,
+		DRIVER_ID_RD_VULKAN = 1 << 3,
+		DRIVER_ID_RD_D3D12 = 1 << 4,
 	};
 	static BitField<DriverID> tested_drivers;
 
@@ -580,7 +581,7 @@ class DisplayServerWindows : public DisplayServer {
 	void _destroy_rendering_context_window(WindowID p_window_id);
 #endif
 
-#ifdef GLES3_ENABLED
+#if defined(GLES3_ENABLED) || defined(GLES2_ENABLED)
 	Error _create_gl_window(WindowID p_window_id);
 #endif
 

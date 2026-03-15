@@ -56,6 +56,9 @@
 #if defined(GLES3_ENABLED)
 #include "drivers/gles3/rasterizer_gles3.h"
 #endif
+#if defined(GLES2_ENABLED)
+#include "drivers/gles2/rasterizer_gles2.h"
+#endif
 
 #if defined(RD_ENABLED)
 #include "servers/rendering/renderer_rd/renderer_compositor_rd.h"
@@ -3673,6 +3676,10 @@ Vector<String> DisplayServerMacOS::get_rendering_drivers_func() {
 	drivers.push_back("opengl3");
 	drivers.push_back("opengl3_angle");
 #endif
+#if defined(GLES2_ENABLED)
+	drivers.push_back("opengl2");
+	drivers.push_back("opengl2_angle");
+#endif
 
 	return drivers;
 }
@@ -3995,6 +4002,7 @@ DisplayServerMacOS::DisplayServerMacOS(const String &p_rendering_driver, WindowM
 			memdelete(rendering_context);
 			rendering_context = nullptr;
 #if defined(GLES3_ENABLED)
+// TODO(GLES2): Add another fallback to GLES3 => GLES 2
 			bool fallback_to_opengl3 = GLOBAL_GET("rendering/rendering_device/fallback_to_opengl3");
 			if (fallback_to_opengl3 && rendering_driver != "opengl3") {
 				WARN_PRINT("Your device seem not to support MoltenVK or Metal, switching to OpenGL 3.");
@@ -4012,6 +4020,7 @@ DisplayServerMacOS::DisplayServerMacOS(const String &p_rendering_driver, WindowM
 #endif
 
 #if defined(GLES3_ENABLED)
+// TODO(GLES2): Add initialisation for GLES2 after plumbing
 	if (rendering_driver == "opengl3" && OS::get_singleton()->get_processor_name().contains("Virtual")) {
 		WARN_PRINT("Virtual Machine detected, switching to ANGLE.");
 		rendering_driver = "opengl3_angle";
@@ -4079,6 +4088,14 @@ DisplayServerMacOS::DisplayServerMacOS(const String &p_rendering_driver, WindowM
 	}
 	if (rendering_driver == "opengl3_angle") {
 		RasterizerGLES3::make_current(false);
+	}
+#endif
+#if defined(GLES2_ENABLED)
+	if (rendering_driver == "opengl2") {
+		RasterizerGLES2::make_current(true);
+	}
+	if (rendering_driver == "opengl2_angle") {
+		RasterizerGLES2::make_current(false);
 	}
 #endif
 #if defined(RD_ENABLED)

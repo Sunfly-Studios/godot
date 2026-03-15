@@ -88,6 +88,9 @@ extern "C" {
 #if defined(GLES3_ENABLED)
 #include "drivers/gles3/rasterizer_gles3.h"
 #endif
+#if defined(GLES2_ENABLED)
+#include "drivers/gles2/rasterizer_gles2.h"
+#endif
 
 #ifdef DEBUG_ENABLED
 #pragma pack(push, before_imagehlp, 8)
@@ -2843,12 +2846,29 @@ bool OS_Windows::_test_create_rendering_device_and_gl(const String &p_display_dr
 	}
 
 	bool ok = true;
+	GLManagerNative_Windows *test_gl_manager_native = nullptr;
 #ifdef GLES3_ENABLED
-	GLManagerNative_Windows *test_gl_manager_native = memnew(GLManagerNative_Windows);
-	if (test_gl_manager_native->window_create(DisplayServer::MAIN_WINDOW_ID, hWnd, GetModuleHandle(nullptr), 800, 600) == OK) {
-		RasterizerGLES3::make_current(true);
-	} else {
-		ok = false;
+	{
+		test_gl_manager_native = memnew(GLManagerNative_Windows(false));
+		if (test_gl_manager_native->window_create(DisplayServer::MAIN_WINDOW_ID, hWnd, GetModuleHandle(nullptr), 800, 600) == OK) {
+			RasterizerGLES3::make_current(true);
+		} else {
+			ok = false;
+		}
+	}
+#endif
+#ifdef GLES2_ENABLED
+	{
+		test_gl_manager_native = memnew(GLManagerNative_Windows(true));
+		if (test_gl_manager_native->window_create(DisplayServer::MAIN_WINDOW_ID, hWnd, GetModuleHandle(nullptr), 800, 600) == OK) {
+			RasterizerGLES2::make_current(true);
+			if (!ok) {
+				// In case GLES3 failed.
+				ok = true;
+			}
+		} else {
+			ok = false;
+		}
 	}
 #endif
 
@@ -2862,7 +2882,7 @@ bool OS_Windows::_test_create_rendering_device_and_gl(const String &p_display_dr
 		ok = _test_create_rendering_device(p_display_driver);
 	}
 
-#ifdef GLES3_ENABLED
+#if defined(GLES3_ENABLED) || defined(GLES2_ENABLED)
 	if (test_gl_manager_native) {
 		memdelete(test_gl_manager_native);
 	}

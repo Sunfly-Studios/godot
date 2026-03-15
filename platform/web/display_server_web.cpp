@@ -1010,6 +1010,9 @@ Vector<String> DisplayServerWeb::get_rendering_drivers_func() {
 #ifdef GLES3_ENABLED
 	drivers.push_back("opengl3");
 #endif
+#ifdef GLES2_ENABLED
+	drivers.push_back("opengl2");
+#endif
 	return drivers;
 }
 

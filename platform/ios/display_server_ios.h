@@ -53,6 +53,10 @@
 #include "drivers/gles3/rasterizer_gles3.h"
 #endif // GLES3_ENABLED
 
+#if defined(GLES2_ENABLED)
+#include "drivers/gles2/rasterizer_gles2.h"
+#endif // GLES2_ENABLED
+
 #import <Foundation/Foundation.h>
 #import <QuartzCore/CAMetalLayer.h>
 

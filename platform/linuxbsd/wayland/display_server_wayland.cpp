@@ -1384,6 +1384,11 @@ Vector<String> DisplayServerWayland::get_rendering_drivers_func() {
 	drivers.push_back("opengl3_es");
 #endif
 
+#ifdef GLES2_ENABLED
+	drivers.push_back("opengl2");
+	drivers.push_back("opengl2_es");
+#endif
+
 	return drivers;
 }
 
@@ -1446,6 +1451,7 @@ DisplayServerWayland::DisplayServerWayland(const String &p_rendering_driver, Win
 			memdelete(rendering_context);
 			rendering_context = nullptr;
 #if defined(GLES3_ENABLED)
+// TODO(GLES2): Add another fallback to GLES3 => GLES 2
 			bool fallback_to_opengl3 = GLOBAL_GET("rendering/rendering_device/fallback_to_opengl3");
 			if (fallback_to_opengl3 && rendering_driver != "opengl3") {
 				WARN_PRINT("Your video card drivers seem not to support the required Vulkan version, switching to OpenGL 3.");
@@ -1477,6 +1483,7 @@ DisplayServerWayland::DisplayServerWayland(const String &p_rendering_driver, Win
 #endif // RD_ENABLED
 
 #ifdef GLES3_ENABLED
+// TODO(GLES2): Add initialisation for GLES2 after plumbing
 	if (rendering_driver == "opengl3" || rendering_driver == "opengl3_es") {
 #ifdef SOWRAP_ENABLED
 		if (initialize_wayland_egl(dylibloader_verbose) != 0) {

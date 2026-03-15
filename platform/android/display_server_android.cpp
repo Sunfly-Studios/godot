@@ -48,7 +48,13 @@
 
 #ifdef GLES3_ENABLED
 #include "drivers/gles3/rasterizer_gles3.h"
+#endif
 
+#ifdef GLES2_ENABLED
+#include "drivers/gles2/rasterizer_gles2.h"
+#endif
+
+#if defined(GLES2_ENABLED) || defined(GLES3_ENABLED)
 #include <EGL/egl.h>
 #endif
 
@@ -434,15 +440,15 @@ int64_t DisplayServerAndroid::window_get_native_handle(HandleType p_handle_type,
 		case WINDOW_VIEW: {
 			return 0; // Not supported.
 		}
-#ifdef GLES3_ENABLED
+#if defined(GLES3_ENABLED) || defined(GLES2_ENABLED)
 		case DISPLAY_HANDLE: {
-			if (rendering_driver == "opengl3") {
+			if (rendering_driver == "opengl3" || rendering_driver == "opengl2") {
 				return reinterpret_cast<int64_t>(eglGetCurrentDisplay());
 			}
 			return 0;
 		}
 		case OPENGL_CONTEXT: {
-			if (rendering_driver == "opengl3") {
+			if (rendering_driver == "opengl3" || rendering_driver == "opengl2") {
 				return reinterpret_cast<int64_t>(eglGetCurrentContext());
 			}
 			return 0;
@@ -585,6 +591,9 @@ Vector<String> DisplayServerAndroid::get_rendering_drivers_func() {
 #ifdef GLES3_ENABLED
 	drivers.push_back("opengl3");
 #endif
+#ifdef GLES2_ENABLED
+	drivers.push_back("opengl2");
+#endif
 #ifdef VULKAN_ENABLED
 	drivers.push_back("vulkan");
 #endif
@@ -630,6 +639,7 @@ bool DisplayServerAndroid::check_vulkan_global_context(bool p_vulkan_requirement
 			}
 
 #if defined(GLES3_ENABLED)
+// TODO(GLES2): Add another fallback to GLES3 => GLES 2
 			if (fallback_to_opengl3) {
 				WARN_PRINT("Your device does not seem to support Vulkan, switching to OpenGL 3.");
 				OS::get_singleton()->set_current_rendering_driver_name("opengl3", OS::RENDERING_SOURCE_FALLBACK);
@@ -755,6 +765,11 @@ DisplayServerAndroid::DisplayServerAndroid(const String &p_rendering_driver, Dis
 #if defined(GLES3_ENABLED)
 	if (rendering_driver == "opengl3") {
 		RasterizerGLES3::make_current(false);
+	}
+#endif
+#if defined(GLES2_ENABLED)
+	if (rendering_driver == "opengl2") {
+		RasterizerGLES2::make_current(false);
 	}
 #endif
 

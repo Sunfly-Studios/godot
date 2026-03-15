@@ -49,6 +49,7 @@ const char *EditorBuildProfile::build_option_identifiers[BUILD_OPTION_MAX] = {
 	"openxr",
 	"rendering_device", // FIXME: there's no scons option to disable rendering device
 	"opengl3",
+	"opengl2",
 	"vulkan",
 	"module_text_server_fb_enabled",
 	"module_text_server_adv_enabled",
@@ -67,6 +68,7 @@ const bool EditorBuildProfile::build_option_disabled_by_default[BUILD_OPTION_MAX
 	false, // XR
 	false, // RENDERING_DEVICE
 	false, // OPENGL
+	false, // OPENGL2
 	false, // VULKAN
 	true, // TEXT_SERVER_FALLBACK
 	false, // TEXT_SERVER_COMPLEX
@@ -85,6 +87,7 @@ const bool EditorBuildProfile::build_option_disable_values[BUILD_OPTION_MAX] = {
 	false, // XR
 	false, // RENDERING_DEVICE
 	false, // OPENGL
+	false, // OPENGL2
 	false, // VULKAN
 	false, // TEXT_SERVER_FALLBACK
 	false, // TEXT_SERVER_COMPLEX

@@ -1865,7 +1865,19 @@ Error EditorExportPlatformMacOS::export_project(const Ref<EditorExportPreset> &p
 	int export_angle = p_preset->get("application/export_angle");
 	bool include_angle_libs = false;
 	if (export_angle == 0) {
-		include_angle_libs = String(GLOBAL_GET("rendering/gl_compatibility/driver.macos")) == "opengl3_angle";
+		include_angle_libs = (
+			(
+				String(GLOBAL_GET("rendering/gl_compatibility/driver.macos")) == "opengl3_angle"
+			) && (
+				String(GLOBAL_GET("rendering/renderer/rendering_method")) == "gl_compatibility"
+			)
+		) || (
+			(
+				String(GLOBAL_GET("rendering/gl_compatibility/driver.macos")) == "opengl2_angle"
+			) && (
+				String(GLOBAL_GET("rendering/renderer/rendering_method")) == "gl_legacy"
+			)
+		);
 	} else if (export_angle == 1) {
 		include_angle_libs = true;
 	}

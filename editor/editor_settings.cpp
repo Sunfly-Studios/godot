@@ -1011,7 +1011,8 @@ void EditorSettings::_load_defaults(Ref<ConfigFile> p_extra_config) {
 	EDITOR_SETTING_BASIC(Variant::INT, PROPERTY_HINT_ENUM, "project_manager/directory_naming_convention", 1, "No convention,kebab-case,snake_case,camelCase,PascalCase,Title Case")
 
 #if defined(WEB_ENABLED)
-	// Web platform only supports `gl_compatibility`.
+	// Web platform only supports `gl_compatibility` or `gl_legacy`.
+	// TODO(GLES2): Maybe `gl_legacy` once is done?
 	const String default_renderer = "gl_compatibility";
 #elif defined(ANDROID_ENABLED)
 	// Use more suitable rendering method by default.
@@ -1019,7 +1020,7 @@ void EditorSettings::_load_defaults(Ref<ConfigFile> p_extra_config) {
 #else
 	const String default_renderer = "forward_plus";
 #endif
-	EDITOR_SETTING_BASIC(Variant::STRING, PROPERTY_HINT_ENUM, "project_manager/default_renderer", default_renderer, "forward_plus,mobile,gl_compatibility")
+	EDITOR_SETTING_BASIC(Variant::STRING, PROPERTY_HINT_ENUM, "project_manager/default_renderer", default_renderer, "forward_plus,mobile,gl_compatibility,gl_legacy")
 
 #undef EDITOR_SETTING
 #undef EDITOR_SETTING_BASIC

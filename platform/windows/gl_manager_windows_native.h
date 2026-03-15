@@ -31,7 +31,7 @@
 #ifndef GL_MANAGER_WINDOWS_NATIVE_H
 #define GL_MANAGER_WINDOWS_NATIVE_H
 
-#if defined(WINDOWS_ENABLED) && defined(GLES3_ENABLED)
+#if defined(WINDOWS_ENABLED) && (defined(GLES3_ENABLED) || defined(GLES2_ENABLED))
 
 #include "core/error/error_list.h"
 #include "core/os/os.h"
@@ -75,6 +75,7 @@ private:
 	const GLDisplay &get_display(unsigned int id) { return _displays[id]; }
 
 	bool direct_render;
+	bool use_gles2 = false;
 	int glx_minor, glx_major;
 
 private:
@@ -100,10 +101,10 @@ public:
 	HDC get_hdc(DisplayServer::WindowID p_window_id);
 	HGLRC get_hglrc(DisplayServer::WindowID p_window_id);
 
-	GLManagerNative_Windows();
+	GLManagerNative_Windows(bool p_use_gles2);
 	~GLManagerNative_Windows();
 };
 
-#endif // WINDOWS_ENABLED && GLES3_ENABLED
+#endif // WINDOWS_ENABLED && (GLES3_ENABLED || GLES2_ENABLED)
 
 #endif // GL_MANAGER_WINDOWS_NATIVE_H
