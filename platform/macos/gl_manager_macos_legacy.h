@@ -31,7 +31,7 @@
 #ifndef GL_MANAGER_MACOS_LEGACY_H
 #define GL_MANAGER_MACOS_LEGACY_H
 
-#if defined(MACOS_ENABLED) && defined(GLES3_ENABLED)
+#if defined(MACOS_ENABLED) && (defined(GLES3_ENABLED) || defined(GLES2_ENABLED) || defined(GLES1_ENABLED))
 
 #include "core/error/error_list.h"
 #include "core/os/os.h"
@@ -64,6 +64,7 @@ class GLManagerLegacy_MacOS {
 
 	bool framework_loaded = false;
 	bool use_vsync = false;
+	int gles_major, gles_minor;
 	CGLEnablePtr CGLEnable = nullptr;
 	CGLSetParameterPtr CGLSetParameter = nullptr;
 	CGLGetCurrentContextPtr CGLGetCurrentContext = nullptr;
@@ -87,12 +88,12 @@ public:
 
 	NSOpenGLContext *get_context(DisplayServer::WindowID p_window_id);
 
-	GLManagerLegacy_MacOS();
+	GLManagerLegacy_MacOS(int p_gles_major, int p_gles_minor);
 	~GLManagerLegacy_MacOS();
 };
 
 #pragma clang diagnostic push
 
-#endif // MACOS_ENABLED && GLES3_ENABLED
+#endif // MACOS_ENABLED && (GLES3_ENABLED || GLES2_ENABLED || GLES1_ENABLED)
 
 #endif // GL_MANAGER_MACOS_LEGACY_H

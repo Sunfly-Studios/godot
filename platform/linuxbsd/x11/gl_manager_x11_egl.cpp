@@ -30,7 +30,7 @@
 
 #include "gl_manager_x11_egl.h"
 
-#if defined(X11_ENABLED) && defined(GLES3_ENABLED)
+#if defined(X11_ENABLED) && (defined(GLES3_ENABLED) || defined(GLES2_ENABLED) || defined(GLES1_ENABLED))
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -54,10 +54,10 @@ EGLenum GLManagerEGL_X11::_get_platform_api_enum() const {
 Vector<EGLint> GLManagerEGL_X11::_get_platform_context_attribs() const {
 	Vector<EGLint> ret;
 	ret.push_back(EGL_CONTEXT_CLIENT_VERSION);
-	ret.push_back(3);
+	ret.push_back(gles_major);
 	ret.push_back(EGL_NONE);
 
 	return ret;
 }
 
-#endif // WINDOWS_ENABLED && GLES3_ENABLED
+#endif // WINDOWS_ENABLED && (GLES3_ENABLED || GLES2_ENABLED || GLES1_ENABLED)

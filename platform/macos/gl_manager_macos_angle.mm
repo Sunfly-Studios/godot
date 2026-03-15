@@ -30,7 +30,7 @@
 
 #include "gl_manager_macos_angle.h"
 
-#if defined(MACOS_ENABLED) && defined(GLES3_ENABLED)
+#if defined(MACOS_ENABLED) && (defined(GLES3_ENABLED) || defined(GLES2_ENABLED) || defined(GLES1_ENABLED))
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -61,10 +61,10 @@ EGLenum GLManagerANGLE_MacOS::_get_platform_api_enum() const {
 Vector<EGLint> GLManagerANGLE_MacOS::_get_platform_context_attribs() const {
 	Vector<EGLint> ret;
 	ret.push_back(EGL_CONTEXT_CLIENT_VERSION);
-	ret.push_back(3);
+	ret.push_back(gles_major);
 	ret.push_back(EGL_NONE);
 
 	return ret;
 }
 
-#endif // MACOS_ENABLED && GLES3_ENABLED
+#endif // MACOS_ENABLED && (GLES3_ENABLED) || GLES2_ENABLED)

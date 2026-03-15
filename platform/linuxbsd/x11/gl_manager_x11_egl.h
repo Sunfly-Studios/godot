@@ -31,7 +31,7 @@
 #ifndef GL_MANAGER_X11_EGL_H
 #define GL_MANAGER_X11_EGL_H
 
-#if defined(X11_ENABLED) && defined(GLES3_ENABLED)
+#if defined(X11_ENABLED) && (defined(GLES3_ENABLED) || defined(GLES2_ENABLED) || defined(GLES1_ENABLED))
 
 #include "core/error/error_list.h"
 #include "core/os/os.h"
@@ -49,13 +49,18 @@ private:
 	virtual Vector<EGLAttrib> _get_platform_display_attributes() const override;
 	virtual Vector<EGLint> _get_platform_context_attribs() const override;
 
+	int gles_major, gles_minor;
+
 public:
 	void window_resize(DisplayServer::WindowID p_window_id, int p_width, int p_height) {}
 
-	GLManagerEGL_X11() {}
+	GLManagerEGL_X11(int p_gles_major, int p_gles_minor) {
+		gles_major = p_gles_major;
+		gles_minor = p_gles_minor;
+	}
 	~GLManagerEGL_X11() {}
 };
 
-#endif // X11_ENABLED && GLES3_ENABLED
+#endif // X11_ENABLED && (GLES3_ENABLED || GLES2_ENABLED || GLES1_ENABLED)
 
 #endif // GL_MANAGER_X11_EGL_H

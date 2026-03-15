@@ -69,6 +69,12 @@
 #if defined(GLES3_ENABLED)
 #include "drivers/gles3/rasterizer_gles3.h"
 #endif
+#if defined(GLES2_ENABLED)
+#include "drivers/gles2/rasterizer_gles2.h"
+#endif
+#if defined(GLES1_ENABLED)
+#include "drivers/gles1/rasterizer_gles1.h"
+#endif
 
 #include <dlfcn.h>
 #include <stdio.h>
@@ -1257,29 +1263,60 @@ bool OS_LinuxBSD::_test_create_rendering_device(const String &p_display_driver) 
 bool OS_LinuxBSD::_test_create_rendering_device_and_gl(const String &p_display_driver) const {
 	// Tests OpenGL context and Rendering Device simultaneous creation. This function is expected to crash on some drivers.
 
-#ifdef GLES3_ENABLED
-#ifdef X11_ENABLED
+#if defined(GLES3_ENABLED) || defined(GLES2_ENABLED) || defined(GLES1_ENABLED) || defined(GLES1_ENABLED)
+	String rendering_method = OS::get_singleton()->get_current_rendering_method();
+	int gles_major = 1, gles_minor = 5; // `gl_classic` first
+
+	if (rendering_method == "gl_legacy") {
+		gles_major = 2;
+		gles_minor = 1;
+	} else if (rendering_method == "gl_compatibility") {
+		gles_major = 3;
+		gles_minor = 3;
+	}
+
+#if defined(X11_ENABLED)
 	if (p_display_driver == "x11" || p_display_driver.is_empty()) {
-#ifdef SOWRAP_ENABLED
+#if defined(SOWRAP_ENABLED)
 		if (initialize_xlib(0) != 0) {
 			return false;
 		}
-#endif
-		DetectPrimeX11::create_context();
+#endif // SOWRAP_ENABLED
+		DetectPrimeX11::create_context(gles_major, gles_minor);
 	}
-#endif
-#ifdef WAYLAND_ENABLED
+#endif // X11_ENABLED
+
+#if defined(WAYLAND_ENABLED)
 	if (p_display_driver == "wayland") {
-#ifdef SOWRAP_ENABLED
+#if defined(SOWRAP_ENABLED)
 		if (initialize_wayland_egl(0) != 0) {
 			return false;
 		}
-#endif
-		DetectPrimeEGL::create_context(EGL_PLATFORM_WAYLAND_KHR);
+#endif // SOWRAP_ENABLED
+		DetectPrimeEGL::create_context(EGL_PLATFORM_WAYLAND_KHR, gles_major, gles_minor);
 	}
-#endif
-	RasterizerGLES3::make_current(true);
-#endif
+#endif // WAYLAND_ENABLED
+
+#if defined(GLES3_ENABLED)
+	if (rendering_method == "gl_compatibility") {
+		RasterizerGLES3::make_current(true);
+	}
+#endif // GLES3_ENABLED
+
+#if defined(GLES2_ENABLED)
+	if (rendering_method == "gl_legacy") {
+		RasterizerGLES2::make_current(true);
+	}
+#endif // GLES2_ENABLED
+
+#if defined(GLES1_ENABLED)
+	if (rendering_method == "gl_classic") {
+		RasterizerGLES1::make_current(true);
+	}
+#endif // GLES1_ENABLED
+
+#endif // GLES3_ENABLED || GLES2_ENABLED || GLES1_ENABLED
+
 	return _test_create_rendering_device(p_display_driver);
 }
 

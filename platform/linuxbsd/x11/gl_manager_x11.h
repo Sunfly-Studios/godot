@@ -31,7 +31,7 @@
 #ifndef GL_MANAGER_X11_H
 #define GL_MANAGER_X11_H
 
-#if defined(X11_ENABLED) && defined(GLES3_ENABLED)
+#if defined(X11_ENABLED) && (defined(GLES3_ENABLED) || defined(GLES2_ENABLED) || defined(GLES1_ENABLED))
 
 #include "core/os/os.h"
 #include "core/templates/local_vector.h"
@@ -58,6 +58,8 @@ class GLManager_X11 {
 public:
 	enum ContextType {
 		GLES_3_0_COMPATIBLE,
+		GLES_2_1_COMPATIBLE,
+		GLES_1_5_COMPATIBLE,
 	};
 
 private:
@@ -133,6 +135,6 @@ public:
 	~GLManager_X11();
 };
 
-#endif // X11_ENABLED && GLES3_ENABLED
+#endif // X11_ENABLED && (GLES3_ENABLED || GLES2_ENABLED || GLES1_ENABLED)
 
 #endif // GL_MANAGER_X11_H

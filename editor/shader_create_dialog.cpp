@@ -490,6 +490,9 @@ String ShaderCreateDialog::_validate_path(const String &p_path) {
 }
 
 void ShaderCreateDialog::_update_dialog() {
+	if (OS::get_singleton()->get_current_rendering_method() == "gl_classic") {
+		validation_panel->set_message(MSG_ID_SHADER, TTR("Shaders are not available in the Classic rendering method."), EditorValidationPanel::MSG_ERROR);
+	}
 	if (!is_built_in && !is_path_valid) {
 		validation_panel->set_message(MSG_ID_SHADER, TTR("Invalid path."), EditorValidationPanel::MSG_ERROR);
 	}
@@ -556,7 +559,9 @@ ShaderCreateDialog::ShaderCreateDialog() {
 
 	validation_panel = memnew(EditorValidationPanel);
 	validation_panel->add_line(MSG_ID_SHADER, TTR("Shader path/name is valid."));
-	validation_panel->add_line(MSG_ID_PATH, TTR("Will create a new shader file."));
+	if (OS::get_singleton()->get_current_rendering_method() != "gl_classic") {
+		validation_panel->add_line(MSG_ID_PATH, TTR("Will create a new shader file."));
+	}
 	validation_panel->add_line(MSG_ID_BUILT_IN);
 	validation_panel->set_update_callback(callable_mp(this, &ShaderCreateDialog::_update_dialog));
 	validation_panel->set_accept_button(get_ok_button());
@@ -669,6 +674,10 @@ ShaderCreateDialog::ShaderCreateDialog() {
 
 	set_ok_button_text(TTR("Create"));
 	set_hide_on_ok(false);
+
+	if (OS::get_singleton()->get_current_rendering_method() == "gl_classic") {
+		get_ok_button()->set_disabled(true);
+	}
 
 	set_title(TTR("Create Shader"));
 }

@@ -965,6 +965,7 @@ private:
 	GlobalShaderUniformGetTypeFunc global_shader_uniform_get_type_func = nullptr;
 
 	bool error_set = false;
+	bool is_gles2_renderer = false;
 	String error_str;
 	int error_line = 0;
 

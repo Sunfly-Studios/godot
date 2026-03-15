@@ -224,7 +224,19 @@ Error EditorExportPlatformWindows::export_project(const Ref<EditorExportPreset> 
 	int export_angle = p_preset->get("application/export_angle");
 	bool include_angle_libs = false;
 	if (export_angle == 0) {
-		include_angle_libs = (String(GLOBAL_GET("rendering/gl_compatibility/driver.windows")) == "opengl3_angle") && (String(GLOBAL_GET("rendering/renderer/rendering_method")) == "gl_compatibility");
+		include_angle_libs = (
+			(
+				String(GLOBAL_GET("rendering/gl_compatibility/driver.windows")) == "opengl3_angle"
+			) && (
+				String(GLOBAL_GET("rendering/renderer/rendering_method")) == "gl_compatibility"
+			)
+		) || (
+			(
+				String(GLOBAL_GET("rendering/gl_compatibility/driver.windows")) == "opengl2_angle"
+			) && (
+				String(GLOBAL_GET("rendering/renderer/rendering_method")) == "gl_legacy"
+			)
+		);
 	} else if (export_angle == 1) {
 		include_angle_libs = true;
 	}
@@ -242,7 +254,19 @@ Error EditorExportPlatformWindows::export_project(const Ref<EditorExportPreset> 
 	bool agility_sdk_multiarch = p_preset->get("application/d3d12_agility_sdk_multiarch");
 	bool include_d3d12_extra_libs = false;
 	if (export_d3d12 == 0) {
-		include_d3d12_extra_libs = (String(GLOBAL_GET("rendering/rendering_device/driver.windows")) == "d3d12") && (String(GLOBAL_GET("rendering/renderer/rendering_method")) != "gl_compatibility");
+		include_d3d12_extra_libs = (
+			(
+				String(GLOBAL_GET("rendering/rendering_device/driver.windows")) == "d3d12"
+			) && (
+				String(GLOBAL_GET("rendering/renderer/rendering_method")) != "gl_compatibility"
+			)
+		) || (
+			(
+				String(GLOBAL_GET("rendering/rendering_device/driver.windows")) == "d3d12"
+			) && (
+				String(GLOBAL_GET("rendering/renderer/rendering_method")) != "gl_legacy"
+			)
+		);
 	} else if (export_d3d12 == 1) {
 		include_d3d12_extra_libs = true;
 	}

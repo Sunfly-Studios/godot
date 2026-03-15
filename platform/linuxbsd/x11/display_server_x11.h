@@ -50,7 +50,7 @@
 #include "tts_linux.h"
 #endif
 
-#if defined(GLES3_ENABLED)
+#if defined(GLES3_ENABLED) || defined(GLES2_ENABLED) || defined(GLES1_ENABLED)
 #include "x11/gl_manager_x11.h"
 #include "x11/gl_manager_x11_egl.h"
 #endif
@@ -137,7 +137,7 @@ class DisplayServerX11 : public DisplayServer {
 	Atom requested = None;
 	int xdnd_version = 5;
 
-#if defined(GLES3_ENABLED)
+#if defined(GLES3_ENABLED) || defined(GLES2_ENABLED) || defined(GLES1_ENABLED)
 	GLManager_X11 *gl_manager = nullptr;
 	GLManagerEGL_X11 *gl_manager_egl = nullptr;
 #endif

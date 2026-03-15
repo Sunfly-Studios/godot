@@ -175,8 +175,14 @@ def configure(env: "SConsEnvironment"):
     if env["vulkan"]:
         env.AppendUnique(CPPDEFINES=["VULKAN_ENABLED", "RD_ENABLED"])
 
-    if env["opengl3"]:
-        env.Append(CPPDEFINES=["GLES3_ENABLED", "GLES_SILENCE_DEPRECATION"])
+    if env["opengl3"] or env["opengl2"] or env["opengl1"]:
+        if env["opengl3"]:
+            env.Append(CPPDEFINES=["GLES3_ENABLED", "GLES_SILENCE_DEPRECATION"])
+        if env["opengl2"]:
+            env.Append(CPPDEFINES=["GLES2_ENABLED", "GLES_SILENCE_DEPRECATION"])
+        if env["opengl1"]:
+            env.Append(CPPDEFINES=["GLES1_ENABLED", "GLES_SILENCE_DEPRECATION"])
+            
         env.Append(CCFLAGS=["-Wno-module-import-in-extern-c"])
         env.Prepend(
             CPPPATH=[

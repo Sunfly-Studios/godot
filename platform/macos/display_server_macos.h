@@ -34,10 +34,10 @@
 #include "core/input/input.h"
 #include "servers/display_server.h"
 
-#if defined(GLES3_ENABLED)
+#if defined(GLES3_ENABLED) || defined(GLES2_ENABLED) || defined(GLES1_ENABLED)
 #include "gl_manager_macos_angle.h"
 #include "gl_manager_macos_legacy.h"
-#endif // GLES3_ENABLED
+#endif // GLES3_ENABLED || GLES2_ENABLED || GLES1_ENABLED
 
 #include "native_menu_macos.h"
 
@@ -139,7 +139,7 @@ public:
 	uint64_t time_since_popup = 0;
 
 private:
-#if defined(GLES3_ENABLED)
+#if defined(GLES3_ENABLED) || defined(GLES2_ENABLED) || defined(GLES1_ENABLED)
 	GLManagerLegacy_MacOS *gl_manager_legacy = nullptr;
 	GLManagerANGLE_MacOS *gl_manager_angle = nullptr;
 #endif

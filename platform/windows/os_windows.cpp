@@ -75,7 +75,7 @@ extern "C" {
 #include "servers/rendering/rendering_device.h"
 #endif
 
-#if defined(GLES3_ENABLED)
+#if defined(GLES3_ENABLED) || defined(GLES2_ENABLED) || defined(GLES1_ENABLED)
 #include "gl_manager_windows_native.h"
 #endif
 
@@ -87,6 +87,12 @@ extern "C" {
 #endif
 #if defined(GLES3_ENABLED)
 #include "drivers/gles3/rasterizer_gles3.h"
+#endif
+#if defined(GLES2_ENABLED)
+#include "drivers/gles2/rasterizer_gles2.h"
+#endif
+#if defined(GLES1_ENABLED)
+#include "drivers/gles1/rasterizer_gles1.h"
 #endif
 
 #ifdef DEBUG_ENABLED
@@ -2843,12 +2849,43 @@ bool OS_Windows::_test_create_rendering_device_and_gl(const String &p_display_dr
 	}
 
 	bool ok = true;
+	GLManagerNative_Windows *test_gl_manager_native = nullptr;
 #ifdef GLES3_ENABLED
-	GLManagerNative_Windows *test_gl_manager_native = memnew(GLManagerNative_Windows);
-	if (test_gl_manager_native->window_create(DisplayServer::MAIN_WINDOW_ID, hWnd, GetModuleHandle(nullptr), 800, 600) == OK) {
-		RasterizerGLES3::make_current(true);
-	} else {
-		ok = false;
+	{
+		test_gl_manager_native = memnew(GLManagerNative_Windows(3, 3));
+		if (test_gl_manager_native->window_create(DisplayServer::MAIN_WINDOW_ID, hWnd, GetModuleHandle(nullptr), 800, 600) == OK) {
+			RasterizerGLES3::make_current(true);
+		} else {
+			ok = false;
+		}
+	}
+#endif
+#ifdef GLES2_ENABLED
+	{
+		test_gl_manager_native = memnew(GLManagerNative_Windows(2, 1));
+		if (test_gl_manager_native->window_create(DisplayServer::MAIN_WINDOW_ID, hWnd, GetModuleHandle(nullptr), 800, 600) == OK) {
+			RasterizerGLES2::make_current(true);
+			if (!ok) {
+				// In case GLES3 failed.
+				ok = true;
+			}
+		} else {
+			ok = false;
+		}
+	}
+#endif
+#ifdef GLES1_ENABLED
+	{
+		test_gl_manager_native = memnew(GLManagerNative_Windows(1, 5));
+		if (test_gl_manager_native->window_create(DisplayServer::MAIN_WINDOW_ID, hWnd, GetModuleHandle(nullptr), 800, 600) == OK) {
+			RasterizerGLES1::make_current(true);
+			if (!ok) {
+				// In case GLES3 or GLES2 failed.
+				ok = true;
+			}
+		} else {
+			ok = false;
+		}
 	}
 #endif
 
@@ -2862,7 +2899,7 @@ bool OS_Windows::_test_create_rendering_device_and_gl(const String &p_display_dr
 		ok = _test_create_rendering_device(p_display_driver);
 	}
 
-#ifdef GLES3_ENABLED
+#if defined(GLES3_ENABLED) || defined(GLES2_ENABLED) || defined(GLES1_ENABLED)
 	if (test_gl_manager_native) {
 		memdelete(test_gl_manager_native);
 	}

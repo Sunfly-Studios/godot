@@ -52,22 +52,32 @@ public class RegularContextFactory implements GLSurfaceView.EGLContextFactory {
 	private static int EGL_CONTEXT_CLIENT_VERSION = 0x3098;
 
 	private final boolean mUseDebugOpengl;
+	private final int mGlMajor;
+	private final int mGlMinor;
 
 	public RegularContextFactory() {
-		this(false);
+		this(false, 3, 3);
 	}
 
-	public RegularContextFactory(boolean useDebugOpengl) {
+	public RegularContextFactory(boolean useDebugOpengl, int glMajor, int glMinor) {
 		this.mUseDebugOpengl = useDebugOpengl;
+		this.mGlMajor = glMajor;
+		this.mGlMinor = glMinor;
 	}
 
 	public EGLContext createContext(EGL10 egl, EGLDisplay display, EGLConfig eglConfig) {
-		Log.w(TAG, "creating OpenGL ES 3.0 context :");
+		Log.w(TAG, "creating OpenGL " + this.mGlMajor + "." + this.mGlMinor + " context :");
 
 		GLUtils.checkEglError(TAG, "Before eglCreateContext", egl);
 		EGLContext context;
-		int[] debug_attrib_list = { EGL_CONTEXT_CLIENT_VERSION, 3, _EGL_CONTEXT_FLAGS_KHR, _EGL_CONTEXT_OPENGL_DEBUG_BIT_KHR, EGL10.EGL_NONE };
-		int[] attrib_list = { EGL_CONTEXT_CLIENT_VERSION, 3, EGL10.EGL_NONE };
+		int[] debug_attrib_list = {
+			EGL_CONTEXT_CLIENT_VERSION,
+			this.mGlMajor,
+			_EGL_CONTEXT_FLAGS_KHR,
+			_EGL_CONTEXT_OPENGL_DEBUG_BIT_KHR,
+			EGL10.EGL_NONE
+		};
+		int[] attrib_list = { EGL_CONTEXT_CLIENT_VERSION, this.mGlMajor, EGL10.EGL_NONE };
 		if (mUseDebugOpengl) {
 			context = egl.eglCreateContext(display, eglConfig, EGL10.EGL_NO_CONTEXT, debug_attrib_list);
 			if (context == null || context == EGL10.EGL_NO_CONTEXT) {

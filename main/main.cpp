@@ -2183,207 +2183,242 @@ Error Main::setup(const char *execpath, int argc, char *argv[], bool p_second_ph
 		GLOBAL_DEF_RST("rendering/rendering_device/fallback_to_vulkan", true);
 		GLOBAL_DEF_RST("rendering/rendering_device/fallback_to_d3d12", true);
 		GLOBAL_DEF_RST("rendering/rendering_device/fallback_to_opengl3", true);
+		GLOBAL_DEF_RST("rendering/rendering_device/fallback_to_opengl2", true);
+		GLOBAL_DEF_RST("rendering/rendering_device/fallback_to_opengl1", true);
 		GLOBAL_DEF_RST("rendering/rendering_device/excluded_device_list", "");
 	}
 
 	{
-		// GL Compatibility driver overrides per platform.
-		GLOBAL_DEF_RST("rendering/gl_compatibility/driver", "opengl3");
-		GLOBAL_DEF_RST(PropertyInfo(Variant::STRING, "rendering/gl_compatibility/driver.windows", PROPERTY_HINT_ENUM, "opengl3,opengl3_angle"), "opengl3");
-		GLOBAL_DEF_RST(PropertyInfo(Variant::STRING, "rendering/gl_compatibility/driver.linuxbsd", PROPERTY_HINT_ENUM, "opengl3,opengl3_es"), "opengl3");
-		GLOBAL_DEF_RST(PropertyInfo(Variant::STRING, "rendering/gl_compatibility/driver.web", PROPERTY_HINT_ENUM, "opengl3"), "opengl3");
-		GLOBAL_DEF_RST(PropertyInfo(Variant::STRING, "rendering/gl_compatibility/driver.android", PROPERTY_HINT_ENUM, "opengl3"), "opengl3");
-		GLOBAL_DEF_RST(PropertyInfo(Variant::STRING, "rendering/gl_compatibility/driver.ios", PROPERTY_HINT_ENUM, "opengl3"), "opengl3");
-		GLOBAL_DEF_RST(PropertyInfo(Variant::STRING, "rendering/gl_compatibility/driver.macos", PROPERTY_HINT_ENUM, "opengl3,opengl3_angle"), "opengl3");
-
-		GLOBAL_DEF_RST("rendering/gl_compatibility/nvidia_disable_threaded_optimization", true);
-		GLOBAL_DEF_RST("rendering/gl_compatibility/fallback_to_angle", true);
-		GLOBAL_DEF_RST("rendering/gl_compatibility/fallback_to_native", true);
-		GLOBAL_DEF_RST("rendering/gl_compatibility/fallback_to_gles", true);
-
-		Array device_blocklist;
+        Array device_blocklist;
 
 #define BLOCK_DEVICE(m_vendor, m_name)      \
-	{                                       \
-		Dictionary device;                  \
-		device["vendor"] = m_vendor;        \
-		device["name"] = m_name;            \
-		device_blocklist.push_back(device); \
-	}
+    {                                       \
+        Dictionary device;                  \
+        device["vendor"] = m_vendor;        \
+        device["name"] = m_name;            \
+        device_blocklist.push_back(device); \
+    }
 
-		// AMD GPUs.
-		BLOCK_DEVICE("ATI", "Radeon 9"); // ATI Radeon 9000 Series
-		BLOCK_DEVICE("ATI", "Radeon X"); // ATI Radeon X500-X2000 Series
-		BLOCK_DEVICE("ATI", "Radeon HD 2"); // AMD/ATI (Mobility) Radeon HD 2xxx Series
-		BLOCK_DEVICE("ATI", "Radeon HD 3"); // AMD/ATI (Mobility) Radeon HD 3xxx Series
-		BLOCK_DEVICE("ATI", "Radeon HD 4"); // AMD/ATI (Mobility) Radeon HD 4xxx Series
-		BLOCK_DEVICE("ATI", "Radeon HD 5"); // AMD/ATI (Mobility) Radeon HD 5xxx Series
-		BLOCK_DEVICE("ATI", "Radeon HD 6"); // AMD/ATI (Mobility) Radeon HD 6xxx Series
-		BLOCK_DEVICE("ATI", "Radeon HD 7"); // AMD/ATI (Mobility) Radeon HD 7xxx Series
-		BLOCK_DEVICE("ATI", "Radeon HD 8"); // AMD/ATI (Mobility) Radeon HD 8xxx Series
-		BLOCK_DEVICE("ATI", "Radeon(TM) R2 Graphics"); // APUs
-		BLOCK_DEVICE("ATI", "Radeon(TM) R3 Graphics");
-		BLOCK_DEVICE("ATI", "Radeon(TM) R4 Graphics");
-		BLOCK_DEVICE("ATI", "Radeon(TM) R5 Graphics");
-		BLOCK_DEVICE("ATI", "Radeon(TM) R6 Graphics");
-		BLOCK_DEVICE("ATI", "Radeon(TM) R7 Graphics");
-		BLOCK_DEVICE("AMD", "Radeon(TM) R7 Graphics");
-		BLOCK_DEVICE("AMD", "Radeon(TM) R8 Graphics");
-		BLOCK_DEVICE("ATI", "Radeon R5 Graphics");
-		BLOCK_DEVICE("ATI", "Radeon R6 Graphics");
-		BLOCK_DEVICE("ATI", "Radeon R7 Graphics");
-		BLOCK_DEVICE("AMD", "Radeon R7 Graphics");
-		BLOCK_DEVICE("AMD", "Radeon R8 Graphics");
-		BLOCK_DEVICE("ATI", "Radeon R5 2"); // Rx 2xx Series
-		BLOCK_DEVICE("ATI", "Radeon R7 2");
-		BLOCK_DEVICE("ATI", "Radeon R9 2");
-		BLOCK_DEVICE("ATI", "Radeon R5 M2"); // Rx M2xx Series
-		BLOCK_DEVICE("ATI", "Radeon R7 M2");
-		BLOCK_DEVICE("ATI", "Radeon R9 M2");
-		BLOCK_DEVICE("ATI", "Radeon (TM) R9 Fury");
-		BLOCK_DEVICE("ATI", "Radeon (TM) R5 3"); // Rx 3xx Series
-		BLOCK_DEVICE("AMD", "Radeon (TM) R5 3");
-		BLOCK_DEVICE("ATI", "Radeon (TM) R7 3");
-		BLOCK_DEVICE("AMD", "Radeon (TM) R7 3");
-		BLOCK_DEVICE("ATI", "Radeon (TM) R9 3");
-		BLOCK_DEVICE("AMD", "Radeon (TM) R9 3");
-		BLOCK_DEVICE("ATI", "Radeon (TM) R5 M3"); // Rx M3xx Series
-		BLOCK_DEVICE("AMD", "Radeon (TM) R5 M3");
-		BLOCK_DEVICE("ATI", "Radeon (TM) R7 M3");
-		BLOCK_DEVICE("AMD", "Radeon (TM) R7 M3");
-		BLOCK_DEVICE("ATI", "Radeon (TM) R9 M3");
-		BLOCK_DEVICE("AMD", "Radeon (TM) R9 M3");
+        // AMD GPUs.
+        BLOCK_DEVICE("ATI", "Radeon 9"); // ATI Radeon 9000 Series
+        BLOCK_DEVICE("ATI", "Radeon X"); // ATI Radeon X500-X2000 Series
+        BLOCK_DEVICE("ATI", "Radeon HD 2"); // AMD/ATI (Mobility) Radeon HD 2xxx Series
+        BLOCK_DEVICE("ATI", "Radeon HD 3"); // AMD/ATI (Mobility) Radeon HD 3xxx Series
+        BLOCK_DEVICE("ATI", "Radeon HD 4"); // AMD/ATI (Mobility) Radeon HD 4xxx Series
+        BLOCK_DEVICE("ATI", "Radeon HD 5"); // AMD/ATI (Mobility) Radeon HD 5xxx Series
+        BLOCK_DEVICE("ATI", "Radeon HD 6"); // AMD/ATI (Mobility) Radeon HD 6xxx Series
+        BLOCK_DEVICE("ATI", "Radeon HD 7"); // AMD/ATI (Mobility) Radeon HD 7xxx Series
+        BLOCK_DEVICE("ATI", "Radeon HD 8"); // AMD/ATI (Mobility) Radeon HD 8xxx Series
+        BLOCK_DEVICE("ATI", "Radeon(TM) R2 Graphics"); // APUs
+        BLOCK_DEVICE("ATI", "Radeon(TM) R3 Graphics");
+        BLOCK_DEVICE("ATI", "Radeon(TM) R4 Graphics");
+        BLOCK_DEVICE("ATI", "Radeon(TM) R5 Graphics");
+        BLOCK_DEVICE("ATI", "Radeon(TM) R6 Graphics");
+        BLOCK_DEVICE("ATI", "Radeon(TM) R7 Graphics");
+        BLOCK_DEVICE("AMD", "Radeon(TM) R7 Graphics");
+        BLOCK_DEVICE("AMD", "Radeon(TM) R8 Graphics");
+        BLOCK_DEVICE("ATI", "Radeon R5 Graphics");
+        BLOCK_DEVICE("ATI", "Radeon R6 Graphics");
+        BLOCK_DEVICE("ATI", "Radeon R7 Graphics");
+        BLOCK_DEVICE("AMD", "Radeon R7 Graphics");
+        BLOCK_DEVICE("AMD", "Radeon R8 Graphics");
+        BLOCK_DEVICE("ATI", "Radeon R5 2"); // Rx 2xx Series
+        BLOCK_DEVICE("ATI", "Radeon R7 2");
+        BLOCK_DEVICE("ATI", "Radeon R9 2");
+        BLOCK_DEVICE("ATI", "Radeon R5 M2"); // Rx M2xx Series
+        BLOCK_DEVICE("ATI", "Radeon R7 M2");
+        BLOCK_DEVICE("ATI", "Radeon R9 M2");
+        BLOCK_DEVICE("ATI", "Radeon (TM) R9 Fury");
+        BLOCK_DEVICE("ATI", "Radeon (TM) R5 3"); // Rx 3xx Series
+        BLOCK_DEVICE("AMD", "Radeon (TM) R5 3");
+        BLOCK_DEVICE("ATI", "Radeon (TM) R7 3");
+        BLOCK_DEVICE("AMD", "Radeon (TM) R7 3");
+        BLOCK_DEVICE("ATI", "Radeon (TM) R9 3");
+        BLOCK_DEVICE("AMD", "Radeon (TM) R9 3");
+        BLOCK_DEVICE("ATI", "Radeon (TM) R5 M3"); // Rx M3xx Series
+        BLOCK_DEVICE("AMD", "Radeon (TM) R5 M3");
+        BLOCK_DEVICE("ATI", "Radeon (TM) R7 M3");
+        BLOCK_DEVICE("AMD", "Radeon (TM) R7 M3");
+        BLOCK_DEVICE("ATI", "Radeon (TM) R9 M3");
+        BLOCK_DEVICE("AMD", "Radeon (TM) R9 M3");
 
-		// Intel GPUs.
-		BLOCK_DEVICE("0x8086", "0x0042"); // HD Graphics, Gen5, Clarkdale
-		BLOCK_DEVICE("0x8086", "0x0046"); // HD Graphics, Gen5, Arrandale
-		BLOCK_DEVICE("0x8086", "0x010A"); // HD Graphics, Gen6, Sandy Bridge
-		BLOCK_DEVICE("Intel", "Intel HD Graphics 2000");
-		BLOCK_DEVICE("Intel", "Intel(R) HD Graphics 2000");
-		BLOCK_DEVICE("0x8086", "0x0102"); // HD Graphics 2000, Gen6, Sandy Bridge
-		BLOCK_DEVICE("0x8086", "0x0116"); // HD Graphics 3000, Gen6, Sandy Bridge
-		BLOCK_DEVICE("Intel", "Intel HD Graphics 3000");
-		BLOCK_DEVICE("Intel", "Intel(R) HD Graphics 3000");
-		BLOCK_DEVICE("0x8086", "0x0126"); // HD Graphics 3000, Gen6, Sandy Bridge
-		BLOCK_DEVICE("Intel", "Intel HD Graphics P3000");
-		BLOCK_DEVICE("Intel", "Intel(R) HD Graphics P3000");
-		BLOCK_DEVICE("0x8086", "0x0112"); // HD Graphics P3000, Gen6, Sandy Bridge
-		BLOCK_DEVICE("0x8086", "0x0122");
-		BLOCK_DEVICE("0x8086", "0x015A"); // HD Graphics, Gen7, Ivy Bridge
-		BLOCK_DEVICE("Intel", "Intel HD Graphics 2500");
-		BLOCK_DEVICE("Intel", "Intel(R) HD Graphics 2500");
-		BLOCK_DEVICE("0x8086", "0x0152"); // HD Graphics 2500, Gen7, Ivy Bridge
-		BLOCK_DEVICE("Intel", "Intel HD Graphics 4000");
-		BLOCK_DEVICE("Intel", "Intel(R) HD Graphics 4000");
-		BLOCK_DEVICE("0x8086", "0x0162"); // HD Graphics 4000, Gen7, Ivy Bridge
-		BLOCK_DEVICE("0x8086", "0x0166");
-		BLOCK_DEVICE("Intel", "Intel HD Graphics P4000");
-		BLOCK_DEVICE("Intel", "Intel(R) HD Graphics P4000");
-		BLOCK_DEVICE("0x8086", "0x016A"); // HD Graphics P4000, Gen7, Ivy Bridge
-		BLOCK_DEVICE("Intel", "Intel(R) Vallyview Graphics");
-		BLOCK_DEVICE("0x8086", "0x0F30"); // Intel(R) Vallyview Graphics, Gen7, Vallyview
-		BLOCK_DEVICE("0x8086", "0x0F31");
-		BLOCK_DEVICE("Intel", "Intel(R) HD Graphics 4200");
-		BLOCK_DEVICE("0x8086", "0x0A1E"); // Intel(R) HD Graphics 4200, Gen7.5, Haswell
-		BLOCK_DEVICE("Intel", "Intel(R) HD Graphics 4400");
-		BLOCK_DEVICE("0x8086", "0x0A16"); // Intel(R) HD Graphics 4400, Gen7.5, Haswell
-		BLOCK_DEVICE("Intel", "Intel(R) HD Graphics 4600");
-		BLOCK_DEVICE("0x8086", "0x0412"); // Intel(R) HD Graphics 4600, Gen7.5, Haswell
-		BLOCK_DEVICE("0x8086", "0x0416");
-		BLOCK_DEVICE("0x8086", "0x0426");
-		BLOCK_DEVICE("0x8086", "0x0D12");
-		BLOCK_DEVICE("0x8086", "0x0D16");
-		BLOCK_DEVICE("Intel", "Intel(R) HD Graphics P4600/P4700");
-		BLOCK_DEVICE("0x8086", "0x041A"); // Intel(R) HD Graphics P4600/P4700, Gen7.5, Haswell
-		BLOCK_DEVICE("Intel", "Intel(R) HD Graphics 5000");
-		BLOCK_DEVICE("0x8086", "0x0422"); // Intel(R) HD Graphics 5000, Gen7.5, Haswell
-		BLOCK_DEVICE("0x8086", "0x042A");
-		BLOCK_DEVICE("0x8086", "0x0A26");
-		BLOCK_DEVICE("Intel", "Intel(R) Iris(TM) Graphics 5100");
-		BLOCK_DEVICE("0x8086", "0x0A22"); // Intel(R) Iris(TM) Graphics 5100, Gen7.5, Haswell
-		BLOCK_DEVICE("0x8086", "0x0A2A");
-		BLOCK_DEVICE("0x8086", "0x0A2B");
-		BLOCK_DEVICE("0x8086", "0x0A2E");
-		BLOCK_DEVICE("Intel", "Intel(R) Iris(TM) Pro Graphics 5200");
-		BLOCK_DEVICE("0x8086", "0x0D22"); // Intel(R) Iris(TM) Pro Graphics 5200, Gen7.5, Haswell
-		BLOCK_DEVICE("0x8086", "0x0D26");
-		BLOCK_DEVICE("0x8086", "0x0D2A");
-		BLOCK_DEVICE("0x8086", "0x0D2B");
-		BLOCK_DEVICE("0x8086", "0x0D2E");
-		BLOCK_DEVICE("Intel", "Intel(R) HD Graphics 400");
-		BLOCK_DEVICE("Intel", "Intel(R) HD Graphics 405");
-		BLOCK_DEVICE("0x8086", "0x22B0"); // Intel(R) HD Graphics, Gen8, Cherryview Braswell
-		BLOCK_DEVICE("0x8086", "0x22B1");
-		BLOCK_DEVICE("0x8086", "0x22B2");
-		BLOCK_DEVICE("0x8086", "0x22B3");
-		BLOCK_DEVICE("Intel", "Intel(R) HD Graphics 5300");
-		BLOCK_DEVICE("0x8086", "0x161E"); // Intel(R) HD Graphics 5300, Gen8, Broadwell
-		BLOCK_DEVICE("Intel", "Intel(R) HD Graphics 5500");
-		BLOCK_DEVICE("0x8086", "0x1616"); // Intel(R) HD Graphics 5500, Gen8, Broadwell
-		BLOCK_DEVICE("Intel", "Intel(R) HD Graphics 5600");
-		BLOCK_DEVICE("0x8086", "0x1612"); // Intel(R) HD Graphics 5600, Gen8, Broadwell
-		BLOCK_DEVICE("Intel", "Intel(R) HD Graphics 6000");
-		BLOCK_DEVICE("0x8086", "0x1626"); // Intel(R) HD Graphics 6000, Gen8, Broadwell
-		BLOCK_DEVICE("Intel", "Intel(R) Iris(TM) Graphics 6100");
-		BLOCK_DEVICE("0x8086", "0x162B"); // Intel(R) Iris(TM) Graphics 6100, Gen8, Broadwell
-		BLOCK_DEVICE("Intel", "Intel(R) Iris(TM) Pro Graphics 6200");
-		BLOCK_DEVICE("0x8086", "0x1622"); // Intel(R) Iris(TM) Pro Graphics 6200, Gen8, Broadwell
-		BLOCK_DEVICE("Intel", "Intel(R) Iris(TM) Pro Graphics P6300");
-		BLOCK_DEVICE("0x8086", "0x162A"); // Intel(R) Iris(TM) Pro Graphics P6300, Gen8, Broadwell
-		BLOCK_DEVICE("Intel", "Intel(R) HD Graphics 500");
-		BLOCK_DEVICE("Intel", "Intel(R) HD Graphics 505");
-		BLOCK_DEVICE("Intel", "Intel(R) HD Graphics 510");
-		BLOCK_DEVICE("0x8086", "0x1902"); // Intel(R) HD Graphics 510, Gen9, Skylake
-		BLOCK_DEVICE("0x8086", "0x1906");
-		BLOCK_DEVICE("Intel", "Intel(R) HD Graphics 520");
-		BLOCK_DEVICE("0x8086", "0x1916"); // Intel(R) HD Graphics 520, Gen9, Skylake
-		BLOCK_DEVICE("Intel", "Intel(R) HD Graphics 530");
-		BLOCK_DEVICE("0x8086", "0x1912"); // Intel(R) HD Graphics 530, Gen9, Skylake
-		BLOCK_DEVICE("0x8086", "0x191B");
-		BLOCK_DEVICE("Intel", "Intel(R) HD Graphics P530");
-		BLOCK_DEVICE("0x8086", "0x191D"); // Intel(R) HD Graphics P530, Gen9, Skylake
-		BLOCK_DEVICE("Intel", "Intel(R) HD Graphics 515");
-		BLOCK_DEVICE("0x8086", "0x191E"); // Intel(R) HD Graphics 515, Gen9, Skylake
-		BLOCK_DEVICE("Intel", "Intel(R) Iris Graphics 540");
-		BLOCK_DEVICE("0x8086", "0x1926"); // Intel(R) Iris Graphics 540, Gen9, Skylake
-		BLOCK_DEVICE("0x8086", "0x1927");
-		BLOCK_DEVICE("Intel", "Intel(R) Iris Pro Graphics 580");
-		BLOCK_DEVICE("0x8086", "0x193B"); // Intel(R) Iris Pro Graphics 580, Gen9, Skylake
-		BLOCK_DEVICE("Intel", "Intel(R) Iris Pro Graphics P580");
-		BLOCK_DEVICE("0x8086", "0x193D"); // Intel(R) Iris Pro Graphics P580, Gen9, Skylake
-		BLOCK_DEVICE("Intel", "Intel(R) HD Graphics 610");
-		BLOCK_DEVICE("0x8086", "0x5902"); // Intel(R) HD Graphics 610, Gen9.5, Kaby Lake
-		BLOCK_DEVICE("0x8086", "0x5906");
-		BLOCK_DEVICE("0x8086", "0x5908");
-		BLOCK_DEVICE("0x8086", "0x590A");
-		BLOCK_DEVICE("0x8086", "0x590B");
-		BLOCK_DEVICE("0x8086", "0x590E");
-		BLOCK_DEVICE("Intel", "Intel(R) HD Graphics 615");
-		BLOCK_DEVICE("0x8086", "0x5913"); // Intel(R) HD Graphics 615, Gen9.5, Kaby Lake
-		BLOCK_DEVICE("0x8086", "0x5915");
-		BLOCK_DEVICE("0x8086", "0x591E");
-		BLOCK_DEVICE("Intel", "Intel(R) HD Graphics 620");
-		BLOCK_DEVICE("0x8086", "0x5916"); // Intel(R) HD Graphics 620, Gen9.5, Kaby Lake
-		BLOCK_DEVICE("0x8086", "0x5917");
-		BLOCK_DEVICE("0x8086", "0x5921");
-		BLOCK_DEVICE("Intel", "Intel(R) HD Graphics 630");
-		BLOCK_DEVICE("0x8086", "0x5912"); // Intel(R) HD Graphics 630, Gen9.5, Kaby Lake
-		BLOCK_DEVICE("0x8086", "0x591B");
-		BLOCK_DEVICE("Intel", "Intel(R) HD Graphics 635");
-		BLOCK_DEVICE("0x8086", "0x5923"); // Intel(R) HD Graphics 635, Gen9.5, Kaby Lake
-		BLOCK_DEVICE("Intel", "Intel(R) Iris Plus Graphics 640");
-		BLOCK_DEVICE("0x8086", "0x5926"); // Intel(R) Iris Plus Graphics 640, Gen9.5, Kaby Lake
-		BLOCK_DEVICE("Intel", "Intel(R) Iris Plus Graphics 650");
-		BLOCK_DEVICE("0x8086", "0x5927"); // Iris Plus Graphics 650, Gen9.5, Kaby Lake
-		BLOCK_DEVICE("0x8086", "0x593B");
-		BLOCK_DEVICE("Intel", "Intel(R) HD Graphics P630");
-		BLOCK_DEVICE("0x8086", "0x591A"); // Intel(R) HD Graphics P630, Gen9.5, Kaby Lake
-		BLOCK_DEVICE("0x8086", "0x591D");
+        // Intel GPUs.
+        BLOCK_DEVICE("0x8086", "0x0042"); // HD Graphics, Gen5, Clarkdale
+        BLOCK_DEVICE("0x8086", "0x0046"); // HD Graphics, Gen5, Arrandale
+        BLOCK_DEVICE("0x8086", "0x010A"); // HD Graphics, Gen6, Sandy Bridge
+        BLOCK_DEVICE("Intel", "Intel HD Graphics 2000");
+        BLOCK_DEVICE("Intel", "Intel(R) HD Graphics 2000");
+        BLOCK_DEVICE("0x8086", "0x0102"); // HD Graphics 2000, Gen6, Sandy Bridge
+        BLOCK_DEVICE("0x8086", "0x0116"); // HD Graphics 3000, Gen6, Sandy Bridge
+        BLOCK_DEVICE("Intel", "Intel HD Graphics 3000");
+        BLOCK_DEVICE("Intel", "Intel(R) HD Graphics 3000");
+        BLOCK_DEVICE("0x8086", "0x0126"); // HD Graphics 3000, Gen6, Sandy Bridge
+        BLOCK_DEVICE("Intel", "Intel HD Graphics P3000");
+        BLOCK_DEVICE("Intel", "Intel(R) HD Graphics P3000");
+        BLOCK_DEVICE("0x8086", "0x0112"); // HD Graphics P3000, Gen6, Sandy Bridge
+        BLOCK_DEVICE("0x8086", "0x0122");
+        BLOCK_DEVICE("0x8086", "0x015A"); // HD Graphics, Gen7, Ivy Bridge
+        BLOCK_DEVICE("Intel", "Intel HD Graphics 2500");
+        BLOCK_DEVICE("Intel", "Intel(R) HD Graphics 2500");
+        BLOCK_DEVICE("0x8086", "0x0152"); // HD Graphics 2500, Gen7, Ivy Bridge
+        BLOCK_DEVICE("Intel", "Intel HD Graphics 4000");
+        BLOCK_DEVICE("Intel", "Intel(R) HD Graphics 4000");
+        BLOCK_DEVICE("0x8086", "0x0162"); // HD Graphics 4000, Gen7, Ivy Bridge
+        BLOCK_DEVICE("0x8086", "0x0166");
+        BLOCK_DEVICE("Intel", "Intel HD Graphics P4000");
+        BLOCK_DEVICE("Intel", "Intel(R) HD Graphics P4000");
+        BLOCK_DEVICE("0x8086", "0x016A"); // HD Graphics P4000, Gen7, Ivy Bridge
+        BLOCK_DEVICE("Intel", "Intel(R) Vallyview Graphics");
+        BLOCK_DEVICE("0x8086", "0x0F30"); // Intel(R) Vallyview Graphics, Gen7, Vallyview
+        BLOCK_DEVICE("0x8086", "0x0F31");
+        BLOCK_DEVICE("Intel", "Intel(R) HD Graphics 4200");
+        BLOCK_DEVICE("0x8086", "0x0A1E"); // Intel(R) HD Graphics 4200, Gen7.5, Haswell
+        BLOCK_DEVICE("Intel", "Intel(R) HD Graphics 4400");
+        BLOCK_DEVICE("0x8086", "0x0A16"); // Intel(R) HD Graphics 4400, Gen7.5, Haswell
+        BLOCK_DEVICE("Intel", "Intel(R) HD Graphics 4600");
+        BLOCK_DEVICE("0x8086", "0x0412"); // Intel(R) HD Graphics 4600, Gen7.5, Haswell
+        BLOCK_DEVICE("0x8086", "0x0416");
+        BLOCK_DEVICE("0x8086", "0x0426");
+        BLOCK_DEVICE("0x8086", "0x0D12");
+        BLOCK_DEVICE("0x8086", "0x0D16");
+        BLOCK_DEVICE("Intel", "Intel(R) HD Graphics P4600/P4700");
+        BLOCK_DEVICE("0x8086", "0x041A"); // Intel(R) HD Graphics P4600/P4700, Gen7.5, Haswell
+        BLOCK_DEVICE("Intel", "Intel(R) HD Graphics 5000");
+        BLOCK_DEVICE("0x8086", "0x0422"); // Intel(R) HD Graphics 5000, Gen7.5, Haswell
+        BLOCK_DEVICE("0x8086", "0x042A");
+        BLOCK_DEVICE("0x8086", "0x0A26");
+        BLOCK_DEVICE("Intel", "Intel(R) Iris(TM) Graphics 5100");
+        BLOCK_DEVICE("0x8086", "0x0A22"); // Intel(R) Iris(TM) Graphics 5100, Gen7.5, Haswell
+        BLOCK_DEVICE("0x8086", "0x0A2A");
+        BLOCK_DEVICE("0x8086", "0x0A2B");
+        BLOCK_DEVICE("0x8086", "0x0A2E");
+        BLOCK_DEVICE("Intel", "Intel(R) Iris(TM) Pro Graphics 5200");
+        BLOCK_DEVICE("0x8086", "0x0D22"); // Intel(R) Iris(TM) Pro Graphics 5200, Gen7.5, Haswell
+        BLOCK_DEVICE("0x8086", "0x0D26");
+        BLOCK_DEVICE("0x8086", "0x0D2A");
+        BLOCK_DEVICE("0x8086", "0x0D2B");
+        BLOCK_DEVICE("0x8086", "0x0D2E");
+        BLOCK_DEVICE("Intel", "Intel(R) HD Graphics 400");
+        BLOCK_DEVICE("Intel", "Intel(R) HD Graphics 405");
+        BLOCK_DEVICE("0x8086", "0x22B0"); // Intel(R) HD Graphics, Gen8, Cherryview Braswell
+        BLOCK_DEVICE("0x8086", "0x22B1");
+        BLOCK_DEVICE("0x8086", "0x22B2");
+        BLOCK_DEVICE("0x8086", "0x22B3");
+        BLOCK_DEVICE("Intel", "Intel(R) HD Graphics 5300");
+        BLOCK_DEVICE("0x8086", "0x161E"); // Intel(R) HD Graphics 5300, Gen8, Broadwell
+        BLOCK_DEVICE("Intel", "Intel(R) HD Graphics 5500");
+        BLOCK_DEVICE("0x8086", "0x1616"); // Intel(R) HD Graphics 5500, Gen8, Broadwell
+        BLOCK_DEVICE("Intel", "Intel(R) HD Graphics 5600");
+        BLOCK_DEVICE("0x8086", "0x1612"); // Intel(R) HD Graphics 5600, Gen8, Broadwell
+        BLOCK_DEVICE("Intel", "Intel(R) HD Graphics 6000");
+        BLOCK_DEVICE("0x8086", "0x1626"); // Intel(R) HD Graphics 6000, Gen8, Broadwell
+        BLOCK_DEVICE("Intel", "Intel(R) Iris(TM) Graphics 6100");
+        BLOCK_DEVICE("0x8086", "0x162B"); // Intel(R) Iris(TM) Graphics 6100, Gen8, Broadwell
+        BLOCK_DEVICE("Intel", "Intel(R) Iris(TM) Pro Graphics 6200");
+        BLOCK_DEVICE("0x8086", "0x1622"); // Intel(R) Iris(TM) Pro Graphics 6200, Gen8, Broadwell
+        BLOCK_DEVICE("Intel", "Intel(R) Iris(TM) Pro Graphics P6300");
+        BLOCK_DEVICE("0x8086", "0x162A"); // Intel(R) Iris(TM) Pro Graphics P6300, Gen8, Broadwell
+        BLOCK_DEVICE("Intel", "Intel(R) HD Graphics 500");
+        BLOCK_DEVICE("Intel", "Intel(R) HD Graphics 505");
+        BLOCK_DEVICE("Intel", "Intel(R) HD Graphics 510");
+        BLOCK_DEVICE("0x8086", "0x1902"); // Intel(R) HD Graphics 510, Gen9, Skylake
+        BLOCK_DEVICE("0x8086", "0x1906");
+        BLOCK_DEVICE("Intel", "Intel(R) HD Graphics 520");
+        BLOCK_DEVICE("0x8086", "0x1916"); // Intel(R) HD Graphics 520, Gen9, Skylake
+        BLOCK_DEVICE("Intel", "Intel(R) HD Graphics 530");
+        BLOCK_DEVICE("0x8086", "0x1912"); // Intel(R) HD Graphics 530, Gen9, Skylake
+        BLOCK_DEVICE("0x8086", "0x191B");
+        BLOCK_DEVICE("Intel", "Intel(R) HD Graphics P530");
+        BLOCK_DEVICE("0x8086", "0x191D"); // Intel(R) HD Graphics P530, Gen9, Skylake
+        BLOCK_DEVICE("Intel", "Intel(R) HD Graphics 515");
+        BLOCK_DEVICE("0x8086", "0x191E"); // Intel(R) HD Graphics 515, Gen9, Skylake
+        BLOCK_DEVICE("Intel", "Intel(R) Iris Graphics 540");
+        BLOCK_DEVICE("0x8086", "0x1926"); // Intel(R) Iris Graphics 540, Gen9, Skylake
+        BLOCK_DEVICE("0x8086", "0x1927");
+        BLOCK_DEVICE("Intel", "Intel(R) Iris Pro Graphics 580");
+        BLOCK_DEVICE("0x8086", "0x193B"); // Intel(R) Iris Pro Graphics 580, Gen9, Skylake
+        BLOCK_DEVICE("Intel", "Intel(R) Iris Pro Graphics P580");
+        BLOCK_DEVICE("0x8086", "0x193D"); // Intel(R) Iris Pro Graphics P580, Gen9, Skylake
+        BLOCK_DEVICE("Intel", "Intel(R) HD Graphics 610");
+        BLOCK_DEVICE("0x8086", "0x5902"); // Intel(R) HD Graphics 610, Gen9.5, Kaby Lake
+        BLOCK_DEVICE("0x8086", "0x5906");
+        BLOCK_DEVICE("0x8086", "0x5908");
+        BLOCK_DEVICE("0x8086", "0x590A");
+        BLOCK_DEVICE("0x8086", "0x590B");
+        BLOCK_DEVICE("0x8086", "0x590E");
+        BLOCK_DEVICE("Intel", "Intel(R) HD Graphics 615");
+        BLOCK_DEVICE("0x8086", "0x5913"); // Intel(R) HD Graphics 615, Gen9.5, Kaby Lake
+        BLOCK_DEVICE("0x8086", "0x5915");
+        BLOCK_DEVICE("0x8086", "0x591E");
+        BLOCK_DEVICE("Intel", "Intel(R) HD Graphics 620");
+        BLOCK_DEVICE("0x8086", "0x5916"); // Intel(R) HD Graphics 620, Gen9.5, Kaby Lake
+        BLOCK_DEVICE("0x8086", "0x5917");
+        BLOCK_DEVICE("0x8086", "0x5921");
+        BLOCK_DEVICE("Intel", "Intel(R) HD Graphics 630");
+        BLOCK_DEVICE("0x8086", "0x5912"); // Intel(R) HD Graphics 630, Gen9.5, Kaby Lake
+        BLOCK_DEVICE("0x8086", "0x591B");
+        BLOCK_DEVICE("Intel", "Intel(R) HD Graphics 635");
+        BLOCK_DEVICE("0x8086", "0x5923"); // Intel(R) HD Graphics 635, Gen9.5, Kaby Lake
+        BLOCK_DEVICE("Intel", "Intel(R) Iris Plus Graphics 640");
+        BLOCK_DEVICE("0x8086", "0x5926"); // Intel(R) Iris Plus Graphics 640, Gen9.5, Kaby Lake
+        BLOCK_DEVICE("Intel", "Intel(R) Iris Plus Graphics 650");
+        BLOCK_DEVICE("0x8086", "0x5927"); // Iris Plus Graphics 650, Gen9.5, Kaby Lake
+        BLOCK_DEVICE("0x8086", "0x593B");
+        BLOCK_DEVICE("Intel", "Intel(R) HD Graphics P630");
+        BLOCK_DEVICE("0x8086", "0x591A"); // Intel(R) HD Graphics P630, Gen9.5, Kaby Lake
+        BLOCK_DEVICE("0x8086", "0x591D");
 
 #undef BLOCK_DEVICE
 
-		GLOBAL_DEF_RST_NOVAL(PropertyInfo(Variant::ARRAY, "rendering/gl_compatibility/force_angle_on_devices", PROPERTY_HINT_ARRAY_TYPE, vformat("%s/%s:%s", Variant::DICTIONARY, PROPERTY_HINT_NONE, String())), device_blocklist);
-	}
+        // GL Compatibility driver overrides
+        GLOBAL_DEF_RST("rendering/gl_compatibility/driver", "opengl3");
+        GLOBAL_DEF_RST(PropertyInfo(Variant::STRING, "rendering/gl_compatibility/driver.windows", PROPERTY_HINT_ENUM, "opengl3,opengl3_angle"), "opengl3");
+        GLOBAL_DEF_RST(PropertyInfo(Variant::STRING, "rendering/gl_compatibility/driver.linuxbsd", PROPERTY_HINT_ENUM, "opengl3,opengl3_es"), "opengl3");
+        GLOBAL_DEF_RST(PropertyInfo(Variant::STRING, "rendering/gl_compatibility/driver.web", PROPERTY_HINT_ENUM, "opengl3"), "opengl3");
+        GLOBAL_DEF_RST(PropertyInfo(Variant::STRING, "rendering/gl_compatibility/driver.android", PROPERTY_HINT_ENUM, "opengl3"), "opengl3");
+        GLOBAL_DEF_RST(PropertyInfo(Variant::STRING, "rendering/gl_compatibility/driver.ios", PROPERTY_HINT_ENUM, "opengl3"), "opengl3");
+        GLOBAL_DEF_RST(PropertyInfo(Variant::STRING, "rendering/gl_compatibility/driver.macos", PROPERTY_HINT_ENUM, "opengl3,opengl3_angle"), "opengl3");
+
+        GLOBAL_DEF_RST("rendering/gl_compatibility/nvidia_disable_threaded_optimization", true);
+        GLOBAL_DEF_RST("rendering/gl_compatibility/fallback_to_angle", true);
+        GLOBAL_DEF_RST("rendering/gl_compatibility/fallback_to_native", true);
+        GLOBAL_DEF_RST("rendering/gl_compatibility/fallback_to_gles", true);
+
+        // Map the blocklist to compatibility
+        GLOBAL_DEF_RST_NOVAL(PropertyInfo(Variant::ARRAY, "rendering/gl_compatibility/force_angle_on_devices", PROPERTY_HINT_ARRAY_TYPE, vformat("%s/%s:%s", Variant::DICTIONARY, PROPERTY_HINT_NONE, String())), device_blocklist);
+
+		// GL Legacy driver overrides
+        GLOBAL_DEF_RST("rendering/gl_legacy/driver", "opengl2");
+        GLOBAL_DEF_RST(PropertyInfo(Variant::STRING, "rendering/gl_legacy/driver.windows", PROPERTY_HINT_ENUM, "opengl2,opengl2_angle"), "opengl2");
+        GLOBAL_DEF_RST(PropertyInfo(Variant::STRING, "rendering/gl_legacy/driver.linuxbsd", PROPERTY_HINT_ENUM, "opengl2,opengl2_es"), "opengl2");
+        GLOBAL_DEF_RST(PropertyInfo(Variant::STRING, "rendering/gl_legacy/driver.web", PROPERTY_HINT_ENUM, "opengl2"), "opengl2");
+        GLOBAL_DEF_RST(PropertyInfo(Variant::STRING, "rendering/gl_legacy/driver.android", PROPERTY_HINT_ENUM, "opengl2"), "opengl2");
+        GLOBAL_DEF_RST(PropertyInfo(Variant::STRING, "rendering/gl_legacy/driver.ios", PROPERTY_HINT_ENUM, "opengl2"), "opengl2");
+        GLOBAL_DEF_RST(PropertyInfo(Variant::STRING, "rendering/gl_legacy/driver.macos", PROPERTY_HINT_ENUM, "opengl2,opengl2_angle"), "opengl2");
+
+        GLOBAL_DEF_RST("rendering/gl_legacy/nvidia_disable_threaded_optimization", true);
+        GLOBAL_DEF_RST("rendering/gl_legacy/fallback_to_angle", true);
+        GLOBAL_DEF_RST("rendering/gl_legacy/fallback_to_native", true);
+        GLOBAL_DEF_RST("rendering/gl_legacy/fallback_to_gles", true);
+
+        GLOBAL_DEF_RST_NOVAL(PropertyInfo(Variant::ARRAY, "rendering/gl_legacy/force_angle_on_devices", PROPERTY_HINT_ARRAY_TYPE, vformat("%s/%s:%s", Variant::DICTIONARY, PROPERTY_HINT_NONE, String())), device_blocklist);
+
+		// GL Classic driver overrides
+        GLOBAL_DEF_RST("rendering/gl_classic/driver", "opengl1");
+        GLOBAL_DEF_RST(PropertyInfo(Variant::STRING, "rendering/gl_classic/driver.windows", PROPERTY_HINT_ENUM, "opengl1,opengl1_angle"), "opengl1");
+        GLOBAL_DEF_RST(PropertyInfo(Variant::STRING, "rendering/gl_classic/driver.linuxbsd", PROPERTY_HINT_ENUM, "opengl1,opengl1_es"), "opengl1");
+        GLOBAL_DEF_RST(PropertyInfo(Variant::STRING, "rendering/gl_classic/driver.web", PROPERTY_HINT_ENUM, "opengl1"), "opengl1");
+        GLOBAL_DEF_RST(PropertyInfo(Variant::STRING, "rendering/gl_classic/driver.android", PROPERTY_HINT_ENUM, "opengl1"), "opengl1");
+        GLOBAL_DEF_RST(PropertyInfo(Variant::STRING, "rendering/gl_classic/driver.ios", PROPERTY_HINT_ENUM, "opengl1"), "opengl1");
+        GLOBAL_DEF_RST(PropertyInfo(Variant::STRING, "rendering/gl_classic/driver.macos", PROPERTY_HINT_ENUM, "opengl1,opengl1_angle"), "opengl1");
+
+        GLOBAL_DEF_RST("rendering/gl_classic/nvidia_disable_threaded_optimization", true);
+        GLOBAL_DEF_RST("rendering/gl_classic/fallback_to_angle", true);
+        GLOBAL_DEF_RST("rendering/gl_classic/fallback_to_native", true);
+        GLOBAL_DEF_RST("rendering/gl_classic/fallback_to_gles", true);
+
+        GLOBAL_DEF_RST_NOVAL(PropertyInfo(Variant::ARRAY, "rendering/gl_classic/force_angle_on_devices", PROPERTY_HINT_ARRAY_TYPE, vformat("%s/%s:%s", Variant::DICTIONARY, PROPERTY_HINT_NONE, String())), device_blocklist);
+    }
 
 	// Start with RenderingDevice-based backends.
 #ifdef RD_ENABLED
@@ -2391,7 +2426,7 @@ Error Main::setup(const char *execpath, int argc, char *argv[], bool p_second_ph
 	default_renderer_mobile = "mobile";
 #endif
 
-	// And Compatibility next, or first if Vulkan is disabled.
+	// Add Compatibility next.
 #ifdef GLES3_ENABLED
 	if (!renderer_hints.is_empty()) {
 		renderer_hints += ",";
@@ -2400,21 +2435,54 @@ Error Main::setup(const char *execpath, int argc, char *argv[], bool p_second_ph
 	if (default_renderer_mobile.is_empty()) {
 		default_renderer_mobile = "gl_compatibility";
 	}
-	// Default to Compatibility when using the project manager.
-	if (rendering_driver.is_empty() && rendering_method.is_empty() && project_manager) {
-		rendering_driver = "opengl3";
-		rendering_method = "gl_compatibility";
-		default_renderer_mobile = "gl_compatibility";
+#endif
+
+	// Add Legacy next.
+#ifdef GLES2_ENABLED
+	if (!renderer_hints.is_empty()) {
+		renderer_hints += ",";
+	}
+	renderer_hints += "gl_legacy";
+	if (default_renderer_mobile.is_empty()) {
+		default_renderer_mobile = "gl_legacy";
 	}
 #endif
+
+	// Add Classic next.
+#ifdef GLES1_ENABLED
+	if (!renderer_hints.is_empty()) {
+		renderer_hints += ",";
+	}
+	renderer_hints += "gl_classic";
+	if (default_renderer_mobile.is_empty()) {
+		default_renderer_mobile = "gl_classic";
+	}
+#endif
+
 	if (renderer_hints.is_empty()) {
 		ERR_PRINT("No renderers available.");
+	}
+
+	// Handle project manager defaults independently.
+	if (rendering_driver.is_empty() && rendering_method.is_empty() && project_manager) {
+#if defined(GLES1_ENABLED)
+		rendering_driver = "opengl1";
+		rendering_method = "gl_classic";
+#elif defined(GLES2_ENABLED)
+		rendering_driver = "opengl2";
+		rendering_method = "gl_legacy";
+#elif defined(GLES3_ENABLED)
+		rendering_driver = "opengl3";
+		rendering_method = "gl_compatibility";
+#endif
 	}
 
 	if (!rendering_method.is_empty()) {
 		if (rendering_method != "forward_plus" &&
 				rendering_method != "mobile" &&
-				rendering_method != "gl_compatibility") {
+				rendering_method != "gl_compatibility" &&
+				rendering_method != "gl_legacy" &&
+				rendering_method != "gl_classic") {
 			OS::get_singleton()->print("Unknown rendering method '%s', aborting.\nValid options are ",
 					rendering_method.utf8().get_data());
 
@@ -2484,6 +2552,10 @@ Error Main::setup(const char *execpath, int argc, char *argv[], bool p_second_ph
 		if (rendering_method.is_empty()) {
 			if (rendering_driver == "opengl3" || rendering_driver == "opengl3_angle" || rendering_driver == "opengl3_es") {
 				rendering_method = "gl_compatibility";
+			} else if (rendering_driver == "opengl2" || rendering_driver == "opengl2_angle" || rendering_driver == "opengl2_es") {
+				rendering_method = "gl_legacy";
+			} else if (rendering_driver == "opengl1" || rendering_driver == "opengl1_angle" || rendering_driver == "opengl1_es") {
+				rendering_method = "gl_classic";
 			} else {
 				rendering_method = "forward_plus";
 			}
@@ -2508,6 +2580,20 @@ Error Main::setup(const char *execpath, int argc, char *argv[], bool p_second_ph
 			available_drivers.push_back("opengl3");
 			available_drivers.push_back("opengl3_angle");
 			available_drivers.push_back("opengl3_es");
+		}
+#endif
+#ifdef GLES2_ENABLED
+		if (rendering_method == "gl_legacy") {
+			available_drivers.push_back("opengl2");
+			available_drivers.push_back("opengl2_angle");
+			available_drivers.push_back("opengl2_es");
+		}
+#endif
+#ifdef GLES1_ENABLED
+		if (rendering_method == "gl_classic") {
+			available_drivers.push_back("opengl1");
+			available_drivers.push_back("opengl1_angle");
+			available_drivers.push_back("opengl1_es");
 		}
 #endif
 		if (available_drivers.is_empty()) {
@@ -2538,7 +2624,16 @@ Error Main::setup(const char *execpath, int argc, char *argv[], bool p_second_ph
 	default_renderer = renderer_hints.get_slice(",", 0);
 	GLOBAL_DEF_RST_BASIC(PropertyInfo(Variant::STRING, "rendering/renderer/rendering_method", PROPERTY_HINT_ENUM, renderer_hints), default_renderer);
 	GLOBAL_DEF_RST_BASIC("rendering/renderer/rendering_method.mobile", default_renderer_mobile);
-	GLOBAL_DEF_RST_BASIC("rendering/renderer/rendering_method.web", "gl_compatibility"); // This is a bit of a hack until we have WebGPU support.
+
+	if (rendering_method == "gl_legacy" || rendering_method == "gl_classic") {
+		if (rendering_method == "gl_classic") {
+			GLOBAL_DEF_RST_BASIC("rendering/renderer/rendering_method.web", "gl_legacy");
+		} else {
+			GLOBAL_DEF_RST_BASIC("rendering/renderer/rendering_method.web", rendering_method);
+		}
+	} else {
+		GLOBAL_DEF_RST_BASIC("rendering/renderer/rendering_method.web", "gl_compatibility"); // This is a bit of a hack until we have WebGPU support.
+	}
 
 	// Default to ProjectSettings default if nothing set on the command line.
 	if (rendering_method.is_empty()) {
@@ -2549,6 +2644,12 @@ Error Main::setup(const char *execpath, int argc, char *argv[], bool p_second_ph
 	if (rendering_driver.is_empty()) {
 		if (rendering_method == "gl_compatibility") {
 			rendering_driver = GLOBAL_GET("rendering/gl_compatibility/driver");
+			rendering_driver_source = OS::RenderingSource::RENDERING_SOURCE_PROJECT_SETTING;
+		} else if (rendering_method == "gl_legacy") {
+			rendering_driver = GLOBAL_GET("rendering/gl_legacy/driver");
+			rendering_driver_source = OS::RenderingSource::RENDERING_SOURCE_PROJECT_SETTING;
+		} else if (rendering_method == "gl_classic") {
+			rendering_driver = GLOBAL_GET("rendering/gl_classic/driver");
 			rendering_driver_source = OS::RenderingSource::RENDERING_SOURCE_PROJECT_SETTING;
 		} else {
 			rendering_driver = GLOBAL_GET("rendering/rendering_device/driver");

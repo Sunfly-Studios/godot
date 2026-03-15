@@ -33,6 +33,8 @@
 #include "core/crypto/crypto_core.h"
 #include "core/io/dir_access.h"
 #include "drivers/gles3/rasterizer_gles3.h"
+#include "drivers/gles2/rasterizer_gles2.h"
+#include "drivers/gles1/rasterizer_gles1.h"
 
 #ifdef EGL_ENABLED
 
@@ -63,6 +65,29 @@ extern "C" EGLAPI EGLDisplay EGLAPIENTRY eglGetPlatformDisplayEXT(EGLenum platfo
 #define EGL_SURFACE_ORIENTATION_INVERT_X_ANGLE 0x0001
 #define EGL_SURFACE_ORIENTATION_INVERT_Y_ANGLE 0x0002
 #endif
+#endif
+
+// We add these just in case they're missing
+// rather than assuming.
+
+#ifndef EGL_OPENGL_ES_BIT
+#define EGL_OPENGL_ES_BIT  0x0001 // OpenGL ES 1.x
+#endif
+
+#ifndef EGL_OPENVG_BIT
+#define EGL_OPENVG_BIT     0x0002 // OpenVG
+#endif
+
+#ifndef EGL_OPENGL_ES2_BIT
+#define EGL_OPENGL_ES2_BIT 0x0004 // OpenGL ES 2.0
+#endif
+
+#ifndef EGL_OPENGL_BIT
+#define EGL_OPENGL_BIT     0x0008 // Desktop OpenGL
+#endif
+
+#ifndef EGL_OPENGL_ES3_BIT
+#define EGL_OPENGL_ES3_BIT 0x0040 // OpenGL ES 3.0
 #endif
 
 // Creates and caches a GLDisplay. Returns -1 on error.
@@ -180,29 +205,39 @@ EGLsizeiANDROID EGLManager::_get_cache(const void *p_key, EGLsizeiANDROID p_key_
 #endif
 
 Error EGLManager::_gldisplay_create_context(GLDisplay &p_gldisplay) {
+	String rendering_method = OS::get_singleton()->get_current_rendering_method();
+	EGLint renderable_type = EGL_OPENGL_ES3_BIT;
+	
+#ifdef GLES2_ENABLED
+	if (rendering_method == "gl_legacy") {
+		renderable_type = EGL_OPENGL_ES2_BIT;
+	}
+#endif
+
+#ifdef GLES1_ENABLED
+	if (rendering_method == "gl_classic") {
+		renderable_type = EGL_OPENGL_ES_BIT;
+	}
+#endif
+
 	EGLint attribs[] = {
-		EGL_RED_SIZE,
-		1,
-		EGL_BLUE_SIZE,
-		1,
-		EGL_GREEN_SIZE,
-		1,
-		EGL_DEPTH_SIZE,
-		24,
+		EGL_RED_SIZE, 1,
+		EGL_BLUE_SIZE, 1,
+		EGL_GREEN_SIZE, 1,
+		EGL_DEPTH_SIZE, 24,
+		EGL_RENDERABLE_TYPE,
+		renderable_type,
 		EGL_NONE,
 	};
 
 	EGLint attribs_layered[] = {
-		EGL_RED_SIZE,
-		8,
-		EGL_GREEN_SIZE,
-		8,
-		EGL_GREEN_SIZE,
-		8,
-		EGL_ALPHA_SIZE,
-		8,
-		EGL_DEPTH_SIZE,
-		24,
+		EGL_RED_SIZE, 8,
+		EGL_GREEN_SIZE, 8,
+		EGL_GREEN_SIZE, 8,
+		EGL_ALPHA_SIZE, 8,
+		EGL_DEPTH_SIZE, 24,
+		EGL_RENDERABLE_TYPE,
+		renderable_type,
 		EGL_NONE,
 	};
 
@@ -215,11 +250,11 @@ Error EGLManager::_gldisplay_create_context(GLDisplay &p_gldisplay) {
 	}
 
 	ERR_FAIL_COND_V(eglGetError() != EGL_SUCCESS, ERR_BUG);
-	ERR_FAIL_COND_V(config_count == 0, ERR_UNCONFIGURED);
+	ERR_FAIL_COND_V_MSG(config_count == 0, ERR_UNCONFIGURED, "EGL: No suitable config found. Your hardware may not support the requested OpenGL ES profile.");
 
 	Vector<EGLint> context_attribs = _get_platform_context_attribs();
 	p_gldisplay.egl_context = eglCreateContext(p_gldisplay.egl_display, p_gldisplay.egl_config, EGL_NO_CONTEXT, (context_attribs.size() > 0) ? context_attribs.ptr() : nullptr);
-	ERR_FAIL_COND_V_MSG(p_gldisplay.egl_context == EGL_NO_CONTEXT, ERR_CANT_CREATE, vformat("Can't create an EGL context. Error code: %d", eglGetError()));
+	ERR_FAIL_COND_V_MSG(p_gldisplay.egl_context == EGL_NO_CONTEXT, ERR_CANT_CREATE, vformat("Can't create an EGL context. Error code: %x", eglGetError()));
 
 	return OK;
 }
@@ -379,8 +414,19 @@ void EGLManager::window_make_current(DisplayServer::WindowID p_window_id) {
 	eglMakeCurrent(current_display.egl_display, current_window->egl_surface, current_window->egl_surface, current_display.egl_context);
 
 #ifdef WINDOWS_ENABLED
+#ifdef GLES3_ENABLED
 	RasterizerGLES3::set_screen_flipped_y(glwindow.flipped_y);
-#endif
+#endif // GLES3_ENABLED
+
+#ifdef GLES2_ENABLED
+	RasterizerGLES2::set_screen_flipped_y(glwindow.flipped_y);
+#endif // GLES2_ENABLED
+
+#ifdef GLES1_ENABLED
+	RasterizerGLES1::set_screen_flipped_y(glwindow.flipped_y);
+#endif // GLES1_ENABLED
+
+#endif // WINDOWS_ENABLED
 }
 
 void EGLManager::set_use_vsync(bool p_use) {

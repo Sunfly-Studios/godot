@@ -55,10 +55,10 @@
 #include "servers/rendering/rendering_device.h"
 #endif
 
-#if defined(GLES3_ENABLED)
+#if defined(GLES3_ENABLED) || defined(GLES2_ENABLED) || defined(GLES1_ENABLED)
 #include "gl_manager_windows_angle.h"
 #include "gl_manager_windows_native.h"
-#endif // GLES3_ENABLED
+#endif // GLES3_ENABLED || GLES2_ENABLED || GLES1_ENABLED || GLES1_ENABLED
 
 #include "native_menu_windows.h"
 
@@ -410,9 +410,11 @@ class DisplayServerWindows : public DisplayServer {
 
 	enum DriverID {
 		DRIVER_ID_COMPAT_OPENGL3 = 1 << 0,
-		DRIVER_ID_COMPAT_ANGLE_D3D11 = 1 << 1,
-		DRIVER_ID_RD_VULKAN = 1 << 2,
-		DRIVER_ID_RD_D3D12 = 1 << 3,
+		DRIVER_ID_COMPAT_OPENGL2 = 1 << 1,
+		DRIVER_ID_COMPAT_OPENGL1 = 1 << 2,
+		DRIVER_ID_COMPAT_ANGLE_D3D11 = 1 << 3,
+		DRIVER_ID_RD_VULKAN = 1 << 4,
+		DRIVER_ID_RD_D3D12 = 1 << 5,
 	};
 	static BitField<DriverID> tested_drivers;
 
@@ -444,7 +446,7 @@ class DisplayServerWindows : public DisplayServer {
 	int old_x, old_y;
 	Point2i center;
 
-#if defined(GLES3_ENABLED)
+#if defined(GLES3_ENABLED) || defined(GLES2_ENABLED) || defined(GLES1_ENABLED)
 	GLManagerANGLE_Windows *gl_manager_angle = nullptr;
 	GLManagerNative_Windows *gl_manager_native = nullptr;
 #endif
@@ -580,7 +582,7 @@ class DisplayServerWindows : public DisplayServer {
 	void _destroy_rendering_context_window(WindowID p_window_id);
 #endif
 
-#ifdef GLES3_ENABLED
+#if defined(GLES3_ENABLED) || defined(GLES2_ENABLED) || defined(GLES1_ENABLED)
 	Error _create_gl_window(WindowID p_window_id);
 #endif
 

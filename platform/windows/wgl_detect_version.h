@@ -31,12 +31,12 @@
 #ifndef WGL_DETECT_VERSION_H
 #define WGL_DETECT_VERSION_H
 
-#if defined(WINDOWS_ENABLED) && defined(GLES3_ENABLED)
+#if defined(WINDOWS_ENABLED) && (defined(GLES3_ENABLED) || defined(GLES2_ENABLED) || defined(GLES1_ENABLED))
 
 class Dictionary;
 
-Dictionary detect_wgl();
+Dictionary detect_wgl(int p_gles_major, int p_gles_minor);
 
-#endif // WINDOWS_ENABLED && GLES3_ENABLED
+#endif // WINDOWS_ENABLED && (GLES3_ENABLED || GLES2_ENABLED || GLES1_ENABLED)
 
 #endif // WGL_DETECT_VERSION_H

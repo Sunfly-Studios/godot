@@ -35,6 +35,24 @@
 #define GLES_API_ENABLED // Allow using GLES.
 #endif
 
+#ifdef GLES3_ENABLED
 #include <ES3/gl.h>
+#include <ES3/glext.h>
+#elif defined(GLES2_ENABLED)
+#include <ES2/gl.h>
+#include <ES2/glext.h>
+#endif // GLES3_ENABLED
+
+#ifdef GLES1_ENABLED
+
+// Unlock OES functions.
+#ifndef GL_GLEXT_PROTOTYPES
+#define GL_GLEXT_PROTOTYPES 1
+#endif
+
+#include <ES1/gl.h>
+#include <ES1/glext.h>
+
+#endif // GLES1_ENABLED
 
 #endif // PLATFORM_GL_H

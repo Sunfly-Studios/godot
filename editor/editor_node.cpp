@@ -5125,7 +5125,12 @@ String EditorNode::_get_system_info() const {
 		rendering_method = "Mobile";
 	} else if (rendering_method == "gl_compatibility") {
 		rendering_method = "Compatibility";
+	} else if (rendering_method == "gl_legacy") {
+		rendering_method = "Legacy";
+	} else if (rendering_method == "gl_classic") {
+		rendering_method = "Classic";
 	}
+
 	if (driver_name == "vulkan") {
 		driver_name = "Vulkan";
 	} else if (driver_name == "d3d12") {
@@ -5139,6 +5144,26 @@ String EditorNode::_get_system_info() const {
 			driver_name = "OpenGL 3";
 		} else {
 			driver_name = "OpenGL ES 3";
+		}
+	}else if (driver_name == "opengl2_angle") {
+		driver_name = "OpenGL ES 2/ANGLE";
+	} else if (driver_name == "opengl2_es") {
+		driver_name = "OpenGL ES 2";
+	} else if (driver_name == "opengl2") {
+		if (OS::get_singleton()->get_gles_over_gl()) {
+			driver_name = "OpenGL 2";
+		} else {
+			driver_name = "OpenGL ES 2";
+		}
+	} else if (driver_name == "opengl1_angle") {
+		driver_name = "OpenGL ES 1/ANGLE";
+	} else if (driver_name == "opengl1_es") {
+		driver_name = "OpenGL ES 1";
+	} else if (driver_name == "opengl1") {
+		if (OS::get_singleton()->get_gles_over_gl()) {
+			driver_name = "OpenGL 1";
+		} else {
+			driver_name = "OpenGL ES 1";
 		}
 	} else if (driver_name == "metal") {
 		driver_name = "Metal";
@@ -6717,6 +6742,10 @@ void EditorNode::_update_renderer_color() {
 		renderer->add_theme_color_override(SceneStringName(font_color), theme->get_color(SNAME("mobile_color"), EditorStringName(Editor)));
 	} else if (rendering_method == "gl_compatibility") {
 		renderer->add_theme_color_override(SceneStringName(font_color), theme->get_color(SNAME("gl_compatibility_color"), EditorStringName(Editor)));
+	} else if (rendering_method == "gl_legacy") {
+		renderer->add_theme_color_override(SceneStringName(font_color), theme->get_color(SNAME("gl_legacy_color"), EditorStringName(Editor)));
+	} else if (rendering_method == "gl_classic") {
+		renderer->add_theme_color_override(SceneStringName(font_color), theme->get_color(SNAME("gl_classic_color"), EditorStringName(Editor)));
 	}
 }
 
@@ -6730,9 +6759,20 @@ void EditorNode::_renderer_selected(int p_which) {
 	}
 
 	renderer_request = rendering_method;
-	video_restart_dialog->set_text(
-			vformat(TTR("Changing the renderer requires restarting the editor.\n\nChoosing Save & Restart will change the rendering method to:\n- Desktop platforms: %s\n- Mobile platforms: %s\n- Web platform: gl_compatibility"),
-					renderer_request, renderer_request.replace("forward_plus", "mobile")));
+	
+	if (rendering_method == "gl_classic") {
+		video_restart_dialog->set_text(
+				vformat(TTR("Changing the renderer requires restarting the editor.\n\nChoosing Save & Restart will change the rendering method to:\n- Desktop platforms: %s\n- Mobile platforms: %s\n- Web platform: %s (Web platforms will be upgraded to GLES2)"),
+						renderer_request, renderer_request.replace("forward_plus", "mobile"), renderer_request.replace("gl_classic", "gl_legacy")));
+	} else if (rendering_method == "gl_legacy") {
+		video_restart_dialog->set_text(
+				vformat(TTR("Changing the renderer requires restarting the editor.\n\nChoosing Save & Restart will change the rendering method to:\n- Desktop platforms: %s\n- Mobile platforms: %s\n- Web platform: %s"),
+						renderer_request, renderer_request.replace("forward_plus", "mobile"), renderer_request.replace("gl_compatibility", "gl_legacy")));
+	} else {
+		video_restart_dialog->set_text(
+				vformat(TTR("Changing the renderer requires restarting the editor.\n\nChoosing Save & Restart will change the rendering method to:\n- Desktop platforms: %s\n- Mobile platforms: %s\n- Web platform: gl_compatibility"),
+						renderer_request, renderer_request.replace("forward_plus", "mobile")));
+	}
 	video_restart_dialog->popup_centered();
 	renderer->select(renderer_current);
 	_update_renderer_color();
@@ -6749,6 +6789,12 @@ void EditorNode::_add_renderer_entry(const String &p_renderer_name, bool p_mark_
 	if (p_renderer_name == "gl_compatibility") {
 		item_text = TTR("Compatibility");
 	}
+	if (p_renderer_name == "gl_legacy") {
+		item_text = TTR("Legacy");
+	}
+	if (p_renderer_name == "gl_classic") {
+		item_text = TTR("Classic");
+	}
 	if (p_mark_overridden) {
 		item_text += " " + TTR("(Overridden)");
 	}
@@ -6757,10 +6803,17 @@ void EditorNode::_add_renderer_entry(const String &p_renderer_name, bool p_mark_
 
 void EditorNode::_set_renderer_name_save_and_restart() {
 	ProjectSettings::get_singleton()->set("rendering/renderer/rendering_method", renderer_request);
-	if (renderer_request == "mobile" || renderer_request == "gl_compatibility") {
+	if (renderer_request == "mobile" || renderer_request == "gl_compatibility" || renderer_request == "gl_legacy" || renderer_request == "gl_classic") {
 		// Also change the mobile override if changing to a compatible rendering method.
 		// This prevents visual discrepancies between desktop and mobile platforms.
 		ProjectSettings::get_singleton()->set("rendering/renderer/rendering_method.mobile", renderer_request);
+
+		if (renderer_request == "gl_legacy") {
+			ProjectSettings::get_singleton()->set("rendering/renderer/rendering_method.web", renderer_request);
+		} else if (renderer_request == "gl_classic") {
+			// Web projects require GLES2 or higher.
+			ProjectSettings::get_singleton()->set("rendering/renderer/rendering_method.web", "gl_legacy");
+		}
 	} else if (renderer_request == "forward_plus") {
 		// Use the equivalent mobile rendering method. This prevents the rendering method from staying
 		// on its old choice if moving from `gl_compatibility` to `forward_plus`.
@@ -7705,7 +7758,7 @@ EditorNode::EditorNode() {
 	renderer->set_theme_type_variation("TopBarOptionButton");
 	renderer->set_fit_to_longest_item(false);
 	renderer->set_focus_mode(Control::FOCUS_NONE);
-	renderer->set_tooltip_text(TTR("Choose a rendering method.\n\nNotes:\n- On mobile platforms, the Mobile rendering method is used if Forward+ is selected here.\n- On the web platform, the Compatibility rendering method is always used."));
+	renderer->set_tooltip_text(TTR("Choose a rendering method.\n\nNotes:\n- On mobile platforms, the Mobile rendering method is used if Forward+ is selected here.\n- On the web platform, the Compatibility or Legacy rendering method are used."));
 
 	right_menu_hb->add_child(renderer);
 

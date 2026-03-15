@@ -89,15 +89,28 @@
 			kEAGLDrawablePropertyColorFormat,
 			nil];
 
-	// Create GL ES 3 context
-	if (GLOBAL_GET("rendering/renderer/rendering_method") == "gl_compatibility") {
+	// Create GLES 3, GLES 2, or GLES 1 context
+	String render_method = GLOBAL_GET("rendering/renderer/rendering_method");
+	if (render_method == "gl_compatibility") {
 		context = [[EAGLContext alloc] initWithAPI:kEAGLRenderingAPIOpenGLES3];
 		if (!context) {
 			NSLog(@"Godot iOS: Failed to create OpenGL ES 3.0 context!");
 			return;
 		}
+	} else if (render_method == "gl_legacy") {
+		context = [[EAGLContext alloc] initWithAPI:kEAGLRenderingAPIOpenGLES2];
+		if (!context) {
+			NSLog(@"Godot iOS: Failed to create OpenGL ES 2.1 context!");
+			return;
+		}
+	} else if (render_method == "gl_classic") {
+		context = [[EAGLContext alloc] initWithAPI:kEAGLRenderingAPIOpenGLES1];
+		if (!context) {
+			NSLog(@"Godot iOS: Failed to create OpenGL ES 1.1 context!");
+			return;
+		}
 	} else {
-		// If we are not using the GL Compatibility renderer,
+		// If we are not using the GL Compatibility, GL Legacy or GL Classic renderer,
 		// don't go any further.
 		return;
 	}
@@ -188,7 +201,17 @@
 		return NO;
 	}
 
+#ifdef GLES3_ENABLED
 	GLES3::TextureStorage::system_fbo = viewFramebuffer;
+#endif
+
+#ifdef GLES2_ENABLED
+	GLES2::TextureStorage::system_fbo = viewFramebuffer;
+#endif
+
+#ifdef GLES1_ENABLED
+	GLES1::TextureStorage::system_fbo = viewFramebuffer;
+#endif
 
 	return YES;
 }
@@ -211,7 +234,17 @@
 		depthRenderbuffer = 0;
 	}
 	
+#ifdef GLES3_ENABLED
 	GLES3::TextureStorage::system_fbo = 0;
+#endif
+
+#ifdef GLES2_ENABLED
+	GLES2::TextureStorage::system_fbo = 0;
+#endif
+
+#ifdef GLES1_ENABLED
+	GLES1::TextureStorage::system_fbo = 0;
+#endif
 }
 
 @end

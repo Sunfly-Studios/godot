@@ -28,7 +28,7 @@
 /* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                 */
 /**************************************************************************/
 
-#ifdef GLES3_ENABLED
+#if defined(GLES3_ENABLED) || defined(GLES2_ENABLED) || defined(GLES1_ENABLED)
 #ifdef EGL_ENABLED
 
 #include "detect_prime_egl.h"
@@ -53,7 +53,7 @@
 #undef glGetString
 
 // Runs inside a child. Exiting will not quit the engine.
-void DetectPrimeEGL::create_context(EGLenum p_platform_enum) {
+void DetectPrimeEGL::create_context(EGLenum p_platform_enum, int p_gles_major, int p_gles_minor) {
 #if defined(GLAD_ENABLED)
 	if (!gladLoaderLoadEGL(nullptr)) {
 		print_verbose("Unable to load EGL, GPU detection skipped.");
@@ -88,23 +88,25 @@ void DetectPrimeEGL::create_context(EGLenum p_platform_enum) {
 	eglBindAPI(EGL_OPENGL_API);
 
 	EGLint attribs[] = {
-		EGL_RED_SIZE,
-		1,
-		EGL_BLUE_SIZE,
-		1,
-		EGL_GREEN_SIZE,
-		1,
-		EGL_DEPTH_SIZE,
-		24,
+		EGL_RED_SIZE, 1,
+		EGL_BLUE_SIZE, 1,
+		EGL_GREEN_SIZE, 1,
+		EGL_DEPTH_SIZE, 24,
+		EGL_RENDERABLE_TYPE, EGL_OPENGL_BIT,
 		EGL_NONE,
 	};
 
 	EGLint config_count = 0;
 	eglChooseConfig(egl_display, attribs, &egl_config, 1, &config_count);
 
-	EGLint context_attribs[] = {
-		EGL_CONTEXT_MAJOR_VERSION, 3,
-		EGL_CONTEXT_MINOR_VERSION, 3,
+	if (config_count == 0) {
+		print_verbose("Unable to find an EGL config, GPU detection skipped.");
+		quick_exit(1);
+	}
+
+	const EGLint context_attribs[] = {
+		EGL_CONTEXT_MAJOR_VERSION, p_gles_major,
+		EGL_CONTEXT_MINOR_VERSION, p_gles_minor,
 		EGL_NONE
 	};
 
@@ -114,10 +116,13 @@ void DetectPrimeEGL::create_context(EGLenum p_platform_enum) {
 		quick_exit(1);
 	}
 
-	eglMakeCurrent(egl_display, EGL_NO_SURFACE, EGL_NO_SURFACE, egl_context);
+	if (!eglMakeCurrent(egl_display, EGL_NO_SURFACE, EGL_NO_SURFACE, egl_context)) {
+		print_verbose("Unable to make EGL context current, GPU detection skipped.");
+		quick_exit(1);
+	}
 }
 
-int DetectPrimeEGL::detect_prime(EGLenum p_platform_enum) {
+int DetectPrimeEGL::detect_prime(EGLenum p_platform_enum, int p_gles_major, int p_gles_minor) {
 	pid_t p;
 	int priorities[4] = {};
 	String vendors[4];
@@ -150,10 +155,8 @@ int DetectPrimeEGL::detect_prime(EGLenum p_platform_enum) {
 
 			waitpid(p, &stat_loc, 0);
 
-			if (!stat_loc) {
-				// No need to do anything complicated here. Anything less than
-				// PIPE_BUF will be delivered in one read() call.
-				// Leave it 'Unknown' otherwise.
+			// WIFEXITED checks if the child terminated normally (didn't segfault/abort)
+			if (WIFEXITED(stat_loc) && WEXITSTATUS(stat_loc) == 0) {
 				if (read(fdset[0], string, sizeof(string) - 1) > 0) {
 					vendors[i] = string;
 					renderers[i] = string + strlen(string) + 1;
@@ -163,10 +166,6 @@ int DetectPrimeEGL::detect_prime(EGLenum p_platform_enum) {
 			close(fdset[0]);
 		} else {
 			// In child, exit() here will not quit the engine.
-
-			// Prevent false leak reports as we will not be properly
-			// cleaning up these processes, and fork() makes a copy
-			// of all globals.
 			CoreGlobals::leak_reporting_enabled = false;
 
 			char string[201];
@@ -175,11 +174,19 @@ int DetectPrimeEGL::detect_prime(EGLenum p_platform_enum) {
 
 			setenv("DRI_PRIME", itos(i).utf8().ptr(), 1);
 
-			create_context(p_platform_enum);
+			create_context(p_platform_enum, p_gles_major, p_gles_minor);
 
 			PFNGLGETSTRINGPROC glGetString = (PFNGLGETSTRINGPROC)eglGetProcAddress("glGetString");
+			if (!glGetString) {
+				quick_exit(1);
+			}
+
 			const char *vendor = (const char *)glGetString(GL_VENDOR);
 			const char *renderer = (const char *)glGetString(GL_RENDERER);
+
+			if (!vendor || !renderer) {
+				quick_exit(1);
+			}
 
 			unsigned int vendor_len = strlen(vendor) + 1;
 			unsigned int renderer_len = strlen(renderer) + 1;
@@ -196,8 +203,6 @@ int DetectPrimeEGL::detect_prime(EGLenum p_platform_enum) {
 			}
 			close(fdset[1]);
 
-			// The function quick_exit() is used because exit() will call destructors on static objects copied by fork().
-			// These objects will be freed anyway when the process finishes execution.
 			quick_exit(0);
 		}
 	}
@@ -235,4 +240,4 @@ int DetectPrimeEGL::detect_prime(EGLenum p_platform_enum) {
 }
 
 #endif // EGL_ENABLED
-#endif // GLES3_ENABLED
+#endif // GLES3_ENABLED || GLES2_ENABLED || GLES1_ENABLED

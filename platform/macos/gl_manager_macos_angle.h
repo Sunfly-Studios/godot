@@ -31,7 +31,7 @@
 #ifndef GL_MANAGER_MACOS_ANGLE_H
 #define GL_MANAGER_MACOS_ANGLE_H
 
-#if defined(MACOS_ENABLED) && defined(GLES3_ENABLED)
+#if defined(MACOS_ENABLED) && (defined(GLES3_ENABLED) || defined(GLES2_ENABLED) || defined(GLES1_ENABLED))
 
 #include "core/error/error_list.h"
 #include "core/os/os.h"
@@ -51,13 +51,18 @@ private:
 	virtual Vector<EGLAttrib> _get_platform_display_attributes() const override;
 	virtual Vector<EGLint> _get_platform_context_attribs() const override;
 
+	int gles_major, gles_minor;
+
 public:
 	void window_resize(DisplayServer::WindowID p_window_id, int p_width, int p_height) {}
 
-	GLManagerANGLE_MacOS() {}
+	GLManagerANGLE_MacOS(int p_gles_major, int p_gles_minor) {
+		gles_major = p_gles_major;
+		gles_minor = p_gles_minor;
+	}
 	~GLManagerANGLE_MacOS() {}
 };
 
-#endif // MACOS_ENABLED && GLES3_ENABLED
+#endif // MACOS_ENABLED && (GLES3_ENABLED) || GLES2_ENABLED)
 
 #endif // GL_MANAGER_MACOS_ANGLE_H

@@ -778,7 +778,7 @@ Size2i OS_Android::get_display_size() const {
 }
 
 void OS_Android::set_opengl_extensions(const char *p_gl_extensions) {
-#if defined(GLES3_ENABLED)
+#if defined(GLES3_ENABLED) || defined(GLES2_ENABLED) || defined(GLES1_ENABLED)
 	ERR_FAIL_NULL(p_gl_extensions);
 	gl_extensions = p_gl_extensions;
 #endif
@@ -877,7 +877,7 @@ OS_Android::OS_Android(GodotJavaWrapper *p_godot_java, GodotIOJavaWrapper *p_god
 
 	main_loop = nullptr;
 
-#if defined(GLES3_ENABLED)
+#if defined(GLES3_ENABLED) || defined(GLES2_ENABLED) || defined(GLES1_ENABLED)
 	gl_extensions = nullptr;
 #endif
 

@@ -28,7 +28,7 @@
 /* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                 */
 /**************************************************************************/
 
-#if defined(WINDOWS_ENABLED) && defined(GLES3_ENABLED)
+#if defined(WINDOWS_ENABLED) && (defined(GLES3_ENABLED) || defined(GLES2_ENABLED) || defined(GLES1_ENABLED))
 
 #include "wgl_detect_version.h"
 #include "os_windows.h"
@@ -65,7 +65,7 @@ typedef HGLRC(APIENTRY *PFNWGLCREATECONTEXTATTRIBSARBPROC)(HDC, HGLRC, const int
 typedef void *(APIENTRY *PFNWGLGETPROCADDRESS)(LPCSTR);
 typedef const char *(APIENTRY *PFNWGLGETSTRINGPROC)(unsigned int);
 
-Dictionary detect_wgl() {
+Dictionary detect_wgl(int p_gles_major, int p_gles_minor) {
 	Dictionary gl_info = {};
 	gl_info["version"] = 0;
 	gl_info["vendor"] = String();
@@ -129,13 +129,21 @@ Dictionary detect_wgl() {
 			HGLRC hRC = gd_wglCreateContext(hDC);
 			if (hRC) {
 				if (gd_wglMakeCurrent(hDC, hRC)) {
-					int attribs[] = {
-						WGL_CONTEXT_MAJOR_VERSION_ARB, 3,
-						WGL_CONTEXT_MINOR_VERSION_ARB, 3,
-						WGL_CONTEXT_PROFILE_MASK_ARB, WGL_CONTEXT_CORE_PROFILE_BIT_ARB,
-						WGL_CONTEXT_FLAGS_ARB, WGL_CONTEXT_FORWARD_COMPATIBLE_BIT_ARB,
-						0
-					};
+                    
+					int attribs[9] = {};
+					int attr_idx = 0;
+					attribs[attr_idx++] = WGL_CONTEXT_MAJOR_VERSION_ARB;
+					attribs[attr_idx++] = p_gles_major;
+					attribs[attr_idx++] = WGL_CONTEXT_MINOR_VERSION_ARB;
+					attribs[attr_idx++] = p_gles_minor;
+
+					if (p_gles_major > 2) {
+						attribs[attr_idx++] = WGL_CONTEXT_PROFILE_MASK_ARB;
+						attribs[attr_idx++] = WGL_CONTEXT_CORE_PROFILE_BIT_ARB;
+						attribs[attr_idx++] = WGL_CONTEXT_FLAGS_ARB;
+						attribs[attr_idx++] = WGL_CONTEXT_FORWARD_COMPATIBLE_BIT_ARB;
+					}
+					attribs[attr_idx++] = 0; // Null terminator
 
 					PFNWGLCREATECONTEXTATTRIBSARBPROC gd_wglCreateContextAttribsARB = nullptr;
 					gd_wglCreateContextAttribsARB = (PFNWGLCREATECONTEXTATTRIBSARBPROC)gd_wglGetProcAddress("wglCreateContextAttribsARB");
@@ -194,4 +202,4 @@ Dictionary detect_wgl() {
 	return gl_info;
 }
 
-#endif // WINDOWS_ENABLED && GLES3_ENABLED
+#endif // WINDOWS_ENABLED && (GLES3_ENABLED || GLES2_ENABLED || GLES1_ENABLED)

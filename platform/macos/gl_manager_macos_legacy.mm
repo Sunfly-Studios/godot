@@ -30,7 +30,7 @@
 
 #include "gl_manager_macos_legacy.h"
 
-#if defined(MACOS_ENABLED) && defined(GLES3_ENABLED)
+#if defined(MACOS_ENABLED) && (defined(GLES3_ENABLED) || defined(GLES2_ENABLED) || defined(GLES1_ENABLED))
 
 #include <dlfcn.h>
 #include <stdio.h>
@@ -40,10 +40,19 @@
 #pragma clang diagnostic ignored "-Wdeprecated-declarations" // OpenGL is deprecated in macOS 10.14
 
 Error GLManagerLegacy_MacOS::create_context(GLWindow &win) {
+	NSOpenGLPixelFormatAttribute gl_profile;
+	
+	if (gles_major >= 3 && gles_minor >= 2) {
+		gl_profile = NSOpenGLProfileVersion3_2Core;
+	} else {
+		gl_profile = NSOpenGLProfileVersionLegacy;
+	}
+
 	NSOpenGLPixelFormatAttribute attributes[] = {
 		NSOpenGLPFADoubleBuffer,
 		NSOpenGLPFAClosestPolicy,
-		NSOpenGLPFAOpenGLProfile, NSOpenGLProfileVersion3_2Core,
+		NSOpenGLPFAOpenGLProfile,
+		gl_profile,
 		NSOpenGLPFAColorSize, 32,
 		NSOpenGLPFADepthSize, 24,
 		NSOpenGLPFAStencilSize, 8,
@@ -118,7 +127,6 @@ void GLManagerLegacy_MacOS::window_destroy(DisplayServer::WindowID p_window_id) 
 
 	GLWindow &win = windows[p_window_id];
 	
-	// Break the retain cycle between NSOpenGLContext and NSView. 
 	// Without this, the OpenGL context may permanently leak into VRAM.
 	[win.context clearDrawable];
 
@@ -201,8 +209,11 @@ NSOpenGLContext *GLManagerLegacy_MacOS::get_context(DisplayServer::WindowID p_wi
 	return win.context;
 }
 
-GLManagerLegacy_MacOS::GLManagerLegacy_MacOS() {
+GLManagerLegacy_MacOS::GLManagerLegacy_MacOS(int p_gles_major, int p_gles_minor) {
 	NSBundle *framework = [NSBundle bundleWithPath:@"/System/Library/Frameworks/OpenGL.framework"];
+	
+	gles_major = p_gles_major;
+	gles_minor = p_gles_minor;
 	if (framework) {
 		void *library_handle = dlopen([framework.executablePath UTF8String], RTLD_NOW);
 		if (library_handle) {
@@ -221,4 +232,4 @@ GLManagerLegacy_MacOS::~GLManagerLegacy_MacOS() {
 
 #pragma clang diagnostic pop
 
-#endif // MACOS_ENABLED && GLES3_ENABLED
+#endif // MACOS_ENABLED && (GLES3_ENABLED || GLES2_ENABLED || GLES1_ENABLED)

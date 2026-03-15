@@ -44,7 +44,7 @@
 
 #endif //RD_ENABLED
 
-#ifdef GLES3_ENABLED
+#if defined(GLES3_ENABLED) || defined(GLES2_ENABLED) || defined(GLES1_ENABLED)
 #include "drivers/egl/egl_manager.h"
 #endif
 
@@ -77,7 +77,7 @@ class DisplayServerWayland : public DisplayServer {
 
 		Rect2i safe_rect;
 
-#ifdef GLES3_ENABLED
+#if defined(GLES3_ENABLED) || defined(GLES2_ENABLED) || defined(GLES1_ENABLED)
 		struct wl_egl_window *wl_egl_window = nullptr;
 #endif
 
@@ -138,7 +138,7 @@ class DisplayServerWayland : public DisplayServer {
 	RenderingDevice *rendering_device = nullptr;
 #endif
 
-#ifdef GLES3_ENABLED
+#if defined(GLES3_ENABLED) || defined(GLES2_ENABLED) || defined(GLES1_ENABLED)
 	EGLManager *egl_manager = nullptr;
 #endif
 

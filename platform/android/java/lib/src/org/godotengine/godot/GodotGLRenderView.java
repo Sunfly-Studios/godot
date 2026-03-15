@@ -83,7 +83,16 @@ class GodotGLRenderView extends GLSurfaceView implements GodotRenderView {
 	private final GodotRenderer godotRenderer;
 	private final SparseArray<PointerIcon> customPointerIcons = new SparseArray<>();
 
-	public GodotGLRenderView(GodotHost host, Godot godot, GodotInputHandler inputHandler, XRMode xrMode, boolean useDebugOpengl, boolean shouldBeTranslucent) {
+	public GodotGLRenderView(
+		GodotHost host,
+		Godot godot,
+		GodotInputHandler inputHandler,
+		XRMode xrMode,
+		boolean useDebugOpengl,
+		boolean shouldBeTranslucent,
+		int glMajor,
+		int glMinor
+	) {
 		super(host.getActivity());
 
 		this.host = host;
@@ -93,7 +102,7 @@ class GodotGLRenderView extends GLSurfaceView implements GodotRenderView {
 		if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
 			setPointerIcon(PointerIcon.getSystemIcon(getContext(), PointerIcon.TYPE_DEFAULT));
 		}
-		init(xrMode, shouldBeTranslucent, useDebugOpengl);
+		init(xrMode, shouldBeTranslucent, useDebugOpengl, glMajor, glMinor);
 	}
 
 	@Override
@@ -253,7 +262,7 @@ class GodotGLRenderView extends GLSurfaceView implements GodotRenderView {
 		return super.onResolvePointerIcon(me, pointerIndex);
 	}
 
-	private void init(XRMode xrMode, boolean translucent, boolean useDebugOpengl) {
+	private void init(XRMode xrMode, boolean translucent, boolean useDebugOpengl, int glMajor, int glMinor) {
 		setPreserveEGLContextOnPause(true);
 		setFocusableInTouchMode(true);
 		switch (xrMode) {
@@ -282,7 +291,7 @@ class GodotGLRenderView extends GLSurfaceView implements GodotRenderView {
 				/* Setup the context factory for 2.0 rendering.
 				 * See ContextFactory class definition below
 				 */
-				setEGLContextFactory(new RegularContextFactory(useDebugOpengl));
+				setEGLContextFactory(new RegularContextFactory(useDebugOpengl, glMajor, glMinor));
 
 				/* We need to choose an EGLConfig that matches the format of
 				 * our surface exactly. This is going to be done in our

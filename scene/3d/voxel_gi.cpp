@@ -541,9 +541,13 @@ AABB VoxelGI::get_aabb() const {
 
 PackedStringArray VoxelGI::get_configuration_warnings() const {
 	PackedStringArray warnings = VisualInstance3D::get_configuration_warnings();
+	bool is_opengl_renderer = (
+		OS::get_singleton()->get_current_rendering_method() == "gl_compatibility" ||
+		OS::get_singleton()->get_current_rendering_method() == "gl_legacy"
+	);
 
-	if (OS::get_singleton()->get_current_rendering_method() == "gl_compatibility") {
-		warnings.push_back(RTR("VoxelGI nodes are not supported when using the Compatibility renderer yet. Support will be added in a future release."));
+	if (is_opengl_renderer) {
+		warnings.push_back(RTR("VoxelGI nodes are not supported when using the Compatibility or Legacy renderer yet. Support will be added in a future release."));
 	} else if (probe_data.is_null()) {
 		warnings.push_back(RTR("No VoxelGI data set, so this node is disabled. Bake static objects to enable GI."));
 	}

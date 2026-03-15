@@ -37,7 +37,23 @@
 
 #include <EGL/egl.h>
 #include <EGL/eglext.h>
+
+// Android also has a `GLES2` folder with these
+// exact same files. We don't include them here
+// because GLES3 is a superset of GLES2, which
+// includes everything GLES2 has.
 #include <GLES3/gl3.h>
 #include <GLES3/gl3ext.h>
+
+// However, for GLES1, we need to include it
+// manually.
+#ifdef GLES1_ENABLED
+
+// Unlock OES functions.
+#define GL_GLEXT_PROTOTYPES 1
+
+#include <GLES/gl.h>
+#include <GLES/glext.h>
+#endif // GLES1_ENABLED
 
 #endif // PLATFORM_GL_H

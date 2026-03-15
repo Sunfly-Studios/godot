@@ -3840,6 +3840,7 @@ String VisualShaderNodeDerivativeFunc::generate_code(Shader::Mode p_mode, Visual
 	};
 
 	String code;
+	// TODO(GLES2): This needs review for GLES2.
 	if (OS::get_singleton()->get_current_rendering_method() == "gl_compatibility") {
 		code += "	" + p_output_vars[0] + " = " + String(functions[func]).replace_first("$", "").replace_first("$", p_input_vars[0]) + ";\n";
 		return code;
@@ -3850,7 +3851,14 @@ String VisualShaderNodeDerivativeFunc::generate_code(Shader::Mode p_mode, Visual
 }
 
 String VisualShaderNodeDerivativeFunc::get_warning(Shader::Mode p_mode, VisualShader::Type p_type) const {
-	if (precision != PRECISION_NONE && OS::get_singleton()->get_current_rendering_method() == "gl_compatibility") {
+	// TODO(GLES2): This needs review for GLES2
+	// (though this one may be more correct to also include for the legacy driver)
+	
+	bool is_opengl_renderer = (
+		OS::get_singleton()->get_current_rendering_method() == "gl_compatibility" ||
+		OS::get_singleton()->get_current_rendering_method() == "gl_legacy"
+	);
+	if (precision != PRECISION_NONE && is_opengl_renderer) {
 		String precision_str;
 		switch (precision) {
 			case PRECISION_COARSE: {
@@ -3863,7 +3871,7 @@ String VisualShaderNodeDerivativeFunc::get_warning(Shader::Mode p_mode, VisualSh
 			} break;
 		}
 
-		return vformat(RTR("`%s` precision mode is not available for `gl_compatibility` profile.\nReverted to `None` precision."), precision_str);
+		return vformat(RTR("`%s` precision mode is not available for `gl_compatibility`/`gl_legacy` profile.\nReverted to `None` precision."), precision_str);
 	}
 
 	return String();

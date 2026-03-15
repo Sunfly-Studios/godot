@@ -395,7 +395,11 @@ void CameraAttributesPhysical::_update_frustum() {
 	bool use_far = (depth_far < frustum_far) && (depth_far > 0.0);
 	bool use_near = depth_near > frustum_near;
 #ifdef DEBUG_ENABLED
-	if (OS::get_singleton()->get_current_rendering_method() == "gl_compatibility") {
+	bool is_opengl_renderer = (
+		OS::get_singleton()->get_current_rendering_method() == "gl_compatibility" ||
+		OS::get_singleton()->get_current_rendering_method() == "gl_legacy"
+	);
+	if (is_opengl_renderer) {
 		// Force disable DoF in editor builds to suppress warnings.
 		use_far = false;
 		use_near = false;

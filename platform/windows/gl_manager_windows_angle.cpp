@@ -30,7 +30,7 @@
 
 #include "gl_manager_windows_angle.h"
 
-#if defined(WINDOWS_ENABLED) && defined(GLES3_ENABLED)
+#if defined(WINDOWS_ENABLED) && (defined(GLES3_ENABLED) || defined(GLES2_ENABLED) || defined(GLES1_ENABLED))
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -61,7 +61,7 @@ EGLenum GLManagerANGLE_Windows::_get_platform_api_enum() const {
 Vector<EGLint> GLManagerANGLE_Windows::_get_platform_context_attribs() const {
 	Vector<EGLint> ret;
 	ret.push_back(EGL_CONTEXT_CLIENT_VERSION);
-	ret.push_back(3);
+	ret.push_back(gles_major);
 	ret.push_back(EGL_NONE);
 
 	return ret;
@@ -72,4 +72,4 @@ void GLManagerANGLE_Windows::window_resize(DisplayServer::WindowID p_window_id, 
 	eglWaitNative(EGL_CORE_NATIVE_ENGINE);
 }
 
-#endif // WINDOWS_ENABLED && GLES3_ENABLED
+#endif // WINDOWS_ENABLED && (GLES3_ENABLED || GLES2_ENABLED || GLES1_ENABLED)

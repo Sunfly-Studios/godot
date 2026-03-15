@@ -51,10 +51,17 @@
 #include "main/main.h"
 #include "scene/resources/image_texture.h"
 
+#include <functional> // for std::function
 #include <AppKit/AppKit.h>
 
 #if defined(GLES3_ENABLED)
 #include "drivers/gles3/rasterizer_gles3.h"
+#endif
+#if defined(GLES2_ENABLED)
+#include "drivers/gles2/rasterizer_gles2.h"
+#endif
+#if defined(GLES1_ENABLED)
+#include "drivers/gles1/rasterizer_gles1.h"
 #endif
 
 #if defined(RD_ENABLED)
@@ -67,6 +74,7 @@
 #import <IOKit/IOKitLib.h>
 #import <IOKit/hid/IOHIDKeys.h>
 #import <IOKit/hid/IOHIDLib.h>
+
 
 DisplayServerMacOS::WindowID DisplayServerMacOS::_create_window(WindowMode p_mode, VSyncMode p_vsync_mode, const Rect2i &p_rect) {
 	WindowID id;
@@ -161,7 +169,7 @@ DisplayServerMacOS::WindowID DisplayServerMacOS::_create_window(WindowMode p_mod
 			rendering_context->window_set_vsync_mode(window_id_counter, p_vsync_mode);
 		}
 #endif
-#if defined(GLES3_ENABLED)
+#if defined(GLES3_ENABLED) || defined(GLES2_ENABLED) || defined(GLES1_ENABLED)
 		if (gl_manager_legacy) {
 			Error err = gl_manager_legacy->window_create(window_id_counter, wd.window_view, p_rect.size.width, p_rect.size.height);
 			ERR_FAIL_COND_V_MSG(err != OK, INVALID_WINDOW_ID, "Can't create an OpenGL context.");
@@ -200,7 +208,7 @@ DisplayServerMacOS::WindowID DisplayServerMacOS::_create_window(WindowMode p_mod
 		layer.contentsScale = scale;
 	}
 
-#if defined(GLES3_ENABLED)
+#if defined(GLES3_ENABLED) || defined(GLES2_ENABLED) || defined(GLES1_ENABLED)
 	if (gl_manager_legacy) {
 		gl_manager_legacy->window_resize(id, wd.size.width, wd.size.height);
 	}
@@ -276,7 +284,7 @@ void DisplayServerMacOS::set_window_per_pixel_transparency_enabled(bool p_enable
 				[layer setBackgroundColor:[NSColor clearColor].CGColor];
 				[layer setOpaque:NO];
 			}
-#if defined(GLES3_ENABLED)
+#if defined(GLES3_ENABLED) || defined(GLES2_ENABLED) || defined(GLES1_ENABLED)
 			if (gl_manager_legacy) {
 				gl_manager_legacy->window_set_per_pixel_transparency_enabled(p_window, true);
 			}
@@ -295,7 +303,7 @@ void DisplayServerMacOS::set_window_per_pixel_transparency_enabled(bool p_enable
 				[layer setBackgroundColor:bg_color.CGColor];
 				[layer setOpaque:YES];
 			}
-#if defined(GLES3_ENABLED)
+#if defined(GLES3_ENABLED) || defined(GLES2_ENABLED) || defined(GLES1_ENABLED)
 			if (gl_manager_legacy) {
 				gl_manager_legacy->window_set_per_pixel_transparency_enabled(p_window, false);
 			}
@@ -739,7 +747,7 @@ bool DisplayServerMacOS::get_is_resizing() const {
 
 void DisplayServerMacOS::window_destroy(WindowID p_window) {
 	@autoreleasepool {
-#if defined(GLES3_ENABLED)
+#if defined(GLES3_ENABLED) || defined(GLES2_ENABLED) || defined(GLES1_ENABLED)
 		if (gl_manager_legacy) {
 			gl_manager_legacy->window_destroy(p_window);
 		}
@@ -768,7 +776,7 @@ void DisplayServerMacOS::window_resize(WindowID p_window, int p_width, int p_hei
 		rendering_context->window_set_size(p_window, p_width, p_height);
 	}
 #endif
-#if defined(GLES3_ENABLED)
+#if defined(GLES3_ENABLED) || defined(GLES2_ENABLED) || defined(GLES1_ENABLED)
 	if (gl_manager_legacy) {
 		gl_manager_legacy->window_resize(p_window, p_width, p_height);
 	}
@@ -2971,7 +2979,7 @@ int64_t DisplayServerMacOS::window_get_native_handle(HandleType p_handle_type, W
 		case WINDOW_VIEW: {
 			return (int64_t)windows[p_window].window_view;
 		}
-#ifdef GLES3_ENABLED
+#if defined(GLES3_ENABLED) || defined(GLES2_ENABLED) || defined(GLES1_ENABLED)
 		case OPENGL_CONTEXT: {
 			if (gl_manager_legacy) {
 				return (int64_t)gl_manager_legacy->get_context(p_window);
@@ -3015,7 +3023,7 @@ ObjectID DisplayServerMacOS::window_get_attached_instance_id(WindowID p_window) 
 }
 
 void DisplayServerMacOS::gl_window_make_current(DisplayServer::WindowID p_window_id) {
-#if defined(GLES3_ENABLED)
+#if defined(GLES3_ENABLED) || defined(GLES2_ENABLED) || defined(GLES1_ENABLED)
 	if (gl_manager_legacy) {
 		gl_manager_legacy->window_make_current(p_window_id);
 	}
@@ -3027,7 +3035,7 @@ void DisplayServerMacOS::gl_window_make_current(DisplayServer::WindowID p_window
 
 void DisplayServerMacOS::window_set_vsync_mode(DisplayServer::VSyncMode p_vsync_mode, WindowID p_window) {
 	_THREAD_SAFE_METHOD_
-#if defined(GLES3_ENABLED)
+#if defined(GLES3_ENABLED) || defined(GLES2_ENABLED) || defined(GLES1_ENABLED)
 	if (gl_manager_angle) {
 		gl_manager_angle->set_use_vsync(p_vsync_mode != DisplayServer::VSYNC_DISABLED);
 	}
@@ -3044,7 +3052,7 @@ void DisplayServerMacOS::window_set_vsync_mode(DisplayServer::VSyncMode p_vsync_
 
 DisplayServer::VSyncMode DisplayServerMacOS::window_get_vsync_mode(WindowID p_window) const {
 	_THREAD_SAFE_METHOD_
-#if defined(GLES3_ENABLED)
+#if defined(GLES3_ENABLED) || defined(GLES2_ENABLED) || defined(GLES1_ENABLED)
 	if (gl_manager_angle) {
 		return (gl_manager_angle->is_using_vsync() ? DisplayServer::VSyncMode::VSYNC_ENABLED : DisplayServer::VSyncMode::VSYNC_DISABLED);
 	}
@@ -3419,7 +3427,7 @@ void DisplayServerMacOS::force_process_and_drop_events() {
 }
 
 void DisplayServerMacOS::release_rendering_thread() {
-#if defined(GLES3_ENABLED)
+#if defined(GLES3_ENABLED) || defined(GLES2_ENABLED) || defined(GLES1_ENABLED)
 	if (gl_manager_angle) {
 		gl_manager_angle->release_current();
 	}
@@ -3430,7 +3438,7 @@ void DisplayServerMacOS::release_rendering_thread() {
 }
 
 void DisplayServerMacOS::swap_buffers() {
-#if defined(GLES3_ENABLED)
+#if defined(GLES3_ENABLED) || defined(GLES2_ENABLED) || defined(GLES1_ENABLED)
 	if (gl_manager_angle) {
 		gl_manager_angle->swap_buffers();
 	}
@@ -3635,28 +3643,84 @@ bool DisplayServerMacOS::is_window_transparency_available() const {
 
 DisplayServer *DisplayServerMacOS::create_func(const String &p_rendering_driver, WindowMode p_mode, VSyncMode p_vsync_mode, uint32_t p_flags, const Vector2i *p_position, const Vector2i &p_resolution, int p_screen, Context p_context, int64_t p_parent_window, Error &r_error) {
 	DisplayServer *ds = memnew(DisplayServerMacOS(p_rendering_driver, p_mode, p_vsync_mode, p_flags, p_position, p_resolution, p_screen, p_context, p_parent_window, r_error));
-	if (r_error != OK) {
-		if (p_rendering_driver == "vulkan") {
-			String executable_command;
-			if (OS::get_singleton()->get_bundle_resource_dir() == OS::get_singleton()->get_executable_path().get_base_dir()) {
-				executable_command = vformat("\"%s\" --rendering-driver opengl3", OS::get_singleton()->get_executable_path());
-			} else {
-				executable_command = vformat("open \"%s\" --args --rendering-driver opengl3", OS::get_singleton()->get_bundle_resource_dir().path_join("../..").simplify_path());
-			}
-			OS::get_singleton()->alert(
-					vformat("Your video card drivers seem not to support the required Vulkan version.\n\n"
-							"If possible, consider updating your macOS version or using the OpenGL 3 driver.\n\n"
-							"You can enable the OpenGL 3 driver by starting the engine from the\n"
-							"command line with the command:\n\n    %s",
-							executable_command),
-					"Unable to initialize Vulkan video driver");
-		} else {
-			OS::get_singleton()->alert(
-					"Your video card drivers seem not to support the required OpenGL 3.3 version.\n\n"
-					"If possible, consider updating your macOS version.",
-					"Unable to initialize OpenGL video driver");
-		}
+	
+	if (r_error == OK) {
+		return ds;
 	}
+
+	// Cache the OS singleton and paths to avoid repeated calls
+	OS *os = OS::get_singleton();
+	ERR_FAIL_NULL_V(os, ds);
+	String exec_path = os->get_executable_path();
+	String bundle_dir = os->get_bundle_resource_dir();
+	
+	std::function<String(const String &)> get_cmd = [&](const String &driver) -> String {
+		if (bundle_dir == exec_path.get_base_dir()) {
+			return vformat("\"%s\" --rendering-driver %s", exec_path, driver);
+		} else {
+			return vformat("open \"%s\" --args --rendering-driver %s", bundle_dir.path_join("../..").simplify_path(), driver);
+		}
+	};
+
+	if (p_rendering_driver == "vulkan") {
+		os->alert(
+			vformat("Your video card drivers seem not to support the required Vulkan version.\n\n"
+					"If possible, consider updating your macOS version, or using one of the OpenGL drivers.\n\n"
+					"You can enable the OpenGL 3 driver by starting the engine from the\n"
+					"command line with the command:\n\n    %s\n\n"
+					"You can enable the OpenGL 2 driver by starting the engine from the\n"
+					"command line with the command:\n\n    %s\n\n"
+					"You can enable the OpenGL 1 driver by starting the engine from the\n"
+					"command line with the command:\n\n    %s",
+					get_cmd("opengl3"), get_cmd("opengl2"), get_cmd("opengl1")),
+			"Unable to initialize Vulkan video driver"
+		);
+	} else if (p_rendering_driver == "opengl3") {
+		os->alert(
+			vformat("Your video card drivers seem not to support the required OpenGL 3.3 version.\n\n"
+					"If possible, consider updating your macOS version, using the Vulkan driver, using the OpenGL 2 driver, or using the OpenGL 1 driver.\n\n"
+					"You can enable the Vulkan driver by starting the engine from the\n"
+					"command line with the command:\n\n    %s\n\n"
+					"You can enable the OpenGL 2 driver by starting the engine from the\n"
+					"command line with the command:\n\n    %s\n\n"
+					"You can enable the OpenGL 1 driver by starting the engine from the\n"
+					"command line with the command:\n\n    %s",
+					get_cmd("vulkan"), get_cmd("opengl2"), get_cmd("opengl1")),
+			"Unable to initialize OpenGL 3.3 video driver"
+		);
+	} else if (p_rendering_driver == "opengl2") {
+		os->alert(
+			vformat("Your video card drivers seem not to support the required OpenGL 2.1 version.\n\n"
+					"If possible, consider updating your macOS version, using the Vulkan driver, using the OpenGL 3 driver, or using the OpenGL 1 driver.\n\n"
+					"You can enable the Vulkan driver by starting the engine from the\n"
+					"command line with the command:\n\n    %s\n\n"
+					"You can enable the OpenGL 3 driver by starting the engine from the\n"
+					"command line with the command:\n\n    %s\n\n"
+					"You can enable the OpenGL 1 driver by starting the engine from the\n"
+					"command line with the command:\n\n    %s",
+					get_cmd("vulkan"), get_cmd("opengl3"), get_cmd("opengl1")),
+			"Unable to initialize OpenGL 2.1 video driver"
+		);
+	} else {
+		// For this to happen, the user must break 3 specific laws, in order:
+		// 1. The Laws of Apple.
+		// 2. The Laws of Computer Science.
+		// 3. The Laws of Physics.
+		// From what I've heard, not that many people can get around the first law anyway,
+		// which is strict, and inescapable, especially in newer M series macs for regular users.
+		// There _is_ a loophole in all of the above though that I would recommend
+		// to people, and that is using _Linux_ (Asahi-Linux) :lenny-face:.
+		//
+		// If you're using an older mac, I'd recommend instead Adelie Linux or similar.
+		// DO NOT tell any of this to Tim Cook pretty please before Apple denies my app
+		// for the iOS store for the 3rd time >:(.
+		os->alert(
+			"Your video card drivers seem not to support the required OpenGL 1.5 version.\n\n"
+			"If possible, consider updating your macOS version.",
+			"Unable to initialize OpenGL 1.5 video driver"
+		);
+	}
+	
 	return ds;
 }
 
@@ -3672,6 +3736,14 @@ Vector<String> DisplayServerMacOS::get_rendering_drivers_func() {
 #if defined(GLES3_ENABLED)
 	drivers.push_back("opengl3");
 	drivers.push_back("opengl3_angle");
+#endif
+#if defined(GLES2_ENABLED)
+	drivers.push_back("opengl2");
+	drivers.push_back("opengl2_angle");
+#endif
+#if defined(GLES1_ENABLED)
+	drivers.push_back("opengl1");
+	drivers.push_back("opengl1_angle");
 #endif
 
 	return drivers;
@@ -3994,16 +4066,43 @@ DisplayServerMacOS::DisplayServerMacOS(const String &p_rendering_driver, WindowM
 		if (rendering_context->initialize() != OK) {
 			memdelete(rendering_context);
 			rendering_context = nullptr;
+			
+			bool fallback_triggered = false;
+			
 #if defined(GLES3_ENABLED)
 			bool fallback_to_opengl3 = GLOBAL_GET("rendering/rendering_device/fallback_to_opengl3");
-			if (fallback_to_opengl3 && rendering_driver != "opengl3") {
+			if (!fallback_triggered && fallback_to_opengl3 && rendering_driver != "opengl3" && rendering_driver != "opengl2") {
 				WARN_PRINT("Your device seem not to support MoltenVK or Metal, switching to OpenGL 3.");
 				rendering_driver = "opengl3";
 				OS::get_singleton()->set_current_rendering_method("gl_compatibility", OS::RENDERING_SOURCE_FALLBACK);
 				OS::get_singleton()->set_current_rendering_driver_name(rendering_driver, OS::RENDERING_SOURCE_FALLBACK);
-			} else
-#endif
-			{
+				fallback_triggered = true;
+			}
+#endif // GLES3_ENABLED
+			
+#if defined(GLES2_ENABLED)
+			bool fallback_to_opengl2 = GLOBAL_GET("rendering/rendering_device/fallback_to_opengl2");
+			if (!fallback_triggered && fallback_to_opengl2 && rendering_driver != "opengl2") {
+				WARN_PRINT("Your device seem not to support MoltenVK, Metal, or OpenGL 3, switching to OpenGL 2.");
+				rendering_driver = "opengl2";
+				OS::get_singleton()->set_current_rendering_method("gl_legacy", OS::RENDERING_SOURCE_FALLBACK);
+				OS::get_singleton()->set_current_rendering_driver_name(rendering_driver, OS::RENDERING_SOURCE_FALLBACK);
+				fallback_triggered = true;
+			}
+#endif // GLES2_ENABLED
+			
+#if defined(GLES1_ENABLED)
+			bool fallback_to_opengl1 = GLOBAL_GET("rendering/rendering_device/fallback_to_opengl1");
+			if (!fallback_triggered && fallback_to_opengl1 && rendering_driver != "opengl1") {
+				WARN_PRINT("Your device seem not to support MoltenVK, Metal, OpenGL 3, or OpenGL 2, switching to OpenGL 1.");
+				rendering_driver = "opengl1";
+				OS::get_singleton()->set_current_rendering_method("gl_classic", OS::RENDERING_SOURCE_FALLBACK);
+				OS::get_singleton()->set_current_rendering_driver_name(rendering_driver, OS::RENDERING_SOURCE_FALLBACK);
+				fallback_triggered = true;
+			}
+#endif // GLES1_ENABLED
+
+			if (!fallback_triggered) {
 				r_error = ERR_CANT_CREATE;
 				ERR_FAIL_MSG("Could not initialize " + rendering_driver);
 			}
@@ -4012,42 +4111,130 @@ DisplayServerMacOS::DisplayServerMacOS(const String &p_rendering_driver, WindowM
 #endif
 
 #if defined(GLES3_ENABLED)
-	if (rendering_driver == "opengl3" && OS::get_singleton()->get_processor_name().contains("Virtual")) {
-		WARN_PRINT("Virtual Machine detected, switching to ANGLE.");
-		rendering_driver = "opengl3_angle";
-	}
-	if (rendering_driver == "opengl3_angle") {
-		gl_manager_angle = memnew(GLManagerANGLE_MacOS);
-		if (gl_manager_angle->initialize() != OK || gl_manager_angle->open_display(nullptr) != OK) {
-			memdelete(gl_manager_angle);
-			gl_manager_angle = nullptr;
-			if (OS::get_singleton()->get_processor_name().contains("Virtual")) {
-				r_error = ERR_UNAVAILABLE;
-				ERR_FAIL_MSG("Could not initialize ANGLE OpenGL.");
+	{
+		if (rendering_driver == "opengl3" && OS::get_singleton()->get_processor_name().contains("Virtual")) {
+			WARN_PRINT("Virtual Machine detected, switching to ANGLE.");
+			rendering_driver = "opengl3_angle";
+		}
+		if (rendering_driver == "opengl3_angle") {
+			gl_manager_angle = memnew(GLManagerANGLE_MacOS(3, 3));
+			if (gl_manager_angle->initialize() != OK || gl_manager_angle->open_display(nullptr) != OK) {
+				memdelete(gl_manager_angle);
+				gl_manager_angle = nullptr;
+				if (OS::get_singleton()->get_processor_name().contains("Virtual")) {
+					r_error = ERR_UNAVAILABLE;
+					ERR_FAIL_MSG("Could not initialize ANGLE OpenGL.");
+				}
+				bool fallback = GLOBAL_GET("rendering/gl_compatibility/fallback_to_native");
+				if (fallback) {
+	#ifdef EGL_STATIC
+					WARN_PRINT("Your video card drivers seem not to support GLES3 / ANGLE, switching to native OpenGL.");
+	#else
+					WARN_PRINT("Your video card drivers seem not to support GLES3 / ANGLE or ANGLE dynamic libraries (libEGL.dylib and libGLESv2.dylib) are missing, switching to native OpenGL.");
+	#endif
+					rendering_driver = "opengl3";
+					OS::get_singleton()->set_current_rendering_driver_name(rendering_driver, OS::RENDERING_SOURCE_FALLBACK);
+				} else {
+					r_error = ERR_UNAVAILABLE;
+					ERR_FAIL_MSG("Could not initialize ANGLE OpenGL.");
+				}
 			}
-			bool fallback = GLOBAL_GET("rendering/gl_compatibility/fallback_to_native");
-			if (fallback) {
-#ifdef EGL_STATIC
-				WARN_PRINT("Your video card drivers seem not to support GLES3 / ANGLE, switching to native OpenGL.");
-#else
-				WARN_PRINT("Your video card drivers seem not to support GLES3 / ANGLE or ANGLE dynamic libraries (libEGL.dylib and libGLESv2.dylib) are missing, switching to native OpenGL.");
-#endif
-				rendering_driver = "opengl3";
-				OS::get_singleton()->set_current_rendering_driver_name(rendering_driver, OS::RENDERING_SOURCE_FALLBACK);
-			} else {
+		}
+
+		if (rendering_driver == "opengl3") {
+			gl_manager_legacy = memnew(GLManagerLegacy_MacOS(3, 3));
+			if (gl_manager_legacy->initialize() != OK) {
+				memdelete(gl_manager_legacy);
+				gl_manager_legacy = nullptr;
 				r_error = ERR_UNAVAILABLE;
-				ERR_FAIL_MSG("Could not initialize ANGLE OpenGL.");
+				ERR_FAIL_MSG("Could not initialize native OpenGL.");
 			}
 		}
 	}
+#endif
 
-	if (rendering_driver == "opengl3") {
-		gl_manager_legacy = memnew(GLManagerLegacy_MacOS);
-		if (gl_manager_legacy->initialize() != OK) {
-			memdelete(gl_manager_legacy);
-			gl_manager_legacy = nullptr;
-			r_error = ERR_UNAVAILABLE;
-			ERR_FAIL_MSG("Could not initialize native OpenGL.");
+#if defined(GLES2_ENABLED)
+	{
+		if (rendering_driver == "opengl2" && OS::get_singleton()->get_processor_name().contains("Virtual")) {
+			WARN_PRINT("Virtual Machine detected, switching to ANGLE.");
+			rendering_driver = "opengl2_angle";
+		}
+		if (rendering_driver == "opengl2_angle") {
+			gl_manager_angle = memnew(GLManagerANGLE_MacOS(2, 1));
+			if (gl_manager_angle->initialize() != OK || gl_manager_angle->open_display(nullptr) != OK) {
+				memdelete(gl_manager_angle);
+				gl_manager_angle = nullptr;
+				if (OS::get_singleton()->get_processor_name().contains("Virtual")) {
+					r_error = ERR_UNAVAILABLE;
+					ERR_FAIL_MSG("Could not initialize ANGLE OpenGL.");
+				}
+				bool fallback = GLOBAL_GET("rendering/gl_legacy/fallback_to_native");
+				if (fallback) {
+	#ifdef EGL_STATIC
+					WARN_PRINT("Your video card drivers seem not to support GLES2 / ANGLE, switching to native OpenGL.");
+	#else
+					WARN_PRINT("Your video card drivers seem not to support GLES2 / ANGLE or ANGLE dynamic libraries (libEGL.dylib and libGLESv2.dylib) are missing, switching to native OpenGL.");
+	#endif
+					rendering_driver = "opengl2";
+					OS::get_singleton()->set_current_rendering_driver_name(rendering_driver, OS::RENDERING_SOURCE_FALLBACK);
+				} else {
+					r_error = ERR_UNAVAILABLE;
+					ERR_FAIL_MSG("Could not initialize ANGLE OpenGL.");
+				}
+			}
+		}
+
+		if (rendering_driver == "opengl2") {
+			gl_manager_legacy = memnew(GLManagerLegacy_MacOS(2, 1));
+			if (gl_manager_legacy->initialize() != OK) {
+				memdelete(gl_manager_legacy);
+				gl_manager_legacy = nullptr;
+				r_error = ERR_UNAVAILABLE;
+				ERR_FAIL_MSG("Could not initialize native OpenGL.");
+			}
+		}
+	}
+#endif
+
+#if defined(GLES1_ENABLED)
+	{
+		if (rendering_driver == "opengl1" && OS::get_singleton()->get_processor_name().contains("Virtual")) {
+			WARN_PRINT("Virtual Machine detected, switching to ANGLE.");
+			rendering_driver = "opengl1_angle";
+		}
+		if (rendering_driver == "opengl1_angle") {
+			gl_manager_angle = memnew(GLManagerANGLE_MacOS(1, 5));
+			if (gl_manager_angle->initialize() != OK || gl_manager_angle->open_display(nullptr) != OK) {
+				memdelete(gl_manager_angle);
+				gl_manager_angle = nullptr;
+				if (OS::get_singleton()->get_processor_name().contains("Virtual")) {
+					r_error = ERR_UNAVAILABLE;
+					ERR_FAIL_MSG("Could not initialize ANGLE OpenGL.");
+				}
+				bool fallback = GLOBAL_GET("rendering/gl_classic/fallback_to_native");
+				if (fallback) {
+	#ifdef EGL_STATIC
+					WARN_PRINT("Your video card drivers seem not to support GLES1 / ANGLE, switching to native OpenGL.");
+	#else
+					WARN_PRINT("Your video card drivers seem not to support GLES1 / ANGLE or ANGLE dynamic libraries (libEGL.dylib and libGLESv2.dylib) are missing, switching to native OpenGL.");
+	#endif
+					rendering_driver = "opengl1";
+					OS::get_singleton()->set_current_rendering_driver_name(rendering_driver, OS::RENDERING_SOURCE_FALLBACK);
+				} else {
+					r_error = ERR_UNAVAILABLE;
+					ERR_FAIL_MSG("Could not initialize ANGLE OpenGL.");
+				}
+			}
+		}
+
+		if (rendering_driver == "opengl1") {
+			gl_manager_legacy = memnew(GLManagerLegacy_MacOS(1, 5));
+			if (gl_manager_legacy->initialize() != OK) {
+				memdelete(gl_manager_legacy);
+				gl_manager_legacy = nullptr;
+				r_error = ERR_UNAVAILABLE;
+				ERR_FAIL_MSG("Could not initialize native OpenGL.");
+			}
 		}
 	}
 #endif
@@ -4079,6 +4266,22 @@ DisplayServerMacOS::DisplayServerMacOS(const String &p_rendering_driver, WindowM
 	}
 	if (rendering_driver == "opengl3_angle") {
 		RasterizerGLES3::make_current(false);
+	}
+#endif
+#if defined(GLES2_ENABLED)
+	if (rendering_driver == "opengl2") {
+		RasterizerGLES2::make_current(true);
+	}
+	if (rendering_driver == "opengl2_angle") {
+		RasterizerGLES2::make_current(false);
+	}
+#endif
+#if defined(GLES1_ENABLED)
+	if (rendering_driver == "opengl1") {
+		RasterizerGLES1::make_current(true);
+	}
+	if (rendering_driver == "opengl1_angle") {
+		RasterizerGLES1::make_current(false);
 	}
 #endif
 #if defined(RD_ENABLED)
@@ -4126,7 +4329,7 @@ DisplayServerMacOS::~DisplayServerMacOS() {
 	}
 
 	// Destroy drivers.
-#if defined(GLES3_ENABLED)
+#if defined(GLES3_ENABLED) || defined(GLES2_ENABLED) || defined(GLES1_ENABLED)
 	if (gl_manager_legacy) {
 		memdelete(gl_manager_legacy);
 		gl_manager_legacy = nullptr;

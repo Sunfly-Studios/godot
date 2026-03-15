@@ -80,6 +80,7 @@ def get_flags():
         "target": "template_debug",
         "builtin_pcre2_with_jit": False,
         "vulkan": False,
+        "opengl2": True,
         # Embree is heavy and requires too much memory (GH-70621).
         "module_raycast_enabled": False,
         # Use -Os to prioritize optimizing for reduced file size. This is
@@ -211,8 +212,22 @@ def configure(env: "SConsEnvironment"):
     env.Prepend(CPPPATH=["#platform/web"])
     env.Append(CPPDEFINES=["WEB_ENABLED", "UNIX_ENABLED", "UNIX_SOCKET_UNAVAILABLE"])
 
-    if env["opengl3"]:
-        env.AppendUnique(CPPDEFINES=["GLES3_ENABLED"])
+    if env["opengl3"] or env["opengl2"] or env["opengl1"]:
+        # Web platforms only support GLES2 (WebGL 1.0) or higher.
+        # If a build attempts to force only GLES1, silently enable GLES2 
+        # to ensure the C++ fallback logic is actually compiled.
+        if env["opengl1"] and not env["opengl2"] and not env["opengl3"]:
+            env["opengl2"] = True
+            print_info("Web platform requires GLES2 or higher. Enabling GLES2.")
+        elif env["opengl1"]:
+            print_info("Web platform requires GLES2 or higher. GLES1 flag ignored.")
+
+        if env["opengl3"]:
+            env.AppendUnique(CPPDEFINES=["GLES3_ENABLED"])
+        
+        if env["opengl2"]:
+            env.AppendUnique(CPPDEFINES=["GLES2_ENABLED"])
+        
         # This setting just makes WebGL 2 APIs available, it does NOT disable WebGL 1.
         env.Append(LINKFLAGS=["-sMAX_WEBGL_VERSION=2"])
         # Allow use to take control of swapping WebGL buffers.
