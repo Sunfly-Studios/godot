@@ -6788,6 +6788,10 @@ void EditorNode::_set_renderer_name_save_and_restart() {
 		// Also change the mobile override if changing to a compatible rendering method.
 		// This prevents visual discrepancies between desktop and mobile platforms.
 		ProjectSettings::get_singleton()->set("rendering/renderer/rendering_method.mobile", renderer_request);
+
+		if (renderer_request == "gl_legacy") {
+			ProjectSettings::get_singleton()->set("rendering/renderer/rendering_method.web", renderer_request);
+		}
 	} else if (renderer_request == "forward_plus") {
 		// Use the equivalent mobile rendering method. This prevents the rendering method from staying
 		// on its old choice if moving from `gl_compatibility`/`gl_legacy` to `forward_plus`.
