@@ -413,7 +413,7 @@ public:
 	/* Texture API */
 
 	Texture *get_texture(RID p_rid) const {
-        return nullptr;
+		return texture_owner.get_or_null(p_rid);
     }
 	bool owns_texture(RID p_rid) { return texture_owner.owns(p_rid); }
 
@@ -611,11 +611,11 @@ public:
 	virtual Size2i render_target_get_velocity_target_size(RID p_render_target) const override { return Size2i(); }
 
 	void bind_framebuffer(GLuint framebuffer) {
-		// glBindFramebuffer(GL_FRAMEBUFFER, framebuffer);
+		glBindFramebuffer(GL_FRAMEBUFFER, framebuffer);
 	}
 
 	void bind_framebuffer_system() {
-		// glBindFramebuffer(GL_FRAMEBUFFER, GLES2::TextureStorage::system_fbo);
+		glBindFramebuffer(GL_FRAMEBUFFER, GLES2::TextureStorage::system_fbo);
 	}
 
 	String get_framebuffer_error(GLenum p_status);

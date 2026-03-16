@@ -4,6 +4,8 @@
 mode_default = #define MODE_SIMPLE_COPY
 mode_copy_section = #define USE_COPY_SECTION \n#define MODE_SIMPLE_COPY
 mode_copy_section_source = #define USE_COPY_SECTION \n#define MODE_SIMPLE_COPY \n#define MODE_COPY_FROM
+mode_copy_section_3d = #define USE_COPY_SECTION \n#define MODE_SIMPLE_COPY \n#define USE_TEXTURE_3D
+mode_copy_section_2d_array = #define USE_COPY_SECTION \n#define MODE_SIMPLE_COPY \n#define USE_TEXTURE_2D_ARRAY
 mode_screen = #define MODE_SIMPLE_COPY \n#define MODE_MULTIPLY
 mode_gaussian_blur = #define MODE_GAUSSIAN_BLUR
 mode_mipmap = #define MODE_MIPMAP

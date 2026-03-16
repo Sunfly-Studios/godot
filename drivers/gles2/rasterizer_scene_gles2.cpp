@@ -308,7 +308,10 @@ void RasterizerSceneGLES2::set_debug_draw_mode(RS::ViewportDebugDraw p_debug_dra
 }
 
 Ref<RenderSceneBuffers> RasterizerSceneGLES2::render_buffers_create() {
-	return Ref<RenderSceneBuffers>();
+	Ref<RenderSceneBuffersGLES2> rb;
+	rb.instantiate();
+	ERR_FAIL_COND_V(rb.is_null(), Ref<RenderSceneBuffers>());
+	return rb;
 }
 
 void RasterizerSceneGLES2::_render_buffers_debug_draw(Ref<RenderSceneBuffersGLES2> p_render_buffers, RID p_shadow_atlas, GLuint p_fbo) {

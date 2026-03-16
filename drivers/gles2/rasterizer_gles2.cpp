@@ -378,16 +378,109 @@ RasterizerGLES2::~RasterizerGLES2() {
 }
 
 void RasterizerGLES2::_blit_render_target_to_screen(RID p_render_target, DisplayServer::WindowID p_screen, const Rect2 &p_screen_rect, uint32_t p_layer, bool p_first) {
+	GLES2::RenderTarget *rt = GLES2::TextureStorage::get_singleton()->get_render_target(p_render_target);
+	ERR_FAIL_NULL(rt);
 
+	// Create a temporary FBO to read from our color texture
+	GLuint read_fbo = 0;
+	glGenFramebuffers(1, &read_fbo);
+	glBindFramebuffer(GL_READ_FRAMEBUFFER, read_fbo);
+	glFramebufferTexture2D(GL_READ_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, rt->color, 0);
+
+	// Steer the draw target to the actual application window
+	glBindFramebuffer(GL_DRAW_FRAMEBUFFER, GLES2::TextureStorage::system_fbo);
+
+	if (p_first) {
+		Size2i win_size = DisplayServer::get_singleton()->window_get_size();
+		if (p_screen_rect.position != Vector2() || p_screen_rect.size != rt->size) {
+			glViewport(0, 0, win_size.width, win_size.height);
+			glClearColor(0.0, 0.0, 0.0, 1.0);
+			glClear(GL_COLOR_BUFFER_BIT);
+		}
+	}
+
+	Vector2i screen_rect_end = p_screen_rect.get_end();
+
+	// OpenGL RenderTargets are upside down relative to the screen.
+	// By swapping the Y coordinates, we flip the image right-side up during the copy!
+	glBlitFramebuffer(0, 0, rt->size.x, rt->size.y,
+			p_screen_rect.position.x, screen_rect_end.y,
+			screen_rect_end.x, p_screen_rect.position.y,
+			GL_COLOR_BUFFER_BIT, GL_NEAREST);
+
+	// Clean up
+	glBindFramebuffer(GL_READ_FRAMEBUFFER, 0);
+	glDeleteFramebuffers(1, &read_fbo);
 }
 
 // is this p_screen useless in a multi window environment?
 void RasterizerGLES2::blit_render_targets_to_screen(DisplayServer::WindowID p_screen, const BlitToScreen *p_render_targets, int p_amount) {
+	for (int i = 0; i < p_amount; i++) {
+		const BlitToScreen &blit = p_render_targets[i];
+		RID rid_rt = blit.render_target;
+		Rect2 dst_rect = blit.dst_rect;
 
+		_blit_render_target_to_screen(rid_rt, p_screen, dst_rect, blit.multi_view.use_layer ? blit.multi_view.layer : 0, i == 0);
+	}
 }
 
 void RasterizerGLES2::set_boot_image(const Ref<Image> &p_image, const Color &p_color, bool p_scale, bool p_use_filter) {
+	if (p_image.is_null() || p_image->is_empty()) {
+		return;
+	}
 
+	Size2i win_size = DisplayServer::get_singleton()->window_get_size();
+
+	glBindFramebuffer(GL_FRAMEBUFFER, GLES2::TextureStorage::system_fbo);
+	glViewport(0, 0, win_size.width, win_size.height);
+	glEnable(GL_BLEND);
+	glBlendFuncSeparate(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_ZERO, GL_ONE);
+	glDepthMask(GL_FALSE);
+	glClearColor(p_color.r, p_color.g, p_color.b, 1.0);
+	glClear(GL_COLOR_BUFFER_BIT);
+
+	RID texture = texture_storage->texture_allocate();
+	texture_storage->texture_2d_initialize(texture, p_image);
+
+	Rect2 imgrect(0, 0, p_image->get_width(), p_image->get_height());
+	Rect2 screenrect;
+	if (p_scale) {
+		if (win_size.width > win_size.height) {
+			//scale horizontally
+			screenrect.size.y = win_size.height;
+			screenrect.size.x = imgrect.size.x * win_size.height / imgrect.size.y;
+			screenrect.position.x = (win_size.width - screenrect.size.x) / 2;
+
+		} else {
+			//scale vertically
+			screenrect.size.x = win_size.width;
+			screenrect.size.y = imgrect.size.y * win_size.width / imgrect.size.x;
+			screenrect.position.y = (win_size.height - screenrect.size.y) / 2;
+		}
+	} else {
+		screenrect = imgrect;
+		screenrect.position += ((Size2(win_size.width, win_size.height) - screenrect.size) / 2.0).floor();
+	}
+
+	// Flip Y.
+	screenrect.position.y = win_size.y - screenrect.position.y;
+	screenrect.size.y = -screenrect.size.y;
+
+	// Normalize texture coordinates to window size.
+	screenrect.position /= win_size;
+	screenrect.size /= win_size;
+
+	GLES2::Texture *t = texture_storage->get_texture(texture);
+	t->gl_set_filter(p_use_filter ? RS::CANVAS_ITEM_TEXTURE_FILTER_LINEAR : RS::CANVAS_ITEM_TEXTURE_FILTER_NEAREST);
+	glActiveTexture(GL_TEXTURE0);
+	glBindTexture(GL_TEXTURE_2D, t->tex_id);
+	copy_effects->copy_to_rect(screenrect);
+	glBindTexture(GL_TEXTURE_2D, 0);
+
+	DisplayServer::get_singleton()->swap_buffers();
+	// end_viewport(true);
+
+	texture_storage->texture_free(texture);
 }
 
 #endif // GLES2_ENABLED

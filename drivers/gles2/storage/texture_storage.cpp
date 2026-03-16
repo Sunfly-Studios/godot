@@ -726,7 +726,115 @@ AABB TextureStorage::decal_get_aabb(RID p_decal) const {
 GLuint TextureStorage::system_fbo = 0;
 
 void TextureStorage::_update_render_target(RenderTarget *rt) {
+	// Do not allocate a render target with no size
+	if (rt->size.x <= 0 || rt->size.y <= 0) {
+		return;
+	}
 
+	// If drawing directly to the screen, we just use
+	// the default system Framebuffer (0)
+	if (rt->direct_to_screen) {
+		rt->fbo = system_fbo;
+		return;
+	}
+
+	// Set up the color formats for the FBO
+	if (rt->is_transparent) {
+		rt->color_internal_format = GL_RGBA;
+		rt->color_format = GL_RGBA;
+		rt->color_type = GL_UNSIGNED_BYTE;
+		rt->color_format_size = 4;
+		rt->image_format = Image::FORMAT_RGBA8;
+	} else {
+		rt->color_internal_format = GL_RGB;
+		rt->color_format = GL_RGB;
+		rt->color_type = GL_UNSIGNED_BYTE;
+		rt->color_format_size = 3;
+		rt->image_format = Image::FORMAT_RGB8;
+	}
+
+	glDisable(GL_SCISSOR_TEST);
+	glColorMask(1, 1, 1, 1);
+	glDepthMask(GL_FALSE);
+
+	Texture *texture;
+	GLenum texture_target = GL_TEXTURE_2D;
+
+	// FBO Generation
+	glGenFramebuffers(1, &rt->fbo);
+	glBindFramebuffer(GL_FRAMEBUFFER, rt->fbo);
+
+	if (rt->overridden.color.is_valid()) {
+		texture = get_texture(rt->overridden.color);
+		ERR_FAIL_NULL(texture);
+		rt->color = texture->tex_id;
+		rt->size = Size2i(texture->width, texture->height);
+	} else {
+		texture = get_texture(rt->texture);
+		ERR_FAIL_NULL(texture);
+
+		glGenTextures(1, &rt->color);
+		glBindTexture(texture_target, rt->color);
+
+		glTexImage2D(texture_target, 0, rt->color_internal_format, rt->size.x, rt->size.y, 0, rt->color_format, rt->color_type, nullptr);
+
+		texture->gl_set_filter(RS::CANVAS_ITEM_TEXTURE_FILTER_NEAREST);
+		texture->gl_set_repeat(RS::CANVAS_ITEM_TEXTURE_REPEAT_DISABLED);
+	}
+
+	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, texture_target, rt->color, 0);
+
+	if (rt->overridden.depth.is_valid()) {
+		texture = get_texture(rt->overridden.depth);
+		ERR_FAIL_NULL(texture);
+		rt->depth = texture->tex_id;
+	} else {
+		glGenTextures(1, &rt->depth);
+		glBindTexture(texture_target, rt->depth);
+
+		glTexImage2D(texture_target, 0, GL_DEPTH_COMPONENT, rt->size.x, rt->size.y, 0, GL_DEPTH_COMPONENT, GL_UNSIGNED_INT, nullptr);
+
+		glTexParameteri(texture_target, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+		glTexParameteri(texture_target, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+		glTexParameteri(texture_target, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+		glTexParameteri(texture_target, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+	}
+
+	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, texture_target, rt->depth, 0);
+
+	GLenum status = glCheckFramebufferStatus(GL_FRAMEBUFFER);
+	if (status != GL_FRAMEBUFFER_COMPLETE) {
+		glDeleteFramebuffers(1, &rt->fbo);
+		rt->fbo = 0;
+		WARN_PRINT("Could not create render target FBO, status: " + get_framebuffer_error(status));
+		return;
+	}
+
+	// Update the backing texture so the engine
+	// knows about the FBO's memory
+	texture->is_render_target = true;
+	texture->render_target = rt;
+	if (rt->overridden.color.is_null()) {
+		texture->format = rt->image_format;
+		texture->real_format = rt->image_format;
+		texture->target = texture_target;
+		texture->type = Texture::TYPE_2D;
+		texture->layers = 1;
+		texture->gl_format_cache = rt->color_format;
+		texture->gl_type_cache = GL_UNSIGNED_BYTE;
+		texture->gl_internal_format_cache = rt->color_internal_format;
+		texture->tex_id = rt->color;
+		texture->width = rt->size.x;
+		texture->alloc_width = rt->size.x;
+		texture->height = rt->size.y;
+		texture->alloc_height = rt->size.y;
+		texture->active = true;
+	}
+
+	// Clear out FBO rubbish/garbage
+	glClearColor(0, 0, 0, 0);
+	glClear(GL_COLOR_BUFFER_BIT);
+	glBindFramebuffer(GL_FRAMEBUFFER, system_fbo);
 }
 
 void TextureStorage::_create_render_target_backbuffer(RenderTarget *rt) {
@@ -741,7 +849,21 @@ void TextureStorage::_clear_render_target(RenderTarget *rt) {
 }
 
 RID TextureStorage::render_target_create() {
-    return RID();
+	RenderTarget rt;
+	rt.texture = texture_allocate();
+
+	RID rid = render_target_owner.make_rid(rt);
+
+	// Get the real pointer to link them
+	RenderTarget *real_rt = render_target_owner.get_or_null(rid);
+	Texture *tex = texture_owner.get_or_null(real_rt->texture);
+
+	if (tex) {
+		tex->is_render_target = true;
+		tex->render_target = real_rt;
+	}
+
+	return rid;
 }
 
 void TextureStorage::render_target_free(RID p_rid) {
@@ -757,11 +879,28 @@ Point2i TextureStorage::render_target_get_position(RID p_render_target) const {
 }
 
 void TextureStorage::render_target_set_size(RID p_render_target, int p_width, int p_height, uint32_t p_view_count) {
+	RenderTarget *rt = render_target_owner.get_or_null(p_render_target);
+	ERR_FAIL_NULL(rt);
+
+	// If the size hasn't actually changed, do nothing to save performance
+	if (rt->size.width == p_width && rt->size.height == p_height && rt->view_count == p_view_count) {
+		return;
+	}
+
+	_clear_render_target(rt);
+
+	rt->size.width = p_width;
+	rt->size.height = p_height;
+	rt->view_count = p_view_count;
+
+	_update_render_target(rt);
 }
 
-// TODO: convert to Size2i internally
 Size2i TextureStorage::render_target_get_size(RID p_render_target) const {
-    return Size2i();
+	RenderTarget *rt = render_target_owner.get_or_null(p_render_target);
+	ERR_FAIL_NULL_V(rt, Size2i());
+
+	return rt->size;
 }
 
 void TextureStorage::render_target_set_override(RID p_render_target, RID p_color_texture, RID p_depth_texture, RID p_velocity_texture, RID p_velocity_depth_texture) {
@@ -848,7 +987,11 @@ uint32_t TextureStorage::render_target_get_color_format_size(RID p_render_target
 }
 
 void TextureStorage::render_target_request_clear(RID p_render_target, const Color &p_clear_color) {
+	RenderTarget *rt = render_target_owner.get_or_null(p_render_target);
+	ERR_FAIL_NULL(rt);
 
+	rt->clear_requested = true;
+	rt->clear_color = p_clear_color;
 }
 
 bool TextureStorage::render_target_is_clear_requested(RID p_render_target) {
@@ -864,7 +1007,24 @@ void TextureStorage::render_target_disable_clear_request(RID p_render_target) {
 }
 
 void TextureStorage::render_target_do_clear_request(RID p_render_target) {
+	RenderTarget *rt = render_target_owner.get_or_null(p_render_target);
+	ERR_FAIL_NULL(rt);
 
+	if (!rt->clear_requested) {
+		return;
+	}
+
+	// Steer the GPU to the correct framebuffer
+	glBindFramebuffer(GL_FRAMEBUFFER, rt->fbo);
+
+	// Paint the color.
+	glClearColor(rt->clear_color.r, rt->clear_color.g, rt->clear_color.b, rt->clear_color.a);
+	glClear(GL_COLOR_BUFFER_BIT);
+
+	rt->clear_requested = false;
+
+	// Reset back to the main window
+	glBindFramebuffer(GL_FRAMEBUFFER, system_fbo);
 }
 
 GLuint TextureStorage::render_target_get_fbo(RID p_render_target) const {
