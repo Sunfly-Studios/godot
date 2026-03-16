@@ -170,6 +170,8 @@ private:
 	const char **uniform_names = nullptr;
 	int uniform_count = 0;
 	const UBOPair *ubo_pairs = nullptr;
+	const AttributePair *attribute_pairs = nullptr;
+	int attribute_pair_count = 0;
 	int ubo_count = 0;
 	const Feedback *feedbacks;
 	int feedback_count = 0;
