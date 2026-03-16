@@ -587,6 +587,13 @@ void TextureStorage::_texture_set_data(RID p_texture, const Ref<Image> &p_image,
 	glActiveTexture(GL_TEXTURE0);
 	glBindTexture(texture->target, texture->tex_id);
 
+	// Default to Clamp-to-Edge to prevent possible NPOT black screens.
+	// Default to Linear filtering so mipmap checks don't fail an incomplete texture.
+	glTexParameteri(texture->target, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	glTexParameteri(texture->target, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+	glTexParameteri(texture->target, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+	glTexParameteri(texture->target, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+
 	int mipmaps = img->has_mipmaps() ? img->get_mipmap_count() + 1 : 1;
 	int w = img->get_width();
 	int h = img->get_height();
