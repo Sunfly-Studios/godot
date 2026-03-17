@@ -266,7 +266,8 @@ struct RenderTarget {
 	GLuint backbuffer_depth = 0;
 	bool depth_has_stencil = true;
 
-	bool hdr = false; // For Compatibility this effects both 2D and 3D rendering!
+	bool was_used = false;
+	bool hdr = false; // For Legacy this effects both 2D and 3D rendering!
 	GLuint color_internal_format = GL_RGBA8;
 	GLuint color_format = GL_RGBA;
 	GLuint color_type = GL_UNSIGNED_BYTE;

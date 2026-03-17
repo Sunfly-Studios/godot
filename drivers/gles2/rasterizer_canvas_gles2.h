@@ -38,311 +38,121 @@
 #include "servers/rendering/renderer_compositor.h"
 #include "storage/material_storage.h"
 #include "storage/texture_storage.h"
+#include "batch/rasterizer_canvas_batcher.h"
 
 #include "drivers/gles2/shaders/canvas.glsl.gen.h"
 #include "drivers/gles2/shaders/canvas_occlusion.glsl.gen.h"
 
 class RasterizerSceneGLES2;
 
-class RasterizerCanvasGLES2 : public RendererCanvasRender {
+class RasterizerCanvasGLES2 : public RendererCanvasRender, public RasterizerCanvasBatcher {
+	friend class RasterizerCanvasBatcher;
+
 	static RasterizerCanvasGLES2 *singleton;
 
-	_FORCE_INLINE_ void _update_transform_2d_to_mat2x4(const Transform2D &p_transform, float *p_mat2x4);
-	_FORCE_INLINE_ void _update_transform_2d_to_mat2x3(const Transform2D &p_transform, float *p_mat2x3);
-
-	_FORCE_INLINE_ void _update_transform_2d_to_mat4(const Transform2D &p_transform, float *p_mat4);
-	_FORCE_INLINE_ void _update_transform_to_mat4(const Transform3D &p_transform, float *p_mat4);
-
-	enum {
-		INSTANCE_FLAGS_LIGHT_COUNT_SHIFT = 0, // 4 bits for light count.
-
-		INSTANCE_FLAGS_CLIP_RECT_UV = (1 << 4),
-		INSTANCE_FLAGS_TRANSPOSE_RECT = (1 << 5),
-		INSTANCE_FLAGS_USE_MSDF = (1 << 6),
-		INSTANCE_FLAGS_USE_LCD = (1 << 7),
-
-		INSTANCE_FLAGS_NINEPACH_DRAW_CENTER = (1 << 8),
-		INSTANCE_FLAGS_NINEPATCH_H_MODE_SHIFT = 9,
-		INSTANCE_FLAGS_NINEPATCH_V_MODE_SHIFT = 11,
-
-		INSTANCE_FLAGS_SHADOW_MASKED_SHIFT = 13, // 16 bits.
-	};
-
-	enum {
-		BATCH_FLAGS_INSTANCING_MASK = 0x7F,
-		BATCH_FLAGS_INSTANCING_HAS_COLORS = (1 << 7),
-		BATCH_FLAGS_INSTANCING_HAS_CUSTOM_DATA = (1 << 8),
-
-		BATCH_FLAGS_DEFAULT_NORMAL_MAP_USED = (1 << 9),
-		BATCH_FLAGS_DEFAULT_SPECULAR_MAP_USED = (1 << 10),
-	};
-
-	enum {
-		LIGHT_FLAGS_TEXTURE_MASK = 0xFFFF,
-		LIGHT_FLAGS_BLEND_SHIFT = 16,
-		LIGHT_FLAGS_BLEND_MASK = (3 << 16),
-		LIGHT_FLAGS_BLEND_MODE_ADD = (0 << 16),
-		LIGHT_FLAGS_BLEND_MODE_SUB = (1 << 16),
-		LIGHT_FLAGS_BLEND_MODE_MIX = (2 << 16),
-		LIGHT_FLAGS_BLEND_MODE_MASK = (3 << 16),
-		LIGHT_FLAGS_HAS_SHADOW = (1 << 20),
-		LIGHT_FLAGS_FILTER_SHIFT = 22
-
-	};
-
-	enum {
-		MAX_RENDER_ITEMS = 256 * 1024,
-		MAX_LIGHT_TEXTURES = 1024,
-		MAX_LIGHTS_PER_ITEM = 16,
-		DEFAULT_MAX_LIGHTS_PER_RENDER = 256,
-	};
-
-	/******************/
-	/**** LIGHTING ****/
-	/******************/
-
-	struct CanvasLight {
-		RID texture;
-		struct {
-			bool enabled = false;
-			float z_far;
-			float y_offset;
-			Transform2D directional_xform;
-		} shadow;
-	};
-
-	RID_Owner<CanvasLight> canvas_light_owner;
-
-	struct OccluderPolygon {
-		RS::CanvasOccluderPolygonCullMode cull_mode = RS::CANVAS_OCCLUDER_POLYGON_CULL_DISABLED;
-		int line_point_count = 0;
-		GLuint vertex_buffer = 0;
-		GLuint vertex_array = 0;
-		GLuint index_buffer = 0;
-
-		int sdf_point_count = 0;
-		int sdf_index_count = 0;
-		GLuint sdf_vertex_buffer = 0;
-		GLuint sdf_vertex_array = 0;
-		GLuint sdf_index_buffer = 0;
-		bool sdf_is_lines = false;
-	};
-
-	RID_Owner<OccluderPolygon> occluder_polygon_owner;
-
-	void _update_shadow_atlas();
-
-	struct {
-		CanvasOcclusionShaderGLES2 shader;
-		RID shader_version;
-	} shadow_render;
-
-	struct LightUniform {
-		float matrix[8]; //light to texture coordinate matrix
-		float shadow_matrix[8]; //light to shadow coordinate matrix
-		float color[4];
-
-		uint8_t shadow_color[4];
-		uint32_t flags; //index to light texture
-		float shadow_pixel_size;
-		float height;
-
-		float position[2];
-		float shadow_z_far_inv;
-		float shadow_y_ofs;
-
-		float atlas_rect[4];
-	};
-
-	static_assert(sizeof(LightUniform) % 16 == 0, "2D light UBO size must be a multiple of 16 bytes");
-
-public:
-	enum {
-		BASE_UNIFORM_LOCATION = 0,
-		GLOBAL_UNIFORM_LOCATION = 1,
-		LIGHT_UNIFORM_LOCATION = 2,
-		INSTANCE_UNIFORM_LOCATION = 3,
-		MATERIAL_UNIFORM_LOCATION = 4,
-	};
-
-	struct StateBuffer {
-		float canvas_transform[16];
-		float screen_transform[16];
-		float canvas_normal_transform[16];
-		float canvas_modulate[4];
-
-		float screen_pixel_size[2];
+protected:
+	struct Uniforms {
+		Transform3D projection_matrix;
+		Transform2D modelview_matrix;
+		Transform2D extra_matrix;
+		Color final_modulate;
 		float time;
-		uint32_t use_pixel_snap;
-
-		float sdf_to_tex[4];
-		float sdf_to_screen[2];
-		float screen_to_sdf[2];
-
-		uint32_t directional_light_count;
-		float tex_to_sdf;
-		uint32_t pad1;
-		uint32_t pad2;
 	};
-
-	static_assert(sizeof(StateBuffer) % 16 == 0, "2D state UBO size must be a multiple of 16 bytes");
-
-	struct PolygonBuffers {
-		GLuint vertex_buffer = 0;
-		GLuint vertex_array = 0;
-		GLuint index_buffer = 0;
-		int count = 0;
-		bool color_disabled = false;
-		Color color = Color(1.0, 1.0, 1.0, 1.0);
-	};
-
-	struct {
-		HashMap<PolygonID, PolygonBuffers> polygons;
-		PolygonID last_id = 0;
-	} polygon_buffers;
-
-	RendererCanvasRender::PolygonID request_polygon(const Vector<int> &p_indices, const Vector<Point2> &p_points, const Vector<Color> &p_colors, const Vector<Point2> &p_uvs = Vector<Point2>(), const Vector<int> &p_bones = Vector<int>(), const Vector<float> &p_weights = Vector<float>()) override;
-	void free_polygon(PolygonID p_polygon) override;
-
-	struct InstanceData {
-		float world[6];
-		float color_texture_pixel_size[2];
-		union {
-			//rect
-			struct {
-				float modulation[4];
-				union {
-					float msdf[4];
-					float ninepatch_margins[4];
-				};
-				float dst_rect[4];
-				float src_rect[4];
-				float pad[2];
-			};
-			//primitive
-			struct {
-				float points[6]; // vec2 points[3]
-				float uvs[6]; // vec2 points[3]
-				uint32_t colors[6]; // colors encoded as half
-			};
-		};
-		uint32_t flags;
-		uint32_t instance_uniforms_ofs;
-		uint32_t lights[4];
-	};
-
-	static_assert(sizeof(InstanceData) == 128, "2D instance data struct size must be 128 bytes");
 
 	struct Data {
 		GLuint canvas_quad_vertices;
-		GLuint canvas_quad_array;
+		GLuint polygon_buffer;
+		GLuint polygon_index_buffer;
 
-		GLuint indexed_quad_buffer;
-		GLuint indexed_quad_array;
-
-		GLuint particle_quad_vertices;
-		GLuint particle_quad_array;
+		uint32_t polygon_buffer_size;
+		uint32_t polygon_index_buffer_size;
 
 		GLuint ninepatch_vertices;
 		GLuint ninepatch_elements;
 
 		RID canvas_shader_default_version;
-
-		uint32_t max_lights_per_render = 256;
-		uint32_t max_lights_per_item = 16;
-		uint32_t max_instances_per_buffer = 16384;
-		uint32_t max_instance_buffer_size = 16384 * 128;
 	} data;
 
-	struct Batch {
-		// Position in the UBO measured in bytes
-		uint32_t start = 0;
-		uint32_t instance_count = 0;
-		uint32_t instance_buffer_index = 0;
-
-		RID tex;
-		RS::CanvasItemTextureFilter filter = RS::CANVAS_ITEM_TEXTURE_FILTER_MAX;
-		RS::CanvasItemTextureRepeat repeat = RS::CANVAS_ITEM_TEXTURE_REPEAT_MAX;
-
-		GLES2::CanvasShaderData::BlendMode blend_mode = GLES2::CanvasShaderData::BLEND_MODE_MIX;
-		Color blend_color = Color(1.0, 1.0, 1.0, 1.0);
-
-		Item *clip = nullptr;
-
-		RID material;
-		GLES2::CanvasMaterialData *material_data = nullptr;
-		uint64_t vertex_input_mask = RS::ARRAY_FORMAT_VERTEX | RS::ARRAY_FORMAT_COLOR | RS::ARRAY_FORMAT_TEX_UV;
-		uint64_t specialization = 0;
-
-		const Item::Command *command = nullptr;
-		Item::Command::Type command_type = Item::Command::TYPE_ANIMATION_SLICE; // Can default to any type that doesn't form a batch.
-		uint32_t primitive_points = 0;
-
-		uint32_t flags = 0;
-		uint32_t specular_shininess = 0.0;
-
-		bool lights_disabled = false;
+	struct PolyData {
+		LocalVector<int> indices;
+		LocalVector<Point2> points;
+		LocalVector<Color> colors;
+		LocalVector<Point2> uvs;
 	};
-
-	// DataBuffer contains our per-frame data. I.e. the resources that are updated each frame.
-	// We track them and ensure that they don't get reused until at least 2 frames have passed
-	// to avoid the GPU stalling to wait for a resource to become available.
-	struct DataBuffer {
-		Vector<GLuint> instance_buffers;
-		GLuint light_ubo = 0;
-		GLuint state_ubo = 0;
-		uint64_t last_frame_used = -3;
-		GLsync fence = GLsync();
-	};
+	uint32_t next_polygon_id = 1;
+	HashMap<RendererCanvasRender::PolygonID, PolyData> polygon_cache;
+	RasterizerPooledIndirectList<PolyData> _polydata;
 
 	struct State {
-		LocalVector<DataBuffer> canvas_instance_data_buffers;
-		LocalVector<Batch> canvas_instance_batches;
-		uint32_t current_data_buffer_index = 0;
-		uint32_t current_instance_buffer_index = 0;
-		uint32_t current_batch_index = 0;
-		uint32_t last_item_index = 0;
+		Uniforms uniforms;
+		bool canvas_texscreen_used;
+		CanvasShaderGLES2 *canvas_shader;
 
-		InstanceData *instance_data_array = nullptr;
+		RID shader_version;
+		uint64_t specialization;
+		CanvasShaderGLES2::ShaderVariant mode_variant = CanvasShaderGLES2::ShaderVariant::MODE_QUAD;
 
-		LightUniform *light_uniforms = nullptr;
+		bool using_ninepatch;
+		bool using_skeleton;
 
-		GLuint shadow_texture = 0;
-		GLuint shadow_depth_buffer = 0;
-		GLuint shadow_fb = 0;
-		int shadow_texture_size = 2048;
+		Transform2D skeleton_transform;
+		Transform2D skeleton_transform_inverse;
+		Size2i skeleton_texture_size;
 
-		bool using_directional_lights = false;
+		RID current_tex = RID();
+		bool current_tex_is_rt = false;
+		Size2 texpixel_size = Size2(1.0, 1.0);
+		Size2i texture_size = Size2i(1, 1);
+		bool normal_used = false;
 
-		RID current_tex;
-		RS::CanvasItemTextureFilter current_filter_mode = RS::CANVAS_ITEM_TEXTURE_FILTER_MAX;
-		RS::CanvasItemTextureRepeat current_repeat_mode = RS::CANVAS_ITEM_TEXTURE_REPEAT_MAX;
+		Transform3D vp;
+		Light *using_light = nullptr;
+		bool using_shadow;
 
-		bool transparent_render_target = false;
-
+		RID render_target;
 		double time = 0.0;
 
-		RS::CanvasItemTextureFilter default_filter = RS::CANVAS_ITEM_TEXTURE_FILTER_DEFAULT;
-		RS::CanvasItemTextureRepeat default_repeat = RS::CANVAS_ITEM_TEXTURE_REPEAT_DEFAULT;
+		// TODO(GLES2): Godot 4 expects strict per-item filter and repeat state tracking.
+		// Temporarily ignoring this logic in the batcher until basic colored rects are rendering.
+		RS::CanvasItemTextureFilter default_filter = RS::CANVAS_ITEM_TEXTURE_FILTER_NEAREST;
+		RS::CanvasItemTextureRepeat default_repeat = RS::CANVAS_ITEM_TEXTURE_REPEAT_DISABLED;
+		RS::CanvasItemTextureFilter current_filter = RS::CANVAS_ITEM_TEXTURE_FILTER_MAX;
+		RS::CanvasItemTextureRepeat current_repeat = RS::CANVAS_ITEM_TEXTURE_REPEAT_MAX;
 	} state;
 
-	Item *items[MAX_RENDER_ITEMS];
-
 	RID default_canvas_texture;
-	RID default_canvas_group_material;
-	RID default_canvas_group_shader;
-	RID default_clip_children_material;
-	RID default_clip_children_shader;
 
-	typedef void Texture;
+	// Internal bindings
+	void _set_texture_rect_mode(bool p_texture_rect, bool p_light_angle = false, bool p_modulate = false, bool p_large_vertex = false);
+	void _bind_canvas_texture(RID p_texture, RS::CanvasItemTextureFilter p_base_filter, RS::CanvasItemTextureRepeat p_base_repeat);
+	void _set_canvas_uniforms();
+	void _bind_quad_buffer();
 
-	void canvas_begin(RID p_to_render_target, bool p_to_backbuffer, bool p_backbuffer_has_mipmaps);
+	inline void _buffer_orphan_and_upload(unsigned int p_buffer_size_bytes, unsigned int p_offset_bytes, unsigned int p_data_size_bytes, const void *p_data, GLenum p_target, GLenum p_usage, bool p_optional_orphan) const;
+	void _legacy_draw_poly_triangles(Item::CommandPolygon *p_poly, GLES2::CanvasMaterialData *p_material);
 
-	//virtual void draw_window_margins(int *black_margin, RID *black_image) override;
-	void draw_lens_distortion_rect(const Rect2 &p_rect, float p_k1, float p_k2, const Vector2 &p_eye_center, float p_oversample);
+public:
+	static RasterizerCanvasGLES2 *get_singleton();
+	RasterizerCanvasGLES2();
+	~RasterizerCanvasGLES2();
+
+	virtual void set_time(double p_time);
 
 	void reset_canvas();
 
+	// The Core Rendering Loop
+	virtual void canvas_render_items_begin(const Color &p_modulate, Light *p_light, const Transform2D &p_base_transform);
+	virtual void canvas_render_items_end();
+	void canvas_render_items_internal(Item *p_item_list, int p_z, const Color &p_modulate, Light *p_light, const Transform2D &p_base_transform);
+	virtual void canvas_begin(RID p_to_render_target, bool p_to_backbuffer);
+	virtual void canvas_end();
+
+	void canvas_render_items(RID p_to_render_target, Item *p_item_list, const Color &p_modulate, Light *p_light_list, Light *p_directional_list, const Transform2D &p_canvas_transform, RS::CanvasItemTextureFilter p_default_filter, RS::CanvasItemTextureRepeat p_default_repeat, bool p_snap_2d_vertices_to_pixel, bool &r_sdf_used, RenderingMethod::RenderInfo *r_render_info = nullptr) override;
+
+	RendererCanvasRender::PolygonID request_polygon(const Vector<int> &p_indices, const Vector<Point2> &p_points, const Vector<Color> &p_colors, const Vector<Point2> &p_uvs = Vector<Point2>(), const Vector<int> &p_bones = Vector<int>(), const Vector<float> &p_weights = Vector<float>()) override;
+	void free_polygon(PolygonID p_polygon) override;
+
+	// Light & Shadow Stubs
 	RID light_create() override;
 	void light_set_texture(RID p_rid, RID p_texture) override;
 	void light_set_use_shadow(RID p_rid, bool p_enable) override;
@@ -357,36 +167,23 @@ public:
 
 	bool free(RID p_rid) override;
 	void update() override;
+	virtual void set_debug_redraw(bool p_enabled, double p_time, const Color &p_color) override;
+	virtual uint32_t get_pipeline_compilations(RS::PipelineSource p_source) override;
 
-	void _bind_canvas_texture(RID p_texture, RS::CanvasItemTextureFilter p_base_filter, RS::CanvasItemTextureRepeat p_base_repeat);
-	void _prepare_canvas_texture(RID p_texture, RS::CanvasItemTextureFilter p_base_filter, RS::CanvasItemTextureRepeat p_base_repeat, uint32_t &r_index, Size2 &r_texpixel_size);
+private:
+	// The Batcher Bridge
+	void canvas_render_items_implementation(Item *p_item_list, int p_z, const Color &p_modulate, Light *p_light, const Transform2D &p_base_transform);
+	void render_batches(Item::Command *const *p_commands, Item *p_current_clip, bool &r_reclip, GLES2::CanvasMaterialData *p_material);
 
-	void canvas_render_items(RID p_to_render_target, Item *p_item_list, const Color &p_modulate, Light *p_light_list, Light *p_directional_list, const Transform2D &p_canvas_transform, RS::CanvasItemTextureFilter p_default_filter, RS::CanvasItemTextureRepeat p_default_repeat, bool p_snap_2d_vertices_to_pixel, bool &r_sdf_used, RenderingMethod::RenderInfo *r_render_info = nullptr) override;
-	void _render_items(RID p_to_render_target, int p_item_count, const Transform2D &p_canvas_transform_inverse, Light *p_lights, bool &r_sdf_used, bool p_to_backbuffer = false, RenderingMethod::RenderInfo *r_render_info = nullptr, bool p_backbuffer_has_mipmaps = false);
-	void _record_item_commands(const Item *p_item, RID p_render_target, const Transform2D &p_canvas_transform_inverse, Item *&current_clip, GLES2::CanvasShaderData::BlendMode p_blend_mode, Light *p_lights, uint32_t &r_index, bool &r_break_batch, bool &r_sdf_used, const Point2 &p_repeat_offset);
-	void _render_batch(Light *p_lights, uint32_t p_index, RenderingMethod::RenderInfo *r_render_info = nullptr);
-	bool _bind_material(GLES2::CanvasMaterialData *p_material_data, CanvasShaderGLES2::ShaderVariant p_variant, uint64_t p_specialization);
-	void _new_batch(bool &r_batch_broken);
-	void _add_to_batch(uint32_t &r_index, bool &r_batch_broken);
-	void _allocate_instance_data_buffer();
-	void _allocate_instance_buffer();
-	void _enable_attributes(uint32_t p_start, bool p_primitive, uint32_t p_rate = 1);
+	void _batch_upload_buffers();
 
-	void set_time(double p_time);
+	// RasterizerCanvasBatcher Template Hooks
+	void gl_enable_scissor(int p_x, int p_y, int p_width, int p_height) const;
+	void gl_disable_scissor() const;
 
-	virtual void set_debug_redraw(bool p_enabled, double p_time, const Color &p_color) override {
-		if (p_enabled) {
-			WARN_PRINT_ONCE("Debug CanvasItem Redraw is not available yet when using the Compatibility renderer.");
-		}
-	}
-
-	virtual uint32_t get_pipeline_compilations(RS::PipelineSource p_source) override { return 0; }
-
-	static RasterizerCanvasGLES2 *get_singleton();
-	RasterizerCanvasGLES2();
-	~RasterizerCanvasGLES2();
+public:
+	void initialize();
 };
 
 #endif // GLES2_ENABLED
-
 #endif // RASTERIZER_CANVAS_GLES2_H

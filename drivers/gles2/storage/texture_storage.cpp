@@ -95,7 +95,7 @@ TextureStorage::~TextureStorage() {
 /* Canvas Texture API */
 
 RID TextureStorage::canvas_texture_allocate() {
-	return RID();
+	return canvas_texture_owner.allocate_rid();
 }
 
 void TextureStorage::canvas_texture_initialize(RID p_rid) {
@@ -785,6 +785,13 @@ void TextureStorage::_update_render_target(RenderTarget *rt) {
 
 		glTexImage2D(texture_target, 0, rt->color_internal_format, rt->size.x, rt->size.y, 0, rt->color_format, rt->color_type, nullptr);
 
+		// Force the texture parameters immediately after creating the color texture,
+		// otherwise shenanigans will happen (a.k.a, a very useful black screen).
+		glTexParameteri(texture_target, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+		glTexParameteri(texture_target, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+		glTexParameteri(texture_target, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+		glTexParameteri(texture_target, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+
 		texture->gl_set_filter(RS::CANVAS_ITEM_TEXTURE_FILTER_NEAREST);
 		texture->gl_set_repeat(RS::CANVAS_ITEM_TEXTURE_REPEAT_DISABLED);
 	}
@@ -934,7 +941,9 @@ Rect2i TextureStorage::render_target_get_render_region(RID p_render_target) cons
 }
 
 RID TextureStorage::render_target_get_texture(RID p_render_target) {
-    return RID();
+	RenderTarget *rt = render_target_owner.get_or_null(p_render_target);
+	ERR_FAIL_NULL_V(rt, RID());
+	return rt->texture;
 }
 
 void TextureStorage::render_target_set_transparent(RID p_render_target, bool p_transparent) {
@@ -954,11 +963,15 @@ bool TextureStorage::render_target_get_direct_to_screen(RID p_render_target) con
 }
 
 bool TextureStorage::render_target_was_used(RID p_render_target) const {
-    return false;
+	RenderTarget *rt = render_target_owner.get_or_null(p_render_target);
+	ERR_FAIL_NULL_V(rt, false);
+	return rt->was_used; 
 }
 
 void TextureStorage::render_target_clear_used(RID p_render_target) {
-
+	RenderTarget *rt = render_target_owner.get_or_null(p_render_target);
+	ERR_FAIL_NULL(rt);
+	rt->was_used = false;
 }
 
 void TextureStorage::render_target_set_msaa(RID p_render_target, RS::ViewportMSAA p_msaa) {
@@ -1002,15 +1015,21 @@ void TextureStorage::render_target_request_clear(RID p_render_target, const Colo
 }
 
 bool TextureStorage::render_target_is_clear_requested(RID p_render_target) {
-    return false;
+	RenderTarget *rt = render_target_owner.get_or_null(p_render_target);
+	ERR_FAIL_NULL_V(rt, false);
+	return rt->clear_requested;
 }
 
 Color TextureStorage::render_target_get_clear_request_color(RID p_render_target) {
-    return Color();
+	RenderTarget *rt = render_target_owner.get_or_null(p_render_target);
+	ERR_FAIL_NULL_V(rt, Color());
+	return rt->clear_color;
 }
 
 void TextureStorage::render_target_disable_clear_request(RID p_render_target) {
-
+	RenderTarget *rt = render_target_owner.get_or_null(p_render_target);
+	ERR_FAIL_NULL(rt);
+	rt->clear_requested = false;
 }
 
 void TextureStorage::render_target_do_clear_request(RID p_render_target) {
@@ -1035,15 +1054,21 @@ void TextureStorage::render_target_do_clear_request(RID p_render_target) {
 }
 
 GLuint TextureStorage::render_target_get_fbo(RID p_render_target) const {
-    return 0;
+	RenderTarget *rt = render_target_owner.get_or_null(p_render_target);
+	ERR_FAIL_NULL_V(rt, 0);
+	return rt->fbo;
 }
 
 GLuint TextureStorage::render_target_get_color(RID p_render_target) const {
-    return 0;
+	RenderTarget *rt = render_target_owner.get_or_null(p_render_target);
+	ERR_FAIL_NULL_V(rt, 0);
+	return rt->color;
 }
 
 GLuint TextureStorage::render_target_get_depth(RID p_render_target) const {
-    return 0;
+	RenderTarget *rt = render_target_owner.get_or_null(p_render_target);
+	ERR_FAIL_NULL_V(rt, 0);
+	return rt->depth;
 }
 
 bool TextureStorage::render_target_get_depth_has_stencil(RID p_render_target) const {

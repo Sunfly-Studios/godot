@@ -202,6 +202,8 @@ typedef void(GLAPIENTRY *DebugMessageCallbackARB)(DEBUGPROCARB callback, const v
 
 void RasterizerGLES2::initialize() {
 	Engine::get_singleton()->print_header(vformat("OpenGL API %s - Legacy - Using Device: %s - %s", RS::get_singleton()->get_video_adapter_api_version(), RS::get_singleton()->get_video_adapter_vendor(), RS::get_singleton()->get_video_adapter_name()));
+
+	canvas->initialize();
 }
 
 void RasterizerGLES2::finalize() {
@@ -381,17 +383,12 @@ void RasterizerGLES2::_blit_render_target_to_screen(RID p_render_target, Display
 	GLES2::RenderTarget *rt = GLES2::TextureStorage::get_singleton()->get_render_target(p_render_target);
 	ERR_FAIL_NULL(rt);
 
-	// Create a temporary FBO to read from our color texture
-	GLuint read_fbo = 0;
-	glGenFramebuffers(1, &read_fbo);
-	glBindFramebuffer(GL_READ_FRAMEBUFFER, read_fbo);
-	glFramebufferTexture2D(GL_READ_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, rt->color, 0);
-
 	// Steer the draw target to the actual application window
-	glBindFramebuffer(GL_DRAW_FRAMEBUFFER, GLES2::TextureStorage::system_fbo);
+	glBindFramebuffer(GL_FRAMEBUFFER, GLES2::TextureStorage::system_fbo);
+
+	Size2i win_size = DisplayServer::get_singleton()->window_get_size();
 
 	if (p_first) {
-		Size2i win_size = DisplayServer::get_singleton()->window_get_size();
 		if (p_screen_rect.position != Vector2() || p_screen_rect.size != rt->size) {
 			glViewport(0, 0, win_size.width, win_size.height);
 			glClearColor(0.0, 0.0, 0.0, 1.0);
@@ -399,18 +396,28 @@ void RasterizerGLES2::_blit_render_target_to_screen(RID p_render_target, Display
 		}
 	}
 
-	Vector2i screen_rect_end = p_screen_rect.get_end();
+	// Calculate the correct viewport for the destination rect
+	// OpenGL has bottom-left origin, so we must flip the Y axis for the viewport
+	glViewport(
+		p_screen_rect.position.x, 
+		win_size.height - p_screen_rect.position.y - p_screen_rect.size.height, 
+		p_screen_rect.size.width, 
+		p_screen_rect.size.height
+	);
 
-	// OpenGL RenderTargets are upside down relative to the screen.
-	// By swapping the Y coordinates, we flip the image right-side up during the copy!
-	glBlitFramebuffer(0, 0, rt->size.x, rt->size.y,
-			p_screen_rect.position.x, screen_rect_end.y,
-			screen_rect_end.x, p_screen_rect.position.y,
-			GL_COLOR_BUFFER_BIT, GL_NEAREST);
+	// Disable states that could ruin a direct copy
+	glDisable(GL_BLEND);
+	glDisable(GL_DEPTH_TEST);
+	glDisable(GL_CULL_FACE);
+	glDisable(GL_SCISSOR_TEST);
+
+	// Bind the RenderTarget's color texture
+	glActiveTexture(GL_TEXTURE0);
+	glBindTexture(GL_TEXTURE_2D, rt->color);
+	copy_effects->copy_to_rect(Rect2(0, 0, 1, 1));
 
 	// Clean up
-	glBindFramebuffer(GL_READ_FRAMEBUFFER, 0);
-	glDeleteFramebuffers(1, &read_fbo);
+	glBindTexture(GL_TEXTURE_2D, 0);
 }
 
 // is this p_screen useless in a multi window environment?
