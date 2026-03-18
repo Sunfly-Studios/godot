@@ -43,6 +43,11 @@ uniform highp vec4 copy_section;
 uniform highp vec4 source_section;
 #endif
 
+#if defined(USE_TEXTURE_3D) || defined(USE_TEXTURE_2D_ARRAY)
+uniform highp float layer;
+uniform lowp float lod;
+#endif
+
 void main() {
 	uv_interp = vertex_attrib * 0.5 + 0.5;
 	gl_Position = vec4(vertex_attrib, 1.0, 1.0);

@@ -155,7 +155,8 @@ void CopyEffects::copy_to_rect_3d(const Rect2 &p_rect, float p_layer, int p_type
 	ERR_FAIL_COND_MSG(!success, "Failed to bind CopyEffect Shader during CopyEffects::copy_to_rect_3d");
 
 	copy.shader.version_set_uniform(CopyShaderGLES2::COPY_SECTION, p_rect.position.x, p_rect.position.y, p_rect.size.x, p_rect.size.y, copy.shader_version, variant);
-	// TODO(GLES2): add layer and lod to CopyShaderGLES2 uniforms.
+	copy.shader.version_set_uniform(CopyShaderGLES2::LAYER, p_layer, copy.shader_version, variant);
+	copy.shader.version_set_uniform(CopyShaderGLES2::LOD, p_lod, copy.shader_version, variant);
 
 	draw_screen_quad();
 }

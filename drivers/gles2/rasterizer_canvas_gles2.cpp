@@ -244,7 +244,7 @@ void RasterizerCanvasGLES2::_bind_canvas_texture(RID p_texture, RS::CanvasItemTe
 		glActiveTexture(GL_TEXTURE0);
 		RID white_tex_rid = GLES2::TextureStorage::get_singleton()->texture_gl_get_default(GLES2::DEFAULT_GL_TEXTURE_WHITE);
 		GLES2::Texture *tex_white = GLES2::TextureStorage::get_singleton()->get_texture(white_tex_rid);
-		
+
 		if (tex_white) {
 			glBindTexture(GL_TEXTURE_2D, tex_white->tex_id);
 		}
@@ -260,7 +260,63 @@ void RasterizerCanvasGLES2::_bind_canvas_texture(RID p_texture, RS::CanvasItemTe
 		glActiveTexture(GL_TEXTURE0);
 		glBindTexture(GL_TEXTURE_2D, tex->tex_id);
 
-		// TODO(GLES2): Apply p_base_filter and p_base_repeat via glTexParameteri here.
+		// Resolve GL Filter
+		GLenum min_filter = GL_LINEAR;
+		GLenum mag_filter = GL_LINEAR;
+
+		switch (p_base_filter) {
+			case RS::CANVAS_ITEM_TEXTURE_FILTER_NEAREST:
+				min_filter = GL_NEAREST;
+				mag_filter = GL_NEAREST;
+				break;
+			case RS::CANVAS_ITEM_TEXTURE_FILTER_LINEAR:
+				min_filter = GL_LINEAR;
+				mag_filter = GL_LINEAR;
+				break;
+			case RS::CANVAS_ITEM_TEXTURE_FILTER_NEAREST_WITH_MIPMAPS:
+			case RS::CANVAS_ITEM_TEXTURE_FILTER_NEAREST_WITH_MIPMAPS_ANISOTROPIC:
+				min_filter = GL_NEAREST_MIPMAP_NEAREST;
+				mag_filter = GL_NEAREST;
+				break;
+			case RS::CANVAS_ITEM_TEXTURE_FILTER_LINEAR_WITH_MIPMAPS:
+			case RS::CANVAS_ITEM_TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC:
+				min_filter = GL_LINEAR_MIPMAP_LINEAR;
+				mag_filter = GL_LINEAR;
+				break;
+			default:
+				min_filter = GL_NEAREST;
+				mag_filter = GL_NEAREST;
+				break;
+		}
+
+		// Resolve GL Repeat
+		GLenum wrap_s = GL_CLAMP_TO_EDGE;
+		GLenum wrap_t = GL_CLAMP_TO_EDGE;
+
+		switch (p_base_repeat) {
+			case RS::CANVAS_ITEM_TEXTURE_REPEAT_DISABLED:
+				wrap_s = GL_CLAMP_TO_EDGE;
+				wrap_t = GL_CLAMP_TO_EDGE;
+				break;
+			case RS::CANVAS_ITEM_TEXTURE_REPEAT_ENABLED:
+				wrap_s = GL_REPEAT;
+				wrap_t = GL_REPEAT;
+				break;
+			case RS::CANVAS_ITEM_TEXTURE_REPEAT_MIRROR:
+				wrap_s = GL_MIRRORED_REPEAT;
+				wrap_t = GL_MIRRORED_REPEAT;
+				break;
+			default:
+				break;
+		}
+
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, min_filter);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, mag_filter);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, wrap_s);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, wrap_t);
+
+		// TODO(GLES2): GLES2 doesn't support anisotropic filtering natively.
+		// We would check for the GL_EXT_texture_filter_anisotropic extension.
 	}
 }
 
@@ -282,7 +338,13 @@ void RasterizerCanvasGLES2::_set_canvas_uniforms() {
 		}
 	}
 
-	// TODO(GLES2): Add skeleton and lighting uniforms back in later once basic rects work.
+	// TODO(GLES2): Only added Skeletons for now,
+	// lighting will come way later (in Phase 3, probably).
+	if (state.using_skeleton) {
+		state.canvas_shader->version_set_uniform(CanvasShaderGLES2::SKELETON_TRANSFORM, state.skeleton_transform, data.canvas_shader_default_version, state.mode_variant, state.specialization);
+		state.canvas_shader->version_set_uniform(CanvasShaderGLES2::SKELETON_TRANSFORM_INVERSE, state.skeleton_transform_inverse, data.canvas_shader_default_version, state.mode_variant, state.specialization);
+		state.canvas_shader->version_set_uniform(CanvasShaderGLES2::SKELETON_TEXTURE_SIZE, state.skeleton_texture_size, data.canvas_shader_default_version, state.mode_variant, state.specialization);
+	}
 }
 
 void RasterizerCanvasGLES2::canvas_begin(RID p_to_render_target, bool p_to_backbuffer) {

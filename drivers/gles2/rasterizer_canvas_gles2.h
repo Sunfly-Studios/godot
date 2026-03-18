@@ -112,8 +112,6 @@ protected:
 		RID render_target;
 		double time = 0.0;
 
-		// TODO(GLES2): Godot 4 expects strict per-item filter and repeat state tracking.
-		// Temporarily ignoring this logic in the batcher until basic colored rects are rendering.
 		RS::CanvasItemTextureFilter default_filter = RS::CANVAS_ITEM_TEXTURE_FILTER_NEAREST;
 		RS::CanvasItemTextureRepeat default_repeat = RS::CANVAS_ITEM_TEXTURE_REPEAT_DISABLED;
 		RS::CanvasItemTextureFilter current_filter = RS::CANVAS_ITEM_TEXTURE_FILTER_MAX;
