@@ -603,9 +603,13 @@ void RasterizerCanvasGLES2::render_batches(Item::Command *const *p_commands, Ite
 						case Item::Command::TYPE_RECT: {
 							Item::CommandRect *r = static_cast<Item::CommandRect *>(command);
 
+							// Clean state
+							// (so that rubbish/garbage doesn't ruin stuff later)
 							glDisableVertexAttribArray(RS::ARRAY_COLOR);
+							glDisableVertexAttribArray(RS::ARRAY_TEX_UV);
 							glVertexAttrib4fv(RS::ARRAY_COLOR, r->modulate.components);
 
+							// Texture binding
 							RS::CanvasItemTextureRepeat repeat = state.default_repeat;
 							if (p_current_clip && p_current_clip->texture_repeat != RS::CANVAS_ITEM_TEXTURE_REPEAT_DEFAULT) {
 								repeat = p_current_clip->texture_repeat;
@@ -613,17 +617,21 @@ void RasterizerCanvasGLES2::render_batches(Item::Command *const *p_commands, Ite
 							if (r->flags & CANVAS_RECT_TILE) {
 								repeat = RS::CANVAS_ITEM_TEXTURE_REPEAT_ENABLED;
 							}
+
 							RS::CanvasItemTextureFilter filter = state.default_filter;
 							if (p_current_clip && p_current_clip->texture_filter != RS::CANVAS_ITEM_TEXTURE_FILTER_DEFAULT) {
 								filter = p_current_clip->texture_filter;
 							}
+
 							_bind_canvas_texture(r->texture, filter, repeat);
 
+							// Flip logic
 							bool upside_down = r->flags & CANVAS_RECT_FLIP_V;
 							if (state.current_tex_is_rt) {
 								upside_down = true;
 							}
 
+							// Shader setup
 							_set_texture_rect_mode(true);
 
 							if (state.canvas_shader->version_bind_shader(state.shader_version, state.mode_variant, state.specialization)) {
@@ -638,6 +646,7 @@ void RasterizerCanvasGLES2::render_batches(Item::Command *const *p_commands, Ite
 							glEnableVertexAttribArray(RS::ARRAY_VERTEX);
 							glVertexAttribPointer(RS::ARRAY_VERTEX, 2, GL_FLOAT, GL_FALSE, 0, nullptr);
 
+							// Calculate rects
 							Rect2 src_rect = (r->flags & CANVAS_RECT_REGION) ? Rect2(r->source.position * state.texpixel_size, r->source.size * state.texpixel_size) : Rect2(0, 0, 1, 1);
 							Rect2 dst_rect = Rect2(r->rect.position, r->rect.size);
 
@@ -651,23 +660,28 @@ void RasterizerCanvasGLES2::render_batches(Item::Command *const *p_commands, Ite
 							}
 
 							if (r->flags & CANVAS_RECT_FLIP_H) {
+								// Shift origin right, then flip.
+								src_rect.position.x += src_rect.size.x;
 								src_rect.size.x *= -1;
 							}
 							if (upside_down) {
+								src_rect.position.y += src_rect.size.y;
 								src_rect.size.y *= -1;
 							}
+
 							if (r->flags & CANVAS_RECT_TRANSPOSE) {
-								dst_rect.size.x *= -1;
+								dst_rect.size.x *= -1; // Encoded into DST_RECT.z for the shader to interpret
 							}
 
+							// Push uniforms now
 							state.canvas_shader->version_set_uniform(CanvasShaderGLES2::COLOR_TEXPIXEL_SIZE, state.texpixel_size, state.shader_version, state.mode_variant, state.specialization);
 							state.canvas_shader->version_set_uniform(CanvasShaderGLES2::DST_RECT, Color(dst_rect.position.x, dst_rect.position.y, dst_rect.size.x, dst_rect.size.y), state.shader_version, state.mode_variant, state.specialization);
 							state.canvas_shader->version_set_uniform(CanvasShaderGLES2::SRC_RECT, Color(src_rect.position.x, src_rect.position.y, src_rect.size.x, src_rect.size.y), state.shader_version, state.mode_variant, state.specialization);
 
 							glDrawArrays(GL_TRIANGLE_FAN, 0, 4);
 
+							// Cleanup
 							glBindBuffer(GL_ARRAY_BUFFER, 0);
-
 							state.specialization &= ~(CanvasShaderGLES2::USE_FORCE_REPEAT);
 						} break;
 

@@ -445,6 +445,15 @@ RID TextureStorage::texture_create_from_native_handle(RS::TextureType p_type, Im
 }
 
 void TextureStorage::texture_2d_update(RID p_texture, const Ref<Image> &p_image, int p_layer) {
+	texture_set_data(p_texture, p_image, p_layer);
+
+	Texture *tex = texture_owner.get_or_null(p_texture);
+	ERR_FAIL_NULL(tex);
+	GLES2::Utilities::get_singleton()->texture_resize_data(tex->tex_id, tex->total_data_size);
+
+#ifdef TOOLS_ENABLED
+	tex->image_cache_2d.unref();
+#endif
 
 }
 
@@ -547,6 +556,7 @@ uint64_t TextureStorage::texture_get_native_handle(RID p_texture, bool p_srgb) c
 }
 
 void TextureStorage::texture_set_data(RID p_texture, const Ref<Image> &p_image, int p_layer) {
+	_texture_set_data(p_texture, p_image, p_layer, false);
 }
 
 void TextureStorage::_texture_set_data(RID p_texture, const Ref<Image> &p_image, int p_layer, bool p_initialize) {
