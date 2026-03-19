@@ -272,6 +272,7 @@ public:
 
 	uint8_t *get_unit(unsigned int ui) { return &_list[ui * _unit_size_bytes]; }
 	const uint8_t *get_unit(unsigned int ui) const { return &_list[ui * _unit_size_bytes]; }
+	const uint8_t *get_data() const { return _list; }
 
 	int size() const { return _size; }
 	int max_size() const { return _max_size; }

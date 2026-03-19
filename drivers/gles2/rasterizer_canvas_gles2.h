@@ -174,6 +174,7 @@ private:
 	void render_batches(Item::Command *const *p_commands, Item *p_current_clip, bool &r_reclip, GLES2::CanvasMaterialData *p_material);
 
 	void _batch_upload_buffers();
+	void _batch_render_generic(const Batch &p_batch, GLES2::CanvasMaterialData *p_material);
 
 	// RasterizerCanvasBatcher Template Hooks
 	void gl_enable_scissor(int p_x, int p_y, int p_width, int p_height) const;

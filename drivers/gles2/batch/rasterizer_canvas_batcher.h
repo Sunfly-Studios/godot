@@ -192,6 +192,8 @@ public:
 		uint32_t first_vert;
 
 		BatchColor color;
+
+		const RendererCanvasRender::Item *item;
 	};
 
 	struct BatchTex {
@@ -555,6 +557,7 @@ protected:
 
 	// recording and sorting items from the initial pass
 	void record_items(RendererCanvasRender::Item *p_item_list, int p_z);
+	bool try_join_item(RendererCanvasRender::Item *p_ci, RenderItemState &r_ris, bool &r_batch_break);
 	void join_sorted_items();
 	void sort_items();
 	bool _sort_items_match(const BSortItem &p_a, const BSortItem &p_b) const;
@@ -565,14 +568,14 @@ protected:
 	bool _detect_item_batch_break(RenderItemState &r_ris, RendererCanvasRender::Item *p_ci, bool &r_batch_break);
 
 	// drives the loop filling batches and flushing
-	void render_joined_item_commands(const BItemJoined &p_bij, RendererCanvasRender::Item *p_current_clip, bool &r_reclip, GLES2::Material *p_material, bool p_lit);
+	void render_joined_item_commands(const BItemJoined &p_bij, RendererCanvasRender::Item *p_current_clip, bool &r_reclip, GLES2::CanvasMaterialData *p_material, bool p_lit);
 
 private:
 	// flush once full or end of joined item
-	void flush_render_batches(RendererCanvasRender::Item *p_first_item, RendererCanvasRender::Item *p_current_clip, bool &r_reclip, GLES2::Material *p_material, uint32_t p_sequence_batch_type_flags);
+	void flush_render_batches(RendererCanvasRender::Item *p_first_item, RendererCanvasRender::Item *p_current_clip, bool &r_reclip, GLES2::CanvasMaterialData *p_material, uint32_t p_sequence_batch_type_flags);
 
 	// a single joined item can contain multiple itemrefs, and thus create lots of batches
-	bool prefill_joined_item(FillState &r_fill_state, RendererCanvasRender::Item::Command **r_first_command, RendererCanvasRender::Item *p_item, RendererCanvasRender::Item *p_current_clip, bool &r_reclip, GLES2::Material *p_material);
+	bool prefill_joined_item(FillState &r_fill_state, RendererCanvasRender::Item::Command **r_first_command, RendererCanvasRender::Item *p_item, RendererCanvasRender::Item *p_current_clip, bool &r_reclip, GLES2::CanvasMaterialData *p_material);
 
 	// prefilling different types of batch
 
@@ -652,8 +655,9 @@ public:
 			RAST_DEBUG_ASSERT(batch);
 		}
 
-		if (p_blank)
+		if (p_blank) {
 			memset(batch, 0, sizeof(Batch));
+		}
 
 		return batch;
 	}

@@ -240,12 +240,87 @@ struct Texture {
 
 	// texture state
 	void gl_set_filter(RS::CanvasItemTextureFilter p_filter) {
+		if (p_filter == state_filter) {
+			return;
+		}
+		GLES2::Config *config = GLES2::Config::get_singleton();
+		state_filter = p_filter;
+		GLenum pmin = GL_NEAREST;
+		GLenum pmag = GL_NEAREST;
+		GLfloat anisotropy = 1.0f;
 
-    }
+		switch (state_filter) {
+			case RS::CANVAS_ITEM_TEXTURE_FILTER_NEAREST: {
+				pmin = GL_NEAREST;
+				pmag = GL_NEAREST;
+			} break;
+			case RS::CANVAS_ITEM_TEXTURE_FILTER_LINEAR: {
+				pmin = GL_LINEAR;
+				pmag = GL_LINEAR;
+			} break;
+			case RS::CANVAS_ITEM_TEXTURE_FILTER_NEAREST_WITH_MIPMAPS_ANISOTROPIC: {
+				anisotropy = config->anisotropic_level;
+			};
+				[[fallthrough]];
+			case RS::CANVAS_ITEM_TEXTURE_FILTER_NEAREST_WITH_MIPMAPS: {
+				pmag = GL_NEAREST;
+				if (mipmaps <= 1) {
+					pmin = GL_NEAREST;
+				} else if (config->use_nearest_mip_filter) {
+					pmin = GL_NEAREST_MIPMAP_NEAREST;
+				} else {
+					pmin = GL_NEAREST_MIPMAP_LINEAR;
+				}
+			} break;
+			case RS::CANVAS_ITEM_TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC: {
+				anisotropy = config->anisotropic_level;
+			};
+				[[fallthrough]];
+			case RS::CANVAS_ITEM_TEXTURE_FILTER_LINEAR_WITH_MIPMAPS: {
+				pmag = GL_LINEAR;
+				if (mipmaps <= 1) {
+					pmin = GL_LINEAR;
+				} else if (config->use_nearest_mip_filter) {
+					pmin = GL_LINEAR_MIPMAP_NEAREST;
+				} else {
+					pmin = GL_LINEAR_MIPMAP_LINEAR;
+				}
+			} break;
+			default: {
+				return;
+			} break;
+		}
+		glTexParameteri(target, GL_TEXTURE_MIN_FILTER, pmin);
+		glTexParameteri(target, GL_TEXTURE_MAG_FILTER, pmag);
 
-    void gl_set_repeat(RS::CanvasItemTextureRepeat p_repeat) {
+		if (config->support_anisotropic_filter) {
+			glTexParameterf(target, _GL_TEXTURE_MAX_ANISOTROPY_EXT, anisotropy);
+		}
+	}
 
-    }
+	void gl_set_repeat(RS::CanvasItemTextureRepeat p_repeat) {
+		if (p_repeat == state_repeat) {
+			return;
+		}
+		state_repeat = p_repeat;
+		GLenum prep = GL_CLAMP_TO_EDGE;
+		switch (state_repeat) {
+			case RS::CANVAS_ITEM_TEXTURE_REPEAT_DISABLED: {
+				prep = GL_CLAMP_TO_EDGE;
+			} break;
+			case RS::CANVAS_ITEM_TEXTURE_REPEAT_ENABLED: {
+				prep = GL_REPEAT;
+			} break;
+			case RS::CANVAS_ITEM_TEXTURE_REPEAT_MIRROR: {
+				prep = GL_MIRRORED_REPEAT;
+			} break;
+			default: {
+				return;
+			} break;
+		}
+		glTexParameteri(target, GL_TEXTURE_WRAP_T, prep);
+		glTexParameteri(target, GL_TEXTURE_WRAP_S, prep);
+	}
 
 private:
 	RS::CanvasItemTextureFilter state_filter = RS::CANVAS_ITEM_TEXTURE_FILTER_MAX;

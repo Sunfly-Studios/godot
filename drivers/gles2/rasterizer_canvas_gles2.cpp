@@ -575,11 +575,153 @@ void RasterizerCanvasGLES2::canvas_render_items_end() {
 }
 
 void RasterizerCanvasGLES2::_batch_upload_buffers() {
-	// TODO(GLES2): Implement dynamic vertex buffers (automatically uploaded to the GPU)
+	if (bdata.vertices.size() == 0) {
+		return;
+	}
+
+	glBindBuffer(GL_ARRAY_BUFFER, bdata.gl_vertex_buffer);
+
+	if (bdata.fvf == BatcherEnums::FVF_UNBATCHED || bdata.fvf == BatcherEnums::FVF_REGULAR) {
+		uint32_t buffer_bytes = bdata.vertices.size() * sizeof(BatchVertex);
+		glBufferSubData(GL_ARRAY_BUFFER, 0, buffer_bytes, bdata.vertices.get_data());
+	} else {
+		// We are using an upgraded FVF format, upload the translated unit_vertices
+		int sizeof_vert = 0;
+		switch (bdata.fvf) {
+			case BatcherEnums::FVF_COLOR:
+				sizeof_vert = sizeof(BatchVertexColored);
+				break;
+			case BatcherEnums::FVF_LIGHT_ANGLE:
+				sizeof_vert = sizeof(BatchVertexLightAngled);
+				break;
+			case BatcherEnums::FVF_MODULATED:
+				sizeof_vert = sizeof(BatchVertexModulated);
+				break;
+			case BatcherEnums::FVF_LARGE:
+				sizeof_vert = sizeof(BatchVertexLarge);
+				break;
+			default:
+				break;
+		}
+		uint32_t buffer_bytes = bdata.vertices.size() * sizeof_vert;
+		glBufferSubData(GL_ARRAY_BUFFER, 0, buffer_bytes, bdata.unit_vertices.get_data());
+	}
+	glBindBuffer(GL_ARRAY_BUFFER, 0);
+}
+
+void RasterizerCanvasGLES2::_batch_render_generic(const Batch &p_batch, GLES2::CanvasMaterialData *p_material) {
+	ERR_FAIL_COND(p_batch.num_commands <= 0);
+
+	const bool use_light_angles = bdata.use_light_angles;
+	const bool use_modulate = bdata.use_modulate;
+	const bool use_large_verts = bdata.use_large_verts;
+	const bool colored_verts = (
+		bdata.use_colored_vertices || use_light_angles ||
+		use_modulate || use_large_verts
+	);
+
+	int sizeof_vert = 0;
+
+	switch (bdata.fvf) {
+		case BatcherEnums::FVF_UNBATCHED:
+			return;
+		case BatcherEnums::FVF_REGULAR:
+			sizeof_vert = sizeof(BatchVertex);
+			break;
+		case BatcherEnums::FVF_COLOR:
+			sizeof_vert = sizeof(BatchVertexColored);
+			break;
+		case BatcherEnums::FVF_LIGHT_ANGLE:
+			sizeof_vert = sizeof(BatchVertexLightAngled);
+			break;
+		case BatcherEnums::FVF_MODULATED:
+			sizeof_vert = sizeof(BatchVertexModulated);
+			break;
+		case BatcherEnums::FVF_LARGE:
+			sizeof_vert = sizeof(BatchVertexLarge);
+			break;
+		default:
+			break;
+	}
+
+	_set_texture_rect_mode(false, use_light_angles, use_modulate, use_large_verts);
+
+	const BatchTex &tex = bdata.batch_textures[p_batch.batch_texture_id];
+
+	if (tex.tile_mode == BatchTex::TILE_FORCE_REPEAT) {
+		state.specialization |= CanvasShaderGLES2::USE_FORCE_REPEAT;
+	}
+
+	if (state.canvas_shader->version_bind_shader(state.shader_version, state.mode_variant, state.specialization)) {
+		_set_canvas_uniforms();
+		if (p_material) {
+			p_material->bind_uniforms();
+		}
+	}
+
+	// Determine Texture Filter and Repeat from the Batch FVF flags
+	RS::CanvasItemTextureRepeat repeat = (tex.tile_mode != BatchTex::TILE_OFF) ? RS::CANVAS_ITEM_TEXTURE_REPEAT_ENABLED : state.default_repeat;
+	RS::CanvasItemTextureFilter filter = state.default_filter;
+
+	_bind_canvas_texture(tex.RID_texture, filter, repeat);
+
+	// Bind the massive dynamic buffer
+	glBindBuffer(GL_ARRAY_BUFFER, bdata.gl_vertex_buffer);
+	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, bdata.gl_index_buffer);
+
+	uint64_t pointer = 0;
+	glEnableVertexAttribArray(RS::ARRAY_VERTEX);
+	glVertexAttribPointer(RS::ARRAY_VERTEX, 2, GL_FLOAT, GL_FALSE, sizeof_vert, (const void *)(uintptr_t)pointer);
+
+	glEnableVertexAttribArray(RS::ARRAY_TEX_UV);
+	glVertexAttribPointer(RS::ARRAY_TEX_UV, 2, GL_FLOAT, GL_FALSE, sizeof_vert, (const void *)(uintptr_t)(pointer + (2 * 4)));
+
+	if (!colored_verts) {
+		glDisableVertexAttribArray(RS::ARRAY_COLOR);
+		glVertexAttrib4fv(RS::ARRAY_COLOR, p_batch.color.get_data());
+	} else {
+		glEnableVertexAttribArray(RS::ARRAY_COLOR);
+		glVertexAttribPointer(RS::ARRAY_COLOR, 4, GL_FLOAT, GL_FALSE, sizeof_vert, (const void *)(uintptr_t)(pointer + (4 * 4)));
+	}
+
+	// Send Pixel Size to the shader (using the state updated by _bind_canvas_texture)
+	state.canvas_shader->version_set_uniform(CanvasShaderGLES2::COLOR_TEXPIXEL_SIZE, state.texpixel_size, state.shader_version, state.mode_variant, state.specialization);
+
+	switch (p_batch.type) {
+		case BatcherEnums::BT_RECT: {
+			// A quad is 4 vertices. The index buffer has 6 indices per quad (2 triangles).
+			// 6 indices * 2 bytes (GL_UNSIGNED_SHORT) = 12 bytes per quad.
+			// first_vert / 4 * 12 == first_vert * 3. Lawnjelly's math is brilliant.
+			int64_t offset = p_batch.first_vert * 3;
+			int num_elements = p_batch.num_commands * 6;
+			glDrawElements(GL_TRIANGLES, num_elements, GL_UNSIGNED_SHORT, (const void *)(uintptr_t)offset);
+		} break;
+		case BatcherEnums::BT_POLY: {
+			int64_t offset = p_batch.first_vert;
+			int num_elements = p_batch.num_commands;
+			glDrawArrays(GL_TRIANGLES, offset, num_elements);
+		} break;
+		default:
+			break;
+	}
+
+	// Cleanup
+	if (tex.tile_mode == BatchTex::TILE_FORCE_REPEAT) {
+		state.specialization &= ~(CanvasShaderGLES2::USE_FORCE_REPEAT);
+	}
+
+	glDisableVertexAttribArray(RS::ARRAY_TEX_UV);
+	glDisableVertexAttribArray(RS::ARRAY_COLOR);
+	glBindBuffer(GL_ARRAY_BUFFER, 0);
+	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
 }
 
 void RasterizerCanvasGLES2::render_batches(Item::Command *const *p_commands, Item *p_current_clip, bool &r_reclip, GLES2::CanvasMaterialData *p_material) {
 	int num_batches = bdata.batches.size();
+
+	Transform2D base_matrix = state.uniforms.modelview_matrix;
+	Transform2D base_extra = state.uniforms.extra_matrix;
+	Color base_modulate = state.uniforms.final_modulate;
 
 	for (int batch_num = 0; batch_num < num_batches; batch_num++) {
 		const Batch &batch = bdata.batches[batch_num];
@@ -597,8 +739,14 @@ void RasterizerCanvasGLES2::render_batches(Item::Command *const *p_commands, Ite
 
 		switch (batch.type) {
 			case BatcherEnums::BT_DEFAULT: {
+				if (batch.item) {
+					state.uniforms.modelview_matrix = batch.item->final_transform;
+					state.uniforms.extra_matrix = Transform2D();
+					state.uniforms.final_modulate = batch.item->final_modulate;
+				}
+
 				Item::Command *command = batch.first_command;
-				for (uint32_t i = 0; i < batch.num_commands; i++, command = command->next) {
+				for (uint32_t i = 0; i < batch.num_commands && command != nullptr; i++, command = command->next) {
 					switch (command->type) {
 						case Item::Command::TYPE_RECT: {
 							Item::CommandRect *r = static_cast<Item::CommandRect *>(command);
@@ -634,11 +782,13 @@ void RasterizerCanvasGLES2::render_batches(Item::Command *const *p_commands, Ite
 							// Shader setup
 							_set_texture_rect_mode(true);
 
-							if (state.canvas_shader->version_bind_shader(state.shader_version, state.mode_variant, state.specialization)) {
-								_set_canvas_uniforms();
-								if (p_material) {
-									p_material->bind_uniforms();
-								}
+							bool rebind = state.canvas_shader->version_bind_shader(state.shader_version, state.mode_variant, state.specialization);
+							
+							// Must be called every single draw in immediate mode to update the matrices.
+							_set_canvas_uniforms(); 
+							
+							if (rebind && p_material) {
+								p_material->bind_uniforms();
 							}
 
 							// Bind the default quad buffer
@@ -689,11 +839,12 @@ void RasterizerCanvasGLES2::render_batches(Item::Command *const *p_commands, Ite
 							Item::CommandNinePatch *np = static_cast<Item::CommandNinePatch *>(command);
 
 							_set_texture_rect_mode(false);
-							if (state.canvas_shader->version_bind_shader(state.shader_version, state.mode_variant, state.specialization)) {
-								_set_canvas_uniforms();
-								if (p_material) {
-									p_material->bind_uniforms();
-								}
+
+							bool rebind = state.canvas_shader->version_bind_shader(state.shader_version, state.mode_variant, state.specialization);
+							_set_canvas_uniforms();
+							
+							if (rebind && p_material) {
+								p_material->bind_uniforms();
 							}
 
 							glDisableVertexAttribArray(RS::ARRAY_COLOR);
@@ -886,10 +1037,18 @@ void RasterizerCanvasGLES2::render_batches(Item::Command *const *p_commands, Ite
 						} break;
 					}
 				}
+
+				state.uniforms.modelview_matrix = base_matrix;
+				state.uniforms.extra_matrix = base_extra;
+				state.uniforms.final_modulate = base_modulate;
+			} break;
+
+			case BatcherEnums::BT_RECT:
+			case BatcherEnums::BT_POLY: {
+				_batch_render_generic(batch, p_material);
 			} break;
 
 			default:
-				// TODO(GLES2): Accelerated batches (BT_RECT, BT_POLY) go here.
 				break;
 		}
 	}
