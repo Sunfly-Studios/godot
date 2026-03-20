@@ -358,7 +358,7 @@ public:
 	}
 
 	_FORCE_INLINE_ GLenum mesh_surface_get_index_type(void *p_surface) const {
-		return GL_UNSIGNED_INT;
+		return GL_UNSIGNED_SHORT;
 	}
 
 	// Use this to cache Vertex Array Objects so they are only generated once

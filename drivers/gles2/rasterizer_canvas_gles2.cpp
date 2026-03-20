@@ -236,35 +236,76 @@ void RasterizerCanvasGLES2::update() {
 }
 
 void RasterizerCanvasGLES2::_bind_canvas_texture(RID p_texture, RS::CanvasItemTextureFilter p_base_filter, RS::CanvasItemTextureRepeat p_base_repeat) {
-	if (p_texture == RID()) {
-		state.current_tex = RID();
-		state.current_tex_is_rt = false;
-		state.texpixel_size = Size2(1, 1);
+	if (p_texture.is_null()) {
+		// Fallback to default white if passed null
+		p_texture = GLES2::TextureStorage::get_singleton()->texture_gl_get_default(GLES2::DEFAULT_GL_TEXTURE_WHITE);
+	}
 
-		glActiveTexture(GL_TEXTURE0);
-		RID white_tex_rid = GLES2::TextureStorage::get_singleton()->texture_gl_get_default(GLES2::DEFAULT_GL_TEXTURE_WHITE);
-		GLES2::Texture *tex_white = GLES2::TextureStorage::get_singleton()->get_texture(white_tex_rid);
-
-		if (tex_white) {
-			glBindTexture(GL_TEXTURE_2D, tex_white->tex_id);
-		}
+	// Cache Check (Prevents redundant state changes)
+	if (state.current_tex == p_texture && state.current_filter == p_base_filter && state.current_repeat == p_base_repeat) {
 		return;
 	}
 
-	GLES2::Texture *tex = GLES2::TextureStorage::get_singleton()->get_texture(p_texture);
-	if (tex) {
-		state.current_tex = p_texture;
-		state.current_tex_is_rt = tex->is_render_target;
-		state.texpixel_size = Size2(1.0 / tex->width, 1.0 / tex->height);
+	// Resolve CanvasTexture
+	GLES2::CanvasTexture *ct = nullptr;
+	GLES2::Texture *t = GLES2::TextureStorage::get_singleton()->get_texture(p_texture);
 
-		glActiveTexture(GL_TEXTURE0);
-		glBindTexture(GL_TEXTURE_2D, tex->tex_id);
+	if (t) {
+		// If it's a raw texture, it might have an embedded CanvasTexture
+		if (!t->canvas_texture) {
+			// This is based on the GLES3 code, but tbh I find it somewhat icky, since we don't create a RID and I also can't see how or when this is destroyed.
+			t->canvas_texture = memnew(GLES2::CanvasTexture);
+			t->canvas_texture->diffuse = p_texture;
+		}
 
-		// Resolve GL Filter
+		ct = t->canvas_texture;
+		if (t->render_target) {
+			t->render_target->used_in_frame = true;
+		}
+	} else {
+		// It's a genuine CanvasTexture RID
+		ct = GLES2::TextureStorage::get_singleton()->get_canvas_texture(p_texture);
+	}
+
+	if (!ct) {
+		// Completely invalid texture, bind white safely
+		RID white_tex = GLES2::TextureStorage::get_singleton()->texture_gl_get_default(GLES2::DEFAULT_GL_TEXTURE_WHITE);
+		_bind_canvas_texture(white_tex, p_base_filter, p_base_repeat);
+		return;
+	}
+
+	state.current_tex_is_rt = false;
+
+	// Resolve overrides from CanvasTexture
+	RS::CanvasItemTextureFilter filter = ct->texture_filter != RS::CANVAS_ITEM_TEXTURE_FILTER_DEFAULT ? ct->texture_filter : p_base_filter;
+	RS::CanvasItemTextureRepeat repeat = ct->texture_repeat != RS::CANVAS_ITEM_TEXTURE_REPEAT_DEFAULT ? ct->texture_repeat : p_base_repeat;
+
+	// Bind Diffuse (Texture Unit 0)
+	glActiveTexture(GL_TEXTURE0);
+	GLES2::Texture *texture = GLES2::TextureStorage::get_singleton()->get_texture(ct->diffuse);
+
+	if (!texture || texture->tex_id == 0 || texture->width == 0 || texture->height == 0) {
+		// Something _really_ went wrong here if we got here.
+		GLES2::Texture *tex_2d_bg = GLES2::TextureStorage::get_singleton()->get_texture(
+			GLES2::TextureStorage::get_singleton()->texture_gl_get_default(
+				GLES2::DEFAULT_GL_TEXTURE_WHITE
+			)
+		);
+		if (tex_2d_bg) {
+			glBindTexture(GL_TEXTURE_2D, tex_2d_bg->tex_id);
+			state.texpixel_size = Size2(1.0 / tex_2d_bg->width, 1.0 / tex_2d_bg->height);
+			state.texture_size = Size2i(tex_2d_bg->width, tex_2d_bg->height);
+		}
+	} else {
+		glBindTexture(GL_TEXTURE_2D, texture->tex_id);
+
+		// Setup Filters
 		GLenum min_filter = GL_LINEAR;
 		GLenum mag_filter = GL_LINEAR;
+		GLenum wrap_s = GL_CLAMP_TO_EDGE;
+		GLenum wrap_t = GL_CLAMP_TO_EDGE;
 
-		switch (p_base_filter) {
+		switch (filter) {
 			case RS::CANVAS_ITEM_TEXTURE_FILTER_NEAREST:
 				min_filter = GL_NEAREST;
 				mag_filter = GL_NEAREST;
@@ -284,16 +325,10 @@ void RasterizerCanvasGLES2::_bind_canvas_texture(RID p_texture, RS::CanvasItemTe
 				mag_filter = GL_LINEAR;
 				break;
 			default:
-				min_filter = GL_NEAREST;
-				mag_filter = GL_NEAREST;
 				break;
 		}
 
-		// Resolve GL Repeat
-		GLenum wrap_s = GL_CLAMP_TO_EDGE;
-		GLenum wrap_t = GL_CLAMP_TO_EDGE;
-
-		switch (p_base_repeat) {
+		switch (repeat) {
 			case RS::CANVAS_ITEM_TEXTURE_REPEAT_DISABLED:
 				wrap_s = GL_CLAMP_TO_EDGE;
 				wrap_t = GL_CLAMP_TO_EDGE;
@@ -315,18 +350,70 @@ void RasterizerCanvasGLES2::_bind_canvas_texture(RID p_texture, RS::CanvasItemTe
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, wrap_s);
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, wrap_t);
 
-		// TODO(GLES2): GLES2 doesn't support anisotropic filtering natively.
-		// We would check for the GL_EXT_texture_filter_anisotropic extension.
+		if (texture->render_target) {
+			texture->render_target->used_in_frame = true;
+			state.current_tex_is_rt = true;
+		}
+
+		// Safe division to prevent black screen NaNs if width is uninitialized
+		float w = texture->width > 0 ? texture->width : 1024.0f;
+		float h = texture->height > 0 ? texture->height : 1024.0f;
+		state.texpixel_size = Size2(1.0 / w, 1.0 / h);
+		state.texture_size = Size2i(w, h);
 	}
+
+	GLint max_units;
+	glGetIntegerv(GL_MAX_TEXTURE_IMAGE_UNITS, &max_units);
+
+	// Normal Map
+	glActiveTexture(GL_TEXTURE0 + max_units - 6);
+	GLES2::Texture *normal_map = GLES2::TextureStorage::get_singleton()->get_texture(ct->normal_map);
+	if (!normal_map) {
+		GLES2::Texture *tex_norm = GLES2::TextureStorage::get_singleton()->get_texture(GLES2::TextureStorage::get_singleton()->texture_gl_get_default(GLES2::DEFAULT_GL_TEXTURE_NORMAL));
+		if (tex_norm) {
+			glBindTexture(GL_TEXTURE_2D, tex_norm->tex_id);
+		}
+		state.normal_used = false;
+	} else {
+		glBindTexture(GL_TEXTURE_2D, normal_map->tex_id);
+		state.normal_used = true;
+		state.current_tex_is_rt = state.current_tex_is_rt || normal_map->render_target;
+	}
+
+	// Specular Map
+	glActiveTexture(GL_TEXTURE0 + max_units - 7);
+	GLES2::Texture *specular_map = GLES2::TextureStorage::get_singleton()->get_texture(ct->specular);
+	if (!specular_map) {
+		GLES2::Texture *tex_spec = GLES2::TextureStorage::get_singleton()->get_texture(GLES2::TextureStorage::get_singleton()->texture_gl_get_default(GLES2::DEFAULT_GL_TEXTURE_WHITE));
+		if (tex_spec) {
+			glBindTexture(GL_TEXTURE_2D, tex_spec->tex_id);
+		}
+	} else {
+		glBindTexture(GL_TEXTURE_2D, specular_map->tex_id);
+		state.current_tex_is_rt = state.current_tex_is_rt || specular_map->render_target;
+	}
+
+	// Reset Active Texture to 0 so we don't
+	// accidentally draw geometry to the specular unit
+	glActiveTexture(GL_TEXTURE0);
+
+	// Update State Tracker
+	state.current_tex = p_texture;
+	state.current_filter = filter;
+	state.current_repeat = repeat;
 }
 
 void RasterizerCanvasGLES2::_set_canvas_uniforms() {
+	if (state.shader_version.is_null()) {
+		return;
+	}
+
 	// These rely on the generated canvas.glsl.gen.h Uniforms enum and version_set_uniform
-	state.canvas_shader->version_set_uniform(CanvasShaderGLES2::PROJECTION_MATRIX, state.uniforms.projection_matrix, data.canvas_shader_default_version, state.mode_variant, state.specialization);
-	state.canvas_shader->version_set_uniform(CanvasShaderGLES2::MODELVIEW_MATRIX, state.uniforms.modelview_matrix, data.canvas_shader_default_version, state.mode_variant, state.specialization);
-	state.canvas_shader->version_set_uniform(CanvasShaderGLES2::EXTRA_MATRIX, state.uniforms.extra_matrix, data.canvas_shader_default_version, state.mode_variant, state.specialization);
-	state.canvas_shader->version_set_uniform(CanvasShaderGLES2::FINAL_MODULATE, state.uniforms.final_modulate, data.canvas_shader_default_version, state.mode_variant, state.specialization);
-	state.canvas_shader->version_set_uniform(CanvasShaderGLES2::TIME, state.time, data.canvas_shader_default_version, state.mode_variant, state.specialization);
+	state.canvas_shader->version_set_uniform(CanvasShaderGLES2::PROJECTION_MATRIX, state.uniforms.projection_matrix, state.shader_version, state.mode_variant, state.specialization);
+	state.canvas_shader->version_set_uniform(CanvasShaderGLES2::MODELVIEW_MATRIX, state.uniforms.modelview_matrix, state.shader_version, state.mode_variant, state.specialization);
+	state.canvas_shader->version_set_uniform(CanvasShaderGLES2::EXTRA_MATRIX, state.uniforms.extra_matrix, state.shader_version, state.mode_variant, state.specialization);
+	state.canvas_shader->version_set_uniform(CanvasShaderGLES2::FINAL_MODULATE, state.uniforms.final_modulate, state.shader_version, state.mode_variant, state.specialization);
+	state.canvas_shader->version_set_uniform(CanvasShaderGLES2::TIME, state.time, state.shader_version, state.mode_variant, state.specialization);
 
 	if (state.render_target != RID()) {
 		GLES2::RenderTarget *rt = GLES2::TextureStorage::get_singleton()->get_render_target(state.render_target);
@@ -334,16 +421,16 @@ void RasterizerCanvasGLES2::_set_canvas_uniforms() {
 			Vector2 screen_pixel_size;
 			screen_pixel_size.x = 1.0 / rt->size.width;
 			screen_pixel_size.y = 1.0 / rt->size.height;
-			state.canvas_shader->version_set_uniform(CanvasShaderGLES2::SCREEN_PIXEL_SIZE, screen_pixel_size, data.canvas_shader_default_version, state.mode_variant, state.specialization);
+			state.canvas_shader->version_set_uniform(CanvasShaderGLES2::SCREEN_PIXEL_SIZE, screen_pixel_size, state.shader_version, state.mode_variant, state.specialization);
 		}
 	}
 
 	// TODO(GLES2): Only added Skeletons for now,
 	// lighting will come way later (in Phase 3, probably).
 	if (state.using_skeleton) {
-		state.canvas_shader->version_set_uniform(CanvasShaderGLES2::SKELETON_TRANSFORM, state.skeleton_transform, data.canvas_shader_default_version, state.mode_variant, state.specialization);
-		state.canvas_shader->version_set_uniform(CanvasShaderGLES2::SKELETON_TRANSFORM_INVERSE, state.skeleton_transform_inverse, data.canvas_shader_default_version, state.mode_variant, state.specialization);
-		state.canvas_shader->version_set_uniform(CanvasShaderGLES2::SKELETON_TEXTURE_SIZE, state.skeleton_texture_size, data.canvas_shader_default_version, state.mode_variant, state.specialization);
+		state.canvas_shader->version_set_uniform(CanvasShaderGLES2::SKELETON_TRANSFORM, state.skeleton_transform, state.shader_version, state.mode_variant, state.specialization);
+		state.canvas_shader->version_set_uniform(CanvasShaderGLES2::SKELETON_TRANSFORM_INVERSE, state.skeleton_transform_inverse, state.shader_version, state.mode_variant, state.specialization);
+		state.canvas_shader->version_set_uniform(CanvasShaderGLES2::SKELETON_TEXTURE_SIZE, state.skeleton_texture_size, state.shader_version, state.mode_variant, state.specialization);
 	}
 }
 
@@ -532,6 +619,12 @@ void RasterizerCanvasGLES2::canvas_render_items_implementation(Item *p_item_list
 	state.current_tex = RID();
 	state.current_tex_is_rt = false;
 
+	// Force baseline 2D state for the pass
+	glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    glDisable(GL_CULL_FACE);
+    glDisable(GL_DEPTH_TEST);
+
 	// Bind default white texture to texture unit 0
 	glActiveTexture(GL_TEXTURE0);
 	RID white_tex_rid = GLES2::TextureStorage::get_singleton()->texture_gl_get_default(GLES2::DEFAULT_GL_TEXTURE_WHITE);
@@ -545,18 +638,70 @@ void RasterizerCanvasGLES2::canvas_render_items_implementation(Item *p_item_list
 		// Render using the batched result
 		int num_joined_items = bdata.items_joined.size();
 		for (int j = 0; j < num_joined_items; j++) {
+			const RasterizerCanvasBatcher::BItemJoined &joined_item = bdata.items_joined[j];
 			bool reclip = false;
-			// TODO(GLES2): Pass nullptr for material and false for lit right now.
-			// Handle actual materials inside the prefill step.
-			render_joined_item_commands(bdata.items_joined[j], ris.current_clip, reclip, nullptr, false);
+			Item *first_item = bdata.item_refs[joined_item.first_item_ref].item;
+
+			// Make sure we set current clip for scissor testing.
+			if (ris.current_clip != first_item->final_clip_owner) {
+				ris.current_clip = first_item->final_clip_owner;
+				if (ris.current_clip) {
+					glEnable(GL_SCISSOR_TEST);
+					int x = ris.current_clip->final_clip_rect.position.x;
+					Size2i rt_size = GLES2::TextureStorage::get_singleton()->get_render_target(state.render_target)->size;
+					int y = rt_size.height - (ris.current_clip->final_clip_rect.position.y + ris.current_clip->final_clip_rect.size.y);
+					int w = ris.current_clip->final_clip_rect.size.x;
+					int h = ris.current_clip->final_clip_rect.size.y;
+					glScissor(x, y, w, h);
+				} else {
+					glDisable(GL_SCISSOR_TEST);
+				}
+			}
+
+			// Extract the CanvasMaterialData
+			GLES2::CanvasMaterialData *mat_data = nullptr;
+			if (first_item && first_item->material.is_valid()) {
+				GLES2::Material *material = GLES2::MaterialStorage::get_singleton()->get_material(first_item->material);
+				if (material && material->data) {
+					mat_data = static_cast<GLES2::CanvasMaterialData *>(material->data);
+				}
+			}
+
+			// Pass the joined_item and the extracted material into the render step
+			render_joined_item_commands(joined_item, ris.current_clip, reclip, mat_data, false);
 		}
 	} else {
 		// Legacy / Immediate render fallback
-		while (p_item_list) {
-			Item *ci = p_item_list;
+		Item *ci = p_item_list;
+		while (ci) {
 			bool reclip = false;
-			_legacy_canvas_item_render_commands(ci, ris.current_clip, reclip, nullptr);
-			p_item_list = p_item_list->next;
+
+			if (ris.current_clip != ci->final_clip_owner) {
+				ris.current_clip = ci->final_clip_owner;
+				if (ris.current_clip) {
+					glEnable(GL_SCISSOR_TEST);
+					int x = ris.current_clip->final_clip_rect.position.x;
+					Size2i rt_size = GLES2::TextureStorage::get_singleton()->get_render_target(state.render_target)->size;
+					int y = rt_size.height - (ris.current_clip->final_clip_rect.position.y + ris.current_clip->final_clip_rect.size.y);
+					int w = ris.current_clip->final_clip_rect.size.x;
+					int h = ris.current_clip->final_clip_rect.size.y;
+					glScissor(x, y, w, h);
+				} else {
+					glDisable(GL_SCISSOR_TEST);
+				}
+			}
+
+			// Extract the CanvasMaterialData for legacy rendering too.
+			GLES2::CanvasMaterialData *mat_data = nullptr;
+			if (ci->material.is_valid()) {
+				GLES2::Material *material = GLES2::MaterialStorage::get_singleton()->get_material(ci->material);
+				if (material && material->data) {
+					mat_data = static_cast<GLES2::CanvasMaterialData *>(material->data);
+				}
+			}
+
+			_legacy_canvas_item_render_commands(ci, ris.current_clip, reclip, mat_data);
+			ci = ci->next;
 		}
 	}
 
@@ -739,10 +884,13 @@ void RasterizerCanvasGLES2::render_batches(Item::Command *const *p_commands, Ite
 
 		switch (batch.type) {
 			case BatcherEnums::BT_DEFAULT: {
+				Transform2D prev_matrix = state.uniforms.modelview_matrix;
+            	Color prev_modulate = state.uniforms.final_modulate;
+
 				if (batch.item) {
 					state.uniforms.modelview_matrix = batch.item->final_transform;
-					state.uniforms.extra_matrix = Transform2D();
 					state.uniforms.final_modulate = batch.item->final_modulate;
+					state.uniforms.extra_matrix = Transform2D();
 				}
 
 				Item::Command *command = batch.first_command;
@@ -783,10 +931,10 @@ void RasterizerCanvasGLES2::render_batches(Item::Command *const *p_commands, Ite
 							_set_texture_rect_mode(true);
 
 							bool rebind = state.canvas_shader->version_bind_shader(state.shader_version, state.mode_variant, state.specialization);
-							
+
 							// Must be called every single draw in immediate mode to update the matrices.
-							_set_canvas_uniforms(); 
-							
+							_set_canvas_uniforms();
+
 							if (rebind && p_material) {
 								p_material->bind_uniforms();
 							}
@@ -842,7 +990,7 @@ void RasterizerCanvasGLES2::render_batches(Item::Command *const *p_commands, Ite
 
 							bool rebind = state.canvas_shader->version_bind_shader(state.shader_version, state.mode_variant, state.specialization);
 							_set_canvas_uniforms();
-							
+
 							if (rebind && p_material) {
 								p_material->bind_uniforms();
 							}
@@ -879,7 +1027,7 @@ void RasterizerCanvasGLES2::render_batches(Item::Command *const *p_commands, Ite
 								screen_scale = MIN(1.0, screen_scale);
 							}
 
-							float buffer[16 * 2 + 16 * 2];
+							float buffer[16 * 2 + 16 * 2] = {};
 							{
 								// first row
 
@@ -992,6 +1140,7 @@ void RasterizerCanvasGLES2::render_batches(Item::Command *const *p_commands, Ite
 
 							glEnableVertexAttribArray(RS::ARRAY_VERTEX);
 							glEnableVertexAttribArray(RS::ARRAY_TEX_UV);
+							glDisableVertexAttribArray(RS::ARRAY_COLOR);
 
 							glVertexAttribPointer(RS::ARRAY_VERTEX, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), nullptr);
 							glVertexAttribPointer(RS::ARRAY_TEX_UV, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (const void *)(sizeof(float) * 2));
@@ -1031,16 +1180,119 @@ void RasterizerCanvasGLES2::render_batches(Item::Command *const *p_commands, Ite
 							}
 						} break;
 
+						case Item::Command::TYPE_PRIMITIVE: {
+							Item::CommandPrimitive *pr = static_cast<Item::CommandPrimitive *>(command);
+
+							switch (pr->point_count) {
+								case 2: {
+									_legacy_draw_line(pr, p_material);
+								} break;
+								default: {
+									_legacy_draw_primitive(pr, p_material);
+								} break;
+							}
+						} break;
+
+						case Item::Command::TYPE_MESH: {
+							Item::CommandMesh *mesh_cmd = static_cast<Item::CommandMesh *>(command);
+
+							_set_texture_rect_mode(false);
+
+							// Bind Shader and stack the item's material (if any)
+							bool rebind = state.canvas_shader->version_bind_shader(state.shader_version, state.mode_variant, state.specialization);
+
+							// CommandMesh has its own transform and modulate that stack with the item's baseline
+							Transform2D prev_transform_extra = state.uniforms.extra_matrix;
+							Color prev_colour_module = state.uniforms.final_modulate;
+
+							state.uniforms.extra_matrix = state.uniforms.extra_matrix * mesh_cmd->transform;
+							state.uniforms.final_modulate = state.uniforms.final_modulate * mesh_cmd->modulate;
+
+							_set_canvas_uniforms();
+
+							if (rebind && p_material) {
+								p_material->bind_uniforms();
+							}
+
+							// Setup Texture, Filter, and Repeat
+							RS::CanvasItemTextureRepeat repeat = state.default_repeat;
+							if (p_current_clip && p_current_clip->texture_repeat != RS::CANVAS_ITEM_TEXTURE_REPEAT_DEFAULT) {
+								repeat = p_current_clip->texture_repeat;
+							}
+							RS::CanvasItemTextureFilter filter = state.default_filter;
+							if (p_current_clip && p_current_clip->texture_filter != RS::CANVAS_ITEM_TEXTURE_FILTER_DEFAULT) {
+								filter = p_current_clip->texture_filter;
+							}
+
+							_bind_canvas_texture(mesh_cmd->texture, filter, repeat);
+							if (state.texpixel_size != Size2(0.0, 0.0)) {
+								state.canvas_shader->version_set_uniform(CanvasShaderGLES2::COLOR_TEXPIXEL_SIZE, state.texpixel_size, state.shader_version, state.mode_variant, state.specialization);
+							}
+
+							// Fetch and Draw Mesh Data
+							GLES2::Mesh *mesh_data = GLES2::MeshStorage::get_singleton()->get_mesh(mesh_cmd->mesh);
+							if (mesh_data) {
+								// Loop using the double pointer array
+								for (uint32_t j = 0; j < mesh_data->surface_count; j++) {
+									GLES2::Mesh::Surface *s = mesh_data->surfaces[j];
+
+									glBindBuffer(GL_ARRAY_BUFFER, s->vertex_buffer);
+
+									if (s->index_count > 0) {
+										glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, s->index_buffer);
+									}
+
+									// Setup vertex attributes from the cached Version struct
+									if (s->version_count > 0 && s->versions) {
+										GLES2::Mesh::Surface::Version *v = &s->versions[0];
+
+										for (int k = 0; k < RS::ARRAY_MAX - 1; k++) {
+											if (v->attribs[k].enabled) {
+												glEnableVertexAttribArray(k);
+												glVertexAttribPointer(k, v->attribs[k].size, v->attribs[k].type, v->attribs[k].normalized, v->attribs[k].stride, (const void *)(uintptr_t)v->attribs[k].offset);
+											} else {
+												glDisableVertexAttribArray(k);
+												if (k == RS::ARRAY_COLOR) {
+													glVertexAttrib4f(RS::ARRAY_COLOR, 1.0f, 1.0f, 1.0f, 1.0f);
+												}
+											}
+										}
+									}
+
+									// Draw call using the correct index count and vertex count
+									if (s->index_count > 0) {
+										GLenum index_type = (s->vertex_count >= (1 << 16)) ? GL_UNSIGNED_INT : GL_UNSIGNED_SHORT;
+										glDrawElements(s->primitive, s->index_count, index_type, nullptr);
+									} else {
+										glDrawArrays(s->primitive, 0, s->vertex_count);
+									}
+
+									// Clean up attributes
+									for (int k = 0; k < RS::ARRAY_MAX - 1; k++) {
+										glDisableVertexAttribArray(k);
+									}
+								}
+							}
+
+							// Restore state
+							state.uniforms.extra_matrix = prev_transform_extra;
+							state.uniforms.final_modulate = prev_colour_module;
+
+							glBindBuffer(GL_ARRAY_BUFFER, 0);
+							glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+						} break;
+
 						default: {
-							// TODO(GLES2): Add support for TYPE_LINE, TYPE_POLYGON, TYPE_MESH, etc.
+							// MULTIMESH, PARTICLES, etc.
+							print_verbose(command->type);
 							print_verbose("What did Godot meant by this?");
 						} break;
 					}
 				}
-
-				state.uniforms.modelview_matrix = base_matrix;
+				
+				state.uniforms.modelview_matrix = prev_matrix;
 				state.uniforms.extra_matrix = base_extra;
-				state.uniforms.final_modulate = base_modulate;
+				state.uniforms.final_modulate = prev_modulate;
 			} break;
 
 			case BatcherEnums::BT_RECT:
@@ -1052,6 +1304,73 @@ void RasterizerCanvasGLES2::render_batches(Item::Command *const *p_commands, Ite
 				break;
 		}
 	}
+}
+
+void RasterizerCanvasGLES2::_draw_gui_primitive(int p_points, const Vector2 *p_vertices, const Color *p_colors, const Vector2 *p_uvs, const float *p_light_angles) {
+	glBindBuffer(GL_ARRAY_BUFFER, data.polygon_buffer);
+
+	uint32_t vertex_size = p_points * sizeof(Vector2);
+	uint32_t color_size = p_colors ? p_points * sizeof(Color) : 0;
+	uint32_t uv_size = p_uvs ? p_points * sizeof(Vector2) : 0;
+	uint32_t total_size = vertex_size + color_size + uv_size;
+
+	glBufferData(GL_ARRAY_BUFFER, total_size, nullptr, GL_DYNAMIC_DRAW);
+
+	uint32_t offset = 0;
+
+	// Vertices
+	glBufferSubData(GL_ARRAY_BUFFER, offset, vertex_size, p_vertices);
+	glEnableVertexAttribArray(RS::ARRAY_VERTEX);
+	glVertexAttribPointer(RS::ARRAY_VERTEX, 2, GL_FLOAT, GL_FALSE, 0, (const void *)(uintptr_t)offset);
+	offset += vertex_size;
+
+	// Colors
+	if (p_colors) {
+		glBufferSubData(GL_ARRAY_BUFFER, offset, color_size, p_colors);
+		glEnableVertexAttribArray(RS::ARRAY_COLOR);
+		glVertexAttribPointer(RS::ARRAY_COLOR, 4, GL_FLOAT, GL_FALSE, 0, (const void *)(uintptr_t)offset);
+		offset += color_size;
+	} else {
+		glDisableVertexAttribArray(RS::ARRAY_COLOR);
+	}
+
+	// UVs
+	if (p_uvs) {
+		glBufferSubData(GL_ARRAY_BUFFER, offset, uv_size, p_uvs);
+		glEnableVertexAttribArray(RS::ARRAY_TEX_UV);
+		glVertexAttribPointer(RS::ARRAY_TEX_UV, 2, GL_FLOAT, GL_FALSE, 0, (const void *)(uintptr_t)offset);
+		offset += uv_size;
+	} else {
+		glDisableVertexAttribArray(RS::ARRAY_TEX_UV);
+	}
+
+	// For Gizmos, we often draw Lines, Triangles, or Points depending on p_points
+	GLenum draw_mode = (p_points == 2) ? GL_LINES : ((p_points == 3) ? GL_TRIANGLES : GL_TRIANGLE_FAN);
+	glDrawArrays(draw_mode, 0, p_points);
+
+	glBindBuffer(GL_ARRAY_BUFFER, 0);
+}
+
+void RasterizerCanvasGLES2::_legacy_draw_primitive(Item::CommandPrimitive *p_pr, GLES2::CanvasMaterialData *p_material) {
+	_set_texture_rect_mode(false);
+
+	if (state.canvas_shader->version_bind_shader(state.shader_version, state.mode_variant, state.specialization)) {
+		_set_canvas_uniforms();
+		if (p_material) {
+			p_material->bind_uniforms();
+		}
+	}
+
+	ERR_FAIL_COND(p_pr->point_count < 1);
+
+	_bind_canvas_texture(p_pr->texture, state.default_filter, state.default_repeat);
+	state.canvas_shader->version_set_uniform(CanvasShaderGLES2::COLOR_TEXPIXEL_SIZE, state.texpixel_size, state.shader_version, state.mode_variant, state.specialization);
+	_draw_gui_primitive(p_pr->point_count, p_pr->points, p_pr->colors, p_pr->uvs);
+}
+
+void RasterizerCanvasGLES2::_legacy_draw_line(Item::CommandPrimitive *p_pr, GLES2::CanvasMaterialData *p_material) {
+	// Godot 4 uses TYPE_PRIMITIVE with 2 points to draw lines
+	_legacy_draw_primitive(p_pr, p_material);
 }
 
 void RasterizerCanvasGLES2::_legacy_draw_poly_triangles(Item::CommandPolygon *p_poly, GLES2::CanvasMaterialData *p_material) {
@@ -1066,9 +1385,11 @@ void RasterizerCanvasGLES2::_legacy_draw_poly_triangles(Item::CommandPolygon *p_
 
 	_set_texture_rect_mode(false);
 
-	if (state.canvas_shader->version_bind_shader(state.shader_version, state.mode_variant, state.specialization)) {
-		_set_canvas_uniforms();
-		// TODO(GLES2): Material uniform binding goes here (if ready).
+	bool rebind = state.canvas_shader->version_bind_shader(state.shader_version, state.mode_variant, state.specialization);
+	_set_canvas_uniforms();
+
+	if (rebind && p_material) {
+		p_material->bind_uniforms();
 	}
 
 	// Bind texture and get pixel size
@@ -1123,12 +1444,20 @@ void RasterizerCanvasGLES2::_legacy_draw_poly_triangles(Item::CommandPolygon *p_
 
 	// Draw
 	if (!pd.indices.is_empty()) {
-		// Upload indices
 		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, data.polygon_index_buffer);
-		uint32_t index_size = pd.indices.size() * sizeof(int);
-		glBufferData(GL_ELEMENT_ARRAY_BUFFER, index_size, pd.indices.ptr(), GL_DYNAMIC_DRAW);
-
-		glDrawElements(GL_TRIANGLES, pd.indices.size(), GL_UNSIGNED_INT, nullptr);
+	
+		// GLES2 requires 16-BIT indices. Downcast Godot's 32-bit ints.
+		Vector<uint16_t> indices_16;
+		int index_count = pd.indices.size();
+		indices_16.resize(index_count);
+		
+		for (int i = 0; i < index_count; i++) {
+			indices_16.write[i] = (uint16_t)pd.indices[i];
+		}
+	
+		uint32_t index_size = index_count * sizeof(uint16_t);
+		glBufferData(GL_ELEMENT_ARRAY_BUFFER, index_size, indices_16.ptr(), GL_DYNAMIC_DRAW);
+		glDrawElements(GL_TRIANGLES, index_count, GL_UNSIGNED_SHORT, nullptr);
 		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
 	} else {
 		// Draw arrays if no indices

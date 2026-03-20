@@ -148,6 +148,9 @@ public:
 	}
 
 	_FORCE_INLINE_ void texture_resize_data(GLuint p_id, uint32_t p_size) {
+		if (!texture_allocs_cache.has(p_id)) {
+			texture_allocated_data(p_id, p_size, "Texture ID: " + p_id);
+		}
 		ERR_FAIL_COND(!texture_allocs_cache.has(p_id));
 		texture_mem_cache -= texture_allocs_cache[p_id].size;
 		texture_mem_cache += p_size;

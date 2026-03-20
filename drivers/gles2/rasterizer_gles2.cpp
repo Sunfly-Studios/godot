@@ -386,12 +386,17 @@ void RasterizerGLES2::_blit_render_target_to_screen(RID p_render_target, Display
 	// Steer the draw target to the actual application window
 	glBindFramebuffer(GL_FRAMEBUFFER, GLES2::TextureStorage::system_fbo);
 
-	Size2i win_size = DisplayServer::get_singleton()->window_get_size();
+	Size2i win_size = DisplayServer::get_singleton()->window_get_size(p_screen);
 
 	if (p_first) {
 		if (p_screen_rect.position != Vector2() || p_screen_rect.size != rt->size) {
 			glViewport(0, 0, win_size.width, win_size.height);
-			glClearColor(0.0, 0.0, 0.0, 1.0);
+			// Respect the FBO's transparency when clearing the OS window
+			if (rt->is_transparent) {
+				glClearColor(0.0, 0.0, 0.0, 0.0);
+			} else {
+				glClearColor(0.0, 0.0, 0.0, 1.0);
+			}
 			glClear(GL_COLOR_BUFFER_BIT);
 		}
 	}
@@ -399,22 +404,29 @@ void RasterizerGLES2::_blit_render_target_to_screen(RID p_render_target, Display
 	// Calculate the correct viewport for the destination rect
 	// OpenGL has bottom-left origin, so we must flip the Y axis for the viewport
 	glViewport(
-		p_screen_rect.position.x, 
-		win_size.height - p_screen_rect.position.y - p_screen_rect.size.height, 
-		p_screen_rect.size.width, 
-		p_screen_rect.size.height
-	);
+		p_screen_rect.position.x,
+		win_size.height - p_screen_rect.position.y - p_screen_rect.size.height,
+		p_screen_rect.size.width,
+		p_screen_rect.size.height);
 
 	// Disable states that could ruin a direct copy
 	glDisable(GL_BLEND);
 	glDisable(GL_DEPTH_TEST);
 	glDisable(GL_CULL_FACE);
 	glDisable(GL_SCISSOR_TEST);
+	glDepthMask(GL_FALSE);
 
 	// Bind the RenderTarget's color texture
 	glActiveTexture(GL_TEXTURE0);
 	glBindTexture(GL_TEXTURE_2D, rt->color);
-	copy_effects->copy_to_rect(Rect2(0, 0, 1, 1));
+
+	// Make sure we don't blur the image when the RT is smaller than the screen
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+
+	copy_effects->copy_to_rect(Rect2(0.0, 0.0, 1.0, 1.0));
 
 	// Clean up
 	glBindTexture(GL_TEXTURE_2D, 0);

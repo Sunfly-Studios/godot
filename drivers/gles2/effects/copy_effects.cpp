@@ -106,10 +106,6 @@ void CopyEffects::draw_screen_triangle() {
 	glVertexAttribPointer(RS::ARRAY_VERTEX, 2, GL_FLOAT, GL_FALSE, sizeof(float) * 4, nullptr);
 	glEnableVertexAttribArray(RS::ARRAY_VERTEX);
 
-	// UV attribute (2 floats).
-	glVertexAttribPointer(RS::ARRAY_TEX_UV, 2, GL_FLOAT, GL_FALSE, sizeof(float) * 4, (void *)(sizeof(float) * 2));
-	glEnableVertexAttribArray(RS::ARRAY_TEX_UV);
-
 	glDrawArrays(GL_TRIANGLES, 0, 3);
 
 	// Clean up state
@@ -119,22 +115,21 @@ void CopyEffects::draw_screen_triangle() {
 }
 
 void CopyEffects::draw_screen_quad() {
-	glBindBuffer(GL_ARRAY_BUFFER, quad);
-	
-	// Position attribute
-	glVertexAttribPointer(RS::ARRAY_VERTEX, 2, GL_FLOAT, GL_FALSE, sizeof(float) * 4, nullptr);
-	glEnableVertexAttribArray(RS::ARRAY_VERTEX);
+    glBindBuffer(GL_ARRAY_BUFFER, quad);
+    
+    // Position
+    glVertexAttribPointer(RS::ARRAY_VERTEX, 2, GL_FLOAT, GL_FALSE, sizeof(float) * 4, nullptr);
+    glEnableVertexAttribArray(RS::ARRAY_VERTEX);
 
-	// UV attribute (Offset by 2 floats)
-	glVertexAttribPointer(RS::ARRAY_TEX_UV, 2, GL_FLOAT, GL_FALSE, sizeof(float) * 4, (void *)(sizeof(float) * 2));
-	glEnableVertexAttribArray(RS::ARRAY_TEX_UV);
+    // UV (Offset by 2 floats / 8 bytes)
+    glVertexAttribPointer(RS::ARRAY_TEX_UV, 2, GL_FLOAT, GL_FALSE, sizeof(float) * 4, (const void *)(sizeof(float) * 2));
+    glEnableVertexAttribArray(RS::ARRAY_TEX_UV);
 
-	glDrawArrays(GL_TRIANGLES, 0, 6);
+    glDrawArrays(GL_TRIANGLES, 0, 6);
 
-	// Clean up state
-	glDisableVertexAttribArray(RS::ARRAY_VERTEX);
-	glDisableVertexAttribArray(RS::ARRAY_TEX_UV);
-	glBindBuffer(GL_ARRAY_BUFFER, 0);
+    glDisableVertexAttribArray(RS::ARRAY_VERTEX);
+    glDisableVertexAttribArray(RS::ARRAY_TEX_UV);
+    glBindBuffer(GL_ARRAY_BUFFER, 0);
 }
 
 void CopyEffects::copy_to_rect(const Rect2 &p_rect) {

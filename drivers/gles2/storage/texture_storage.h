@@ -148,6 +148,7 @@ struct Texture {
 	RID self;
 
 	bool is_proxy = false;
+	bool is_external = false;
 	bool is_from_native_handle = false;
 	bool is_render_target = false;
 
@@ -489,12 +490,16 @@ public:
 	/* Texture API */
 
 	Texture *get_texture(RID p_rid) const {
-		return texture_owner.get_or_null(p_rid);
+		Texture *texture = texture_owner.get_or_null(p_rid);
+		if (texture && texture->is_proxy) {
+			return texture_owner.get_or_null(texture->proxy_to);
+		}
+		return texture;
     }
 	bool owns_texture(RID p_rid) { return texture_owner.owns(p_rid); }
 
 	void texture_2d_initialize_from_texture(RID p_texture, Texture &p_tex) {
-
+		texture_owner.initialize_rid(p_texture, p_tex);
     }
 
 	virtual RID texture_allocate() override;
@@ -563,7 +568,12 @@ public:
 
 	GLuint texture_atlas_get_texture() const;
 	_FORCE_INLINE_ Rect2 texture_atlas_get_texture_rect(RID p_texture) {
-        return Rect2();
+		TextureAtlas::Texture *t = texture_atlas.textures.getptr(p_texture);
+		if (!t) {
+			return Rect2();
+		}
+
+		return t->uv_rect;
 	}
 
 	void texture_add_to_texture_atlas(RID p_texture);

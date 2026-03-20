@@ -814,6 +814,7 @@ void RasterizerCanvasBatcher::_legacy_canvas_item_render_commands(RendererCanvas
 	batch->type = BatcherEnums::BT_DEFAULT;
 	batch->first_command = p_item->commands;
 	batch->num_commands = godot4_commands_count(p_item->commands);
+	batch->item = p_item;
 
 	get_this()->state.uniforms.modelview_matrix = p_item->final_transform;
 	get_this()->state.uniforms.final_modulate = p_item->final_modulate;

@@ -99,27 +99,52 @@ RID TextureStorage::canvas_texture_allocate() {
 }
 
 void TextureStorage::canvas_texture_initialize(RID p_rid) {
-
+	canvas_texture_owner.initialize_rid(p_rid);
 }
 
 void TextureStorage::canvas_texture_free(RID p_rid) {
-
+	canvas_texture_owner.free(p_rid);
 }
 
 void TextureStorage::canvas_texture_set_channel(RID p_canvas_texture, RS::CanvasTextureChannel p_channel, RID p_texture) {
+	CanvasTexture *ct = canvas_texture_owner.get_or_null(p_canvas_texture);
+	ERR_FAIL_NULL(ct);
 
+	switch (p_channel) {
+		case RS::CANVAS_TEXTURE_CHANNEL_DIFFUSE: {
+			ct->diffuse = p_texture;
+		} break;
+		case RS::CANVAS_TEXTURE_CHANNEL_NORMAL: {
+			ct->normal_map = p_texture;
+		} break;
+		case RS::CANVAS_TEXTURE_CHANNEL_SPECULAR: {
+			ct->specular = p_texture;
+		} break;
+	}
 }
 
 void TextureStorage::canvas_texture_set_shading_parameters(RID p_canvas_texture, const Color &p_specular_color, float p_shininess) {
+	CanvasTexture *ct = canvas_texture_owner.get_or_null(p_canvas_texture);
+	ERR_FAIL_NULL(ct);
 
+	ct->specular_color.r = p_specular_color.r;
+	ct->specular_color.g = p_specular_color.g;
+	ct->specular_color.b = p_specular_color.b;
+	ct->specular_color.a = p_shininess;
 }
 
 void TextureStorage::canvas_texture_set_texture_filter(RID p_canvas_texture, RS::CanvasItemTextureFilter p_filter) {
+	CanvasTexture *ct = canvas_texture_owner.get_or_null(p_canvas_texture);
+	ERR_FAIL_NULL(ct);
 
+	ct->texture_filter = p_filter;
 }
 
 void TextureStorage::canvas_texture_set_texture_repeat(RID p_canvas_texture, RS::CanvasItemTextureRepeat p_repeat) {
+	CanvasTexture *ct = canvas_texture_owner.get_or_null(p_canvas_texture);
+	ERR_FAIL_NULL(ct);
 
+	ct->texture_repeat = p_repeat;
 }
 
 /* Texture API */
@@ -385,8 +410,29 @@ RID TextureStorage::texture_allocate() {
 	return texture_owner.make_rid(texture);
 }
 
-void TextureStorage::texture_free(RID p_texture) {
+void TextureStorage::texture_free(RID p_rid) {
+	Texture *tex = texture_owner.get_or_null(p_rid);
+	ERR_FAIL_NULL(tex);
 
+	if (tex->canvas_texture) {
+		memdelete(tex->canvas_texture);
+	}
+
+	// Only delete the GL texture if we actually own it (Proxies don't own their GL textures)
+	if (!tex->is_proxy && tex->tex_id != 0) {
+		glDeleteTextures(1, &tex->tex_id);
+		tex->tex_id = 0;
+	}
+
+	// If this was a proxy, remove ourselves from the base texture's proxy list
+	if (tex->is_proxy && tex->proxy_to.is_valid()) {
+		Texture *base = texture_owner.get_or_null(tex->proxy_to);
+		if (base) {
+			base->proxies.erase(p_rid);
+		}
+	}
+
+	texture_owner.free(p_rid);
 }
 
 void TextureStorage::texture_2d_initialize(RID p_texture, const Ref<Image> &p_image) {
@@ -427,17 +473,83 @@ void TextureStorage::texture_external_initialize(RID p_texture, int p_width, int
 }
 
 void TextureStorage::texture_2d_layered_initialize(RID p_texture, const Vector<Ref<Image>> &p_layers, RS::TextureLayeredType p_layered_type) {
+	ERR_FAIL_COND(p_layers.is_empty());
 
+	ERR_FAIL_COND(p_layered_type == RS::TEXTURE_LAYERED_CUBEMAP && p_layers.size() != 6);
+	ERR_FAIL_COND_MSG(p_layered_type == RS::TEXTURE_LAYERED_CUBEMAP_ARRAY, "Cubemap Arrays are not supported in the GLES2 backend.");
+	ERR_FAIL_COND_MSG(p_layered_type == RS::TEXTURE_LAYERED_2D_ARRAY, "2D Texture Arrays are not supported in the GLES2 backend.");
+
+	const Ref<Image> &image = p_layers[0];
+	{
+		int valid_width = 0;
+		int valid_height = 0;
+		bool valid_mipmaps = false;
+		Image::Format valid_format = Image::FORMAT_MAX;
+
+		for (int i = 0; i < p_layers.size(); i++) {
+			ERR_FAIL_COND(p_layers[i]->is_empty());
+
+			if (i == 0) {
+				valid_width = p_layers[i]->get_width();
+				valid_height = p_layers[i]->get_height();
+				valid_format = p_layers[i]->get_format();
+				valid_mipmaps = p_layers[i]->has_mipmaps();
+			} else {
+				ERR_FAIL_COND(p_layers[i]->get_width() != valid_width);
+				ERR_FAIL_COND(p_layers[i]->get_height() != valid_height);
+				ERR_FAIL_COND(p_layers[i]->get_format() != valid_format);
+				ERR_FAIL_COND(p_layers[i]->has_mipmaps() != valid_mipmaps);
+			}
+		}
+	}
+
+	GLES2::Texture texture;
+	texture.width = image->get_width();
+	texture.height = image->get_height();
+	texture.alloc_width = texture.width;
+	texture.alloc_height = texture.height;
+	texture.mipmaps = image->get_mipmap_count() + 1;
+	texture.format = image->get_format();
+	texture.type = GLES2::Texture::TYPE_LAYERED;
+	texture.layered_type = p_layered_type;
+	texture.target = GL_TEXTURE_CUBE_MAP;
+	texture.layers = p_layers.size();
+	_get_gl_image_and_format(Ref<Image>(), texture.format, texture.real_format, texture.gl_format_cache, texture.gl_internal_format_cache, texture.gl_type_cache, texture.compressed, false);
+	texture.total_data_size = p_layers[0]->get_image_data_size(texture.width, texture.height, texture.format, texture.mipmaps) * texture.layers;
+	texture.active = true;
+	glGenTextures(1, &texture.tex_id);
+	GLES2::Utilities::get_singleton()->texture_allocated_data(texture.tex_id, texture.total_data_size, "Texture Layered");
+	texture_owner.initialize_rid(p_texture, texture);
+	for (int i = 0; i < p_layers.size(); i++) {
+		_texture_set_data(p_texture, p_layers[i], i, i == 0);
+	}
 }
 
 void TextureStorage::texture_3d_initialize(RID p_texture, Image::Format p_format, int p_width, int p_height, int p_depth, bool p_mipmaps, const Vector<Ref<Image>> &p_data) {
-
+	WARN_PRINT("Trying to initialize a 3D texture with the GLES2 driver, which doesn't support 3D Textures!");
 }
 
 // Called internally when texture_proxy_create(p_base) is called.
 // Note: p_base is the root and p_texture is the proxy.
 void TextureStorage::texture_proxy_initialize(RID p_texture, RID p_base) {
+	Texture *tex = texture_owner.get_or_null(p_texture);
+	ERR_FAIL_NULL(tex);
+	Texture *base = texture_owner.get_or_null(p_base);
+	ERR_FAIL_NULL(base);
 
+	// Destroy the dummy tex_id created by texture_allocate() so we don't leak it
+	if (tex->tex_id != 0) {
+		glDeleteTextures(1, &tex->tex_id);
+		tex->tex_id = 0;
+	}
+
+	// The proxy inherits the exact GL state and ID of its base
+	tex->copy_from(*base);
+	tex->is_proxy = true;
+	tex->proxy_to = p_base;
+
+	// Tell the base texture that it has a proxy tracking it
+	base->proxies.push_back(p_texture);
 }
 
 RID TextureStorage::texture_create_from_native_handle(RS::TextureType p_type, Image::Format p_format, uint64_t p_native_handle, int p_width, int p_height, int p_depth, int p_layers, RS::TextureLayeredType p_layered_type) {
@@ -458,7 +570,7 @@ void TextureStorage::texture_2d_update(RID p_texture, const Ref<Image> &p_image,
 }
 
 void TextureStorage::texture_3d_update(RID p_texture, const Vector<Ref<Image>> &p_data) {
-
+	WARN_PRINT("Trying to update a 3D texture with the GLES2 driver, which doesn't support 3D Textures!");
 }
 
 void TextureStorage::texture_external_update(RID p_texture, int p_width, int p_height, uint64_t p_external_buffer) {
@@ -466,19 +578,67 @@ void TextureStorage::texture_external_update(RID p_texture, int p_width, int p_h
 }
 
 void TextureStorage::texture_proxy_update(RID p_texture, RID p_proxy_to) {
+	Texture *tex = texture_owner.get_or_null(p_texture);
+	ERR_FAIL_NULL(tex);
+	Texture *base = texture_owner.get_or_null(p_proxy_to);
+	ERR_FAIL_NULL(base);
 
+	// Remove from old base's tracker
+	if (tex->proxy_to.is_valid()) {
+		Texture *old_base = texture_owner.get_or_null(tex->proxy_to);
+		if (old_base) {
+			old_base->proxies.erase(p_texture);
+		}
+	}
+
+	tex->copy_from(*base);
+	tex->is_proxy = true;
+	tex->proxy_to = p_proxy_to;
+
+	base->proxies.push_back(p_texture);
 }
 
 void TextureStorage::texture_2d_placeholder_initialize(RID p_texture) {
+	//this could be better optimized to reuse an existing image , done this way
+	//for now to get it working
+	Ref<Image> image = Image::create_empty(4, 4, false, Image::FORMAT_RGBA8);
+	image->fill(Color(1, 0, 1, 1));
 
+	texture_2d_initialize(p_texture, image);
 }
 
-void TextureStorage::texture_2d_layered_placeholder_initialize(RID p_texture, RS::TextureLayeredType p_layered_type) {
+void TextureStorage::texture_2d_layered_placeholder_initialize(RID p_texture, RenderingServer::TextureLayeredType p_layered_type) {
+	//this could be better optimized to reuse an existing image , done this way
+	//for now to get it working
+	Ref<Image> image = Image::create_empty(4, 4, false, Image::FORMAT_RGBA8);
+	image->fill(Color(1, 0, 1, 1));
 
+	Vector<Ref<Image>> images;
+	if (p_layered_type == RS::TEXTURE_LAYERED_2D_ARRAY) {
+		images.push_back(image);
+	} else {
+		//cube
+		for (int i = 0; i < 6; i++) {
+			images.push_back(image);
+		}
+	}
+
+	texture_2d_layered_initialize(p_texture, images, p_layered_type);
 }
 
 void TextureStorage::texture_3d_placeholder_initialize(RID p_texture) {
+	//this could be better optimized to reuse an existing image , done this way
+	//for now to get it working
+	Ref<Image> image = Image::create_empty(4, 4, false, Image::FORMAT_RGBA8);
+	image->fill(Color(1, 0, 1, 1));
 
+	Vector<Ref<Image>> images;
+	//cube
+	for (int i = 0; i < 4; i++) {
+		images.push_back(image);
+	}
+
+	texture_3d_initialize(p_texture, Image::FORMAT_RGBA8, 4, 4, 4, false, images);
 }
 
 Ref<Image> TextureStorage::texture_2d_get(RID p_texture) const {
@@ -499,19 +659,56 @@ Ref<Image> TextureStorage::texture_2d_layer_get(RID p_texture, int p_layer) cons
 }
 
 Vector<Ref<Image>> TextureStorage::_texture_3d_read_framebuffer(GLES2::Texture *p_texture) const {
-	return Vector<Ref<Image>>();
+	ERR_FAIL_V_MSG(Vector<Ref<Image>>(), "Trying to get a 3D framebuffer with the GLES2 driver, which doesn't support 3D Textures!");
 }
 
 Vector<Ref<Image>> TextureStorage::texture_3d_get(RID p_texture) const {
-    return Vector<Ref<Image>>();
+	ERR_FAIL_V_MSG(Vector<Ref<Image>>(), "Trying to get a 3D texture with the GLES2 driver, which doesn't support 3D Textures!");
 }
 
 void TextureStorage::texture_replace(RID p_texture, RID p_by_texture) {
+	Texture *tex = texture_owner.get_or_null(p_texture);
+	ERR_FAIL_NULL(tex);
+	Texture *by_tex = texture_owner.get_or_null(p_by_texture);
+	ERR_FAIL_NULL(by_tex);
 
+	// Destroy the old physical GL texture
+	if (!tex->is_proxy && tex->tex_id != 0) {
+		glDeleteTextures(1, &tex->tex_id);
+	}
+
+	Vector<RID> old_proxies = tex->proxies;
+
+	// Steal the GL state and ID from the new texture
+	tex->copy_from(*by_tex);
+	tex->proxies = old_proxies; // Restore the proxies list!
+	tex->is_proxy = false;
+
+	// Notify all proxy textures (the UI elements) that their base has a new ID/Size
+	for (int i = 0; i < tex->proxies.size(); i++) {
+		Texture *proxy = texture_owner.get_or_null(tex->proxies[i]);
+		if (proxy) {
+			proxy->copy_from(*tex);
+			proxy->is_proxy = true;
+			proxy->proxy_to = p_texture;
+		}
+	}
+
+	// We consumed by_tex, so clear its GL ID to prevent texture_free from destroying our new texture!
+	by_tex->tex_id = 0;
+	texture_free(p_by_texture);
 }
 
 void TextureStorage::texture_set_size_override(RID p_texture, int p_width, int p_height) {
+	Texture *tex = texture_owner.get_or_null(p_texture);
+	if (!tex) {
+		return;
+	}
 
+	tex->width = p_width;
+	tex->height = p_height;
+	tex->alloc_width = p_width;
+	tex->alloc_height = p_height;
 }
 
 void TextureStorage::texture_set_path(RID p_texture, const String &p_path) {
@@ -646,11 +843,15 @@ Image::Format TextureStorage::texture_get_format(RID p_texture) const {
 }
 
 uint32_t TextureStorage::texture_get_texid(RID p_texture) const {
-    return 0;
+	Texture *tex = texture_owner.get_or_null(p_texture);
+	ERR_FAIL_NULL_V(tex, 0);
+	return tex->tex_id;
 }
 
 Vector3i TextureStorage::texture_get_size(RID p_texture) const {
-	return Vector3i(0, 0, 0);
+	Texture *tex = texture_owner.get_or_null(p_texture);
+	ERR_FAIL_NULL_V(tex, Vector3i(0, 0, 0));
+	return Vector3i(tex->width, tex->height, tex->depth);
 }
 
 uint32_t TextureStorage::texture_get_width(RID p_texture) const {
@@ -666,10 +867,16 @@ uint32_t TextureStorage::texture_get_height(RID p_texture) const {
 }
 
 uint32_t TextureStorage::texture_get_depth(RID p_texture) const {
-	return 0;
+	Texture *tex = texture_owner.get_or_null(p_texture);
+	ERR_FAIL_NULL_V(tex, 0);
+	return tex->depth;
 }
 
 void TextureStorage::texture_bind(RID p_texture, uint32_t p_texture_no) {
+	Texture *tex = texture_owner.get_or_null(p_texture);
+	ERR_FAIL_NULL(tex);
+	glActiveTexture(GL_TEXTURE0 + p_texture_no);
+	glBindTexture(tex->target, tex->tex_id);
 }
 
 /* TEXTURE ATLAS API */
@@ -687,7 +894,10 @@ void TextureStorage::texture_atlas_mark_dirty_on_texture(RID p_texture) {
 }
 
 void TextureStorage::texture_atlas_remove_texture(RID p_texture) {
-
+	if (texture_atlas.textures.has(p_texture)) {
+		texture_atlas.textures.erase(p_texture);
+		// There is not much a point of making it dirty, texture can be removed next time the atlas is updated.
+	}
 }
 
 GLuint TextureStorage::texture_atlas_get_texture() const {
@@ -812,19 +1022,14 @@ void TextureStorage::_update_render_target(RenderTarget *rt) {
 		texture = get_texture(rt->overridden.depth);
 		ERR_FAIL_NULL(texture);
 		rt->depth = texture->tex_id;
+		glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, texture_target, rt->depth, 0);
 	} else {
-		glGenTextures(1, &rt->depth);
-		glBindTexture(texture_target, rt->depth);
-
-		glTexImage2D(texture_target, 0, GL_DEPTH_COMPONENT, rt->size.x, rt->size.y, 0, GL_DEPTH_COMPONENT, GL_UNSIGNED_INT, nullptr);
-
-		glTexParameteri(texture_target, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-		glTexParameteri(texture_target, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-		glTexParameteri(texture_target, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-		glTexParameteri(texture_target, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+		// Use a Renderbuffer for depth.
+		glGenRenderbuffers(1, &rt->depth);
+		glBindRenderbuffer(GL_RENDERBUFFER, rt->depth);
+		glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT16, rt->size.x, rt->size.y);
+		glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, rt->depth);
 	}
-
-	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, texture_target, rt->depth, 0);
 
 	GLenum status = glCheckFramebufferStatus(GL_FRAMEBUFFER);
 	if (status != GL_FRAMEBUFFER_COMPLETE) {
@@ -869,7 +1074,24 @@ void GLES2::TextureStorage::check_backbuffer(RenderTarget *rt, const bool uses_s
 }
 
 void TextureStorage::_clear_render_target(RenderTarget *rt) {
+	if (!rt) {
+		return;
+	}
 
+	if (rt->fbo != 0 && rt->fbo != system_fbo) {
+		glDeleteFramebuffers(1, &rt->fbo);
+		rt->fbo = 0;
+	}
+
+	if (rt->color != 0 && !rt->overridden.color.is_valid()) {
+		glDeleteTextures(1, &rt->color);
+		rt->color = 0;
+	}
+
+	if (rt->depth != 0 && !rt->overridden.depth.is_valid()) {
+		glDeleteRenderbuffers(1, &rt->depth);
+		rt->depth = 0;
+	}
 }
 
 RID TextureStorage::render_target_create() {
@@ -891,15 +1113,32 @@ RID TextureStorage::render_target_create() {
 }
 
 void TextureStorage::render_target_free(RID p_rid) {
-
+	RenderTarget *rt = render_target_owner.get_or_null(p_rid);
+	if (rt) {
+		_clear_render_target(rt);
+		// If the RenderTarget owns a proxy texture, mark it for deletion too
+		if (rt->texture.is_valid()) {
+			texture_free(rt->texture);
+		}
+		if (rt->overridden.color.is_null()) {
+			texture_free(rt->texture);
+		}
+		render_target_owner.free(p_rid);
+	}
 }
 
 void TextureStorage::render_target_set_position(RID p_render_target, int p_x, int p_y) {
+	RenderTarget *rt = render_target_owner.get_or_null(p_render_target);
+	ERR_FAIL_NULL(rt);
 
+	rt->position = Point2i(p_x, p_y);
 }
 
 Point2i TextureStorage::render_target_get_position(RID p_render_target) const {
-	return Point2i();
+	RenderTarget *rt = render_target_owner.get_or_null(p_render_target);
+	ERR_FAIL_NULL_V(rt, Point2i());
+
+	return rt->position;
 }
 
 void TextureStorage::render_target_set_size(RID p_render_target, int p_width, int p_height, uint32_t p_view_count) {
@@ -928,19 +1167,80 @@ Size2i TextureStorage::render_target_get_size(RID p_render_target) const {
 }
 
 void TextureStorage::render_target_set_override(RID p_render_target, RID p_color_texture, RID p_depth_texture, RID p_velocity_texture, RID p_velocity_depth_texture) {
+	RenderTarget *rt = render_target_owner.get_or_null(p_render_target);
+	ERR_FAIL_NULL(rt);
+	ERR_FAIL_COND(rt->direct_to_screen);
 
+	rt->overridden.velocity = p_velocity_texture;
+
+	if (rt->overridden.color == p_color_texture && rt->overridden.depth == p_depth_texture) {
+		return;
+	}
+
+	if (p_color_texture.is_null() && p_depth_texture.is_null()) {
+		_clear_render_target(rt);
+		_update_render_target(rt);
+		return;
+	}
+
+	if (!rt->overridden.is_overridden) {
+		_clear_render_target(rt);
+	}
+
+	rt->overridden.color = p_color_texture;
+	rt->overridden.depth = p_depth_texture;
+	rt->overridden.is_overridden = true;
+
+	uint32_t hash_key = hash_murmur3_one_64(p_color_texture.get_id());
+	hash_key = hash_murmur3_one_64(p_depth_texture.get_id(), hash_key);
+	hash_key = hash_fmix32(hash_key);
+
+	RBMap<uint32_t, RenderTarget::RTOverridden::FBOCacheEntry>::Element *cache;
+	if ((cache = rt->overridden.fbo_cache.find(hash_key)) != nullptr) {
+		rt->fbo = cache->get().fbo;
+		rt->color = cache->get().color;
+		rt->depth = cache->get().depth;
+		rt->size = cache->get().size;
+		rt->texture = p_color_texture;
+		return;
+	}
+
+	_update_render_target(rt);
+
+	RenderTarget::RTOverridden::FBOCacheEntry new_entry;
+	new_entry.fbo = rt->fbo;
+	new_entry.color = rt->color;
+	new_entry.depth = rt->depth;
+	new_entry.size = rt->size;
+	// Keep track of any textures we had to allocate because they weren't overridden.
+	if (p_color_texture.is_null()) {
+		new_entry.allocated_textures.push_back(rt->color);
+	}
+	if (p_depth_texture.is_null()) {
+		new_entry.allocated_textures.push_back(rt->depth);
+	}
+	rt->overridden.fbo_cache.insert(hash_key, new_entry);
 }
 
 RID TextureStorage::render_target_get_override_color(RID p_render_target) const {
-    return RID();
+	RenderTarget *rt = render_target_owner.get_or_null(p_render_target);
+	ERR_FAIL_NULL_V(rt, RID());
+
+	return rt->overridden.color;
 }
 
 RID TextureStorage::render_target_get_override_depth(RID p_render_target) const {
-    return RID();
+	RenderTarget *rt = render_target_owner.get_or_null(p_render_target);
+	ERR_FAIL_NULL_V(rt, RID());
+
+	return rt->overridden.depth;
 }
 
 RID TextureStorage::render_target_get_override_velocity(RID p_render_target) const {
-    return RID();
+	RenderTarget *rt = render_target_owner.get_or_null(p_render_target);
+	ERR_FAIL_NULL_V(rt, RID());
+
+	return rt->overridden.velocity;
 }
 
 void TextureStorage::render_target_set_render_region(RID p_render_target, const Rect2i &p_render_region) {
@@ -957,19 +1257,48 @@ RID TextureStorage::render_target_get_texture(RID p_render_target) {
 }
 
 void TextureStorage::render_target_set_transparent(RID p_render_target, bool p_transparent) {
+	RenderTarget *rt = render_target_owner.get_or_null(p_render_target);
+	ERR_FAIL_NULL(rt);
 
+	rt->is_transparent = p_transparent;
+
+	if (rt->overridden.color.is_null()) {
+		_clear_render_target(rt);
+		_update_render_target(rt);
+	}
 }
 
 bool TextureStorage::render_target_get_transparent(RID p_render_target) const {
-    return false;
+	RenderTarget *rt = render_target_owner.get_or_null(p_render_target);
+	ERR_FAIL_NULL_V(rt, false);
+
+	return rt->is_transparent;
 }
 
 void TextureStorage::render_target_set_direct_to_screen(RID p_render_target, bool p_direct_to_screen) {
+	RenderTarget *rt = render_target_owner.get_or_null(p_render_target);
+	ERR_FAIL_NULL(rt);
 
+	if (p_direct_to_screen == rt->direct_to_screen) {
+		return;
+	}
+	// When setting DIRECT_TO_SCREEN, you need to clear before the value is set, but allocate after as
+	// those functions change how they operate depending on the value of DIRECT_TO_SCREEN
+	_clear_render_target(rt);
+	rt->direct_to_screen = p_direct_to_screen;
+	if (rt->direct_to_screen) {
+		rt->overridden.color = RID();
+		rt->overridden.depth = RID();
+		rt->overridden.velocity = RID();
+	}
+	_update_render_target(rt);
 }
 
 bool TextureStorage::render_target_get_direct_to_screen(RID p_render_target) const {
-    return false;
+	RenderTarget *rt = render_target_owner.get_or_null(p_render_target);
+	ERR_FAIL_NULL_V(rt, false);
+
+	return rt->direct_to_screen;
 }
 
 bool TextureStorage::render_target_was_used(RID p_render_target) const {
@@ -1001,19 +1330,31 @@ bool TextureStorage::render_target_is_using_hdr(RID p_render_target) const {
 }
 
 GLuint TextureStorage::render_target_get_color_internal_format(RID p_render_target) const {
-    return GL_RGBA8;
+	RenderTarget *rt = render_target_owner.get_or_null(p_render_target);
+	ERR_FAIL_NULL_V(rt, GL_RGBA);
+
+	return rt->color_internal_format;
 }
 
 GLuint TextureStorage::render_target_get_color_format(RID p_render_target) const {
-    return GL_RGBA;
+	RenderTarget *rt = render_target_owner.get_or_null(p_render_target);
+	ERR_FAIL_NULL_V(rt, GL_RGBA);
+
+	return rt->color_format;
 }
 
 GLuint TextureStorage::render_target_get_color_type(RID p_render_target) const {
-    return GL_UNSIGNED_BYTE;
+	RenderTarget *rt = render_target_owner.get_or_null(p_render_target);
+	ERR_FAIL_NULL_V(rt, GL_UNSIGNED_BYTE);
+
+	return rt->color_type;
 }
 
 uint32_t TextureStorage::render_target_get_color_format_size(RID p_render_target) const {
-    return 4;
+	RenderTarget *rt = render_target_owner.get_or_null(p_render_target);
+	ERR_FAIL_NULL_V(rt, 4);
+
+	return rt->color_format_size;
 }
 
 void TextureStorage::render_target_request_clear(RID p_render_target, const Color &p_clear_color) {

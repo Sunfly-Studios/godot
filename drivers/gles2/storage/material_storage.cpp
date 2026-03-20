@@ -46,16 +46,503 @@ using namespace GLES2;
 ///////////////////////////////////////////////////////////////////////////
 // UBI helper functions
 
-[[maybe_unused]] static void _fill_std140_variant_ubo_value(ShaderLanguage::DataType type, int p_array_size, const Variant &value, uint8_t *data) {
+static void _fill_std140_variant_ubo_value(ShaderLanguage::DataType type, int p_array_size, const Variant &value, uint8_t *data) {
+	switch (type) {
+		case ShaderLanguage::TYPE_BOOL: {
+			uint32_t *gui = (uint32_t *)data;
 
+			if (p_array_size > 0) {
+				PackedInt32Array ba = value;
+				for (int i = 0; i < ba.size(); i++) {
+					ba.set(i, ba[i] ? 1 : 0);
+				}
+				write_array_std140<int32_t>(ba, gui, p_array_size, 4);
+			} else {
+				bool v = value;
+				gui[0] = v ? 1 : 0;
+			}
+		} break;
+		case ShaderLanguage::TYPE_BVEC2: {
+			uint32_t *gui = (uint32_t *)data;
+
+			if (p_array_size > 0) {
+				PackedInt32Array ba = convert_array_std140<Vector2i, int32_t>(value);
+				for (int i = 0; i < ba.size(); i++) {
+					ba.set(i, ba[i] ? 1 : 0);
+				}
+				write_array_std140<Vector2i>(ba, gui, p_array_size, 4);
+			} else {
+				uint32_t v = value;
+				gui[0] = v & 1 ? 1 : 0;
+				gui[1] = v & 2 ? 1 : 0;
+			}
+		} break;
+		case ShaderLanguage::TYPE_BVEC3: {
+			uint32_t *gui = (uint32_t *)data;
+
+			if (p_array_size > 0) {
+				PackedInt32Array ba = convert_array_std140<Vector3i, int32_t>(value);
+				for (int i = 0; i < ba.size(); i++) {
+					ba.set(i, ba[i] ? 1 : 0);
+				}
+				write_array_std140<Vector3i>(ba, gui, p_array_size, 4);
+			} else {
+				uint32_t v = value;
+				gui[0] = (v & 1) ? 1 : 0;
+				gui[1] = (v & 2) ? 1 : 0;
+				gui[2] = (v & 4) ? 1 : 0;
+			}
+		} break;
+		case ShaderLanguage::TYPE_BVEC4: {
+			uint32_t *gui = (uint32_t *)data;
+
+			if (p_array_size > 0) {
+				PackedInt32Array ba = convert_array_std140<Vector4i, int32_t>(value);
+				for (int i = 0; i < ba.size(); i++) {
+					ba.set(i, ba[i] ? 1 : 0);
+				}
+				write_array_std140<Vector4i>(ba, gui, p_array_size, 4);
+			} else {
+				uint32_t v = value;
+				gui[0] = (v & 1) ? 1 : 0;
+				gui[1] = (v & 2) ? 1 : 0;
+				gui[2] = (v & 4) ? 1 : 0;
+				gui[3] = (v & 8) ? 1 : 0;
+			}
+		} break;
+		case ShaderLanguage::TYPE_INT: {
+			int32_t *gui = (int32_t *)data;
+
+			if (p_array_size > 0) {
+				const PackedInt32Array &iv = value;
+				write_array_std140<int32_t>(iv, gui, p_array_size, 4);
+			} else {
+				int v = value;
+				gui[0] = v;
+			}
+		} break;
+		case ShaderLanguage::TYPE_IVEC2: {
+			int32_t *gui = (int32_t *)data;
+
+			if (p_array_size > 0) {
+				const PackedInt32Array &iv = convert_array_std140<Vector2i, int32_t>(value);
+				write_array_std140<Vector2i>(iv, gui, p_array_size, 4);
+			} else {
+				Vector2i v = convert_to_vector<Vector2i>(value);
+				gui[0] = v.x;
+				gui[1] = v.y;
+			}
+		} break;
+		case ShaderLanguage::TYPE_IVEC3: {
+			int32_t *gui = (int32_t *)data;
+
+			if (p_array_size > 0) {
+				const PackedInt32Array &iv = convert_array_std140<Vector3i, int32_t>(value);
+				write_array_std140<Vector3i>(iv, gui, p_array_size, 4);
+			} else {
+				Vector3i v = convert_to_vector<Vector3i>(value);
+				gui[0] = v.x;
+				gui[1] = v.y;
+				gui[2] = v.z;
+			}
+		} break;
+		case ShaderLanguage::TYPE_IVEC4: {
+			int32_t *gui = (int32_t *)data;
+
+			if (p_array_size > 0) {
+				const PackedInt32Array &iv = convert_array_std140<Vector4i, int32_t>(value);
+				write_array_std140<Vector4i>(iv, gui, p_array_size, 4);
+			} else {
+				Vector4i v = convert_to_vector<Vector4i>(value);
+				gui[0] = v.x;
+				gui[1] = v.y;
+				gui[2] = v.z;
+				gui[3] = v.w;
+			}
+		} break;
+		case ShaderLanguage::TYPE_UINT: {
+			uint32_t *gui = (uint32_t *)data;
+
+			if (p_array_size > 0) {
+				const PackedInt32Array &iv = value;
+				write_array_std140<uint32_t>(iv, gui, p_array_size, 4);
+			} else {
+				int v = value;
+				gui[0] = v;
+			}
+		} break;
+		case ShaderLanguage::TYPE_UVEC2: {
+			uint32_t *gui = (uint32_t *)data;
+
+			if (p_array_size > 0) {
+				const PackedInt32Array &iv = convert_array_std140<Vector2i, int32_t>(value);
+				write_array_std140<Vector2i>(iv, gui, p_array_size, 4);
+			} else {
+				Vector2i v = convert_to_vector<Vector2i>(value);
+				gui[0] = v.x;
+				gui[1] = v.y;
+			}
+		} break;
+		case ShaderLanguage::TYPE_UVEC3: {
+			uint32_t *gui = (uint32_t *)data;
+
+			if (p_array_size > 0) {
+				const PackedInt32Array &iv = convert_array_std140<Vector3i, int32_t>(value);
+				write_array_std140<Vector3i>(iv, gui, p_array_size, 4);
+			} else {
+				Vector3i v = convert_to_vector<Vector3i>(value);
+				gui[0] = v.x;
+				gui[1] = v.y;
+				gui[2] = v.z;
+			}
+		} break;
+		case ShaderLanguage::TYPE_UVEC4: {
+			uint32_t *gui = (uint32_t *)data;
+
+			if (p_array_size > 0) {
+				const PackedInt32Array &iv = convert_array_std140<Vector4i, int32_t>(value);
+				write_array_std140<Vector4i>(iv, gui, p_array_size, 4);
+			} else {
+				Vector4i v = convert_to_vector<Vector4i>(value);
+				gui[0] = v.x;
+				gui[1] = v.y;
+				gui[2] = v.z;
+				gui[3] = v.w;
+			}
+		} break;
+		case ShaderLanguage::TYPE_FLOAT: {
+			float *gui = (float *)data;
+
+			if (p_array_size > 0) {
+				const PackedFloat32Array &a = value;
+				write_array_std140<float>(a, gui, p_array_size, 4);
+			} else {
+				float v = value;
+				gui[0] = v;
+			}
+		} break;
+		case ShaderLanguage::TYPE_VEC2: {
+			float *gui = (float *)data;
+
+			if (p_array_size > 0) {
+				const PackedFloat32Array &a = convert_array_std140<Vector2, float>(value);
+				write_array_std140<Vector2>(a, gui, p_array_size, 4);
+			} else {
+				Vector2 v = convert_to_vector<Vector2>(value);
+				gui[0] = v.x;
+				gui[1] = v.y;
+			}
+		} break;
+		case ShaderLanguage::TYPE_VEC3: {
+			float *gui = (float *)data;
+
+			if (p_array_size > 0) {
+				const PackedFloat32Array &a = convert_array_std140<Vector3, float>(value);
+				write_array_std140<Vector3>(a, gui, p_array_size, 4);
+			} else {
+				Vector3 v = convert_to_vector<Vector3>(value);
+				gui[0] = v.x;
+				gui[1] = v.y;
+				gui[2] = v.z;
+			}
+		} break;
+		case ShaderLanguage::TYPE_VEC4: {
+			float *gui = (float *)data;
+
+			if (p_array_size > 0) {
+				const PackedFloat32Array &a = convert_array_std140<Vector4, float>(value);
+				write_array_std140<Vector4>(a, gui, p_array_size, 4);
+			} else {
+				Vector4 v = convert_to_vector<Vector4>(value);
+				gui[0] = v.x;
+				gui[1] = v.y;
+				gui[2] = v.z;
+				gui[3] = v.w;
+			}
+		} break;
+		case ShaderLanguage::TYPE_MAT2: {
+			float *gui = (float *)data;
+
+			if (p_array_size > 0) {
+				const PackedFloat32Array &a = value;
+				int s = a.size();
+
+				for (int i = 0, j = 0; i < p_array_size * 4; i += 4, j += 8) {
+					if (i + 3 < s) {
+						gui[j] = a[i];
+						gui[j + 1] = a[i + 1];
+
+						gui[j + 4] = a[i + 2];
+						gui[j + 5] = a[i + 3];
+					} else {
+						gui[j] = 1;
+						gui[j + 1] = 0;
+
+						gui[j + 4] = 0;
+						gui[j + 5] = 1;
+					}
+					gui[j + 2] = 0; // ignored
+					gui[j + 3] = 0; // ignored
+					gui[j + 6] = 0; // ignored
+					gui[j + 7] = 0; // ignored
+				}
+			} else {
+				Transform2D v = value;
+
+				//in std140 members of mat2 are treated as vec4s
+				gui[0] = v.columns[0][0];
+				gui[1] = v.columns[0][1];
+				gui[2] = 0; // ignored
+				gui[3] = 0; // ignored
+
+				gui[4] = v.columns[1][0];
+				gui[5] = v.columns[1][1];
+				gui[6] = 0; // ignored
+				gui[7] = 0; // ignored
+			}
+		} break;
+		case ShaderLanguage::TYPE_MAT3: {
+			float *gui = (float *)data;
+
+			if (p_array_size > 0) {
+				const PackedFloat32Array &a = convert_array_std140<Basis, float>(value);
+				const Basis default_basis;
+				const int s = a.size();
+
+				for (int i = 0, j = 0; i < p_array_size * 9; i += 9, j += 12) {
+					if (i + 8 < s) {
+						gui[j] = a[i];
+						gui[j + 1] = a[i + 1];
+						gui[j + 2] = a[i + 2];
+						gui[j + 3] = 0; // Ignored.
+
+						gui[j + 4] = a[i + 3];
+						gui[j + 5] = a[i + 4];
+						gui[j + 6] = a[i + 5];
+						gui[j + 7] = 0; // Ignored.
+
+						gui[j + 8] = a[i + 6];
+						gui[j + 9] = a[i + 7];
+						gui[j + 10] = a[i + 8];
+						gui[j + 11] = 0; // Ignored.
+					} else {
+						convert_item_std140(default_basis, gui + j);
+					}
+				}
+			} else {
+				convert_item_std140<Basis>(value, gui);
+			}
+		} break;
+		case ShaderLanguage::TYPE_MAT4: {
+			float *gui = (float *)data;
+
+			if (p_array_size > 0) {
+				const PackedFloat32Array &a = convert_array_std140<Projection, float>(value);
+				write_array_std140<Projection>(a, gui, p_array_size, 16);
+			} else {
+				convert_item_std140<Projection>(value, gui);
+			}
+		} break;
+		default: {
+		}
+	}
 }
 
 _FORCE_INLINE_ static void _fill_std140_ubo_value(ShaderLanguage::DataType type, const Vector<ShaderLanguage::Scalar> &value, uint8_t *data) {
+	switch (type) {
+		case ShaderLanguage::TYPE_BOOL: {
+			uint32_t *gui = (uint32_t *)data;
+			gui[0] = value[0].boolean ? 1 : 0;
+		} break;
+		case ShaderLanguage::TYPE_BVEC2: {
+			uint32_t *gui = (uint32_t *)data;
+			gui[0] = value[0].boolean ? 1 : 0;
+			gui[1] = value[1].boolean ? 1 : 0;
 
+		} break;
+		case ShaderLanguage::TYPE_BVEC3: {
+			uint32_t *gui = (uint32_t *)data;
+			gui[0] = value[0].boolean ? 1 : 0;
+			gui[1] = value[1].boolean ? 1 : 0;
+			gui[2] = value[2].boolean ? 1 : 0;
+
+		} break;
+		case ShaderLanguage::TYPE_BVEC4: {
+			uint32_t *gui = (uint32_t *)data;
+			gui[0] = value[0].boolean ? 1 : 0;
+			gui[1] = value[1].boolean ? 1 : 0;
+			gui[2] = value[2].boolean ? 1 : 0;
+			gui[3] = value[3].boolean ? 1 : 0;
+
+		} break;
+		case ShaderLanguage::TYPE_INT: {
+			int32_t *gui = (int32_t *)data;
+			gui[0] = value[0].sint;
+
+		} break;
+		case ShaderLanguage::TYPE_IVEC2: {
+			int32_t *gui = (int32_t *)data;
+
+			for (int i = 0; i < 2; i++) {
+				gui[i] = value[i].sint;
+			}
+
+		} break;
+		case ShaderLanguage::TYPE_IVEC3: {
+			int32_t *gui = (int32_t *)data;
+
+			for (int i = 0; i < 3; i++) {
+				gui[i] = value[i].sint;
+			}
+
+		} break;
+		case ShaderLanguage::TYPE_IVEC4: {
+			int32_t *gui = (int32_t *)data;
+
+			for (int i = 0; i < 4; i++) {
+				gui[i] = value[i].sint;
+			}
+
+		} break;
+		case ShaderLanguage::TYPE_UINT: {
+			uint32_t *gui = (uint32_t *)data;
+			gui[0] = value[0].uint;
+
+		} break;
+		case ShaderLanguage::TYPE_UVEC2: {
+			int32_t *gui = (int32_t *)data;
+
+			for (int i = 0; i < 2; i++) {
+				gui[i] = value[i].uint;
+			}
+		} break;
+		case ShaderLanguage::TYPE_UVEC3: {
+			int32_t *gui = (int32_t *)data;
+
+			for (int i = 0; i < 3; i++) {
+				gui[i] = value[i].uint;
+			}
+
+		} break;
+		case ShaderLanguage::TYPE_UVEC4: {
+			int32_t *gui = (int32_t *)data;
+
+			for (int i = 0; i < 4; i++) {
+				gui[i] = value[i].uint;
+			}
+		} break;
+		case ShaderLanguage::TYPE_FLOAT: {
+			float *gui = (float *)data;
+			gui[0] = value[0].real;
+
+		} break;
+		case ShaderLanguage::TYPE_VEC2: {
+			float *gui = (float *)data;
+
+			for (int i = 0; i < 2; i++) {
+				gui[i] = value[i].real;
+			}
+
+		} break;
+		case ShaderLanguage::TYPE_VEC3: {
+			float *gui = (float *)data;
+
+			for (int i = 0; i < 3; i++) {
+				gui[i] = value[i].real;
+			}
+
+		} break;
+		case ShaderLanguage::TYPE_VEC4: {
+			float *gui = (float *)data;
+
+			for (int i = 0; i < 4; i++) {
+				gui[i] = value[i].real;
+			}
+		} break;
+		case ShaderLanguage::TYPE_MAT2: {
+			float *gui = (float *)data;
+
+			//in std140 members of mat2 are treated as vec4s
+			gui[0] = value[0].real;
+			gui[1] = value[1].real;
+			gui[2] = 0;
+			gui[3] = 0;
+			gui[4] = value[2].real;
+			gui[5] = value[3].real;
+			gui[6] = 0;
+			gui[7] = 0;
+		} break;
+		case ShaderLanguage::TYPE_MAT3: {
+			float *gui = (float *)data;
+
+			gui[0] = value[0].real;
+			gui[1] = value[1].real;
+			gui[2] = value[2].real;
+			gui[3] = 0;
+			gui[4] = value[3].real;
+			gui[5] = value[4].real;
+			gui[6] = value[5].real;
+			gui[7] = 0;
+			gui[8] = value[6].real;
+			gui[9] = value[7].real;
+			gui[10] = value[8].real;
+			gui[11] = 0;
+		} break;
+		case ShaderLanguage::TYPE_MAT4: {
+			float *gui = (float *)data;
+
+			for (int i = 0; i < 16; i++) {
+				gui[i] = value[i].real;
+			}
+		} break;
+		default: {
+		}
+	}
 }
 
 _FORCE_INLINE_ static void _fill_std140_ubo_empty(ShaderLanguage::DataType type, int p_array_size, uint8_t *data) {
+	if (p_array_size <= 0) {
+		p_array_size = 1;
+	}
 
+	switch (type) {
+		case ShaderLanguage::TYPE_BOOL:
+		case ShaderLanguage::TYPE_INT:
+		case ShaderLanguage::TYPE_UINT:
+		case ShaderLanguage::TYPE_FLOAT: {
+			memset(data, 0, 4 * p_array_size);
+		} break;
+		case ShaderLanguage::TYPE_BVEC2:
+		case ShaderLanguage::TYPE_IVEC2:
+		case ShaderLanguage::TYPE_UVEC2:
+		case ShaderLanguage::TYPE_VEC2: {
+			memset(data, 0, 8 * p_array_size);
+		} break;
+		case ShaderLanguage::TYPE_BVEC3:
+		case ShaderLanguage::TYPE_IVEC3:
+		case ShaderLanguage::TYPE_UVEC3:
+		case ShaderLanguage::TYPE_VEC3: {
+			memset(data, 0, 12 * p_array_size);
+		} break;
+		case ShaderLanguage::TYPE_BVEC4:
+		case ShaderLanguage::TYPE_IVEC4:
+		case ShaderLanguage::TYPE_UVEC4:
+		case ShaderLanguage::TYPE_VEC4: {
+			memset(data, 0, 16 * p_array_size);
+		} break;
+		case ShaderLanguage::TYPE_MAT2: {
+			memset(data, 0, 32 * p_array_size);
+		} break;
+		case ShaderLanguage::TYPE_MAT3: {
+			memset(data, 0, 48 * p_array_size);
+		} break;
+		case ShaderLanguage::TYPE_MAT4: {
+			memset(data, 0, 64 * p_array_size);
+		} break;
+
+		default: {
+		}
+	}
 }
 
 ///////////////////////////////////////////////////////////////////////////
@@ -158,7 +645,21 @@ static const RS::CanvasItemTextureFilter filter_from_uniform_canvas[ShaderLangua
 };
 
 void MaterialData::update_uniform_buffer(const HashMap<StringName, ShaderLanguage::ShaderNode::Uniform> &p_uniforms, const uint32_t *p_uniform_offsets, const HashMap<StringName, Variant> &p_parameters, uint8_t *p_buffer, uint32_t p_buffer_size) {
+	for (const KeyValue<StringName, ShaderLanguage::ShaderNode::Uniform> &E : p_uniforms) {
+		if (E.value.order < 0 || E.value.scope == ShaderLanguage::ShaderNode::Uniform::SCOPE_INSTANCE) {
+			continue;
+		}
 
+		uint32_t offset = p_uniform_offsets[E.value.order];
+		uint8_t *data = &p_buffer[offset];
+		HashMap<StringName, Variant>::ConstIterator V = p_parameters.find(E.key);
+
+		if (V) {
+			_fill_std140_variant_ubo_value(E.value.type, E.value.array_size, V->value, data);
+		} else {
+			_fill_std140_ubo_empty(E.value.type, E.value.array_size, data);
+		}
+	}
 }
 
 MaterialData::~MaterialData() {
@@ -166,11 +667,46 @@ MaterialData::~MaterialData() {
 }
 
 void MaterialData::update_textures(const HashMap<StringName, Variant> &p_parameters, const HashMap<StringName, HashMap<int, RID>> &p_default_textures, const Vector<ShaderCompiler::GeneratedCode::Texture> &p_texture_uniforms, RID *p_textures, bool p_is_3d_shader_type) {
+	TextureStorage *texture_storage = TextureStorage::get_singleton();
 
+	for (int i = 0, k = 0; i < p_texture_uniforms.size(); i++) {
+		const StringName &uniform_name = p_texture_uniforms[i].name;
+		HashMap<StringName, Variant>::ConstIterator V = p_parameters.find(uniform_name);
+
+		RID gl_texture = texture_storage->texture_gl_get_default(GLES2::DEFAULT_GL_TEXTURE_WHITE);
+		if (V && V->value.get_type() == Variant::RID) {
+			gl_texture = V->value;
+		}
+		p_textures[k++] = gl_texture;
+	}
 }
 
 void MaterialData::update_parameters_internal(const HashMap<StringName, Variant> &p_parameters, bool p_uniform_dirty, bool p_textures_dirty, const HashMap<StringName, ShaderLanguage::ShaderNode::Uniform> &p_uniforms, const uint32_t *p_uniform_offsets, const Vector<ShaderCompiler::GeneratedCode::Texture> &p_texture_uniforms, const HashMap<StringName, HashMap<int, RID>> &p_default_texture_params, uint32_t p_ubo_size, bool p_is_3d_shader_type) {
+	if ((uint32_t)ubo_data.size() != p_ubo_size) {
+		p_uniform_dirty = true;
+		ubo_data.resize(p_ubo_size);
+		if (ubo_data.size()) {
+			memset(ubo_data.ptrw(), 0, ubo_data.size());
+		}
+	}
 
+	if (p_uniform_dirty && ubo_data.size()) {
+		update_uniform_buffer(p_uniforms, p_uniform_offsets, p_parameters, ubo_data.ptrw(), ubo_data.size());
+	}
+
+	uint32_t tex_uniform_count = 0U;
+	for (int i = 0; i < p_texture_uniforms.size(); i++) {
+		tex_uniform_count += uint32_t(p_texture_uniforms[i].array_size > 0 ? p_texture_uniforms[i].array_size : 1);
+	}
+
+	if ((uint32_t)texture_cache.size() != tex_uniform_count || p_textures_dirty) {
+		texture_cache.resize(tex_uniform_count);
+		p_textures_dirty = true;
+	}
+
+	if (p_textures_dirty && tex_uniform_count) {
+		update_textures(p_parameters, p_default_texture_params, p_texture_uniforms, texture_cache.ptrw(), p_is_3d_shader_type);
+	}
 }
 
 ///////////////////////////////////////////////////////////////////////////
@@ -188,6 +724,11 @@ MaterialStorage::MaterialStorage() {
 
 MaterialStorage::~MaterialStorage() {
 	//shaders.copy.version_free(shaders.copy_version);
+
+	// Clear the update queue
+	while (material_update_list.first()) {
+		material_update_list.remove(material_update_list.first());
+	}
 	singleton = nullptr;
 }
 
@@ -313,31 +854,111 @@ RS::ShaderNativeSourceCode MaterialStorage::shader_get_native_source_code(RID p_
 
 /* MATERIAL API */
 
-void MaterialStorage::_material_queue_update(GLES2::Material *material, bool p_uniform, bool p_texture) {
+void MaterialStorage::_material_queue_update(Material *material, bool p_uniform, bool p_texture) {
+	ERR_FAIL_NULL(material);
 
+	if (p_uniform) {
+		material->uniform_dirty = true;
+	}
+	if (p_texture) {
+		material->texture_dirty = true;
+	}
+
+	if (!material->update_element.in_list()) {
+		material_update_list.add(&material->update_element);
+	}
 }
 
 void MaterialStorage::_update_queued_materials() {
+	while (material_update_list.first()) {
+		Material *mat = material_update_list.first()->self();
+
+		// Push the cached params into the GLES2 Uniform Buffers
+		if (mat->data) {
+			mat->data->update_parameters(mat->params, mat->uniform_dirty, mat->texture_dirty);
+		}
+
+		mat->texture_dirty = false;
+		mat->uniform_dirty = false;
+
+		material_update_list.remove(material_update_list.first());
+	}
 }
 
 RID MaterialStorage::material_allocate() {
-    return RID();
+	return material_owner.allocate_rid();
 }
 
 void MaterialStorage::material_initialize(RID p_rid) {
-
+	material_owner.initialize_rid(p_rid);
 }
 
 void MaterialStorage::material_free(RID p_rid) {
+	Material *material = material_owner.get_or_null(p_rid);
+	ERR_FAIL_NULL(material);
 
+	// Destroy the CanvasMaterialData and unbinds the shader
+	material_set_shader(p_rid, RID());
+
+	// Ensure we don't leave dangling pointers in our update queue
+	if (material->update_element.in_list()) {
+		material_update_list.remove(&material->update_element);
+	}
+
+	material_owner.free(p_rid);
 }
 
 void MaterialStorage::material_set_shader(RID p_material, RID p_shader) {
+	Material *material = material_owner.get_or_null(p_material);
+	ERR_FAIL_NULL(material);
 
+	if (material->data) {
+		memdelete(material->data);
+		material->data = nullptr;
+	}
+
+	if (p_shader.is_null()) {
+		material->shader = nullptr;
+		material->shader_id = 0;
+		material->shader_mode = RS::SHADER_MAX;
+		return;
+	}
+
+	Shader *shader = shader_owner.get_or_null(p_shader);
+	ERR_FAIL_NULL(shader);
+
+	material->shader = shader;
+	material->shader_id = p_shader.get_id();
+	material->shader_mode = shader->mode;
+
+	if (shader->data) {
+		if (shader->mode == RS::SHADER_CANVAS_ITEM) {
+			material->data = GLES2::_create_canvas_material_func(shader->data);
+		} else if (shader->mode == RS::SHADER_PARTICLES) {
+			material->data = GLES2::_create_particles_material_func(shader->data);
+		}
+		// TODO(GLES2): Add Spatial material allocation when 3D is implemented
+	}
+
+	_material_queue_update(material, true, true);
 }
 
 void MaterialStorage::material_set_param(RID p_material, const StringName &p_param, const Variant &p_value) {
+	Material *material = material_owner.get_or_null(p_material);
+	ERR_FAIL_NULL(material);
 
+	if (p_value.get_type() == Variant::NIL) {
+		material->params.erase(p_param);
+	} else {
+		material->params[p_param] = p_value;
+	}
+
+	// Tell the queue what kind of update this is
+	if (p_value.get_type() == Variant::OBJECT || p_value.get_type() == Variant::RID) {
+		_material_queue_update(material, false, true); // Texture dirty
+	} else {
+		_material_queue_update(material, true, false); // Uniform dirty
+	}
 }
 
 Variant MaterialStorage::material_get_param(RID p_material, const StringName &p_param) const {
@@ -415,11 +1036,90 @@ void CanvasMaterialData::update_parameters(const HashMap<StringName, Variant> &p
 	update_parameters_internal(p_parameters, p_uniform_dirty, p_textures_dirty, shader_data->uniforms, shader_data->ubo_offsets.ptr(), shader_data->texture_uniforms, shader_data->default_texture_params, shader_data->ubo_size, false);
 }
 
-[[maybe_unused]] static void bind_uniforms_generic(const Vector<RID> &p_textures, const Vector<ShaderCompiler::GeneratedCode::Texture> &p_texture_uniforms, int texture_offset = 0, const RS::CanvasItemTextureFilter *filter_mapping = filter_from_uniform, const RS::CanvasItemTextureRepeat *repeat_mapping = repeat_from_uniform) {
-}
-
 void CanvasMaterialData::bind_uniforms() {
-	// Bind Material Uniforms
+	GLint prog = 0;
+	glGetIntegerv(GL_CURRENT_PROGRAM, &prog);
+	ERR_FAIL_COND(prog == 0);
+
+	// Unpack the custom UBO data and push via glUniform
+	if (!ubo_data.is_empty()) {
+		const uint8_t *data = ubo_data.ptr();
+
+		for (const KeyValue<StringName, ShaderLanguage::ShaderNode::Uniform> &E : shader_data->uniforms) {
+			if (E.value.order < 0) {
+				continue; // Skip Textures
+			}
+			if (E.value.scope == ShaderLanguage::ShaderNode::Uniform::SCOPE_INSTANCE) {
+				continue;
+			}
+
+			// Godot 4 shader compiler always prefixes custom uniforms with "m_"
+			String uniform_name = "m_" + String(E.key);
+			GLint loc = glGetUniformLocation(prog, uniform_name.utf8().get_data());
+
+			if (loc < 0) {
+				continue; // Uniform was optimized out by GLSL
+			}
+
+			uint32_t offset = shader_data->ubo_offsets[E.value.order];
+			const uint8_t *val_ptr = &data[offset];
+
+			// Translate the std140 bytes into raw GLES2 bindings
+			switch (E.value.type) {
+				case ShaderLanguage::TYPE_BOOL:
+				case ShaderLanguage::TYPE_INT:
+				case ShaderLanguage::TYPE_UINT:
+					glUniform1i(loc, *(const int32_t *)val_ptr);
+					break;
+				case ShaderLanguage::TYPE_FLOAT:
+					glUniform1f(loc, *(const float *)val_ptr);
+					break;
+				case ShaderLanguage::TYPE_VEC2:
+					glUniform2f(loc, ((const float *)val_ptr)[0], ((const float *)val_ptr)[1]);
+					break;
+				case ShaderLanguage::TYPE_VEC3:
+					glUniform3f(loc, ((const float *)val_ptr)[0], ((const float *)val_ptr)[1], ((const float *)val_ptr)[2]);
+					break;
+				case ShaderLanguage::TYPE_VEC4:
+					glUniform4f(loc, ((const float *)val_ptr)[0], ((const float *)val_ptr)[1], ((const float *)val_ptr)[2], ((const float *)val_ptr)[3]);
+					break;
+				case ShaderLanguage::TYPE_MAT4:
+					glUniformMatrix4fv(loc, 1, GL_FALSE, (const GLfloat *)val_ptr);
+					break;
+				default:
+					break;
+			}
+		}
+	}
+
+	// Bind Textures to their active GL_TEXTURE units
+	const RID *textures = texture_cache.ptr();
+	const ShaderCompiler::GeneratedCode::Texture *texture_uniforms = shader_data->texture_uniforms.ptr();
+	int texture_uniform_index = 0;
+	int texture_uniform_count = 0;
+
+	for (int ti = 0; ti < texture_cache.size(); ti++) {
+		const ShaderCompiler::GeneratedCode::Texture &texture_uniform = texture_uniforms[texture_uniform_index];
+
+		// Tell the custom shader which texture unit to read from
+		String tex_name = "m_" + String(texture_uniform.name);
+		GLint tex_loc = glGetUniformLocation(prog, tex_name.utf8().get_data());
+		if (tex_loc >= 0) {
+			glUniform1i(tex_loc, ti);
+		}
+
+		GLES2::Texture *texture = GLES2::TextureStorage::get_singleton()->get_texture(textures[ti]);
+		if (texture) {
+			glActiveTexture(GL_TEXTURE0 + ti);
+			glBindTexture(GL_TEXTURE_2D, texture->tex_id);
+		}
+
+		texture_uniform_count++;
+		if (texture_uniform_count >= texture_uniform.array_size) {
+			texture_uniform_index++;
+			texture_uniform_count = 0;
+		}
+	}
 }
 
 CanvasMaterialData::~CanvasMaterialData() {
