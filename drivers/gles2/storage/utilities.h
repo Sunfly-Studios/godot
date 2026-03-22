@@ -157,6 +157,10 @@ public:
 		texture_allocs_cache[p_id].size = p_size;
 	}
 
+	_FORCE_INLINE_ bool has_texture_data(GLuint p_id) const {
+		return texture_allocs_cache.has(p_id);
+	}
+
 	/* INSTANCES */
 
 	virtual RS::InstanceType get_base_type(RID p_rid) const override;

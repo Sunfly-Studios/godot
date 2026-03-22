@@ -202,8 +202,6 @@ typedef void(GLAPIENTRY *DebugMessageCallbackARB)(DEBUGPROCARB callback, const v
 
 void RasterizerGLES2::initialize() {
 	Engine::get_singleton()->print_header(vformat("OpenGL API %s - Legacy - Using Device: %s - %s", RS::get_singleton()->get_video_adapter_api_version(), RS::get_singleton()->get_video_adapter_vendor(), RS::get_singleton()->get_video_adapter_name()));
-
-	canvas->initialize();
 }
 
 void RasterizerGLES2::finalize() {
@@ -511,7 +509,6 @@ void RasterizerGLES2::set_boot_image(const Ref<Image> &p_image, const Color &p_c
 	glBindTexture(GL_TEXTURE_2D, 0);
 
 	DisplayServer::get_singleton()->swap_buffers();
-	// end_viewport(true);
 
 	texture_storage->texture_free(texture);
 }

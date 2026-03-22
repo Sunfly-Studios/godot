@@ -31,6 +31,7 @@
 #ifdef GLES2_ENABLED
 
 #include "copy_effects.h"
+#include "drivers/gles2/storage/utilities.h"
 #include "drivers/gles2/storage/texture_storage.h"
 
 using namespace GLES2;
@@ -84,8 +85,8 @@ CopyEffects::~CopyEffects() {
 
 	copy.shader.version_free(copy.shader_version);
 
-	glDeleteBuffers(1, &screen_triangle);
-	glDeleteBuffers(1, &quad);
+	GLES2::Utilities::get_singleton()->buffer_free_data(screen_triangle);
+	GLES2::Utilities::get_singleton()->buffer_free_data(quad);
 }
 
 void CopyEffects::set_color(const Color &p_color, const Rect2i &p_region) {

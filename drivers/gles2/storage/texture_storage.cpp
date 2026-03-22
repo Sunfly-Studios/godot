@@ -90,6 +90,15 @@ TextureStorage::TextureStorage() {
 
 TextureStorage::~TextureStorage() {
 	singleton = nullptr;
+	for (int i = 0; i < DEFAULT_GL_TEXTURE_MAX; i++) {
+		texture_free(default_gl_textures[i]);
+	}
+	if (texture_atlas.texture != 0) {
+		GLES2::Utilities::get_singleton()->texture_free_data(texture_atlas.texture);
+	}
+	texture_atlas.texture = 0;
+	glDeleteFramebuffers(1, &texture_atlas.framebuffer);
+	texture_atlas.framebuffer = 0;
 }
 
 /* Canvas Texture API */
@@ -402,7 +411,6 @@ Ref<Image> TextureStorage::_get_gl_image_and_format(const Ref<Image> &p_image, I
 
 RID TextureStorage::texture_allocate() {
 	Texture texture;
-
 	glGenTextures(1, &texture.tex_id);
 	texture.active = false;
 	texture.total_data_size = 0;
@@ -412,24 +420,47 @@ RID TextureStorage::texture_allocate() {
 
 void TextureStorage::texture_free(RID p_rid) {
 	Texture *tex = texture_owner.get_or_null(p_rid);
-	ERR_FAIL_NULL(tex);
+	if (!tex) {
+		return;
+	}
 
 	if (tex->canvas_texture) {
 		memdelete(tex->canvas_texture);
 	}
 
-	// Only delete the GL texture if we actually own it (Proxies don't own their GL textures)
-	if (!tex->is_proxy && tex->tex_id != 0) {
-		glDeleteTextures(1, &tex->tex_id);
+	bool must_free_data = false;
+
+	// Handle Proxy Unlinking (Base <- Proxy)
+	if (tex->is_proxy) {
+		if (tex->proxy_to.is_valid()) {
+			Texture *base = texture_owner.get_or_null(tex->proxy_to);
+			if (base) {
+				base->proxies.erase(p_rid);
+			}
+		}
+	} else {
+		must_free_data = (tex->tex_id != 0 && !tex->is_from_native_handle);
+	}
+
+	// Safely free the tracked data
+	if (must_free_data) {
+		if (GLES2::Utilities::get_singleton()->has_texture_data(tex->tex_id)) {
+			GLES2::Utilities::get_singleton()->texture_free_data(tex->tex_id);
+		} else {
+			// This was an eagerly allocated empty shell.
+			glDeleteTextures(1, &tex->tex_id);
+		}
 		tex->tex_id = 0;
 	}
 
-	// If this was a proxy, remove ourselves from the base texture's proxy list
-	if (tex->is_proxy && tex->proxy_to.is_valid()) {
-		Texture *base = texture_owner.get_or_null(tex->proxy_to);
-		if (base) {
-			base->proxies.erase(p_rid);
+	// Handle Reverse Proxy Unlinking (Proxy -> Base)
+	for (int i = 0; i < tex->proxies.size(); i++) {
+		Texture *p = texture_owner.get_or_null(tex->proxies[i]);
+		if (!p) {
+			continue;
 		}
+		p->proxy_to = RID();
+		p->tex_id = 0;
 	}
 
 	texture_owner.free(p_rid);
@@ -674,7 +705,7 @@ void TextureStorage::texture_replace(RID p_texture, RID p_by_texture) {
 
 	// Destroy the old physical GL texture
 	if (!tex->is_proxy && tex->tex_id != 0) {
-		glDeleteTextures(1, &tex->tex_id);
+		GLES2::Utilities::get_singleton()->texture_free_data(tex->tex_id);
 	}
 
 	Vector<RID> old_proxies = tex->proxies;
@@ -1015,9 +1046,9 @@ void TextureStorage::_update_render_target(RenderTarget *rt) {
 		texture->gl_set_filter(RS::CANVAS_ITEM_TEXTURE_FILTER_NEAREST);
 		texture->gl_set_repeat(RS::CANVAS_ITEM_TEXTURE_REPEAT_DISABLED);
 
-		// TODO(GLES2): This causes issues such as the textures
-		// being already registered. Not sure why?
-		//GLES2::Utilities::get_singleton()->texture_allocated_data(rt->color, rt->size.x * rt->size.y * rt->view_count * rt->color_format_size, "Render target color texture");
+		if (!GLES2::Utilities::get_singleton()->has_texture_data(rt->color)) {
+			GLES2::Utilities::get_singleton()->texture_allocated_data(rt->color, rt->size.x * rt->size.y * rt->view_count * rt->color_format_size, "Render target color texture");
+		}
 	}
 
 	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, texture_target, rt->color, 0);
@@ -1034,9 +1065,9 @@ void TextureStorage::_update_render_target(RenderTarget *rt) {
 		glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT16, rt->size.x, rt->size.y);
 		glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, rt->depth);
 
-		// TODO(GLES2): This causes issues such as the textures
-		// being already registered. Not sure why?
-		//GLES2::Utilities::get_singleton()->texture_allocated_data(rt->depth, rt->size.x * rt->size.y * rt->view_count * 3, "Render target depth texture");
+		if (!GLES2::Utilities::get_singleton()->has_texture_data(rt->color)) {
+			GLES2::Utilities::get_singleton()->texture_allocated_data(rt->depth, rt->size.x * rt->size.y * rt->view_count * 3, "Render target depth texture");
+		}
 	}
 
 	GLenum status = glCheckFramebufferStatus(GL_FRAMEBUFFER);

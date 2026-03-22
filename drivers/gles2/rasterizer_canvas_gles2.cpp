@@ -1510,6 +1510,8 @@ RasterizerCanvasGLES2 *RasterizerCanvasGLES2::get_singleton() {
 RasterizerCanvasGLES2::RasterizerCanvasGLES2() {
 	singleton = this;
 
+	initialize();
+
 	// The Canvas Shader is often managed by MaterialStorage,
 	// but since we generated it locally, we'll instantiate it directly for the state.
 	state.canvas_shader = memnew(CanvasShaderGLES2);
@@ -1532,18 +1534,19 @@ RasterizerCanvasGLES2::~RasterizerCanvasGLES2() {
 	GLES2::TextureStorage::get_singleton()->canvas_texture_free(default_canvas_texture);
 
 	// Free buffers
-	glDeleteBuffers(1, &data.canvas_quad_vertices);
-	glDeleteBuffers(1, &data.ninepatch_vertices);
-	glDeleteBuffers(1, &data.ninepatch_elements);
-	glDeleteBuffers(1, &data.polygon_buffer);
-	glDeleteBuffers(1, &data.polygon_index_buffer);
+	GLES2::Utilities::get_singleton()->buffer_free_data(data.canvas_quad_vertices);
+	GLES2::Utilities::get_singleton()->buffer_free_data(data.canvas_quad_vertices);
+	GLES2::Utilities::get_singleton()->buffer_free_data(data.ninepatch_vertices);
+	GLES2::Utilities::get_singleton()->buffer_free_data(data.ninepatch_elements);
+	GLES2::Utilities::get_singleton()->buffer_free_data(data.polygon_buffer);
+	GLES2::Utilities::get_singleton()->buffer_free_data(data.polygon_index_buffer);
 
 	// Free batcher buffers
 	if (bdata.gl_vertex_buffer != 0) {
-		glDeleteBuffers(1, &bdata.gl_vertex_buffer);
+		GLES2::Utilities::get_singleton()->buffer_free_data(bdata.gl_vertex_buffer);
 	}
 	if (bdata.gl_index_buffer != 0) {
-		glDeleteBuffers(1, &bdata.gl_index_buffer);
+		GLES2::Utilities::get_singleton()->buffer_free_data(bdata.gl_index_buffer);
 	}
 }
 
