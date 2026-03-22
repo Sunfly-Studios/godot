@@ -103,19 +103,19 @@ Config::Config() {
 
 	GLint result = 0;
 	GLint result_2[2] = { 0, 0 };
-	
+
 	glGetIntegerv(GL_MAX_VERTEX_TEXTURE_IMAGE_UNITS, &result);
-	max_vertex_texture_image_units = result;
-	
+	max_vertex_texture_image_units = (result >= 0) ? result : 0;
+
 	glGetIntegerv(GL_MAX_TEXTURE_IMAGE_UNITS, &result);
-	max_texture_image_units = result;
-	
+	max_texture_image_units = (result >= 8) ? result : 8;
+
 	glGetIntegerv(GL_MAX_TEXTURE_SIZE, &result);
-	max_texture_size = result;
-	
+	max_texture_size = (result >= 64) ? result : 2048;
+
 	glGetIntegerv(GL_MAX_VIEWPORT_DIMS, result_2);
-	max_viewport_size[0] = result_2[0];
-	max_viewport_size[1] = result_2[1];
+	max_viewport_size[0] = (result_2[0] >= 64) ? result_2[0] : 2048;
+	max_viewport_size[1] = (result_2[1] >= 64) ? result_2[1] : 2048;
 
 	// GLES2 does not support UBO
 	max_uniform_buffer_size = 0;
@@ -128,6 +128,15 @@ Config::Config() {
 	if (support_anisotropic_filter) {
 		glGetFloatv(_GL_MAX_TEXTURE_MAX_ANISOTROPY_EXT, &anisotropic_level);
 		anisotropic_level = MIN(float(1 << int(GLOBAL_GET("rendering/textures/default_filters/anisotropic_filtering_level"))), anisotropic_level);
+	}
+
+	// Cache 3D texture support
+	support_3d_textures = extensions.has("GL_OES_texture_3D");
+
+	if (!support_3d_textures) {
+		// Some drivers expose it under the ARB or
+		// standard GL string if they are desktop wrappers
+		support_3d_textures = extensions.has("GL_EXT_texture3D") || extensions.has("GL_ARB_texture3D");
 	}
 
 #ifdef WEB_ENABLED
@@ -145,7 +154,8 @@ Config::Config() {
 	max_lights_per_object = GLOBAL_GET("rendering/limits/opengl/max_lights_per_object");
 
 	// Adreno 3xx Compatibility / Workarounds
-	const String rendering_device_name = String::utf8((const char *)glGetString(GL_RENDERER));
+	const GLubyte *renderer_str = glGetString(GL_RENDERER);
+	const String rendering_device_name = renderer_str ? String::utf8((const char *)renderer_str) : String();
 	if (rendering_device_name.left(13) == "Adreno (TM) 3") {
 		// Adreno 3xx devices are notorious for breaking with complex shader paths
 		adreno_3xx_compatibility = true;

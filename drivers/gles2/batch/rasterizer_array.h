@@ -1,32 +1,32 @@
-/*************************************************************************/
-/*  rasterizer_array.h                                                   */
-/*************************************************************************/
-/*                       This file is part of:                           */
-/*                           GODOT ENGINE                                */
-/*                      https://godotengine.org                          */
-/*************************************************************************/
-/* Copyright (c) 2007-2021 Juan Linietsky, Ariel Manzur.                 */
-/* Copyright (c) 2014-2021 Godot Engine contributors (cf. AUTHORS.md).   */
-/*                                                                       */
-/* Permission is hereby granted, free of charge, to any person obtaining */
-/* a copy of this software and associated documentation files (the       */
-/* "Software"), to deal in the Software without restriction, including   */
-/* without limitation the rights to use, copy, modify, merge, publish,   */
-/* distribute, sublicense, and/or sell copies of the Software, and to    */
-/* permit persons to whom the Software is furnished to do so, subject to */
-/* the following conditions:                                             */
-/*                                                                       */
-/* The above copyright notice and this permission notice shall be        */
-/* included in all copies or substantial portions of the Software.       */
-/*                                                                       */
-/* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,       */
-/* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF    */
-/* MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.*/
-/* IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY  */
-/* CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,  */
-/* TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE     */
-/* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                */
-/*************************************************************************/
+/**************************************************************************/
+/*  rasterizer_array.h                                                    */
+/**************************************************************************/
+/*                       This file is part of:                            */
+/*                           GODOT ENGINE                                 */
+/*                      https://godotengine.org                           */
+/**************************************************************************/
+/* Copyright (c) 2014-present Godot Engine contributors (see AUTHORS.md). */
+/* Copyright (c) 2007-2014 Juan Linietsky, Ariel Manzur.                  */
+/*                                                                        */
+/* Permission is hereby granted, free of charge, to any person obtaining  */
+/* a copy of this software and associated documentation files (the        */
+/* "Software"), to deal in the Software without restriction, including    */
+/* without limitation the rights to use, copy, modify, merge, publish,    */
+/* distribute, sublicense, and/or sell copies of the Software, and to     */
+/* permit persons to whom the Software is furnished to do so, subject to  */
+/* the following conditions:                                              */
+/*                                                                        */
+/* The above copyright notice and this permission notice shall be         */
+/* included in all copies or substantial portions of the Software.        */
+/*                                                                        */
+/* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,        */
+/* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF     */
+/* MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. */
+/* IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY   */
+/* CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,   */
+/* TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE      */
+/* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                 */
+/**************************************************************************/
 
 #ifdef GLES2_ENABLED
 
@@ -35,6 +35,7 @@
 
 #include "core/os/memory.h"
 #include <string.h>
+#include <type_traits>
 
 #include "core/templates/local_vector.h"
 #include "core/templates/vector.h"
@@ -43,19 +44,25 @@
 // which can be cast to whatever vertex format FVF required, and is initially
 // created with enough memory to hold the biggest FVF.
 // This allows multiple FVFs to use the same array.
-class RasterizerUnitArrayGLES2 {
+template <class T>
+class RasterizerUnitArray {
+	static_assert(std::is_trivially_copyable<T>::value, "RasterizerArray must only be used with trivially copyable (POD) types.");
+	static_assert(std::is_trivially_destructible<T>::value, "RasterizerArray must only be used with trivially destructible types.");
+
 public:
-	RasterizerUnitArrayGLES2() {
+	RasterizerUnitArray() {
 		_list = nullptr;
 		free();
 	}
-	~RasterizerUnitArrayGLES2() { free(); }
+	~RasterizerUnitArray() { free(); }
 
 	uint8_t *get_unit(unsigned int ui) { return &_list[ui * _unit_size_bytes]; }
 	const uint8_t *get_unit(unsigned int ui) const { return &_list[ui * _unit_size_bytes]; }
+	const uint8_t *get_data() const { return _list; }
 
 	int size() const { return _size; }
 	int max_size() const { return _max_size; }
+	int get_unit_size_bytes() const { return _unit_size_bytes; }
 
 	void free() {
 		if (_list) {
@@ -155,7 +162,7 @@ public:
 		if (_size < _max_size) {
 			return &_list[_size++];
 		}
-		return 0;
+		return nullptr;
 	}
 
 	// several items at a time
@@ -258,77 +265,6 @@ private:
 	int _size;
 };
 
-// very simple non-growable array, that keeps track of the size of a 'unit'
-// which can be cast to whatever vertex format FVF required, and is initially
-// created with enough memory to hold the biggest FVF.
-// This allows multiple FVFs to use the same array.
-class RasterizerUnitArray {
-public:
-	RasterizerUnitArray() {
-		_list = nullptr;
-		free();
-	}
-	~RasterizerUnitArray() { free(); }
-
-	uint8_t *get_unit(unsigned int ui) { return &_list[ui * _unit_size_bytes]; }
-	const uint8_t *get_unit(unsigned int ui) const { return &_list[ui * _unit_size_bytes]; }
-	const uint8_t *get_data() const { return _list; }
-
-	int size() const { return _size; }
-	int max_size() const { return _max_size; }
-	int get_unit_size_bytes() const { return _unit_size_bytes; }
-
-	void free() {
-		if (_list) {
-			memdelete_arr(_list);
-			_list = 0;
-		}
-		_size = 0;
-		_max_size = 0;
-		_max_size_bytes = 0;
-		_unit_size_bytes = 0;
-	}
-
-	void create(int p_max_size_units, int p_max_unit_size_bytes) {
-		free();
-
-		_max_unit_size_bytes = p_max_unit_size_bytes;
-		_max_size = p_max_size_units;
-		_max_size_bytes = p_max_size_units * p_max_unit_size_bytes;
-
-		if (_max_size_bytes) {
-			_list = memnew_arr(uint8_t, _max_size_bytes);
-		}
-	}
-
-	void prepare(int p_unit_size_bytes) {
-		_unit_size_bytes = p_unit_size_bytes;
-		_size = 0;
-	}
-
-	// several items at a time
-	uint8_t *request(int p_num_items = 1) {
-		int old_size = _size;
-		_size += p_num_items;
-
-		if (_size <= _max_size) {
-			return get_unit(old_size);
-		}
-
-		// revert
-		_size = old_size;
-		return nullptr;
-	}
-
-private:
-	uint8_t *_list;
-	int _size; // in units
-	int _max_size; // in units
-	int _max_size_bytes;
-	int _unit_size_bytes;
-	int _max_unit_size_bytes;
-};
-
 template <class T, bool force_trivial = false>
 class RasterizerPooledList {
 	LocalVector<T, uint32_t, force_trivial> list;
@@ -366,13 +302,11 @@ public:
 			id = freelist[new_size];
 			freelist.resize(new_size);
 			return id;
-			//			return &list[r_id];
 		}
 
 		id = list.size();
 		list.resize(id + 1);
 		return id;
-		//		return &list[r_id];
 	}
 	void free(const uint32_t &p_id) {
 		// should not be on free list already

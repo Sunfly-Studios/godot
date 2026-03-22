@@ -152,7 +152,7 @@ void ShaderGLES2::_build_variant_code(StringBuilder &builder, uint32_t p_variant
 		builder.append("#version 120\n");
 		builder.append("#define USE_GLES_OVER_GL\n");
 	} else {
-		builder.append("#version 100 es\n");
+		builder.append("#version 100\n");
 	}
 
 	for (int i = 0; i < specialization_count; i++) {
@@ -185,6 +185,11 @@ void ShaderGLES2::_build_variant_code(StringBuilder &builder, uint32_t p_variant
 	builder.append("precision highp int;\n");
 	builder.append("precision highp sampler2D;\n");
 	builder.append("precision highp samplerCube;\n");
+	builder.append("#else\n");
+	builder.append("precision mediump float;\n");
+	builder.append("precision mediump int;\n");
+	builder.append("precision mediump sampler2D;\n");
+	builder.append("precision mediump samplerCube;\n");
 	builder.append("#endif\n");
 
 	const StageTemplate &stage_template = stage_templates[p_stage_type];
@@ -250,7 +255,9 @@ void ShaderGLES2::_get_uniform_locations(Version::Specialization &spec, Version 
 
 		GLint location = glGetUniformLocation(spec.id, native_uniform_name.ascii().get_data());
 		Vector<int32_t> texture_uniform_bindings;
-		int texture_count = p_version->texture_uniforms[i].array_size;
+		// A size of 0 means it's a single texture, not an array.
+		// At least 1 binding is required.
+		int texture_count = MAX(1, p_version->texture_uniforms[i].array_size);
 		for (int j = 0; j < texture_count; j++) {
 			texture_uniform_bindings.append(texture_index + base_texture_index);
 			texture_index++;
@@ -290,11 +297,11 @@ void ShaderGLES2::_compile_specialization(Version::Specialization &spec, uint32_
 				ERR_PRINT("No OpenGL vertex shader compiler log.");
 			} else {
 				if (iloglen == 0) {
-					iloglen = 4096; // buggy driver fallback
+					iloglen = 4096;
 				}
 				char *ilogmem = (char *)Memory::alloc_static(iloglen + 1);
 				memset(ilogmem, 0, iloglen + 1);
-				glGetShaderInfoLog(spec.vert_id, iloglen, &iloglen, ilogmem);
+				glGetProgramInfoLog(spec.id, iloglen, &iloglen, ilogmem);
 
 				String err_string = name + ": Vertex shader compilation failed:\n" + ilogmem;
 				_display_error_with_code(err_string, builder_string);
@@ -343,6 +350,12 @@ void ShaderGLES2::_compile_specialization(Version::Specialization &spec, uint32_
 
 				Memory::free_static(ilogmem);
 				glDeleteShader(spec.frag_id);
+
+				if (spec.vert_id != 0) {
+					glDeleteShader(spec.vert_id);
+					spec.vert_id = 0;
+				}
+				
 				glDeleteProgram(spec.id);
 				spec.id = 0;
 			}
@@ -378,7 +391,7 @@ void ShaderGLES2::_compile_specialization(Version::Specialization &spec, uint32_
 			iloglen = 4096;
 		}
 		char *ilogmem = (char *)Memory::alloc_static(iloglen + 1);
-		ilogmem[iloglen] = '\0';
+		memset(ilogmem, 0, iloglen + 1);
 		glGetProgramInfoLog(spec.id, iloglen, &iloglen, ilogmem);
 
 		String err_string = name + ": Program linking failed:\n" + ilogmem;
@@ -457,7 +470,12 @@ String ShaderGLES2::_version_get_sha1(Version *p_version) const {
 		hash_build.append(p_version->custom_defines[i].get_data());
 	}
 
-	hash_build.append("[gles2]");
+	if (RasterizerGLES2::is_gles_over_gl()) {
+		hash_build.append("[gl2]");
+	} else {
+		hash_build.append("[gles2]");
+	}
+
 
 	return hash_build.as_string().sha1_text();
 }
@@ -501,10 +519,17 @@ void ShaderGLES2::_clear_version(Version *p_version) {
 
 	for (int i = 0; i < variant_count; i++) {
 		for (OAHashMap<uint64_t, Version::Specialization>::Iterator it = p_version->variants[i].iter(); it.valid; it = p_version->variants[i].next_iter(it)) {
-			if (it.value->id != 0) {
+			if (it.value->vert_id != 0) {
 				glDeleteShader(it.value->vert_id);
+				it.value->vert_id = 0;
+			}
+			if (it.value->frag_id != 0) {
 				glDeleteShader(it.value->frag_id);
+				it.value->frag_id = 0;
+			}
+			if (it.value->id != 0) {
 				glDeleteProgram(it.value->id);
+				it.value->id = 0;
 			}
 		}
 	}
@@ -583,7 +608,7 @@ void ShaderGLES2::initialize(const String &p_general_defines, int p_base_texture
 
 	_init();
 
-	glGetIntegerv(GL_MAX_TEXTURE_IMAGE_UNITS, &max_image_units);
+	max_image_units = GLES2::Config::get_singleton()->max_texture_image_units;
 }
 
 void ShaderGLES2::set_shader_cache_dir(const String &p_dir) {

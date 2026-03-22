@@ -44,29 +44,8 @@
 #include "drivers/gles2/storage/material_storage.h"
 #include "drivers/gles2/storage/texture_storage.h"
 
-// We are using the curiously recurring template pattern
-// https://en.wikipedia.org/wiki/Curiously_recurring_template_pattern
-// For static polymorphism.
-
-// This makes it super easy to access
-// data / call funcs in the derived rasterizers from the base without writing and
-// maintaining a boatload of virtual functions.
-// In addition it assures that vtable will not be used and the function calls can be optimized,
-// because it gives compile time static polymorphism.
-
-// These macros makes it simpler and less verbose to define (and redefine) the inline functions
-// template preamble
-#define T_PREAMBLE //template <class T /*, typename T_STORAGE*/>
-// class preamble
-#define C_PREAMBLE RasterizerCanvasBatcher //<T /*, T_STORAGE*/>
-// generic preamble
-#define PREAMBLE(RET_T) \
-	T_PREAMBLE          \
-	RET_T C_PREAMBLE
-
 class RasterizerCanvasGLES2;
 
-//template <class T /*, typename T_STORAGE*/>
 class RasterizerCanvasBatcher {
 public:
 	// used to determine whether we use hardware transform (none)
@@ -123,6 +102,8 @@ public:
 			return (r == p_c.r) && (g == p_c.g) && (b == p_c.b) && (a == p_c.a);
 		}
 		const float *get_data() const { return &r; }
+
+#if defined(TOOLS_ENABLED) && defined(DEBUG_ENABLED)
 		String to_string() const {
 			String sz = "{";
 			const float *data = get_data();
@@ -134,6 +115,7 @@ public:
 			sz += "}";
 			return sz;
 		}
+#endif
 	};
 
 	// simplest FVF - local or baked position
@@ -144,13 +126,20 @@ public:
 	};
 
 	// simple FVF but also incorporating baked color
-	struct BatchVertexColored : public BatchVertex {
-		// must be 32 bit pod
+	struct BatchVertexColored {
+		BatchVector2 pos;
+		BatchVector2 uv;
+
+		// must be 32-bit pod
 		BatchColor col;
 	};
 
 	// if we are using normal mapping, we need light angles to be sent
-	struct BatchVertexLightAngled : public BatchVertexColored {
+	struct BatchVertexLightAngled {
+		BatchVector2 pos;
+		BatchVector2 uv;
+		BatchColor col;
+
 		// must be pod
 		float light_angle;
 	};
@@ -159,7 +148,10 @@ public:
 	// be needed with custom shaders in order to have the data accessible in the shader.
 
 	// if we are using COLOR in vertex shader but not position (VERTEX)
-	struct BatchVertexModulated : public BatchVertexLightAngled {
+	struct BatchVertexModulated {
+		BatchVector2 pos;
+		BatchVector2 uv;
+		BatchColor col;
 		BatchColor modulate;
 	};
 
@@ -170,7 +162,12 @@ public:
 
 	// last resort, specially for custom shader, we put everything possible into a huge FVF
 	// not very efficient, but better than no batching at all.
-	struct BatchVertexLarge : public BatchVertexModulated {
+	struct BatchVertexLarge {
+		BatchVector2 pos;
+		BatchVector2 uv;
+		BatchColor col;
+		BatchColor modulate;
+
 		// must be pod
 		BatchTransform transform;
 	};
@@ -331,8 +328,8 @@ public:
 			fvf = BatcherEnums::FVF_REGULAR;
 		}
 
-		unsigned int gl_vertex_buffer;
-		unsigned int gl_index_buffer;
+		GLuint gl_vertex_buffer;
+		GLuint gl_index_buffer;
 
 		uint32_t max_quads;
 		uint32_t vertex_buffer_size_units;
@@ -354,7 +351,7 @@ public:
 		// instead of having a different buffer for each vertex FVF type
 		// we have a special array big enough for the biggest FVF
 		// which can have a changeable unit size, and reuse it.
-		RasterizerUnitArray unit_vertices;
+		RasterizerUnitArray<uint8_t> unit_vertices;
 
 		RasterizerArray<Batch> batches;
 		RasterizerArray<Batch> batches_temp; // used for translating to colored vertex batches
@@ -466,7 +463,8 @@ public:
 		// using flags allows quicker rejection of sequences with different batch types
 		uint32_t sequence_batch_type_flags;
 
-		Batch *curr_batch;
+		Batch *curr_batch = nullptr;
+		Batch dummy_batch;
 		int batch_tex_id;
 		bool use_hardware_transform;
 		bool contract_uvs;
@@ -490,6 +488,7 @@ public:
 			shader_cache = nullptr;
 			rebind_shader = true;
 			prev_use_skeleton = false;
+			prev_distance_field = false;
 			last_blend_mode = -1;
 			canvas_last_material = RID();
 			item_group_z = 0;
@@ -533,13 +532,6 @@ public:
 	//////////////////////////////////////////////////////////////////////////////
 	// End of structs used by the batcher. Beginning of funcs.
 private:
-	// curiously recurring template pattern - allows access to functions in the DERIVED class
-	// this is kind of like using virtual functions but more efficient as they are resolved at compile time
-	/*
-	T_STORAGE *get_storage() { return static_cast<const T *>(this)->storage; }
-	const T_STORAGE *get_storage() const { return static_cast<const T *>(this)->storage; }
-
-	*/
 
 	RasterizerCanvasGLES2 *get_this();
 	const RasterizerCanvasGLES2 *get_this() const;
@@ -636,7 +628,7 @@ protected:
 			}
 		}
 
-		return 0;
+		return nullptr;
 	}
 
 public:
@@ -656,7 +648,7 @@ public:
 		}
 
 		if (p_blank) {
-			memset(batch, 0, sizeof(Batch));
+			*batch = Batch();
 		}
 
 		return batch;
@@ -669,19 +661,25 @@ public:
 protected:
 	int godot4_commands_count(RendererCanvasRender::Item::Command *p_comm) const {
 		int count = 0;
-		while (p_comm) {
+		int circuit_breaker = 65536;
+		while (p_comm && circuit_breaker-- > 0) {
 			count++;
 			p_comm = p_comm->next;
 		}
+		ERR_FAIL_COND_V_MSG(circuit_breaker <= 0, 0, "GLES2: Cyclic linked list detected in CanvasItem commands. Infinite loop prevented.");
 		return count;
 	}
 
 	unsigned int godot4_commands_to_vector(RendererCanvasRender::Item::Command *p_comm, LocalVector<RendererCanvasRender::Item::Command *> &p_list) {
+		int count = 0;
+		int circuit_breaker = 65536;
 		p_list.clear();
-		while (p_comm) {
+		while (p_comm && circuit_breaker-- > 0) {
+			count++;
 			p_list.push_back(p_comm);
 			p_comm = p_comm->next;
 		}
+		ERR_FAIL_COND_V_MSG(circuit_breaker <= 0, 0, "GLES2: Cyclic linked list detected in CanvasItem commands. Infinite loop prevented.");
 		return p_list.size();
 	}
 
@@ -690,10 +688,6 @@ protected:
 //#include "batch_diagnose.inc"
 #endif
 };
-
-#undef PREAMBLE
-#undef T_PREAMBLE
-#undef C_PREAMBLE
 
 #endif // RASTERIZER_CANVAS_BATCHER_H
 #endif // GLES2_ENABLED

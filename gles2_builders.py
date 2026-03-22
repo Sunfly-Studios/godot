@@ -538,13 +538,15 @@ def build_gles_header(
     else:
         fd.write("\t\tstatic TexUnitPair *_texunit_pairs=nullptr;\n")
 
-    if header_data.ubos and gles_version >= 3:
-        fd.write("\t\tstatic UBOPair _ubo_pairs[]={\n")
-        for x in header_data.ubos:
-            fd.write('\t\t\t{"' + x[0] + '",' + x[1] + "},\n")
-        fd.write("\t\t};\n\n")
-    else:
-        fd.write("\t\tstatic UBOPair *_ubo_pairs=nullptr;\n")
+    # GLES2 does not support UBOs.
+#     if header_data.ubos and gles_version >= 3:
+#         fd.write("\t\tstatic UBOPair _ubo_pairs[]={\n")
+#         for x in header_data.ubos:
+#             fd.write('\t\t\t{"' + x[0] + '",' + x[1] + "},\n")
+#         fd.write("\t\t};\n\n")
+#     else:
+#
+#         fd.write("\t\tstatic UBOPair *_ubo_pairs=nullptr;\n")
 
     specializations_found = []
 
@@ -572,22 +574,25 @@ def build_gles_header(
         else:
             fd.write("\t\tstatic AttributePair *_attribute_pairs=nullptr;\n")
 
+    # TODO(GLES2): Eventually uncomment this out when
+    # we upgrade and actually use the shaders from this
+    # generator later (maybe in the 3D)
     feedback_count = 0
-    if header_data.feedbacks and gles_version >= 3:
-        fd.write("\t\tstatic const Feedback _feedbacks[]={\n")
-        for x in header_data.feedbacks:
-            name = x[0]
-            spec = x[1]
-            if spec in specializations_found:
-                fd.write('\t\t\t{"' + name + '",' + str(1 << specializations_found.index(spec)) + "},\n")
-            else:
-                fd.write('\t\t\t{"' + name + '",0},\n')
-
-            feedback_count += 1
-
-        fd.write("\t\t};\n\n")
-    else:
-        fd.write("\t\tstatic const Feedback* _feedbacks=nullptr;\n")
+    # if header_data.feedbacks and gles_version >= 3:
+    #     fd.write("\t\tstatic const Feedback _feedbacks[]={\n")
+    #     for x in header_data.feedbacks:
+    #         name = x[0]
+    #         spec = x[1]
+    #         if spec in specializations_found:
+    #             fd.write('\t\t\t{"' + name + '",' + str(1 << specializations_found.index(spec)) + "},\n")
+    #         else:
+    #             fd.write('\t\t\t{"' + name + '",0},\n')
+    #
+    #         feedback_count += 1
+    #
+    #     fd.write("\t\t};\n\n")
+    # else:
+        # fd.write("\t\tstatic const Feedback* _feedbacks=nullptr;\n")
 
     fd.write("\t\tstatic const char _vertex_code[]={\n")
     fd.write(to_raw_cstring(header_data.vertex_lines))

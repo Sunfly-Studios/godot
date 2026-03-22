@@ -99,6 +99,7 @@ public:
 	bool external_texture_supported = false;
 	bool support_32_bits_indices = false;
 	bool adreno_3xx_compatibility = false;
+	bool support_3d_textures = false;
 
 	// Adreno 3XX compatibility.
 	bool disable_particles_workaround = false; // Set to 'true' to disable 'GPUParticles'.

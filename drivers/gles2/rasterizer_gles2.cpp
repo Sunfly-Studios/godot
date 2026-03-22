@@ -269,10 +269,11 @@ RasterizerGLES2::RasterizerGLES2() {
 		}
 	}
 
-	// FIXME this is an early return from a constructor.  Any other code using this instance will crash or the finalizer will crash, because none of
-	// the members of this instance are initialized, so this just makes debugging harder.  It should either crash here intentionally,
-	// or we need to actually test for this situation before constructing this.
-	ERR_FAIL_COND_MSG(!glad_loaded, "Error initializing GLAD.");
+	if (unlikely(!glad_loaded)) {
+		singleton = nullptr;
+		ERR_FAIL_MSG("GLES2: Error initializing GLAD. OpenGL driver failed to load.");
+		return;
+	}
 
 	if (gles_over_gl) {
 		if (OS::get_singleton()->is_stdout_verbose()) {
@@ -401,11 +402,14 @@ void RasterizerGLES2::_blit_render_target_to_screen(RID p_render_target, Display
 
 	// Calculate the correct viewport for the destination rect
 	// OpenGL has bottom-left origin, so we must flip the Y axis for the viewport
+	GLsizei vp_w = MAX(0, p_screen_rect.size.width);
+	GLsizei vp_h = MAX(0, p_screen_rect.size.height);
+
 	glViewport(
 		p_screen_rect.position.x,
 		win_size.height - p_screen_rect.position.y - p_screen_rect.size.height,
-		p_screen_rect.size.width,
-		p_screen_rect.size.height);
+		vp_w,
+		vp_h);
 
 	// Disable states that could ruin a direct copy
 	glDisable(GL_BLEND);
@@ -442,6 +446,9 @@ void RasterizerGLES2::_blit_render_target_to_screen(RID p_render_target, Display
 
 	// Clean up
 	glBindTexture(GL_TEXTURE_2D, 0);
+
+	// Restore global depth mask
+	glDepthMask(GL_TRUE);
 }
 
 // is this p_screen useless in a multi window environment?
@@ -461,6 +468,8 @@ void RasterizerGLES2::set_boot_image(const Ref<Image> &p_image, const Color &p_c
 	}
 
 	Size2i win_size = DisplayServer::get_singleton()->window_get_size();
+	win_size.width = MAX(1, win_size.width);
+	win_size.height = MAX(1, win_size.height);
 
 	glBindFramebuffer(GL_FRAMEBUFFER, GLES2::TextureStorage::system_fbo);
 	glViewport(0, 0, win_size.width, win_size.height);
@@ -473,19 +482,21 @@ void RasterizerGLES2::set_boot_image(const Ref<Image> &p_image, const Color &p_c
 	RID texture = texture_storage->texture_allocate();
 	texture_storage->texture_2d_initialize(texture, p_image);
 
-	Rect2 imgrect(0, 0, p_image->get_width(), p_image->get_height());
+	float img_w = MAX(1.0f, p_image->get_width());
+	float img_h = MAX(1.0f, p_image->get_height());
+	Rect2 imgrect(0, 0, img_w, img_h);
 	Rect2 screenrect;
 	if (p_scale) {
 		if (win_size.width > win_size.height) {
 			//scale horizontally
 			screenrect.size.y = win_size.height;
-			screenrect.size.x = imgrect.size.x * win_size.height / imgrect.size.y;
+			screenrect.size.x = img_w * win_size.height / img_h;
 			screenrect.position.x = (win_size.width - screenrect.size.x) / 2;
 
 		} else {
 			//scale vertically
 			screenrect.size.x = win_size.width;
-			screenrect.size.y = imgrect.size.y * win_size.width / imgrect.size.x;
+			screenrect.size.y = img_h * win_size.width / img_w;
 			screenrect.position.y = (win_size.height - screenrect.size.y) / 2;
 		}
 	} else {

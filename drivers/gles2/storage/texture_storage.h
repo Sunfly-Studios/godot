@@ -491,11 +491,46 @@ public:
 
 	Texture *get_texture(RID p_rid) const {
 		Texture *texture = texture_owner.get_or_null(p_rid);
-		if (texture && texture->is_proxy) {
-			return texture_owner.get_or_null(texture->proxy_to);
+		if (!texture) {
+			return nullptr;
 		}
+
+		if (texture->is_proxy) {
+			// Prevent infinite loops in circular proxy chains.
+			const int MAX_PROXY_HOPS = 8; 
+			int hops = 0;
+			
+			Texture *current_proxy = texture;
+
+			while (current_proxy && current_proxy->is_proxy) {
+				if (hops >= MAX_PROXY_HOPS) {
+					ERR_PRINT_ONCE("GLES2: Maximum proxy texture depth exceeded. Possible circular proxy loop detected.");
+					return nullptr; // Break the freeze
+				}
+
+				if (current_proxy->proxy_to.is_valid()) {
+					Texture *next_proxy = texture_owner.get_or_null(current_proxy->proxy_to);
+					if (next_proxy) {
+						current_proxy = next_proxy;
+						hops++;
+						continue;
+					} else {
+						// The RID it points to is dead.
+						ERR_PRINT_ONCE("GLES2: Proxy texture points to an invalid/freed RID.");
+						return nullptr; 
+					}
+				} else {
+					// It's flagged as a proxy, but has no target RID.
+					return nullptr;
+				}
+			}
+			
+			// We successfully reached the bottom of the chain.
+			return current_proxy;
+		}
+
 		return texture;
-    }
+	}
 	bool owns_texture(RID p_rid) { return texture_owner.owns(p_rid); }
 
 	void texture_2d_initialize_from_texture(RID p_texture, Texture &p_tex) {

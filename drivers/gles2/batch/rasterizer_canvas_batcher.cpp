@@ -270,9 +270,7 @@ void RasterizerCanvasBatcher::record_items(RendererCanvasRender::Item *p_item_li
 		if (!s) {
 			bdata.sort_items.grow();
 			s = bdata.sort_items.request();
-#ifdef DEBUG_ENABLED
-			CRASH_COND_MSG(!s, "GLES2 Canvas Batcher: Failed to allocate BSortItem even after growing array.");
-#endif
+			ERR_FAIL_NULL_MSG(s, "GLES2 Canvas Batcher: Failed to allocate BSortItem even after growing array.");
 		}
 
 		s->item = p_item_list;
@@ -316,6 +314,7 @@ void RasterizerCanvasBatcher::join_sorted_items() {
 			if (!joined) {
 				bdata.items_joined.grow();
 				joined = bdata.items_joined.request();
+				ERR_FAIL_NULL_MSG(joined, "GLES2 Canvas Batcher: Failed to allocate BSortItem even after growing array.");
 			}
 			_render_item_state.joined_item = joined;
 
@@ -331,6 +330,7 @@ void RasterizerCanvasBatcher::join_sorted_items() {
 			if (!r) {
 				bdata.item_refs.grow();
 				r = bdata.item_refs.request();
+				ERR_FAIL_NULL_MSG(r, "GLES2 Canvas Batcher: Failed to allocate BSortItem even after growing array.");
 			}
 			r->item = ci;
 			r->final_modulate = _render_item_state.final_modulate;
@@ -343,6 +343,7 @@ void RasterizerCanvasBatcher::join_sorted_items() {
 			if (!r) {
 				bdata.item_refs.grow();
 				r = bdata.item_refs.request();
+				ERR_FAIL_NULL_MSG(r, "GLES2 Canvas Batcher: Failed to allocate BSortItem even after growing array.");
 			}
 			r->item = ci;
 			r->final_modulate = _render_item_state.final_modulate;
@@ -691,9 +692,9 @@ bool RasterizerCanvasBatcher::prefill_joined_item(FillState &r_fill_state, Rende
 
 	// Allocate dummy batch on the stack to prevent dangling zero-length default batches
 	if (!r_fill_state.curr_batch) {
-		// TODO(GLES2): Change to the SAFE_ versions.
-		r_fill_state.curr_batch = (Batch *)alloca(sizeof(Batch));
+		r_fill_state.curr_batch = &r_fill_state.dummy_batch;
 		r_fill_state.curr_batch->type = BatcherEnums::BT_DUMMY;
+		r_fill_state.curr_batch->num_commands = 0;
 	}
 
 	// We use a local pointer to traverse. We only update the caller's pointer
@@ -848,10 +849,10 @@ void RasterizerCanvasBatcher::_translate_batches_to_larger_FVF(uint32_t p_sequen
 
 	Batch *dest_batch = nullptr;
 
-	const BatchColor *source_vertex_colors = &bdata.vertex_colors[0];
-	const float *source_light_angles = &bdata.light_angles[0];
-	const BatchColor *source_vertex_modulates = &bdata.vertex_modulates[0];
-	const BatchTransform *source_vertex_transforms = &bdata.vertex_transforms[0];
+	const BatchColor *source_vertex_colors = bdata.vertex_colors.get_data();
+	const float *source_light_angles = bdata.light_angles.get_data();
+	const BatchColor *source_vertex_modulates = bdata.vertex_modulates.get_data();
+	const BatchTransform *source_vertex_transforms = bdata.vertex_transforms.get_data();
 
 	for (int n = 0; n < bdata.batches.size(); n++) {
 		const Batch &source_batch = bdata.batches[n];
@@ -875,24 +876,28 @@ void RasterizerCanvasBatcher::_translate_batches_to_larger_FVF(uint32_t p_sequen
 					needs_new_batch = false;
 
 					int first_vert = source_batch.first_vert;
-					int end_vert = first_vert + num_vertices_in_batch;
+					int end_vert = MIN(first_vert + num_vertices_in_batch, bdata.vertices.size());
 
 					for (int v = first_vert; v < end_vert; v++) {
 						const BatchVertex &bv = bdata.vertices[v];
 						BATCH_VERTEX_TYPE *cv = (BATCH_VERTEX_TYPE *)bdata.unit_vertices.request();
+						if (unlikely(!cv)) {
+							ERR_PRINT_ONCE("GLES2: FVF Translation buffer overflowed! Geometry will be missing.");
+							break;
+						}
 						cv->pos = bv.pos;
 						cv->uv = bv.uv;
 						cv->col = source_batch.color;
 
-						if (INCLUDE_LIGHT_ANGLES) {
+						if constexpr (INCLUDE_LIGHT_ANGLES) {
 							BatchVertexLightAngled *lv = (BatchVertexLightAngled *)cv;
 							lv->light_angle = source_batch_uses_light_angles ? *source_light_angles++ : 0.0f;
 						}
-						if (INCLUDE_MODULATE) {
+						if constexpr (INCLUDE_MODULATE) {
 							BatchVertexModulated *mv = (BatchVertexModulated *)cv;
 							mv->modulate = *source_vertex_modulates++;
 						}
-						if (INCLUDE_LARGE) {
+						if constexpr (INCLUDE_LARGE) {
 							BatchVertexLarge *lv = (BatchVertexLarge *)cv;
 							lv->transform = *source_vertex_transforms++;
 						}
@@ -909,11 +914,15 @@ void RasterizerCanvasBatcher::_translate_batches_to_larger_FVF(uint32_t p_sequen
 
 			if (source_batch.type != BatcherEnums::BT_DEFAULT) {
 				int first_vert = source_batch.first_vert;
-				int end_vert = first_vert + num_vertices_in_batch;
+				int end_vert = MIN(first_vert + num_vertices_in_batch, bdata.vertices.size());
 
 				for (int v = first_vert; v < end_vert; v++) {
 					const BatchVertex &bv = bdata.vertices[v];
 					BATCH_VERTEX_TYPE *cv = (BATCH_VERTEX_TYPE *)bdata.unit_vertices.request();
+					if (unlikely(!cv)) {
+						ERR_PRINT_ONCE("GLES2: FVF Translation buffer overflowed! Geometry will be missing.");
+						break;
+					}
 					cv->pos = bv.pos;
 					cv->uv = bv.uv;
 
@@ -923,15 +932,15 @@ void RasterizerCanvasBatcher::_translate_batches_to_larger_FVF(uint32_t p_sequen
 						cv->col = *source_vertex_colors++;
 					}
 
-					if (INCLUDE_LIGHT_ANGLES) {
+					if constexpr (INCLUDE_LIGHT_ANGLES) {
 						BatchVertexLightAngled *lv = (BatchVertexLightAngled *)cv;
 						lv->light_angle = source_batch_uses_light_angles ? *source_light_angles++ : 0.0f;
 					}
-					if (INCLUDE_MODULATE) {
+					if constexpr (INCLUDE_MODULATE) {
 						BatchVertexModulated *mv = (BatchVertexModulated *)cv;
 						mv->modulate = *source_vertex_modulates++;
 					}
-					if (INCLUDE_LARGE) {
+					if constexpr (INCLUDE_LARGE) {
 						BatchVertexLarge *lv = (BatchVertexLarge *)cv;
 						lv->transform = *source_vertex_transforms++;
 					}
@@ -950,6 +959,10 @@ void RasterizerCanvasBatcher::_translate_batches_to_vertex_colored_FVF() {
 	for (int n = 0; n < num_verts; n++) {
 		const BatchVertex &bv = bdata.vertices[n];
 		BatchVertexColored *cv = (BatchVertexColored *)bdata.unit_vertices.request();
+		if (unlikely(!cv)) {
+			ERR_PRINT_ONCE("GLES2: FVF Translation buffer overflowed!");
+			break;
+		}
 		cv->pos = bv.pos;
 		cv->uv = bv.uv;
 		cv->col = *source_vertex_colors++;
@@ -1118,6 +1131,7 @@ bool RasterizerCanvasBatcher::_prefill_rect(RendererCanvasRender::Item::CommandR
 
 	if (use_modulate) {
 		BatchColor *pBC = bdata.vertex_modulates.request(4);
+		DEV_ASSERT(pBC && "GLES2: Modulate buffer desynchronized from main vertex buffer!");
 		pBC[0].set(r_fill_state.final_modulate);
 		pBC[1] = pBC[0];
 		pBC[2] = pBC[0];
@@ -1126,6 +1140,7 @@ bool RasterizerCanvasBatcher::_prefill_rect(RendererCanvasRender::Item::CommandR
 
 	if (use_large_verts) {
 		BatchTransform *pBT = bdata.vertex_transforms.request(4);
+		DEV_ASSERT(pBT && "GLES2: Modulate buffer desynchronized from main vertex buffer!");
 		const Transform2D &tr = r_fill_state.transform_combined;
 		pBT[0].translate.set(tr.columns[2].x, tr.columns[2].y);
 		pBT[0].basis[0].set(tr.columns[0][0], tr.columns[1][0]);
@@ -1137,6 +1152,7 @@ bool RasterizerCanvasBatcher::_prefill_rect(RendererCanvasRender::Item::CommandR
 
 	if (SEND_LIGHT_ANGLES) {
 		float *angles = bdata.light_angles.request(4);
+		DEV_ASSERT(angles && "GLES2: Modulate buffer desynchronized from main vertex buffer!");
 		float angle = 0.0f;
 		const float TWO_PI = Math_PI * 2.0f;
 
@@ -1198,7 +1214,7 @@ bool RasterizerCanvasBatcher::_prefill_ninepatch(RendererCanvasRender::Item::Com
 	}
 
 	float screen_scale = 1.0f;
-	if ((bdata.settings_ninepatch_mode == 1) && (source.size.x != 0) && (source.size.y != 0)) {
+	if ((bdata.settings_ninepatch_mode == 1) && !Math::is_zero_approx(source.size.x) && !Math::is_zero_approx(source.size.y)) {
 		screen_scale = MIN(p_np->rect.size.x / source.size.x, p_np->rect.size.y / source.size.y);
 		screen_scale = MIN(1.0f, screen_scale);
 	}
@@ -1317,7 +1333,8 @@ int RasterizerCanvasBatcher::_batch_find_or_create_tex(const RID &p_texture, con
 			w = 1;
 			h = 1;
 		}
-
+		w = MAX(1, texture->width);
+		h = MAX(1, texture->height);
 		new_batch_tex.tex_pixel_size.set(1.0f / w, 1.0f / h);
 	} else {
 		new_batch_tex.tex_pixel_size.set(1.0f, 1.0f);

@@ -104,14 +104,13 @@ void CopyEffects::draw_screen_triangle() {
 	glBindBuffer(GL_ARRAY_BUFFER, screen_triangle);
 
 	// Position attribute (2 floats).
-	glVertexAttribPointer(RS::ARRAY_VERTEX, 2, GL_FLOAT, GL_FALSE, sizeof(float) * 4, nullptr);
+	glVertexAttribPointer(RS::ARRAY_VERTEX, 2, GL_FLOAT, GL_FALSE, sizeof(float) * 2, nullptr);
 	glEnableVertexAttribArray(RS::ARRAY_VERTEX);
 
 	glDrawArrays(GL_TRIANGLES, 0, 3);
 
 	// Clean up state
 	glDisableVertexAttribArray(RS::ARRAY_VERTEX);
-	glDisableVertexAttribArray(RS::ARRAY_TEX_UV);
 	glBindBuffer(GL_ARRAY_BUFFER, 0);
 }
 
@@ -144,6 +143,11 @@ void CopyEffects::copy_to_rect(const Rect2 &p_rect) {
 
 void CopyEffects::copy_to_rect_3d(const Rect2 &p_rect, float p_layer, int p_type, float p_lod) {
 	ERR_FAIL_COND(p_type != Texture::TYPE_LAYERED && p_type != Texture::TYPE_3D);
+
+	if (unlikely(!GLES2::Config::get_singleton()->support_3d_textures)) {
+		ERR_PRINT_ONCE("GLES2: 3D and Layered texture copying is not supported on this hardware. Aborting copy_to_rect_3d.");
+		return;
+	}
 
 	CopyShaderGLES2::ShaderVariant variant = p_type == Texture::TYPE_LAYERED ? CopyShaderGLES2::MODE_COPY_SECTION_2D_ARRAY : CopyShaderGLES2::MODE_COPY_SECTION_3D;
 

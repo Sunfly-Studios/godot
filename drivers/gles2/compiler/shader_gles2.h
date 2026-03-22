@@ -173,7 +173,7 @@ private:
 	const AttributePair *attribute_pairs = nullptr;
 	int attribute_pair_count = 0;
 	int ubo_count = 0;
-	const Feedback *feedbacks;
+	const Feedback *feedbacks = nullptr;
 	int feedback_count = 0;
 	const TexUnitPair *texunit_pairs = nullptr;
 	int texunit_pair_count = 0;
@@ -214,13 +214,19 @@ protected:
 
 				spec = version->variants[p_variant].lookup_ptr(specialization_default_mask);
 			} else {
-				// Compile on the spot
-				Version::Specialization s;
-				_compile_specialization(s, p_variant, version, p_specialization);
-				version->variants[p_variant].insert(p_specialization, s);
+				// lock the map before compiling and inserting.
+				MutexLock lock(variant_set_mutex);
+
+				// Double-check it didn't compile while we were waiting for the lock
 				spec = version->variants[p_variant].lookup_ptr(p_specialization);
-				if (shader_cache_dir_valid) {
-					_save_to_cache(version);
+				if (!spec) {
+					Version::Specialization s;
+					_compile_specialization(s, p_variant, version, p_specialization);
+					version->variants[p_variant].insert(p_specialization, s);
+					spec = version->variants[p_variant].lookup_ptr(p_specialization);
+					if (shader_cache_dir_valid) {
+						_save_to_cache(version);
+					}
 				}
 			}
 		} else if (spec->build_queued) {

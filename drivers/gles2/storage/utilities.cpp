@@ -118,24 +118,10 @@ Vector<uint8_t> Utilities::buffer_get_data(GLenum p_target, GLuint p_buffer, uin
 		return ret;
 	}
 
-	ret.resize(p_buffer_size);
-	glBindBuffer(p_target, p_buffer);
+	// TODO(GLES2): GLES2 does not natively support glMapBufferRange or glGetBufferSubData.
+	// Readback requires CPU-side shadowing.
+	ERR_PRINT_ONCE("GLES2: buffer_get_data is not supported on GLES2 hardware.");
 
-	ERR_FAIL_V_MSG(ret, "Unable to get buffer data in GLES 2.0");
-#if defined(__EMSCRIPTEN__)
-	uint8_t *w = ret.ptrw();
-	godot_webgl2_glGetBufferSubData(p_target, 0, p_buffer_size, w);
-	return ret;
-#else
-	void *data = glMapBufferRange(p_target, 0, p_buffer_size, GL_MAP_READ_BIT);
-	ERR_FAIL_NULL_V(data, Vector<uint8_t>());
-	{
-		uint8_t *w = ret.ptrw();
-		memcpy(w, data, p_buffer_size);
-	}
-	glUnmapBuffer(p_target);
-#endif
-	glBindBuffer(p_target, 0);
 	return ret;
 }
 
@@ -264,7 +250,10 @@ void Utilities::visibility_notifier_set_aabb(RID p_notifier, const AABB &p_aabb)
 }
 
 void Utilities::visibility_notifier_set_callbacks(RID p_notifier, const Callable &p_enter_callbable, const Callable &p_exit_callable) {
-
+	VisibilityNotifier *vn = visibility_notifier_owner.get_or_null(p_notifier);
+	ERR_FAIL_NULL(vn);
+	vn->enter_callback = p_enter_callbable;
+	vn->exit_callback = p_exit_callable;
 }
 
 AABB Utilities::visibility_notifier_get_aabb(RID p_notifier) const {
@@ -414,11 +403,25 @@ Size2i Utilities::get_maximum_viewport_size() const {
 }
 
 uint32_t Utilities::get_maximum_shader_varyings() const {
-    return 31;
+	GLint max_varyings = 0;
+	glGetIntegerv(GL_MAX_VARYING_VECTORS, &max_varyings);
+
+	return (max_varyings >= 8) ? max_varyings : 8;
 }
 
 uint64_t Utilities::get_maximum_uniform_buffer_size() const {
-    return 65536;
+	GLint result = 0;
+	glGetIntegerv(GL_MAX_FRAGMENT_UNIFORM_VECTORS, &result);
+	GLint max_frag_uniforms = (result >= 0) ? result : 16;
+
+	glGetIntegerv(GL_MAX_VERTEX_UNIFORM_VECTORS, &result);
+	GLint max_vert_uniforms = (result >= 0) ? result : 128;
+
+	GLint min_uniforms = MIN(max_frag_uniforms, max_vert_uniforms);
+	min_uniforms = (min_uniforms >= 16) ? min_uniforms : 128;
+
+	// Convert vectors to bytes (1 vector = 4 floats = 16 bytes)
+	return (uint64_t)(min_uniforms * 16);
 }
 
 #endif // GLES2_ENABLED

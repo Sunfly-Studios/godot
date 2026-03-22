@@ -92,8 +92,8 @@ protected:
 		uint64_t specialization;
 		CanvasShaderGLES2::ShaderVariant mode_variant = CanvasShaderGLES2::ShaderVariant::MODE_QUAD;
 
-		bool using_ninepatch;
-		bool using_skeleton;
+		bool using_ninepatch = false;
+		bool using_skeleton = false;
 
 		Transform2D skeleton_transform;
 		Transform2D skeleton_transform_inverse;
@@ -107,7 +107,7 @@ protected:
 
 		Transform3D vp;
 		Light *using_light = nullptr;
-		bool using_shadow;
+		bool using_shadow = false;
 
 		RID render_target;
 		double time = 0.0;

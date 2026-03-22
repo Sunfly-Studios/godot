@@ -326,7 +326,7 @@ public:
 	}
 
 	_FORCE_INLINE_ void *mesh_get_surface(RID p_mesh, uint32_t p_surface_index) {
-
+		return nullptr;
 	}
 
 	_FORCE_INLINE_ RID mesh_get_shadow_mesh(RID p_mesh) {

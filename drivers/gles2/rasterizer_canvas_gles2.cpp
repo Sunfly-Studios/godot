@@ -362,8 +362,7 @@ void RasterizerCanvasGLES2::_bind_canvas_texture(RID p_texture, RS::CanvasItemTe
 		state.texture_size = Size2i(w, h);
 	}
 
-	GLint max_units;
-	glGetIntegerv(GL_MAX_TEXTURE_IMAGE_UNITS, &max_units);
+	GLint max_units = GLES2::Config::get_singleton()->max_texture_image_units;
 
 	// Normal Map
 	glActiveTexture(GL_TEXTURE0 + max_units - 6);
@@ -527,8 +526,11 @@ void RasterizerCanvasGLES2::canvas_begin(RID p_to_render_target, bool p_to_backb
 		}
 	}
 
-	Transform3D translate(Basis(), Vector3(-(render_target_size.width / 2.0f), -(render_target_size.height / 2.0f), 0.0f));
-	Transform3D scale(Basis().scaled(Vector3(2.0f / render_target_size.width, y_scale / render_target_size.height, 1.0f)), Vector3());
+	float rt_w = MAX(1.0f, render_target_size.width);
+	float rt_h = MAX(1.0f, render_target_size.height);
+
+	Transform3D translate(Basis(), Vector3(-(rt_w / 2.0f), -(rt_h / 2.0f), 0.0f));
+	Transform3D scale(Basis().scaled(Vector3(2.0f / rt_w, y_scale / rt_h, 1.0f)), Vector3());
 	canvas_transform = scale * translate;
 
 	state.uniforms.projection_matrix = canvas_transform;
@@ -567,6 +569,7 @@ void RasterizerCanvasGLES2::canvas_end() {
 void RasterizerCanvasGLES2::reset_canvas() {
 	glDisable(GL_CULL_FACE);
 	glDisable(GL_DEPTH_TEST);
+	glDepthMask(GL_FALSE);
 	glDisable(GL_SCISSOR_TEST);
 	glDisable(GL_DITHER);
 	glEnable(GL_BLEND);
@@ -646,12 +649,13 @@ void RasterizerCanvasGLES2::canvas_render_items_implementation(Item *p_item_list
 		glBindTexture(GL_TEXTURE_2D, tex_white->tex_id);
 	}
 
+	bool reclip = false;
+
 	if (bdata.settings_use_batching) {
 		// Render using the batched result
 		int num_joined_items = bdata.items_joined.size();
 		for (int j = 0; j < num_joined_items; j++) {
 			const RasterizerCanvasBatcher::BItemJoined &joined_item = bdata.items_joined[j];
-			bool reclip = false;
 			Item *first_item = bdata.item_refs[joined_item.first_item_ref].item;
 
 			// Make sure we set current clip for scissor testing.
@@ -667,6 +671,7 @@ void RasterizerCanvasGLES2::canvas_render_items_implementation(Item *p_item_list
 				} else {
 					glDisable(GL_SCISSOR_TEST);
 				}
+				reclip = false;
 			}
 
 			// Extract the CanvasMaterialData
@@ -685,8 +690,6 @@ void RasterizerCanvasGLES2::canvas_render_items_implementation(Item *p_item_list
 		// Legacy / Immediate render fallback
 		Item *ci = p_item_list;
 		while (ci) {
-			bool reclip = false;
-
 			if (ris.current_clip != ci->final_clip_owner) {
 				ris.current_clip = ci->final_clip_owner;
 				if (ris.current_clip) {
@@ -699,6 +702,7 @@ void RasterizerCanvasGLES2::canvas_render_items_implementation(Item *p_item_list
 				} else {
 					glDisable(GL_SCISSOR_TEST);
 				}
+				reclip = false;
 			}
 
 			// Extract the CanvasMaterialData for legacy rendering too.
@@ -716,7 +720,7 @@ void RasterizerCanvasGLES2::canvas_render_items_implementation(Item *p_item_list
 	}
 
 	// Clean up scissor test if it was left enabled by a clip
-	if (ris.current_clip) {
+	if (ris.current_clip && !reclip) {
 		glDisable(GL_SCISSOR_TEST);
 	}
 }
@@ -759,6 +763,7 @@ void RasterizerCanvasGLES2::_batch_upload_buffers() {
 				break;
 		}
 		uint32_t buffer_bytes = bdata.vertices.size() * sizeof_vert;
+		ERR_FAIL_COND_MSG(buffer_bytes > bdata.vertex_buffer_size_bytes, "GLES2: Batch vertex buffer payload exceeds VRAM allocation! Aborting upload.");
 		glBufferSubData(GL_ARRAY_BUFFER, 0, buffer_bytes, bdata.unit_vertices.get_data());
 	}
 	glBindBuffer(GL_ARRAY_BUFFER, 0);
@@ -826,10 +831,19 @@ void RasterizerCanvasGLES2::_batch_render_generic(const Batch &p_batch, GLES2::C
 
 	uint64_t pointer = 0;
 	glEnableVertexAttribArray(RS::ARRAY_VERTEX);
-	glVertexAttribPointer(RS::ARRAY_VERTEX, 2, GL_FLOAT, GL_FALSE, sizeof_vert, (const void *)(uintptr_t)pointer);
+	glVertexAttribPointer(RS::ARRAY_VERTEX, 2, GL_FLOAT, GL_FALSE, sizeof_vert, (const void *)(uintptr_t)offsetof(BatchVertex, pos));
 
 	glEnableVertexAttribArray(RS::ARRAY_TEX_UV);
-	glVertexAttribPointer(RS::ARRAY_TEX_UV, 2, GL_FLOAT, GL_FALSE, sizeof_vert, (const void *)(uintptr_t)(pointer + (2 * 4)));
+	glVertexAttribPointer(RS::ARRAY_TEX_UV, 2, GL_FLOAT, GL_FALSE, sizeof_vert, (const void *)(uintptr_t)offsetof(BatchVertex, uv));
+
+	if (!colored_verts) {
+		glDisableVertexAttribArray(RS::ARRAY_COLOR);
+		glVertexAttrib4fv(RS::ARRAY_COLOR, p_batch.color.get_data());
+	} else {
+		glEnableVertexAttribArray(RS::ARRAY_COLOR);
+		// BatchVertexColored is our baseline for colored geometry
+		glVertexAttribPointer(RS::ARRAY_COLOR, 4, GL_FLOAT, GL_FALSE, sizeof_vert, (const void *)(uintptr_t)offsetof(BatchVertexColored, col));
+	}
 
 	if (!colored_verts) {
 		glDisableVertexAttribArray(RS::ARRAY_COLOR);
@@ -874,9 +888,7 @@ void RasterizerCanvasGLES2::_batch_render_generic(const Batch &p_batch, GLES2::C
 void RasterizerCanvasGLES2::render_batches(Item::Command *const *p_commands, Item *p_current_clip, bool &r_reclip, GLES2::CanvasMaterialData *p_material) {
 	int num_batches = bdata.batches.size();
 
-	Transform2D base_matrix = state.uniforms.modelview_matrix;
 	Transform2D base_extra = state.uniforms.extra_matrix;
-	Color base_modulate = state.uniforms.final_modulate;
 
 	for (int batch_num = 0; batch_num < num_batches; batch_num++) {
 		const Batch &batch = bdata.batches[batch_num];
@@ -1022,7 +1034,7 @@ void RasterizerCanvasGLES2::render_batches(Item::Command *const *p_commands, Ite
 							}
 
 							float screen_scale = 1.0;
-							if ((bdata.settings_ninepatch_mode == 1) && (source.size.x != 0) && (source.size.y != 0)) {
+							if ((bdata.settings_ninepatch_mode == 1) && !Math::is_zero_approx(source.size.x) && !Math::is_zero_approx(source.size.y)) {
 								screen_scale = MIN(np->rect.size.x / source.size.x, np->rect.size.y / source.size.y);
 								screen_scale = MIN(1.0, screen_scale);
 							}
@@ -1260,8 +1272,14 @@ void RasterizerCanvasGLES2::render_batches(Item::Command *const *p_commands, Ite
 
 									// Draw call using the correct index count and vertex count
 									if (s->index_count > 0) {
-										GLenum index_type = (s->vertex_count >= (1 << 16)) ? GL_UNSIGNED_INT : GL_UNSIGNED_SHORT;
-										glDrawElements(s->primitive, s->index_count, index_type, nullptr);
+										bool needs_32_bit = s->vertex_count >= (1 << 16);
+
+										if (unlikely(needs_32_bit && !GLES2::Config::get_singleton()->support_32_bits_indices)) {
+											ERR_PRINT_ONCE("GLES2: Device does not support 32-bit indices for large 2D meshes. Skipping draw.");
+										} else {
+											GLenum index_type = needs_32_bit ? GL_UNSIGNED_INT : GL_UNSIGNED_SHORT;
+											glDrawElements(s->primitive, s->index_count, index_type, nullptr);
+										}
 									} else {
 										glDrawArrays(s->primitive, 0, s->vertex_count);
 									}
@@ -1306,6 +1324,9 @@ void RasterizerCanvasGLES2::render_batches(Item::Command *const *p_commands, Ite
 }
 
 void RasterizerCanvasGLES2::_draw_gui_primitive(int p_points, const Vector2 *p_vertices, const Color *p_colors, const Vector2 *p_uvs, const float *p_light_angles) {
+	if (unlikely(p_points <= 0)) {
+		return;
+	}
 	glBindBuffer(GL_ARRAY_BUFFER, data.polygon_buffer);
 
 	uint32_t vertex_size = p_points * sizeof(Vector2);
@@ -1313,7 +1334,13 @@ void RasterizerCanvasGLES2::_draw_gui_primitive(int p_points, const Vector2 *p_v
 	uint32_t uv_size = p_uvs ? p_points * sizeof(Vector2) : 0;
 	uint32_t total_size = vertex_size + color_size + uv_size;
 
-	glBufferData(GL_ARRAY_BUFFER, total_size, nullptr, GL_DYNAMIC_DRAW);
+	// Lower VRAM fragmentation by only growing the buffer.
+	// If it fits, we pass the tracked size with
+	// nullptr to perform a zero-cost buffer orphan.
+	if (total_size > data.polygon_buffer_size) {
+		data.polygon_buffer_size = next_power_of_2(total_size);
+	}
+	glBufferData(GL_ARRAY_BUFFER, data.polygon_buffer_size, nullptr, GL_DYNAMIC_DRAW);
 
 	uint32_t offset = 0;
 
@@ -1405,7 +1432,11 @@ void RasterizerCanvasGLES2::_legacy_draw_poly_triangles(Item::CommandPolygon *p_
 	uint32_t colors_size = (pd.colors.size() > 1) ? (pd.colors.size() * sizeof(Color)) : 0;
 
 	// Orphan the buffer and upload new data
-	glBufferData(GL_ARRAY_BUFFER, points_size + uvs_size + colors_size, nullptr, GL_DYNAMIC_DRAW);
+	uint32_t total_size = points_size + uvs_size + colors_size;
+	if (total_size > data.polygon_buffer_size) {
+		data.polygon_buffer_size = next_power_of_2(total_size);
+	}
+	glBufferData(GL_ARRAY_BUFFER, data.polygon_buffer_size, nullptr, GL_DYNAMIC_DRAW);
 
 	uint32_t offset = 0;
 
@@ -1443,19 +1474,33 @@ void RasterizerCanvasGLES2::_legacy_draw_poly_triangles(Item::CommandPolygon *p_
 
 	// Draw
 	if (!pd.indices.is_empty()) {
-		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, data.polygon_index_buffer);
-	
-		// GLES2 requires 16-BIT indices. Downcast Godot's 32-bit ints.
-		Vector<uint16_t> indices_16;
 		int index_count = pd.indices.size();
+
+		// GLES2 strictly requires 16-bit indices.
+		if (unlikely(pd.points.size() > 65535)) {
+			ERR_PRINT_ONCE("GLES2: Cannot draw polygon with more than 65535 vertices due to 16-bit index hardware limits.");
+			glBindBuffer(GL_ARRAY_BUFFER, 0);
+			return;
+		}
+
+		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, data.polygon_index_buffer);
+
+		Vector<uint16_t> indices_16;
 		indices_16.resize(index_count);
-		
+
 		for (int i = 0; i < index_count; i++) {
 			indices_16.write[i] = (uint16_t)pd.indices[i];
 		}
-	
+
 		uint32_t index_size = index_count * sizeof(uint16_t);
-		glBufferData(GL_ELEMENT_ARRAY_BUFFER, index_size, indices_16.ptr(), GL_DYNAMIC_DRAW);
+
+		if (index_size > data.polygon_index_buffer_size) {
+			data.polygon_index_buffer_size = next_power_of_2(index_size);
+		}
+
+		glBufferData(GL_ELEMENT_ARRAY_BUFFER, data.polygon_index_buffer_size, nullptr, GL_DYNAMIC_DRAW);
+		glBufferSubData(GL_ELEMENT_ARRAY_BUFFER, 0, index_size, indices_16.ptr());
+
 		glDrawElements(GL_TRIANGLES, index_count, GL_UNSIGNED_SHORT, nullptr);
 		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
 	} else {

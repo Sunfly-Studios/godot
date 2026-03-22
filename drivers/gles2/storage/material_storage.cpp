@@ -46,6 +46,73 @@ using namespace GLES2;
 ///////////////////////////////////////////////////////////////////////////
 // UBI helper functions
 
+
+_FORCE_INLINE_ static void _fill_std140_ubo_empty(ShaderLanguage::DataType type, int p_array_size, uint8_t *data) {
+	if (p_array_size <= 0) {
+		p_array_size = 1;
+	}
+
+	switch (type) {
+		case ShaderLanguage::TYPE_BOOL:
+		case ShaderLanguage::TYPE_INT:
+		case ShaderLanguage::TYPE_UINT:
+		case ShaderLanguage::TYPE_FLOAT: {
+			memset(data, 0, 4 * p_array_size);
+		} break;
+		case ShaderLanguage::TYPE_BVEC2:
+		case ShaderLanguage::TYPE_IVEC2:
+		case ShaderLanguage::TYPE_UVEC2:
+		case ShaderLanguage::TYPE_VEC2: {
+			memset(data, 0, 8 * p_array_size);
+		} break;
+		case ShaderLanguage::TYPE_BVEC3:
+		case ShaderLanguage::TYPE_IVEC3:
+		case ShaderLanguage::TYPE_UVEC3:
+		case ShaderLanguage::TYPE_VEC3: {
+			memset(data, 0, 12 * p_array_size);
+		} break;
+		case ShaderLanguage::TYPE_BVEC4:
+		case ShaderLanguage::TYPE_IVEC4:
+		case ShaderLanguage::TYPE_UVEC4:
+		case ShaderLanguage::TYPE_VEC4: {
+			memset(data, 0, 16 * p_array_size);
+		} break;
+		case ShaderLanguage::TYPE_MAT2: {
+			float *m = (float *)data;
+			for (int i = 0; i < p_array_size; i++) {
+				int ofs = i * 8;
+				memset(&m[ofs], 0, 32); // 8 floats per mat2 in std140
+				m[ofs + 0] = 1.0f; // col 0, row 0
+				m[ofs + 5] = 1.0f; // col 1, row 1
+			}
+		} break;
+		case ShaderLanguage::TYPE_MAT3: {
+			float *m = (float *)data;
+			for (int i = 0; i < p_array_size; i++) {
+				int ofs = i * 12;
+				memset(&m[ofs], 0, 48); // 12 floats per mat3 in std140
+				m[ofs + 0] = 1.0f; // col 0, row 0
+				m[ofs + 5] = 1.0f; // col 1, row 1
+				m[ofs + 10] = 1.0f; // col 2, row 2
+			}
+		} break;
+		case ShaderLanguage::TYPE_MAT4: {
+			float *m = (float *)data;
+			for (int i = 0; i < p_array_size; i++) {
+				int ofs = i * 16;
+				memset(&m[ofs], 0, 64); // 16 floats per mat4 in std140
+				m[ofs + 0] = 1.0f; // col 0, row 0
+				m[ofs + 5] = 1.0f; // col 1, row 1
+				m[ofs + 10] = 1.0f; // col 2, row 2
+				m[ofs + 15] = 1.0f; // col 3, row 3
+			}
+		} break;
+
+		default: {
+		}
+	}
+}
+
 static void _fill_std140_variant_ubo_value(ShaderLanguage::DataType type, int p_array_size, const Variant &value, uint8_t *data) {
 	switch (type) {
 		case ShaderLanguage::TYPE_BOOL: {
@@ -338,7 +405,11 @@ static void _fill_std140_variant_ubo_value(ShaderLanguage::DataType type, int p_
 
 			if (p_array_size > 0) {
 				const PackedFloat32Array &a = convert_array_std140<Projection, float>(value);
-				write_array_std140<Projection>(a, gui, p_array_size, 16);
+				if (unlikely(a.is_empty())) {
+					_fill_std140_ubo_empty(ShaderLanguage::TYPE_MAT4, p_array_size, data);
+				} else {
+					write_array_std140<Projection>(a, gui, p_array_size, 16);
+				}
 			} else {
 				convert_item_std140<Projection>(value, gui);
 			}
@@ -500,51 +571,6 @@ _FORCE_INLINE_ static void _fill_std140_ubo_value(ShaderLanguage::DataType type,
 	}
 }
 
-_FORCE_INLINE_ static void _fill_std140_ubo_empty(ShaderLanguage::DataType type, int p_array_size, uint8_t *data) {
-	if (p_array_size <= 0) {
-		p_array_size = 1;
-	}
-
-	switch (type) {
-		case ShaderLanguage::TYPE_BOOL:
-		case ShaderLanguage::TYPE_INT:
-		case ShaderLanguage::TYPE_UINT:
-		case ShaderLanguage::TYPE_FLOAT: {
-			memset(data, 0, 4 * p_array_size);
-		} break;
-		case ShaderLanguage::TYPE_BVEC2:
-		case ShaderLanguage::TYPE_IVEC2:
-		case ShaderLanguage::TYPE_UVEC2:
-		case ShaderLanguage::TYPE_VEC2: {
-			memset(data, 0, 8 * p_array_size);
-		} break;
-		case ShaderLanguage::TYPE_BVEC3:
-		case ShaderLanguage::TYPE_IVEC3:
-		case ShaderLanguage::TYPE_UVEC3:
-		case ShaderLanguage::TYPE_VEC3: {
-			memset(data, 0, 12 * p_array_size);
-		} break;
-		case ShaderLanguage::TYPE_BVEC4:
-		case ShaderLanguage::TYPE_IVEC4:
-		case ShaderLanguage::TYPE_UVEC4:
-		case ShaderLanguage::TYPE_VEC4: {
-			memset(data, 0, 16 * p_array_size);
-		} break;
-		case ShaderLanguage::TYPE_MAT2: {
-			memset(data, 0, 32 * p_array_size);
-		} break;
-		case ShaderLanguage::TYPE_MAT3: {
-			memset(data, 0, 48 * p_array_size);
-		} break;
-		case ShaderLanguage::TYPE_MAT4: {
-			memset(data, 0, 64 * p_array_size);
-		} break;
-
-		default: {
-		}
-	}
-}
-
 ///////////////////////////////////////////////////////////////////////////
 // ShaderData
 
@@ -669,15 +695,35 @@ MaterialData::~MaterialData() {
 void MaterialData::update_textures(const HashMap<StringName, Variant> &p_parameters, const HashMap<StringName, HashMap<int, RID>> &p_default_textures, const Vector<ShaderCompiler::GeneratedCode::Texture> &p_texture_uniforms, RID *p_textures, bool p_is_3d_shader_type) {
 	TextureStorage *texture_storage = TextureStorage::get_singleton();
 
-	for (int i = 0, k = 0; i < p_texture_uniforms.size(); i++) {
+	int k = 0;
+	for (int i = 0; i < p_texture_uniforms.size(); i++) {
 		const StringName &uniform_name = p_texture_uniforms[i].name;
 		HashMap<StringName, Variant>::ConstIterator V = p_parameters.find(uniform_name);
 
-		RID gl_texture = texture_storage->texture_gl_get_default(GLES2::DEFAULT_GL_TEXTURE_WHITE);
-		if (V && V->value.get_type() == Variant::RID) {
-			gl_texture = V->value;
+		int array_size = p_texture_uniforms[i].array_size > 0 ? p_texture_uniforms[i].array_size : 1;
+
+		// Handle Texture Arrays natively
+		if (V && V->value.get_type() == Variant::ARRAY) {
+			Array tex_array = V->value;
+			for (int j = 0; j < array_size; j++) {
+				RID gl_texture = texture_storage->texture_gl_get_default(GLES2::DEFAULT_GL_TEXTURE_WHITE);
+				if (j < tex_array.size() && tex_array[j].get_type() == Variant::RID) {
+					gl_texture = tex_array[j];
+				}
+				p_textures[k++] = gl_texture;
+			}
+		} else {
+			// Single texture or fallback
+			RID gl_texture = texture_storage->texture_gl_get_default(GLES2::DEFAULT_GL_TEXTURE_WHITE);
+			if (V && V->value.get_type() == Variant::RID) {
+				gl_texture = V->value;
+			}
+
+			// Fill the entire array span even if the user only provided one texture
+			for (int j = 0; j < array_size; j++) {
+				p_textures[k++] = gl_texture;
+			}
 		}
-		p_textures[k++] = gl_texture;
 	}
 }
 
@@ -1018,7 +1064,13 @@ RS::ShaderNativeSourceCode CanvasShaderData::get_native_source_code() const {
 CanvasShaderData::CanvasShaderData() {
 	valid = false;
 	uses_screen_texture = false;
+	uses_screen_texture_mipmaps = false;
 	uses_sdf = false;
+	uses_time = false;
+	uses_custom0 = false;
+	uses_custom1 = false;
+	vertex_input_mask = 0;
+	blend_mode = BLEND_MODE_MIX;
 }
 
 CanvasShaderData::~CanvasShaderData() {
@@ -1086,6 +1138,27 @@ void CanvasMaterialData::bind_uniforms() {
 				case ShaderLanguage::TYPE_MAT4:
 					glUniformMatrix4fv(loc, 1, GL_FALSE, (const GLfloat *)val_ptr);
 					break;
+				case ShaderLanguage::TYPE_MAT2: {
+					float m[4] = {};
+					m[0] = ((const float *)val_ptr)[0];
+					m[1] = ((const float *)val_ptr)[1];
+					m[2] = ((const float *)val_ptr)[4];
+					m[3] = ((const float *)val_ptr)[5];
+					glUniformMatrix2fv(loc, 1, GL_FALSE, m);
+				} break;
+				case ShaderLanguage::TYPE_MAT3: {
+					float m[9] = {};
+					m[0] = ((const float *)val_ptr)[0];
+					m[1] = ((const float *)val_ptr)[1];
+					m[2] = ((const float *)val_ptr)[2];
+					m[3] = ((const float *)val_ptr)[4];
+					m[4] = ((const float *)val_ptr)[5];
+					m[5] = ((const float *)val_ptr)[6];
+					m[6] = ((const float *)val_ptr)[8];
+					m[7] = ((const float *)val_ptr)[9];
+					m[8] = ((const float *)val_ptr)[10];
+					glUniformMatrix3fv(loc, 1, GL_FALSE, m);
+				} break;
 				default:
 					break;
 			}
@@ -1098,7 +1171,15 @@ void CanvasMaterialData::bind_uniforms() {
 	int texture_uniform_index = 0;
 	int texture_uniform_count = 0;
 
+	int max_texture_units = GLES2::Config::get_singleton()->max_texture_image_units;
+	int max_custom_textures = MAX(1, max_texture_units - 8); // Reserve top 8 for engine
+
 	for (int ti = 0; ti < texture_cache.size(); ti++) {
+		if (unlikely(ti >= max_custom_textures)) {
+			ERR_PRINT_ONCE(vformat("GLES2: Custom shader uses too many textures! Hardware limit is %d. Skipping remainder.", max_custom_textures));
+			break;
+		}
+
 		const ShaderCompiler::GeneratedCode::Texture &texture_uniform = texture_uniforms[texture_uniform_index];
 
 		// Tell the custom shader which texture unit to read from
@@ -1215,6 +1296,48 @@ RS::ShaderNativeSourceCode SceneShaderData::get_native_source_code() const {
 SceneShaderData::SceneShaderData() {
 	valid = false;
 	uses_screen_texture = false;
+	uses_screen_texture_mipmaps = false;
+	uses_depth_texture = false;
+	uses_normal_texture = false;
+	uses_time = false;
+	uses_vertex_time = false;
+	uses_fragment_time = false;
+	uses_discard = false;
+	uses_roughness = false;
+	uses_normal = false;
+	uses_particle_trails = false;
+	wireframe = false;
+	unshaded = false;
+	uses_vertex = false;
+	uses_position = false;
+	uses_sss = false;
+	uses_transmittance = false;
+	writes_modelview_or_projection = false;
+	uses_world_coordinates = false;
+	uses_tangent = false;
+	uses_color = false;
+	uses_uv = false;
+	uses_uv2 = false;
+	uses_custom0 = false;
+	uses_custom1 = false;
+	uses_custom2 = false;
+	uses_custom3 = false;
+	uses_bones = false;
+	uses_weights = false;
+	uses_alpha = false;
+	uses_alpha_clip = false;
+	uses_blend_alpha = false;
+	uses_depth_prepass_alpha = false;
+	uses_point_size = false;
+
+	ubo_size = 0;
+
+	blend_mode = BLEND_MODE_MIX;
+	alpha_antialiasing_mode = ALPHA_ANTIALIASING_OFF;
+	depth_draw = DEPTH_DRAW_OPAQUE;
+	depth_test = DEPTH_TEST_ENABLED;
+	cull_mode = RS::CULL_MODE_BACK;
+	vertex_input_mask = 0;
 }
 
 SceneShaderData::~SceneShaderData() {

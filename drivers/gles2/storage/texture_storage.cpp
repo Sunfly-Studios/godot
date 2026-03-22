@@ -370,9 +370,12 @@ Ref<Image> TextureStorage::_get_gl_image_and_format(const Ref<Image> &p_image, I
 
 	if (need_decompress || p_force_decompress) {
 		if (!image.is_null()) {
-			image = image->duplicate();
+			Ref<Image> dup = image->duplicate();
+			ERR_FAIL_COND_V_MSG(dup.is_null(), p_image, "GLES2: Out of memory during image duplication for decompression.");
+
+			image = dup;
 			image->decompress();
-			ERR_FAIL_COND_V(image->is_compressed(), image);
+			ERR_FAIL_COND_V_MSG(image->is_compressed(), image, "GLES2: Image decompression failed.");
 			if (decompress_ra_to_rg) {
 				image->convert_ra_rgba8_to_rg();
 				image->convert(Image::FORMAT_RG8);
@@ -412,6 +415,9 @@ Ref<Image> TextureStorage::_get_gl_image_and_format(const Ref<Image> &p_image, I
 RID TextureStorage::texture_allocate() {
 	Texture texture;
 	glGenTextures(1, &texture.tex_id);
+
+	ERR_FAIL_COND_V_MSG(texture.tex_id == 0, RID(), "GLES2: Failed to generate texture ID. GL Context might be lost or out of memory.");
+
 	texture.active = false;
 	texture.total_data_size = 0;
 
@@ -471,6 +477,12 @@ void TextureStorage::texture_2d_initialize(RID p_texture, const Ref<Image> &p_im
 	ERR_FAIL_NULL(texture);
 	ERR_FAIL_COND(p_image.is_null());
 
+	Config *config = Config::get_singleton();
+
+	int max_size = config->max_texture_size;
+	ERR_FAIL_COND_MSG(p_image->get_width() > max_size || p_image->get_height() > max_size,
+			vformat("GLES2: Texture size (%dx%d) exceeds hardware maximum (%d).", p_image->get_width(), p_image->get_height(), max_size));
+
 	texture->type = Texture::TYPE_2D;
 	texture->target = GL_TEXTURE_2D;
 	texture->width = p_image->get_width();
@@ -481,7 +493,6 @@ void TextureStorage::texture_2d_initialize(RID p_texture, const Ref<Image> &p_im
 	texture->active = true;
 	texture->mipmaps = p_image->has_mipmaps() ? p_image->get_mipmap_count() + 1 : 1;
 	texture->resize_to_po2 = false;
-	Config *config = Config::get_singleton();
 
 	if (!config->support_npot_repeat_mipmap) {
 		int po2_width = next_power_of_2(texture->width);
@@ -568,6 +579,9 @@ void TextureStorage::texture_proxy_initialize(RID p_texture, RID p_base) {
 	Texture *base = texture_owner.get_or_null(p_base);
 	ERR_FAIL_NULL(base);
 
+	ERR_FAIL_COND_MSG(base->is_proxy, "GLES2: Cannot bind a proxy to another proxy. Flat hierarchy enforced.");
+	ERR_FAIL_COND_MSG(p_texture == p_base, "GLES2: Texture proxy attempted to bind to itself. Aborting.");
+
 	// Destroy the dummy tex_id created by texture_allocate() so we don't leak it
 	if (tex->tex_id != 0) {
 		glDeleteTextures(1, &tex->tex_id);
@@ -613,6 +627,9 @@ void TextureStorage::texture_proxy_update(RID p_texture, RID p_proxy_to) {
 	ERR_FAIL_NULL(tex);
 	Texture *base = texture_owner.get_or_null(p_proxy_to);
 	ERR_FAIL_NULL(base);
+
+	ERR_FAIL_COND_MSG(base->is_proxy, "GLES2: Cannot bind a proxy to another proxy. Flat hierarchy enforced.");
+	ERR_FAIL_COND_MSG(p_texture == p_proxy_to, "GLES2: Texture proxy attempted to bind to itself. Aborting.");
 
 	// Remove from old base's tracker
 	if (tex->proxy_to.is_valid()) {
@@ -821,6 +838,12 @@ void TextureStorage::_texture_set_data(RID p_texture, const Ref<Image> &p_image,
 
 	GLenum blit_target = (texture->target == GL_TEXTURE_CUBE_MAP) ? _cube_side_enum[p_layer] : texture->target;
 	Vector<uint8_t> read = img->get_data();
+	int expected_size = img->get_data_size();
+
+	ERR_FAIL_COND_MSG(read.is_empty() || expected_size == 0, "GLES2: Image data is empty. Aborting GL upload to prevent driver crash.");
+	ERR_FAIL_COND_MSG(read.size() < expected_size, "GLES2: Image data vector size is smaller than expected image size. Memory corruption risk.");
+
+	const uint8_t *read_ptr = read.ptr();
 
 	glActiveTexture(GL_TEXTURE0);
 	glBindTexture(texture->target, texture->tex_id);
@@ -843,10 +866,10 @@ void TextureStorage::_texture_set_data(RID p_texture, const Ref<Image> &p_image,
 
 		if (compressed) {
 			glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
-			glCompressedTexImage2D(blit_target, i, internal_format, w, h, 0, size, read.ptr() + ofs);
+			glCompressedTexImage2D(blit_target, i, internal_format, w, h, 0, size, read_ptr + ofs);
 		} else {
 			glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
-			glTexImage2D(blit_target, i, internal_format, w, h, 0, format, type, read.ptr() + ofs);
+			glTexImage2D(blit_target, i, internal_format, w, h, 0, format, type, read_ptr + ofs);
 		}
 
 		tsize += size;
@@ -989,6 +1012,16 @@ void TextureStorage::_update_render_target(RenderTarget *rt) {
 		return;
 	}
 
+	Config *config = Config::get_singleton();
+
+	// Clamp RT size to max viewport dimensions.
+	// Old drivers may silently ignore rendering if FBO > Max Viewport.
+	if (rt->size.x > config->max_viewport_size[0] || rt->size.y > config->max_viewport_size[1]) {
+		WARN_PRINT(vformat("GLES2: RenderTarget size (%dx%d) exceeds hardware maximum viewport size (%dx%d). Clamping.", rt->size.x, rt->size.y, config->max_viewport_size[0], config->max_viewport_size[1]));
+		rt->size.x = MIN(rt->size.x, config->max_viewport_size[0]);
+		rt->size.y = MIN(rt->size.y, config->max_viewport_size[1]);
+	}
+
 	// If drawing directly to the screen, we just use
 	// the default system Framebuffer (0)
 	if (rt->direct_to_screen) {
@@ -1020,18 +1053,32 @@ void TextureStorage::_update_render_target(RenderTarget *rt) {
 
 	// FBO Generation
 	glGenFramebuffers(1, &rt->fbo);
+	ERR_FAIL_COND_MSG(rt->fbo == 0, "GLES2: Failed to generate Framebuffer Object. Context lost?");
 	glBindFramebuffer(GL_FRAMEBUFFER, rt->fbo);
 
 	if (rt->overridden.color.is_valid()) {
 		texture = get_texture(rt->overridden.color);
-		ERR_FAIL_NULL(texture);
+		if (unlikely(!texture)) {
+			glDeleteFramebuffers(1, &rt->fbo);
+			rt->fbo = 0;
+			ERR_FAIL_MSG("GLES2: Missing texture for Render Target.");
+		}
 		rt->color = texture->tex_id;
 		rt->size = Size2i(texture->width, texture->height);
 	} else {
 		texture = get_texture(rt->texture);
-		ERR_FAIL_NULL(texture);
+		if (unlikely(!texture)) {
+			glDeleteFramebuffers(1, &rt->fbo);
+			rt->fbo = 0;
+			ERR_FAIL_MSG("GLES2: Missing texture for Render Target.");
+		}
 
 		glGenTextures(1, &rt->color);
+		if (unlikely(rt->color == 0)) {
+			glDeleteFramebuffers(1, &rt->fbo);
+			rt->fbo = 0;
+			ERR_FAIL_MSG("GLES2: Failed to generate color texture for RenderTarget.");
+		}
 		glBindTexture(texture_target, rt->color);
 
 		glTexImage2D(texture_target, 0, rt->color_internal_format, rt->size.x, rt->size.y, 0, rt->color_format, rt->color_type, nullptr);
@@ -1055,7 +1102,11 @@ void TextureStorage::_update_render_target(RenderTarget *rt) {
 
 	if (rt->overridden.depth.is_valid()) {
 		texture = get_texture(rt->overridden.depth);
-		ERR_FAIL_NULL(texture);
+		if (unlikely(!texture)) {
+			glDeleteFramebuffers(1, &rt->fbo);
+			rt->fbo = 0;
+			ERR_FAIL_MSG("GLES2: Missing texture for Render Target.");
+		}
 		rt->depth = texture->tex_id;
 		glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, texture_target, rt->depth, 0);
 	} else {
