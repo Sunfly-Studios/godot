@@ -442,6 +442,7 @@ void RasterizerCanvasGLES2::canvas_begin(RID p_to_render_target, bool p_to_backb
 	state.mode_variant = CanvasShaderGLES2::ShaderVariant::MODE_QUAD;
 
 	GLES2::RenderTarget *render_target = GLES2::TextureStorage::get_singleton()->get_render_target(p_to_render_target);
+	GLES2::Config *config = GLES2::Config::get_singleton();
 
 	if (render_target) {
 		render_target->was_used = true;
@@ -450,20 +451,23 @@ void RasterizerCanvasGLES2::canvas_begin(RID p_to_render_target, bool p_to_backb
 	// Bind the correct Framebuffer
 	if (p_to_backbuffer) {
 		glBindFramebuffer(GL_FRAMEBUFFER, render_target ? render_target->backbuffer_fbo : 0);
-		// TODO(GLES2): Likely need to implement the config->max_texture_image_units logic later
-		// to do screen-reading shaders.
-		glActiveTexture(GL_TEXTURE0);
+		glActiveTexture(GL_TEXTURE0 + config->max_texture_image_units - 4);
 		GLES2::Texture *tex = GLES2::TextureStorage::get_singleton()->get_texture(default_canvas_texture);
 		if (tex) {
 			glBindTexture(GL_TEXTURE_2D, tex->tex_id);
 		}
 	} else {
 		glBindFramebuffer(GL_FRAMEBUFFER, render_target ? render_target->fbo : 0);
-		glActiveTexture(GL_TEXTURE0);
+		glActiveTexture(GL_TEXTURE0 + config->max_texture_image_units - 4);
 		if (render_target) {
 			glBindTexture(GL_TEXTURE_2D, render_target->backbuffer);
 		}
 	}
+
+	// Reset the active texture back to 0 immediately after,
+	// otherwise, the very next draw call may accidentally bind
+	// its diffuse texture to the screen texture unit.
+	glActiveTexture(GL_TEXTURE0);
 
 	// Set blending and clear buffers if needed
 	if ((render_target && render_target->is_transparent) || p_to_backbuffer) {
