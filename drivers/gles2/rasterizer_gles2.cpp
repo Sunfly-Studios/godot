@@ -426,7 +426,21 @@ void RasterizerGLES2::_blit_render_target_to_screen(RID p_render_target, Display
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 
-	copy_effects->copy_to_rect(Rect2(0.0, 0.0, 1.0, 1.0));
+	// Godot 4 renders to FBOs upside down.
+	// We must invert the UVs when copying to the system screen.
+	bool flip_y = true;
+	if (rt->overridden.color.is_valid()) {
+		// If overridden (e.g., XR), it wasn't rendered upside down.
+		flip_y = false;
+	}
+
+	if (flip_y) {
+		// Start Y at 1.0, and go down by -1.0
+		copy_effects->copy_to_rect(Rect2(0.0, 1.0, 1.0, -1.0));
+	} else {
+		// Normal copy
+		copy_effects->copy_to_rect(Rect2(0.0, 0.0, 1.0, 1.0));
+	}
 
 	// Clean up
 	glBindTexture(GL_TEXTURE_2D, 0);

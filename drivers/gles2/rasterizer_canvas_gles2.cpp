@@ -505,19 +505,27 @@ void RasterizerCanvasGLES2::canvas_begin(RID p_to_render_target, bool p_to_backb
 	// Calculate Projection Matrix
 	// Godot 4 seems to expect 3D transforms even in 2D.
 	Transform3D canvas_transform;
+
 	if (state.render_target != RID() && render_target) {
-		float csy = 1.0;
-		// TODO(GLES2): Handle RENDER_TARGET_VFLIP if needed
-		Size2i rt_size = render_target->size;
-		Transform3D translate(Basis(), Vector3(-(rt_size.width / 2.0f), -(rt_size.height / 2.0f), 0.0f));
-		Transform3D scale(Basis().scaled(Vector3(2.0f / rt_size.width, csy * -2.0f / rt_size.height, 1.0f)), Vector3());
-		canvas_transform = scale * translate;
+		render_target_size = render_target->size;
 	} else {
-		Vector2 ssize = DisplayServer::get_singleton()->window_get_size();
-		Transform3D translate(Basis(), Vector3(-(ssize.width / 2.0f), -(ssize.height / 2.0f), 0.0f));
-		Transform3D scale(Basis().scaled(Vector3(2.0f / ssize.width, -2.0f / ssize.height, 1.0f)), Vector3());
-		canvas_transform = scale * translate;
+		render_target_size = DisplayServer::get_singleton()->window_get_size();
 	}
+
+	// In Godot 4, the default Y-scale for OpenGL is positive 2.0.
+	// We only flip it to -2.0 if there is an overridden color texture (like XR).
+	float y_scale = 2.0f;
+	if (state.render_target != RID()) {
+		RID override_color = GLES2::TextureStorage::get_singleton()->render_target_get_override_color(state.render_target);
+
+		if (override_color.is_valid()) {
+			y_scale = -2.0f;
+		}
+	}
+
+	Transform3D translate(Basis(), Vector3(-(render_target_size.width / 2.0f), -(render_target_size.height / 2.0f), 0.0f));
+	Transform3D scale(Basis().scaled(Vector3(2.0f / render_target_size.width, y_scale / render_target_size.height, 1.0f)), Vector3());
+	canvas_transform = scale * translate;
 
 	state.uniforms.projection_matrix = canvas_transform;
 	state.uniforms.final_modulate = Color(1, 1, 1, 1);
@@ -648,8 +656,7 @@ void RasterizerCanvasGLES2::canvas_render_items_implementation(Item *p_item_list
 				if (ris.current_clip) {
 					glEnable(GL_SCISSOR_TEST);
 					int x = ris.current_clip->final_clip_rect.position.x;
-					Size2i rt_size = GLES2::TextureStorage::get_singleton()->get_render_target(state.render_target)->size;
-					int y = rt_size.height - (ris.current_clip->final_clip_rect.position.y + ris.current_clip->final_clip_rect.size.y);
+					int y = ris.current_clip->final_clip_rect.position.y;
 					int w = ris.current_clip->final_clip_rect.size.x;
 					int h = ris.current_clip->final_clip_rect.size.y;
 					glScissor(x, y, w, h);
@@ -681,8 +688,7 @@ void RasterizerCanvasGLES2::canvas_render_items_implementation(Item *p_item_list
 				if (ris.current_clip) {
 					glEnable(GL_SCISSOR_TEST);
 					int x = ris.current_clip->final_clip_rect.position.x;
-					Size2i rt_size = GLES2::TextureStorage::get_singleton()->get_render_target(state.render_target)->size;
-					int y = rt_size.height - (ris.current_clip->final_clip_rect.position.y + ris.current_clip->final_clip_rect.size.y);
+					int y = ris.current_clip->final_clip_rect.position.y;
 					int w = ris.current_clip->final_clip_rect.size.x;
 					int h = ris.current_clip->final_clip_rect.size.y;
 					glScissor(x, y, w, h);
@@ -921,12 +927,6 @@ void RasterizerCanvasGLES2::render_batches(Item::Command *const *p_commands, Ite
 
 							_bind_canvas_texture(r->texture, filter, repeat);
 
-							// Flip logic
-							bool upside_down = r->flags & CANVAS_RECT_FLIP_V;
-							if (state.current_tex_is_rt) {
-								upside_down = true;
-							}
-
 							// Shader setup
 							_set_texture_rect_mode(true);
 
@@ -961,10 +961,6 @@ void RasterizerCanvasGLES2::render_batches(Item::Command *const *p_commands, Ite
 								// Shift origin right, then flip.
 								src_rect.position.x += src_rect.size.x;
 								src_rect.size.x *= -1;
-							}
-							if (upside_down) {
-								src_rect.position.y += src_rect.size.y;
-								src_rect.size.y *= -1;
 							}
 
 							if (r->flags & CANVAS_RECT_TRANSPOSE) {
@@ -1161,8 +1157,7 @@ void RasterizerCanvasGLES2::render_batches(Item::Command *const *p_commands, Ite
 									} else {
 										glEnable(GL_SCISSOR_TEST);
 										int x = p_current_clip->final_clip_rect.position.x;
-										Size2i rt_size = GLES2::TextureStorage::get_singleton()->get_render_target(state.render_target)->size;
-										int y = rt_size.height - (p_current_clip->final_clip_rect.position.y + p_current_clip->final_clip_rect.size.y);
+										int y = p_current_clip->final_clip_rect.position.y;
 										int w = p_current_clip->final_clip_rect.size.x;
 										int h = p_current_clip->final_clip_rect.size.y;
 										glScissor(x, y, w, h);

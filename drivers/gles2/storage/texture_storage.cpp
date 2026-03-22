@@ -1014,6 +1014,10 @@ void TextureStorage::_update_render_target(RenderTarget *rt) {
 
 		texture->gl_set_filter(RS::CANVAS_ITEM_TEXTURE_FILTER_NEAREST);
 		texture->gl_set_repeat(RS::CANVAS_ITEM_TEXTURE_REPEAT_DISABLED);
+
+		// TODO(GLES2): This causes issues such as the textures
+		// being already registered. Not sure why?
+		//GLES2::Utilities::get_singleton()->texture_allocated_data(rt->color, rt->size.x * rt->size.y * rt->view_count * rt->color_format_size, "Render target color texture");
 	}
 
 	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, texture_target, rt->color, 0);
@@ -1029,12 +1033,30 @@ void TextureStorage::_update_render_target(RenderTarget *rt) {
 		glBindRenderbuffer(GL_RENDERBUFFER, rt->depth);
 		glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT16, rt->size.x, rt->size.y);
 		glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, rt->depth);
+
+		// TODO(GLES2): This causes issues such as the textures
+		// being already registered. Not sure why?
+		//GLES2::Utilities::get_singleton()->texture_allocated_data(rt->depth, rt->size.x * rt->size.y * rt->view_count * 3, "Render target depth texture");
 	}
 
 	GLenum status = glCheckFramebufferStatus(GL_FRAMEBUFFER);
 	if (status != GL_FRAMEBUFFER_COMPLETE) {
 		glDeleteFramebuffers(1, &rt->fbo);
+		if (rt->overridden.color.is_null()) {
+			GLES2::Utilities::get_singleton()->texture_free_data(rt->color);
+		}
+		if (rt->overridden.depth.is_null()) {
+			GLES2::Utilities::get_singleton()->texture_free_data(rt->depth);
+		}
 		rt->fbo = 0;
+		rt->size.x = 0;
+		rt->size.y = 0;
+		rt->color = 0;
+		rt->depth = 0;
+		if (rt->overridden.color.is_null()) {
+			texture->tex_id = 0;
+			texture->active = false;
+		}
 		WARN_PRINT("Could not create render target FBO, status: " + get_framebuffer_error(status));
 		return;
 	}
@@ -1253,6 +1275,10 @@ Rect2i TextureStorage::render_target_get_render_region(RID p_render_target) cons
 RID TextureStorage::render_target_get_texture(RID p_render_target) {
 	RenderTarget *rt = render_target_owner.get_or_null(p_render_target);
 	ERR_FAIL_NULL_V(rt, RID());
+
+	if (rt->overridden.color.is_valid()) {
+		return rt->overridden.color;
+	}
 	return rt->texture;
 }
 
@@ -1413,6 +1439,13 @@ GLuint TextureStorage::render_target_get_fbo(RID p_render_target) const {
 GLuint TextureStorage::render_target_get_color(RID p_render_target) const {
 	RenderTarget *rt = render_target_owner.get_or_null(p_render_target);
 	ERR_FAIL_NULL_V(rt, 0);
+
+	if (rt->overridden.color.is_valid()) {
+		Texture *texture = get_texture(rt->overridden.color);
+		ERR_FAIL_NULL_V(texture, 0);
+
+		return texture->tex_id;
+	}
 	return rt->color;
 }
 
