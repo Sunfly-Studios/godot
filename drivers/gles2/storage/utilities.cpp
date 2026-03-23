@@ -386,7 +386,27 @@ String Utilities::get_video_adapter_vendor() const {
 }
 
 String Utilities::get_video_adapter_api_version() const {
-	return String::utf8((const char *)glGetString(GL_VERSION));
+	const String full_version = String::utf8((const char *)glGetString(GL_VERSION));
+
+	// GL_VERSION strings typically start with the version number followed by a space.
+	// Example: "4.6.0 NVIDIA 572.83" or "2.1.0 Build 123"
+	String version_num = full_version.get_slice(" ", 0);
+
+	// Safely parse the major and minor versions.
+	int major = version_num.get_slice(".", 0).to_int();
+	int minor = version_num.get_slice(".", 1).to_int();
+
+	// If the driver hands us anything higher than OpenGL 2.1,
+	// it's a superset context.
+	if (major > 2 || (major == 2 && minor > 1)) {
+		// Extract the vendor-specific suffix (e.g., " NVIDIA 572.83")
+		int space_idx = full_version.find(" ");
+		String vendor_info = space_idx != -1 ? full_version.substr(space_idx) : "";
+
+		return vformat("2.1 (emulated via %s)%s", version_num, vendor_info);
+	}
+
+	return full_version;
 }
 
 RenderingDevice::DeviceType Utilities::get_video_adapter_type() const {
