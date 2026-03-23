@@ -22,15 +22,6 @@ SHADOW_FILTER_PCF13 = false
 
 #[vertex]
 
-#ifdef USE_GLES_OVER_GL
-#define lowp
-#define mediump
-#define highp
-#else
-precision highp float;
-precision highp int;
-#endif
-
 uniform highp mat4 projection_matrix;
 /* clang-format on */
 
@@ -160,7 +151,12 @@ void main() {
 	vec2 uv;
 
 #ifdef USE_INSTANCING
-	mat4 extra_matrix_instance = extra_matrix * transpose(mat4(instance_xform0, instance_xform1, instance_xform2, vec4(0.0, 0.0, 0.0, 1.0)));
+	mat4 extra_matrix_instance = extra_matrix * mat4(
+		vec4(instance_xform0.x, instance_xform1.x, instance_xform2.x, 0.0),
+		vec4(instance_xform0.y, instance_xform1.y, instance_xform2.y, 0.0),
+		vec4(instance_xform0.z, instance_xform1.z, instance_xform2.z, 0.0),
+		vec4(instance_xform0.w, instance_xform1.w, instance_xform2.w, 1.0)
+	);
 	color *= instance_color;
 
 #ifdef USE_INSTANCE_CUSTOM
@@ -331,20 +327,6 @@ void main() {
 #if !defined(GL_EXT_shader_texture_lod) && !defined(GL_ARB_shader_texture_lod)
 #define texture2DLod(img, coord, lod) texture2D(img, coord, lod)
 #define textureCubeLod(img, coord, lod) textureCube(img, coord, lod)
-#endif
-
-#ifdef USE_GLES_OVER_GL
-#define lowp
-#define mediump
-#define highp
-#else
-#if defined(USE_HIGHP_PRECISION)
-precision highp float;
-precision highp int;
-#else
-precision mediump float;
-precision mediump int;
-#endif
 #endif
 
 #include "stdlib_inc.glsl"

@@ -180,6 +180,7 @@ void ShaderGLES2::_build_variant_code(StringBuilder &builder, uint32_t p_variant
 	builder.append("\n");
 
 	// Default to highp precision unless specified otherwise.
+	builder.append("#ifndef USE_GLES_OVER_GL\n");
 	builder.append("#ifdef GL_FRAGMENT_PRECISION_HIGH\n");
 	builder.append("precision highp float;\n");
 	builder.append("precision highp int;\n");
@@ -190,6 +191,12 @@ void ShaderGLES2::_build_variant_code(StringBuilder &builder, uint32_t p_variant
 	builder.append("precision mediump int;\n");
 	builder.append("precision mediump sampler2D;\n");
 	builder.append("precision mediump samplerCube;\n");
+	builder.append("#endif\n");
+	builder.append("#else\n");
+	// Globally strip precision qualifiers for desktop GLSL 1.20
+	builder.append("#define lowp\n");
+	builder.append("#define mediump\n");
+	builder.append("#define highp\n");
 	builder.append("#endif\n");
 
 	const StageTemplate &stage_template = stage_templates[p_stage_type];

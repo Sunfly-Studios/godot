@@ -21,15 +21,6 @@ mode_cube_to_panorama = #define CUBE_TO_PANORAMA
 
 #[vertex]
 
-#ifdef USE_GLES_OVER_GL
-#define lowp
-#define mediump
-#define highp
-#else
-precision highp float;
-precision highp int;
-#endif
-
 attribute vec2 vertex_attrib; // attrib:0
 
 varying vec2 uv_interp;
@@ -62,15 +53,6 @@ void main() {
 
 /* clang-format off */
 #[fragment]
-
-#ifdef USE_GLES_OVER_GL
-#define lowp
-#define mediump
-#define highp
-#else
-precision highp float;
-precision highp int;
-#endif
 
 varying vec2 uv_interp;
 /* clang-format on */
