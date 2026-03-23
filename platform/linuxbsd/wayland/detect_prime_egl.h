@@ -31,7 +31,7 @@
 #ifndef DETECT_PRIME_EGL_H
 #define DETECT_PRIME_EGL_H
 
-#ifdef GLES3_ENABLED
+#if defined(GLES3_ENABLED) || defined(GLES2_ENABLED)
 #ifdef EGL_ENABLED
 
 #ifdef GLAD_ENABLED
@@ -78,12 +78,12 @@ private:
 	};
 
 public:
-	static void create_context(EGLenum p_platform_enum);
+	static void create_context(EGLenum p_platform_enum, bool p_use_gles2 = false);
 
-	static int detect_prime(EGLenum p_platform_enum);
+	static int detect_prime(EGLenum p_platform_enum, bool p_use_gles2 = false);
 };
 
-#endif // GLES3_ENABLED
+#endif // GLES3_ENABLED || GLES2_ENABLED
 #endif // EGL_ENABLED
 
 #endif // DETECT_PRIME_EGL_H

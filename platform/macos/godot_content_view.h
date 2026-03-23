@@ -36,7 +36,7 @@
 #import <AppKit/AppKit.h>
 #import <Foundation/Foundation.h>
 
-#if defined(GLES3_ENABLED)
+#if defined(GLES3_ENABLED) || defined(GLES2_ENABLED)
 #import <AppKit/NSOpenGLView.h>
 #define RootView NSOpenGLView
 #else
