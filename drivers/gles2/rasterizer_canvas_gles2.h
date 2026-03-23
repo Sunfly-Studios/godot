@@ -78,6 +78,8 @@ protected:
 		LocalVector<Point2> points;
 		LocalVector<Color> colors;
 		LocalVector<Point2> uvs;
+		Vector<int> bones;
+		Vector<float> weights;
 	};
 	uint32_t next_polygon_id = 1;
 	HashMap<RendererCanvasRender::PolygonID, PolyData> polygon_cache;

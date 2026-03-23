@@ -781,9 +781,35 @@ bool RasterizerCanvasBatcher::prefill_joined_item(FillState &r_fill_state, Rende
 			} break;
 
 			case RendererCanvasRender::Item::Command::TYPE_POLYGON: {
-				// TODO(GLES2): Polygons are complex (they require index buffer manipulation).
-				// For the first pass of turning the batcher on, we safely route them to the default unbatched drawer.
-				_prefill_default_batch(r_fill_state, command, *p_item);
+				RendererCanvasRender::Item::CommandPolygon *polygon = static_cast<RendererCanvasRender::Item::CommandPolygon *>(command);
+
+				// The GLES2 2D Batcher is heavily optimized for triangles.
+				// If the polygon is lines or points, route it to the unbatched fallback.
+				if (polygon->primitive != RS::PRIMITIVE_TRIANGLES) {
+					_prefill_default_batch(r_fill_state, command, *p_item);
+					break;
+				}
+
+				bool send_light_angles = false;
+				if (polygon->texture.is_valid()) {
+					GLES2::CanvasTexture *ct = GLES2::TextureStorage::get_singleton()->get_canvas_texture(polygon->texture);
+					if (ct && ct->normal_map.is_valid()) {
+						send_light_angles = true;
+					}
+				}
+
+				bool buffer_full = false;
+				if (send_light_angles) {
+					buffer_full = _prefill_polygon<true>(polygon, r_fill_state, p_command_start, command, p_item, multiply_final_modulate);
+				} else {
+					buffer_full = _prefill_polygon<false>(polygon, r_fill_state, p_command_start, command, p_item, multiply_final_modulate);
+				}
+
+				if (buffer_full) {
+					// VRAM buffer is full. Resume on next flush.
+					*p_command_start = command;
+					return true;
+				}
 			} break;
 
 			default: {
@@ -1016,7 +1042,7 @@ bool RasterizerCanvasBatcher::_prefill_rect(RendererCanvasRender::Item::CommandR
 	int old_batch_tex_id = r_fill_state.batch_tex_id;
 	r_fill_state.batch_tex_id = _batch_find_or_create_tex(rect->texture, RID(), rect->flags & RendererCanvasRender::CanvasRectFlags::CANVAS_RECT_TILE, old_batch_tex_id);
 
-	if (SEND_LIGHT_ANGLES) {
+	if constexpr (SEND_LIGHT_ANGLES) {
 		bdata.use_light_angles = true;
 	}
 
@@ -1044,6 +1070,7 @@ bool RasterizerCanvasBatcher::_prefill_rect(RendererCanvasRender::Item::CommandR
 		r_fill_state.curr_batch->first_command = p_command;
 		r_fill_state.curr_batch->num_commands = 1;
 		r_fill_state.curr_batch->first_vert = bdata.total_verts;
+		r_fill_state.curr_batch->item = p_item;
 	} else {
 		r_fill_state.curr_batch->num_commands++;
 	}
@@ -1150,7 +1177,7 @@ bool RasterizerCanvasBatcher::_prefill_rect(RendererCanvasRender::Item::CommandR
 		pBT[3] = pBT[0];
 	}
 
-	if (SEND_LIGHT_ANGLES) {
+	if constexpr (SEND_LIGHT_ANGLES) {
 		float *angles = bdata.light_angles.request(4);
 		DEV_ASSERT(angles && "GLES2: Modulate buffer desynchronized from main vertex buffer!");
 		float angle = 0.0f;
@@ -1281,6 +1308,195 @@ bool RasterizerCanvasBatcher::_prefill_ninepatch(RendererCanvasRender::Item::Com
 	}
 
 	bdata.settings_use_single_rect_fallback = single_rect_fallback;
+	return false;
+}
+
+template <bool SEND_LIGHT_ANGLES>
+bool RasterizerCanvasBatcher::_prefill_polygon(RendererCanvasRender::Item::CommandPolygon *p_poly, FillState &r_fill_state, RendererCanvasRender::Item::Command **p_command_start, RendererCanvasRender::Item::Command *p_command, RendererCanvasRender::Item *p_item, bool multiply_final_modulate) {
+	bool change_batch = false;
+
+	if (r_fill_state.curr_batch->type != BatcherEnums::BT_POLY) {
+		if (r_fill_state.sequence_batch_type_flags & (~BatcherEnums::BTF_POLY)) {
+			*p_command_start = p_command;
+			return true;
+		}
+		r_fill_state.sequence_batch_type_flags |= BatcherEnums::BTF_POLY;
+		change_batch = true;
+	}
+
+	const RasterizerCanvasGLES2::PolyData *poly_data = get_this()->polygon_cache.getptr(p_poly->polygon.polygon_id);
+
+	if (unlikely(!poly_data)) {
+		return false; // Defensive: Invalid or freed polygon ID
+	}
+
+	int num_inds = poly_data->indices.size();
+	int num_points = poly_data->points.size();
+
+	if (unlikely(num_points == 0)) {
+		return false; // Defensive: Nothing to draw
+	}
+
+	int num_verts_to_draw = num_inds > 0 ? num_inds : num_points;
+
+	BatchVertex *bvs = bdata.vertices.request(num_verts_to_draw);
+	if (!bvs) {
+		*p_command_start = p_command;
+		return true; // Vertex buffer full
+	}
+
+	BatchColor *vertex_colors = bdata.vertex_colors.request(num_verts_to_draw);
+	if (unlikely(!vertex_colors)) {
+		*p_command_start = p_command;
+		return true;
+	}
+
+	const bool use_large_verts = bdata.use_large_verts;
+	const bool use_modulate = bdata.use_modulate;
+
+	BatchColor *vertex_modulates = nullptr;
+	if (use_modulate) {
+		vertex_modulates = bdata.vertex_modulates.request(num_verts_to_draw);
+		if (unlikely(!vertex_modulates)) {
+			*p_command_start = p_command;
+			return true;
+		}
+		vertex_modulates[0].set(r_fill_state.final_modulate);
+	}
+
+	BatchTransform *pBT = nullptr;
+	if (use_large_verts) {
+		pBT = bdata.vertex_transforms.request(num_verts_to_draw);
+		if (unlikely(!pBT)) {
+			*p_command_start = p_command;
+			return true;
+		}
+		const Transform2D &tr = r_fill_state.transform_combined;
+		pBT[0].translate.set(tr.columns[2].x, tr.columns[2].y);
+		pBT[0].basis[0].set(tr.columns[0][0], tr.columns[1][0]);
+		pBT[0].basis[1].set(tr.columns[0][1], tr.columns[1][1]);
+	}
+
+	Color modulate = Color(1, 1, 1, 1);
+	if (!use_large_verts && multiply_final_modulate) {
+		modulate = r_fill_state.final_modulate;
+	}
+
+	int old_batch_tex_id = r_fill_state.batch_tex_id;
+	r_fill_state.batch_tex_id = _batch_find_or_create_tex(p_poly->texture, RID(), false, old_batch_tex_id);
+
+	if constexpr (SEND_LIGHT_ANGLES) {
+		bdata.use_light_angles = true;
+	}
+
+	if (old_batch_tex_id != r_fill_state.batch_tex_id) {
+		change_batch = true;
+	}
+
+	if (change_batch) {
+		const BatchTex &batchtex = bdata.batch_textures[r_fill_state.batch_tex_id];
+		batchtex.tex_pixel_size.to(r_fill_state.texpixel_size);
+
+		if (bdata.settings_uv_contract) {
+			r_fill_state.contract_uvs = (batchtex.flags == 0);
+		}
+
+		r_fill_state.curr_batch = _batch_request_new(false);
+		r_fill_state.curr_batch->type = BatcherEnums::BT_POLY;
+		r_fill_state.curr_batch->color.set(modulate);
+		r_fill_state.curr_batch->batch_texture_id = r_fill_state.batch_tex_id;
+		r_fill_state.curr_batch->first_command = p_command;
+		r_fill_state.curr_batch->num_commands = num_verts_to_draw;
+		r_fill_state.curr_batch->first_vert = bdata.total_verts;
+		r_fill_state.curr_batch->item = p_item;
+	} else {
+		r_fill_state.curr_batch->num_commands += num_verts_to_draw;
+	}
+
+	BatchColor vcol = {};
+	int num_colors_specified = MIN((int)poly_data->colors.size(), num_points);
+	BatchColor *precalced_colors = SAFE_ALLOCA_ARRAY(BatchColor, num_points);
+	if (unlikely(!precalced_colors)) {
+		*p_command_start = p_command;
+		return true;
+	}
+
+	if (num_colors_specified > 0) {
+		vcol.set(poly_data->colors[0] * modulate);
+	} else {
+		vcol.set(modulate);
+	}
+
+	for (int n = 0; n < num_colors_specified; n++) {
+		precalced_colors[n].set(poly_data->colors[n] * modulate);
+	}
+
+	for (int n = num_colors_specified; n < num_points; n++) {
+		precalced_colors[n] = vcol;
+	}
+
+	if constexpr (SEND_LIGHT_ANGLES) {
+		float *angles = bdata.light_angles.request(num_verts_to_draw);
+		if (unlikely(!angles)) {
+			*p_command_start = p_command;
+			return true;
+		}
+
+		float angle = 0.0f;
+		const float TWO_PI = Math_PI * 2.0f;
+
+		if (r_fill_state.transform_mode != TM_NONE) {
+			const Transform2D &tr = r_fill_state.transform_combined;
+			Vector2 x_axis(tr.columns[0][0], tr.columns[1][0]);
+			angle = x_axis.angle();
+			if (angle < 0.0f) {
+				angle += TWO_PI;
+			}
+		}
+		angle += 1.0f;
+
+		for (int n = 0; n < num_verts_to_draw; n++) {
+			angles[n] = angle;
+		}
+	}
+
+	const int *indices_ptr = poly_data->indices.ptr();
+	const Vector2 *points_ptr = poly_data->points.ptr();
+	const Vector2 *uvs_ptr = poly_data->uvs.size() > 0 ? poly_data->uvs.ptr() : nullptr;
+
+	for (int n = 0; n < num_verts_to_draw; n++) {
+		int ind = num_inds > 0 ? indices_ptr[n] : n;
+
+		if (unlikely(ind < 0 || ind >= num_points)) {
+			ERR_PRINT("GLES2 Batcher: Polygon index out of bounds!");
+			ind = 0; 
+		}
+
+		Vector2 pos = points_ptr[ind];
+		if (r_fill_state.transform_mode != TM_NONE) {
+			_software_transform_vertex(pos, r_fill_state.transform_combined);
+		}
+		bvs[n].pos.set(pos.x, pos.y);
+
+		if (uvs_ptr && (uint32_t)ind < poly_data->uvs.size()) {
+			bvs[n].uv.set(uvs_ptr[ind].x, uvs_ptr[ind].y);
+		} else {
+			bvs[n].uv.set(0.0f, 0.0f);
+		}
+
+		vertex_colors[n] = precalced_colors[ind];
+
+		if (use_modulate) {
+			vertex_modulates[n] = vertex_modulates[0];
+		}
+		if (use_large_verts) {
+			pBT[n] = pBT[0];
+		}
+	}
+
+	bdata.total_verts += num_verts_to_draw;
+	bdata.total_quads += (num_verts_to_draw / 3);
+
 	return false;
 }
 
