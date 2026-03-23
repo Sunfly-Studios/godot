@@ -1299,10 +1299,16 @@ void RasterizerCanvasGLES2::render_batches(Item::Command *const *p_commands, Ite
 							glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
 						} break;
 
+						case Item::Command::TYPE_TRANSFORM: {
+							Item::CommandTransform *transform = static_cast<Item::CommandTransform *>(command);
+							state.uniforms.extra_matrix = transform->xform;
+							state.canvas_shader->version_set_uniform(CanvasShaderGLES2::EXTRA_MATRIX, state.uniforms.extra_matrix, state.shader_version, state.mode_variant, state.specialization);
+						} break;
+
 						default: {
 							// MULTIMESH, PARTICLES, etc.
+							print_verbose("NOT IMPLEMENTED COMMAND TYPE:");
 							print_verbose(command->type);
-							print_verbose("What did Godot meant by this?");
 						} break;
 					}
 				}

@@ -31,8 +31,8 @@
 #ifdef GLES2_ENABLED
 
 #include "light_storage.h"
-#include "../rasterizer_gles2.h"
-#include "../rasterizer_scene_gles2.h"
+#include "drivers/gles2/rasterizer_gles2.h"
+#include "drivers/gles2/rasterizer_scene_gles2.h"
 #include "core/config/project_settings.h"
 #include "texture_storage.h"
 

@@ -64,8 +64,6 @@ Vector<EGLint> GLManagerANGLE_Windows::_get_platform_context_attribs() const {
 
 	if (use_gles2) {
 		ret.push_back(2);
-		ret.push_back(EGL_CONTEXT_OPENGL_PROFILE_MASK);
-		ret.push_back(EGL_CONTEXT_OPENGL_COMPATIBILITY_PROFILE_BIT);
 	} else {
 		ret.push_back(3);
 	}
