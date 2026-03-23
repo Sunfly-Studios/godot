@@ -30,7 +30,7 @@
 
 #include "gl_manager_macos_legacy.h"
 
-#if defined(MACOS_ENABLED) && defined(GLES3_ENABLED)
+#if defined(MACOS_ENABLED) && (defined(GLES3_ENABLED) || defined(GLES2_ENABLED))
 
 #include <dlfcn.h>
 #include <stdio.h>
@@ -40,10 +40,11 @@
 #pragma clang diagnostic ignored "-Wdeprecated-declarations" // OpenGL is deprecated in macOS 10.14
 
 Error GLManagerLegacy_MacOS::create_context(GLWindow &win) {
+	NSOpenGLPixelFormatAttribute gl_profile = use_gles2 ? NSOpenGLProfileVersionLegacy : NSOpenGLProfileVersion3_2Core;
 	NSOpenGLPixelFormatAttribute attributes[] = {
 		NSOpenGLPFADoubleBuffer,
 		NSOpenGLPFAClosestPolicy,
-		NSOpenGLPFAOpenGLProfile, NSOpenGLProfileVersion3_2Core,
+		NSOpenGLPFAOpenGLProfile, gl_profile,
 		NSOpenGLPFAColorSize, 32,
 		NSOpenGLPFADepthSize, 24,
 		NSOpenGLPFAStencilSize, 8,
@@ -221,4 +222,4 @@ GLManagerLegacy_MacOS::~GLManagerLegacy_MacOS() {
 
 #pragma clang diagnostic pop
 
-#endif // MACOS_ENABLED && GLES3_ENABLED
+#endif // MACOS_ENABLED && (GLES3_ENABLED || GLES2_ENABLED)

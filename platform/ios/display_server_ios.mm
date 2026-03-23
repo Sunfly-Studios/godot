@@ -111,22 +111,37 @@ DisplayServerIOS::DisplayServerIOS(const String &p_rendering_driver, WindowMode 
 		if (rendering_context->initialize() != OK) {
 			memdelete(rendering_context);
 			rendering_context = nullptr;
+			
+			bool fallback_triggered = false;
+			
 #if defined(GLES3_ENABLED)
-// TODO(GLES2): Add another fallback to GLES3 => GLES 2
 			bool fallback_to_opengl3 = GLOBAL_GET("rendering/rendering_device/fallback_to_opengl3");
-			if (fallback_to_opengl3 && rendering_driver != "opengl3") {
+			if (!fallback_triggered && fallback_to_opengl3 && rendering_driver != "opengl3" && rendering_driver != "opengl2") {
 				WARN_PRINT("Your device seem not to support MoltenVK or Metal, switching to OpenGL 3.");
 				rendering_driver = "opengl3";
-                OS::get_singleton()->set_current_rendering_driver_name(rendering_driver, OS::RENDERING_SOURCE_FALLBACK);
 				OS::get_singleton()->set_current_rendering_method("gl_compatibility", OS::RENDERING_SOURCE_FALLBACK);
-			} else
-#endif
-			{
-				ERR_PRINT(vformat("Failed to initialize %s context", rendering_driver));
-				r_error = ERR_UNAVAILABLE;
-				return;
+				OS::get_singleton()->set_current_rendering_driver_name(rendering_driver, OS::RENDERING_SOURCE_FALLBACK);
+				fallback_triggered = true;
+			}
+#endif // GLES3_ENABLED
+			
+#if defined(GLES2_ENABLED)
+			bool fallback_to_opengl2 = GLOBAL_GET("rendering/rendering_device/fallback_to_opengl2");
+			if (!fallback_triggered && fallback_to_opengl2 && rendering_driver != "opengl2") {
+				WARN_PRINT("Your device seem not to support MoltenVK, Metal, or OpenGL 3, switching to OpenGL 2.");
+				rendering_driver = "opengl2";
+				OS::get_singleton()->set_current_rendering_method("gl_legacy", OS::RENDERING_SOURCE_FALLBACK);
+				OS::get_singleton()->set_current_rendering_driver_name(rendering_driver, OS::RENDERING_SOURCE_FALLBACK);
+				fallback_triggered = true;
+			}
+#endif // GLES2_ENABLED
+			
+			if (!fallback_triggered) {
+				r_error = ERR_CANT_CREATE;
+				ERR_FAIL_MSG("Could not initialize " + rendering_driver);
 			}
 		}
+		driver_found = true;
 	}
 
 	if (rendering_context) {

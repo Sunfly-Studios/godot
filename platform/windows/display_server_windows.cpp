@@ -7092,30 +7092,33 @@ DisplayServerWindows::DisplayServerWindows(const String &p_rendering_driver, Win
 	bool rendering_driver_failed = rendering_driver_count != 0 && rendering_context == nullptr;
 
 #ifdef GLES3_ENABLED
-// TODO(GLES2): Add another fallback to GLES3 => GLES 2
-	if (rendering_driver_failed) {
-		bool fallback_to_opengl3 = GLOBAL_GET("rendering/rendering_device/fallback_to_opengl3");
-		if (fallback_to_opengl3) {
-			tested_drivers.set_flag(DRIVER_ID_COMPAT_OPENGL3);
-			WARN_PRINT("Your video card drivers seem not to support Direct3D 12 or Vulkan, switching to OpenGL 3.");
-			rendering_driver = "opengl3";
-			OS::get_singleton()->set_current_rendering_method("gl_compatibility", OS::RENDERING_SOURCE_FALLBACK);
-			OS::get_singleton()->set_current_rendering_driver_name(rendering_driver, OS::RENDERING_SOURCE_FALLBACK);
-			rendering_driver_failed = false;
+	{
+		if (rendering_driver_failed) {
+			bool fallback_to_opengl3 = GLOBAL_GET("rendering/rendering_device/fallback_to_opengl3");
+			if (fallback_to_opengl3) {
+				tested_drivers.set_flag(DRIVER_ID_COMPAT_OPENGL3);
+				WARN_PRINT("Your video card drivers seem not to support Direct3D 12 or Vulkan, switching to OpenGL 3.");
+				rendering_driver = "opengl3";
+				OS::get_singleton()->set_current_rendering_method("gl_compatibility", OS::RENDERING_SOURCE_FALLBACK);
+				OS::get_singleton()->set_current_rendering_driver_name(rendering_driver, OS::RENDERING_SOURCE_FALLBACK);
+				rendering_driver_failed = false;
+			}
 		}
 	}
 #endif
 
 #ifdef GLES2_ENABLED
-	if (rendering_driver_failed) {
-		bool fallback_to_opengl2 = GLOBAL_GET("rendering/rendering_device/fallback_to_opengl2");
-		if (fallback_to_opengl2) {
-			tested_drivers.set_flag(DRIVER_ID_COMPAT_OPENGL2);
-			WARN_PRINT("Your video card drivers seem not to support Direct3D 12, Vulkan, or OpenGL 3, switching to OpenGL 2.");
-			rendering_driver = "opengl2";
-			OS::get_singleton()->set_current_rendering_method("gl_legacy", OS::RENDERING_SOURCE_FALLBACK);
-			OS::get_singleton()->set_current_rendering_driver_name(rendering_driver, OS::RENDERING_SOURCE_FALLBACK);
-			rendering_driver_failed = false;
+	{
+		if (rendering_driver_failed) {
+			bool fallback_to_opengl2 = GLOBAL_GET("rendering/rendering_device/fallback_to_opengl2");
+			if (fallback_to_opengl2) {
+				tested_drivers.set_flag(DRIVER_ID_COMPAT_OPENGL2);
+				WARN_PRINT("Your video card drivers seem not to support Direct3D 12, Vulkan, or OpenGL 3, switching to OpenGL 2.");
+				rendering_driver = "opengl2";
+				OS::get_singleton()->set_current_rendering_method("gl_legacy", OS::RENDERING_SOURCE_FALLBACK);
+				OS::get_singleton()->set_current_rendering_driver_name(rendering_driver, OS::RENDERING_SOURCE_FALLBACK);
+				rendering_driver_failed = false;
+			}
 		}
 	}
 #endif

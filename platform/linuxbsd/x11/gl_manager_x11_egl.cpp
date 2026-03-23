@@ -54,7 +54,12 @@ EGLenum GLManagerEGL_X11::_get_platform_api_enum() const {
 Vector<EGLint> GLManagerEGL_X11::_get_platform_context_attribs() const {
 	Vector<EGLint> ret;
 	ret.push_back(EGL_CONTEXT_CLIENT_VERSION);
-	ret.push_back(3);
+
+	if (use_gles2) {
+		ret.push_back(2);
+	} else {
+		ret.push_back(3);
+	}
 	ret.push_back(EGL_NONE);
 
 	return ret;

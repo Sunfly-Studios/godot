@@ -609,10 +609,15 @@ DisplayServer *DisplayServerAndroid::create_func(const String &p_rendering_drive
 					"Your device seems not to support the required Vulkan version.\n\n"
 					"Please try exporting your game using the 'gl_compatibility' renderer.",
 					"Unable to initialize Vulkan video driver");
+		} else if (p_rendering_driver == "opengl3") {
+			OS::get_singleton()->alert(
+					"Your device seems not to support the required OpenGL ES 3.0 version.\n\n"
+					"Please try exporting your game using the 'gl_legacy' renderer.",
+					"Unable to initialize OpenGL 3 video driver");
 		} else {
 			OS::get_singleton()->alert(
-					"Your device seems not to support the required OpenGL ES 3.0 version.",
-					"Unable to initialize OpenGL video driver");
+					"Your device seems not to support the required OpenGL ES 2.1 version.",
+					"Unable to initialize OpenGL 2 video driver");
 		}
 	}
 	return ds;
@@ -624,37 +629,50 @@ void DisplayServerAndroid::register_android_driver() {
 
 #ifdef VULKAN_ENABLED
 bool DisplayServerAndroid::check_vulkan_global_context(bool p_vulkan_requirements_met) {
-	if (!rendering_context_global_checked) {
-		bool fallback_to_opengl3 = GLOBAL_GET("rendering/rendering_device/fallback_to_opengl3");
-		Error err = ERR_CANT_CREATE;
-		if (p_vulkan_requirements_met) {
-			rendering_context_global = memnew(RenderingContextDriverVulkanAndroid);
-			err = rendering_context_global->initialize();
-		}
+    if (!rendering_context_global_checked) {
+        Error err = ERR_CANT_CREATE;
+        if (p_vulkan_requirements_met) {
+            rendering_context_global = memnew(RenderingContextDriverVulkanAndroid);
+            err = rendering_context_global->initialize();
+        }
 
-		if (err != OK) {
-			if (rendering_context_global != nullptr) {
-				memdelete(rendering_context_global);
-				rendering_context_global = nullptr;
-			}
+        if (err != OK) {
+            if (rendering_context_global != nullptr) {
+                memdelete(rendering_context_global);
+                rendering_context_global = nullptr;
+            }
+
+            bool fallback_triggered = false;
 
 #if defined(GLES3_ENABLED)
-// TODO(GLES2): Add another fallback to GLES3 => GLES 2
-			if (fallback_to_opengl3) {
-				WARN_PRINT("Your device does not seem to support Vulkan, switching to OpenGL 3.");
-				OS::get_singleton()->set_current_rendering_driver_name("opengl3", OS::RENDERING_SOURCE_FALLBACK);
-				OS::get_singleton()->set_current_rendering_method("gl_compatibility", OS::RENDERING_SOURCE_FALLBACK);
-			} else
-#endif
-			{
-				ERR_PRINT("Failed to initialize Vulkan context.");
-			}
-		}
+            bool fallback_to_opengl3 = GLOBAL_GET("rendering/rendering_device/fallback_to_opengl3");
+            if (!fallback_triggered && fallback_to_opengl3) {
+                WARN_PRINT("Your device does not seem to support Vulkan, switching to OpenGL 3.");
+                OS::get_singleton()->set_current_rendering_driver_name("opengl3", OS::RENDERING_SOURCE_FALLBACK);
+                OS::get_singleton()->set_current_rendering_method("gl_compatibility", OS::RENDERING_SOURCE_FALLBACK);
+                fallback_triggered = true;
+            }
+#endif // GLES3_ENABLED
 
-		rendering_context_global_checked = true;
-	}
+#if defined(GLES2_ENABLED)
+            bool fallback_to_opengl2 = GLOBAL_GET("rendering/rendering_device/fallback_to_opengl2");
+            if (!fallback_triggered && fallback_to_opengl2) {
+                WARN_PRINT("Your device does not seem to support Vulkan or OpenGL 3, switching to OpenGL 2.");
+                OS::get_singleton()->set_current_rendering_driver_name("opengl2", OS::RENDERING_SOURCE_FALLBACK);
+                OS::get_singleton()->set_current_rendering_method("gl_legacy", OS::RENDERING_SOURCE_FALLBACK);
+                fallback_triggered = true;
+            }
+#endif // GLES2_ENABLED
 
-	return rendering_context_global != nullptr;
+            if (!fallback_triggered) {
+                ERR_PRINT("Failed to initialize Vulkan context.");
+            }
+        }
+
+        rendering_context_global_checked = true;
+    }
+
+    return rendering_context_global != nullptr;
 }
 
 void DisplayServerAndroid::free_vulkan_global_context() {

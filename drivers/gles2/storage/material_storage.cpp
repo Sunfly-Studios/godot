@@ -1039,7 +1039,11 @@ void MaterialStorage::material_update_dependency(RID p_material, DependencyTrack
 
 }
 
-LocalVector<ShaderGLES2::TextureUniformData> get_texture_uniform_data(const Vector<ShaderCompiler::GeneratedCode::Texture> &texture_uniforms) {
+// TODO(GLES2): This is forced inline
+// because (at least) GCC in its infinite
+// wisdom combines both materials from GLES3
+// and GLES2 and gets confused which is which.
+_FORCE_INLINE_ LocalVector<ShaderGLES2::TextureUniformData> get_texture_uniform_data(const Vector<ShaderCompiler::GeneratedCode::Texture> &texture_uniforms) {
 	return LocalVector<ShaderGLES2::TextureUniformData>();
 }
 

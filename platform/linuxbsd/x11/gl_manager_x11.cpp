@@ -30,7 +30,7 @@
 
 #include "gl_manager_x11.h"
 
-#if defined(X11_ENABLED) && defined(GLES3_ENABLED)
+#if defined(X11_ENABLED) && (defined(GLES3_ENABLED) || defined(GLES2_ENABLED))
 
 #include "thirdparty/glad/glad/glx.h"
 
@@ -176,6 +176,16 @@ Error GLManager_X11::_create_context(GLDisplay &gl_display) {
 				GLX_CONTEXT_MINOR_VERSION_ARB, 3,
 				GLX_CONTEXT_PROFILE_MASK_ARB, GLX_CONTEXT_CORE_PROFILE_BIT_ARB,
 				GLX_CONTEXT_FLAGS_ARB, GLX_CONTEXT_FORWARD_COMPATIBLE_BIT_ARB /*|GLX_CONTEXT_DEBUG_BIT_ARB*/,
+				None
+			};
+
+			gl_display.context->glx_context = glXCreateContextAttribsARB(x11_display, fbconfig, nullptr, true, context_attribs);
+			ERR_FAIL_COND_V(ctxErrorOccurred || !gl_display.context->glx_context, ERR_UNCONFIGURED);
+		} break;
+		case GLES_2_1_COMPATIBLE: {
+			static int context_attribs[] = {
+				GLX_CONTEXT_MAJOR_VERSION_ARB, 2,
+				GLX_CONTEXT_MINOR_VERSION_ARB, 1,
 				None
 			};
 
@@ -380,7 +390,6 @@ void *GLManager_X11::get_glx_context(DisplayServer::WindowID p_window_id) {
 
 GLManager_X11::GLManager_X11(const Vector2i &p_size, ContextType p_context_type) {
 	context_type = p_context_type;
-
 	double_buffer = false;
 	direct_render = false;
 	glx_minor = glx_major = 0;
@@ -392,4 +401,4 @@ GLManager_X11::~GLManager_X11() {
 	release_current();
 }
 
-#endif // X11_ENABLED && GLES3_ENABLED
+#endif // X11_ENABLED && (GLES3_ENABLED || GLES2_ENABLED)

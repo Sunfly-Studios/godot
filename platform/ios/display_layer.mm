@@ -89,15 +89,21 @@
 			kEAGLDrawablePropertyColorFormat,
 			nil];
 
-	// Create GL ES 3 context
+	// Create GL ES 3 or GL ES 2 context
 	if (GLOBAL_GET("rendering/renderer/rendering_method") == "gl_compatibility") {
 		context = [[EAGLContext alloc] initWithAPI:kEAGLRenderingAPIOpenGLES3];
 		if (!context) {
 			NSLog(@"Godot iOS: Failed to create OpenGL ES 3.0 context!");
 			return;
 		}
+	} else if (GLOBAL_GET("rendering/renderer/rendering_method") == "gl_legacy") {
+		context = [[EAGLContext alloc] initWithAPI:kEAGLRenderingAPIOpenGLES2];
+		if (!context) {
+			NSLog(@"Godot iOS: Failed to create OpenGL ES 2.1 context!");
+			return;
+		}
 	} else {
-		// If we are not using the GL Compatibility renderer,
+		// If we are not using the GL Compatibility or GL Legacy renderer,
 		// don't go any further.
 		return;
 	}
@@ -188,7 +194,17 @@
 		return NO;
 	}
 
-	GLES3::TextureStorage::system_fbo = viewFramebuffer;
+#ifdef GLES3_ENABLED
+    if (rendering_method == "gl_compatibility") {
+        GLES3::TextureStorage::system_fbo = viewFramebuffer;
+    }
+#endif
+
+#ifdef GLES2_ENABLED
+    if (rendering_method == "gl_legacy") {
+        GLES2::TextureStorage::system_fbo = viewFramebuffer;
+    }
+#endif
 
 	return YES;
 }
@@ -211,7 +227,13 @@
 		depthRenderbuffer = 0;
 	}
 	
-	GLES3::TextureStorage::system_fbo = 0;
+#ifdef GLES3_ENABLED
+    GLES3::TextureStorage::system_fbo = 0;
+#endif
+
+#ifdef GLES2_ENABLED
+    GLES2::TextureStorage::system_fbo = 0;
+#endif
 }
 
 @end

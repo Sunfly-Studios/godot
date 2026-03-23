@@ -4001,62 +4001,122 @@ DisplayServerMacOS::DisplayServerMacOS(const String &p_rendering_driver, WindowM
 		if (rendering_context->initialize() != OK) {
 			memdelete(rendering_context);
 			rendering_context = nullptr;
+			
+			bool fallback_triggered = false;
+			
 #if defined(GLES3_ENABLED)
-// TODO(GLES2): Add another fallback to GLES3 => GLES 2
 			bool fallback_to_opengl3 = GLOBAL_GET("rendering/rendering_device/fallback_to_opengl3");
-			if (fallback_to_opengl3 && rendering_driver != "opengl3") {
+			if (!fallback_triggered && fallback_to_opengl3 && rendering_driver != "opengl3" && rendering_driver != "opengl2") {
 				WARN_PRINT("Your device seem not to support MoltenVK or Metal, switching to OpenGL 3.");
 				rendering_driver = "opengl3";
 				OS::get_singleton()->set_current_rendering_method("gl_compatibility", OS::RENDERING_SOURCE_FALLBACK);
 				OS::get_singleton()->set_current_rendering_driver_name(rendering_driver, OS::RENDERING_SOURCE_FALLBACK);
-			} else
-#endif
-			{
+				fallback_triggered = true;
+			}
+#endif // GLES3_ENABLED
+			
+#if defined(GLES2_ENABLED)
+			bool fallback_to_opengl2 = GLOBAL_GET("rendering/rendering_device/fallback_to_opengl2");
+			if (!fallback_triggered && fallback_to_opengl2 && rendering_driver != "opengl2") {
+				WARN_PRINT("Your device seem not to support MoltenVK, Metal, or OpenGL 3, switching to OpenGL 2.");
+				rendering_driver = "opengl2";
+				OS::get_singleton()->set_current_rendering_method("gl_legacy", OS::RENDERING_SOURCE_FALLBACK);
+				OS::get_singleton()->set_current_rendering_driver_name(rendering_driver, OS::RENDERING_SOURCE_FALLBACK);
+				fallback_triggered = true;
+			}
+#endif // GLES2_ENABLED
+			
+			if (!fallback_triggered) {
 				r_error = ERR_CANT_CREATE;
 				ERR_FAIL_MSG("Could not initialize " + rendering_driver);
 			}
 		}
+		driver_found = true;
 	}
 #endif
 
 #if defined(GLES3_ENABLED)
-// TODO(GLES2): Add initialisation for GLES2 after plumbing
-	if (rendering_driver == "opengl3" && OS::get_singleton()->get_processor_name().contains("Virtual")) {
-		WARN_PRINT("Virtual Machine detected, switching to ANGLE.");
-		rendering_driver = "opengl3_angle";
-	}
-	if (rendering_driver == "opengl3_angle") {
-		gl_manager_angle = memnew(GLManagerANGLE_MacOS);
-		if (gl_manager_angle->initialize() != OK || gl_manager_angle->open_display(nullptr) != OK) {
-			memdelete(gl_manager_angle);
-			gl_manager_angle = nullptr;
-			if (OS::get_singleton()->get_processor_name().contains("Virtual")) {
-				r_error = ERR_UNAVAILABLE;
-				ERR_FAIL_MSG("Could not initialize ANGLE OpenGL.");
+	{
+		if (rendering_driver == "opengl3" && OS::get_singleton()->get_processor_name().contains("Virtual")) {
+			WARN_PRINT("Virtual Machine detected, switching to ANGLE.");
+			rendering_driver = "opengl3_angle";
+		}
+		if (rendering_driver == "opengl3_angle") {
+			gl_manager_angle = memnew(GLManagerANGLE_MacOS(false));
+			if (gl_manager_angle->initialize() != OK || gl_manager_angle->open_display(nullptr) != OK) {
+				memdelete(gl_manager_angle);
+				gl_manager_angle = nullptr;
+				if (OS::get_singleton()->get_processor_name().contains("Virtual")) {
+					r_error = ERR_UNAVAILABLE;
+					ERR_FAIL_MSG("Could not initialize ANGLE OpenGL.");
+				}
+				bool fallback = GLOBAL_GET("rendering/gl_compatibility/fallback_to_native");
+				if (fallback) {
+	#ifdef EGL_STATIC
+					WARN_PRINT("Your video card drivers seem not to support GLES3 / ANGLE, switching to native OpenGL.");
+	#else
+					WARN_PRINT("Your video card drivers seem not to support GLES3 / ANGLE or ANGLE dynamic libraries (libEGL.dylib and libGLESv2.dylib) are missing, switching to native OpenGL.");
+	#endif
+					rendering_driver = "opengl3";
+					OS::get_singleton()->set_current_rendering_driver_name(rendering_driver, OS::RENDERING_SOURCE_FALLBACK);
+				} else {
+					r_error = ERR_UNAVAILABLE;
+					ERR_FAIL_MSG("Could not initialize ANGLE OpenGL.");
+				}
 			}
-			bool fallback = GLOBAL_GET("rendering/gl_compatibility/fallback_to_native");
-			if (fallback) {
-#ifdef EGL_STATIC
-				WARN_PRINT("Your video card drivers seem not to support GLES3 / ANGLE, switching to native OpenGL.");
-#else
-				WARN_PRINT("Your video card drivers seem not to support GLES3 / ANGLE or ANGLE dynamic libraries (libEGL.dylib and libGLESv2.dylib) are missing, switching to native OpenGL.");
-#endif
-				rendering_driver = "opengl3";
-				OS::get_singleton()->set_current_rendering_driver_name(rendering_driver, OS::RENDERING_SOURCE_FALLBACK);
-			} else {
+		}
+
+		if (rendering_driver == "opengl3") {
+			gl_manager_legacy = memnew(GLManagerLegacy_MacOS(false));
+			if (gl_manager_legacy->initialize() != OK) {
+				memdelete(gl_manager_legacy);
+				gl_manager_legacy = nullptr;
 				r_error = ERR_UNAVAILABLE;
-				ERR_FAIL_MSG("Could not initialize ANGLE OpenGL.");
+				ERR_FAIL_MSG("Could not initialize native OpenGL.");
 			}
 		}
 	}
+#endif
 
-	if (rendering_driver == "opengl3") {
-		gl_manager_legacy = memnew(GLManagerLegacy_MacOS);
-		if (gl_manager_legacy->initialize() != OK) {
-			memdelete(gl_manager_legacy);
-			gl_manager_legacy = nullptr;
-			r_error = ERR_UNAVAILABLE;
-			ERR_FAIL_MSG("Could not initialize native OpenGL.");
+#if defined(GLES2_ENABLED)
+	{
+		if (rendering_driver == "opengl2" && OS::get_singleton()->get_processor_name().contains("Virtual")) {
+			WARN_PRINT("Virtual Machine detected, switching to ANGLE.");
+			rendering_driver = "opengl2_angle";
+		}
+		if (rendering_driver == "opengl2_angle") {
+			gl_manager_angle = memnew(GLManagerANGLE_MacOS(true));
+			if (gl_manager_angle->initialize() != OK || gl_manager_angle->open_display(nullptr) != OK) {
+				memdelete(gl_manager_angle);
+				gl_manager_angle = nullptr;
+				if (OS::get_singleton()->get_processor_name().contains("Virtual")) {
+					r_error = ERR_UNAVAILABLE;
+					ERR_FAIL_MSG("Could not initialize ANGLE OpenGL.");
+				}
+				bool fallback = GLOBAL_GET("rendering/gl_legacy/fallback_to_native");
+				if (fallback) {
+	#ifdef EGL_STATIC
+					WARN_PRINT("Your video card drivers seem not to support GLES2 / ANGLE, switching to native OpenGL.");
+	#else
+					WARN_PRINT("Your video card drivers seem not to support GLES2 / ANGLE or ANGLE dynamic libraries (libEGL.dylib and libGLESv2.dylib) are missing, switching to native OpenGL.");
+	#endif
+					rendering_driver = "opengl2";
+					OS::get_singleton()->set_current_rendering_driver_name(rendering_driver, OS::RENDERING_SOURCE_FALLBACK);
+				} else {
+					r_error = ERR_UNAVAILABLE;
+					ERR_FAIL_MSG("Could not initialize ANGLE OpenGL.");
+				}
+			}
+		}
+
+		if (rendering_driver == "opengl2") {
+			gl_manager_legacy = memnew(GLManagerLegacy_MacOS(true));
+			if (gl_manager_legacy->initialize() != OK) {
+				memdelete(gl_manager_legacy);
+				gl_manager_legacy = nullptr;
+				r_error = ERR_UNAVAILABLE;
+				ERR_FAIL_MSG("Could not initialize native OpenGL.");
+			}
 		}
 	}
 #endif
