@@ -103,8 +103,6 @@ Error GLManager_X11::_create_context(GLDisplay &gl_display) {
 
 	GLXCREATECONTEXTATTRIBSARBPROC glXCreateContextAttribsARB = (GLXCREATECONTEXTATTRIBSARBPROC)glXGetProcAddress((const GLubyte *)"glXCreateContextAttribsARB");
 
-	ERR_FAIL_NULL_V(glXCreateContextAttribsARB, ERR_UNCONFIGURED);
-
 	static int visual_attribs[] = {
 		GLX_RENDER_TYPE, GLX_RGBA_BIT,
 		GLX_DRAWABLE_TYPE, GLX_WINDOW_BIT,
@@ -169,30 +167,47 @@ Error GLManager_X11::_create_context(GLDisplay &gl_display) {
 
 	int (*oldHandler)(Display *, XErrorEvent *) = XSetErrorHandler(&ctxErrorHandler);
 
-	switch (context_type) {
-		case GLES_3_0_COMPATIBLE: {
-			static int context_attribs[] = {
-				GLX_CONTEXT_MAJOR_VERSION_ARB, 3,
-				GLX_CONTEXT_MINOR_VERSION_ARB, 3,
-				GLX_CONTEXT_PROFILE_MASK_ARB, GLX_CONTEXT_CORE_PROFILE_BIT_ARB,
-				GLX_CONTEXT_FLAGS_ARB, GLX_CONTEXT_FORWARD_COMPATIBLE_BIT_ARB /*|GLX_CONTEXT_DEBUG_BIT_ARB*/,
-				None
-			};
+	if (glXCreateContextAttribsARB) {
+		// Request a specific profile
+		switch (context_type) {
+			case GLES_3_0_COMPATIBLE: {
+				static int context_attribs[] = {
+					GLX_CONTEXT_MAJOR_VERSION_ARB, 3,
+					GLX_CONTEXT_MINOR_VERSION_ARB, 3,
+					GLX_CONTEXT_PROFILE_MASK_ARB, GLX_CONTEXT_CORE_PROFILE_BIT_ARB,
+					GLX_CONTEXT_FLAGS_ARB, GLX_CONTEXT_FORWARD_COMPATIBLE_BIT_ARB /*|GLX_CONTEXT_DEBUG_BIT_ARB*/,
+					None
+				};
 
-			gl_display.context->glx_context = glXCreateContextAttribsARB(x11_display, fbconfig, nullptr, true, context_attribs);
-			ERR_FAIL_COND_V(ctxErrorOccurred || !gl_display.context->glx_context, ERR_UNCONFIGURED);
-		} break;
-		case GLES_2_1_COMPATIBLE: {
-			static int context_attribs[] = {
-				GLX_CONTEXT_MAJOR_VERSION_ARB, 2,
-				GLX_CONTEXT_MINOR_VERSION_ARB, 1,
-				None
-			};
+				gl_display.context->glx_context = glXCreateContextAttribsARB(x11_display, fbconfig, nullptr, True, context_attribs);
+			} break;
+			case GLES_2_1_COMPATIBLE: {
+				static int context_attribs[] = {
+					GLX_CONTEXT_MAJOR_VERSION_ARB, 2,
+					GLX_CONTEXT_MINOR_VERSION_ARB, 1,
+					None
+				};
 
-			gl_display.context->glx_context = glXCreateContextAttribsARB(x11_display, fbconfig, nullptr, true, context_attribs);
-			ERR_FAIL_COND_V(ctxErrorOccurred || !gl_display.context->glx_context, ERR_UNCONFIGURED);
-		} break;
+				gl_display.context->glx_context = glXCreateContextAttribsARB(x11_display, fbconfig, nullptr, True, context_attribs);
+			} break;
+		}
+	} else {
+		// Legacy approach: Give us whatever the driver has
+		if (context_type == GLES_3_0_COMPATIBLE) {
+			WARN_PRINT("glXCreateContextAttribsARB not supported. Falling back to legacy context creation, which may lack OpenGL 3.3 Core features.");
+		} else {
+			WARN_PRINT("glXCreateContextAttribsARB not supported. Creating legacy OpenGL context.");
+		}
+		
+		// glXCreateNewContext is GLX 1.3 API and is guaranteed to exist
+		// (hopefully, we still catch it below if it somehow doesn't).
+		gl_display.context->glx_context = glXCreateNewContext(x11_display, fbconfig, GLX_RGBA_TYPE, nullptr, True);
 	}
+
+	ERR_FAIL_COND_V(ctxErrorOccurred || !gl_display.context->glx_context, ERR_UNCONFIGURED);
+
+	XSync(x11_display, False);
+	XSetErrorHandler(oldHandler);
 
 	XSync(x11_display, False);
 	XSetErrorHandler(oldHandler);
