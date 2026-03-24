@@ -287,6 +287,29 @@ void ShaderGLES2::_compile_specialization(Version::Specialization &spec, uint32_
 
 		spec.vert_id = glCreateShader(GL_VERTEX_SHADER);
 		String builder_string = builder.as_string();
+		if (builder_string.contains("#extension")) {
+			// This path is for even stricter GPUs
+			// (like MALI-400) that demand that
+			// extension directives must occur before any non-preprocessor tokens.
+			Vector<String> lines = builder_string.split("\n");
+			String extensions_string;
+			String final_string;
+
+			for (int j = 0; j < lines.size(); j++) {
+				String line_stripped = lines[j].strip_edges();
+				if (line_stripped.begins_with("#extension")) {
+					extensions_string += lines[j] + "\n";
+				} else {
+					final_string += lines[j] + "\n";
+				}
+			}
+
+			if (!extensions_string.is_empty()) {
+				final_string = final_string.replace("#version 100\n", "#version 100\n" + extensions_string);
+				final_string = final_string.replace("#version 120\n", "#version 120\n" + extensions_string);
+				builder_string = final_string;
+			}
+		}
 		CharString cs = builder_string.utf8();
 		const char *cstr = cs.ptr();
 		glShaderSource(spec.vert_id, 1, &cstr, nullptr);
@@ -329,6 +352,26 @@ void ShaderGLES2::_compile_specialization(Version::Specialization &spec, uint32_
 
 		spec.frag_id = glCreateShader(GL_FRAGMENT_SHADER);
 		String builder_string = builder.as_string();
+		if (builder_string.contains("#extension")) {
+			Vector<String> lines = builder_string.split("\n");
+			String extensions_string;
+			String final_string;
+
+			for (int j = 0; j < lines.size(); j++) {
+				String line_stripped = lines[j].strip_edges();
+				if (line_stripped.begins_with("#extension")) {
+					extensions_string += lines[j] + "\n";
+				} else {
+					final_string += lines[j] + "\n";
+				}
+			}
+
+			if (!extensions_string.is_empty()) {
+				final_string = final_string.replace("#version 100\n", "#version 100\n" + extensions_string);
+				final_string = final_string.replace("#version 120\n", "#version 120\n" + extensions_string);
+				builder_string = final_string;
+			}
+		}
 		CharString cs = builder_string.utf8();
 		const char *cstr = cs.ptr();
 		glShaderSource(spec.frag_id, 1, &cstr, nullptr);
