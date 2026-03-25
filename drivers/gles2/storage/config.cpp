@@ -80,6 +80,8 @@ Config::Config() {
 	astc_hdr_supported = extensions.has("GL_KHR_texture_compression_astc_hdr");
 	astc_layered_supported = extensions.has("GL_KHR_texture_compression_astc_sliced_3d");
 	rgtc_supported = extensions.has("GL_EXT_texture_compression_rgtc") || extensions.has("GL_ARB_texture_compression_rgtc") || extensions.has("EXT_texture_compression_rgtc");
+	support_instancing = extensions.has("GL_EXT_draw_instanced") || extensions.has("GL_ANGLE_instanced_arrays") || extensions.has("GL_ARB_draw_instanced");
+	support_frag_depth = extensions.has("GL_EXT_frag_depth");
 
 	if (RasterizerGLES2::is_gles_over_gl()) {
 		float_texture_supported = true;

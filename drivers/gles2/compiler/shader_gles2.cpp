@@ -155,6 +155,14 @@ void ShaderGLES2::_build_variant_code(StringBuilder &builder, uint32_t p_variant
 		builder.append("#version 100\n");
 	}
 
+	// Hardware extensions
+	if (GLES2::Config::get_singleton()->support_instancing) {
+		builder.append("#extension GL_EXT_draw_instanced : enable\n");
+	}
+	if (p_stage_type == STAGE_TYPE_FRAGMENT && GLES2::Config::get_singleton()->support_frag_depth) {
+		builder.append("#extension GL_EXT_frag_depth : enable\n");
+	}
+
 	for (int i = 0; i < specialization_count; i++) {
 		if (p_specialization & (uint64_t(1) << uint64_t(i))) {
 			builder.append(String("#define ") + specializations[i].name + "\n");
@@ -170,8 +178,25 @@ void ShaderGLES2::_build_variant_code(StringBuilder &builder, uint32_t p_variant
 	}
 
 	builder.append("\n"); // make sure defines begin at newline
+
+	// Polyfills
+	if (GLES2::Config::get_singleton()->support_instancing) {
+		builder.append("#define gl_InstanceID gl_InstanceIDEXT\n");
+	}
+	if (p_stage_type == STAGE_TYPE_FRAGMENT && GLES2::Config::get_singleton()->support_frag_depth) {
+		builder.append("#define gl_FragDepth gl_FragDepthEXT\n");
+	}
+
+	// GLES2 Texture Polyfills
+	builder.append("#define texture texture2D\n");
+	builder.append("#define textureProj texture2DProj\n");
+	builder.append("#define textureLod texture2DLodEXT\n");
+	builder.append("#define textureProjLod texture2DProjLodEXT\n");
+
 	builder.append(general_defines.get_data());
-	builder.append(variant_defines[p_variant]);
+	if (variant_defines != nullptr) {
+		builder.append(variant_defines[p_variant]);
+	}
 	builder.append("\n");
 
 	for (int j = 0; j < p_version->custom_defines.size(); j++) {
@@ -331,7 +356,9 @@ void ShaderGLES2::_compile_specialization(Version::Specialization &spec, uint32_
 				}
 				char *ilogmem = (char *)Memory::alloc_static(iloglen + 1);
 				memset(ilogmem, 0, iloglen + 1);
-				glGetProgramInfoLog(spec.id, iloglen, &iloglen, ilogmem);
+
+				GLsizei returned_length = 0;
+				glGetShaderInfoLog(spec.vert_id, iloglen, &returned_length, ilogmem);
 
 				String err_string = name + ": Vertex shader compilation failed:\n" + ilogmem;
 				_display_error_with_code(err_string, builder_string);
@@ -393,7 +420,9 @@ void ShaderGLES2::_compile_specialization(Version::Specialization &spec, uint32_
 				}
 				char *ilogmem = (char *)Memory::alloc_static(iloglen + 1);
 				memset(ilogmem, 0, iloglen + 1);
-				glGetShaderInfoLog(spec.frag_id, iloglen, &iloglen, ilogmem);
+
+				GLsizei returned_length = 0;
+				glGetShaderInfoLog(spec.frag_id, iloglen, &returned_length, ilogmem);
 
 				String err_string = name + ": Fragment shader compilation failed:\n" + ilogmem;
 				_display_error_with_code(err_string, builder_string);
@@ -442,7 +471,9 @@ void ShaderGLES2::_compile_specialization(Version::Specialization &spec, uint32_
 		}
 		char *ilogmem = (char *)Memory::alloc_static(iloglen + 1);
 		memset(ilogmem, 0, iloglen + 1);
-		glGetProgramInfoLog(spec.id, iloglen, &iloglen, ilogmem);
+
+		GLsizei returned_length = 0;
+		glGetShaderInfoLog(spec.id, iloglen, &returned_length, ilogmem);
 
 		String err_string = name + ": Program linking failed:\n" + ilogmem;
 		_display_error_with_code(err_string, String());

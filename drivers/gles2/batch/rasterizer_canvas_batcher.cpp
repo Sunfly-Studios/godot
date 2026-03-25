@@ -882,8 +882,11 @@ void RasterizerCanvasBatcher::_translate_batches_to_larger_FVF(uint32_t p_sequen
 
 	for (int n = 0; n < bdata.batches.size(); n++) {
 		const Batch &source_batch = bdata.batches[n];
-		const BatchTex &btex = bdata.batch_textures[source_batch.batch_texture_id];
-		bool source_batch_uses_light_angles = btex.RID_normal != RID();
+		bool source_batch_uses_light_angles = false;
+		if (source_batch.type != BatcherEnums::BT_DEFAULT && source_batch.type != BatcherEnums::BT_DUMMY) {
+			const BatchTex &btex = bdata.batch_textures[source_batch.batch_texture_id];
+			source_batch_uses_light_angles = btex.RID_normal.is_valid();
+		}
 		bool needs_new_batch = true;
 
 		// Calculate actual vertices dynamically based on batch type
@@ -1327,14 +1330,14 @@ bool RasterizerCanvasBatcher::_prefill_polygon(RendererCanvasRender::Item::Comma
 	const RasterizerCanvasGLES2::PolyData *poly_data = get_this()->polygon_cache.getptr(p_poly->polygon.polygon_id);
 
 	if (unlikely(!poly_data)) {
-		return false; // Defensive: Invalid or freed polygon ID
+		return false; // Invalid or freed polygon ID
 	}
 
 	int num_inds = poly_data->indices.size();
 	int num_points = poly_data->points.size();
 
 	if (unlikely(num_points == 0)) {
-		return false; // Defensive: Nothing to draw
+		return false; // Nothing to draw
 	}
 
 	int num_verts_to_draw = num_inds > 0 ? num_inds : num_points;

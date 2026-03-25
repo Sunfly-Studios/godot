@@ -110,6 +110,9 @@ public:
 	// ANGLE shader workaround.
 	bool polyfill_half2float = true;
 
+	bool support_instancing = false;
+	bool support_frag_depth = false;
+
 #ifdef ANDROID_ENABLED
 	PFNGLFRAMEBUFFERTEXTUREMULTIVIEWOVRPROC eglFramebufferTextureMultiviewOVR = nullptr;
 	PFNGLTEXSTORAGE3DMULTISAMPLEPROC eglTexStorage3DMultisample = nullptr;

@@ -5990,6 +5990,13 @@ ShaderLanguage::Node *ShaderLanguage::_parse_expression(BlockNode *p_block, cons
 				if (is_token_precision(tk.type)) {
 					precision = get_token_precision(tk.type);
 					tk = _get_token();
+#ifdef DEBUG_ENABLED
+
+					if (is_gles2_renderer && check_warnings && HAS_WARNING(ShaderWarning::HIGHP_IN_GLES2_FLAG) && precision == PRECISION_HIGHP) {
+						_add_line_warning(ShaderWarning::HIGHP_IN_GLES2);
+					}
+#endif // DEBUG_ENABLED
+
 				}
 
 				datatype = get_token_datatype(tk.type);
@@ -7968,6 +7975,10 @@ Error ShaderLanguage::_parse_block(BlockNode *p_block, const FunctionInfo &p_fun
 				if (keyword_completion_context & precision_flag) {
 					keyword_completion_context ^= precision_flag;
 				}
+
+				if (is_gles2_renderer && check_warnings && HAS_WARNING(ShaderWarning::HIGHP_IN_GLES2_FLAG) && precision == PRECISION_HIGHP) {
+					_add_line_warning(ShaderWarning::HIGHP_IN_GLES2);
+				}
 #endif // DEBUG_ENABLED
 			}
 
@@ -9282,6 +9293,9 @@ Error ShaderLanguage::_parse_shader(const HashMap<StringName, FunctionInfo> &p_f
 						precision = get_token_precision(tk.type);
 						tk = _get_token();
 #ifdef DEBUG_ENABLED
+						if (is_gles2_renderer && check_warnings && HAS_WARNING(ShaderWarning::HIGHP_IN_GLES2_FLAG) && precision == PRECISION_HIGHP) {
+							_add_line_warning(ShaderWarning::HIGHP_IN_GLES2);
+						}
 						keyword_completion_context ^= CF_PRECISION_MODIFIER;
 #endif // DEBUG_ENABLED
 					}
@@ -9539,6 +9553,10 @@ Error ShaderLanguage::_parse_shader(const HashMap<StringName, FunctionInfo> &p_f
 						if (is_token_datatype(next.type)) {
 							keyword_completion_context = CF_UNSPECIFIED;
 						}
+					}
+
+					if (is_gles2_renderer && check_warnings && HAS_WARNING(ShaderWarning::HIGHP_IN_GLES2_FLAG) && precision == PRECISION_HIGHP) {
+						_add_line_warning(ShaderWarning::HIGHP_IN_GLES2);
 					}
 #endif // DEBUG_ENABLED
 				}
@@ -10209,6 +10227,12 @@ Error ShaderLanguage::_parse_shader(const HashMap<StringName, FunctionInfo> &p_f
 				if (is_token_precision(tk.type)) {
 					precision = get_token_precision(tk.type);
 					tk = _get_token();
+#ifdef DEBUG_ENABLED
+					if (is_gles2_renderer && check_warnings && HAS_WARNING(ShaderWarning::HIGHP_IN_GLES2_FLAG) && precision == PRECISION_HIGHP) {
+						_add_line_warning(ShaderWarning::HIGHP_IN_GLES2);
+					}
+#endif // DEBUG_ENABLED
+
 				}
 
 				if (shader->structs.has(tk.text)) {
@@ -10749,6 +10773,10 @@ Error ShaderLanguage::_parse_shader(const HashMap<StringName, FunctionInfo> &p_f
 							if (is_token_datatype(next.type)) {
 								keyword_completion_context = CF_UNSPECIFIED;
 							}
+						}
+
+						if (is_gles2_renderer && check_warnings && HAS_WARNING(ShaderWarning::HIGHP_IN_GLES2_FLAG) && precision == PRECISION_HIGHP) {
+							_add_line_warning(ShaderWarning::HIGHP_IN_GLES2);
 						}
 #endif // DEBUG_ENABLED
 					}
@@ -11881,6 +11909,15 @@ ShaderLanguage::ShaderNode *ShaderLanguage::get_shader() {
 ShaderLanguage::ShaderLanguage() {
 	nodes = nullptr;
 	completion_class = TAG_GLOBAL;
+
+	// In GLES2, `highp` is generally considered
+	// unsafe. Some drivers downgrade it to lowp,
+	// others will crash because they simply don't
+	// support it.
+	// But because we don't want to provide false
+	// positive for other drivers, we must check it here
+	// only for the this driver
+	is_gles2_renderer = OS::get_singleton()->get_current_rendering_method() == "gl_legacy";
 
 	if (instance_counter.get() == 0) {
 		int idx = 0;

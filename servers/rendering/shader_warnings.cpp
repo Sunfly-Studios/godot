@@ -67,6 +67,8 @@ String ShaderWarning::get_message() const {
 			return vformat(RTR("The total size of the %s for this shader on this device has been exceeded (%d/%d). The shader may not work correctly."), subject, (int)extra_args[0], (int)extra_args[1]);
 		case MAGIC_POSITION_WRITE:
 			return vformat(RTR("You are attempting to assign the VERTEX position in model space to the vertex POSITION in clip space. The definition of clip space changed in version 4.3, so if this code was written prior to 4.3, it will not continue to work. Consider specifying the clip space z-component directly i.e. use `vec4(VERTEX.xy, 1.0, 1.0)`."));
+		case HIGHP_IN_GLES2:
+			return vformat(RTR("`highp` is generally unstable across GPU drivers. If possible, consider only using `lowp` or `mediump`."));
 		default:
 			break;
 	}
@@ -95,6 +97,7 @@ String ShaderWarning::get_name_from_code(Code p_code) {
 		"FORMATTING_ERROR",
 		"DEVICE_LIMIT_EXCEEDED",
 		"MAGIC_POSITION_WRITE",
+		"HIGHP_IN_GLES2",
 	};
 
 	static_assert((sizeof(names) / sizeof(*names)) == WARNING_MAX, "Amount of warning types don't match the amount of warning names.");
@@ -126,6 +129,7 @@ static void init_code_to_flags_map() {
 	code_to_flags_map->insert(ShaderWarning::FORMATTING_ERROR, ShaderWarning::FORMATTING_ERROR_FLAG);
 	code_to_flags_map->insert(ShaderWarning::DEVICE_LIMIT_EXCEEDED, ShaderWarning::DEVICE_LIMIT_EXCEEDED_FLAG);
 	code_to_flags_map->insert(ShaderWarning::MAGIC_POSITION_WRITE, ShaderWarning::MAGIC_POSITION_WRITE_FLAG);
+	code_to_flags_map->insert(ShaderWarning::HIGHP_IN_GLES2, ShaderWarning::HIGHP_IN_GLES2_FLAG);
 }
 
 ShaderWarning::CodeFlags ShaderWarning::get_flags_from_codemap(const HashMap<Code, bool> &p_map) {

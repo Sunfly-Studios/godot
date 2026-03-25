@@ -650,6 +650,7 @@ void RasterizerCanvasGLES2::canvas_render_items_implementation(Item *p_item_list
 	}
 
 	bool reclip = false;
+	bool time_used = false;
 
 	if (bdata.settings_use_batching) {
 		// Render using the batched result
@@ -659,7 +660,7 @@ void RasterizerCanvasGLES2::canvas_render_items_implementation(Item *p_item_list
 			Item *first_item = bdata.item_refs[joined_item.first_item_ref].item;
 
 			// Make sure we set current clip for scissor testing.
-			if (ris.current_clip != first_item->final_clip_owner) {
+			if (ris.current_clip != first_item->final_clip_owner || reclip) {
 				ris.current_clip = first_item->final_clip_owner;
 				if (ris.current_clip) {
 					glEnable(GL_SCISSOR_TEST);
@@ -680,6 +681,10 @@ void RasterizerCanvasGLES2::canvas_render_items_implementation(Item *p_item_list
 				GLES2::Material *material = GLES2::MaterialStorage::get_singleton()->get_material(first_item->material);
 				if (material && material->data) {
 					mat_data = static_cast<GLES2::CanvasMaterialData *>(material->data);
+
+					if (mat_data->shader_data && mat_data->shader_data->uses_time) {
+						time_used = true;
+					}
 				}
 			}
 
@@ -690,7 +695,7 @@ void RasterizerCanvasGLES2::canvas_render_items_implementation(Item *p_item_list
 		// Legacy / Immediate render fallback
 		Item *ci = p_item_list;
 		while (ci) {
-			if (ris.current_clip != ci->final_clip_owner) {
+			if (ris.current_clip != ci->final_clip_owner || reclip) {
 				ris.current_clip = ci->final_clip_owner;
 				if (ris.current_clip) {
 					glEnable(GL_SCISSOR_TEST);
@@ -712,6 +717,10 @@ void RasterizerCanvasGLES2::canvas_render_items_implementation(Item *p_item_list
 				if (material && material->data) {
 					mat_data = static_cast<GLES2::CanvasMaterialData *>(material->data);
 				}
+
+				if (mat_data && mat_data->shader_data && mat_data->shader_data->uses_time) {
+					time_used = true;
+				}
 			}
 
 			_legacy_canvas_item_render_commands(ci, ris.current_clip, reclip, mat_data);
@@ -722,6 +731,10 @@ void RasterizerCanvasGLES2::canvas_render_items_implementation(Item *p_item_list
 	// Clean up scissor test if it was left enabled by a clip
 	if (ris.current_clip && !reclip) {
 		glDisable(GL_SCISSOR_TEST);
+	}
+
+	if (time_used) {
+		RenderingServerDefault::redraw_request();
 	}
 }
 
@@ -879,6 +892,7 @@ void RasterizerCanvasGLES2::_batch_render_generic(const Batch &p_batch, GLES2::C
 		state.specialization &= ~(CanvasShaderGLES2::USE_FORCE_REPEAT);
 	}
 
+	glDisableVertexAttribArray(RS::ARRAY_VERTEX);
 	glDisableVertexAttribArray(RS::ARRAY_TEX_UV);
 	glDisableVertexAttribArray(RS::ARRAY_COLOR);
 	glBindBuffer(GL_ARRAY_BUFFER, 0);
@@ -901,6 +915,8 @@ void RasterizerCanvasGLES2::render_batches(Item::Command *const *p_commands, Ite
 		if (p_material && p_material->shader_data) {
 			if (p_material->shader_data->version.is_valid() && p_material->shader_data->valid) {
 				state.shader_version = p_material->shader_data->version;
+			} else {
+				state.shader_version = state.canvas_shader->default_version;
 			}
 		}
 
@@ -1380,6 +1396,9 @@ void RasterizerCanvasGLES2::_draw_gui_primitive(int p_points, const Vector2 *p_v
 	GLenum draw_mode = (p_points == 2) ? GL_LINES : ((p_points == 3) ? GL_TRIANGLES : GL_TRIANGLE_FAN);
 	glDrawArrays(draw_mode, 0, p_points);
 
+	glDisableVertexAttribArray(RS::ARRAY_VERTEX);
+	glDisableVertexAttribArray(RS::ARRAY_TEX_UV);
+	glDisableVertexAttribArray(RS::ARRAY_COLOR);
 	glBindBuffer(GL_ARRAY_BUFFER, 0);
 }
 
@@ -1514,6 +1533,10 @@ void RasterizerCanvasGLES2::_legacy_draw_poly_triangles(Item::CommandPolygon *p_
 		glDrawArrays(GL_TRIANGLES, 0, pd.points.size());
 	}
 
+	// Cleanup
+	glDisableVertexAttribArray(RS::ARRAY_VERTEX);
+	glDisableVertexAttribArray(RS::ARRAY_TEX_UV);
+	glDisableVertexAttribArray(RS::ARRAY_COLOR);
 	glBindBuffer(GL_ARRAY_BUFFER, 0);
 }
 
@@ -1567,11 +1590,8 @@ RasterizerCanvasGLES2::RasterizerCanvasGLES2() {
 
 	initialize();
 
-	// The Canvas Shader is often managed by MaterialStorage,
-	// but since we generated it locally, we'll instantiate it directly for the state.
-	state.canvas_shader = memnew(CanvasShaderGLES2);
-	state.canvas_shader->initialize();
-	data.canvas_shader_default_version = state.canvas_shader->version_create();
+	state.canvas_shader = &GLES2::MaterialStorage::get_singleton()->shaders.canvas_shader;
+	data.canvas_shader_default_version = state.canvas_shader->default_version;
 
 	// Allocate the default white texture for untextured polygons/rects
 	default_canvas_texture = GLES2::TextureStorage::get_singleton()->canvas_texture_allocate();
@@ -1582,9 +1602,6 @@ RasterizerCanvasGLES2::RasterizerCanvasGLES2() {
 
 RasterizerCanvasGLES2::~RasterizerCanvasGLES2() {
 	singleton = nullptr;
-
-	state.canvas_shader->version_free(data.canvas_shader_default_version);
-	memdelete(state.canvas_shader);
 
 	GLES2::TextureStorage::get_singleton()->canvas_texture_free(default_canvas_texture);
 
@@ -1605,4 +1622,4 @@ RasterizerCanvasGLES2::~RasterizerCanvasGLES2() {
 	}
 }
 
-#endif // GLES3_ENABLED
+#endif // GLES2_ENABLED

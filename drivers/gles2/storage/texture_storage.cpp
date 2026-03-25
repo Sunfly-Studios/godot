@@ -698,7 +698,7 @@ Ref<Image> TextureStorage::texture_2d_get(RID p_texture) const {
 		return tex->image_cache_2d;
 	}
 
-	ERR_PRINT_ONCE("CPU Image cache is empty for this texture, and GLES2 cannot read back directly.");
+	WARN_PRINT_ONCE("CPU Image cache is empty for this texture, and GLES2 cannot read back directly.");
 	return Ref<Image>();
 }
 
