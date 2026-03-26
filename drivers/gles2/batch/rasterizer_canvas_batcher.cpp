@@ -213,48 +213,14 @@ bool RasterizerCanvasBatcher::try_join_item(RendererCanvasRender::Item *p_ci, Re
 	// this upstream
 	r_ris.final_modulate = p_ci->final_modulate;
 
-	// Command count limit
-	int command_count = godot4_commands_count(p_ci->commands);
-	if (command_count > bdata.settings_max_join_item_commands) {
-		r_batch_break = true;
-		return false;
-	}
-
 	// Material changes break batches
 	if (p_ci->material != r_ris.canvas_last_material) {
 		join = false;
 		r_ris.canvas_last_material = p_ci->material;
 	}
 
-	// Scan for un-batchable commands or batch-type mismatches
-	r_ris.joined_item_batch_type_flags_curr = 0;
-	RendererCanvasRender::Item::Command *c = p_ci->commands;
-
-	while (c) {
-		switch (c->type) {
-			case RendererCanvasRender::Item::Command::TYPE_RECT:
-			case RendererCanvasRender::Item::Command::TYPE_NINEPATCH: {
-				if (_disallow_item_join_if_batch_types_too_different(r_ris, BatcherEnums::BTF_RECT)) {
-					r_batch_break = true;
-				}
-			} break;
-			case RendererCanvasRender::Item::Command::TYPE_POLYGON: {
-				if (_disallow_item_join_if_batch_types_too_different(r_ris, BatcherEnums::BTF_POLY)) {
-					r_batch_break = true;
-				}
-			} break;
-			case RendererCanvasRender::Item::Command::TYPE_TRANSFORM: {
-				// Transforms are safe and compatible with all current batch types
-			} break;
-			default: {
-				// Any unhandled command (like CLIP_IGNORE, LINE, MESH) forces a batch break for safety
-				r_batch_break = true;
-			} break;
-		}
-		c = c->next;
-	}
-
-	if (r_batch_break) {
+	if (_detect_item_batch_break(r_ris, p_ci, r_batch_break)) {
+		r_batch_break = true;
 		join = false;
 	}
 
@@ -996,6 +962,130 @@ void RasterizerCanvasBatcher::_translate_batches_to_vertex_colored_FVF() {
 		cv->uv = bv.uv;
 		cv->col = *source_vertex_colors++;
 	}
+}
+
+bool RasterizerCanvasBatcher::_light_scissor_begin(const Rect2 &p_item_rect, const Transform2D &p_light_xform, const Rect2 &p_light_rect, int p_rt_height) const {
+	float area_item = p_item_rect.size.x * p_item_rect.size.y;
+
+	// The area of pixels saved can never be more
+	// than the area of the item itself.
+	if (area_item < bdata.scissor_threshold_area) {
+		return false;
+	}
+
+	Rect2 cliprect;
+	if (!_light_find_intersection(p_item_rect, p_light_xform, p_light_rect, cliprect)) {
+		cliprect = Rect2(0, 0, 0, 0);
+	} else {
+		// Determine the area (fill rate) that will be saved
+		float area_cliprect = cliprect.size.x * cliprect.size.y;
+		float area_saved = area_item - area_cliprect;
+
+		if (area_saved < bdata.scissor_threshold_area) {
+			return false;
+		}
+	}
+
+	int y = cliprect.position.y + cliprect.size.y;
+	glEnable(GL_SCISSOR_TEST);
+	glScissor(cliprect.position.x, y, cliprect.size.width, cliprect.size.height);
+
+	return true;
+}
+
+bool RasterizerCanvasBatcher::_light_find_intersection(const Rect2 &p_item_rect, const Transform2D &p_light_xform, const Rect2 &p_light_rect, Rect2 &r_cliprect) const {
+	// Transform the light's rect by its transform to get it into global/screen space
+	// We need the AABB of the light in the same space as the item rect
+
+	// Fast path for axis-aligned lights (no rotation)
+	if (p_light_xform.columns[0].y == 0.0f && p_light_xform.columns[1].x == 0.0f) {
+		Vector2 scale = Vector2(p_light_xform.columns[0].x, p_light_xform.columns[1].y);
+		Vector2 pos = p_light_xform.columns[2] + p_light_rect.position * scale;
+		Vector2 size = p_light_rect.size * scale;
+
+		Rect2 global_light_rect(pos, size);
+		r_cliprect = p_item_rect.intersection(global_light_rect);
+	} else {
+		// Slower path for rotated lights
+		// (calculating the bounding box of the transformed light corners)
+		Vector2 points[4] = {
+			p_light_xform.xform(p_light_rect.position),
+			p_light_xform.xform(Vector2(p_light_rect.position.x + p_light_rect.size.x, p_light_rect.position.y)),
+			p_light_xform.xform(Vector2(p_light_rect.position.x, p_light_rect.position.y + p_light_rect.size.y)),
+			p_light_xform.xform(Vector2(p_light_rect.position.x + p_light_rect.size.x, p_light_rect.position.y + p_light_rect.size.y)),
+		};
+
+		Rect2 global_light_rect(points[0], Vector2());
+		for (int i = 1; i < 4; i++) {
+			global_light_rect.expand_to(points[i]);
+		}
+
+		r_cliprect = p_item_rect.intersection(global_light_rect);
+	}
+
+	return r_cliprect.has_area();
+}
+
+bool RasterizerCanvasBatcher::_detect_item_batch_break(RenderItemState &r_ris, RendererCanvasRender::Item *p_ci, bool &r_batch_break) {
+	int command_count = godot4_commands_count(p_ci->commands);
+
+	r_ris.joined_item_batch_type_flags_curr = 0;
+
+	if (command_count > bdata.settings_max_join_item_commands) {
+		return true;
+	}
+
+	RendererCanvasRender::Item::Command *command = p_ci->commands;
+
+	// Run through the linked list of commands looking for one that could prevent joining
+	while (command) {
+		switch (command->type) {
+			case RendererCanvasRender::Item::Command::TYPE_RECT: {
+				if (_disallow_item_join_if_batch_types_too_different(r_ris, BatcherEnums::BTF_LINE | BatcherEnums::BTF_LINE_AA)) {
+					return true;
+				}
+			} break;
+
+			case RendererCanvasRender::Item::Command::TYPE_POLYGON: {
+				if (!bdata.settings_use_software_skinning) {
+					return true;
+				}
+
+				if (_disallow_item_join_if_batch_types_too_different(r_ris, BatcherEnums::BTF_POLY)) {
+					return true;
+				}
+			} break;
+
+			case RendererCanvasRender::Item::Command::TYPE_NINEPATCH: {
+				RendererCanvasRender::Item::CommandNinePatch *np = static_cast<RendererCanvasRender::Item::CommandNinePatch *>(command);
+
+				if ((np->axis_x != RS::NINE_PATCH_STRETCH) || (np->axis_y != RS::NINE_PATCH_STRETCH)) {
+					return true;
+				}
+
+				if (_disallow_item_join_if_batch_types_too_different(r_ris, BatcherEnums::BTF_RECT)) {
+					return true;
+				}
+			} break;
+
+			case RendererCanvasRender::Item::Command::TYPE_TRANSFORM: {
+				// Transforms are compatible with all batch types.
+			} break;
+
+			default: {
+				// Any unhandled command type (like meshes) immediately breaks the batch
+				return true;
+			} break;
+		}
+
+		command = command->next;
+	}
+
+	if (p_ci->copy_back_buffer) {
+		return true;
+	}
+
+	return false;
 }
 
 template <bool SEND_LIGHT_ANGLES>
