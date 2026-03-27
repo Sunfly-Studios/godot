@@ -965,6 +965,7 @@ private:
 	GlobalShaderUniformGetTypeFunc global_shader_uniform_get_type_func = nullptr;
 
 	bool error_set = false;
+	bool is_gles2_renderer = false;
 	String error_str;
 	int error_line = 0;
 
@@ -1017,7 +1018,6 @@ private:
 
 	bool check_warnings = false;
 	uint32_t warning_flags = 0;
-	bool is_gles2_renderer = false;
 
 	void _add_line_warning(ShaderWarning::Code p_code, const StringName &p_subject = "", const Vector<Variant> &p_extra_args = Vector<Variant>()) {
 		warnings.push_back(ShaderWarning(p_code, tk_line, p_subject, p_extra_args));

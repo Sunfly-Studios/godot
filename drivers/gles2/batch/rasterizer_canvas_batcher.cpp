@@ -391,8 +391,9 @@ bool RasterizerCanvasBatcher::sort_items_from(int p_start) {
 
 	BSortItem &second = bdata.sort_items[p_start + 1];
 	if (second.z_index != start_z) {
-		// TODO(GLES2): no sorting across z indices (for now)
-		return false;
+		if (!bdata.join_across_z_indices) {
+			return false;
+		}
 	}
 
 	// if the neighbours are already a good match
@@ -420,9 +421,11 @@ bool RasterizerCanvasBatcher::sort_items_from(int p_start) {
 
 		BSortItem *test_sort_item = &bdata.sort_items[test_sort_item_id];
 
-		// TODO(GLES2): across z indices?
+		// across z indices
 		if (test_sort_item->z_index != start_z) {
-			return false;
+			if (!bdata.join_across_z_indices) {
+				return false;
+			}
 		}
 
 		RendererCanvasRender::Item *test_item = test_sort_item->item;
@@ -445,7 +448,15 @@ bool RasterizerCanvasBatcher::sort_items_from(int p_start) {
 		// in the intersection test above
 		for (int sn = 2; sn < test; sn++) {
 			BSortItem *sandwich_neighbour = &bdata.sort_items[p_start + sn];
+
+			// check if the test item hits the sandwich moving backward
 			if (test_item->global_rect_cache.intersects(sandwich_neighbour->item->global_rect_cache)) {
+				ok = false;
+				break;
+			}
+
+			// check if the second item hits the sandwich moving forward
+			if (second_AABB.intersects(sandwich_neighbour->item->global_rect_cache)) {
 				ok = false;
 				break;
 			}

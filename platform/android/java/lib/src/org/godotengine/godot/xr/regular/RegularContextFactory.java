@@ -56,7 +56,7 @@ public class RegularContextFactory implements GLSurfaceView.EGLContextFactory {
 	private final int mGlMinor;
 
 	public RegularContextFactory() {
-		this(false);
+		this(false, 3, 3);
 	}
 
 	public RegularContextFactory(boolean useDebugOpengl, int glMajor, int glMinor) {
@@ -66,7 +66,7 @@ public class RegularContextFactory implements GLSurfaceView.EGLContextFactory {
 	}
 
 	public EGLContext createContext(EGL10 egl, EGLDisplay display, EGLConfig eglConfig) {
-		Log.w(TAG, "creating OpenGL " + String.valueof(this.mglMajor) + "." + String.valueof(this.mglMinor) + " context :");
+		Log.w(TAG, "creating OpenGL " + this.mGlMajor + "." + this.mGlMinor + " context :");
 
 		GLUtils.checkEglError(TAG, "Before eglCreateContext", egl);
 		EGLContext context;
