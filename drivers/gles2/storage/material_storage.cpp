@@ -751,6 +751,8 @@ void MaterialData::update_uniform_buffer(const HashMap<StringName, ShaderLanguag
 
 		if (V) {
 			_fill_std140_variant_ubo_value(E.value.type, E.value.array_size, V->value, data);
+		} else if (!E.value.default_value.is_empty()) {
+			_fill_std140_ubo_value(E.value.type, E.value.default_value, data);
 		} else {
 			_fill_std140_ubo_empty(E.value.type, E.value.array_size, data);
 		}
@@ -1581,10 +1583,17 @@ void MaterialStorage::material_free(RID p_rid) {
 	material_set_shader(p_rid, RID());
 
 	// Ensure we don't leave dangling pointers in our update queue
+	for (KeyValue<StringName, Variant> &E : material->params) {
+		if (E.value.get_type() == Variant::ARRAY) {
+			Array(E.value).clear();
+		}
+	}
+
 	if (material->update_element.in_list()) {
 		material_update_list.remove(&material->update_element);
 	}
 
+	material->dependency.deleted_notify(p_rid);
 	material_owner.free(p_rid);
 }
 
@@ -1825,7 +1834,6 @@ void CanvasShaderData::set_code(const String &p_code) {
 	ubo_size = gen_code.uniform_total_size;
 	ubo_offsets = gen_code.uniform_offsets;
 	texture_uniforms = gen_code.texture_uniforms;
-
 	valid = true;
 }
 
@@ -1889,6 +1897,12 @@ void CanvasMaterialData::bind_uniforms() {
 			// Godot 4 shader compiler always prefixes custom uniforms with "m_"
 			String uniform_name = "m_" + String(E.key);
 			GLint loc = glGetUniformLocation(prog, uniform_name.utf8().get_data());
+
+			if (loc < 0) {
+				// In case it is not prefixed with `m_`
+				uniform_name = String(E.key);
+				loc = glGetUniformLocation(prog, uniform_name.utf8().get_data());
+			}
 
 			if (loc < 0) {
 				continue; // Uniform was optimized out by GLSL
@@ -1966,6 +1980,13 @@ void CanvasMaterialData::bind_uniforms() {
 		// Tell the custom shader which texture unit to read from
 		String tex_name = "m_" + String(texture_uniform.name);
 		GLint tex_loc = glGetUniformLocation(prog, tex_name.utf8().get_data());
+
+		if (tex_loc < 0) {
+			// In case it is not prefixed with `m_`
+			tex_name = String(texture_uniform.name);
+			tex_loc = glGetUniformLocation(prog, tex_name.utf8().get_data());
+		}
+
 		if (tex_loc >= 0) {
 			glUniform1i(tex_loc, ti);
 		}

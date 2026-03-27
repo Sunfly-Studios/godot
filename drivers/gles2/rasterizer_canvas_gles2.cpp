@@ -825,11 +825,12 @@ void RasterizerCanvasGLES2::_batch_render_generic(const Batch &p_batch, GLES2::C
 		state.specialization |= CanvasShaderGLES2::USE_FORCE_REPEAT;
 	}
 
-	if (state.canvas_shader->version_bind_shader(state.shader_version, state.mode_variant, state.specialization)) {
+	bool rebind = state.canvas_shader->version_bind_shader(state.shader_version, state.mode_variant, state.specialization);
+	if (rebind) {
 		_set_canvas_uniforms();
-		if (p_material) {
-			p_material->bind_uniforms();
-		}
+	}
+	if (p_material) {
+		p_material->bind_uniforms();
 	}
 
 	// Determine Texture Filter and Repeat from the Batch FVF flags
@@ -842,7 +843,6 @@ void RasterizerCanvasGLES2::_batch_render_generic(const Batch &p_batch, GLES2::C
 	glBindBuffer(GL_ARRAY_BUFFER, bdata.gl_vertex_buffer);
 	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, bdata.gl_index_buffer);
 
-	uint64_t pointer = 0;
 	glEnableVertexAttribArray(RS::ARRAY_VERTEX);
 	glVertexAttribPointer(RS::ARRAY_VERTEX, 2, GL_FLOAT, GL_FALSE, sizeof_vert, (const void *)(uintptr_t)offsetof(BatchVertex, pos));
 
@@ -856,14 +856,6 @@ void RasterizerCanvasGLES2::_batch_render_generic(const Batch &p_batch, GLES2::C
 		glEnableVertexAttribArray(RS::ARRAY_COLOR);
 		// BatchVertexColored is our baseline for colored geometry
 		glVertexAttribPointer(RS::ARRAY_COLOR, 4, GL_FLOAT, GL_FALSE, sizeof_vert, (const void *)(uintptr_t)offsetof(BatchVertexColored, col));
-	}
-
-	if (!colored_verts) {
-		glDisableVertexAttribArray(RS::ARRAY_COLOR);
-		glVertexAttrib4fv(RS::ARRAY_COLOR, p_batch.color.get_data());
-	} else {
-		glEnableVertexAttribArray(RS::ARRAY_COLOR);
-		glVertexAttribPointer(RS::ARRAY_COLOR, 4, GL_FLOAT, GL_FALSE, sizeof_vert, (const void *)(uintptr_t)(pointer + (4 * 4)));
 	}
 
 	// Send Pixel Size to the shader (using the state updated by _bind_canvas_texture)
@@ -1405,11 +1397,12 @@ void RasterizerCanvasGLES2::_draw_gui_primitive(int p_points, const Vector2 *p_v
 void RasterizerCanvasGLES2::_legacy_draw_primitive(Item::CommandPrimitive *p_pr, GLES2::CanvasMaterialData *p_material) {
 	_set_texture_rect_mode(false);
 
-	if (state.canvas_shader->version_bind_shader(state.shader_version, state.mode_variant, state.specialization)) {
+	bool rebind = state.canvas_shader->version_bind_shader(state.shader_version, state.mode_variant, state.specialization);
+	if (rebind) {
 		_set_canvas_uniforms();
-		if (p_material) {
-			p_material->bind_uniforms();
-		}
+	}
+	if (p_material) {
+		p_material->bind_uniforms();
 	}
 
 	ERR_FAIL_COND(p_pr->point_count < 1);

@@ -1205,7 +1205,13 @@ bool RasterizerCanvasBatcher::_prefill_rect(RendererCanvasRender::Item::CommandR
 	Vector2 src_max;
 	if (rect->flags & RendererCanvasRender::CanvasRectFlags::CANVAS_RECT_REGION) {
 		src_min = rect->source.position * r_fill_state.texpixel_size;
-		src_max = (rect->source.position + rect->source.size) * r_fill_state.texpixel_size;
+
+		if (rect->flags & RendererCanvasRender::CanvasRectFlags::CANVAS_RECT_TILE) {
+			// Bake the tile repetition into the UV bounds.
+			src_max = src_min + (rect->rect.size * r_fill_state.texpixel_size);
+		} else {
+			src_max = (rect->source.position + rect->source.size) * r_fill_state.texpixel_size;
+		}
 
 		if (r_fill_state.contract_uvs) {
 			const float uv_epsilon = bdata.settings_uv_contract_amount;
@@ -1214,6 +1220,9 @@ bool RasterizerCanvasBatcher::_prefill_rect(RendererCanvasRender::Item::CommandR
 			src_max.x -= uv_epsilon;
 			src_max.y -= uv_epsilon;
 		}
+	} else if (rect->flags & RendererCanvasRender::CanvasRectFlags::CANVAS_RECT_TILE) {
+		src_min = Vector2(0, 0);
+		src_max = rect->rect.size * r_fill_state.texpixel_size;
 	} else {
 		src_min = Vector2(0, 0);
 		src_max = Vector2(1, 1);
@@ -1633,7 +1642,17 @@ int RasterizerCanvasBatcher::_batch_find_or_create_tex(const RID &p_texture, con
 	new_batch_tex.RID_normal = p_normal;
 	new_batch_tex.flags = 0;
 
-	GLES2::Texture *texture = GLES2::TextureStorage::get_singleton()->get_texture(p_texture);
+	RID diffuse_rid = p_texture;
+
+	// Unwrap the CanvasTexture.
+	if (p_texture.is_valid()) {
+		GLES2::CanvasTexture *ct = GLES2::TextureStorage::get_singleton()->get_canvas_texture(p_texture);
+		if (ct && ct->diffuse.is_valid()) {
+			diffuse_rid = ct->diffuse;
+		}
+	}
+
+	GLES2::Texture *texture = GLES2::TextureStorage::get_singleton()->get_texture(diffuse_rid);
 
 	if (texture) {
 		int w = texture->width;
