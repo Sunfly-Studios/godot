@@ -440,11 +440,11 @@ Error GLManagerNative_Windows::_create_context(GLWindow &win, GLDisplay &gl_disp
 
 	Vector<int> attribs;
 	attribs.push_back(WGL_CONTEXT_MAJOR_VERSION_ARB);
-	attribs.push_back(use_gles2 ? 2 : 3);
+	attribs.push_back(gles_major);
 	attribs.push_back(WGL_CONTEXT_MINOR_VERSION_ARB);
-	attribs.push_back(use_gles2 ? 1 : 3);
+	attribs.push_back(gles_minor);
 
-	if (!use_gles2) {
+	if (gles_major > 2) {
 		// Only GLES3/GL3.3+ uses strict core and forward compatibility profiles
 		attribs.push_back(WGL_CONTEXT_PROFILE_MASK_ARB);
 		attribs.push_back(WGL_CONTEXT_CORE_PROFILE_BIT_ARB);
@@ -606,8 +606,9 @@ HGLRC GLManagerNative_Windows::get_hglrc(DisplayServer::WindowID p_window_id) {
 	return disp.hRC;
 }
 
-GLManagerNative_Windows::GLManagerNative_Windows(bool p_use_gles2) {
-	use_gles2 = p_use_gles2;
+GLManagerNative_Windows::GLManagerNative_Windows(int p_gles_major, int p_gles_minor) {
+	gles_major = p_gles_major;
+	gles_minor = p_gles_minor;
 	direct_render = false;
 	glx_minor = glx_major = 0;
 	_current_window = nullptr;

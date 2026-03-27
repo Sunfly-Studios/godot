@@ -40,11 +40,19 @@
 #pragma clang diagnostic ignored "-Wdeprecated-declarations" // OpenGL is deprecated in macOS 10.14
 
 Error GLManagerLegacy_MacOS::create_context(GLWindow &win) {
-	NSOpenGLPixelFormatAttribute gl_profile = use_gles2 ? NSOpenGLProfileVersionLegacy : NSOpenGLProfileVersion3_2Core;
+	NSOpenGLPixelFormatAttribute gl_profile;
+	
+	if (gles_major >= 3 && gles_minor >= 2) {
+		gl_profile = NSOpenGLProfileVersion3_2Core;
+	} else {
+		gl_profile = NSOpenGLProfileVersionLegacy;
+	}
+
 	NSOpenGLPixelFormatAttribute attributes[] = {
 		NSOpenGLPFADoubleBuffer,
 		NSOpenGLPFAClosestPolicy,
-		NSOpenGLPFAOpenGLProfile, gl_profile,
+		NSOpenGLPFAOpenGLProfile,
+		gl_profile,
 		NSOpenGLPFAColorSize, 32,
 		NSOpenGLPFADepthSize, 24,
 		NSOpenGLPFAStencilSize, 8,

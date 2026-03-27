@@ -2849,7 +2849,7 @@ bool OS_Windows::_test_create_rendering_device_and_gl(const String &p_display_dr
 	GLManagerNative_Windows *test_gl_manager_native = nullptr;
 #ifdef GLES3_ENABLED
 	{
-		test_gl_manager_native = memnew(GLManagerNative_Windows(false));
+		test_gl_manager_native = memnew(GLManagerNative_Windows(3, 3));
 		if (test_gl_manager_native->window_create(DisplayServer::MAIN_WINDOW_ID, hWnd, GetModuleHandle(nullptr), 800, 600) == OK) {
 			RasterizerGLES3::make_current(true);
 		} else {
@@ -2859,7 +2859,7 @@ bool OS_Windows::_test_create_rendering_device_and_gl(const String &p_display_dr
 #endif
 #ifdef GLES2_ENABLED
 	{
-		test_gl_manager_native = memnew(GLManagerNative_Windows(true));
+		test_gl_manager_native = memnew(GLManagerNative_Windows(2, 1));
 		if (test_gl_manager_native->window_create(DisplayServer::MAIN_WINDOW_ID, hWnd, GetModuleHandle(nullptr), 800, 600) == OK) {
 			RasterizerGLES2::make_current(true);
 			if (!ok) {

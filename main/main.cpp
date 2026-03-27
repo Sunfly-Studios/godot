@@ -2408,7 +2408,7 @@ Error Main::setup(const char *execpath, int argc, char *argv[], bool p_second_ph
 	default_renderer_mobile = "mobile";
 #endif
 
-	// And Compatibility or Legacy next, or first if Vulkan is disabled.
+	// Add Compatibility next.
 #ifdef GLES3_ENABLED
 	if (!renderer_hints.is_empty()) {
 		renderer_hints += ",";
@@ -2417,14 +2417,9 @@ Error Main::setup(const char *execpath, int argc, char *argv[], bool p_second_ph
 	if (default_renderer_mobile.is_empty()) {
 		default_renderer_mobile = "gl_compatibility";
 	}
-	// Default to Compatibility when using the project manager.
-	if (rendering_driver.is_empty() && rendering_method.is_empty() && project_manager) {
-		rendering_driver = "opengl3";
-		rendering_method = "gl_compatibility";
-		default_renderer_mobile = "gl_compatibility";
-	}
 #endif
 
+	// Add Legacy next.
 #ifdef GLES2_ENABLED
 	if (!renderer_hints.is_empty()) {
 		renderer_hints += ",";
@@ -2433,16 +2428,21 @@ Error Main::setup(const char *execpath, int argc, char *argv[], bool p_second_ph
 	if (default_renderer_mobile.is_empty()) {
 		default_renderer_mobile = "gl_legacy";
 	}
-	// Default to Compatibility when using the project manager.
-	if (rendering_driver.is_empty() && rendering_method.is_empty() && project_manager) {
-		rendering_driver = "opengl2";
-		rendering_method = "gl_legacy";
-		default_renderer_mobile = "gl_legacy";
-	}
 #endif
 
 	if (renderer_hints.is_empty()) {
 		ERR_PRINT("No renderers available.");
+	}
+
+	// Handle project manager defaults independently.
+	if (rendering_driver.is_empty() && rendering_method.is_empty() && project_manager) {
+#ifdef GLES2_ENABLED
+		rendering_driver = "opengl2";
+		rendering_method = "gl_legacy";
+#elif defined(GLES3_ENABLED)
+		rendering_driver = "opengl3";
+		rendering_method = "gl_compatibility";
+#endif
 	}
 
 	if (!rendering_method.is_empty()) {

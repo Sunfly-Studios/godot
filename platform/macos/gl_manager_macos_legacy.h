@@ -64,7 +64,7 @@ class GLManagerLegacy_MacOS {
 
 	bool framework_loaded = false;
 	bool use_vsync = false;
-	bool use_gles2 = false;
+	int gles_major, gles_minor;
 	CGLEnablePtr CGLEnable = nullptr;
 	CGLSetParameterPtr CGLSetParameter = nullptr;
 	CGLGetCurrentContextPtr CGLGetCurrentContext = nullptr;
@@ -88,8 +88,9 @@ public:
 
 	NSOpenGLContext *get_context(DisplayServer::WindowID p_window_id);
 
-	GLManagerLegacy_MacOS(bool p_use_gles2) {
-		use_gles2 = p_use_gles2;
+	GLManagerLegacy_MacOS(int p_gles_major, int p_gles_minor) {
+		gles_major = p_gles_major;
+		gles_minor = p_gles_minor;
 	}
 	~GLManagerLegacy_MacOS();
 };

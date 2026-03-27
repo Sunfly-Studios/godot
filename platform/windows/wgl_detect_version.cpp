@@ -65,7 +65,7 @@ typedef HGLRC(APIENTRY *PFNWGLCREATECONTEXTATTRIBSARBPROC)(HDC, HGLRC, const int
 typedef void *(APIENTRY *PFNWGLGETPROCADDRESS)(LPCSTR);
 typedef const char *(APIENTRY *PFNWGLGETSTRINGPROC)(unsigned int);
 
-Dictionary detect_wgl(bool p_use_gles2) {
+Dictionary detect_wgl(int p_gles_major, int p_gles_minor) {
 	Dictionary gl_info = {};
 	gl_info["version"] = 0;
 	gl_info["vendor"] = String();
@@ -133,11 +133,11 @@ Dictionary detect_wgl(bool p_use_gles2) {
 					int attribs[9] = {};
 					int attr_idx = 0;
 					attribs[attr_idx++] = WGL_CONTEXT_MAJOR_VERSION_ARB;
-					attribs[attr_idx++] = p_use_gles2 ? 2 : 3;
+					attribs[attr_idx++] = p_gles_major;
 					attribs[attr_idx++] = WGL_CONTEXT_MINOR_VERSION_ARB;
-					attribs[attr_idx++] = p_use_gles2 ? 1 : 3;
+					attribs[attr_idx++] = p_gles_minor;
 
-					if (!p_use_gles2) {
+					if (p_gles_major > 2) {
 						attribs[attr_idx++] = WGL_CONTEXT_PROFILE_MASK_ARB;
 						attribs[attr_idx++] = WGL_CONTEXT_CORE_PROFILE_BIT_ARB;
 						attribs[attr_idx++] = WGL_CONTEXT_FLAGS_ARB;

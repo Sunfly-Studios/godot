@@ -99,6 +99,10 @@ int constexpr FS_TRANSP_BORDER = 2;
 #define GetProcAddress (void *)GetProcAddress
 #endif
 
+constexpr int make_gl_version(int major, int minor) {
+	return (major * 10000) + minor;
+}
+
 static String format_error_message(DWORD id) {
 	LPWSTR messageBuffer = nullptr;
 	size_t size = FormatMessageW(FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
@@ -7161,9 +7165,9 @@ if (IsWow64Process2) {
 
 		bool gl_supported = true;
 		if (fallback && (rendering_driver == "opengl3")) {
-			Dictionary gl_info = detect_wgl();
+			Dictionary gl_info = detect_wgl(3, 3);
 
-			constexpr int gl_version = 30003;
+			constexpr int gl_version = make_gl_version(3, 3);
 			bool force_angle = false;
 			gl_supported = gl_info["version"].operator int() >= gl_version;
 
@@ -7203,7 +7207,7 @@ if (IsWow64Process2) {
 		}
 
 		if (rendering_driver == "opengl3_angle") {
-			gl_manager_angle = memnew(GLManagerANGLE_Windows(false));
+			gl_manager_angle = memnew(GLManagerANGLE_Windows(3, 3));
 			tested_drivers.set_flag(DRIVER_ID_COMPAT_ANGLE_D3D11);
 
 			if (gl_manager_angle->initialize() != OK) {
@@ -7226,7 +7230,7 @@ if (IsWow64Process2) {
 			}
 		}
 		if (rendering_driver == "opengl3") {
-			gl_manager_native = memnew(GLManagerNative_Windows(false));
+			gl_manager_native = memnew(GLManagerNative_Windows(3, 3));
 			tested_drivers.set_flag(DRIVER_ID_COMPAT_OPENGL3);
 
 			if (gl_manager_native->initialize() != OK) {
@@ -7269,9 +7273,9 @@ if (IsWow64Process2) {
 
 		bool gl_supported = true;
 		if (fallback && (rendering_driver == "opengl2")) {
-			Dictionary gl_info = detect_wgl(true);
+			Dictionary gl_info = detect_wgl(2, 1);
 
-			constexpr int gl_version = 20000;
+			constexpr int gl_version = make_gl_version(2, 1);
 			bool force_angle = false;
 			gl_supported = gl_info["version"].operator int() >= gl_version;
 
@@ -7298,9 +7302,9 @@ if (IsWow64Process2) {
 				tested_drivers.set_flag(DRIVER_ID_COMPAT_OPENGL2);
 				if (show_warning) {
 					if (gl_info["version"].operator int() < gl_version) {
-						WARN_PRINT("Your video card drivers seem not to support the required OpenGL 2.0 version, switching to ANGLE.");
+						WARN_PRINT("Your video card drivers seem not to support the required OpenGL 2.1 version, switching to ANGLE.");
 					} else {
-						WARN_PRINT("Your video card drivers are known to have low quality OpenGL 2.0 support, switching to ANGLE.");
+						WARN_PRINT("Your video card drivers are known to have low quality OpenGL 2.1 support, switching to ANGLE.");
 					}
 				}
 				rendering_driver = "opengl2_angle";
@@ -7309,7 +7313,7 @@ if (IsWow64Process2) {
 		}
 
 		if (rendering_driver == "opengl2_angle") {
-			gl_manager_angle = memnew(GLManagerANGLE_Windows(true));
+			gl_manager_angle = memnew(GLManagerANGLE_Windows(2, 1));
 			tested_drivers.set_flag(DRIVER_ID_COMPAT_ANGLE_D3D11);
 
 			if (gl_manager_angle->initialize() != OK) {
@@ -7331,7 +7335,7 @@ if (IsWow64Process2) {
 			}
 		}
 		if (rendering_driver == "opengl2") {
-			gl_manager_native = memnew(GLManagerNative_Windows(true));
+			gl_manager_native = memnew(GLManagerNative_Windows(2, 1));
 			tested_drivers.set_flag(DRIVER_ID_COMPAT_OPENGL2);
 
 			if (gl_manager_native->initialize() != OK) {
@@ -7512,18 +7516,39 @@ DisplayServer *DisplayServerWindows::create_func(const String &p_rendering_drive
 			String executable_name = OS::get_singleton()->get_executable_path().get_file();
 			OS::get_singleton()->alert(
 					vformat("Your video card drivers seem not to support the required %s version.\n\n"
-							"If possible, consider updating your video card drivers or using the OpenGL 3 driver.\n\n"
+							"If possible, consider updating your video card drivers, using the OpenGL 3 driver, or using the OpenGL 2 driver.\n\n"
 							"You can enable the OpenGL 3 driver by starting the engine from the\n"
-							"command line with the command:\n\n    \"%s\" --rendering-driver opengl3\n\n"
+							"command line with the command:\n\n    \"%s\" --rendering-driver opengl3\n"
+							"You can enable the OpenGL 2 driver by starting the engine from the\n"
+							"command line with the command:\n\n    \"%s\" --rendering-driver opengl2\n\n"
 							"If you have recently updated your video card drivers, try rebooting.",
 							String(" or ").join(drivers),
+							executable_name,
 							executable_name),
 					"Unable to initialize video driver");
-		} else {
+		} else if (tested_drivers.has_flag(DRIVER_ID_COMPAT_OPENGL3) || tested_drivers.has_flag(DRIVER_ID_COMPAT_OPENGL2)) {
 			Vector<String> drivers;
 			if (tested_drivers.has_flag(DRIVER_ID_COMPAT_OPENGL3)) {
 				drivers.push_back("OpenGL 3.3");
 			}
+			if (tested_drivers.has_flag(DRIVER_ID_COMPAT_OPENGL2)) {
+				drivers.push_back("OpenGL 2.1");
+			}
+			String executable_name = OS::get_singleton()->get_executable_path().get_file();
+			OS::get_singleton()->alert(
+					vformat("Your video card drivers seem not to support the required %s version.\n\n"
+							"If possible, consider updating your video card drivers, using the Vulkan driver, or using the Direct3D 12 driver.\n\n"
+							"You can enable the Vulkan driver by starting the engine from the\n"
+							"command line with the command:\n\n    \"%s\" --rendering-driver vulkan\n"
+							"You can enable the Direct3D 12 driver by starting the engine from the\n"
+							"command line with the command:\n\n    \"%s\" --rendering-driver d3d12\n\n"
+							"If you have recently updated your video card drivers, try rebooting.",
+							String(" or ").join(drivers),
+							executable_name,
+							executable_name),
+					"Unable to initialize video driver");
+		} else {
+			Vector<String> drivers;
 			if (tested_drivers.has_flag(DRIVER_ID_COMPAT_ANGLE_D3D11)) {
 				drivers.push_back("Direct3D 11");
 			}

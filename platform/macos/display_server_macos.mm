@@ -3640,24 +3640,52 @@ DisplayServer *DisplayServerMacOS::create_func(const String &p_rendering_driver,
 	DisplayServer *ds = memnew(DisplayServerMacOS(p_rendering_driver, p_mode, p_vsync_mode, p_flags, p_position, p_resolution, p_screen, p_context, p_parent_window, r_error));
 	if (r_error != OK) {
 		if (p_rendering_driver == "vulkan") {
-			String executable_command;
+			String executable_command_opengl3;
+			String executable_command_opengl2;
+
 			if (OS::get_singleton()->get_bundle_resource_dir() == OS::get_singleton()->get_executable_path().get_base_dir()) {
-				executable_command = vformat("\"%s\" --rendering-driver opengl3", OS::get_singleton()->get_executable_path());
+				executable_command_opengl3 = vformat("\"%s\" --rendering-driver opengl3", OS::get_singleton()->get_executable_path());
+				executable_command_opengl2 = vformat("\"%s\" --rendering-driver opengl2", OS::get_singleton()->get_executable_path());
 			} else {
-				executable_command = vformat("open \"%s\" --args --rendering-driver opengl3", OS::get_singleton()->get_bundle_resource_dir().path_join("../..").simplify_path());
+				executable_command_opengl3 = vformat("open \"%s\" --args --rendering-driver opengl3", OS::get_singleton()->get_bundle_resource_dir().path_join("../..").simplify_path());
+				executable_command_opengl2 = vformat("open \"%s\" --args --rendering-driver opengl2", OS::get_singleton()->get_bundle_resource_dir().path_join("../..").simplify_path());
 			}
+
 			OS::get_singleton()->alert(
 					vformat("Your video card drivers seem not to support the required Vulkan version.\n\n"
-							"If possible, consider updating your macOS version or using the OpenGL 3 driver.\n\n"
+							"If possible, consider updating your macOS version, using the OpenGL 3 driver, or using the OpenGL 2 driver.\n\n"
 							"You can enable the OpenGL 3 driver by starting the engine from the\n"
+							"command line with the command:\n\n    %s\n\n"
+							"You can enable the OpenGL 2 driver by starting the engine from the\n"
 							"command line with the command:\n\n    %s",
-							executable_command),
+							executable_command_opengl3, executable_command_opengl2),
 					"Unable to initialize Vulkan video driver");
+		} else if (p_rendering_driver == "opengl3") {
+			String executable_command_vulkan;
+			String executable_command_opengl2;
+
+			if (OS::get_singleton()->get_bundle_resource_dir() == OS::get_singleton()->get_executable_path().get_base_dir()) {
+				executable_command_vulkan = vformat("\"%s\" --rendering-driver vulkan", OS::get_singleton()->get_executable_path());
+				executable_command_opengl2 = vformat("\"%s\" --rendering-driver opengl2", OS::get_singleton()->get_executable_path());
+			} else {
+				executable_command_vulkan = vformat("open \"%s\" --args --rendering-driver vulkan", OS::get_singleton()->get_bundle_resource_dir().path_join("../..").simplify_path());
+				executable_command_opengl2 = vformat("open \"%s\" --args --rendering-driver opengl2", OS::get_singleton()->get_bundle_resource_dir().path_join("../..").simplify_path());
+			}
+
+			OS::get_singleton()->alert(
+					vformat("Your video card drivers seem not to support the required OpenGL 3.3 version.\n\n"
+							"If possible, consider updating your macOS version, using the Vulkan driver, or using the OpenGL 2 driver.\n\n"
+							"You can enable the Vulkan driver by starting the engine from the\n"
+							"command line with the command:\n\n    %s\n\n"
+							"You can enable the OpenGL 2 driver by starting the engine from the\n"
+							"command line with the command:\n\n    %s",
+							executable_command_vulkan, executable_command_opengl2),
+					"Unable to initialize OpenGL 3.3 video driver");
 		} else {
 			OS::get_singleton()->alert(
-					"Your video card drivers seem not to support the required OpenGL 3.3 version.\n\n"
+					"Your video card drivers seem not to support the required OpenGL 2.1 version.\n\n"
 					"If possible, consider updating your macOS version.",
-					"Unable to initialize OpenGL video driver");
+					"Unable to initialize OpenGL 2.1 video driver");
 		}
 	}
 	return ds;
@@ -4042,7 +4070,7 @@ DisplayServerMacOS::DisplayServerMacOS(const String &p_rendering_driver, WindowM
 			rendering_driver = "opengl3_angle";
 		}
 		if (rendering_driver == "opengl3_angle") {
-			gl_manager_angle = memnew(GLManagerANGLE_MacOS(false));
+			gl_manager_angle = memnew(GLManagerANGLE_MacOS(3, 3));
 			if (gl_manager_angle->initialize() != OK || gl_manager_angle->open_display(nullptr) != OK) {
 				memdelete(gl_manager_angle);
 				gl_manager_angle = nullptr;
@@ -4067,7 +4095,7 @@ DisplayServerMacOS::DisplayServerMacOS(const String &p_rendering_driver, WindowM
 		}
 
 		if (rendering_driver == "opengl3") {
-			gl_manager_legacy = memnew(GLManagerLegacy_MacOS(false));
+			gl_manager_legacy = memnew(GLManagerLegacy_MacOS(3, 3));
 			if (gl_manager_legacy->initialize() != OK) {
 				memdelete(gl_manager_legacy);
 				gl_manager_legacy = nullptr;
@@ -4085,7 +4113,7 @@ DisplayServerMacOS::DisplayServerMacOS(const String &p_rendering_driver, WindowM
 			rendering_driver = "opengl2_angle";
 		}
 		if (rendering_driver == "opengl2_angle") {
-			gl_manager_angle = memnew(GLManagerANGLE_MacOS(true));
+			gl_manager_angle = memnew(GLManagerANGLE_MacOS(2, 1));
 			if (gl_manager_angle->initialize() != OK || gl_manager_angle->open_display(nullptr) != OK) {
 				memdelete(gl_manager_angle);
 				gl_manager_angle = nullptr;
@@ -4110,7 +4138,7 @@ DisplayServerMacOS::DisplayServerMacOS(const String &p_rendering_driver, WindowM
 		}
 
 		if (rendering_driver == "opengl2") {
-			gl_manager_legacy = memnew(GLManagerLegacy_MacOS(true));
+			gl_manager_legacy = memnew(GLManagerLegacy_MacOS(2, 1));
 			if (gl_manager_legacy->initialize() != OK) {
 				memdelete(gl_manager_legacy);
 				gl_manager_legacy = nullptr;

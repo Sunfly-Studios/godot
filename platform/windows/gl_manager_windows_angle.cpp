@@ -61,12 +61,7 @@ EGLenum GLManagerANGLE_Windows::_get_platform_api_enum() const {
 Vector<EGLint> GLManagerANGLE_Windows::_get_platform_context_attribs() const {
 	Vector<EGLint> ret;
 	ret.push_back(EGL_CONTEXT_CLIENT_VERSION);
-
-	if (use_gles2) {
-		ret.push_back(2);
-	} else {
-		ret.push_back(3);
-	}
+	ret.push_back(gles_major);
 	ret.push_back(EGL_NONE);
 
 	return ret;

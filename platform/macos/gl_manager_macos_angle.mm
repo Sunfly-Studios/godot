@@ -61,7 +61,7 @@ EGLenum GLManagerANGLE_MacOS::_get_platform_api_enum() const {
 Vector<EGLint> GLManagerANGLE_MacOS::_get_platform_context_attribs() const {
 	Vector<EGLint> ret;
 	ret.push_back(EGL_CONTEXT_CLIENT_VERSION);
-	ret.push_back(use_gles2 ? 2 : 3);
+	ret.push_back(gles_major);
 	ret.push_back(EGL_NONE);
 
 	return ret;

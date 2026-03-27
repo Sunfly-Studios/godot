@@ -39,7 +39,7 @@
 
 class EGLManagerWayland : public EGLManager {
 private:
-	bool use_gles2 = false;
+	int gles_major, gles_minor;
 
 public:
 	virtual const char *_get_platform_extension_name() const override;
@@ -48,8 +48,9 @@ public:
 	virtual Vector<EGLAttrib> _get_platform_display_attributes() const override;
 	virtual Vector<EGLint> _get_platform_context_attribs() const override;
 
-	EGLManagerWayland(bool p_use_gles2) {
-		use_gles2 = p_use_gles2;
+	EGLManagerWayland(int p_gles_major, int p_gles_minor) {
+		gles_major = p_gles_major;
+		gles_minor = p_gles_minor;
 	}
 	~EGLManagerWayland() {};
 };

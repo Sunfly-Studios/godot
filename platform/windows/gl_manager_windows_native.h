@@ -75,8 +75,8 @@ private:
 	const GLDisplay &get_display(unsigned int id) { return _displays[id]; }
 
 	bool direct_render;
-	bool use_gles2 = false;
 	int glx_minor, glx_major;
+	int gles_major, gles_minor;
 
 private:
 	void _nvapi_setup_profile();
@@ -101,7 +101,7 @@ public:
 	HDC get_hdc(DisplayServer::WindowID p_window_id);
 	HGLRC get_hglrc(DisplayServer::WindowID p_window_id);
 
-	GLManagerNative_Windows(bool p_use_gles2);
+	GLManagerNative_Windows(int p_gles_major, int p_gles_minor);
 	~GLManagerNative_Windows();
 };
 

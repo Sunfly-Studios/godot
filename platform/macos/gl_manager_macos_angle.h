@@ -51,13 +51,14 @@ private:
 	virtual Vector<EGLAttrib> _get_platform_display_attributes() const override;
 	virtual Vector<EGLint> _get_platform_context_attribs() const override;
 
-	bool use_gles2 = false;
+	int gles_major, gles_minor;
 
 public:
 	void window_resize(DisplayServer::WindowID p_window_id, int p_width, int p_height) {}
 
-	GLManagerANGLE_MacOS(bool p_use_gles2) {
-		use_gles2 = p_use_gles2;
+	GLManagerANGLE_MacOS(int p_gles_major, int p_gles_minor) {
+		gles_major = p_gles_major;
+		gles_minor = p_gles_minor;
 	}
 	~GLManagerANGLE_MacOS() {}
 };

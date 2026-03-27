@@ -79,7 +79,7 @@ int silent_error_handler(Display *display, XErrorEvent *error) {
 }
 
 // Runs inside a child. Exiting will not quit the engine.
-void DetectPrimeX11::create_context(bool p_use_gles2) {
+void DetectPrimeX11::create_context(int p_gles_major, int p_gles_minor) {
 	XSetErrorHandler(&silent_error_handler);
 
 	Display *x11_display = XOpenDisplay(nullptr);
@@ -122,23 +122,12 @@ void DetectPrimeX11::create_context(bool p_use_gles2) {
 	GLXCREATECONTEXTATTRIBSARBPROC create_context_attribs = (GLXCREATECONTEXTATTRIBSARBPROC)glXGetProcAddressARB((const GLubyte *)"glXCreateContextAttribsARB");
 
 	if (create_context_attribs) {
-		if (p_use_gles2) {
-			static int context_attribs[] = {
-				GLX_CONTEXT_MAJOR_VERSION_ARB, 2,
-				GLX_CONTEXT_MINOR_VERSION_ARB, 1,
-				None
-			};
-			glx_context = create_context_attribs(x11_display, fbconfig, nullptr, True, context_attribs);
-		} else {
-			static int context_attribs[] = {
-				GLX_CONTEXT_MAJOR_VERSION_ARB, 3,
-				GLX_CONTEXT_MINOR_VERSION_ARB, 3,
-				GLX_CONTEXT_PROFILE_MASK_ARB, GLX_CONTEXT_CORE_PROFILE_BIT_ARB,
-				GLX_CONTEXT_FLAGS_ARB, GLX_CONTEXT_FORWARD_COMPATIBLE_BIT_ARB,
-				None
-			};
-			glx_context = create_context_attribs(x11_display, fbconfig, nullptr, True, context_attribs);
-		}
+		static int context_attribs[] = {
+			GLX_CONTEXT_MAJOR_VERSION_ARB, p_gles_major,
+			GLX_CONTEXT_MINOR_VERSION_ARB, p_gles_minor,
+			None
+		};
+		glx_context = create_context_attribs(x11_display, fbconfig, nullptr, True, context_attribs);
 	} else {
 		// Fallback for ancient drivers
 		glx_context = glXCreateNewContext(x11_display, fbconfig, GLX_RGBA_TYPE, nullptr, True);
@@ -155,7 +144,7 @@ void DetectPrimeX11::create_context(bool p_use_gles2) {
 	XFree(vi);
 }
 
-int DetectPrimeX11::detect_prime(bool p_use_gles2) {
+int DetectPrimeX11::detect_prime(int p_gles_major, int p_gles_minor) {
 	pid_t p;
 	int priorities[2] = {};
 	String vendors[2];
@@ -216,7 +205,7 @@ int DetectPrimeX11::detect_prime(bool p_use_gles2) {
 				setenv("DRI_PRIME", "1", 1);
 			}
 
-			create_context(p_use_gles2);
+			create_context(p_gles_major, p_gles_minor);
 
 			PFNGLGETSTRINGPROC glGetString = (PFNGLGETSTRINGPROC)glXGetProcAddressARB((GLubyte *)"glGetString");
 			if (!glGetString) {
@@ -280,4 +269,4 @@ int DetectPrimeX11::detect_prime(bool p_use_gles2) {
 	return preferred;
 }
 
-#endif // X11_ENABLED && GLES3_ENABLED
+#endif // X11_ENABLED && (GLES3_ENABLED || GLES2_ENABLED)

@@ -1258,49 +1258,57 @@ bool OS_LinuxBSD::_test_create_rendering_device(const String &p_display_driver) 
 }
 
 bool OS_LinuxBSD::_test_create_rendering_device_and_gl(const String &p_display_driver) const {
-    // Tests OpenGL context and Rendering Device simultaneous creation. This function is expected to crash on some drivers.
+	// Tests OpenGL context and Rendering Device simultaneous creation. This function is expected to crash on some drivers.
 
 #if defined(GLES3_ENABLED) || defined(GLES2_ENABLED)
-    String rendering_method = OS::get_singleton()->get_current_rendering_method();
-    bool use_gles2 = (rendering_method == "gl_legacy");
+	String rendering_method = OS::get_singleton()->get_current_rendering_method();
+	int gles_major = 1, gles_minor = 5;
+
+	if (rendering_method == "gl_legacy") {
+		gles_major = 2;
+		gles_minor = 1;
+	} else if (rendering_method == "gl_compatibility") {
+		gles_major = 3;
+		gles_minor = 3;
+	}
 
 #if defined(X11_ENABLED)
-    if (p_display_driver == "x11" || p_display_driver.is_empty()) {
+	if (p_display_driver == "x11" || p_display_driver.is_empty()) {
 #if defined(SOWRAP_ENABLED)
-        if (initialize_xlib(0) != 0) {
-            return false;
-        }
+		if (initialize_xlib(0) != 0) {
+			return false;
+		}
 #endif // SOWRAP_ENABLED
-        DetectPrimeX11::create_context(use_gles2);
-    }
+		DetectPrimeX11::create_context(gles_major, gles_minor);
+	}
 #endif // X11_ENABLED
 
 #if defined(WAYLAND_ENABLED)
-    if (p_display_driver == "wayland") {
+	if (p_display_driver == "wayland") {
 #if defined(SOWRAP_ENABLED)
-        if (initialize_wayland_egl(0) != 0) {
-            return false;
-        }
+		if (initialize_wayland_egl(0) != 0) {
+			return false;
+		}
 #endif // SOWRAP_ENABLED
-        DetectPrimeEGL::create_context(EGL_PLATFORM_WAYLAND_KHR, use_gles2);
-    }
+		DetectPrimeEGL::create_context(EGL_PLATFORM_WAYLAND_KHR, gles_major, gles_minor);
+	}
 #endif // WAYLAND_ENABLED
 
 #if defined(GLES3_ENABLED)
-    if (!use_gles2) {
-        RasterizerGLES3::make_current(true);
-    }
+	if (rendering_method == "gl_compatibility") {
+		RasterizerGLES3::make_current(true);
+	}
 #endif // GLES3_ENABLED
 
 #if defined(GLES2_ENABLED)
-    if (use_gles2) {
-        RasterizerGLES2::make_current(true);
-    }
+	if (rendering_method == "gl_legacy") {
+		RasterizerGLES2::make_current(true);
+	}
 #endif // GLES2_ENABLED
 
 #endif // GLES3_ENABLED || GLES2_ENABLED
 
-    return _test_create_rendering_device(p_display_driver);
+	return _test_create_rendering_device(p_display_driver);
 }
 
 OS_LinuxBSD::OS_LinuxBSD() {

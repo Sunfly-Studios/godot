@@ -53,7 +53,7 @@
 #undef glGetString
 
 // Runs inside a child. Exiting will not quit the engine.
-void DetectPrimeEGL::create_context(EGLenum p_platform_enum, bool p_use_gles2) {
+void DetectPrimeEGL::create_context(EGLenum p_platform_enum, int p_gles_major, int p_gles_minor) {
 #if defined(GLAD_ENABLED)
 	if (!gladLoaderLoadEGL(nullptr)) {
 		print_verbose("Unable to load EGL, GPU detection skipped.");
@@ -104,25 +104,11 @@ void DetectPrimeEGL::create_context(EGLenum p_platform_enum, bool p_use_gles2) {
 		quick_exit(1);
 	}
 
-	const EGLint *context_attribs;
-
-	static const EGLint context_attribs_gl2[] = {
-		EGL_CONTEXT_MAJOR_VERSION, 2,
-		EGL_CONTEXT_MINOR_VERSION, 1,
+	const EGLint context_attribs[] = {
+		EGL_CONTEXT_MAJOR_VERSION, p_gles_major,
+		EGL_CONTEXT_MINOR_VERSION, p_gles_minor,
 		EGL_NONE
 	};
-
-	static const EGLint context_attribs_gl3[] = {
-		EGL_CONTEXT_MAJOR_VERSION, 3,
-		EGL_CONTEXT_MINOR_VERSION, 3,
-		EGL_NONE
-	};
-
-	if (p_use_gles2) {
-		context_attribs = context_attribs_gl2;
-	} else {
-		context_attribs = context_attribs_gl3;
-	}
 
 	egl_context = eglCreateContext(egl_display, egl_config, EGL_NO_CONTEXT, context_attribs);
 	if (egl_context == EGL_NO_CONTEXT) {
@@ -136,7 +122,7 @@ void DetectPrimeEGL::create_context(EGLenum p_platform_enum, bool p_use_gles2) {
 	}
 }
 
-int DetectPrimeEGL::detect_prime(EGLenum p_platform_enum, bool p_use_gles2) {
+int DetectPrimeEGL::detect_prime(EGLenum p_platform_enum, int p_gles_major, int p_gles_minor) {
 	pid_t p;
 	int priorities[4] = {};
 	String vendors[4];
@@ -188,7 +174,7 @@ int DetectPrimeEGL::detect_prime(EGLenum p_platform_enum, bool p_use_gles2) {
 
 			setenv("DRI_PRIME", itos(i).utf8().ptr(), 1);
 
-			create_context(p_platform_enum, p_use_gles2);
+			create_context(p_platform_enum, p_gles_major, p_gles_minor);
 
 			PFNGLGETSTRINGPROC glGetString = (PFNGLGETSTRINGPROC)eglGetProcAddress("glGetString");
 			if (!glGetString) {

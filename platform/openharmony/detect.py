@@ -146,7 +146,7 @@ def configure(env: "SConsEnvironment"):
             env.Append(LIBS=["vulkan"])
 
     if env["opengl3"] or env["opengl2"]:
-        print_error("OpenGL 3/2.0 is not supported on OpenHarmony")
+        print_error("OpenGL is not supported on OpenHarmony")
         sys.exit(255)
 
     env["ARGMAX"] = 8000

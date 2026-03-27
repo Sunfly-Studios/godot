@@ -996,9 +996,7 @@ ProjectDialog::ProjectDialog() {
 	rendering_device_supported = DisplayServer::is_rendering_device_supported();
 
 	if (!rendering_device_supported) {
-		// TODO(GLES2): Maybe the default after the driver works is
-		// gl_legacy
-		default_renderer_type = "gl_compatibility";
+		default_renderer_type = "gl_legacy";
 	}
 
 	Button *rs_button = memnew(CheckBox);
@@ -1064,7 +1062,7 @@ ProjectDialog::ProjectDialog() {
 	rvb->add_child(renderer_info);
 
 	rd_not_supported = memnew(Label);
-	rd_not_supported->set_text(vformat(TTR("RenderingDevice-based methods not available on this GPU:\n%s\nPlease use the Compatibility renderer."), RenderingServer::get_singleton()->get_video_adapter_name()));
+	rd_not_supported->set_text(vformat(TTR("RenderingDevice-based methods not available on this GPU:\n%s\nPlease use the Compatibility or Legacy renderers."), RenderingServer::get_singleton()->get_video_adapter_name()));
 	rd_not_supported->set_horizontal_alignment(HORIZONTAL_ALIGNMENT_CENTER);
 	rd_not_supported->set_custom_minimum_size(Size2(200, 0) * EDSCALE);
 	rd_not_supported->set_autowrap_mode(TextServer::AUTOWRAP_WORD_SMART);

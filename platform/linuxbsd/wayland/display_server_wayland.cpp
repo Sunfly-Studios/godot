@@ -696,7 +696,7 @@ int64_t DisplayServerWayland::window_get_native_handle(HandleType p_handle_type,
 			}
 			return 0;
 		}
-#endif // GLES3_ENABLED
+#endif // GLES3_ENABLED || GLES2_ENABLED
 
 		default: {
 			return 0;
@@ -1015,7 +1015,7 @@ void DisplayServerWayland::window_set_vsync_mode(DisplayServer::VSyncMode p_vsyn
 			egl_manager->set_use_vsync(false);
 		}
 	}
-#endif // GLES3_ENABLED
+#endif // GLES3_ENABLED || GLES2_ENABLED
 }
 
 DisplayServer::VSyncMode DisplayServerWayland::window_get_vsync_mode(DisplayServer::WindowID p_window_id) const {
@@ -1033,7 +1033,7 @@ DisplayServer::VSyncMode DisplayServerWayland::window_get_vsync_mode(DisplayServ
 	if (egl_manager) {
 		return egl_manager->is_using_vsync() ? DisplayServer::VSYNC_ENABLED : DisplayServer::VSYNC_DISABLED;
 	}
-#endif // GLES3_ENABLED
+#endif // GLES3_ENABLED || GLES2_ENABLED
 
 	return DisplayServer::VSYNC_ENABLED;
 }
@@ -1420,7 +1420,7 @@ DisplayServerWayland::DisplayServerWayland(const String &p_rendering_driver, Win
 	int dylibloader_verbose = 0;
 #endif // DEBUG_ENABLED
 #endif // SOWRAP_ENABLED
-#endif // GLES3_ENABLED
+#endif // GLES3_ENABLED || GLES2_ENABLED
 
 	r_error = ERR_UNAVAILABLE;
 	context = p_context;
@@ -1492,6 +1492,8 @@ DisplayServerWayland::DisplayServerWayland(const String &p_rendering_driver, Win
 						"If possible, consider updating your video card drivers or using the OpenGL drivers.\n\n"
 						"You can enable the OpenGL 3 driver by starting the engine from the\n"
 						"command line with the command:\n\n    \"%s\" --rendering-driver opengl3\n\n"
+						"You can enable the OpenGL 2 driver by starting the engine from the\n"
+						"command line with the command:\n\n    \"%s\" --rendering-driver opengl2\n\n"
 						"If you recently updated your video card drivers, try rebooting.",
 							executable_name),
 						"Unable to initialize Vulkan video driver");
@@ -1555,7 +1557,7 @@ DisplayServerWayland::DisplayServerWayland(const String &p_rendering_driver, Win
 	
 				if (prime_idx == -1) {
 					print_verbose("Detecting GPUs, set DRI_PRIME in the environment to override GPU detection logic.");
-					prime_idx = DetectPrimeEGL::detect_prime(EGL_PLATFORM_WAYLAND_KHR);
+					prime_idx = DetectPrimeEGL::detect_prime(EGL_PLATFORM_WAYLAND_KHR, 3, 3);
 				}
 	
 				if (prime_idx) {
@@ -1566,7 +1568,7 @@ DisplayServerWayland::DisplayServerWayland(const String &p_rendering_driver, Win
 			}
 			
 			if (rendering_driver == "opengl3") {
-				egl_manager = memnew(EGLManagerWayland(false));
+				egl_manager = memnew(EGLManagerWayland(3, 3));
 	
 				if (egl_manager->initialize(wayland_thread.get_wl_display()) != OK || egl_manager->open_display(wayland_thread.get_wl_display()) != OK) {
 					memdelete(egl_manager);
@@ -1582,9 +1584,11 @@ DisplayServerWayland::DisplayServerWayland(const String &p_rendering_driver, Win
 	
 						OS::get_singleton()->alert(
 								vformat("Your video card drivers seem not to support the required OpenGL 3.3 version.\n\n"
-										"If possible, consider updating your video card drivers or using the Vulkan driver.\n\n"
+										"If possible, consider updating your video card drivers, using the Vulkan driver, or using the OpenGL 2.1 driver.\n\n"
 										"You can enable the Vulkan driver by starting the engine from the\n"
-										"command line with the command:\n\n    \"%s\" --rendering-driver vulkan\n\n"
+										"command line with the command:\n\n    \"%s\" --rendering-driver vulkan\n"
+										"You can enable the OpenGL 2.1 driver by starting the engine from the\n"
+										"command line with the command:\n\n    \"%s\" --rendering-driver opengl2\n\n"
 										"If you recently updated your video card drivers, try rebooting.",
 										executable_name),
 								"Unable to initialize OpenGL video driver");
@@ -1598,7 +1602,7 @@ DisplayServerWayland::DisplayServerWayland(const String &p_rendering_driver, Win
 			}
 	
 			if (rendering_driver == "opengl3_es") {
-				egl_manager = memnew(EGLManagerWaylandGLES(false));
+				egl_manager = memnew(EGLManagerWaylandGLES(3, 3));
 	
 				if (egl_manager->initialize(wayland_thread.get_wl_display()) != OK || egl_manager->open_display(wayland_thread.get_wl_display()) != OK) {
 					memdelete(egl_manager);
@@ -1607,9 +1611,11 @@ DisplayServerWayland::DisplayServerWayland(const String &p_rendering_driver, Win
 	
 					OS::get_singleton()->alert(
 							vformat("Your video card drivers seem not to support the required OpenGL ES 3.0 version.\n\n"
-									"If possible, consider updating your video card drivers or using the Vulkan driver.\n\n"
+									"If possible, consider updating your video card drivers, using the Vulkan driver, or using the OpenGL ES 2.1.\n\n"
 									"You can enable the Vulkan driver by starting the engine from the\n"
-									"command line with the command:\n\n    \"%s\" --rendering-driver vulkan\n\n"
+									"command line with the command:\n\n    \"%s\" --rendering-driver vulkan\n"
+									"You can enable the OpenGL ES 2.1 driver by starting the engine from the\n"
+									"command line with the command:\n\n    \"%s\" --rendering-driver opengl2_es\n\n"
 									"If you recently updated your video card drivers, try rebooting.",
 									executable_name),
 							"Unable to initialize OpenGL ES video driver");
@@ -1666,7 +1672,7 @@ DisplayServerWayland::DisplayServerWayland(const String &p_rendering_driver, Win
 	
 				if (prime_idx == -1) {
 					print_verbose("Detecting GPUs, set DRI_PRIME in the environment to override GPU detection logic.");
-					prime_idx = DetectPrimeEGL::detect_prime(EGL_PLATFORM_WAYLAND_KHR);
+					prime_idx = DetectPrimeEGL::detect_prime(EGL_PLATFORM_WAYLAND_KHR, 2, 1);
 				}
 	
 				if (prime_idx) {
@@ -1677,7 +1683,7 @@ DisplayServerWayland::DisplayServerWayland(const String &p_rendering_driver, Win
 			}
 			
 			if (rendering_driver == "opengl2") {
-				egl_manager = memnew(EGLManagerWayland(true));
+				egl_manager = memnew(EGLManagerWayland(2, 1));
 	
 				if (egl_manager->initialize(wayland_thread.get_wl_display()) != OK || egl_manager->open_display(wayland_thread.get_wl_display()) != OK) {
 					memdelete(egl_manager);
@@ -1695,7 +1701,7 @@ DisplayServerWayland::DisplayServerWayland(const String &p_rendering_driver, Win
 								vformat("Your video card drivers seem not to support the required OpenGL 2.1 version.\n\n"
 										"If possible, consider updating your video card drivers, using the Vulkan driver, or using the OpenGL 3.3 driver.\n\n"
 										"You can enable the Vulkan driver by starting the engine from the\n"
-										"command line with the command:\n\n    \"%s\" --rendering-driver vulkan\n\n"
+										"command line with the command:\n\n    \"%s\" --rendering-driver vulkan\n"
 										"You can enable the OpenGL 3.3 driver by starting the engine from the\n"
 										"command line with the command:\n\n    \"%s\" --rendering-driver opengl3\n\n"
 										"If you recently updated your video card drivers, try rebooting.",
@@ -1711,7 +1717,7 @@ DisplayServerWayland::DisplayServerWayland(const String &p_rendering_driver, Win
 			}
 	
 			if (rendering_driver == "opengl2_es") {
-				egl_manager = memnew(EGLManagerWaylandGLES(true));
+				egl_manager = memnew(EGLManagerWaylandGLES(2, 1));
 	
 				if (egl_manager->initialize(wayland_thread.get_wl_display()) != OK || egl_manager->open_display(wayland_thread.get_wl_display()) != OK) {
 					memdelete(egl_manager);
@@ -1722,7 +1728,7 @@ DisplayServerWayland::DisplayServerWayland(const String &p_rendering_driver, Win
 							vformat("Your video card drivers seem not to support the required OpenGL ES 2.1 version.\n\n"
 									"If possible, consider updating your video card drivers, using the Vulkan driver, or using the OpenGL 3.3 driver.\n\n"
 									"You can enable the Vulkan driver by starting the engine from the\n"
-									"command line with the command:\n\n    \"%s\" --rendering-driver vulkan\n\n"
+									"command line with the command:\n\n    \"%s\" --rendering-driver vulkan\n"
 									"You can enable the OpenGL 3.3 driver by starting the engine from the\n"
 									"command line with the command:\n\n    \"%s\" --rendering-driver opengl3\n\n"
 									"If you recently updated your video card drivers, try rebooting.",

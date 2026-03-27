@@ -35,7 +35,7 @@
 
 class Dictionary;
 
-Dictionary detect_wgl(bool p_use_gles2 = false);
+Dictionary detect_wgl(int p_gles_major, int p_gles_minor);
 
 #endif // WINDOWS_ENABLED && (GLES3_ENABLED || GLES2_ENABLED)
 

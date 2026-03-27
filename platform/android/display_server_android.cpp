@@ -607,7 +607,7 @@ DisplayServer *DisplayServerAndroid::create_func(const String &p_rendering_drive
 		if (p_rendering_driver == "vulkan") {
 			OS::get_singleton()->alert(
 					"Your device seems not to support the required Vulkan version.\n\n"
-					"Please try exporting your game using the 'gl_compatibility' renderer.",
+					"Please try exporting your game using the 'gl_compatibility', or the 'gl_legacy' renderer.",
 					"Unable to initialize Vulkan video driver");
 		} else if (p_rendering_driver == "opengl3") {
 			OS::get_singleton()->alert(

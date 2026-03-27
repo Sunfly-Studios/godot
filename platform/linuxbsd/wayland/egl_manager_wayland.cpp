@@ -53,9 +53,9 @@ Vector<EGLAttrib> EGLManagerWayland::_get_platform_display_attributes() const {
 Vector<EGLint> EGLManagerWayland::_get_platform_context_attribs() const {
 	Vector<EGLint> ret;
 	ret.push_back(EGL_CONTEXT_MAJOR_VERSION);
-	ret.push_back(use_gles2 ? 2 : 3);
+	ret.push_back(gles_major);
 	ret.push_back(EGL_CONTEXT_MINOR_VERSION);
-	ret.push_back(use_gles2 ? 1 : 3);
+	ret.push_back(gles_minor);
 	ret.push_back(EGL_NONE);
 
 	return ret;

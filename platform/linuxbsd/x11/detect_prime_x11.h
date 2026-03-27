@@ -53,11 +53,11 @@ private:
 	};
 
 public:
-	static void create_context(bool p_use_gles2 = false);
+	static void create_context(int p_gles_major, int p_gles_minor);
 	
-	static int detect_prime(bool p_use_gles2 = false);
+	static int detect_prime(int p_gles_major, int p_gles_minor);
 };
 
-#endif // X11_ENABLED && GLES3_ENABLED
+#endif // X11_ENABLED && (GLES3_ENABLED || GLES2_ENABLED)
 
 #endif // DETECT_PRIME_X11_H

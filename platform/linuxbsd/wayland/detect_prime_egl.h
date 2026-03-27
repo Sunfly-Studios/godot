@@ -78,9 +78,9 @@ private:
 	};
 
 public:
-	static void create_context(EGLenum p_platform_enum, bool p_use_gles2 = false);
+	static void create_context(EGLenum p_platform_enum, int p_gles_major, int p_gles_minor);
 
-	static int detect_prime(EGLenum p_platform_enum, bool p_use_gles2 = false);
+	static int detect_prime(EGLenum p_platform_enum, int p_gles_major, int p_gles_minor);
 };
 
 #endif // GLES3_ENABLED || GLES2_ENABLED

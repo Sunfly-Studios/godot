@@ -589,10 +589,10 @@ class Godot(private val context: Context) {
 					GodotVulkanRenderView(host, this, godotInputHandler, shouldBeTransparent)
 				}
 				"opengl3" -> {
-					GodotGLRenderView(host, this, godotInputHandler, xrMode, useDebugOpengl, shouldBeTransparent)
+					GodotGLRenderView(host, this, godotInputHandler, xrMode, useDebugOpengl, shouldBeTransparent, 3, 3)
 				}
 				"opengl2" -> {
-					GodotGLRenderView(host, this, godotInputHandler, xrMode, useDebugOpengl, shouldBeTransparent)
+					GodotGLRenderView(host, this, godotInputHandler, xrMode, useDebugOpengl, shouldBeTransparent, 2, 1)
 				}
 				else -> {
 					throw IllegalStateException("No native renderer is available.")
