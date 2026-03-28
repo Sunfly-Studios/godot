@@ -841,8 +841,15 @@ if env["lto"] != "none":
 if not env.msvc:
     # Specifying GNU extensions support explicitly, which are supported by
     # both GCC and Clang. Both currently default to gnu17 and gnu++17.
-    env.Prepend(CFLAGS=["-std=gnu17"])
-    env.Prepend(CXXFLAGS=["-std=gnu++17"])
+    if env["use_llvm"] and cc_version_major < 15:
+        # Clang before version 15 simply did not respect
+        # the GNU extensions, but did support the C++
+        # extensions...
+        env.Prepend(CFLAGS=["-std=c17"])
+        env.Prepend(CXXFLAGS=["-std=c++17"])
+    else:
+        env.Prepend(CFLAGS=["-std=gnu17"])
+        env.Prepend(CXXFLAGS=["-std=gnu++17"])
 else:
     # MSVC started offering C standard support with Visual Studio 2019 16.8, which covers all
     # of our supported VS2019 & VS2022 versions; VS2017 will only pass the C++ standard.
@@ -854,7 +861,9 @@ else:
     # MSVC is non-conforming with the C++ standard by default, so we enable more conformance.
     # Note that this is still not complete conformance, as certain Windows-related headers
     # don't compile under complete conformance.
-    env.Prepend(CCFLAGS=["/permissive-"])
+    if env["use_llvm"] and cc_version_major >= 13:
+        env.Prepend(CCFLAGS=["/permissive-"])
+
     # Allow use of `__cplusplus` macro to determine C++ standard universally.
     env.Prepend(CXXFLAGS=["/Zc:__cplusplus"])
 
@@ -929,7 +938,9 @@ else:  # GCC, Clang
         common_warnings += ["-Wshadow-field-in-constructor", "-Wshadow-uncaptured-local"]
         # We often implement `operator<` for structs of pointers as a requirement
         # for putting them in `Set` or `Map`. We don't mind about unreliable ordering.
-        common_warnings += ["-Wno-ordered-compare-function-pointers"]
+        if env["use_llvm"] and cc_version_major >= 13:
+            common_warnings += ["-Wno-ordered-compare-function-pointers"]
+
         common_warnings += ["-Wenum-conversion"]
 
     # clang-cl will interpret `-Wall` as `-Weverything`, workaround with compatibility cast

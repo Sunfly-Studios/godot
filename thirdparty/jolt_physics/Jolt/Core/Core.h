@@ -437,6 +437,12 @@
 #define JPH_MSVC2019_SUPPRESS_WARNING(w)
 #endif
 
+#if !defined(__clang__) || (__clang_major__ >= 9)
+#define JPH_CLANG_9_PLUS_SUPPRESS_WARNING(w) JPH_CLANG_SUPPRESS_WARNING(w)
+#else
+#define JPH_CLANG_9_PLUS_SUPPRESS_WARNING(w)
+#endif
+
 // Disable common warnings triggered by Jolt when compiling with -Wall
 #define JPH_SUPPRESS_WARNINGS																	\
 	JPH_CLANG_SUPPRESS_WARNING("-Wc++98-compat")												\
@@ -457,12 +463,12 @@
 	JPH_CLANG_SUPPRESS_WARNING("-Winvalid-offsetof")											\
 	JPH_CLANG_SUPPRESS_WARNING("-Wgnu-zero-variadic-macro-arguments")							\
 	JPH_CLANG_SUPPRESS_WARNING("-Wdocumentation-unknown-command")								\
-	JPH_CLANG_SUPPRESS_WARNING("-Wctad-maybe-unsupported")										\
+	JPH_CLANG_9_PLUS_SUPPRESS_WARNING("-Wctad-maybe-unsupported")								\
 	JPH_CLANG_SUPPRESS_WARNING("-Wswitch-default")												\
 	JPH_CLANG_13_PLUS_SUPPRESS_WARNING("-Wdeprecated-copy")										\
 	JPH_CLANG_13_PLUS_SUPPRESS_WARNING("-Wdeprecated-copy-with-dtor")							\
 	JPH_CLANG_16_PLUS_SUPPRESS_WARNING("-Wunsafe-buffer-usage")									\
-	JPH_IF_NOT_ANDROID(JPH_CLANG_SUPPRESS_WARNING("-Wimplicit-int-float-conversion"))			\
+	JPH_IF_NOT_ANDROID(JPH_CLANG_9_PLUS_SUPPRESS_WARNING("-Wimplicit-int-float-conversion"))	\
 																								\
 	JPH_GCC_SUPPRESS_WARNING("-Wcomment")														\
 	JPH_GCC_SUPPRESS_WARNING("-Winvalid-offsetof")												\
