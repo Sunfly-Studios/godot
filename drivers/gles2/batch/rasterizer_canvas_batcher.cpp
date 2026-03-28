@@ -66,7 +66,7 @@ void RasterizerCanvasBatcher::batch_initialize() {
 	int max_quads = bdata.settings_batch_buffer_num_verts / 4;
 	max_quads = CLAMP(max_quads, min_possible_quads, max_possible_quads);
 
-	uint32_t sizeof_batch_vert = sizeof(BatchVertex);
+	uint32_t sizeof_batch_vert = sizeof(BatchVertexLarge);
 
 	bdata.max_quads = max_quads;
 	bdata.vertex_buffer_size_units = max_quads * 4;
