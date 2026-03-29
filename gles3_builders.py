@@ -555,12 +555,16 @@ def build_gles3_header(
         else:
             fd.write("\t\tstatic const Feedback* _feedbacks=nullptr;\n")
 
+        readable_vert = "\n".join(header_data.vertex_lines).replace("*/", "* /")
+        fd.write(f"/*\n=== VERTEX CODE ===\n{readable_vert}\n=============================\n*/\n")
         fd.write("\t\tstatic const char _vertex_code[]={\n")
-        fd.write(to_raw_cstring(header_data.vertex_lines))
+        fd.write(to_byte_array(header_data.vertex_lines))
         fd.write("\n\t\t};\n\n")
 
+        readable_frag = "\n".join(header_data.fragment_lines).replace("*/", "* /")
+        fd.write(f"/*\n=== FRAGMENT CODE ===\n{readable_frag}\n===============================\n*/\n")
         fd.write("\t\tstatic const char _fragment_code[]={\n")
-        fd.write(to_raw_cstring(header_data.fragment_lines))
+        fd.write(to_byte_array(header_data.fragment_lines))
         fd.write("\n\t\t};\n\n")
 
         fd.write(
@@ -591,3 +595,8 @@ def build_gles3_headers(target, source, env):
     env.NoCache(target)
     for x in source:
         build_gles3_header(str(x), include="drivers/gles3/shader_gles3.h", class_suffix="GLES3")
+
+def to_byte_array(lines):
+    # Join lines and explicitly add the null terminator 
+    raw_str = "\n".join(lines) + "\0"
+    return ", ".join(str(b) for b in raw_str.encode("utf-8"))

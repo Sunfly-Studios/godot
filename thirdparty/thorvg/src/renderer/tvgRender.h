@@ -25,6 +25,7 @@
 
 #include <math.h>
 #include <cstdarg>
+#include <algorithm>
 #include "tvgCommon.h"
 #include "tvgArray.h"
 #include "tvgLock.h"

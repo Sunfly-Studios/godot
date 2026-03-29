@@ -27,6 +27,7 @@
 
 #include <float.h>
 #include <cmath>
+#include <algorithm>
 #include "tvgCommon.h"
 
 namespace tvg

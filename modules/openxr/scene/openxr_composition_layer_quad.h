@@ -46,10 +46,10 @@ class OpenXRCompositionLayerQuad : public OpenXRCompositionLayer {
 		XR_EYE_VISIBILITY_BOTH, // eyeVisibility
 		{}, // subImage
 		{ { 0, 0, 0, 0 }, { 0, 0, 0 } }, // pose
-		{ 1.0, 1.0 }, // size
+		{ 1.0f, 1.0f }, // size
 	};
 
-	Size2 quad_size = Size2(1.0, 1.0);
+	Size2 quad_size = Size2(1.0f, 1.0f);
 
 protected:
 	static void _bind_methods();

@@ -46,14 +46,14 @@ class OpenXRCompositionLayerCylinder : public OpenXRCompositionLayer {
 		XR_EYE_VISIBILITY_BOTH, // eyeVisibility
 		{}, // subImage
 		{ { 0, 0, 0, 0 }, { 0, 0, 0 } }, // pose
-		1.0, // radius
-		Math_PI / 2.0, // centralAngle
-		1.0, // aspectRatio
+		1.0f, // radius
+		static_cast<float>(Math_PI) / 2.0f, // centralAngle
+		1.0f, // aspectRatio
 	};
 
-	float radius = 1.0;
-	float aspect_ratio = 1.0;
-	float central_angle = Math_PI / 2.0;
+	float radius = 1.0f;
+	float aspect_ratio = 1.0f;
+	float central_angle = static_cast<float>(Math_PI) / 2.0f;
 	uint32_t fallback_segments = 10;
 
 protected:

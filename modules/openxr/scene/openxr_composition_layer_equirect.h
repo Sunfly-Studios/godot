@@ -46,16 +46,16 @@ class OpenXRCompositionLayerEquirect : public OpenXRCompositionLayer {
 		XR_EYE_VISIBILITY_BOTH, // eyeVisibility
 		{}, // subImage
 		{ { 0, 0, 0, 0 }, { 0, 0, 0 } }, // pose
-		1.0, // radius
-		Math_PI / 2.0, // centralHorizontalAngle
-		Math_PI / 4.0, // upperVerticalAngle
-		-Math_PI / 4.0, // lowerVerticalAngle
+		1.0f, // radius
+		static_cast<float>(Math_PI) / 2.0f, // centralHorizontalAngle
+		static_cast<float>(Math_PI) / 4.0f, // upperVerticalAngle
+		static_cast<float>(-Math_PI) / 4.0f, // lowerVerticalAngle
 	};
 
-	float radius = 1.0;
-	float central_horizontal_angle = Math_PI / 2.0;
-	float upper_vertical_angle = Math_PI / 4.0;
-	float lower_vertical_angle = Math_PI / 4.0;
+	float radius = 1.0f;
+	float central_horizontal_angle = static_cast<float>(Math_PI) / 2.0f;
+	float upper_vertical_angle = static_cast<float>(Math_PI) / 4.0f;
+	float lower_vertical_angle = static_cast<float>(Math_PI) / 4.0f;
 	uint32_t fallback_segments = 10;
 
 protected:

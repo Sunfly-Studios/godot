@@ -1,0 +1,24 @@
+diff --git a/thirdparty/thorvg/src/common/tvgMath.h b/thirdparty/thorvg/src/common/tvgMath.h
+index a917998256..9d0bc53514 100644
+--- a/thirdparty/thorvg/src/common/tvgMath.h
++++ b/thirdparty/thorvg/src/common/tvgMath.h
+@@ -27,6 +27,7 @@
+ 
+ #include <float.h>
+ #include <cmath>
++#include <algorithm>
+ #include "tvgCommon.h"
+ 
+ namespace tvg
+diff --git a/thirdparty/thorvg/src/renderer/tvgRender.h b/thirdparty/thorvg/src/renderer/tvgRender.h
+index 7d432cac76..70460fc15d 100644
+--- a/thirdparty/thorvg/src/renderer/tvgRender.h
++++ b/thirdparty/thorvg/src/renderer/tvgRender.h
+@@ -25,6 +25,7 @@
+ 
+ #include <math.h>
+ #include <cstdarg>
++#include <algorithm>
+ #include "tvgCommon.h"
+ #include "tvgArray.h"
+ #include "tvgLock.h"

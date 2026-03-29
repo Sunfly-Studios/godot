@@ -62,7 +62,7 @@ AnimationNode::NodeTimeInfo AnimationNodeExtension::_array_to_node_time_info(con
 	ret_val.length = p_node_info[0];
 	ret_val.position = p_node_info[1];
 	ret_val.delta = p_node_info[2];
-	ret_val.loop_mode = static_cast<Animation::LoopMode>(p_node_info[3]);
+	ret_val.loop_mode = static_cast<Animation::LoopMode>(static_cast<int>(p_node_info[3]));
 	ret_val.will_end = p_node_info[4] > 0.0;
 	ret_val.is_infinity = p_node_info[5] > 0.0;
 	return ret_val;

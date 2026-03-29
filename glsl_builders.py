@@ -79,12 +79,14 @@ def include_file_in_rd_header(filename: str, header_data: RDHeaderStruct, depth:
 
             line = line.replace("\r", "").replace("\n", "")
 
-            if header_data.reading == "vertex":
-                header_data.vertex_lines += [line]
-            if header_data.reading == "fragment":
-                header_data.fragment_lines += [line]
-            if header_data.reading == "compute":
-                header_data.compute_lines += [line]
+            # Only append if the line isn't completely empty
+            if line.strip():
+                if header_data.reading == "vertex":
+                    header_data.vertex_lines += [line]
+                if header_data.reading == "fragment":
+                    header_data.fragment_lines += [line]
+                if header_data.reading == "compute":
+                    header_data.compute_lines += [line]
 
             line = fs.readline()
             header_data.line_offset += 1
@@ -110,20 +112,25 @@ def build_rd_header(
     out_file_class = out_file_base.replace(".glsl.gen.h", "").title().replace("_", "").replace(".", "") + "ShaderRD"
 
     if header_data.compute_lines:
+        readable_code = "\n".join(header_data.compute_lines).replace("*/", "* /")
         body_parts = [
-            "static const char _compute_code[] = {\n%s\n\t\t};" % to_raw_cstring(header_data.compute_lines),
+            f"/*\n=== SHADER CODE ===\n{readable_code}\n==================================\n*/",
+            "static const char _compute_code[] = {\n\t\t\t%s\n\t\t};" % to_byte_array(header_data.compute_lines),
             f'setup(nullptr, nullptr, _compute_code, "{out_file_class}");',
         ]
     else:
+        readable_vert = "\n".join(header_data.vertex_lines).replace("*/", "* /")
+        readable_frag = "\n".join(header_data.fragment_lines).replace("*/", "* /")
         body_parts = [
-            "static const char _vertex_code[] = {\n%s\n\t\t};" % to_raw_cstring(header_data.vertex_lines),
-            "static const char _fragment_code[] = {\n%s\n\t\t};" % to_raw_cstring(header_data.fragment_lines),
+            f"/*\n=== VERTEX CODE ===\n{readable_vert}\n=============================\n*/",
+            "static const char _vertex_code[] = {\n\t\t\t%s\n\t\t};" % to_byte_array(header_data.vertex_lines),
+            f"/*\n=== FRAGMENT CODE ===\n{readable_frag}\n===============================\n*/",
+            "static const char _fragment_code[] = {\n\t\t\t%s\n\t\t};" % to_byte_array(header_data.fragment_lines),
             f'setup(_vertex_code, _fragment_code, nullptr, "{out_file_class}");',
         ]
 
     body_content = "\n\t\t".join(body_parts)
 
-    # Intended curly brackets are doubled so f-string doesn't eat them up.
     shader_template = f"""/* WARNING, THIS FILE WAS GENERATED, DO NOT EDIT */
 #ifndef {out_file_ifdef}_RD
 #define {out_file_ifdef}_RD
@@ -209,3 +216,8 @@ def build_raw_headers(target, source, env):
     env.NoCache(target)
     for x in source:
         build_raw_header(filename=str(x))
+
+def to_byte_array(lines):
+    # Join lines and explicitly add the null terminator 
+    raw_str = "\n".join(lines) + "\0"
+    return ", ".join(str(b) for b in raw_str.encode('utf-8'))

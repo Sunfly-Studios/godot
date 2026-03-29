@@ -51,7 +51,7 @@ class OpenXRCompositionLayer : public Node3D {
 
 	SubViewport *layer_viewport = nullptr;
 	bool use_android_surface = false;
-	Size2i android_surface_size = Size2i(1024, 1024);
+	Size2i android_surface_size = Size2i(1024.0, 1024.0);
 	bool enable_hole_punch = false;
 	MeshInstance3D *fallback = nullptr;
 	bool should_update_fallback_mesh = false;

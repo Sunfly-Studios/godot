@@ -5228,7 +5228,7 @@ String String::property_name_encode() const {
 
 // Changes made to the set of invalid characters must also be reflected in the String documentation.
 
-static const char32_t invalid_node_name_characters[] = { '.', ':', '@', '/', '\"', UNIQUE_NODE_PREFIX[0], 0 };
+static const char32_t invalid_node_name_characters[] = { U'.', U':', U'@', U'/', U'\"', static_cast<char32_t>(UNIQUE_NODE_PREFIX[0]), 0 };
 
 String String::get_invalid_node_name_characters(bool p_allow_internal) {
 	// Do not use this function for critical validation.
