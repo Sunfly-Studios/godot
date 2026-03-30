@@ -344,7 +344,7 @@ struct RenderTarget {
 
 	bool was_used = false;
 	bool hdr = false; // For Legacy this effects both 2D and 3D rendering!
-	GLuint color_internal_format = GL_RGBA8;
+	GLuint color_internal_format = GL_RGBA;
 	GLuint color_format = GL_RGBA;
 	GLuint color_type = GL_UNSIGNED_BYTE;
 	uint32_t color_format_size = 4;

@@ -239,7 +239,6 @@ protected:
 			return false;
 		}
 
-		glUseProgram(spec->id);
 		current_shader = spec;
 		return true;
 	}

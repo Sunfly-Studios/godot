@@ -416,10 +416,12 @@ void RasterizerGLES1::_blit_render_target_to_screen(RID p_render_target, Display
 	glDisable(GL_DEPTH_TEST);
 	glDisable(GL_CULL_FACE);
 	glDisable(GL_SCISSOR_TEST);
+	glDisable(GL_TEXTURE_2D);
 	glDepthMask(GL_FALSE);
 
 	// Bind the RenderTarget's color texture
 	glActiveTexture(GL_TEXTURE0);
+	glEnable(GL_TEXTURE_2D);
 	glBindTexture(GL_TEXTURE_2D, rt->color);
 
 	// Make sure we don't blur the image when the RT is smaller than the screen
@@ -436,16 +438,59 @@ void RasterizerGLES1::_blit_render_target_to_screen(RID p_render_target, Display
 		flip_y = false;
 	}
 
+	glEnable(GL_TEXTURE_2D);
+
+	// Ensure matrices are clean for NDC drawing
+	glMatrixMode(GL_PROJECTION);
+	glLoadIdentity();
+	glMatrixMode(GL_MODELVIEW);
+	glLoadIdentity();
+
+	float uvs[8] = {};
 	if (flip_y) {
-		// Start Y at 1.0, and go down by -1.0
-		copy_effects->copy_to_rect(Rect2(0.0, 1.0, 1.0, -1.0));
+		// Upside down UVs
+		uvs[0] = 0.0f;
+		uvs[1] = 0.0f;
+		uvs[2] = 0.0f;
+		uvs[3] = 1.0f;
+		uvs[4] = 1.0f;
+		uvs[5] = 0.0f;
+		uvs[6] = 1.0f;
+		uvs[7] = 1.0f;
 	} else {
-		// Normal copy
-		copy_effects->copy_to_rect(Rect2(0.0, 0.0, 1.0, 1.0));
+		// Normal UVs
+		uvs[0] = 0.0f;
+		uvs[1] = 1.0f;
+		uvs[2] = 0.0f;
+		uvs[3] = 0.0f;
+		uvs[4] = 1.0f;
+		uvs[5] = 1.0f;
+		uvs[6] = 1.0f;
+		uvs[7] = 0.0f;
 	}
+
+	// Draw full screen quad in NDC (-1 to 1)
+	float vertices[] = {
+		-1.0f, 1.0f,
+		-1.0f, -1.0f,
+		1.0f, 1.0f,
+		1.0f, -1.0f
+	};
+
+	glEnableClientState(GL_VERTEX_ARRAY);
+	glEnableClientState(GL_TEXTURE_COORD_ARRAY);
+
+	glVertexPointer(2, GL_FLOAT, 0, vertices);
+	glTexCoordPointer(2, GL_FLOAT, 0, uvs);
+
+	glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+
+	glDisableClientState(GL_VERTEX_ARRAY);
+	glDisableClientState(GL_TEXTURE_COORD_ARRAY);
 
 	// Clean up
 	glBindTexture(GL_TEXTURE_2D, 0);
+	glDisable(GL_TEXTURE_2D);
 
 	// Restore global depth mask
 	glDepthMask(GL_TRUE);
@@ -515,9 +560,28 @@ void RasterizerGLES1::set_boot_image(const Ref<Image> &p_image, const Color &p_c
 	GLES1::Texture *t = texture_storage->get_texture(texture);
 	t->gl_set_filter(p_use_filter ? RS::CANVAS_ITEM_TEXTURE_FILTER_LINEAR : RS::CANVAS_ITEM_TEXTURE_FILTER_NEAREST);
 	glActiveTexture(GL_TEXTURE0);
+	glEnable(GL_TEXTURE_2D);
 	glBindTexture(GL_TEXTURE_2D, t->tex_id);
+
+	glDisable(GL_CULL_FACE);
+	glDisable(GL_DEPTH_TEST);
+	glDisable(GL_SCISSOR_TEST);
+	glDisableClientState(GL_COLOR_ARRAY);
+
+	// Ensure the texture is multiplied by pure white,
+	// not whatever ghost color was left over
+	glColor4f(1.0f, 1.0f, 1.0f, 1.0f);
+
+	// Godot's logo has a transparent background.
+	glEnable(GL_BLEND);
+	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
 	copy_effects->copy_to_rect(screenrect);
+
+	// Clean up
 	glBindTexture(GL_TEXTURE_2D, 0);
+	glDisable(GL_TEXTURE_2D);
+	glDisable(GL_BLEND);
 
 	DisplayServer::get_singleton()->swap_buffers();
 

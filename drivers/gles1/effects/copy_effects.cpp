@@ -100,36 +100,41 @@ void CopyEffects::set_color(const Color &p_color, const Rect2i &p_region) {
 }
 
 void CopyEffects::draw_screen_triangle() {
-	// GLES2 doesn't have native VAOs in the base spec, so we bind pointers directly
 	glBindBuffer(GL_ARRAY_BUFFER, screen_triangle);
 
-	// Position attribute (2 floats).
-	glVertexAttribPointer(RS::ARRAY_VERTEX, 2, GL_FLOAT, GL_FALSE, sizeof(float) * 2, nullptr);
-	glEnableVertexAttribArray(RS::ARRAY_VERTEX);
+	// In GLES1, we use standard client states, not attribute arrays
+	glEnableClientState(GL_VERTEX_ARRAY);
+	glVertexPointer(2, GL_FLOAT, sizeof(float) * 2, nullptr);
 
+	// TODO(GLES1): The screen triangle doesn't use UVs in the VBO (shader computes them),
+	// but fixed-function doesn't have a shader. So this might need UVs later,
+	// but for now, just draw the vertex array.
 	glDrawArrays(GL_TRIANGLES, 0, 3);
 
 	// Clean up state
-	glDisableVertexAttribArray(RS::ARRAY_VERTEX);
+	glDisableClientState(GL_VERTEX_ARRAY);
 	glBindBuffer(GL_ARRAY_BUFFER, 0);
 }
 
 void CopyEffects::draw_screen_quad() {
-    glBindBuffer(GL_ARRAY_BUFFER, quad);
-    
-    // Position
-    glVertexAttribPointer(RS::ARRAY_VERTEX, 2, GL_FLOAT, GL_FALSE, sizeof(float) * 4, nullptr);
-    glEnableVertexAttribArray(RS::ARRAY_VERTEX);
+	glBindBuffer(GL_ARRAY_BUFFER, quad);
 
-    // UV (Offset by 2 floats / 8 bytes)
-    glVertexAttribPointer(RS::ARRAY_TEX_UV, 2, GL_FLOAT, GL_FALSE, sizeof(float) * 4, (const void *)(sizeof(float) * 2));
-    glEnableVertexAttribArray(RS::ARRAY_TEX_UV);
+	// Enable fixed-function client states
+	glEnableClientState(GL_VERTEX_ARRAY);
+	glEnableClientState(GL_TEXTURE_COORD_ARRAY);
 
-    glDrawArrays(GL_TRIANGLES, 0, 6);
+	// Position (2 floats, stride of 4 floats)
+	glVertexPointer(2, GL_FLOAT, sizeof(float) * 4, nullptr);
 
-    glDisableVertexAttribArray(RS::ARRAY_VERTEX);
-    glDisableVertexAttribArray(RS::ARRAY_TEX_UV);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
+	// UV (2 floats, stride of 4 floats, offset by 2 floats)
+	glTexCoordPointer(2, GL_FLOAT, sizeof(float) * 4, (const void *)(sizeof(float) * 2));
+
+	glDrawArrays(GL_TRIANGLES, 0, 6);
+
+	// Clean up state
+	glDisableClientState(GL_VERTEX_ARRAY);
+	glDisableClientState(GL_TEXTURE_COORD_ARRAY);
+	glBindBuffer(GL_ARRAY_BUFFER, 0);
 }
 
 void CopyEffects::copy_to_rect(const Rect2 &p_rect) {
@@ -196,7 +201,7 @@ void CopyEffects::copy_cube_to_panorama(float p_mip_level) {
 	draw_screen_quad();
 }
 
-// Stubs for mipmapping/blur effects (GLES2 does not support native framebuffer blit well enough for this)
+// Stubs for mipmapping/blur effects (GLES1 has no support for native framebuffer blit)
 void CopyEffects::bilinear_blur(GLuint p_source_texture, int p_mipmap_count, const Rect2i &p_region) {
 
 }
