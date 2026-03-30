@@ -2236,7 +2236,8 @@ void VisualShaderEditor::_update_options_menu() {
 
 	static bool low_driver = (
 		GLOBAL_GET("rendering/renderer/rendering_method") == "gl_compatibility" ||
-		GLOBAL_GET("rendering/renderer/rendering_method") == "gl_legacy"
+		GLOBAL_GET("rendering/renderer/rendering_method") == "gl_legacy" ||
+		GLOBAL_GET("rendering/renderer/rendering_method") == "gl_classic"
 	);
 
 	HashMap<String, TreeItem *> folders;

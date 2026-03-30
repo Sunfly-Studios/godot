@@ -164,7 +164,7 @@ DisplayServerMacOS::WindowID DisplayServerMacOS::_create_window(WindowMode p_mod
 			rendering_context->window_set_vsync_mode(window_id_counter, p_vsync_mode);
 		}
 #endif
-#if defined(GLES3_ENABLED) || defined(GLES2_ENABLED)
+#if defined(GLES3_ENABLED) || defined(GLES2_ENABLED) || defined(GLES1_ENABLED)
 		if (gl_manager_legacy) {
 			Error err = gl_manager_legacy->window_create(window_id_counter, wd.window_view, p_rect.size.width, p_rect.size.height);
 			ERR_FAIL_COND_V_MSG(err != OK, INVALID_WINDOW_ID, "Can't create an OpenGL context.");
@@ -203,7 +203,7 @@ DisplayServerMacOS::WindowID DisplayServerMacOS::_create_window(WindowMode p_mod
 		layer.contentsScale = scale;
 	}
 
-#if defined(GLES3_ENABLED) || defined(GLES2_ENABLED)
+#if defined(GLES3_ENABLED) || defined(GLES2_ENABLED) || defined(GLES1_ENABLED)
 	if (gl_manager_legacy) {
 		gl_manager_legacy->window_resize(id, wd.size.width, wd.size.height);
 	}
@@ -279,7 +279,7 @@ void DisplayServerMacOS::set_window_per_pixel_transparency_enabled(bool p_enable
 				[layer setBackgroundColor:[NSColor clearColor].CGColor];
 				[layer setOpaque:NO];
 			}
-#if defined(GLES3_ENABLED) || defined(GLES2_ENABLED)
+#if defined(GLES3_ENABLED) || defined(GLES2_ENABLED) || defined(GLES1_ENABLED)
 			if (gl_manager_legacy) {
 				gl_manager_legacy->window_set_per_pixel_transparency_enabled(p_window, true);
 			}
@@ -298,7 +298,7 @@ void DisplayServerMacOS::set_window_per_pixel_transparency_enabled(bool p_enable
 				[layer setBackgroundColor:bg_color.CGColor];
 				[layer setOpaque:YES];
 			}
-#if defined(GLES3_ENABLED) || defined(GLES2_ENABLED)
+#if defined(GLES3_ENABLED) || defined(GLES2_ENABLED) || defined(GLES1_ENABLED)
 			if (gl_manager_legacy) {
 				gl_manager_legacy->window_set_per_pixel_transparency_enabled(p_window, false);
 			}
@@ -742,7 +742,7 @@ bool DisplayServerMacOS::get_is_resizing() const {
 
 void DisplayServerMacOS::window_destroy(WindowID p_window) {
 	@autoreleasepool {
-#if defined(GLES3_ENABLED) || defined(GLES2_ENABLED)
+#if defined(GLES3_ENABLED) || defined(GLES2_ENABLED) || defined(GLES1_ENABLED)
 		if (gl_manager_legacy) {
 			gl_manager_legacy->window_destroy(p_window);
 		}
@@ -771,7 +771,7 @@ void DisplayServerMacOS::window_resize(WindowID p_window, int p_width, int p_hei
 		rendering_context->window_set_size(p_window, p_width, p_height);
 	}
 #endif
-#if defined(GLES3_ENABLED) || defined(GLES2_ENABLED)
+#if defined(GLES3_ENABLED) || defined(GLES2_ENABLED) || defined(GLES1_ENABLED)
 	if (gl_manager_legacy) {
 		gl_manager_legacy->window_resize(p_window, p_width, p_height);
 	}
@@ -2974,7 +2974,7 @@ int64_t DisplayServerMacOS::window_get_native_handle(HandleType p_handle_type, W
 		case WINDOW_VIEW: {
 			return (int64_t)windows[p_window].window_view;
 		}
-#if defined(GLES3_ENABLED) || defined(GLES2_ENABLED)
+#if defined(GLES3_ENABLED) || defined(GLES2_ENABLED) || defined(GLES1_ENABLED)
 		case OPENGL_CONTEXT: {
 			if (gl_manager_legacy) {
 				return (int64_t)gl_manager_legacy->get_context(p_window);
@@ -3018,7 +3018,7 @@ ObjectID DisplayServerMacOS::window_get_attached_instance_id(WindowID p_window) 
 }
 
 void DisplayServerMacOS::gl_window_make_current(DisplayServer::WindowID p_window_id) {
-#if defined(GLES3_ENABLED) || defined(GLES2_ENABLED)
+#if defined(GLES3_ENABLED) || defined(GLES2_ENABLED) || defined(GLES1_ENABLED)
 	if (gl_manager_legacy) {
 		gl_manager_legacy->window_make_current(p_window_id);
 	}
@@ -3030,7 +3030,7 @@ void DisplayServerMacOS::gl_window_make_current(DisplayServer::WindowID p_window
 
 void DisplayServerMacOS::window_set_vsync_mode(DisplayServer::VSyncMode p_vsync_mode, WindowID p_window) {
 	_THREAD_SAFE_METHOD_
-#if defined(GLES3_ENABLED) || defined(GLES2_ENABLED)
+#if defined(GLES3_ENABLED) || defined(GLES2_ENABLED) || defined(GLES1_ENABLED)
 	if (gl_manager_angle) {
 		gl_manager_angle->set_use_vsync(p_vsync_mode != DisplayServer::VSYNC_DISABLED);
 	}
@@ -3047,7 +3047,7 @@ void DisplayServerMacOS::window_set_vsync_mode(DisplayServer::VSyncMode p_vsync_
 
 DisplayServer::VSyncMode DisplayServerMacOS::window_get_vsync_mode(WindowID p_window) const {
 	_THREAD_SAFE_METHOD_
-#if defined(GLES3_ENABLED) || defined(GLES2_ENABLED)
+#if defined(GLES3_ENABLED) || defined(GLES2_ENABLED) || defined(GLES1_ENABLED)
 	if (gl_manager_angle) {
 		return (gl_manager_angle->is_using_vsync() ? DisplayServer::VSyncMode::VSYNC_ENABLED : DisplayServer::VSyncMode::VSYNC_DISABLED);
 	}
@@ -3422,7 +3422,7 @@ void DisplayServerMacOS::force_process_and_drop_events() {
 }
 
 void DisplayServerMacOS::release_rendering_thread() {
-#if defined(GLES3_ENABLED) || defined(GLES2_ENABLED)
+#if defined(GLES3_ENABLED) || defined(GLES2_ENABLED) || defined(GLES1_ENABLED)
 	if (gl_manager_angle) {
 		gl_manager_angle->release_current();
 	}
@@ -3433,7 +3433,7 @@ void DisplayServerMacOS::release_rendering_thread() {
 }
 
 void DisplayServerMacOS::swap_buffers() {
-#if defined(GLES3_ENABLED) || defined(GLES2_ENABLED)
+#if defined(GLES3_ENABLED) || defined(GLES2_ENABLED) || defined(GLES1_ENABLED)
 	if (gl_manager_angle) {
 		gl_manager_angle->swap_buffers();
 	}
@@ -3707,6 +3707,10 @@ Vector<String> DisplayServerMacOS::get_rendering_drivers_func() {
 #if defined(GLES2_ENABLED)
 	drivers.push_back("opengl2");
 	drivers.push_back("opengl2_angle");
+#endif
+#if defined(GLES1_ENABLED)
+	drivers.push_back("opengl1");
+	drivers.push_back("opengl1_angle");
 #endif
 
 	return drivers;
@@ -4231,7 +4235,7 @@ DisplayServerMacOS::~DisplayServerMacOS() {
 	}
 
 	// Destroy drivers.
-#if defined(GLES3_ENABLED) || defined(GLES2_ENABLED)
+#if defined(GLES3_ENABLED) || defined(GLES2_ENABLED) || defined(GLES1_ENABLED)
 	if (gl_manager_legacy) {
 		memdelete(gl_manager_legacy);
 		gl_manager_legacy = nullptr;

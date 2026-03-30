@@ -1,5 +1,5 @@
 /**************************************************************************/
-/*  rasterizer_canvas_batcher.h                                           */
+/*  rasterizer_canvas_batcher_gles1.h                                     */
 /**************************************************************************/
 /*                         This file is part of:                          */
 /*                             GODOT ENGINE                               */
@@ -28,25 +28,25 @@
 /* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                 */
 /**************************************************************************/
 
-#ifdef GLES2_ENABLED
+#ifdef GLES1_ENABLED
 
-#ifndef RASTERIZER_CANVAS_BATCHER_H
-#define RASTERIZER_CANVAS_BATCHER_H
+#ifndef RASTERIZER_CANVAS_BATCHER_GLES1_H
+#define RASTERIZER_CANVAS_BATCHER_GLES1_H
 
-#include "batcher_enum.h"
 #include "core/os/os.h"
 #include "core/templates/local_vector.h"
-#include "rasterizer_array.h"
-#include "rasterizer_asserts.h"
+#include "drivers/gles_common/batch/batcher_enum.h"
+#include "drivers/gles_common/batch/rasterizer_array.h"
+#include "drivers/gles_common/batch/rasterizer_asserts.h"
 
 #include "core/config/project_settings.h"
 #include "servers/rendering/renderer_compositor.h"
-#include "drivers/gles2/storage/material_storage.h"
-#include "drivers/gles2/storage/texture_storage.h"
+#include "drivers/gles1/storage/material_storage.h"
+#include "drivers/gles1/storage/texture_storage.h"
 
-class RasterizerCanvasGLES2;
+class RasterizerCanvasGLES1;
 
-class RasterizerCanvasBatcher {
+class RasterizerCanvasBatcherGLES1 {
 public:
 	// used to determine whether we use hardware transform (none)
 	// software transform all verts, or software transform just a translate
@@ -502,7 +502,7 @@ public:
 		}
 
 		RendererCanvasRender::Item *current_clip;
-		GLES2::Shader *shader_cache;
+		GLES1::Shader *shader_cache;
 		bool rebind_shader;
 		bool prev_use_skeleton;
 		bool prev_distance_field;
@@ -533,8 +533,8 @@ public:
 	// End of structs used by the batcher. Beginning of funcs.
 private:
 
-	RasterizerCanvasGLES2 *get_this();
-	const RasterizerCanvasGLES2 *get_this() const;
+	RasterizerCanvasGLES1 *get_this();
+	const RasterizerCanvasGLES1 *get_this() const;
 
 protected:
 	// main functions called from the rasterizer canvas
@@ -560,14 +560,14 @@ protected:
 	bool _detect_item_batch_break(RenderItemState &r_ris, RendererCanvasRender::Item *p_ci, bool &r_batch_break);
 
 	// drives the loop filling batches and flushing
-	void render_joined_item_commands(const BItemJoined &p_bij, RendererCanvasRender::Item *p_current_clip, bool &r_reclip, GLES2::CanvasMaterialData *p_material, bool p_lit);
+	void render_joined_item_commands(const BItemJoined &p_bij, RendererCanvasRender::Item *p_current_clip, bool &r_reclip, GLES1::CanvasMaterialData *p_material, bool p_lit);
 
 private:
 	// flush once full or end of joined item
-	void flush_render_batches(RendererCanvasRender::Item *p_first_item, RendererCanvasRender::Item *p_current_clip, bool &r_reclip, GLES2::CanvasMaterialData *p_material, uint32_t p_sequence_batch_type_flags);
+	void flush_render_batches(RendererCanvasRender::Item *p_first_item, RendererCanvasRender::Item *p_current_clip, bool &r_reclip, GLES1::CanvasMaterialData *p_material, uint32_t p_sequence_batch_type_flags);
 
 	// a single joined item can contain multiple itemrefs, and thus create lots of batches
-	bool prefill_joined_item(FillState &r_fill_state, RendererCanvasRender::Item::Command **r_first_command, RendererCanvasRender::Item *p_item, RendererCanvasRender::Item *p_current_clip, bool &r_reclip, GLES2::CanvasMaterialData *p_material);
+	bool prefill_joined_item(FillState &r_fill_state, RendererCanvasRender::Item::Command **r_first_command, RendererCanvasRender::Item *p_item, RendererCanvasRender::Item *p_current_clip, bool &r_reclip, GLES1::CanvasMaterialData *p_material);
 
 	// prefilling different types of batch
 
@@ -587,7 +587,7 @@ private:
 
 protected:
 	// legacy support for non batched mode
-	void _legacy_canvas_item_render_commands(RendererCanvasRender::Item *p_item, RendererCanvasRender::Item *p_current_clip, bool &r_reclip, GLES2::CanvasMaterialData *p_material);
+	void _legacy_canvas_item_render_commands(RendererCanvasRender::Item *p_item, RendererCanvasRender::Item *p_current_clip, bool &r_reclip, GLES1::CanvasMaterialData *p_material);
 
 	// light scissoring
 	bool _light_scissor_begin(const Rect2 &p_item_rect, const Transform2D &p_light_xform, const Rect2 &p_light_rect, int p_rt_height) const;
@@ -616,9 +616,9 @@ protected:
 		return TM_ALL;
 	}
 
-	GLES2::Texture *_get_canvas_texture(const RID &p_texture) const {
+	GLES1::Texture *_get_canvas_texture(const RID &p_texture) const {
 		if (p_texture.is_valid()) {
-			GLES2::Texture *texture = GLES2::TextureStorage::get_singleton()->get_texture(p_texture);
+			GLES1::Texture *texture = GLES1::TextureStorage::get_singleton()->get_texture(p_texture);
 			//GLES::Texture *texture = get_storage()->texture_owner.getornull(p_texture);
 
 			if (texture) {
@@ -664,7 +664,7 @@ protected:
 			count++;
 			p_comm = p_comm->next;
 		}
-		ERR_FAIL_COND_V_MSG(circuit_breaker <= 0, 0, "GLES2: Cyclic linked list detected in CanvasItem commands. Infinite loop prevented.");
+		ERR_FAIL_COND_V_MSG(circuit_breaker <= 0, 0, "GLES1: Cyclic linked list detected in CanvasItem commands. Infinite loop prevented.");
 		return count;
 	}
 
@@ -677,7 +677,7 @@ protected:
 			p_list.push_back(p_comm);
 			p_comm = p_comm->next;
 		}
-		ERR_FAIL_COND_V_MSG(circuit_breaker <= 0, 0, "GLES2: Cyclic linked list detected in CanvasItem commands. Infinite loop prevented.");
+		ERR_FAIL_COND_V_MSG(circuit_breaker <= 0, 0, "GLES1: Cyclic linked list detected in CanvasItem commands. Infinite loop prevented.");
 		return p_list.size();
 	}
 
@@ -688,4 +688,4 @@ protected:
 };
 
 #endif // RASTERIZER_CANVAS_BATCHER_H
-#endif // GLES2_ENABLED
+#endif // GLES1_ENABLED

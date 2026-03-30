@@ -145,7 +145,7 @@ def configure(env: "SConsEnvironment"):
         if not env["use_volk"]:
             env.Append(LIBS=["vulkan"])
 
-    if env["opengl3"] or env["opengl2"]:
+    if env["opengl3"] or env["opengl2"] or env["opengl1"]:
         print_error("OpenGL is not supported on OpenHarmony")
         sys.exit(255)
 

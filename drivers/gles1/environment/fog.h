@@ -1,5 +1,5 @@
 /**************************************************************************/
-/*  batcher_enum.h                                                        */
+/*  fog.h                                                                 */
 /**************************************************************************/
 /*                         This file is part of:                          */
 /*                             GODOT ENGINE                               */
@@ -28,55 +28,32 @@
 /* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                 */
 /**************************************************************************/
 
-#ifdef GLES2_ENABLED
+#ifndef FOG_GLES1_H
+#define FOG_GLES1_H
 
-#ifndef BATCHER_ENUMS_H
-#define BATCHER_ENUMS_H
+#ifdef GLES1_ENABLED
 
-#include <stdint.h>
+#include "servers/rendering/environment/renderer_fog.h"
 
-class BatcherEnums {
+namespace GLES1 {
+
+class Fog : public RendererFog {
 public:
-	enum FVF {
-		FVF_UNBATCHED,
-		FVF_REGULAR,
-		FVF_COLOR,
-		FVF_LIGHT_ANGLE,
-		FVF_MODULATED,
-		FVF_LARGE,
-	};
+	/* FOG VOLUMES */
 
-	// these flags are specifically for batching
-	// some of the logic is thus in rasterizer_storage.cpp
-	// we could alternatively set bitflags for each 'uses' and test on the fly
-	enum BatchFlags {
-		PREVENT_COLOR_BAKING = 1 << 0,
-		PREVENT_VERTEX_BAKING = 1 << 1,
+	virtual RID fog_volume_allocate() override;
+	virtual void fog_volume_initialize(RID p_rid) override;
+	virtual void fog_volume_free(RID p_rid) override;
 
-		// custom vertex shaders using BUILTINS that vary per item
-		PREVENT_ITEM_JOINING = 1 << 2,
-
-		USE_MODULATE_FVF = 1 << 3,
-		USE_LARGE_FVF = 1 << 4,
-	};
-
-	enum BatchType : uint16_t {
-		BT_DEFAULT = 0,
-		BT_RECT = 1,
-		BT_LINE = 2,
-		BT_LINE_AA = 3,
-		BT_POLY = 4,
-		BT_DUMMY = 5, // dummy batch is just used to keep the batch creation loop simple
-	};
-
-	enum BatchTypeFlags {
-		BTF_DEFAULT = 1 << BT_DEFAULT,
-		BTF_RECT = 1 << BT_RECT,
-		BTF_LINE = 1 << BT_LINE,
-		BTF_LINE_AA = 1 << BT_LINE_AA,
-		BTF_POLY = 1 << BT_POLY,
-	};
+	virtual void fog_volume_set_shape(RID p_fog_volume, RS::FogVolumeShape p_shape) override;
+	virtual void fog_volume_set_size(RID p_fog_volume, const Vector3 &p_size) override;
+	virtual void fog_volume_set_material(RID p_fog_volume, RID p_material) override;
+	virtual AABB fog_volume_get_aabb(RID p_fog_volume) const override;
+	virtual RS::FogVolumeShape fog_volume_get_shape(RID p_fog_volume) const override;
 };
 
-#endif
-#endif
+} // namespace GLES2
+
+#endif // GLES1_ENABLED
+
+#endif // FOG_GLES1_H

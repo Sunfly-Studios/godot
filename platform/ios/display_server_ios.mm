@@ -135,6 +135,17 @@ DisplayServerIOS::DisplayServerIOS(const String &p_rendering_driver, WindowMode 
 				fallback_triggered = true;
 			}
 #endif // GLES2_ENABLED
+
+#if defined(GLES1_ENABLED)
+			bool fallback_to_opengl1 = GLOBAL_GET("rendering/rendering_device/fallback_to_opengl1");
+			if (!fallback_triggered && fallback_to_opengl1 && rendering_driver != "opengl1") {
+				WARN_PRINT("Your device seem not to support MoltenVK, Metal, OpenGL 3, or OpenGL 2, switching to OpenGL 1.");
+				rendering_driver = "opengl1";
+				OS::get_singleton()->set_current_rendering_method("gl_classic", OS::RENDERING_SOURCE_FALLBACK);
+				OS::get_singleton()->set_current_rendering_driver_name(rendering_driver, OS::RENDERING_SOURCE_FALLBACK);
+				fallback_triggered = true;
+			}
+#endif // GLES1_ENABLED
 			
 			if (!fallback_triggered) {
 				r_error = ERR_CANT_CREATE;
@@ -196,6 +207,18 @@ DisplayServerIOS::DisplayServerIOS(const String &p_rendering_driver, WindowMode 
 	}
 #endif
 
+#if defined(GLES1_ENABLED)
+	if (rendering_driver == "opengl1") {
+		CALayer *layer = [AppDelegate.viewController.godotView initializeRenderingForDriver:@"opengl1"];
+
+		if (!layer) {
+			ERR_FAIL_MSG("Failed to create iOS OpenGLES rendering layer.");
+		}
+
+		RasterizerGLES1::make_current(false);
+	}
+#endif
+
 	bool keep_screen_on = bool(GLOBAL_GET("display/window/energy_saving/keep_screen_on"));
 	screen_set_keep_on(keep_screen_on);
 
@@ -251,6 +274,9 @@ Vector<String> DisplayServerIOS::get_rendering_drivers_func() {
 #endif
 #if defined(GLES2_ENABLED)
 	drivers.push_back("opengl2");
+#endif
+#if defined(GLES1_ENABLED)
+	drivers.push_back("opengl1");
 #endif
 
 	return drivers;

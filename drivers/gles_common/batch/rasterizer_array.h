@@ -28,8 +28,6 @@
 /* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                 */
 /**************************************************************************/
 
-#ifdef GLES2_ENABLED
-
 #ifndef RASTERIZER_ARRAY_H
 #define RASTERIZER_ARRAY_H
 
@@ -352,5 +350,3 @@ private:
 };
 
 #endif // RASTERIZER_ARRAY_H
-
-#endif // GLES2_ENABLED

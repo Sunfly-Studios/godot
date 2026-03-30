@@ -1,5 +1,5 @@
 /**************************************************************************/
-/*  rasterizer_canvas_batcher.cpp                                         */
+/*  rasterizer_canvas_batcher_gles2.cpp                                   */
 /**************************************************************************/
 /*                         This file is part of:                          */
 /*                             GODOT ENGINE                               */
@@ -28,26 +28,26 @@
 /* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                 */
 /**************************************************************************/
 
-#include "rasterizer_canvas_batcher.h"
+#include "rasterizer_canvas_batcher_gles2.h"
 
 #ifdef GLES2_ENABLED
 
 #include "core/config/project_settings.h"
 #include "drivers/gles2/rasterizer_canvas_gles2.h"
 
-RasterizerCanvasGLES2 *RasterizerCanvasBatcher::get_this() {
+RasterizerCanvasGLES2 *RasterizerCanvasBatcherGLES2::get_this() {
 	return static_cast<RasterizerCanvasGLES2 *>(this);
 }
 
-const RasterizerCanvasGLES2 *RasterizerCanvasBatcher::get_this() const {
+const RasterizerCanvasGLES2 *RasterizerCanvasBatcherGLES2::get_this() const {
 	return static_cast<const RasterizerCanvasGLES2 *>(this);
 }
 
-void RasterizerCanvasBatcher::batch_constructor() {
+void RasterizerCanvasBatcherGLES2::batch_constructor() {
 	use_nvidia_rect_workaround = false;
 }
 
-void RasterizerCanvasBatcher::batch_initialize() {
+void RasterizerCanvasBatcherGLES2::batch_initialize() {
 	bdata.settings_use_batching = GLOBAL_GET("rendering/2d/batching/use_batching");
 	bdata.settings_max_join_item_commands = 16;
 	bdata.settings_colored_vertex_format_threshold = 0.5f;
@@ -91,7 +91,7 @@ void RasterizerCanvasBatcher::batch_initialize() {
 	bdata.batch_textures.create(32);
 }
 
-void RasterizerCanvasBatcher::batch_canvas_begin() {
+void RasterizerCanvasBatcherGLES2::batch_canvas_begin() {
 	bdata.frame_string = "";
 
 #if defined(TOOLS_ENABLED) && defined(DEBUG_ENABLED)
@@ -120,7 +120,7 @@ void RasterizerCanvasBatcher::batch_canvas_begin() {
 #endif
 }
 
-void RasterizerCanvasBatcher::batch_canvas_render_items_begin(const Color &p_modulate, RendererCanvasRender::Light *p_light, const Transform2D &p_base_transform) {
+void RasterizerCanvasBatcherGLES2::batch_canvas_render_items_begin(const Color &p_modulate, RendererCanvasRender::Light *p_light, const Transform2D &p_base_transform) {
 	if (bdata.settings_flash_batching) {
 		bdata.settings_use_batching = (Engine::get_singleton()->get_frames_drawn() % 2) == 0;
 	}
@@ -156,7 +156,7 @@ void RasterizerCanvasBatcher::batch_canvas_render_items_begin(const Color &p_mod
 	}
 }
 
-void RasterizerCanvasBatcher::batch_canvas_render_items(RendererCanvasRender::Item *p_item_list, int p_z, const Color &p_modulate, RendererCanvasRender::Light *p_light, const Transform2D &p_base_transform) {
+void RasterizerCanvasBatcherGLES2::batch_canvas_render_items(RendererCanvasRender::Item *p_item_list, int p_z, const Color &p_modulate, RendererCanvasRender::Light *p_light, const Transform2D &p_base_transform) {
 	if (bdata.settings_use_batching) {
 		// Stage 1: Record items for sorting and joining. Rendering happens in _end().
 		record_items(p_item_list, p_z);
@@ -166,7 +166,7 @@ void RasterizerCanvasBatcher::batch_canvas_render_items(RendererCanvasRender::It
 	}
 }
 
-void RasterizerCanvasBatcher::batch_canvas_end() {
+void RasterizerCanvasBatcherGLES2::batch_canvas_end() {
 #if defined(TOOLS_ENABLED) && defined(DEBUG_ENABLED)
 	if (bdata.diagnose_frame) {
 		bdata.frame_string += "canvas_end\n";
@@ -182,7 +182,7 @@ void RasterizerCanvasBatcher::batch_canvas_end() {
 #endif
 }
 
-void RasterizerCanvasBatcher::batch_canvas_render_items_end() {
+void RasterizerCanvasBatcherGLES2::batch_canvas_render_items_end() {
 	if (!bdata.settings_use_batching) {
 		return;
 	}
@@ -205,7 +205,7 @@ void RasterizerCanvasBatcher::batch_canvas_render_items_end() {
 	bdata.sort_items.reset();
 }
 
-bool RasterizerCanvasBatcher::try_join_item(RendererCanvasRender::Item *p_ci, RenderItemState &r_ris, bool &r_batch_break) {
+bool RasterizerCanvasBatcherGLES2::try_join_item(RendererCanvasRender::Item *p_ci, RenderItemState &r_ris, bool &r_batch_break) {
 	bool join = true;
 	r_batch_break = false;
 
@@ -227,7 +227,7 @@ bool RasterizerCanvasBatcher::try_join_item(RendererCanvasRender::Item *p_ci, Re
 	return join;
 }
 
-void RasterizerCanvasBatcher::record_items(RendererCanvasRender::Item *p_item_list, int p_z) {
+void RasterizerCanvasBatcherGLES2::record_items(RendererCanvasRender::Item *p_item_list, int p_z) {
 	while (p_item_list) {
 		// Request a new sort item
 		BSortItem *s = bdata.sort_items.request();
@@ -246,7 +246,7 @@ void RasterizerCanvasBatcher::record_items(RendererCanvasRender::Item *p_item_li
 	}
 }
 
-void RasterizerCanvasBatcher::join_sorted_items() {
+void RasterizerCanvasBatcherGLES2::join_sorted_items() {
 	sort_items();
 
 	int z = RS::CANVAS_ITEM_Z_MIN;
@@ -317,7 +317,7 @@ void RasterizerCanvasBatcher::join_sorted_items() {
 	}
 }
 
-void RasterizerCanvasBatcher::sort_items() {
+void RasterizerCanvasBatcherGLES2::sort_items() {
 	if (!bdata.settings_item_reordering_lookahead) {
 		return;
 	}
@@ -331,7 +331,7 @@ void RasterizerCanvasBatcher::sort_items() {
 	}
 }
 
-bool RasterizerCanvasBatcher::_sort_items_match(const BSortItem &p_a, const BSortItem &p_b) const {
+bool RasterizerCanvasBatcherGLES2::_sort_items_match(const BSortItem &p_a, const BSortItem &p_b) const {
 	const RendererCanvasRender::Item *a = p_a.item;
 	const RendererCanvasRender::Item *b = p_b.item;
 
@@ -372,7 +372,7 @@ bool RasterizerCanvasBatcher::_sort_items_match(const BSortItem &p_a, const BSor
 	return true;
 }
 
-bool RasterizerCanvasBatcher::sort_items_from(int p_start) {
+bool RasterizerCanvasBatcherGLES2::sort_items_from(int p_start) {
 #if defined(TOOLS_ENABLED) && defined(DEBUG_ENABLED)
 	ERR_FAIL_COND_V((p_start + 1) >= bdata.sort_items.size(), false);
 #endif
@@ -477,7 +477,7 @@ bool RasterizerCanvasBatcher::sort_items_from(int p_start) {
 	return false;
 }
 
-void RasterizerCanvasBatcher::_calculate_scissor_threshold_area() {
+void RasterizerCanvasBatcherGLES2::_calculate_scissor_threshold_area() {
 	if (!bdata.settings_scissor_lights) {
 		return;
 	}
@@ -501,7 +501,7 @@ void RasterizerCanvasBatcher::_calculate_scissor_threshold_area() {
 	}
 }
 
-void RasterizerCanvasBatcher::render_joined_item_commands(const BItemJoined &p_bij, RendererCanvasRender::Item *p_current_clip, bool &r_reclip, GLES2::CanvasMaterialData *p_material, bool p_lit) {
+void RasterizerCanvasBatcherGLES2::render_joined_item_commands(const BItemJoined &p_bij, RendererCanvasRender::Item *p_current_clip, bool &r_reclip, GLES2::CanvasMaterialData *p_material, bool p_lit) {
 	RendererCanvasRender::Item *item = nullptr;
 	RendererCanvasRender::Item *first_item = bdata.item_refs[p_bij.first_item_ref].item;
 
@@ -594,7 +594,7 @@ void RasterizerCanvasBatcher::render_joined_item_commands(const BItemJoined &p_b
 	bdata.reset_flush();
 }
 
-void RasterizerCanvasBatcher::flush_render_batches(RendererCanvasRender::Item *p_first_item, RendererCanvasRender::Item *p_current_clip, bool &r_reclip, GLES2::CanvasMaterialData *p_material, uint32_t p_sequence_batch_type_flags) {
+void RasterizerCanvasBatcherGLES2::flush_render_batches(RendererCanvasRender::Item *p_first_item, RendererCanvasRender::Item *p_current_clip, bool &r_reclip, GLES2::CanvasMaterialData *p_material, uint32_t p_sequence_batch_type_flags) {
 	bdata.use_colored_vertices = false;
 	BatcherEnums::FVF backup_fvf = bdata.fvf;
 
@@ -660,7 +660,7 @@ void RasterizerCanvasBatcher::flush_render_batches(RendererCanvasRender::Item *p
 	bdata.fvf = backup_fvf;
 }
 
-bool RasterizerCanvasBatcher::prefill_joined_item(FillState &r_fill_state, RendererCanvasRender::Item::Command **p_command_start, RendererCanvasRender::Item *p_item, RendererCanvasRender::Item *p_current_clip, bool &r_reclip, GLES2::CanvasMaterialData *p_material) {
+bool RasterizerCanvasBatcherGLES2::prefill_joined_item(FillState &r_fill_state, RendererCanvasRender::Item::Command **p_command_start, RendererCanvasRender::Item *p_item, RendererCanvasRender::Item *p_current_clip, bool &r_reclip, GLES2::CanvasMaterialData *p_material) {
 	// Checking the color for not being white makes it noticeably faster for the 90% case where it is white
 	bool multiply_final_modulate = false;
 	if (!r_fill_state.use_hardware_transform && (r_fill_state.final_modulate != Color(1, 1, 1, 1))) {
@@ -805,7 +805,7 @@ bool RasterizerCanvasBatcher::prefill_joined_item(FillState &r_fill_state, Rende
 	return false;
 }
 
-void RasterizerCanvasBatcher::_legacy_canvas_item_render_commands(RendererCanvasRender::Item* p_item, RendererCanvasRender::Item* p_current_clip, bool& r_reclip, GLES2::CanvasMaterialData* p_material) {
+void RasterizerCanvasBatcherGLES2::_legacy_canvas_item_render_commands(RendererCanvasRender::Item* p_item, RendererCanvasRender::Item* p_current_clip, bool& r_reclip, GLES2::CanvasMaterialData* p_material) {
 	if (!p_item || !p_item->commands) {
 		return;
 	}
@@ -827,7 +827,7 @@ void RasterizerCanvasBatcher::_legacy_canvas_item_render_commands(RendererCanvas
 	get_this()->render_batches(nullptr, p_current_clip, r_reclip, p_material);
 }
 
-bool RasterizerCanvasBatcher::_disallow_item_join_if_batch_types_too_different(RenderItemState &r_ris, uint32_t btf_allowed) {
+bool RasterizerCanvasBatcherGLES2::_disallow_item_join_if_batch_types_too_different(RenderItemState &r_ris, uint32_t btf_allowed) {
 	r_ris.joined_item_batch_type_flags_curr |= btf_allowed;
 
 	bool disallow = false;
@@ -840,7 +840,7 @@ bool RasterizerCanvasBatcher::_disallow_item_join_if_batch_types_too_different(R
 }
 
 template <class BATCH_VERTEX_TYPE, bool INCLUDE_LIGHT_ANGLES, bool INCLUDE_MODULATE, bool INCLUDE_LARGE>
-void RasterizerCanvasBatcher::_translate_batches_to_larger_FVF(uint32_t p_sequence_batch_type_flags) {
+void RasterizerCanvasBatcherGLES2::_translate_batches_to_larger_FVF(uint32_t p_sequence_batch_type_flags) {
 	bool include_poly_color = false;
 
 	if (p_sequence_batch_type_flags & BatcherEnums::BTF_POLY) {
@@ -957,7 +957,7 @@ void RasterizerCanvasBatcher::_translate_batches_to_larger_FVF(uint32_t p_sequen
 	bdata.batches.copy_from(bdata.batches_temp);
 }
 
-void RasterizerCanvasBatcher::_translate_batches_to_vertex_colored_FVF() {
+void RasterizerCanvasBatcherGLES2::_translate_batches_to_vertex_colored_FVF() {
 	bdata.unit_vertices.prepare(sizeof(BatchVertexColored));
 	const BatchColor *source_vertex_colors = &bdata.vertex_colors[0];
 	int num_verts = bdata.vertices.size();
@@ -975,7 +975,7 @@ void RasterizerCanvasBatcher::_translate_batches_to_vertex_colored_FVF() {
 	}
 }
 
-bool RasterizerCanvasBatcher::_light_scissor_begin(const Rect2 &p_item_rect, const Transform2D &p_light_xform, const Rect2 &p_light_rect, int p_rt_height) const {
+bool RasterizerCanvasBatcherGLES2::_light_scissor_begin(const Rect2 &p_item_rect, const Transform2D &p_light_xform, const Rect2 &p_light_rect, int p_rt_height) const {
 	float area_item = p_item_rect.size.x * p_item_rect.size.y;
 
 	// The area of pixels saved can never be more
@@ -1004,7 +1004,7 @@ bool RasterizerCanvasBatcher::_light_scissor_begin(const Rect2 &p_item_rect, con
 	return true;
 }
 
-bool RasterizerCanvasBatcher::_light_find_intersection(const Rect2 &p_item_rect, const Transform2D &p_light_xform, const Rect2 &p_light_rect, Rect2 &r_cliprect) const {
+bool RasterizerCanvasBatcherGLES2::_light_find_intersection(const Rect2 &p_item_rect, const Transform2D &p_light_xform, const Rect2 &p_light_rect, Rect2 &r_cliprect) const {
 	// Transform the light's rect by its transform to get it into global/screen space
 	// We need the AABB of the light in the same space as the item rect
 
@@ -1037,7 +1037,7 @@ bool RasterizerCanvasBatcher::_light_find_intersection(const Rect2 &p_item_rect,
 	return r_cliprect.has_area();
 }
 
-bool RasterizerCanvasBatcher::_detect_item_batch_break(RenderItemState &r_ris, RendererCanvasRender::Item *p_ci, bool &r_batch_break) {
+bool RasterizerCanvasBatcherGLES2::_detect_item_batch_break(RenderItemState &r_ris, RendererCanvasRender::Item *p_ci, bool &r_batch_break) {
 	int command_count = godot4_commands_count(p_ci->commands);
 
 	r_ris.joined_item_batch_type_flags_curr = 0;
@@ -1100,7 +1100,7 @@ bool RasterizerCanvasBatcher::_detect_item_batch_break(RenderItemState &r_ris, R
 }
 
 template <bool SEND_LIGHT_ANGLES>
-bool RasterizerCanvasBatcher::_prefill_rect(RendererCanvasRender::Item::CommandRect *rect, FillState &r_fill_state, RendererCanvasRender::Item::Command **p_command_start, RendererCanvasRender::Item::Command *p_command, RendererCanvasRender::Item *p_item, bool multiply_final_modulate) {
+bool RasterizerCanvasBatcherGLES2::_prefill_rect(RendererCanvasRender::Item::CommandRect *rect, FillState &r_fill_state, RendererCanvasRender::Item::Command **p_command_start, RendererCanvasRender::Item::Command *p_command, RendererCanvasRender::Item *p_item, bool multiply_final_modulate) {
 	bool change_batch = false;
 
 	if (r_fill_state.curr_batch->type != BatcherEnums::BT_RECT) {
@@ -1329,7 +1329,7 @@ bool RasterizerCanvasBatcher::_prefill_rect(RendererCanvasRender::Item::CommandR
 }
 
 template <bool SEND_LIGHT_ANGLES>
-bool RasterizerCanvasBatcher::_prefill_ninepatch(RendererCanvasRender::Item::CommandNinePatch *p_np, FillState &r_fill_state, RendererCanvasRender::Item::Command **p_command_start, RendererCanvasRender::Item::Command *p_command, RendererCanvasRender::Item *p_item, bool multiply_final_modulate) {
+bool RasterizerCanvasBatcherGLES2::_prefill_ninepatch(RendererCanvasRender::Item::CommandNinePatch *p_np, FillState &r_fill_state, RendererCanvasRender::Item::Command **p_command_start, RendererCanvasRender::Item::Command *p_command, RendererCanvasRender::Item *p_item, bool multiply_final_modulate) {
 	GLES2::Texture *tex = GLES2::TextureStorage::get_singleton()->get_texture(p_np->texture);
 
 	if (!tex || tex->width == 0 || tex->height == 0) {
@@ -1425,7 +1425,7 @@ bool RasterizerCanvasBatcher::_prefill_ninepatch(RendererCanvasRender::Item::Com
 }
 
 template <bool SEND_LIGHT_ANGLES>
-bool RasterizerCanvasBatcher::_prefill_polygon(RendererCanvasRender::Item::CommandPolygon *p_poly, FillState &r_fill_state, RendererCanvasRender::Item::Command **p_command_start, RendererCanvasRender::Item::Command *p_command, RendererCanvasRender::Item *p_item, bool multiply_final_modulate) {
+bool RasterizerCanvasBatcherGLES2::_prefill_polygon(RendererCanvasRender::Item::CommandPolygon *p_poly, FillState &r_fill_state, RendererCanvasRender::Item::Command **p_command_start, RendererCanvasRender::Item::Command *p_command, RendererCanvasRender::Item *p_item, bool multiply_final_modulate) {
 	bool change_batch = false;
 
 	if (r_fill_state.curr_batch->type != BatcherEnums::BT_POLY) {
@@ -1613,17 +1613,17 @@ bool RasterizerCanvasBatcher::_prefill_polygon(RendererCanvasRender::Item::Comma
 	return false;
 }
 
-void RasterizerCanvasBatcher::_software_transform_vertex(BatchVector2 &r_v, const Transform2D &p_tr) const {
+void RasterizerCanvasBatcherGLES2::_software_transform_vertex(BatchVector2 &r_v, const Transform2D &p_tr) const {
 	Vector2 vc(r_v.x, r_v.y);
 	vc = p_tr.xform(vc);
 	r_v.set(vc);
 }
 
-void RasterizerCanvasBatcher::_software_transform_vertex(Vector2 &r_v, const Transform2D &p_tr) const {
+void RasterizerCanvasBatcherGLES2::_software_transform_vertex(Vector2 &r_v, const Transform2D &p_tr) const {
 	r_v = p_tr.xform(r_v);
 }
 
-int RasterizerCanvasBatcher::_batch_find_or_create_tex(const RID &p_texture, const RID &p_normal, bool p_tile, int p_previous_match) {
+int RasterizerCanvasBatcherGLES2::_batch_find_or_create_tex(const RID &p_texture, const RID &p_normal, bool p_tile, int p_previous_match) {
 	// Fast Path: Assume the last item use this exact texture
 	if (p_previous_match >= 0 && p_previous_match < bdata.batch_textures.size()) {
 		const BatchTex &batch_texture = bdata.batch_textures[p_previous_match];
@@ -1706,7 +1706,7 @@ int RasterizerCanvasBatcher::_batch_find_or_create_tex(const RID &p_texture, con
 	return bdata.batch_textures.size() - 1;
 }
 
-void RasterizerCanvasBatcher::_prefill_default_batch(FillState &r_fill_state, RendererCanvasRender::Item::Command *p_command, const RendererCanvasRender::Item &p_item) {
+void RasterizerCanvasBatcherGLES2::_prefill_default_batch(FillState &r_fill_state, RendererCanvasRender::Item::Command *p_command, const RendererCanvasRender::Item &p_item) {
 	if (r_fill_state.curr_batch->type == BatcherEnums::BT_DEFAULT) {
 		// We are already in a default batch.
 		if (!r_fill_state.transform_extra_command) {

@@ -72,6 +72,9 @@
 #if defined(GLES2_ENABLED)
 #include "drivers/gles2/rasterizer_gles2.h"
 #endif
+#if defined(GLES1_ENABLED)
+#include "drivers/gles1/rasterizer_gles1.h"
+#endif
 
 #include <dlfcn.h>
 #include <stdio.h>
@@ -1260,9 +1263,9 @@ bool OS_LinuxBSD::_test_create_rendering_device(const String &p_display_driver) 
 bool OS_LinuxBSD::_test_create_rendering_device_and_gl(const String &p_display_driver) const {
 	// Tests OpenGL context and Rendering Device simultaneous creation. This function is expected to crash on some drivers.
 
-#if defined(GLES3_ENABLED) || defined(GLES2_ENABLED)
+#if defined(GLES3_ENABLED) || defined(GLES2_ENABLED) || defined(GLES1_ENABLED) || defined(GLES1_ENABLED)
 	String rendering_method = OS::get_singleton()->get_current_rendering_method();
-	int gles_major = 1, gles_minor = 5;
+	int gles_major = 1, gles_minor = 5; // `gl_classic` first
 
 	if (rendering_method == "gl_legacy") {
 		gles_major = 2;
@@ -1306,7 +1309,13 @@ bool OS_LinuxBSD::_test_create_rendering_device_and_gl(const String &p_display_d
 	}
 #endif // GLES2_ENABLED
 
-#endif // GLES3_ENABLED || GLES2_ENABLED
+#if defined(GLES1_ENABLED)
+	if (rendering_method == "gl_classic") {
+		RasterizerGLES1::make_current(true);
+	}
+#endif // GLES1_ENABLED
+
+#endif // GLES3_ENABLED || GLES2_ENABLED || GLES1_ENABLED
 
 	return _test_create_rendering_device(p_display_driver);
 }

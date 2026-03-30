@@ -42,7 +42,7 @@ if env["d3d12"]:
         print_error("Target platform '{}' does not support the D3D12 rendering driver".format(env["platform"]))
         Exit(255)
     SConscript("d3d12/SCsub")
-if env["opengl3"] or env["opengl2"]:
+if env["opengl3"] or env["opengl2"] or env["opengl1"]:
     SConscript("gl_context/SCsub")
     SConscript("egl/SCsub")
 
@@ -50,6 +50,9 @@ if env["opengl3"] or env["opengl2"]:
         SConscript("gles3/SCsub")
     if env["opengl2"]:
         SConscript("gles2/SCsub")
+    if env["opengl1"]:
+        SConscript("gles1/SCsub")
+    
 if env["metal"]:
     if "metal" not in supported:
         print_error("Target platform '{}' does not support the Metal rendering driver".format(env["platform"]))

@@ -28,7 +28,7 @@
 /* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                 */
 /**************************************************************************/
 
-#if defined(WINDOWS_ENABLED) && (defined(GLES3_ENABLED) || defined(GLES2_ENABLED))
+#if defined(WINDOWS_ENABLED) && (defined(GLES3_ENABLED) || defined(GLES2_ENABLED) || defined(GLES1_ENABLED))
 
 #include "wgl_detect_version.h"
 #include "os_windows.h"
@@ -202,4 +202,4 @@ Dictionary detect_wgl(int p_gles_major, int p_gles_minor) {
 	return gl_info;
 }
 
-#endif // WINDOWS_ENABLED && (GLES3_ENABLED || GLES2_ENABLED)
+#endif // WINDOWS_ENABLED && (GLES3_ENABLED || GLES2_ENABLED || GLES1_ENABLED)

@@ -75,7 +75,7 @@ extern "C" {
 #include "servers/rendering/rendering_device.h"
 #endif
 
-#if defined(GLES3_ENABLED)
+#if defined(GLES3_ENABLED) || defined(GLES2_ENABLED) || defined(GLES1_ENABLED)
 #include "gl_manager_windows_native.h"
 #endif
 
@@ -90,6 +90,9 @@ extern "C" {
 #endif
 #if defined(GLES2_ENABLED)
 #include "drivers/gles2/rasterizer_gles2.h"
+#endif
+#if defined(GLES1_ENABLED)
+#include "drivers/gles1/rasterizer_gles1.h"
 #endif
 
 #ifdef DEBUG_ENABLED
@@ -2871,6 +2874,20 @@ bool OS_Windows::_test_create_rendering_device_and_gl(const String &p_display_dr
 		}
 	}
 #endif
+#ifdef GLES1_ENABLED
+	{
+		test_gl_manager_native = memnew(GLManagerNative_Windows(1, 5));
+		if (test_gl_manager_native->window_create(DisplayServer::MAIN_WINDOW_ID, hWnd, GetModuleHandle(nullptr), 800, 600) == OK) {
+			RasterizerGLES1::make_current(true);
+			if (!ok) {
+				// In case GLES3 or GLES2 failed.
+				ok = true;
+			}
+		} else {
+			ok = false;
+		}
+	}
+#endif
 
 	MSG msg = {};
 	while (PeekMessageW(&msg, nullptr, 0, 0, PM_REMOVE)) {
@@ -2882,7 +2899,7 @@ bool OS_Windows::_test_create_rendering_device_and_gl(const String &p_display_dr
 		ok = _test_create_rendering_device(p_display_driver);
 	}
 
-#if defined(GLES3_ENABLED) || defined(GLES2_ENABLED)
+#if defined(GLES3_ENABLED) || defined(GLES2_ENABLED) || defined(GLES1_ENABLED)
 	if (test_gl_manager_native) {
 		memdelete(test_gl_manager_native);
 	}

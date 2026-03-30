@@ -31,7 +31,7 @@
 #ifndef DETECT_PRIME_EGL_H
 #define DETECT_PRIME_EGL_H
 
-#if defined(GLES3_ENABLED) || defined(GLES2_ENABLED)
+#if defined(GLES3_ENABLED) || defined(GLES2_ENABLED) || defined(GLES1_ENABLED)
 #ifdef EGL_ENABLED
 
 #ifdef GLAD_ENABLED
@@ -83,7 +83,7 @@ public:
 	static int detect_prime(EGLenum p_platform_enum, int p_gles_major, int p_gles_minor);
 };
 
-#endif // GLES3_ENABLED || GLES2_ENABLED
+#endif // GLES3_ENABLED || GLES2_ENABLED || GLES1_ENABLED
 #endif // EGL_ENABLED
 
 #endif // DETECT_PRIME_EGL_H

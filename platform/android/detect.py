@@ -247,6 +247,10 @@ def configure(env: "SConsEnvironment"):
         if not env["use_volk"]:
             env.Append(LIBS=["vulkan"])
 
+    if env["opengl1"]:
+        env.Append(CPPDEFINES=["GLES1_ENABLED"])
+        env.Append(LIBS=["GLESv1"])
+
     if env["opengl2"]:
         env.Append(CPPDEFINES=["GLES2_ENABLED"])
         env.Append(LIBS=["GLESv2"])

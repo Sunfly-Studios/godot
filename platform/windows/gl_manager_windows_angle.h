@@ -31,7 +31,7 @@
 #ifndef GL_MANAGER_WINDOWS_ANGLE_H
 #define GL_MANAGER_WINDOWS_ANGLE_H
 
-#if defined(WINDOWS_ENABLED) && (defined(GLES3_ENABLED) || defined(GLES2_ENABLED))
+#if defined(WINDOWS_ENABLED) && (defined(GLES3_ENABLED) || defined(GLES2_ENABLED) || defined(GLES1_ENABLED))
 
 #include "core/error/error_list.h"
 #include "core/os/os.h"
@@ -61,6 +61,6 @@ public:
 	~GLManagerANGLE_Windows() {}
 };
 
-#endif // WINDOWS_ENABLED && (GLES3_ENABLED || GLES2_ENABLED)
+#endif // WINDOWS_ENABLED && (GLES3_ENABLED || GLES2_ENABLED || GLES1_ENABLED)
 
 #endif // GL_MANAGER_WINDOWS_ANGLE_H

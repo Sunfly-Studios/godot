@@ -38,15 +38,15 @@
 #include "servers/rendering/renderer_compositor.h"
 #include "storage/material_storage.h"
 #include "storage/texture_storage.h"
-#include "batch/rasterizer_canvas_batcher.h"
+#include "batch/rasterizer_canvas_batcher_gles2.h"
 
 #include "drivers/gles2/shaders/canvas.glsl.gen.h"
 #include "drivers/gles2/shaders/canvas_occlusion.glsl.gen.h"
 
 class RasterizerSceneGLES2;
 
-class RasterizerCanvasGLES2 : public RendererCanvasRender, public RasterizerCanvasBatcher {
-	friend class RasterizerCanvasBatcher;
+class RasterizerCanvasGLES2 : public RendererCanvasRender, public RasterizerCanvasBatcherGLES2 {
+	friend class RasterizerCanvasBatcherGLES2;
 
 	static RasterizerCanvasGLES2 *singleton;
 
@@ -181,7 +181,7 @@ private:
 	void _batch_upload_buffers();
 	void _batch_render_generic(const Batch &p_batch, GLES2::CanvasMaterialData *p_material);
 
-	// RasterizerCanvasBatcher Template Hooks
+	// RasterizerCanvasBatcherGLES2 Template Hooks
 	void gl_enable_scissor(int p_x, int p_y, int p_width, int p_height) const;
 	void gl_disable_scissor() const;
 

@@ -30,7 +30,7 @@
 
 #include "gl_manager_macos_angle.h"
 
-#if defined(MACOS_ENABLED) && (defined(GLES3_ENABLED) || defined(GLES2_ENABLED))
+#if defined(MACOS_ENABLED) && (defined(GLES3_ENABLED) || defined(GLES2_ENABLED) || defined(GLES1_ENABLED))
 
 #include <stdio.h>
 #include <stdlib.h>

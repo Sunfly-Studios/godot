@@ -31,7 +31,7 @@
 #ifndef GL_MANAGER_MACOS_LEGACY_H
 #define GL_MANAGER_MACOS_LEGACY_H
 
-#if defined(MACOS_ENABLED) && (defined(GLES3_ENABLED) || defined(GLES2_ENABLED))
+#if defined(MACOS_ENABLED) && (defined(GLES3_ENABLED) || defined(GLES2_ENABLED) || defined(GLES1_ENABLED))
 
 #include "core/error/error_list.h"
 #include "core/os/os.h"
@@ -97,6 +97,6 @@ public:
 
 #pragma clang diagnostic push
 
-#endif // MACOS_ENABLED && (GLES3_ENABLED || GLES2_ENABLED)
+#endif // MACOS_ENABLED && (GLES3_ENABLED || GLES2_ENABLED || GLES1_ENABLED)
 
 #endif // GL_MANAGER_MACOS_LEGACY_H

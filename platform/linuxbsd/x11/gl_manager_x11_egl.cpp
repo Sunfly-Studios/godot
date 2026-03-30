@@ -30,7 +30,7 @@
 
 #include "gl_manager_x11_egl.h"
 
-#if defined(X11_ENABLED) && defined(GLES3_ENABLED)
+#if defined(X11_ENABLED) && (defined(GLES3_ENABLED) || defined(GLES2_ENABLED) || defined(GLES1_ENABLED))
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -60,4 +60,4 @@ Vector<EGLint> GLManagerEGL_X11::_get_platform_context_attribs() const {
 	return ret;
 }
 
-#endif // WINDOWS_ENABLED && (GLES3_ENABLED || GLES2_ENABLED)
+#endif // WINDOWS_ENABLED && (GLES3_ENABLED || GLES2_ENABLED || GLES1_ENABLED)

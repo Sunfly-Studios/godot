@@ -30,7 +30,7 @@
 
 #include "gl_manager_x11.h"
 
-#if defined(X11_ENABLED) && (defined(GLES3_ENABLED) || defined(GLES2_ENABLED))
+#if defined(X11_ENABLED) && (defined(GLES3_ENABLED) || defined(GLES2_ENABLED) || defined(GLES1_ENABLED))
 
 #include "thirdparty/glad/glad/glx.h"
 
@@ -185,6 +185,15 @@ Error GLManager_X11::_create_context(GLDisplay &gl_display) {
 				static int context_attribs[] = {
 					GLX_CONTEXT_MAJOR_VERSION_ARB, 2,
 					GLX_CONTEXT_MINOR_VERSION_ARB, 1,
+					None
+				};
+
+				gl_display.context->glx_context = glXCreateContextAttribsARB(x11_display, fbconfig, nullptr, True, context_attribs);
+			} break;
+			case GLES_1_5_COMPATIBLE: {
+				static int context_attribs[] = {
+					GLX_CONTEXT_MAJOR_VERSION_ARB, 1,
+					GLX_CONTEXT_MINOR_VERSION_ARB, 5,
 					None
 				};
 
@@ -416,4 +425,4 @@ GLManager_X11::~GLManager_X11() {
 	release_current();
 }
 
-#endif // X11_ENABLED && (GLES3_ENABLED || GLES2_ENABLED)
+#endif // X11_ENABLED && (GLES3_ENABLED || GLES2_ENABLED || GLES1_ENABLED)

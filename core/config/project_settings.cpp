@@ -110,6 +110,9 @@ const PackedStringArray ProjectSettings::_get_supported_features() {
 #ifdef GLES2_ENABLED
 	features.append("GL Legacy");
 #endif
+#ifdef GLES1_ENABLED
+	features.append("GL Classic");
+#endif
 	return features;
 }
 

@@ -33,7 +33,7 @@
 
 #ifdef WAYLAND_ENABLED
 #ifdef EGL_ENABLED
-#if defined(GLES3_ENABLED) || defined(GLES2_ENABLED)
+#if defined(GLES3_ENABLED) || defined(GLES2_ENABLED) || defined(GLES1_ENABLED)
 
 #include "drivers/egl/egl_manager.h"
 
@@ -55,7 +55,7 @@ public:
 	~EGLManagerWaylandGLES() {};
 };
 
-#endif // GLES3_ENABLED || GLES2_ENABLED
+#endif // GLES3_ENABLED || GLES2_ENABLED || GLES1_ENABLED
 #endif // EGL_ENABLED
 #endif // WAYLAND_ENABLED
 

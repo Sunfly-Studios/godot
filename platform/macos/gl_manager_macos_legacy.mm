@@ -30,7 +30,7 @@
 
 #include "gl_manager_macos_legacy.h"
 
-#if defined(MACOS_ENABLED) && (defined(GLES3_ENABLED) || defined(GLES2_ENABLED))
+#if defined(MACOS_ENABLED) && (defined(GLES3_ENABLED) || defined(GLES2_ENABLED) || defined(GLES1_ENABLED))
 
 #include <dlfcn.h>
 #include <stdio.h>
@@ -230,4 +230,4 @@ GLManagerLegacy_MacOS::~GLManagerLegacy_MacOS() {
 
 #pragma clang diagnostic pop
 
-#endif // MACOS_ENABLED && (GLES3_ENABLED || GLES2_ENABLED)
+#endif // MACOS_ENABLED && (GLES3_ENABLED || GLES2_ENABLED || GLES1_ENABLED)

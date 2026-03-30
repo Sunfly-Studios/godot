@@ -28,7 +28,7 @@
 /* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                 */
 /**************************************************************************/
 
-#if defined(GLES3_ENABLED) || defined(GLES2_ENABLED)
+#if defined(GLES3_ENABLED) || defined(GLES2_ENABLED) || defined(GLES1_ENABLED)
 #ifdef EGL_ENABLED
 
 #include "detect_prime_egl.h"
@@ -240,4 +240,4 @@ int DetectPrimeEGL::detect_prime(EGLenum p_platform_enum, int p_gles_major, int 
 }
 
 #endif // EGL_ENABLED
-#endif // GLES3_ENABLED || GLES2_ENABLED
+#endif // GLES3_ENABLED || GLES2_ENABLED || GLES1_ENABLED

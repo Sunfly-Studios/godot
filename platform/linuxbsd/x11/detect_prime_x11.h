@@ -31,7 +31,7 @@
 #ifndef DETECT_PRIME_X11_H
 #define DETECT_PRIME_X11_H
 
-#if defined(X11_ENABLED) && (defined(GLES3_ENABLED) || defined(GLES2_ENABLED))
+#if defined(X11_ENABLED) && (defined(GLES3_ENABLED) || defined(GLES2_ENABLED) || defined(GLES1_ENABLED))
 
 class DetectPrimeX11 {
 private:
@@ -58,6 +58,6 @@ public:
 	static int detect_prime(int p_gles_major, int p_gles_minor);
 };
 
-#endif // X11_ENABLED && (GLES3_ENABLED || GLES2_ENABLED)
+#endif // X11_ENABLED && (GLES3_ENABLED || GLES2_ENABLED || GLES1_ENABLED)
 
 #endif // DETECT_PRIME_X11_H

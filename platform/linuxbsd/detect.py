@@ -695,6 +695,8 @@ def configure(env: "SConsEnvironment"):
         env.Append(CPPDEFINES=["GLES3_ENABLED"])
     if env["opengl2"]:
         env.Append(CPPDEFINES=["GLES2_ENABLED"])
+    if env["opengl1"]:
+        env.Append(CPPDEFINES=["GLES1_ENABLED"])
 
     env.Append(LIBS=["pthread"])
 

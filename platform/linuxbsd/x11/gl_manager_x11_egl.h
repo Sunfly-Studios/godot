@@ -31,7 +31,7 @@
 #ifndef GL_MANAGER_X11_EGL_H
 #define GL_MANAGER_X11_EGL_H
 
-#if defined(X11_ENABLED) && (defined(GLES3_ENABLED) || defined(GLES2_ENABLED))
+#if defined(X11_ENABLED) && (defined(GLES3_ENABLED) || defined(GLES2_ENABLED) || defined(GLES1_ENABLED))
 
 #include "core/error/error_list.h"
 #include "core/os/os.h"
@@ -61,6 +61,6 @@ public:
 	~GLManagerEGL_X11() {}
 };
 
-#endif // X11_ENABLED && (GLES3_ENABLED || GLES2_ENABLED)
+#endif // X11_ENABLED && (GLES3_ENABLED || GLES2_ENABLED || GLES1_ENABLED)
 
 #endif // GL_MANAGER_X11_EGL_H

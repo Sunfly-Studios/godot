@@ -30,7 +30,7 @@
 
 #include "gl_manager_windows_native.h"
 
-#if defined(WINDOWS_ENABLED) && (defined(GLES3_ENABLED) || defined(GLES2_ENABLED))
+#if defined(WINDOWS_ENABLED) && (defined(GLES3_ENABLED) || defined(GLES2_ENABLED) || defined(GLES1_ENABLED))
 
 #include "core/config/project_settings.h"
 #include "core/version.h"
@@ -456,7 +456,7 @@ Error GLManagerNative_Windows::_create_context(GLWindow &win, GLDisplay &gl_disp
 	PFNWGLCREATECONTEXTATTRIBSARBPROC wglCreateContextAttribsARB = nullptr; //pointer to the method
 	wglCreateContextAttribsARB = (PFNWGLCREATECONTEXTATTRIBSARBPROC)gd_wglGetProcAddress("wglCreateContextAttribsARB");
 
-	if (wglCreateContextAttribsARB == nullptr) //OpenGL 3.0/2.0 is not supported
+	if (wglCreateContextAttribsARB == nullptr) //OpenGL 3/2/1 is not supported
 	{
 		gd_wglDeleteContext(gl_display.hRC);
 		gl_display.hRC = nullptr;
@@ -618,4 +618,4 @@ GLManagerNative_Windows::~GLManagerNative_Windows() {
 	release_current();
 }
 
-#endif // WINDOWS_ENABLED && (GLES3_ENABLED || GLES2_ENABLED)
+#endif // WINDOWS_ENABLED && (GLES3_ENABLED || GLES2_ENABLED || GLES1_ENABLED)

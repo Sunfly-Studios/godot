@@ -2386,6 +2386,7 @@ Error Main::setup(const char *execpath, int argc, char *argv[], bool p_second_ph
         // Map the blocklist to compatibility
         GLOBAL_DEF_RST_NOVAL(PropertyInfo(Variant::ARRAY, "rendering/gl_compatibility/force_angle_on_devices", PROPERTY_HINT_ARRAY_TYPE, vformat("%s/%s:%s", Variant::DICTIONARY, PROPERTY_HINT_NONE, String())), device_blocklist);
 
+		// GL Legacy driver overrides
         GLOBAL_DEF_RST("rendering/gl_legacy/driver", "opengl2");
         GLOBAL_DEF_RST(PropertyInfo(Variant::STRING, "rendering/gl_legacy/driver.windows", PROPERTY_HINT_ENUM, "opengl2,opengl2_angle"), "opengl2");
         GLOBAL_DEF_RST(PropertyInfo(Variant::STRING, "rendering/gl_legacy/driver.linuxbsd", PROPERTY_HINT_ENUM, "opengl2,opengl2_es"), "opengl2");
@@ -2400,6 +2401,22 @@ Error Main::setup(const char *execpath, int argc, char *argv[], bool p_second_ph
         GLOBAL_DEF_RST("rendering/gl_legacy/fallback_to_gles", true);
 
         GLOBAL_DEF_RST_NOVAL(PropertyInfo(Variant::ARRAY, "rendering/gl_legacy/force_angle_on_devices", PROPERTY_HINT_ARRAY_TYPE, vformat("%s/%s:%s", Variant::DICTIONARY, PROPERTY_HINT_NONE, String())), device_blocklist);
+
+		// GL Classic driver overrides
+        GLOBAL_DEF_RST("rendering/gl_classic/driver", "opengl1");
+        GLOBAL_DEF_RST(PropertyInfo(Variant::STRING, "rendering/gl_classic/driver.windows", PROPERTY_HINT_ENUM, "opengl1,opengl1_angle"), "opengl1");
+        GLOBAL_DEF_RST(PropertyInfo(Variant::STRING, "rendering/gl_classic/driver.linuxbsd", PROPERTY_HINT_ENUM, "opengl1,opengl1_es"), "opengl1");
+        GLOBAL_DEF_RST(PropertyInfo(Variant::STRING, "rendering/gl_classic/driver.web", PROPERTY_HINT_ENUM, "opengl1"), "opengl1");
+        GLOBAL_DEF_RST(PropertyInfo(Variant::STRING, "rendering/gl_classic/driver.android", PROPERTY_HINT_ENUM, "opengl1"), "opengl1");
+        GLOBAL_DEF_RST(PropertyInfo(Variant::STRING, "rendering/gl_classic/driver.ios", PROPERTY_HINT_ENUM, "opengl1"), "opengl1");
+        GLOBAL_DEF_RST(PropertyInfo(Variant::STRING, "rendering/gl_classic/driver.macos", PROPERTY_HINT_ENUM, "opengl1,opengl1_angle"), "opengl1");
+
+        GLOBAL_DEF_RST("rendering/gl_classic/nvidia_disable_threaded_optimization", true);
+        GLOBAL_DEF_RST("rendering/gl_classic/fallback_to_angle", true);
+        GLOBAL_DEF_RST("rendering/gl_classic/fallback_to_native", true);
+        GLOBAL_DEF_RST("rendering/gl_classic/fallback_to_gles", true);
+
+        GLOBAL_DEF_RST_NOVAL(PropertyInfo(Variant::ARRAY, "rendering/gl_classic/force_angle_on_devices", PROPERTY_HINT_ARRAY_TYPE, vformat("%s/%s:%s", Variant::DICTIONARY, PROPERTY_HINT_NONE, String())), device_blocklist);
     }
 
 	// Start with RenderingDevice-based backends.
@@ -2430,12 +2447,25 @@ Error Main::setup(const char *execpath, int argc, char *argv[], bool p_second_ph
 	}
 #endif
 
+	// Add Classic next.
+#ifdef GLES1_ENABLED
+	if (!renderer_hints.is_empty()) {
+		renderer_hints += ",";
+	}
+	renderer_hints += "gl_classic";
+	if (default_renderer_mobile.is_empty()) {
+		default_renderer_mobile = "gl_classic";
+	}
+#endif
+
 	if (renderer_hints.is_empty()) {
 		ERR_PRINT("No renderers available.");
 	}
 
 	// Handle project manager defaults independently.
 	if (rendering_driver.is_empty() && rendering_method.is_empty() && project_manager) {
+		// TODO(GLES1): Make Classic the preferred one once
+		// we get 2D working and solid.
 #ifdef GLES2_ENABLED
 		rendering_driver = "opengl2";
 		rendering_method = "gl_legacy";
@@ -2449,7 +2479,8 @@ Error Main::setup(const char *execpath, int argc, char *argv[], bool p_second_ph
 		if (rendering_method != "forward_plus" &&
 				rendering_method != "mobile" &&
 				rendering_method != "gl_compatibility" &&
-				rendering_method != "gl_legacy") {
+				rendering_method != "gl_legacy" &&
+				rendering_method != "gl_classic") {
 			OS::get_singleton()->print("Unknown rendering method '%s', aborting.\nValid options are ",
 					rendering_method.utf8().get_data());
 
@@ -2521,6 +2552,8 @@ Error Main::setup(const char *execpath, int argc, char *argv[], bool p_second_ph
 				rendering_method = "gl_compatibility";
 			} else if (rendering_driver == "opengl2" || rendering_driver == "opengl2_angle" || rendering_driver == "opengl2_es") {
 				rendering_method = "gl_legacy";
+			} else if (rendering_driver == "opengl1" || rendering_driver == "opengl1_angle" || rendering_driver == "opengl1_es") {
+				rendering_method = "gl_classic";
 			} else {
 				rendering_method = "forward_plus";
 			}
@@ -2554,6 +2587,13 @@ Error Main::setup(const char *execpath, int argc, char *argv[], bool p_second_ph
 			available_drivers.push_back("opengl2_es");
 		}
 #endif
+#ifdef GLES1_ENABLED
+		if (rendering_method == "gl_classic") {
+			available_drivers.push_back("opengl1");
+			available_drivers.push_back("opengl1_angle");
+			available_drivers.push_back("opengl1_es");
+		}
+#endif
 		if (available_drivers.is_empty()) {
 			OS::get_singleton()->print("Unknown renderer name '%s', aborting.\n", rendering_method.utf8().get_data());
 			goto error;
@@ -2583,8 +2623,12 @@ Error Main::setup(const char *execpath, int argc, char *argv[], bool p_second_ph
 	GLOBAL_DEF_RST_BASIC(PropertyInfo(Variant::STRING, "rendering/renderer/rendering_method", PROPERTY_HINT_ENUM, renderer_hints), default_renderer);
 	GLOBAL_DEF_RST_BASIC("rendering/renderer/rendering_method.mobile", default_renderer_mobile);
 
-	if (rendering_method == "gl_legacy") {
-		GLOBAL_DEF_RST_BASIC("rendering/renderer/rendering_method.web", rendering_method);
+	if (rendering_method == "gl_legacy" || rendering_method == "gl_classic") {
+		if (rendering_method == "gl_classic") {
+			GLOBAL_DEF_RST_BASIC("rendering/renderer/rendering_method.web", "gl_legacy");
+		} else {
+			GLOBAL_DEF_RST_BASIC("rendering/renderer/rendering_method.web", rendering_method);
+		}
 	} else {
 		GLOBAL_DEF_RST_BASIC("rendering/renderer/rendering_method.web", "gl_compatibility"); // This is a bit of a hack until we have WebGPU support.
 	}
@@ -2601,6 +2645,9 @@ Error Main::setup(const char *execpath, int argc, char *argv[], bool p_second_ph
 			rendering_driver_source = OS::RenderingSource::RENDERING_SOURCE_PROJECT_SETTING;
 		} else if (rendering_method == "gl_legacy") {
 			rendering_driver = GLOBAL_GET("rendering/gl_legacy/driver");
+			rendering_driver_source = OS::RenderingSource::RENDERING_SOURCE_PROJECT_SETTING;
+		} else if (rendering_method == "gl_classic") {
+			rendering_driver = GLOBAL_GET("rendering/gl_classic/driver");
 			rendering_driver_source = OS::RenderingSource::RENDERING_SOURCE_PROJECT_SETTING;
 		} else {
 			rendering_driver = GLOBAL_GET("rendering/rendering_device/driver");

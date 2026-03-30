@@ -1017,6 +1017,9 @@ Vector<String> DisplayServerWeb::get_rendering_drivers_func() {
 #ifdef GLES2_ENABLED
 	drivers.push_back("opengl2");
 #endif
+#ifdef GLES1_ENABLED
+	drivers.push_back("opengl1");
+#endif
 	return drivers;
 }
 
@@ -1166,7 +1169,7 @@ DisplayServerWeb::DisplayServerWeb(const String &p_rendering_driver, WindowMode 
 	}
 #endif // GLES3_ENABLED
 
-#ifdef GLES2_ENABLED
+#if defined(GLES2_ENABLED) || defined(GLES1_ENABLED)
 	if (!webgl_inited) {
 		if (godot_js_display_has_webgl(1)) {
 			EmscriptenWebGLContextAttributes attributes;
@@ -1184,7 +1187,7 @@ DisplayServerWeb::DisplayServerWeb(const String &p_rendering_driver, WindowMode 
 			RasterizerGLES2::make_current(false);
 		}
 	}
-#endif // GLES2_ENABLED
+#endif // GLES2_ENABLED || GLES1_ENABLED
 
 	if (!webgl_inited) {
 		OS::get_singleton()->alert(
@@ -1223,7 +1226,7 @@ DisplayServerWeb::~DisplayServerWeb() {
 		memdelete(native_menu);
 		native_menu = nullptr;
 	}
-#if defined(GLES3_ENABLED) || defined(GLES2_ENABLED)
+#if defined(GLES3_ENABLED) || defined(GLES2_ENABLED) || defined(GLES1_ENABLED)
 	if (webgl_ctx) {
 		emscripten_webgl_destroy_context(webgl_ctx);
 		webgl_ctx = 0;
@@ -1514,7 +1517,7 @@ bool DisplayServerWeb::get_swap_cancel_ok() {
 }
 
 void DisplayServerWeb::swap_buffers() {
-#if defined(GLES3_ENABLED) || defined(GLES2_ENABLED)
+#if defined(GLES3_ENABLED) || defined(GLES2_ENABLED) || defined(GLES1_ENABLED)
 	if (webgl_ctx) {
 		emscripten_webgl_commit_frame();
 	}

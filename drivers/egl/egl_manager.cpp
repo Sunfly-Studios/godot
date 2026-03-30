@@ -34,6 +34,7 @@
 #include "core/io/dir_access.h"
 #include "drivers/gles3/rasterizer_gles3.h"
 #include "drivers/gles2/rasterizer_gles2.h"
+#include "drivers/gles1/rasterizer_gles1.h"
 
 #ifdef EGL_ENABLED
 
@@ -210,6 +211,12 @@ Error EGLManager::_gldisplay_create_context(GLDisplay &p_gldisplay) {
 #ifdef GLES2_ENABLED
 	if (rendering_method == "gl_legacy") {
 		renderable_type = EGL_OPENGL_ES2_BIT;
+	}
+#endif
+
+#ifdef GLES1_ENABLED
+	if (rendering_method == "gl_classic") {
+		renderable_type = EGL_OPENGL_ES_BIT;
 	}
 #endif
 
@@ -414,6 +421,10 @@ void EGLManager::window_make_current(DisplayServer::WindowID p_window_id) {
 #ifdef GLES2_ENABLED
 	RasterizerGLES2::set_screen_flipped_y(glwindow.flipped_y);
 #endif // GLES2_ENABLED
+
+#ifdef GLES1_ENABLED
+	RasterizerGLES1::set_screen_flipped_y(glwindow.flipped_y);
+#endif // GLES1_ENABLED
 
 #endif // WINDOWS_ENABLED
 }
