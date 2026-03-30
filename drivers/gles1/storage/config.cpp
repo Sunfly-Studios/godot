@@ -83,12 +83,24 @@ Config::Config() {
 	support_instancing = extensions.has("GL_EXT_draw_instanced") || extensions.has("GL_ANGLE_instanced_arrays") || extensions.has("GL_ARB_draw_instanced");
 	support_frag_depth = extensions.has("GL_EXT_frag_depth");
 
+	support_fbo = extensions.has("GL_OES_framebuffer_object") || extensions.has("GL_EXT_framebuffer_object");
+	support_npot = extensions.has("GL_OES_texture_npot") || extensions.has("GL_ARB_texture_non_power_of_two");
+	support_blend_func_separate = extensions.has("GL_OES_blend_func_separate") || extensions.has("GL_EXT_blend_func_separate");
+	support_texture_env_combine = extensions.has("GL_OES_texture_env_crossbar") || extensions.has("GL_ARB_texture_env_combine") || extensions.has("GL_EXT_texture_env_combine");
+	support_point_sprite = extensions.has("GL_OES_point_sprite") || extensions.has("GL_ARB_point_sprite");
+
 	if (RasterizerGLES1::is_gles_over_gl()) {
 		float_texture_supported = true;
 		etc2_supported = false;
 		s3tc_supported = true;
 		support_npot_repeat_mipmap = true;
 		support_32_bits_indices = true;
+
+		support_fbo = true;
+		support_npot = true;
+		support_blend_func_separate = true;
+		support_texture_env_combine = true;
+		support_point_sprite = true;
 	} else {
 		float_texture_supported = extensions.has("GL_OES_texture_float") || extensions.has("GL_EXT_color_buffer_float");
 		etc2_supported = true;
@@ -165,7 +177,7 @@ Config::Config() {
 		disable_transform_feedback_shader_cache = true;
 	}
 
-	if (OS::get_singleton()->get_current_rendering_driver_name() == "opengl2_angle") {
+	if (OS::get_singleton()->get_current_rendering_driver_name() == "opengl1_angle") {
 		polyfill_half2float = false;
 	}
 #ifdef WEB_ENABLED

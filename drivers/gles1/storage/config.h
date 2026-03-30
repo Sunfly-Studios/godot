@@ -57,6 +57,11 @@ public:
 	bool use_nearest_mip_filter = false;
 	bool use_depth_prepass = true;
 	bool support_npot_repeat_mipmap = true;
+	bool support_fbo = false;
+	bool support_npot = false;
+	bool support_blend_func_separate = false;
+	bool support_texture_env_combine = false;
+	bool support_point_sprite = false;
 
 	GLint max_vertex_texture_image_units = 0;
 	GLint max_texture_image_units = 0;

@@ -292,12 +292,18 @@ void RasterizerCanvasGLES1::_bind_canvas_texture(RID p_texture, RS::CanvasItemTe
 			)
 		);
 		if (tex_2d_bg) {
+			glEnable(GL_TEXTURE_2D);
 			glBindTexture(GL_TEXTURE_2D, tex_2d_bg->tex_id);
 			state.texpixel_size = Size2(1.0 / tex_2d_bg->width, 1.0 / tex_2d_bg->height);
 			state.texture_size = Size2i(tex_2d_bg->width, tex_2d_bg->height);
 		}
 	} else {
+		glEnable(GL_TEXTURE_2D);
 		glBindTexture(GL_TEXTURE_2D, texture->tex_id);
+
+		if (GLES1::Config::get_singleton()->support_texture_env_combine) {
+			glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE);
+		}
 
 		// Setup Filters
 		GLenum min_filter = GL_LINEAR;
@@ -502,8 +508,8 @@ void RasterizerCanvasGLES1::canvas_begin(RID p_to_render_target, bool p_to_backb
 		glBindTexture(GL_TEXTURE_2D, tex_white->tex_id);
 	}
 
-	glVertexAttrib4f(RS::ARRAY_COLOR, 1, 1, 1, 1);
-	glDisableVertexAttribArray(RS::ARRAY_COLOR);
+	glColor4f(1.0f, 1.0f, 1.0f, 1.0f);
+	glDisableClientState(GL_COLOR_ARRAY);
 
 	// Calculate Projection Matrix
 	// Godot 4 seems to expect 3D transforms even in 2D.
@@ -548,9 +554,11 @@ void RasterizerCanvasGLES1::canvas_end() {
 
 	glBindBuffer(GL_ARRAY_BUFFER, 0);
 
-	for (int i = 0; i < RS::ARRAY_MAX; i++) {
-		glDisableVertexAttribArray(i);
-	}
+	glDisableClientState(GL_VERTEX_ARRAY);
+	glDisableClientState(GL_TEXTURE_COORD_ARRAY);
+	glDisableClientState(GL_COLOR_ARRAY);
+
+	glDisable(GL_TEXTURE_2D);
 
 	Size2 render_target_size;
 	if (state.render_target != RID()) {
@@ -843,19 +851,18 @@ void RasterizerCanvasGLES1::_batch_render_generic(const Batch &p_batch, GLES1::C
 	glBindBuffer(GL_ARRAY_BUFFER, bdata.gl_vertex_buffer);
 	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, bdata.gl_index_buffer);
 
-	glEnableVertexAttribArray(RS::ARRAY_VERTEX);
-	glVertexAttribPointer(RS::ARRAY_VERTEX, 2, GL_FLOAT, GL_FALSE, sizeof_vert, (const void *)(uintptr_t)offsetof(BatchVertex, pos));
+	glEnableClientState(GL_VERTEX_ARRAY);
+	glVertexPointer(2, GL_FLOAT, sizeof_vert, (const void *)(uintptr_t)offsetof(BatchVertex, pos));
 
-	glEnableVertexAttribArray(RS::ARRAY_TEX_UV);
-	glVertexAttribPointer(RS::ARRAY_TEX_UV, 2, GL_FLOAT, GL_FALSE, sizeof_vert, (const void *)(uintptr_t)offsetof(BatchVertex, uv));
+	glEnableClientState(GL_TEXTURE_COORD_ARRAY);
+	glTexCoordPointer(2, GL_FLOAT, sizeof_vert, (const void *)(uintptr_t)offsetof(BatchVertex, uv));
 
 	if (!colored_verts) {
-		glDisableVertexAttribArray(RS::ARRAY_COLOR);
-		glVertexAttrib4fv(RS::ARRAY_COLOR, p_batch.color.get_data());
+		glDisableClientState(GL_COLOR_ARRAY);
+		glColor4f(p_batch.color.r, p_batch.color.g, p_batch.color.b, p_batch.color.a);
 	} else {
-		glEnableVertexAttribArray(RS::ARRAY_COLOR);
-		// BatchVertexColored is our baseline for colored geometry
-		glVertexAttribPointer(RS::ARRAY_COLOR, 4, GL_FLOAT, GL_FALSE, sizeof_vert, (const void *)(uintptr_t)offsetof(BatchVertexColored, col));
+		glEnableClientState(GL_COLOR_ARRAY);
+		glColorPointer(4, GL_FLOAT, sizeof_vert, (const void *)(uintptr_t)offsetof(BatchVertexColored, col));
 	}
 
 	// Send Pixel Size to the shader (using the state updated by _bind_canvas_texture)
@@ -884,9 +891,9 @@ void RasterizerCanvasGLES1::_batch_render_generic(const Batch &p_batch, GLES1::C
 		state.specialization &= ~(CanvasShaderGLES1::USE_FORCE_REPEAT);
 	}
 
-	glDisableVertexAttribArray(RS::ARRAY_VERTEX);
-	glDisableVertexAttribArray(RS::ARRAY_TEX_UV);
-	glDisableVertexAttribArray(RS::ARRAY_COLOR);
+	glDisableClientState(GL_VERTEX_ARRAY);
+	glDisableClientState(GL_TEXTURE_COORD_ARRAY);
+	glDisableClientState(GL_COLOR_ARRAY);
 	glBindBuffer(GL_ARRAY_BUFFER, 0);
 	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
 }
@@ -931,9 +938,9 @@ void RasterizerCanvasGLES1::render_batches(Item::Command *const *p_commands, Ite
 
 							// Clean state
 							// (so that rubbish/garbage doesn't ruin stuff later)
-							glDisableVertexAttribArray(RS::ARRAY_COLOR);
-							glDisableVertexAttribArray(RS::ARRAY_TEX_UV);
-							glVertexAttrib4fv(RS::ARRAY_COLOR, r->modulate.components);
+							glDisableClientState(GL_COLOR_ARRAY);
+							glDisableClientState(GL_TEXTURE_COORD_ARRAY);
+							glColor4fv(r->modulate.components);
 
 							// Texture binding
 							RS::CanvasItemTextureRepeat repeat = state.default_repeat;
@@ -965,8 +972,8 @@ void RasterizerCanvasGLES1::render_batches(Item::Command *const *p_commands, Ite
 
 							// Bind the default quad buffer
 							glBindBuffer(GL_ARRAY_BUFFER, data.canvas_quad_vertices);
-							glEnableVertexAttribArray(RS::ARRAY_VERTEX);
-							glVertexAttribPointer(RS::ARRAY_VERTEX, 2, GL_FLOAT, GL_FALSE, 0, nullptr);
+							glEnableClientState(GL_VERTEX_ARRAY);
+							glVertexPointer(2, GL_FLOAT, 0, nullptr);
 
 							// Calculate rects
 							Rect2 src_rect = (r->flags & CANVAS_RECT_REGION) ? Rect2(r->source.position * state.texpixel_size, r->source.size * state.texpixel_size) : Rect2(0, 0, 1, 1);
@@ -1015,8 +1022,8 @@ void RasterizerCanvasGLES1::render_batches(Item::Command *const *p_commands, Ite
 								p_material->bind_uniforms();
 							}
 
-							glDisableVertexAttribArray(RS::ARRAY_COLOR);
-							glVertexAttrib4fv(RS::ARRAY_COLOR, np->color.components);
+							glDisableClientState(GL_COLOR_ARRAY);
+							glColor4fv(np->color.components);
 
 							RS::CanvasItemTextureRepeat repeat = state.default_repeat;
 							if (p_current_clip && p_current_clip->texture_repeat != RS::CANVAS_ITEM_TEXTURE_REPEAT_DEFAULT) {
@@ -1158,12 +1165,12 @@ void RasterizerCanvasGLES1::render_batches(Item::Command *const *p_commands, Ite
 							glBufferData(GL_ARRAY_BUFFER, sizeof(float) * (16 + 16) * 2, buffer, GL_DYNAMIC_DRAW);
 							glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, data.ninepatch_elements);
 
-							glEnableVertexAttribArray(RS::ARRAY_VERTEX);
-							glEnableVertexAttribArray(RS::ARRAY_TEX_UV);
-							glDisableVertexAttribArray(RS::ARRAY_COLOR);
+							glEnableClientState(GL_VERTEX_ARRAY);
+							glEnableClientState(GL_TEXTURE_COORD_ARRAY);
+							glDisableClientState(GL_COLOR_ARRAY);
 
-							glVertexAttribPointer(RS::ARRAY_VERTEX, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), nullptr);
-							glVertexAttribPointer(RS::ARRAY_TEX_UV, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (const void *)(sizeof(float) * 2));
+							glVertexPointer(2, GL_FLOAT, 4 * sizeof(float), nullptr);
+							glTexCoordPointer(2, GL_FLOAT, 4 * sizeof(float), (const void *)(sizeof(float) * 2));
 
 							glDrawElements(GL_TRIANGLES, 18 * 3 - (np->draw_center ? 0 : 6), GL_UNSIGNED_BYTE, nullptr);
 
@@ -1267,12 +1274,24 @@ void RasterizerCanvasGLES1::render_batches(Item::Command *const *p_commands, Ite
 
 										for (int k = 0; k < RS::ARRAY_MAX - 1; k++) {
 											if (v->attribs[k].enabled) {
-												glEnableVertexAttribArray(k);
-												glVertexAttribPointer(k, v->attribs[k].size, v->attribs[k].type, v->attribs[k].normalized, v->attribs[k].stride, (const void *)(uintptr_t)v->attribs[k].offset);
+												if (k == RS::ARRAY_VERTEX) {
+													glEnableClientState(GL_VERTEX_ARRAY);
+													glVertexPointer(v->attribs[k].size, v->attribs[k].type, v->attribs[k].stride, (const void *)(uintptr_t)v->attribs[k].offset);
+												} else if (k == RS::ARRAY_COLOR) {
+													glEnableClientState(GL_COLOR_ARRAY);
+													glColorPointer(v->attribs[k].size, v->attribs[k].type, v->attribs[k].stride, (const void *)(uintptr_t)v->attribs[k].offset);
+												} else if (k == RS::ARRAY_TEX_UV) {
+													glEnableClientState(GL_TEXTURE_COORD_ARRAY);
+													glTexCoordPointer(v->attribs[k].size, v->attribs[k].type, v->attribs[k].stride, (const void *)(uintptr_t)v->attribs[k].offset);
+												}
 											} else {
-												glDisableVertexAttribArray(k);
-												if (k == RS::ARRAY_COLOR) {
-													glVertexAttrib4f(RS::ARRAY_COLOR, 1.0f, 1.0f, 1.0f, 1.0f);
+												if (k == RS::ARRAY_VERTEX) {
+													glDisableClientState(GL_VERTEX_ARRAY);
+												} else if (k == RS::ARRAY_COLOR) {
+													glDisableClientState(GL_COLOR_ARRAY);
+													glColor4f(1.0f, 1.0f, 1.0f, 1.0f);
+												} else if (k == RS::ARRAY_TEX_UV) {
+													glDisableClientState(GL_TEXTURE_COORD_ARRAY);
 												}
 											}
 										}
@@ -1293,9 +1312,9 @@ void RasterizerCanvasGLES1::render_batches(Item::Command *const *p_commands, Ite
 									}
 
 									// Clean up attributes
-									for (int k = 0; k < RS::ARRAY_MAX - 1; k++) {
-										glDisableVertexAttribArray(k);
-									}
+									glDisableClientState(GL_VERTEX_ARRAY);
+									glDisableClientState(GL_TEXTURE_COORD_ARRAY);
+									glDisableClientState(GL_COLOR_ARRAY);
 								}
 							}
 
@@ -1360,37 +1379,38 @@ void RasterizerCanvasGLES1::_draw_gui_primitive(int p_points, const Vector2 *p_v
 
 	// Vertices
 	glBufferSubData(GL_ARRAY_BUFFER, offset, vertex_size, p_vertices);
-	glEnableVertexAttribArray(RS::ARRAY_VERTEX);
-	glVertexAttribPointer(RS::ARRAY_VERTEX, 2, GL_FLOAT, GL_FALSE, 0, (const void *)(uintptr_t)offset);
+	glEnableClientState(GL_VERTEX_ARRAY);
+	glVertexPointer(2, GL_FLOAT, 0, (const void *)(uintptr_t)offset);
 	offset += vertex_size;
 
 	// Colors
 	if (p_colors) {
 		glBufferSubData(GL_ARRAY_BUFFER, offset, color_size, p_colors);
-		glEnableVertexAttribArray(RS::ARRAY_COLOR);
-		glVertexAttribPointer(RS::ARRAY_COLOR, 4, GL_FLOAT, GL_FALSE, 0, (const void *)(uintptr_t)offset);
+		glEnableClientState(GL_COLOR_ARRAY);
+		glColorPointer(4, GL_FLOAT, 0, (const void *)(uintptr_t)offset);
 		offset += color_size;
 	} else {
-		glDisableVertexAttribArray(RS::ARRAY_COLOR);
+		glDisableClientState(GL_COLOR_ARRAY);
+		glColor4f(1.0f, 1.0f, 1.0f, 1.0f);
 	}
 
 	// UVs
 	if (p_uvs) {
 		glBufferSubData(GL_ARRAY_BUFFER, offset, uv_size, p_uvs);
-		glEnableVertexAttribArray(RS::ARRAY_TEX_UV);
-		glVertexAttribPointer(RS::ARRAY_TEX_UV, 2, GL_FLOAT, GL_FALSE, 0, (const void *)(uintptr_t)offset);
+		glEnableClientState(GL_TEXTURE_COORD_ARRAY);
+		glTexCoordPointer(2, GL_FLOAT, 0, (const void *)(uintptr_t)offset);
 		offset += uv_size;
 	} else {
-		glDisableVertexAttribArray(RS::ARRAY_TEX_UV);
+		glDisableClientState(GL_TEXTURE_COORD_ARRAY);
 	}
 
 	// For Gizmos, we often draw Lines, Triangles, or Points depending on p_points
 	GLenum draw_mode = (p_points == 2) ? GL_LINES : ((p_points == 3) ? GL_TRIANGLES : GL_TRIANGLE_FAN);
 	glDrawArrays(draw_mode, 0, p_points);
 
-	glDisableVertexAttribArray(RS::ARRAY_VERTEX);
-	glDisableVertexAttribArray(RS::ARRAY_TEX_UV);
-	glDisableVertexAttribArray(RS::ARRAY_COLOR);
+	glDisableClientState(GL_VERTEX_ARRAY);
+	glDisableClientState(GL_TEXTURE_COORD_ARRAY);
+	glDisableClientState(GL_COLOR_ARRAY);
 	glBindBuffer(GL_ARRAY_BUFFER, 0);
 }
 
@@ -1460,41 +1480,41 @@ void RasterizerCanvasGLES1::_legacy_draw_poly_triangles(Item::CommandPolygon *p_
 
 	// Points
 	glBufferSubData(GL_ARRAY_BUFFER, offset, points_size, pd.points.ptr());
-	glEnableVertexAttribArray(RS::ARRAY_VERTEX);
-	glVertexAttribPointer(RS::ARRAY_VERTEX, 2, GL_FLOAT, GL_FALSE, 0, (const void *)(uintptr_t)offset);
+	glEnableClientState(GL_VERTEX_ARRAY);
+	glVertexPointer(2, GL_FLOAT, 0, (const void *)(uintptr_t)offset);
 	offset += points_size;
 
 	// UVs
 	if (uvs_size > 0) {
 		glBufferSubData(GL_ARRAY_BUFFER, offset, uvs_size, pd.uvs.ptr());
-		glEnableVertexAttribArray(RS::ARRAY_TEX_UV);
-		glVertexAttribPointer(RS::ARRAY_TEX_UV, 2, GL_FLOAT, GL_FALSE, 0, (const void *)(uintptr_t)offset);
+		glEnableClientState(GL_TEXTURE_COORD_ARRAY);
+		glTexCoordPointer(2, GL_FLOAT, 0, (const void *)(uintptr_t)offset);
 		offset += uvs_size;
 	} else {
-		glDisableVertexAttribArray(RS::ARRAY_TEX_UV);
+		glDisableClientState(GL_TEXTURE_COORD_ARRAY);
 	}
 
 	// Colors
 	if (pd.colors.size() == 1) {
 		// Flat colored polygon (e.g., editor backgrounds)
-		glDisableVertexAttribArray(RS::ARRAY_COLOR);
-		glVertexAttrib4f(RS::ARRAY_COLOR, pd.colors[0].r, pd.colors[0].g, pd.colors[0].b, pd.colors[0].a);
+		glDisableClientState(GL_COLOR_ARRAY);
+		glColor4f(pd.colors[0].r, pd.colors[0].g, pd.colors[0].b, pd.colors[0].a);
 	} else if (pd.colors.size() > 1) {
 		// Vertex colored polygon
 		glBufferSubData(GL_ARRAY_BUFFER, offset, colors_size, pd.colors.ptr());
-		glEnableVertexAttribArray(RS::ARRAY_COLOR);
-		glVertexAttribPointer(RS::ARRAY_COLOR, 4, GL_FLOAT, GL_FALSE, 0, (const void *)(uintptr_t)offset);
+		glEnableClientState(GL_COLOR_ARRAY);
+		glColorPointer(4, GL_FLOAT, 0, (const void *)(uintptr_t)offset);
 	} else {
 		// No color
-		glDisableVertexAttribArray(RS::ARRAY_COLOR);
-		glVertexAttrib4f(RS::ARRAY_COLOR, 1.0f, 1.0f, 1.0f, 1.0f); // Default white
+		glDisableClientState(GL_COLOR_ARRAY);
+		glColor4f(1.0f, 1.0f, 1.0f, 1.0f); // Default white
 	}
 
 	// Draw
 	if (!pd.indices.is_empty()) {
 		int index_count = pd.indices.size();
 
-		// GLES2 strictly requires 16-bit indices.
+		// GLES1 strictly requires 16-bit indices.
 		if (unlikely(pd.points.size() > 65535)) {
 			ERR_PRINT_ONCE("GLES1: Cannot draw polygon with more than 65535 vertices due to 16-bit index hardware limits.");
 			glBindBuffer(GL_ARRAY_BUFFER, 0);
@@ -1527,9 +1547,9 @@ void RasterizerCanvasGLES1::_legacy_draw_poly_triangles(Item::CommandPolygon *p_
 	}
 
 	// Cleanup
-	glDisableVertexAttribArray(RS::ARRAY_VERTEX);
-	glDisableVertexAttribArray(RS::ARRAY_TEX_UV);
-	glDisableVertexAttribArray(RS::ARRAY_COLOR);
+	glDisableClientState(GL_VERTEX_ARRAY);
+	glDisableClientState(GL_TEXTURE_COORD_ARRAY);
+	glDisableClientState(GL_COLOR_ARRAY);
 	glBindBuffer(GL_ARRAY_BUFFER, 0);
 }
 
