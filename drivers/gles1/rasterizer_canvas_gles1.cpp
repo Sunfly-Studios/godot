@@ -538,6 +538,7 @@ void RasterizerCanvasGLES1::canvas_end() {
 	glDisableClientState(GL_COLOR_ARRAY);
 
 	glDisable(GL_TEXTURE_2D);
+	glColor4f(1.0f, 1.0f, 1.0f, 1.0f);
 
 	Size2 render_target_size;
 	if (state.render_target != RID()) {
@@ -622,10 +623,9 @@ void RasterizerCanvasGLES1::canvas_render_items_implementation(Item *p_item_list
 	state.current_tex_is_rt = false;
 
 	// Force baseline 2D state for the pass
-	glEnable(GL_BLEND);
-    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-    glDisable(GL_CULL_FACE);
-    glDisable(GL_DEPTH_TEST);
+	// Call reset_canvas() instead of hardcoding the blend func,
+	// because reset_canvas respects transparent RenderTargets (sub-windows).
+	reset_canvas();
 
 	// Bind default white texture to texture unit 0
 	glActiveTexture(GL_TEXTURE0);

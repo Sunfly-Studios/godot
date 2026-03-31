@@ -189,7 +189,7 @@ Ref<Image> TextureStorage::_get_gl_image_and_format(const Ref<Image> &p_image, I
 			r_gl_type = GL_UNSIGNED_BYTE;
 		} break;
 		case Image::FORMAT_RG8: {
-			ERR_PRINT_ONCE("RG8 Format is not supported by GLES2, converting to RGB.");
+			ERR_PRINT_ONCE("RG8 Format is not supported by GLES1, converting to RGB.");
 			if (image.is_valid()) {
 				image->convert(Image::FORMAT_RGB8);
 			}
@@ -219,7 +219,7 @@ Ref<Image> TextureStorage::_get_gl_image_and_format(const Ref<Image> &p_image, I
 			r_gl_type = GL_UNSIGNED_BYTE;
 		} break;
 		case Image::FORMAT_RGF: {
-			ERR_PRINT_ONCE("RGF Format is not supported by GLES2, converting to RGB8.");
+			ERR_PRINT_ONCE("RGF Format is not supported by GLES1, converting to RGB8.");
 			if (image.is_valid()) {
 				image->convert(Image::FORMAT_RGB8);
 			}
@@ -229,7 +229,7 @@ Ref<Image> TextureStorage::_get_gl_image_and_format(const Ref<Image> &p_image, I
 			r_gl_type = GL_UNSIGNED_BYTE;
 		} break;
 		case Image::FORMAT_RGBF: {
-			ERR_PRINT_ONCE("RGB float texture not supported by GLES2, converting to RGB8.");
+			ERR_PRINT_ONCE("RGB float texture not supported by GLES1, converting to RGB8.");
 			if (image.is_valid()) {
 				image->convert(Image::FORMAT_RGB8);
 			}
@@ -364,7 +364,7 @@ Ref<Image> TextureStorage::_get_gl_image_and_format(const Ref<Image> &p_image, I
 			need_decompress = true;
 		} break;
 		default: {
-			ERR_FAIL_V_MSG(Ref<Image>(), "The image format " + itos(p_format) + " is not supported by the GLES2 rendering backend.");
+			ERR_FAIL_V_MSG(Ref<Image>(), "The image format " + itos(p_format) + " is not supported by the GLES1 rendering backend.");
 		}
 	}
 
@@ -518,8 +518,8 @@ void TextureStorage::texture_2d_layered_initialize(RID p_texture, const Vector<R
 	ERR_FAIL_COND(p_layers.is_empty());
 
 	ERR_FAIL_COND(p_layered_type == RS::TEXTURE_LAYERED_CUBEMAP && p_layers.size() != 6);
-	ERR_FAIL_COND_MSG(p_layered_type == RS::TEXTURE_LAYERED_CUBEMAP_ARRAY, "Cubemap Arrays are not supported in the GLES2 backend.");
-	ERR_FAIL_COND_MSG(p_layered_type == RS::TEXTURE_LAYERED_2D_ARRAY, "2D Texture Arrays are not supported in the GLES2 backend.");
+	ERR_FAIL_COND_MSG(p_layered_type == RS::TEXTURE_LAYERED_CUBEMAP_ARRAY, "Cubemap Arrays are not supported in the GLES1 backend.");
+	ERR_FAIL_COND_MSG(p_layered_type == RS::TEXTURE_LAYERED_2D_ARRAY, "2D Texture Arrays are not supported in the GLES1 backend.");
 
 	const Ref<Image> &image = p_layers[0];
 	{
@@ -568,7 +568,7 @@ void TextureStorage::texture_2d_layered_initialize(RID p_texture, const Vector<R
 }
 
 void TextureStorage::texture_3d_initialize(RID p_texture, Image::Format p_format, int p_width, int p_height, int p_depth, bool p_mipmaps, const Vector<Ref<Image>> &p_data) {
-	WARN_PRINT("Trying to initialize a 3D texture with the GLES2 driver, which doesn't support 3D Textures!");
+	WARN_PRINT("Trying to initialize a 3D texture with the GLES1 driver, which doesn't support 3D Textures!");
 }
 
 // Called internally when texture_proxy_create(p_base) is called.
@@ -615,7 +615,7 @@ void TextureStorage::texture_2d_update(RID p_texture, const Ref<Image> &p_image,
 }
 
 void TextureStorage::texture_3d_update(RID p_texture, const Vector<Ref<Image>> &p_data) {
-	WARN_PRINT("Trying to update a 3D texture with the GLES2 driver, which doesn't support 3D Textures!");
+	WARN_PRINT("Trying to update a 3D texture with the GLES1 driver, which doesn't support 3D Textures!");
 }
 
 void TextureStorage::texture_external_update(RID p_texture, int p_width, int p_height, uint64_t p_external_buffer) {
@@ -693,12 +693,14 @@ Ref<Image> TextureStorage::texture_2d_get(RID p_texture) const {
 	Texture *tex = texture_owner.get_or_null(p_texture);
 	ERR_FAIL_NULL_V(tex, Ref<Image>());
 
-	// Return the cached image since GLES2 can't read it back natively
+	// Return the cached image since GLES1 can't read it back natively
 	if (tex->image_cache_2d.is_valid()) {
 		return tex->image_cache_2d;
 	}
 
-	WARN_PRINT_ONCE("CPU Image cache is empty for this texture, and GLES2 cannot read back directly.");
+#ifdef DEV_ENABLED
+	WARN_PRINT_ONCE("CPU Image cache is empty for this texture, and GLES1 cannot read back directly.");
+#endif
 	return Ref<Image>();
 }
 
@@ -1196,6 +1198,11 @@ void TextureStorage::_clear_render_target(RenderTarget *rt) {
 		glDeleteRenderbuffers(1, &rt->depth);
 		rt->depth = 0;
 	}
+
+	if (rt->backbuffer != 0) {
+		glDeleteTextures(1, &rt->backbuffer);
+		rt->backbuffer = 0;
+	}
 }
 
 RID TextureStorage::render_target_create() {
@@ -1590,7 +1597,42 @@ void TextureStorage::render_target_sdf_process(RID p_render_target) {
 }
 
 void TextureStorage::render_target_copy_to_back_buffer(RID p_render_target, const Rect2i &p_region, bool p_gen_mipmaps) {
+	RenderTarget *rt = render_target_owner.get_or_null(p_render_target);
+	ERR_FAIL_NULL(rt);
 
+	// Generate the backbuffer texture
+	if (rt->backbuffer == 0) {
+		glGenTextures(1, &rt->backbuffer);
+		glBindTexture(GL_TEXTURE_2D, rt->backbuffer);
+
+		// NPOT enforcer
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+
+		// Allocate the VRAM for the texture,
+		// matching the FBO's format and size
+		glTexImage2D(GL_TEXTURE_2D, 0, rt->color_internal_format, rt->size.width, rt->size.height, 0, rt->color_format, GL_UNSIGNED_BYTE, nullptr);
+	} else {
+		glBindTexture(GL_TEXTURE_2D, rt->backbuffer);
+	}
+
+	// The FBO we want to copy from is already bound by the engine at this exact moment.
+	// We simply command OpenGL to rip the pixels from the FBO and write them into our bound texture.
+	glCopyTexSubImage2D(GL_TEXTURE_2D, 0,
+		// Destination x, y in the texture
+		p_region.position.x, p_region.position.y,
+
+		// Source x, y from the FBO
+		p_region.position.x, p_region.position.y,
+
+		// Width and height to copy
+		p_region.size.width, p_region.size.height
+	);
+
+	// Clean up
+	glBindTexture(GL_TEXTURE_2D, 0);
 }
 
 void TextureStorage::render_target_clear_back_buffer(RID p_render_target, const Rect2i &p_region, const Color &p_color) {
