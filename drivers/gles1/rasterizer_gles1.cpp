@@ -202,6 +202,10 @@ typedef void(GLAPIENTRY *DebugMessageCallbackARB)(DEBUGPROCARB callback, const v
 
 void RasterizerGLES1::initialize() {
 	Engine::get_singleton()->print_header(vformat("OpenGL API %s - Classic - Using Device: %s - %s", RS::get_singleton()->get_video_adapter_api_version(), RS::get_singleton()->get_video_adapter_vendor(), RS::get_singleton()->get_video_adapter_name()));
+
+	// Legacy OpenGL contexts cannot be safely shared across multiple OS windows.
+	// We force all popups and tooltips to render internally to the main window.
+	ProjectSettings::get_singleton()->set("display/window/subwindows/embed_subwindows", true);
 }
 
 void RasterizerGLES1::finalize() {

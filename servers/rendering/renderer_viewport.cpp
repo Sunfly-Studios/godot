@@ -373,11 +373,7 @@ void RendererViewport::_draw_viewport(Viewport *p_viewport) {
 		timestamp_vp_map[rt_id] = p_viewport->self;
 	}
 
-	bool is_opengl_renderer = (
-		OS::get_singleton()->get_current_rendering_method() == "gl_compatibility" ||
-		OS::get_singleton()->get_current_rendering_method() == "gl_legacy"
-	);
-	if (is_opengl_renderer) {
+	if (OS::get_singleton()->get_current_rendering_method().begins_with("gl_")) {
 		// This is currently needed for GLES to keep the current window being rendered to up to date
 		DisplayServer::get_singleton()->gl_window_make_current(p_viewport->viewport_to_screen);
 	}

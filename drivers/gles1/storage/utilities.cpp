@@ -396,14 +396,14 @@ String Utilities::get_video_adapter_api_version() const {
 	int major = version_num.get_slice(".", 0).to_int();
 	int minor = version_num.get_slice(".", 1).to_int();
 
-	// If the driver hands us anything higher than OpenGL 2.1,
+	// If the driver hands us anything higher than OpenGL 1.5,
 	// it's a superset context.
-	if (major > 2 || (major == 2 && minor > 1)) {
+	if (major > 1 || (major == 1 && minor > 5)) {
 		// Extract the vendor-specific suffix (e.g., " NVIDIA 572.83")
 		int space_idx = full_version.find(" ");
 		String vendor_info = space_idx != -1 ? full_version.substr(space_idx) : "";
 
-		return vformat("2.1 (emulated via %s)%s", version_num, vendor_info);
+		return vformat("1.5 (emulated via %s)%s", version_num, vendor_info);
 	}
 
 	return full_version;

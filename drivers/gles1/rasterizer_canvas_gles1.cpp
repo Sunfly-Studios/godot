@@ -305,56 +305,35 @@ void RasterizerCanvasGLES1::_bind_canvas_texture(RID p_texture, RS::CanvasItemTe
 			glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE);
 		}
 
+		// Check if this texture is NPOT
+		bool is_npot = false;
+		unsigned int tex_w = static_cast<unsigned int>(texture->width);
+		unsigned int tex_h = static_cast<unsigned int>(texture->height);
+		if (tex_w != next_power_of_2(texture->width) || tex_h != next_power_of_2(texture->height)) {
+			is_npot = true;
+		}
+
 		// Setup Filters
 		GLenum min_filter = GL_LINEAR;
 		GLenum mag_filter = GL_LINEAR;
-		GLenum wrap_s = GL_CLAMP_TO_EDGE;
-		GLenum wrap_t = GL_CLAMP_TO_EDGE;
+		GLenum wrap = GL_REPEAT;
 
-		switch (filter) {
-			case RS::CANVAS_ITEM_TEXTURE_FILTER_NEAREST:
-				min_filter = GL_NEAREST;
-				mag_filter = GL_NEAREST;
-				break;
-			case RS::CANVAS_ITEM_TEXTURE_FILTER_LINEAR:
-				min_filter = GL_LINEAR;
-				mag_filter = GL_LINEAR;
-				break;
-			case RS::CANVAS_ITEM_TEXTURE_FILTER_NEAREST_WITH_MIPMAPS:
-			case RS::CANVAS_ITEM_TEXTURE_FILTER_NEAREST_WITH_MIPMAPS_ANISOTROPIC:
-				min_filter = GL_NEAREST_MIPMAP_NEAREST;
-				mag_filter = GL_NEAREST;
-				break;
-			case RS::CANVAS_ITEM_TEXTURE_FILTER_LINEAR_WITH_MIPMAPS:
-			case RS::CANVAS_ITEM_TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC:
-				min_filter = GL_LINEAR_MIPMAP_LINEAR;
-				mag_filter = GL_LINEAR;
-				break;
-			default:
-				break;
+		if (p_base_filter == RS::CANVAS_ITEM_TEXTURE_FILTER_NEAREST) {
+			min_filter = GL_NEAREST;
+			mag_filter = GL_NEAREST;
 		}
 
-		switch (repeat) {
-			case RS::CANVAS_ITEM_TEXTURE_REPEAT_DISABLED:
-				wrap_s = GL_CLAMP_TO_EDGE;
-				wrap_t = GL_CLAMP_TO_EDGE;
-				break;
-			case RS::CANVAS_ITEM_TEXTURE_REPEAT_ENABLED:
-				wrap_s = GL_REPEAT;
-				wrap_t = GL_REPEAT;
-				break;
-			case RS::CANVAS_ITEM_TEXTURE_REPEAT_MIRROR:
-				wrap_s = GL_MIRRORED_REPEAT;
-				wrap_t = GL_MIRRORED_REPEAT;
-				break;
-			default:
-				break;
+		if (p_base_repeat == RS::CANVAS_ITEM_TEXTURE_REPEAT_DISABLED || is_npot) {
+			// NPOT textures must be clamped to edge in GLES1,
+			// no exceptions.
+			wrap = GL_CLAMP_TO_EDGE;
 		}
 
+		// Force the parameters directly to the driver
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, min_filter);
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, mag_filter);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, wrap_s);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, wrap_t);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, wrap);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, wrap);
 
 		if (texture->render_target) {
 			texture->render_target->used_in_frame = true;
