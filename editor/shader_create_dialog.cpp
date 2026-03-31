@@ -490,6 +490,9 @@ String ShaderCreateDialog::_validate_path(const String &p_path) {
 }
 
 void ShaderCreateDialog::_update_dialog() {
+	if (OS::get_singleton()->get_current_rendering_method() == "gl_classic") {
+		validation_panel->set_message(MSG_ID_SHADER, TTR("Shaders are not available in the Classic rendering method."), EditorValidationPanel::MSG_ERROR);
+	}
 	if (!is_built_in && !is_path_valid) {
 		validation_panel->set_message(MSG_ID_SHADER, TTR("Invalid path."), EditorValidationPanel::MSG_ERROR);
 	}
@@ -669,6 +672,10 @@ ShaderCreateDialog::ShaderCreateDialog() {
 
 	set_ok_button_text(TTR("Create"));
 	set_hide_on_ok(false);
+
+	if (OS::get_singleton()->get_current_rendering_method() == "gl_classic") {
+		get_ok_button()->set_disabled(true);
+	}
 
 	set_title(TTR("Create Shader"));
 }
