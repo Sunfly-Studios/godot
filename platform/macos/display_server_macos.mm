@@ -59,6 +59,9 @@
 #if defined(GLES2_ENABLED)
 #include "drivers/gles2/rasterizer_gles2.h"
 #endif
+#if defined(GLES1_ENABLED)
+#include "drivers/gles1/rasterizer_gles1.h"
+#endif
 
 #if defined(RD_ENABLED)
 #include "servers/rendering/renderer_rd/renderer_compositor_rd.h"
@@ -4188,6 +4191,14 @@ DisplayServerMacOS::DisplayServerMacOS(const String &p_rendering_driver, WindowM
 	}
 	if (rendering_driver == "opengl2_angle") {
 		RasterizerGLES2::make_current(false);
+	}
+#endif
+#if defined(GLES1_ENABLED)
+	if (rendering_driver == "opengl1") {
+		RasterizerGLES1::make_current(true);
+	}
+	if (rendering_driver == "opengl1_angle") {
+		RasterizerGLES1::make_current(false);
 	}
 #endif
 #if defined(RD_ENABLED)

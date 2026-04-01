@@ -48,11 +48,11 @@
 #include "storage/texture_storage.h"
 
 _FORCE_INLINE_ static uint32_t _indices_to_primitives(RS::PrimitiveType p_primitive, uint32_t p_indices) {
-    return 0;
+	return 0;
 }
 
 RID RasterizerCanvasGLES1::light_create() {
-    return RID();
+	return RID();
 }
 
 void RasterizerCanvasGLES1::light_set_texture(RID p_rid, RID p_texture) {
@@ -76,7 +76,7 @@ void RasterizerCanvasGLES1::render_sdf(RID p_render_target, LightOccluderInstanc
 }
 
 RID RasterizerCanvasGLES1::occluder_polygon_create() {
-    return RID();
+	return RID();
 }
 
 void RasterizerCanvasGLES1::occluder_polygon_set_shape(RID p_occluder, const Vector<Vector2> &p_points, bool p_closed) {
@@ -318,12 +318,12 @@ void RasterizerCanvasGLES1::_bind_canvas_texture(RID p_texture, RS::CanvasItemTe
 		GLenum mag_filter = GL_LINEAR;
 		GLenum wrap = GL_REPEAT;
 
-		if (p_base_filter == RS::CANVAS_ITEM_TEXTURE_FILTER_NEAREST) {
+		if (filter == RS::CANVAS_ITEM_TEXTURE_FILTER_NEAREST) {
 			min_filter = GL_NEAREST;
 			mag_filter = GL_NEAREST;
 		}
 
-		if (p_base_repeat == RS::CANVAS_ITEM_TEXTURE_REPEAT_DISABLED || is_npot) {
+		if (repeat == RS::CANVAS_ITEM_TEXTURE_REPEAT_DISABLED || is_npot) {
 			// NPOT textures must be clamped to edge in GLES1,
 			// no exceptions.
 			wrap = GL_CLAMP_TO_EDGE;
@@ -350,31 +350,37 @@ void RasterizerCanvasGLES1::_bind_canvas_texture(RID p_texture, RS::CanvasItemTe
 	GLint max_units = GLES1::Config::get_singleton()->max_texture_image_units;
 
 	// Normal Map
-	glActiveTexture(GL_TEXTURE0 + max_units - 6);
-	GLES1::Texture *normal_map = GLES1::TextureStorage::get_singleton()->get_texture(ct->normal_map);
-	if (!normal_map) {
-		GLES1::Texture *tex_norm = GLES1::TextureStorage::get_singleton()->get_texture(GLES1::TextureStorage::get_singleton()->texture_gl_get_default(GLES1::DEFAULT_GL_TEXTURE_NORMAL));
-		if (tex_norm) {
-			glBindTexture(GL_TEXTURE_2D, tex_norm->tex_id);
+	if (max_units >= 2) {
+		glActiveTexture(GL_TEXTURE1);
+		GLES1::Texture *normal_map = GLES1::TextureStorage::get_singleton()->get_texture(ct->normal_map);
+		if (!normal_map) {
+			GLES1::Texture *tex_norm = GLES1::TextureStorage::get_singleton()->get_texture(GLES1::TextureStorage::get_singleton()->texture_gl_get_default(GLES1::DEFAULT_GL_TEXTURE_NORMAL));
+			if (tex_norm) {
+				glBindTexture(GL_TEXTURE_2D, tex_norm->tex_id);
+			}
+			state.normal_used = false;
+		} else {
+			glBindTexture(GL_TEXTURE_2D, normal_map->tex_id);
+			state.normal_used = true;
+			state.current_tex_is_rt = state.current_tex_is_rt || normal_map->render_target;
 		}
-		state.normal_used = false;
 	} else {
-		glBindTexture(GL_TEXTURE_2D, normal_map->tex_id);
-		state.normal_used = true;
-		state.current_tex_is_rt = state.current_tex_is_rt || normal_map->render_target;
+		state.normal_used = false; // Device doesn't support enough texture units
 	}
 
 	// Specular Map
-	glActiveTexture(GL_TEXTURE0 + max_units - 7);
-	GLES1::Texture *specular_map = GLES1::TextureStorage::get_singleton()->get_texture(ct->specular);
-	if (!specular_map) {
-		GLES1::Texture *tex_spec = GLES1::TextureStorage::get_singleton()->get_texture(GLES1::TextureStorage::get_singleton()->texture_gl_get_default(GLES1::DEFAULT_GL_TEXTURE_WHITE));
-		if (tex_spec) {
-			glBindTexture(GL_TEXTURE_2D, tex_spec->tex_id);
+	if (max_units >= 3) {
+		glActiveTexture(GL_TEXTURE2);
+		GLES1::Texture *specular_map = GLES1::TextureStorage::get_singleton()->get_texture(ct->specular);
+		if (!specular_map) {
+			GLES1::Texture *tex_spec = GLES1::TextureStorage::get_singleton()->get_texture(GLES1::TextureStorage::get_singleton()->texture_gl_get_default(GLES1::DEFAULT_GL_TEXTURE_WHITE));
+			if (tex_spec) {
+				glBindTexture(GL_TEXTURE_2D, tex_spec->tex_id);
+			}
+		} else {
+			glBindTexture(GL_TEXTURE_2D, specular_map->tex_id);
+			state.current_tex_is_rt = state.current_tex_is_rt || specular_map->render_target;
 		}
-	} else {
-		glBindTexture(GL_TEXTURE_2D, specular_map->tex_id);
-		state.current_tex_is_rt = state.current_tex_is_rt || specular_map->render_target;
 	}
 
 	// Reset Active Texture to 0 so we don't
@@ -432,17 +438,26 @@ void RasterizerCanvasGLES1::canvas_begin(RID p_to_render_target, bool p_to_backb
 		render_target->was_used = true;
 	}
 
+	// Determine a safe texture unit for the screen/backbuffer.
+	// We prefer texture unit 3, but fallback to 1 (sacrificing normal maps) if limited to 2 units.
+	GLenum screen_tex_unit = GL_TEXTURE0;
+	if (config->max_texture_image_units >= 4) {
+		screen_tex_unit = GL_TEXTURE3;
+	} else if (config->max_texture_image_units >= 2) {
+		screen_tex_unit = GL_TEXTURE1; 
+	}
+
 	// Bind the correct Framebuffer
 	if (p_to_backbuffer) {
 		glBindFramebuffer(GL_FRAMEBUFFER, render_target ? render_target->backbuffer_fbo : 0);
-		glActiveTexture(GL_TEXTURE0 + config->max_texture_image_units - 4);
+		glActiveTexture(screen_tex_unit);
 		GLES1::Texture *tex = GLES1::TextureStorage::get_singleton()->get_texture(default_canvas_texture);
 		if (tex) {
 			glBindTexture(GL_TEXTURE_2D, tex->tex_id);
 		}
 	} else {
 		glBindFramebuffer(GL_FRAMEBUFFER, render_target ? render_target->fbo : 0);
-		glActiveTexture(GL_TEXTURE0 + config->max_texture_image_units - 4);
+		glActiveTexture(screen_tex_unit);
 		if (render_target) {
 			glBindTexture(GL_TEXTURE_2D, render_target->backbuffer);
 		}
@@ -901,7 +916,7 @@ void RasterizerCanvasGLES1::render_batches(Item::Command *const *p_commands, Ite
 		switch (batch.type) {
 			case BatcherEnums::BT_DEFAULT: {
 				Transform2D prev_matrix = state.uniforms.modelview_matrix;
-            	Color prev_modulate = state.uniforms.final_modulate;
+				Color prev_modulate = state.uniforms.final_modulate;
 
 				if (batch.item) {
 					state.uniforms.modelview_matrix = batch.item->final_transform;
@@ -952,7 +967,9 @@ void RasterizerCanvasGLES1::render_batches(Item::Command *const *p_commands, Ite
 							// Bind the default quad buffer
 							glBindBuffer(GL_ARRAY_BUFFER, data.canvas_quad_vertices);
 							glEnableClientState(GL_VERTEX_ARRAY);
+							glEnableClientState(GL_TEXTURE_COORD_ARRAY);
 							glVertexPointer(2, GL_FLOAT, 0, nullptr);
+							glTexCoordPointer(2, GL_FLOAT, 0, nullptr);
 
 							// Calculate rects
 							Rect2 src_rect = (r->flags & CANVAS_RECT_REGION) ? Rect2(r->source.position * state.texpixel_size, r->source.size * state.texpixel_size) : Rect2(0, 0, 1, 1);
@@ -982,6 +999,7 @@ void RasterizerCanvasGLES1::render_batches(Item::Command *const *p_commands, Ite
 							state.canvas_shader->version_set_uniform(CanvasShaderGLES1::DST_RECT, Color(dst_rect.position.x, dst_rect.position.y, dst_rect.size.x, dst_rect.size.y), state.shader_version, state.mode_variant, state.specialization);
 							state.canvas_shader->version_set_uniform(CanvasShaderGLES1::SRC_RECT, Color(src_rect.position.x, src_rect.position.y, src_rect.size.x, src_rect.size.y), state.shader_version, state.mode_variant, state.specialization);
 
+							glEnable(GL_TEXTURE_2D);
 							glDrawArrays(GL_TRIANGLE_FAN, 0, 4);
 
 							// Cleanup
@@ -1535,6 +1553,13 @@ void RasterizerCanvasGLES1::_legacy_draw_poly_triangles(Item::CommandPolygon *p_
 void RasterizerCanvasGLES1::_set_texture_rect_mode(bool p_texture_rect, bool p_light_angle, bool p_modulate, bool p_large_vertex) {
 	// Switch the shader variant between Quad and Texture Rect
 	state.mode_variant = p_texture_rect ? CanvasShaderGLES1::ShaderVariant::MODE_TEXTURE_RECT : CanvasShaderGLES1::ShaderVariant::MODE_QUAD;
+
+	if (!p_texture_rect) {
+		// Reset the texture matrix
+		glMatrixMode(GL_TEXTURE);
+		glLoadIdentity();
+		glMatrixMode(GL_MODELVIEW);
+	}
 
 	uint64_t spec = 0;
 	if (p_light_angle) {

@@ -45,4 +45,15 @@
 #include <GLES3/gl3.h>
 #include <GLES3/gl3ext.h>
 
+// However, for GLES1, we need to include it
+// manually.
+#ifdef GLES1_ENABLED
+
+// Unlock OES functions.
+#define GL_GLEXT_PROTOTYPES 1
+
+#include <GLES/gl.h>
+#include <GLES/glext.h>
+#endif // GLES1_ENABLED
+
 #endif // PLATFORM_GL_H

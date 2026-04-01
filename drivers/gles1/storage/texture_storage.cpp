@@ -97,7 +97,10 @@ TextureStorage::~TextureStorage() {
 		GLES1::Utilities::get_singleton()->texture_free_data(texture_atlas.texture);
 	}
 	texture_atlas.texture = 0;
-	glDeleteFramebuffers(1, &texture_atlas.framebuffer);
+
+	if (Config::get_singleton()->support_fbo && texture_atlas.framebuffer != 0) {
+		glDeleteFramebuffersOES(1, &texture_atlas.framebuffer);
+	}
 	texture_atlas.framebuffer = 0;
 }
 
@@ -159,7 +162,7 @@ void TextureStorage::canvas_texture_set_texture_repeat(RID p_canvas_texture, RS:
 /* Texture API */
 
 static inline Error _get_gl_uncompressed_format(const Ref<Image> &p_image, Image::Format p_format, Image::Format &r_real_format, GLenum &r_gl_format, GLenum &r_gl_internal_format, GLenum &r_gl_type) {
-    return ERR_UNAVAILABLE;
+	return ERR_UNAVAILABLE;
 }
 
 Ref<Image> TextureStorage::_get_gl_image_and_format(const Ref<Image> &p_image, Image::Format p_format, Image::Format &r_real_format, GLenum &r_gl_format, GLenum &r_gl_internal_format, GLenum &r_gl_type, bool &r_compressed, bool p_force_decompress) const {
@@ -174,8 +177,9 @@ Ref<Image> TextureStorage::_get_gl_image_and_format(const Ref<Image> &p_image, I
 
 	switch (p_format) {
 		case Image::FORMAT_L8: {
-			r_gl_internal_format = GL_LUMINANCE;
-			r_gl_format = GL_LUMINANCE;
+			// Trick GLES1 into treating grayscale fonts as alpha masks
+			r_gl_internal_format = GL_ALPHA; 
+			r_gl_format = GL_ALPHA;
 			r_gl_type = GL_UNSIGNED_BYTE;
 		} break;
 		case Image::FORMAT_LA8: {
@@ -598,7 +602,7 @@ void TextureStorage::texture_proxy_initialize(RID p_texture, RID p_base) {
 }
 
 RID TextureStorage::texture_create_from_native_handle(RS::TextureType p_type, Image::Format p_format, uint64_t p_native_handle, int p_width, int p_height, int p_depth, int p_layers, RS::TextureLayeredType p_layered_type) {
-    return RID();
+	return RID();
 }
 
 void TextureStorage::texture_2d_update(RID p_texture, const Ref<Image> &p_image, int p_layer) {
@@ -705,7 +709,7 @@ Ref<Image> TextureStorage::texture_2d_get(RID p_texture) const {
 }
 
 Ref<Image> TextureStorage::texture_2d_layer_get(RID p_texture, int p_layer) const {
-    return Ref<Image>();
+	return Ref<Image>();
 }
 
 Vector<Ref<Image>> TextureStorage::_texture_3d_read_framebuffer(GLES1::Texture *p_texture) const {
@@ -766,7 +770,7 @@ void TextureStorage::texture_set_path(RID p_texture, const String &p_path) {
 }
 
 String TextureStorage::texture_get_path(RID p_texture) const {
-    return String();
+	return String();
 }
 
 void TextureStorage::texture_set_detect_3d_callback(RID p_texture, RS::TextureDetectCallback p_callback, void *p_userdata) {
@@ -799,7 +803,7 @@ RID TextureStorage::texture_get_rd_texture(RID p_texture, bool p_srgb) const {
 }
 
 uint64_t TextureStorage::texture_get_native_handle(RID p_texture, bool p_srgb) const {
-    return 0;
+	return 0;
 }
 
 void TextureStorage::texture_set_data(RID p_texture, const Ref<Image> &p_image, int p_layer) {
@@ -1024,9 +1028,9 @@ void TextureStorage::_update_render_target(RenderTarget *rt) {
 		rt->size.y = MIN(rt->size.y, config->max_viewport_size[1]);
 	}
 
-	// If drawing directly to the screen, we just use
-	// the default system Framebuffer (0)
-	if (rt->direct_to_screen) {
+	// If drawing directly to the screen, or
+	// the GPU flat out doesn't support FBOs
+	if (rt->direct_to_screen || !config->support_fbo) {
 		rt->fbo = system_fbo;
 		return;
 	}
@@ -1054,14 +1058,14 @@ void TextureStorage::_update_render_target(RenderTarget *rt) {
 	GLenum texture_target = GL_TEXTURE_2D;
 
 	// FBO Generation
-	glGenFramebuffers(1, &rt->fbo);
+	glGenFramebuffersOES(1, &rt->fbo);
 	ERR_FAIL_COND_MSG(rt->fbo == 0, "GLES1: Failed to generate Framebuffer Object. Context lost?");
-	glBindFramebuffer(GL_FRAMEBUFFER, rt->fbo);
+	glBindFramebufferOES(GL_FRAMEBUFFER_OES, rt->fbo);
 
 	if (rt->overridden.color.is_valid()) {
 		texture = get_texture(rt->overridden.color);
 		if (unlikely(!texture)) {
-			glDeleteFramebuffers(1, &rt->fbo);
+			glDeleteFramebuffersOES(1, &rt->fbo);
 			rt->fbo = 0;
 			ERR_FAIL_MSG("GLES1: Missing texture for Render Target.");
 		}
@@ -1070,14 +1074,14 @@ void TextureStorage::_update_render_target(RenderTarget *rt) {
 	} else {
 		texture = get_texture(rt->texture);
 		if (unlikely(!texture)) {
-			glDeleteFramebuffers(1, &rt->fbo);
+			glDeleteFramebuffersOES(1, &rt->fbo);
 			rt->fbo = 0;
 			ERR_FAIL_MSG("GLES1: Missing texture for Render Target.");
 		}
 
 		glGenTextures(1, &rt->color);
 		if (unlikely(rt->color == 0)) {
-			glDeleteFramebuffers(1, &rt->fbo);
+			glDeleteFramebuffersOES(1, &rt->fbo);
 			rt->fbo = 0;
 			ERR_FAIL_MSG("GLES1: Failed to generate color texture for RenderTarget.");
 		}
@@ -1085,8 +1089,7 @@ void TextureStorage::_update_render_target(RenderTarget *rt) {
 
 		glTexImage2D(texture_target, 0, rt->color_internal_format, rt->size.x, rt->size.y, 0, rt->color_format, rt->color_type, nullptr);
 
-		// Force the texture parameters immediately after creating the color texture,
-		// otherwise shenanigans will happen (a.k.a, a very useful black screen).
+		// Force the texture parameters immediately after creating the color texture
 		glTexParameteri(texture_target, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
 		glTexParameteri(texture_target, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
 		glTexParameteri(texture_target, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
@@ -1100,32 +1103,32 @@ void TextureStorage::_update_render_target(RenderTarget *rt) {
 		}
 	}
 
-	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, texture_target, rt->color, 0);
+	glFramebufferTexture2DOES(GL_FRAMEBUFFER_OES, GL_COLOR_ATTACHMENT0_OES, texture_target, rt->color, 0);
 
 	if (rt->overridden.depth.is_valid()) {
 		texture = get_texture(rt->overridden.depth);
 		if (unlikely(!texture)) {
-			glDeleteFramebuffers(1, &rt->fbo);
+			glDeleteFramebuffersOES(1, &rt->fbo);
 			rt->fbo = 0;
 			ERR_FAIL_MSG("GLES1: Missing texture for Render Target.");
 		}
 		rt->depth = texture->tex_id;
-		glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, texture_target, rt->depth, 0);
+		glFramebufferTexture2DOES(GL_FRAMEBUFFER_OES, GL_DEPTH_ATTACHMENT_OES, texture_target, rt->depth, 0);
 	} else {
 		// Use a Renderbuffer for depth.
-		glGenRenderbuffers(1, &rt->depth);
-		glBindRenderbuffer(GL_RENDERBUFFER, rt->depth);
-		glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT16, rt->size.x, rt->size.y);
-		glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, rt->depth);
+		glGenRenderbuffersOES(1, &rt->depth);
+		glBindRenderbufferOES(GL_RENDERBUFFER_OES, rt->depth);
+		glRenderbufferStorageOES(GL_RENDERBUFFER_OES, GL_DEPTH_COMPONENT16_OES, rt->size.x, rt->size.y);
+		glFramebufferRenderbufferOES(GL_FRAMEBUFFER_OES, GL_DEPTH_ATTACHMENT_OES, GL_RENDERBUFFER_OES, rt->depth);
 
 		if (!GLES1::Utilities::get_singleton()->has_texture_data(rt->color)) {
 			GLES1::Utilities::get_singleton()->texture_allocated_data(rt->depth, rt->size.x * rt->size.y * rt->view_count * 3, "Render target depth texture");
 		}
 	}
 
-	GLenum status = glCheckFramebufferStatus(GL_FRAMEBUFFER);
-	if (status != GL_FRAMEBUFFER_COMPLETE) {
-		glDeleteFramebuffers(1, &rt->fbo);
+	GLenum status = glCheckFramebufferStatusOES(GL_FRAMEBUFFER_OES);
+	if (status != GL_FRAMEBUFFER_COMPLETE_OES) {
+		glDeleteFramebuffersOES(1, &rt->fbo);
 		if (rt->overridden.color.is_null()) {
 			GLES1::Utilities::get_singleton()->texture_free_data(rt->color);
 		}
@@ -1145,8 +1148,7 @@ void TextureStorage::_update_render_target(RenderTarget *rt) {
 		return;
 	}
 
-	// Update the backing texture so the engine
-	// knows about the FBO's memory
+	// Update the backing texture so the engine knows about the FBO's memory
 	texture->is_render_target = true;
 	texture->render_target = rt;
 	if (rt->overridden.color.is_null()) {
@@ -1166,10 +1168,10 @@ void TextureStorage::_update_render_target(RenderTarget *rt) {
 		texture->active = true;
 	}
 
-	// Clear out FBO rubbish/garbage
+	// Clear out FBO garbage
 	glClearColor(0, 0, 0, 0);
 	glClear(GL_COLOR_BUFFER_BIT);
-	glBindFramebuffer(GL_FRAMEBUFFER, system_fbo);
+	glBindFramebufferOES(GL_FRAMEBUFFER_OES, system_fbo);
 }
 
 void TextureStorage::_create_render_target_backbuffer(RenderTarget *rt) {
@@ -1184,19 +1186,21 @@ void TextureStorage::_clear_render_target(RenderTarget *rt) {
 		return;
 	}
 
-	if (rt->fbo != 0 && rt->fbo != system_fbo) {
-		glDeleteFramebuffers(1, &rt->fbo);
-		rt->fbo = 0;
+	if (Config::get_singleton()->support_fbo) {
+		if (rt->fbo != 0 && rt->fbo != system_fbo) {
+			glDeleteFramebuffersOES(1, &rt->fbo);
+			rt->fbo = 0;
+		}
+
+		if (rt->depth != 0 && !rt->overridden.depth.is_valid()) {
+			glDeleteRenderbuffersOES(1, &rt->depth);
+			rt->depth = 0;
+		}
 	}
 
 	if (rt->color != 0 && !rt->overridden.color.is_valid()) {
 		glDeleteTextures(1, &rt->color);
 		rt->color = 0;
-	}
-
-	if (rt->depth != 0 && !rt->overridden.depth.is_valid()) {
-		glDeleteRenderbuffers(1, &rt->depth);
-		rt->depth = 0;
 	}
 
 	if (rt->backbuffer != 0) {
@@ -1358,7 +1362,7 @@ void TextureStorage::render_target_set_render_region(RID p_render_target, const 
 }
 
 Rect2i TextureStorage::render_target_get_render_region(RID p_render_target) const {
-    return Rect2i();
+	return Rect2i();
 }
 
 RID TextureStorage::render_target_get_texture(RID p_render_target) {
@@ -1441,7 +1445,7 @@ void TextureStorage::render_target_set_use_hdr(RID p_render_target, bool p_use_h
 }
 
 bool TextureStorage::render_target_is_using_hdr(RID p_render_target) const {
-    return false;
+	return false;
 }
 
 GLuint TextureStorage::render_target_get_color_internal_format(RID p_render_target) const {
@@ -1506,8 +1510,10 @@ void TextureStorage::render_target_do_clear_request(RID p_render_target) {
 		return;
 	}
 
-	// Steer the GPU to the correct framebuffer
-	glBindFramebuffer(GL_FRAMEBUFFER, rt->fbo);
+	if (Config::get_singleton()->support_fbo) {
+		// Steer the GPU to the correct framebuffer
+		glBindFramebufferOES(GL_FRAMEBUFFER_OES, rt->fbo);
+	}
 
 	// Paint the color.
 	glClearColor(rt->clear_color.r, rt->clear_color.g, rt->clear_color.b, rt->clear_color.a);
@@ -1515,8 +1521,10 @@ void TextureStorage::render_target_do_clear_request(RID p_render_target) {
 
 	rt->clear_requested = false;
 
-	// Reset back to the main window
-	glBindFramebuffer(GL_FRAMEBUFFER, system_fbo);
+	if (Config::get_singleton()->support_fbo) {
+		// Reset back to the main window
+		glBindFramebufferOES(GL_FRAMEBUFFER_OES, system_fbo);
+	}
 }
 
 GLuint TextureStorage::render_target_get_fbo(RID p_render_target) const {
@@ -1545,7 +1553,7 @@ GLuint TextureStorage::render_target_get_depth(RID p_render_target) const {
 }
 
 bool TextureStorage::render_target_get_depth_has_stencil(RID p_render_target) const {
-    return false;
+	return false;
 }
 
 void TextureStorage::render_target_set_reattach_textures(RID p_render_target, bool p_reattach_textures) const {
@@ -1553,7 +1561,7 @@ void TextureStorage::render_target_set_reattach_textures(RID p_render_target, bo
 }
 
 bool TextureStorage::render_target_is_reattach_textures(RID p_render_target) const {
-    return false;
+	return false;
 }
 
 void TextureStorage::render_target_set_sdf_size_and_scale(RID p_render_target, RS::ViewportSDFOversize p_size, RS::ViewportSDFScale p_scale) {
@@ -1573,11 +1581,11 @@ void TextureStorage::render_target_mark_sdf_enabled(RID p_render_target, bool p_
 }
 
 bool TextureStorage::render_target_is_sdf_enabled(RID p_render_target) const {
-    return false;
+	return false;
 }
 
 GLuint TextureStorage::render_target_get_sdf_texture(RID p_render_target) {
-    return 0;
+	return 0;
 }
 
 void TextureStorage::_render_target_allocate_sdf(RenderTarget *rt) {
@@ -1589,7 +1597,7 @@ void TextureStorage::_render_target_clear_sdf(RenderTarget *rt) {
 }
 
 GLuint TextureStorage::render_target_get_sdf_framebuffer(RID p_render_target) {
-    return 0;
+	return 0;
 }
 
 void TextureStorage::render_target_sdf_process(RID p_render_target) {

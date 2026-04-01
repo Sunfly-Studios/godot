@@ -83,7 +83,25 @@ GL_1_5_MAPPINGS = {
         "\t\t\t\tglTranslatef(ss.x, ss.y, 0.0f);\n"
         "\t\t\t\tglScalef(ss.z, ss.w, 1.0f);\n"
         "\t\t\t\tglMatrixMode(GL_MODELVIEW);"
-    )
+    ),
+    "dst_rect": (
+        "Rect2 dr;\n"
+        "\t\t\t\tif (p_value.get_type() == Variant::RECT2) { dr = p_value; }\n"
+        "\t\t\t\telse { Color c = p_value; dr = Rect2(c.r, c.g, c.b, c.a); }\n"
+        "\t\t\t\tglMatrixMode(GL_MODELVIEW);\n"
+        "\t\t\t\tglTranslatef(dr.position.x, dr.position.y, 0.0f);\n"
+        "\t\t\t\tglScalef(Math::abs(dr.size.x), Math::abs(dr.size.y), 1.0f);"
+    ),
+    "src_rect": (
+        "Rect2 sr;\n"
+        "\t\t\t\tif (p_value.get_type() == Variant::RECT2) { sr = p_value; }\n"
+        "\t\t\t\telse { Color c = p_value; sr = Rect2(c.r, c.g, c.b, c.a); }\n"
+        "\t\t\t\tglMatrixMode(GL_TEXTURE);\n"
+        "\t\t\t\tglLoadIdentity();\n"
+        "\t\t\t\tglTranslatef(sr.position.x, sr.position.y, 0.0f);\n"
+        "\t\t\t\tglScalef(sr.size.x, sr.size.y, 1.0f);\n"
+        "\t\t\t\tglMatrixMode(GL_MODELVIEW);"
+    ),
 }
 
 class GLESHeaderStruct:

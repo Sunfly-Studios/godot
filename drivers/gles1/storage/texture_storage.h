@@ -218,6 +218,10 @@ struct Texture {
 		alloc_width = o.alloc_width;
 		alloc_height = o.alloc_height;
 		format = o.format;
+		real_format = o.real_format;
+		gl_format_cache = o.gl_format_cache;
+		gl_internal_format_cache = o.gl_internal_format_cache;
+		gl_type_cache = o.gl_type_cache;
 		type = o.type;
 		layered_type = o.layered_type;
 		target = o.target;
@@ -237,6 +241,8 @@ struct Texture {
 		detect_normal_callback_ud = o.detect_normal_callback_ud;
 		detect_roughness_callback = o.detect_roughness_callback;
 		detect_roughness_callback_ud = o.detect_roughness_callback_ud;
+		image_cache_2d = o.image_cache_2d;
+		image_cache_3d = o.image_cache_3d;
 	}
 
 	// texture state
@@ -470,7 +476,7 @@ public:
 
 	_FORCE_INLINE_ RID texture_gl_get_default(DefaultGLTexture p_texture) {
 		return default_gl_textures[p_texture];
-    }
+	}
 
 	/* Canvas Texture API */
 
@@ -535,7 +541,7 @@ public:
 
 	void texture_2d_initialize_from_texture(RID p_texture, Texture &p_tex) {
 		texture_owner.initialize_rid(p_texture, p_tex);
-    }
+	}
 
 	virtual RID texture_allocate() override;
 	virtual void texture_free(RID p_rid) override;
@@ -732,11 +738,15 @@ public:
 	virtual Size2i render_target_get_velocity_target_size(RID p_render_target) const override { return Size2i(); }
 
 	void bind_framebuffer(GLuint framebuffer) {
-		glBindFramebuffer(GL_FRAMEBUFFER, framebuffer);
+		if (GLES1::Config::get_singleton()->support_fbo) {
+			glBindFramebufferOES(GL_FRAMEBUFFER_OES, framebuffer);
+		}
 	}
 
 	void bind_framebuffer_system() {
-		glBindFramebuffer(GL_FRAMEBUFFER, GLES1::TextureStorage::system_fbo);
+		if (GLES1::Config::get_singleton()->support_fbo) {
+			glBindFramebufferOES(GL_FRAMEBUFFER_OES, GLES1::TextureStorage::system_fbo);
+		}
 	}
 
 	String get_framebuffer_error(GLenum p_status);
@@ -744,14 +754,16 @@ public:
 
 inline String TextureStorage::get_framebuffer_error(GLenum p_status) {
 #if defined(DEBUG_ENABLED) && defined(GL_API_ENABLED)
-	if (p_status == GL_FRAMEBUFFER_INCOMPLETE_ATTACHMENT) {
-		return "GL_FRAMEBUFFER_INCOMPLETE_ATTACHMENT";
-	} else if (p_status == GL_FRAMEBUFFER_INCOMPLETE_MISSING_ATTACHMENT) {
-		return "GL_FRAMEBUFFER_INCOMPLETE_MISSING_ATTACHMENT";
-	} else if (p_status == GL_FRAMEBUFFER_INCOMPLETE_DRAW_BUFFER) {
-		return "GL_FRAMEBUFFER_INCOMPLETE_DRAW_BUFFER";
-	} else if (p_status == GL_FRAMEBUFFER_INCOMPLETE_READ_BUFFER) {
-		return "GL_FRAMEBUFFER_INCOMPLETE_READ_BUFFER";
+	if (p_status == GL_FRAMEBUFFER_INCOMPLETE_ATTACHMENT_OES) {
+		return "GL_FRAMEBUFFER_INCOMPLETE_ATTACHMENT_OES";
+	} else if (p_status == GL_FRAMEBUFFER_INCOMPLETE_MISSING_ATTACHMENT_OES) {
+		return "GL_FRAMEBUFFER_INCOMPLETE_MISSING_ATTACHMENT_OES";
+	} else if (p_status == GL_FRAMEBUFFER_INCOMPLETE_DIMENSIONS_OES) {
+		return "GL_FRAMEBUFFER_INCOMPLETE_DIMENSIONS_OES";
+	} else if (p_status == GL_FRAMEBUFFER_INCOMPLETE_FORMATS_OES) {
+		return "GL_FRAMEBUFFER_INCOMPLETE_FORMATS_OES";
+	} else if (p_status == GL_FRAMEBUFFER_UNSUPPORTED_OES) {
+		return "GL_FRAMEBUFFER_UNSUPPORTED_OES";
 	}
 #endif
 	return itos(p_status);

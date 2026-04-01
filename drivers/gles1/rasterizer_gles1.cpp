@@ -39,6 +39,10 @@
 #include "core/os/os.h"
 #include "storage/texture_storage.h"
 
+#ifdef ANDROID_ENABLED
+#include <dlfcn.h> // Required for dlopen/dlsym
+#endif
+
 #define _EXT_DEBUG_OUTPUT_SYNCHRONOUS_ARB 0x8242
 #define _EXT_DEBUG_NEXT_LOGGED_MESSAGE_LENGTH_ARB 0x8243
 #define _EXT_DEBUG_CALLBACK_FUNCTION_ARB 0x8244
@@ -231,7 +235,15 @@ RasterizerGLES1 *RasterizerGLES1::singleton = nullptr;
 
 #ifdef EGL_ENABLED
 void *_egl_load_function_wrapper_gles1(const char *p_name) {
-	return (void *)eglGetProcAddress(p_name);
+	void *ptr = (void *)eglGetProcAddress(p_name);
+	if (!ptr) {
+		// Fallback for core functions on old Android versions
+		static void *gles_dll = dlopen("libGLESv1_CM.so", RTLD_LOCAL | RTLD_LAZY);
+		if (gles_dll) {
+			ptr = dlsym(gles_dll, p_name);
+		}
+	}
+	return ptr;
 }
 #endif
 
@@ -240,6 +252,22 @@ RasterizerGLES1::RasterizerGLES1() {
 
 #ifdef GLAD_ENABLED
 	bool glad_loaded = false;
+
+#ifdef ANDROID_ENABLED
+
+#ifdef EGL_ENABLED
+	if (gles_over_gl) {
+		gladLoadGL((GLADloadfunc)&_egl_load_function_wrapper_gles1);
+	} else {
+		// This will technically return 0 because it expects GLES 2.0/3.0, 
+		// but the shared function pointers will be successfully populated.
+		gladLoadGLES2((GLADloadfunc)&_egl_load_function_wrapper_gles1);
+	}
+	
+	glad_loaded = true; 
+#endif // EGL_ENABLED
+
+#else // Rest of other platforms.
 
 #ifdef EGL_ENABLED
 	// There should be a more flexible system for getting the GL pointer, as
@@ -272,6 +300,8 @@ RasterizerGLES1::RasterizerGLES1() {
 			glad_loaded = true;
 		}
 	}
+
+#endif // ANDROID_ENABLED
 
 	if (unlikely(!glad_loaded)) {
 		singleton = nullptr;

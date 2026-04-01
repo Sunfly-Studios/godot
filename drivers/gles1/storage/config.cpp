@@ -42,6 +42,32 @@ using namespace GLES1;
 
 #define _GL_MAX_TEXTURE_MAX_ANISOTROPY_EXT 0x84FF
 
+// Legacy Limits
+#ifndef GL_MAX_TEXTURE_UNITS
+#define GL_MAX_TEXTURE_UNITS 0x84E2
+#endif
+#ifndef GL_MAX_LIGHTS
+#define GL_MAX_LIGHTS 0x0D31
+#endif
+#ifndef GL_MAX_CLIP_PLANES
+#define GL_MAX_CLIP_PLANES 0x0D32
+#endif
+#ifndef GL_MAX_MODELVIEW_STACK_DEPTH
+#define GL_MAX_MODELVIEW_STACK_DEPTH 0x0D36
+#endif
+#ifndef GL_MAX_PROJECTION_STACK_DEPTH
+#define GL_MAX_PROJECTION_STACK_DEPTH 0x0D38
+#endif
+#ifndef GL_MAX_TEXTURE_STACK_DEPTH
+#define GL_MAX_TEXTURE_STACK_DEPTH 0x0D39
+#endif
+#ifndef GL_MAX_PALETTE_MATRICES_OES
+#define GL_MAX_PALETTE_MATRICES_OES 0x8842
+#endif
+#ifndef GL_MAX_VERTEX_UNITS_OES
+#define GL_MAX_VERTEX_UNITS_OES 0x86A4
+#endif
+
 Config *Config::singleton = nullptr;
 
 Config::Config() {
@@ -75,68 +101,64 @@ Config::Config() {
 	}
 #endif
 
-	bptc_supported = extensions.has("GL_ARB_texture_compression_bptc") || extensions.has("EXT_texture_compression_bptc");
-	astc_supported = extensions.has("GL_KHR_texture_compression_astc") || extensions.has("GL_OES_texture_compression_astc") || extensions.has("GL_KHR_texture_compression_astc_ldr") || extensions.has("GL_KHR_texture_compression_astc_hdr");
-	astc_hdr_supported = extensions.has("GL_KHR_texture_compression_astc_hdr");
-	astc_layered_supported = extensions.has("GL_KHR_texture_compression_astc_sliced_3d");
-	rgtc_supported = extensions.has("GL_EXT_texture_compression_rgtc") || extensions.has("GL_ARB_texture_compression_rgtc") || extensions.has("EXT_texture_compression_rgtc");
-	support_instancing = extensions.has("GL_EXT_draw_instanced") || extensions.has("GL_ANGLE_instanced_arrays") || extensions.has("GL_ARB_draw_instanced");
-	support_frag_depth = extensions.has("GL_EXT_frag_depth");
+	// Fixed-Function / Context Limitations
+	GLint result = 0;
+	GLint result_2[2] = { 0, 0 };
 
+	glGetIntegerv(GL_MAX_TEXTURE_UNITS, &result);
+	max_texture_units = (result >= 2) ? result : 2; // Minimum 3 texture unit required by spec
+    max_texture_image_units = max_texture_units;
+
+	glGetIntegerv(GL_MAX_TEXTURE_SIZE, &result);
+	max_texture_size = (result >= 64) ? result : 1024;
+
+	glGetIntegerv(GL_MAX_VIEWPORT_DIMS, result_2);
+	max_viewport_size[0] = (result_2[0] >= 64) ? result_2[0] : 1024;
+	max_viewport_size[1] = (result_2[1] >= 64) ? result_2[1] : 1024;
+
+	glGetIntegerv(GL_MAX_LIGHTS, &result);
+	max_lights = (result >= 0) ? result : 8; // Usually 8 in GLES 1.1
+
+	glGetIntegerv(GL_MAX_CLIP_PLANES, &result);
+	max_clip_planes = (result >= 0) ? result : 6;
+
+	glGetIntegerv(GL_MAX_MODELVIEW_STACK_DEPTH, &result);
+	max_modelview_stack_depth = (result >= 0) ? result : 16;
+
+	glGetIntegerv(GL_MAX_PROJECTION_STACK_DEPTH, &result);
+	max_projection_stack_depth = (result >= 0) ? result : 2;
+
+	glGetIntegerv(GL_MAX_TEXTURE_STACK_DEPTH, &result);
+	max_texture_stack_depth = (result >= 0) ? result : 2;
+
+	// GLES1 doesn't support UBOs
+	max_uniform_buffer_size = 0;
+
+	// Extensions
 	support_fbo = extensions.has("GL_OES_framebuffer_object") || extensions.has("GL_EXT_framebuffer_object");
 	support_npot = extensions.has("GL_OES_texture_npot") || extensions.has("GL_ARB_texture_non_power_of_two");
 	support_blend_func_separate = extensions.has("GL_OES_blend_func_separate") || extensions.has("GL_EXT_blend_func_separate");
 	support_texture_env_combine = extensions.has("GL_OES_texture_env_crossbar") || extensions.has("GL_ARB_texture_env_combine") || extensions.has("GL_EXT_texture_env_combine");
 	support_point_sprite = extensions.has("GL_OES_point_sprite") || extensions.has("GL_ARB_point_sprite");
+	support_matrix_palette = extensions.has("GL_OES_matrix_palette");
+	support_draw_texture = extensions.has("GL_OES_draw_texture");
+	support_cubemap = extensions.has("GL_OES_texture_cube_map");
+	support_generate_mipmap = extensions.has("GL_OES_generate_mipmap");
+	support_depth24 = extensions.has("GL_OES_depth24");
+	support_depth32 = extensions.has("GL_OES_depth32");
+	support_packed_depth_stencil = extensions.has("GL_OES_packed_depth_stencil");
+	support_blend_subtract = extensions.has("GL_OES_blend_subtract");
+	support_blend_equation_separate = extensions.has("GL_OES_blend_equation_separate");
+	support_mirrored_repeat = extensions.has("GL_OES_texture_mirrored_repeat");
+	support_32_bits_indices = extensions.has("GL_OES_element_index_uint");
+	support_npot_repeat_mipmap = extensions.has("GL_OES_texture_npot");
 
-	if (RasterizerGLES1::is_gles_over_gl()) {
-		float_texture_supported = true;
-		etc2_supported = false;
-		s3tc_supported = true;
-		support_npot_repeat_mipmap = true;
-		support_32_bits_indices = true;
-
-		support_fbo = true;
-		support_npot = true;
-		support_blend_func_separate = true;
-		support_texture_env_combine = true;
-		support_point_sprite = true;
-	} else {
-		float_texture_supported = extensions.has("GL_OES_texture_float") || extensions.has("GL_EXT_color_buffer_float");
-		etc2_supported = true;
-#if defined(ANDROID_ENABLED) || defined(IOS_ENABLED)
-		// Some Android devices report support for S3TC but we don't expect that
-		// and don't export the textures.
-		s3tc_supported = false;
-#else
-		s3tc_supported = extensions.has("GL_EXT_texture_compression_dxt1") || extensions.has("GL_EXT_texture_compression_s3tc") || extensions.has("WEBGL_compressed_texture_s3tc");
-#endif
-		support_npot_repeat_mipmap = extensions.has("GL_OES_texture_npot");
-		support_32_bits_indices = extensions.has("GL_OES_element_index_uint");
+	if (support_matrix_palette) {
+		glGetIntegerv(GL_MAX_PALETTE_MATRICES_OES, &result);
+		max_palette_matrices = result;
+		glGetIntegerv(GL_MAX_VERTEX_UNITS_OES, &result);
+		max_vertex_units = result;
 	}
-
-	GLint result = 0;
-	GLint result_2[2] = { 0, 0 };
-
-	glGetIntegerv(GL_MAX_VERTEX_TEXTURE_IMAGE_UNITS, &result);
-	max_vertex_texture_image_units = (result >= 0) ? result : 0;
-
-	glGetIntegerv(GL_MAX_TEXTURE_IMAGE_UNITS, &result);
-	max_texture_image_units = (result >= 8) ? result : 8;
-
-	glGetIntegerv(GL_MAX_TEXTURE_SIZE, &result);
-	max_texture_size = (result >= 64) ? result : 2048;
-
-	glGetIntegerv(GL_MAX_VIEWPORT_DIMS, result_2);
-	max_viewport_size[0] = (result_2[0] >= 64) ? result_2[0] : 2048;
-	max_viewport_size[1] = (result_2[1] >= 64) ? result_2[1] : 2048;
-
-	// GLES2 does not support UBO
-	max_uniform_buffer_size = 0;
-
-	GLint max_varyings = 0;
-	glGetIntegerv(GL_MAX_VARYING_VECTORS, &max_varyings);
-	max_shader_varyings = (uint32_t)max_varyings;
 
 	support_anisotropic_filter = extensions.has("GL_EXT_texture_filter_anisotropic");
 	if (support_anisotropic_filter) {
@@ -144,22 +166,40 @@ Config::Config() {
 		anisotropic_level = MIN(float(1 << int(GLOBAL_GET("rendering/textures/default_filters/anisotropic_filtering_level"))), anisotropic_level);
 	}
 
-	// Cache 3D texture support
-	support_3d_textures = extensions.has("GL_OES_texture_3D");
-
-	if (!support_3d_textures) {
-		// Some drivers expose it under the ARB or
-		// standard GL string if they are desktop wrappers
+	if (RasterizerGLES1::is_gles_over_gl()) {
+		// Emulating GLES1 over desktop GL
+		float_texture_supported = true;
+		etc1_supported = false;
+		s3tc_supported = true;
 		support_3d_textures = extensions.has("GL_EXT_texture3D") || extensions.has("GL_ARB_texture3D");
+
+		// Desktop OpenGL almost universally supports these
+		support_fbo = true;
+		support_npot = true;
+		support_blend_func_separate = true;
+		support_texture_env_combine = true;
+		support_point_sprite = true;
+		support_cubemap = true;
+		support_generate_mipmap = true;
+		support_32_bits_indices = true;
+		support_npot_repeat_mipmap = true;
+		srgb_framebuffer_supported = true;
+	} else {
+		float_texture_supported = extensions.has("GL_OES_texture_float") || extensions.has("GL_EXT_color_buffer_float");
+		etc1_supported = extensions.has("GL_OES_compressed_ETC1_RGB8_texture");
+		pvrtc_supported = extensions.has("GL_IMG_texture_compression_pvrtc");
+		support_3d_textures = extensions.has("GL_OES_texture_3D");
+
+#if defined(ANDROID_ENABLED) || defined(IOS_ENABLED)
+		s3tc_supported = false; // Usually not on mobile
+#else
+		s3tc_supported = extensions.has("GL_EXT_texture_compression_dxt1") || extensions.has("GL_EXT_texture_compression_s3tc");
+#endif
+		bptc_supported = extensions.has("GL_ARB_texture_compression_bptc") || extensions.has("EXT_texture_compression_bptc");
+		rgtc_supported = extensions.has("GL_EXT_texture_compression_rgtc") || extensions.has("GL_ARB_texture_compression_rgtc");
 	}
 
-#ifdef WEB_ENABLED
-	glGetIntegerv(GL_MAX_SAMPLES, &msaa_max_samples);
-	msaa_supported = (msaa_max_samples > 0);
-#else
-	msaa_supported = extensions.has("GL_EXT_framebuffer_multisample");
-#endif
-
+	// Project Settings
 	force_vertex_shading = GLOBAL_GET("rendering/shading/overrides/force_vertex_shading");
 	use_nearest_mip_filter = GLOBAL_GET("rendering/textures/default_filters/use_nearest_mipmap_filter");
 
@@ -167,22 +207,18 @@ Config::Config() {
 	max_renderable_lights = GLOBAL_GET("rendering/limits/opengl/max_renderable_lights");
 	max_lights_per_object = GLOBAL_GET("rendering/limits/opengl/max_lights_per_object");
 
-	// Adreno 3xx Compatibility / Workarounds
+	// Workarounds
 	const GLubyte *renderer_str = glGetString(GL_RENDERER);
 	const String rendering_device_name = renderer_str ? String::utf8((const char *)renderer_str) : String();
 	if (rendering_device_name.left(13) == "Adreno (TM) 3") {
-		// Adreno 3xx devices are notorious for breaking with complex shader paths
 		adreno_3xx_compatibility = true;
 	} else if (rendering_device_name.contains("PowerVR")) {
 		disable_transform_feedback_shader_cache = true;
 	}
 
-	if (OS::get_singleton()->get_current_rendering_driver_name() == "opengl1_angle") {
+	if (OS::get_singleton()->get_current_rendering_driver_name() == "opengl1_angle" || OS::get_singleton()->has_feature("web")) {
 		polyfill_half2float = false;
 	}
-#ifdef WEB_ENABLED
-	polyfill_half2float = false;
-#endif
 }
 
 Config::~Config() {

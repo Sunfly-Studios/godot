@@ -812,6 +812,11 @@ DisplayServerAndroid::DisplayServerAndroid(const String &p_rendering_driver, Dis
 		RasterizerGLES2::make_current(false);
 	}
 #endif
+#if defined(GLES1_ENABLED)
+	if (rendering_driver == "opengl1") {
+		RasterizerGLES1::make_current(false);
+	}
+#endif
 
 	Input::get_singleton()->set_event_dispatch_function(_dispatch_input_events);
 

@@ -54,69 +54,73 @@ private:
 	static Config *singleton;
 
 public:
+	// General Settings
 	bool use_nearest_mip_filter = false;
 	bool use_depth_prepass = true;
-	bool support_npot_repeat_mipmap = true;
-	bool support_fbo = false;
-	bool support_npot = false;
-	bool support_blend_func_separate = false;
-	bool support_texture_env_combine = false;
-	bool support_point_sprite = false;
+	bool generate_wireframes = false;
+	bool force_vertex_shading = false;
+	bool multi_bounce_occlusion = false;
+	bool srgb_framebuffer_supported = false;
+	bool support_npot_repeat_mipmap = false;
 
-	GLint max_vertex_texture_image_units = 0;
-	GLint max_texture_image_units = 0;
+	// Limits
+	GLint max_texture_units = 0;
 	GLint max_texture_size = 0;
 	GLint max_viewport_size[2] = { 0, 0 };
-	GLint64 max_uniform_buffer_size = 0;
-	uint32_t max_shader_varyings = 0;
+	GLint max_lights = 0;
+	GLint max_clip_planes = 0;
+	GLint max_modelview_stack_depth = 0;
+	GLint max_projection_stack_depth = 0;
+	GLint max_texture_stack_depth = 0;
+	GLint max_palette_matrices = 0; // For GL_OES_matrix_palette
+	GLint max_vertex_units = 0; // For GL_OES_matrix_palette
+	GLint max_texture_image_units = 0;
+	GLint max_uniform_buffer_size = 0; // Always 0.
 
+	// Limits for Godot
 	int64_t max_renderable_elements = 0;
 	int64_t max_renderable_lights = 0;
 	int64_t max_lights_per_object = 0;
 
-	bool generate_wireframes = false;
-
+	// Extension Tracking
 	HashSet<String> extensions;
 
-	bool float_texture_supported = false;
-	bool float_texture_linear_supported = false;
-	bool s3tc_supported = false;
-	bool rgtc_supported = false;
-	bool bptc_supported = false;
-	bool etc2_supported = false;
-	bool astc_supported = false;
-	bool astc_hdr_supported = false;
-	bool astc_layered_supported = false;
-	bool srgb_framebuffer_supported = false;
-
-	bool force_vertex_shading = false;
-	bool multi_bounce_occlusion = false;
-
-	bool support_anisotropic_filter = false;
+	// Extensions
+	bool support_fbo = false; // GL_OES_framebuffer_object
+	bool support_npot = false; // GL_OES_texture_npot
+	bool support_blend_func_separate = false; // GL_OES_blend_func_separate
+	bool support_texture_env_combine = false; // GL_OES_texture_env_crossbar
+	bool support_point_sprite = false; // GL_OES_point_sprite
+	bool support_matrix_palette = false; // GL_OES_matrix_palette
+	bool support_draw_texture = false; // GL_OES_draw_texture
+	bool support_cubemap = false; // GL_OES_texture_cube_map
+	bool support_generate_mipmap = false; // GL_OES_generate_mipmap
+	bool support_depth24 = false; // GL_OES_depth24
+	bool support_depth32 = false; // GL_OES_depth32
+	bool support_packed_depth_stencil = false; // GL_OES_packed_depth_stencil
+	bool support_blend_subtract = false; // GL_OES_blend_subtract
+	bool support_blend_equation_separate = false; // GL_OES_blend_equation_separate
+	bool support_mirrored_repeat = false; // GL_OES_texture_mirrored_repeat
+	bool support_anisotropic_filter = false; // GL_EXT_texture_filter_anisotropic
 	float anisotropic_level = 0.0f;
 
-	GLint msaa_max_samples = 0;
-	bool msaa_supported = false;
-	bool msaa_multiview_supported = false;
-	bool rt_msaa_supported = false;
-	bool rt_msaa_multiview_supported = false;
-	bool multiview_supported = false;
-	bool external_texture_supported = false;
-	bool support_32_bits_indices = false;
+	// Texture Formats
+	bool float_texture_supported = false; // GL_OES_texture_float
+	bool support_32_bits_indices = false; // GL_OES_element_index_uint
+	bool support_3d_textures = false; // GL_OES_texture_3D
+	
+	// Compression Formats
+	bool etc1_supported = false; // GL_OES_compressed_ETC1_RGB8_texture
+	bool pvrtc_supported = false; // GL_IMG_texture_compression_pvrtc
+	bool s3tc_supported = false;
+	bool bptc_supported = false;
+	bool rgtc_supported = false;
+
+	// Compatibility / Workarounds
 	bool adreno_3xx_compatibility = false;
-	bool support_3d_textures = false;
-
-	// Adreno 3XX compatibility.
-	bool disable_particles_workaround = false; // Set to 'true' to disable 'GPUParticles'.
-
-	// PowerVR GE 8320 workaround.
+	bool disable_particles_workaround = false;
 	bool disable_transform_feedback_shader_cache = false;
-
-	// ANGLE shader workaround.
 	bool polyfill_half2float = true;
-
-	bool support_instancing = false;
-	bool support_frag_depth = false;
 
 #ifdef ANDROID_ENABLED
 	PFNGLFRAMEBUFFERTEXTUREMULTIVIEWOVRPROC eglFramebufferTextureMultiviewOVR = nullptr;
@@ -132,7 +136,7 @@ public:
 	~Config();
 };
 
-} // namespace 
+} // namespace GLES1
 
 #endif // GLES1_ENABLED
 

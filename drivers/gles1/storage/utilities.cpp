@@ -374,19 +374,35 @@ uint64_t Utilities::get_rendering_info(RS::RenderingInfo p_info) {
 }
 
 String Utilities::get_video_adapter_name() const {
-	const String rendering_device_name = String::utf8((const char *)glGetString(GL_RENDERER));
+	const GLubyte *extension_string = glGetString(GL_RENDERER);
+	if (extension_string == nullptr) {
+		return String();
+	}
+
+	const String rendering_device_name = String::utf8((const char *)extension_string);
+
 	// NVIDIA suffixes all GPU model names with "/PCIe/SSE2" in OpenGL (but not Vulkan). This isn't necessary to display nowadays, so it can be trimmed.
 	return rendering_device_name.trim_suffix("/PCIe/SSE2");
 }
 
 String Utilities::get_video_adapter_vendor() const {
-	const String rendering_device_vendor = String::utf8((const char *)glGetString(GL_VENDOR));
+	const GLubyte *vendor_string = glGetString(GL_VENDOR);
+	if (vendor_string == nullptr) {
+		return String();
+	}
+
+	const String rendering_device_vendor = String::utf8((const char *)vendor_string);
+
 	// NVIDIA suffixes its vendor name with " Corporation". This is neither necessary to process nor display.
 	return rendering_device_vendor.trim_suffix(" Corporation");
 }
 
 String Utilities::get_video_adapter_api_version() const {
-	const String full_version = String::utf8((const char *)glGetString(GL_VERSION));
+	const GLubyte *version_string = glGetString(GL_VERSION);
+	if (version_string == nullptr) {
+		return String("1.5 unknown");
+	}
+	const String full_version = String::utf8((const char *)version_string);
 
 	// GL_VERSION strings typically start with the version number followed by a space.
 	// Example: "4.6.0 NVIDIA 572.83" or "2.1.0 Build 123"
@@ -419,7 +435,7 @@ Size2i Utilities::get_maximum_viewport_size() const {
 		return Size2i();
 	}
 
-	return Size2i(config->max_viewport_size[0], config->max_viewport_size[1]);
+	return Size2i(config->max_viewport_size[0], config->max_viewport_size[1]); 
 }
 
 uint32_t Utilities::get_maximum_shader_varyings() const {
