@@ -841,7 +841,7 @@ if env["lto"] != "none":
 if not env.msvc:
     # Specifying GNU extensions support explicitly, which are supported by
     # both GCC and Clang. Both currently default to gnu17 and gnu++17.
-    if env["use_llvm"] and cc_version_major < 15:
+    if env.get("use_llvm") and cc_version_major < 15:
         # Clang before version 15 simply did not respect
         # the GNU extensions, but did support the C++
         # extensions...
@@ -861,7 +861,7 @@ else:
     # MSVC is non-conforming with the C++ standard by default, so we enable more conformance.
     # Note that this is still not complete conformance, as certain Windows-related headers
     # don't compile under complete conformance.
-    if env["use_llvm"] and cc_version_major >= 13:
+    if env.get("use_llvm") and cc_version_major >= 13:
         env.Prepend(CCFLAGS=["/permissive-"])
 
     # Allow use of `__cplusplus` macro to determine C++ standard universally.
@@ -938,10 +938,16 @@ else:  # GCC, Clang
         common_warnings += ["-Wshadow-field-in-constructor", "-Wshadow-uncaptured-local"]
         # We often implement `operator<` for structs of pointers as a requirement
         # for putting them in `Set` or `Map`. We don't mind about unreliable ordering.
-        if env["use_llvm"] and cc_version_major >= 13:
+        if env.get("use_llvm") and cc_version_major >= 13:
             common_warnings += ["-Wno-ordered-compare-function-pointers"]
 
         common_warnings += ["-Wenum-conversion"]
+
+    # In the `glsX_builders`, we append comments
+    # inside of comments. One comment has the shader,
+    # and those have comments, causing GCC or clang
+    # to complain.
+    common_warnings += ["-Wno-comment"]
 
     # clang-cl will interpret `-Wall` as `-Weverything`, workaround with compatibility cast
     W_ALL = "-Wall" if not env.msvc else "-W3"
