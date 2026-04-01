@@ -1,5 +1,5 @@
 /**************************************************************************/
-/*  rasterizer_canvas_batcher_gles2.cpp                                   */
+/*  rasterizer_canvas_batcher_common.inc                                  */
 /**************************************************************************/
 /*                         This file is part of:                          */
 /*                             GODOT ENGINE                               */
@@ -28,26 +28,15 @@
 /* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                 */
 /**************************************************************************/
 
-#include "rasterizer_canvas_batcher_gles2.h"
-
-#ifdef GLES2_ENABLED
-
 #include "core/config/project_settings.h"
-#include "drivers/gles2/rasterizer_canvas_gles2.h"
 
-RasterizerCanvasGLES2 *RasterizerCanvasBatcherGLES2::get_this() {
-	return static_cast<RasterizerCanvasGLES2 *>(this);
-}
-
-const RasterizerCanvasGLES2 *RasterizerCanvasBatcherGLES2::get_this() const {
-	return static_cast<const RasterizerCanvasGLES2 *>(this);
-}
-
-void RasterizerCanvasBatcherGLES2::batch_constructor() {
+template <typename T_API>
+void RasterizerCanvasBatcherCommon<T_API>::batch_constructor() {
 	use_nvidia_rect_workaround = false;
 }
 
-void RasterizerCanvasBatcherGLES2::batch_initialize() {
+template <typename T_API>
+void RasterizerCanvasBatcherCommon<T_API>::batch_initialize() {
 	bdata.settings_use_batching = GLOBAL_GET("rendering/2d/batching/use_batching");
 	bdata.settings_max_join_item_commands = 16;
 	bdata.settings_colored_vertex_format_threshold = 0.5f;
@@ -91,7 +80,8 @@ void RasterizerCanvasBatcherGLES2::batch_initialize() {
 	bdata.batch_textures.create(32);
 }
 
-void RasterizerCanvasBatcherGLES2::batch_canvas_begin() {
+template <typename T_API>
+void RasterizerCanvasBatcherCommon<T_API>::batch_canvas_begin() {
 	bdata.frame_string = "";
 
 #if defined(TOOLS_ENABLED) && defined(DEBUG_ENABLED)
@@ -120,7 +110,8 @@ void RasterizerCanvasBatcherGLES2::batch_canvas_begin() {
 #endif
 }
 
-void RasterizerCanvasBatcherGLES2::batch_canvas_render_items_begin(const Color &p_modulate, RendererCanvasRender::Light *p_light, const Transform2D &p_base_transform) {
+template <typename T_API>
+void RasterizerCanvasBatcherCommon<T_API>::batch_canvas_render_items_begin(const Color &p_modulate, RendererCanvasRender::Light *p_light, const Transform2D &p_base_transform) {
 	if (bdata.settings_flash_batching) {
 		bdata.settings_use_batching = (Engine::get_singleton()->get_frames_drawn() % 2) == 0;
 	}
@@ -156,7 +147,8 @@ void RasterizerCanvasBatcherGLES2::batch_canvas_render_items_begin(const Color &
 	}
 }
 
-void RasterizerCanvasBatcherGLES2::batch_canvas_render_items(RendererCanvasRender::Item *p_item_list, int p_z, const Color &p_modulate, RendererCanvasRender::Light *p_light, const Transform2D &p_base_transform) {
+template <typename T_API>
+void RasterizerCanvasBatcherCommon<T_API>::batch_canvas_render_items(RendererCanvasRender::Item *p_item_list, int p_z, const Color &p_modulate, RendererCanvasRender::Light *p_light, const Transform2D &p_base_transform) {
 	if (bdata.settings_use_batching) {
 		// Stage 1: Record items for sorting and joining. Rendering happens in _end().
 		record_items(p_item_list, p_z);
@@ -166,7 +158,8 @@ void RasterizerCanvasBatcherGLES2::batch_canvas_render_items(RendererCanvasRende
 	}
 }
 
-void RasterizerCanvasBatcherGLES2::batch_canvas_end() {
+template <typename T_API>
+void RasterizerCanvasBatcherCommon<T_API>::batch_canvas_end() {
 #if defined(TOOLS_ENABLED) && defined(DEBUG_ENABLED)
 	if (bdata.diagnose_frame) {
 		bdata.frame_string += "canvas_end\n";
@@ -182,7 +175,8 @@ void RasterizerCanvasBatcherGLES2::batch_canvas_end() {
 #endif
 }
 
-void RasterizerCanvasBatcherGLES2::batch_canvas_render_items_end() {
+template <typename T_API>
+void RasterizerCanvasBatcherCommon<T_API>::batch_canvas_render_items_end() {
 	if (!bdata.settings_use_batching) {
 		return;
 	}
@@ -205,7 +199,8 @@ void RasterizerCanvasBatcherGLES2::batch_canvas_render_items_end() {
 	bdata.sort_items.reset();
 }
 
-bool RasterizerCanvasBatcherGLES2::try_join_item(RendererCanvasRender::Item *p_ci, RenderItemState &r_ris, bool &r_batch_break) {
+template <typename T_API>
+bool RasterizerCanvasBatcherCommon<T_API>::try_join_item(RendererCanvasRender::Item *p_ci, RenderItemState &r_ris, bool &r_batch_break) {
 	bool join = true;
 	r_batch_break = false;
 
@@ -227,7 +222,8 @@ bool RasterizerCanvasBatcherGLES2::try_join_item(RendererCanvasRender::Item *p_c
 	return join;
 }
 
-void RasterizerCanvasBatcherGLES2::record_items(RendererCanvasRender::Item *p_item_list, int p_z) {
+template <typename T_API>
+void RasterizerCanvasBatcherCommon<T_API>::record_items(RendererCanvasRender::Item *p_item_list, int p_z) {
 	while (p_item_list) {
 		// Request a new sort item
 		BSortItem *s = bdata.sort_items.request();
@@ -246,7 +242,8 @@ void RasterizerCanvasBatcherGLES2::record_items(RendererCanvasRender::Item *p_it
 	}
 }
 
-void RasterizerCanvasBatcherGLES2::join_sorted_items() {
+template <typename T_API>
+void RasterizerCanvasBatcherCommon<T_API>::join_sorted_items() {
 	sort_items();
 
 	int z = RS::CANVAS_ITEM_Z_MIN;
@@ -317,7 +314,8 @@ void RasterizerCanvasBatcherGLES2::join_sorted_items() {
 	}
 }
 
-void RasterizerCanvasBatcherGLES2::sort_items() {
+template <typename T_API>
+void RasterizerCanvasBatcherCommon<T_API>::sort_items() {
 	if (!bdata.settings_item_reordering_lookahead) {
 		return;
 	}
@@ -331,7 +329,8 @@ void RasterizerCanvasBatcherGLES2::sort_items() {
 	}
 }
 
-bool RasterizerCanvasBatcherGLES2::_sort_items_match(const BSortItem &p_a, const BSortItem &p_b) const {
+template <typename T_API>
+bool RasterizerCanvasBatcherCommon<T_API>::_sort_items_match(const BSortItem &p_a, const BSortItem &p_b) const {
 	const RendererCanvasRender::Item *a = p_a.item;
 	const RendererCanvasRender::Item *b = p_b.item;
 
@@ -372,7 +371,8 @@ bool RasterizerCanvasBatcherGLES2::_sort_items_match(const BSortItem &p_a, const
 	return true;
 }
 
-bool RasterizerCanvasBatcherGLES2::sort_items_from(int p_start) {
+template <typename T_API>
+bool RasterizerCanvasBatcherCommon<T_API>::sort_items_from(int p_start) {
 #if defined(TOOLS_ENABLED) && defined(DEBUG_ENABLED)
 	ERR_FAIL_COND_V((p_start + 1) >= bdata.sort_items.size(), false);
 #endif
@@ -477,7 +477,8 @@ bool RasterizerCanvasBatcherGLES2::sort_items_from(int p_start) {
 	return false;
 }
 
-void RasterizerCanvasBatcherGLES2::_calculate_scissor_threshold_area() {
+template <typename T_API>
+void RasterizerCanvasBatcherCommon<T_API>::_calculate_scissor_threshold_area() {
 	if (!bdata.settings_scissor_lights) {
 		return;
 	}
@@ -490,7 +491,7 @@ void RasterizerCanvasBatcherGLES2::_calculate_scissor_threshold_area() {
 	} else {
 		// in pixels
 		RID rt = get_this()->state.render_target;
-		Size2i size = GLES2::TextureStorage::get_singleton()->get_render_target(rt)->size;
+		Size2i size = T_API::TextureStorage::get_singleton()->get_render_target(rt)->size;
 
 		int w = size.width;
 		int h = size.height;
@@ -501,7 +502,8 @@ void RasterizerCanvasBatcherGLES2::_calculate_scissor_threshold_area() {
 	}
 }
 
-void RasterizerCanvasBatcherGLES2::render_joined_item_commands(const BItemJoined &p_bij, RendererCanvasRender::Item *p_current_clip, bool &r_reclip, GLES2::CanvasMaterialData *p_material, bool p_lit) {
+template <typename T_API>
+void RasterizerCanvasBatcherCommon<T_API>::render_joined_item_commands(const BItemJoined &p_bij, RendererCanvasRender::Item *p_current_clip, bool &r_reclip, typename T_API::MaterialData *p_material, bool p_lit) {
 	RendererCanvasRender::Item *item = nullptr;
 	RendererCanvasRender::Item *first_item = bdata.item_refs[p_bij.first_item_ref].item;
 
@@ -594,7 +596,8 @@ void RasterizerCanvasBatcherGLES2::render_joined_item_commands(const BItemJoined
 	bdata.reset_flush();
 }
 
-void RasterizerCanvasBatcherGLES2::flush_render_batches(RendererCanvasRender::Item *p_first_item, RendererCanvasRender::Item *p_current_clip, bool &r_reclip, GLES2::CanvasMaterialData *p_material, uint32_t p_sequence_batch_type_flags) {
+template <typename T_API>
+void RasterizerCanvasBatcherCommon<T_API>::flush_render_batches(RendererCanvasRender::Item *p_first_item, RendererCanvasRender::Item *p_current_clip, bool &r_reclip, typename T_API::MaterialData *p_material, uint32_t p_sequence_batch_type_flags) {
 	bdata.use_colored_vertices = false;
 	BatcherEnums::FVF backup_fvf = bdata.fvf;
 
@@ -660,7 +663,8 @@ void RasterizerCanvasBatcherGLES2::flush_render_batches(RendererCanvasRender::It
 	bdata.fvf = backup_fvf;
 }
 
-bool RasterizerCanvasBatcherGLES2::prefill_joined_item(FillState &r_fill_state, RendererCanvasRender::Item::Command **p_command_start, RendererCanvasRender::Item *p_item, RendererCanvasRender::Item *p_current_clip, bool &r_reclip, GLES2::CanvasMaterialData *p_material) {
+template <typename T_API>
+bool RasterizerCanvasBatcherCommon<T_API>::prefill_joined_item(FillState &r_fill_state, RendererCanvasRender::Item::Command **p_command_start, RendererCanvasRender::Item *p_item, RendererCanvasRender::Item *p_current_clip, bool &r_reclip, typename T_API::MaterialData *p_material) {
 	// Checking the color for not being white makes it noticeably faster for the 90% case where it is white
 	bool multiply_final_modulate = false;
 	if (!r_fill_state.use_hardware_transform && (r_fill_state.final_modulate != Color(1, 1, 1, 1))) {
@@ -707,7 +711,7 @@ bool RasterizerCanvasBatcherGLES2::prefill_joined_item(FillState &r_fill_state, 
 
 				bool send_light_angles = false;
 				if (rect->texture.is_valid()) {
-					GLES2::CanvasTexture *ct = GLES2::TextureStorage::get_singleton()->get_canvas_texture(rect->texture);
+					typename T_API::CanvasTexture *ct = T_API::TextureStorage::get_singleton()->get_canvas_texture(rect->texture);
 					if (ct && ct->normal_map.is_valid()) {
 						send_light_angles = true;
 					}
@@ -737,7 +741,7 @@ bool RasterizerCanvasBatcherGLES2::prefill_joined_item(FillState &r_fill_state, 
 				} else {
 					bool send_light_angles = false;
 					if (np->texture.is_valid()) {
-						GLES2::CanvasTexture *ct = GLES2::TextureStorage::get_singleton()->get_canvas_texture(np->texture);
+						typename T_API::CanvasTexture *ct = T_API::TextureStorage::get_singleton()->get_canvas_texture(np->texture);
 						if (ct && ct->normal_map.is_valid()) {
 							send_light_angles = true;
 						}
@@ -769,7 +773,7 @@ bool RasterizerCanvasBatcherGLES2::prefill_joined_item(FillState &r_fill_state, 
 
 				bool send_light_angles = false;
 				if (polygon->texture.is_valid()) {
-					GLES2::CanvasTexture *ct = GLES2::TextureStorage::get_singleton()->get_canvas_texture(polygon->texture);
+					typename T_API::CanvasTexture *ct = T_API::TextureStorage::get_singleton()->get_canvas_texture(polygon->texture);
 					if (ct && ct->normal_map.is_valid()) {
 						send_light_angles = true;
 					}
@@ -805,7 +809,8 @@ bool RasterizerCanvasBatcherGLES2::prefill_joined_item(FillState &r_fill_state, 
 	return false;
 }
 
-void RasterizerCanvasBatcherGLES2::_legacy_canvas_item_render_commands(RendererCanvasRender::Item* p_item, RendererCanvasRender::Item* p_current_clip, bool& r_reclip, GLES2::CanvasMaterialData* p_material) {
+template <typename T_API>
+void RasterizerCanvasBatcherCommon<T_API>::_legacy_canvas_item_render_commands(RendererCanvasRender::Item* p_item, RendererCanvasRender::Item* p_current_clip, bool& r_reclip, typename T_API::MaterialData* p_material) {
 	if (!p_item || !p_item->commands) {
 		return;
 	}
@@ -827,7 +832,8 @@ void RasterizerCanvasBatcherGLES2::_legacy_canvas_item_render_commands(RendererC
 	get_this()->render_batches(nullptr, p_current_clip, r_reclip, p_material);
 }
 
-bool RasterizerCanvasBatcherGLES2::_disallow_item_join_if_batch_types_too_different(RenderItemState &r_ris, uint32_t btf_allowed) {
+template <typename T_API>
+bool RasterizerCanvasBatcherCommon<T_API>::_disallow_item_join_if_batch_types_too_different(RenderItemState &r_ris, uint32_t btf_allowed) {
 	r_ris.joined_item_batch_type_flags_curr |= btf_allowed;
 
 	bool disallow = false;
@@ -839,8 +845,9 @@ bool RasterizerCanvasBatcherGLES2::_disallow_item_join_if_batch_types_too_differ
 	return disallow;
 }
 
+template <typename T_API>
 template <class BATCH_VERTEX_TYPE, bool INCLUDE_LIGHT_ANGLES, bool INCLUDE_MODULATE, bool INCLUDE_LARGE>
-void RasterizerCanvasBatcherGLES2::_translate_batches_to_larger_FVF(uint32_t p_sequence_batch_type_flags) {
+void RasterizerCanvasBatcherCommon<T_API>::_translate_batches_to_larger_FVF(uint32_t p_sequence_batch_type_flags) {
 	bool include_poly_color = false;
 
 	if (p_sequence_batch_type_flags & BatcherEnums::BTF_POLY) {
@@ -888,7 +895,7 @@ void RasterizerCanvasBatcherGLES2::_translate_batches_to_larger_FVF(uint32_t p_s
 						const BatchVertex &bv = bdata.vertices[v];
 						BATCH_VERTEX_TYPE *cv = (BATCH_VERTEX_TYPE *)bdata.unit_vertices.request();
 						if (unlikely(!cv)) {
-							ERR_PRINT_ONCE("GLES2: FVF Translation buffer overflowed! Geometry will be missing.");
+							ERR_PRINT_ONCE("GLES1: FVF Translation buffer overflowed! Geometry will be missing.");
 							break;
 						}
 						cv->pos = bv.pos;
@@ -926,7 +933,7 @@ void RasterizerCanvasBatcherGLES2::_translate_batches_to_larger_FVF(uint32_t p_s
 					const BatchVertex &bv = bdata.vertices[v];
 					BATCH_VERTEX_TYPE *cv = (BATCH_VERTEX_TYPE *)bdata.unit_vertices.request();
 					if (unlikely(!cv)) {
-						ERR_PRINT_ONCE("GLES2: FVF Translation buffer overflowed! Geometry will be missing.");
+						ERR_PRINT_ONCE("GLES1: FVF Translation buffer overflowed! Geometry will be missing.");
 						break;
 					}
 					cv->pos = bv.pos;
@@ -957,7 +964,8 @@ void RasterizerCanvasBatcherGLES2::_translate_batches_to_larger_FVF(uint32_t p_s
 	bdata.batches.copy_from(bdata.batches_temp);
 }
 
-void RasterizerCanvasBatcherGLES2::_translate_batches_to_vertex_colored_FVF() {
+template <typename T_API>
+void RasterizerCanvasBatcherCommon<T_API>::_translate_batches_to_vertex_colored_FVF() {
 	bdata.unit_vertices.prepare(sizeof(BatchVertexColored));
 	const BatchColor *source_vertex_colors = &bdata.vertex_colors[0];
 	int num_verts = bdata.vertices.size();
@@ -966,7 +974,7 @@ void RasterizerCanvasBatcherGLES2::_translate_batches_to_vertex_colored_FVF() {
 		const BatchVertex &bv = bdata.vertices[n];
 		BatchVertexColored *cv = (BatchVertexColored *)bdata.unit_vertices.request();
 		if (unlikely(!cv)) {
-			ERR_PRINT_ONCE("GLES2: FVF Translation buffer overflowed!");
+			ERR_PRINT_ONCE("GLES1: FVF Translation buffer overflowed!");
 			break;
 		}
 		cv->pos = bv.pos;
@@ -975,7 +983,8 @@ void RasterizerCanvasBatcherGLES2::_translate_batches_to_vertex_colored_FVF() {
 	}
 }
 
-bool RasterizerCanvasBatcherGLES2::_light_scissor_begin(const Rect2 &p_item_rect, const Transform2D &p_light_xform, const Rect2 &p_light_rect, int p_rt_height) const {
+template <typename T_API>
+bool RasterizerCanvasBatcherCommon<T_API>::_light_scissor_begin(const Rect2 &p_item_rect, const Transform2D &p_light_xform, const Rect2 &p_light_rect, int p_rt_height) const {
 	float area_item = p_item_rect.size.x * p_item_rect.size.y;
 
 	// The area of pixels saved can never be more
@@ -1004,7 +1013,8 @@ bool RasterizerCanvasBatcherGLES2::_light_scissor_begin(const Rect2 &p_item_rect
 	return true;
 }
 
-bool RasterizerCanvasBatcherGLES2::_light_find_intersection(const Rect2 &p_item_rect, const Transform2D &p_light_xform, const Rect2 &p_light_rect, Rect2 &r_cliprect) const {
+template <typename T_API>
+bool RasterizerCanvasBatcherCommon<T_API>::_light_find_intersection(const Rect2 &p_item_rect, const Transform2D &p_light_xform, const Rect2 &p_light_rect, Rect2 &r_cliprect) const {
 	// Transform the light's rect by its transform to get it into global/screen space
 	// We need the AABB of the light in the same space as the item rect
 
@@ -1037,7 +1047,8 @@ bool RasterizerCanvasBatcherGLES2::_light_find_intersection(const Rect2 &p_item_
 	return r_cliprect.has_area();
 }
 
-bool RasterizerCanvasBatcherGLES2::_detect_item_batch_break(RenderItemState &r_ris, RendererCanvasRender::Item *p_ci, bool &r_batch_break) {
+template <typename T_API>
+bool RasterizerCanvasBatcherCommon<T_API>::_detect_item_batch_break(RenderItemState &r_ris, RendererCanvasRender::Item *p_ci, bool &r_batch_break) {
 	int command_count = godot4_commands_count(p_ci->commands);
 
 	r_ris.joined_item_batch_type_flags_curr = 0;
@@ -1099,8 +1110,9 @@ bool RasterizerCanvasBatcherGLES2::_detect_item_batch_break(RenderItemState &r_r
 	return false;
 }
 
+template <typename T_API>
 template <bool SEND_LIGHT_ANGLES>
-bool RasterizerCanvasBatcherGLES2::_prefill_rect(RendererCanvasRender::Item::CommandRect *rect, FillState &r_fill_state, RendererCanvasRender::Item::Command **p_command_start, RendererCanvasRender::Item::Command *p_command, RendererCanvasRender::Item *p_item, bool multiply_final_modulate) {
+bool RasterizerCanvasBatcherCommon<T_API>::_prefill_rect(RendererCanvasRender::Item::CommandRect *rect, FillState &r_fill_state, RendererCanvasRender::Item::Command **p_command_start, RendererCanvasRender::Item::Command *p_command, RendererCanvasRender::Item *p_item, bool multiply_final_modulate) {
 	bool change_batch = false;
 
 	if (r_fill_state.curr_batch->type != BatcherEnums::BT_RECT) {
@@ -1271,7 +1283,7 @@ bool RasterizerCanvasBatcherGLES2::_prefill_rect(RendererCanvasRender::Item::Com
 
 	if (use_modulate) {
 		BatchColor *pBC = bdata.vertex_modulates.request(4);
-		DEV_ASSERT(pBC && "GLES2: Modulate buffer desynchronized from main vertex buffer!");
+		DEV_ASSERT(pBC && "GLES1: Modulate buffer desynchronized from main vertex buffer!");
 		pBC[0].set(r_fill_state.final_modulate);
 		pBC[1] = pBC[0];
 		pBC[2] = pBC[0];
@@ -1280,7 +1292,7 @@ bool RasterizerCanvasBatcherGLES2::_prefill_rect(RendererCanvasRender::Item::Com
 
 	if (use_large_verts) {
 		BatchTransform *pBT = bdata.vertex_transforms.request(4);
-		DEV_ASSERT(pBT && "GLES2: Modulate buffer desynchronized from main vertex buffer!");
+		DEV_ASSERT(pBT && "GLES1: Modulate buffer desynchronized from main vertex buffer!");
 		const Transform2D &tr = r_fill_state.transform_combined;
 		pBT[0].translate.set(tr.columns[2].x, tr.columns[2].y);
 		pBT[0].basis[0].set(tr.columns[0][0], tr.columns[1][0]);
@@ -1292,7 +1304,7 @@ bool RasterizerCanvasBatcherGLES2::_prefill_rect(RendererCanvasRender::Item::Com
 
 	if constexpr (SEND_LIGHT_ANGLES) {
 		float *angles = bdata.light_angles.request(4);
-		DEV_ASSERT(angles && "GLES2: Modulate buffer desynchronized from main vertex buffer!");
+		DEV_ASSERT(angles && "GLES1: Modulate buffer desynchronized from main vertex buffer!");
 		float angle = 0.0f;
 		const float TWO_PI = Math_PI * 2.0f;
 
@@ -1328,9 +1340,10 @@ bool RasterizerCanvasBatcherGLES2::_prefill_rect(RendererCanvasRender::Item::Com
 	return false;
 }
 
+template <typename T_API>
 template <bool SEND_LIGHT_ANGLES>
-bool RasterizerCanvasBatcherGLES2::_prefill_ninepatch(RendererCanvasRender::Item::CommandNinePatch *p_np, FillState &r_fill_state, RendererCanvasRender::Item::Command **p_command_start, RendererCanvasRender::Item::Command *p_command, RendererCanvasRender::Item *p_item, bool multiply_final_modulate) {
-	GLES2::Texture *tex = GLES2::TextureStorage::get_singleton()->get_texture(p_np->texture);
+bool RasterizerCanvasBatcherCommon<T_API>::_prefill_ninepatch(RendererCanvasRender::Item::CommandNinePatch *p_np, FillState &r_fill_state, RendererCanvasRender::Item::Command **p_command_start, RendererCanvasRender::Item::Command *p_command, RendererCanvasRender::Item *p_item, bool multiply_final_modulate) {
+	typename T_API::Texture *tex = T_API::TextureStorage::get_singleton()->get_texture(p_np->texture);
 
 	if (!tex || tex->width == 0 || tex->height == 0) {
 		return false;
@@ -1424,8 +1437,9 @@ bool RasterizerCanvasBatcherGLES2::_prefill_ninepatch(RendererCanvasRender::Item
 	return false;
 }
 
+template <typename T_API>
 template <bool SEND_LIGHT_ANGLES>
-bool RasterizerCanvasBatcherGLES2::_prefill_polygon(RendererCanvasRender::Item::CommandPolygon *p_poly, FillState &r_fill_state, RendererCanvasRender::Item::Command **p_command_start, RendererCanvasRender::Item::Command *p_command, RendererCanvasRender::Item *p_item, bool multiply_final_modulate) {
+bool RasterizerCanvasBatcherCommon<T_API>::_prefill_polygon(RendererCanvasRender::Item::CommandPolygon *p_poly, FillState &r_fill_state, RendererCanvasRender::Item::Command **p_command_start, RendererCanvasRender::Item::Command *p_command, RendererCanvasRender::Item *p_item, bool multiply_final_modulate) {
 	bool change_batch = false;
 
 	if (r_fill_state.curr_batch->type != BatcherEnums::BT_POLY) {
@@ -1437,7 +1451,7 @@ bool RasterizerCanvasBatcherGLES2::_prefill_polygon(RendererCanvasRender::Item::
 		change_batch = true;
 	}
 
-	const RasterizerCanvasGLES2::PolyData *poly_data = get_this()->polygon_cache.getptr(p_poly->polygon.polygon_id);
+	const typename T_API::Canvas::PolyData *poly_data = get_this()->polygon_cache.getptr(p_poly->polygon.polygon_id);
 
 	if (unlikely(!poly_data)) {
 		return false; // Invalid or freed polygon ID
@@ -1613,17 +1627,20 @@ bool RasterizerCanvasBatcherGLES2::_prefill_polygon(RendererCanvasRender::Item::
 	return false;
 }
 
-void RasterizerCanvasBatcherGLES2::_software_transform_vertex(BatchVector2 &r_v, const Transform2D &p_tr) const {
+template <typename T_API>
+void RasterizerCanvasBatcherCommon<T_API>::_software_transform_vertex(BatchVector2 &r_v, const Transform2D &p_tr) const {
 	Vector2 vc(r_v.x, r_v.y);
 	vc = p_tr.xform(vc);
 	r_v.set(vc);
 }
 
-void RasterizerCanvasBatcherGLES2::_software_transform_vertex(Vector2 &r_v, const Transform2D &p_tr) const {
+template <typename T_API>
+void RasterizerCanvasBatcherCommon<T_API>::_software_transform_vertex(Vector2 &r_v, const Transform2D &p_tr) const {
 	r_v = p_tr.xform(r_v);
 }
 
-int RasterizerCanvasBatcherGLES2::_batch_find_or_create_tex(const RID &p_texture, const RID &p_normal, bool p_tile, int p_previous_match) {
+template <typename T_API>
+int RasterizerCanvasBatcherCommon<T_API>::_batch_find_or_create_tex(const RID &p_texture, const RID &p_normal, bool p_tile, int p_previous_match) {
 	// Fast Path: Assume the last item use this exact texture
 	if (p_previous_match >= 0 && p_previous_match < bdata.batch_textures.size()) {
 		const BatchTex &batch_texture = bdata.batch_textures[p_previous_match];
@@ -1657,13 +1674,13 @@ int RasterizerCanvasBatcherGLES2::_batch_find_or_create_tex(const RID &p_texture
 
 	// Unwrap the CanvasTexture.
 	if (p_texture.is_valid()) {
-		GLES2::CanvasTexture *ct = GLES2::TextureStorage::get_singleton()->get_canvas_texture(p_texture);
+		typename T_API::CanvasTexture *ct = T_API::TextureStorage::get_singleton()->get_canvas_texture(p_texture);
 		if (ct && ct->diffuse.is_valid()) {
 			diffuse_rid = ct->diffuse;
 		}
 	}
 
-	GLES2::Texture *texture = GLES2::TextureStorage::get_singleton()->get_texture(diffuse_rid);
+	typename T_API::Texture *texture = T_API::TextureStorage::get_singleton()->get_texture(diffuse_rid);
 
 	if (texture) {
 		int w = texture->width;
@@ -1706,7 +1723,8 @@ int RasterizerCanvasBatcherGLES2::_batch_find_or_create_tex(const RID &p_texture
 	return bdata.batch_textures.size() - 1;
 }
 
-void RasterizerCanvasBatcherGLES2::_prefill_default_batch(FillState &r_fill_state, RendererCanvasRender::Item::Command *p_command, const RendererCanvasRender::Item &p_item) {
+template <typename T_API>
+void RasterizerCanvasBatcherCommon<T_API>::_prefill_default_batch(FillState &r_fill_state, RendererCanvasRender::Item::Command *p_command, const RendererCanvasRender::Item &p_item) {
 	if (r_fill_state.curr_batch->type == BatcherEnums::BT_DEFAULT) {
 		// We are already in a default batch.
 		if (!r_fill_state.transform_extra_command) {
@@ -1760,5 +1778,3 @@ void RasterizerCanvasBatcherGLES2::_prefill_default_batch(FillState &r_fill_stat
 		r_fill_state.curr_batch->item = &p_item;
 	}
 }
-
-#endif // GLES2_ENABLED

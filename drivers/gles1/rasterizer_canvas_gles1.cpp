@@ -220,9 +220,9 @@ void RasterizerCanvasGLES1::initialize() {
 			indices.write[i_pos + 4] = q_pos + 2;
 			indices.write[i_pos + 5] = q_pos + 3;
 
-			// GLES2 restricts us to 16-bit indices!
+			// GLES1 restricts us to 16-bit indices!
 #ifdef DEBUG_ENABLED
-			CRASH_COND_MSG((q_pos + 3) > 65535, "GLES2 Canvas Batcher: Too many vertices for 16-bit indices!");
+			CRASH_COND_MSG((q_pos + 3) > 65535, "GLES1 Canvas Batcher: Too many vertices for 16-bit indices!");
 #endif
 		}
 
@@ -658,7 +658,7 @@ void RasterizerCanvasGLES1::canvas_render_items_implementation(Item *p_item_list
 		// Render using the batched result
 		int num_joined_items = bdata.items_joined.size();
 		for (int j = 0; j < num_joined_items; j++) {
-			const RasterizerCanvasBatcherGLES1::BItemJoined &joined_item = bdata.items_joined[j];
+			const BItemJoined &joined_item = bdata.items_joined[j];
 			Item *first_item = bdata.item_refs[joined_item.first_item_ref].item;
 
 			// Make sure we set current clip for scissor testing.
@@ -934,7 +934,7 @@ void RasterizerCanvasGLES1::render_batches(Item::Command *const *p_commands, Ite
 							// (so that rubbish/garbage doesn't ruin stuff later)
 							glDisableClientState(GL_COLOR_ARRAY);
 							glDisableClientState(GL_TEXTURE_COORD_ARRAY);
-							glColor4fv(r->modulate.components);
+							glColor4f(r->modulate.r, r->modulate.g, r->modulate.b, r->modulate.a);
 
 							// Texture binding
 							RS::CanvasItemTextureRepeat repeat = state.default_repeat;
@@ -1020,7 +1020,7 @@ void RasterizerCanvasGLES1::render_batches(Item::Command *const *p_commands, Ite
 							}
 
 							glDisableClientState(GL_COLOR_ARRAY);
-							glColor4fv(np->color.components);
+							glColor4f(np->color.r, np->color.g, np->color.b, np->color.a);
 
 							RS::CanvasItemTextureRepeat repeat = state.default_repeat;
 							if (p_current_clip && p_current_clip->texture_repeat != RS::CANVAS_ITEM_TEXTURE_REPEAT_DEFAULT) {

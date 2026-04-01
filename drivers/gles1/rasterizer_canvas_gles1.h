@@ -38,15 +38,25 @@
 #include "servers/rendering/renderer_compositor.h"
 #include "storage/material_storage.h"
 #include "storage/texture_storage.h"
-#include "batch/rasterizer_canvas_batcher_gles1.h"
+#include "drivers/gles_common/batch/rasterizer_canvas_batcher_common.h"
 
 #include "drivers/gles1/shaders/canvas.glsl.gen.h"
 #include "drivers/gles1/shaders/canvas_occlusion.glsl.gen.h"
 
 class RasterizerSceneGLES1;
+class RasterizerCanvasGLES1;
 
-class RasterizerCanvasGLES1 : public RendererCanvasRender, public RasterizerCanvasBatcherGLES1 {
-	friend class RasterizerCanvasBatcherGLES1;
+struct BatcherAPIGLES1 {
+	using Canvas = RasterizerCanvasGLES1;
+	using MaterialData = GLES1::CanvasMaterialData;
+	using TextureStorage = GLES1::TextureStorage;
+	using Texture = GLES1::Texture;
+	using CanvasTexture = GLES1::CanvasTexture;
+	using Shader = GLES1::Shader;
+};
+
+class RasterizerCanvasGLES1 : public RendererCanvasRender, public RasterizerCanvasBatcherCommon<BatcherAPIGLES1> {
+	friend class RasterizerCanvasBatcherCommon<BatcherAPIGLES1>;
 
 	static RasterizerCanvasGLES1 *singleton;
 

@@ -113,6 +113,34 @@ namespace GLES1 {
 
 #define _EXT_TEXTURE_CUBE_MAP_SEAMLESS 0x884F
 
+// GLES1 to Desktop GL redirections.
+#ifndef GL_FRAMEBUFFER_OES
+// Tokens
+#define GL_FRAMEBUFFER_OES 0x8D40
+#define GL_COLOR_ATTACHMENT0_OES 0x8CE0
+#define GL_DEPTH_ATTACHMENT_OES 0x8D00
+#define GL_RENDERBUFFER_OES 0x8D41
+#define GL_DEPTH_COMPONENT16_OES 0x81A5
+#define GL_FRAMEBUFFER_COMPLETE_OES 0x8CD5
+#define GL_FRAMEBUFFER_INCOMPLETE_ATTACHMENT_OES 0x8CD6
+#define GL_FRAMEBUFFER_INCOMPLETE_MISSING_ATTACHMENT_OES 0x8CD7
+#define GL_FRAMEBUFFER_INCOMPLETE_DIMENSIONS_OES 0x8CD9
+#define GL_FRAMEBUFFER_INCOMPLETE_FORMATS_OES 0x8CDA
+#define GL_FRAMEBUFFER_UNSUPPORTED_OES 0x8CDD
+
+// Functions
+#define glBindFramebufferOES glBindFramebuffer
+#define glGenFramebuffersOES glGenFramebuffers
+#define glDeleteFramebuffersOES glDeleteFramebuffers
+#define glCheckFramebufferStatusOES glCheckFramebufferStatus
+#define glFramebufferTexture2DOES glFramebufferTexture2D
+#define glGenRenderbuffersOES glGenRenderbuffers
+#define glBindRenderbufferOES glBindRenderbuffer
+#define glRenderbufferStorageOES glRenderbufferStorage
+#define glFramebufferRenderbufferOES glFramebufferRenderbuffer
+#define glDeleteRenderbuffersOES glDeleteRenderbuffers
+#endif
+
 enum DefaultGLTexture {
 	DEFAULT_GL_TEXTURE_WHITE,
 	DEFAULT_GL_TEXTURE_BLACK,

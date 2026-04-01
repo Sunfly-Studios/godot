@@ -236,6 +236,8 @@ RasterizerGLES1 *RasterizerGLES1::singleton = nullptr;
 #ifdef EGL_ENABLED
 void *_egl_load_function_wrapper_gles1(const char *p_name) {
 	void *ptr = (void *)eglGetProcAddress(p_name);
+
+#ifdef ANDROID_ENABLED
 	if (!ptr) {
 		// Fallback for core functions on old Android versions
 		static void *gles_dll = dlopen("libGLESv1_CM.so", RTLD_LOCAL | RTLD_LAZY);
@@ -243,6 +245,7 @@ void *_egl_load_function_wrapper_gles1(const char *p_name) {
 			ptr = dlsym(gles_dll, p_name);
 		}
 	}
+#endif
 	return ptr;
 }
 #endif

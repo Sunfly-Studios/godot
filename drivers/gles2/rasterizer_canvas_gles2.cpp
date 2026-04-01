@@ -656,7 +656,7 @@ void RasterizerCanvasGLES2::canvas_render_items_implementation(Item *p_item_list
 		// Render using the batched result
 		int num_joined_items = bdata.items_joined.size();
 		for (int j = 0; j < num_joined_items; j++) {
-			const RasterizerCanvasBatcherGLES2::BItemJoined &joined_item = bdata.items_joined[j];
+			const BItemJoined &joined_item = bdata.items_joined[j];
 			Item *first_item = bdata.item_refs[joined_item.first_item_ref].item;
 
 			// Make sure we set current clip for scissor testing.
