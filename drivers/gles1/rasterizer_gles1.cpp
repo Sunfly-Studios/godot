@@ -98,6 +98,11 @@ bool RasterizerGLES1::screen_flipped_y = false;
 bool RasterizerGLES1::gles_over_gl = true;
 
 void RasterizerGLES1::begin_frame(double frame_step) {
+	// Detect silent EGL context loss
+	if (canvas && canvas->is_context_lost()) {
+		canvas->force_context_recovery();
+	}
+
 	frame++;
 	delta = frame_step;
 
@@ -420,7 +425,7 @@ void RasterizerGLES1::_blit_render_target_to_screen(RID p_render_target, Display
 	ERR_FAIL_NULL(rt);
 
 	// Steer the draw target to the actual application window
-	glBindFramebuffer(GL_FRAMEBUFFER, GLES1::TextureStorage::system_fbo);
+	GLES1::TextureStorage::get_singleton()->bind_framebuffer_system();
 
 	Size2i win_size = DisplayServer::get_singleton()->window_get_size(p_screen);
 
@@ -466,6 +471,17 @@ void RasterizerGLES1::_blit_render_target_to_screen(RID p_render_target, Display
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+
+	// Unbind VBOs so glVertexPointer reads from our local CPU array
+	glBindBuffer(GL_ARRAY_BUFFER, 0);
+	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+
+	glDisableClientState(GL_COLOR_ARRAY);
+	glColor4f(1.0f, 1.0f, 1.0f, 1.0f);
+
+	// Reset the texture matrix
+	glMatrixMode(GL_TEXTURE);
+	glLoadIdentity();
 
 	// Godot 4 renders to FBOs upside down.
 	// We must invert the UVs when copying to the system screen.
@@ -553,7 +569,7 @@ void RasterizerGLES1::set_boot_image(const Ref<Image> &p_image, const Color &p_c
 	win_size.width = MAX(1, win_size.width);
 	win_size.height = MAX(1, win_size.height);
 
-	glBindFramebuffer(GL_FRAMEBUFFER, GLES1::TextureStorage::system_fbo);
+	GLES1::TextureStorage::get_singleton()->bind_framebuffer_system();
 	glViewport(0, 0, win_size.width, win_size.height);
 	glEnable(GL_BLEND);
 	glBlendFuncSeparate(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_ZERO, GL_ONE);

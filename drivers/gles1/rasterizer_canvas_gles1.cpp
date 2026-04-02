@@ -242,9 +242,12 @@ void RasterizerCanvasGLES1::_bind_canvas_texture(RID p_texture, RS::CanvasItemTe
 	}
 
 	// Cache Check (Prevents redundant state changes)
-	if (state.current_tex == p_texture && state.current_filter == p_base_filter && state.current_repeat == p_base_repeat) {
+	if (!state.state_dirty && state.current_tex == p_texture && state.current_filter == p_base_filter && state.current_repeat == p_base_repeat) {
 		return;
 	}
+
+	// Clear the flag
+	state.state_dirty = false;
 
 	// Resolve CanvasTexture
 	GLES1::CanvasTexture *ct = nullptr;
@@ -298,6 +301,16 @@ void RasterizerCanvasGLES1::_bind_canvas_texture(RID p_texture, RS::CanvasItemTe
 			state.texture_size = Size2i(tex_2d_bg->width, tex_2d_bg->height);
 		}
 	} else {
+		if (glIsTexture(texture->tex_id) == GL_FALSE) {
+			print_verbose("GLES1: Dead Texture handle detected. Re-uploading to VRAM.");
+			texture->tex_id = 0; // Wipe the dead handle
+			if (texture->image_cache_2d.is_valid()) {
+				// Re-upload the cached image. This generates a new tex_id.
+				GLES1::TextureStorage::get_singleton()->texture_2d_update(ct->diffuse, texture->image_cache_2d, 0);
+			} else {
+				ERR_PRINT("GLES1: Cannot recover texture, CPU cache is empty.");
+			}
+		}
 		glEnable(GL_TEXTURE_2D);
 		glBindTexture(GL_TEXTURE_2D, texture->tex_id);
 
@@ -447,16 +460,24 @@ void RasterizerCanvasGLES1::canvas_begin(RID p_to_render_target, bool p_to_backb
 		screen_tex_unit = GL_TEXTURE1; 
 	}
 
+	if (render_target && render_target->fbo != 0) {
+		if (glIsFramebufferOES(render_target->fbo) == GL_FALSE) {
+			print_verbose("GLES1: Dead FBO detected. Forcing recreation.");
+			render_target->fbo = 0; 
+			GLES1::TextureStorage::get_singleton()->render_target_set_size(p_to_render_target, render_target->size.width, render_target->size.height, render_target->view_count);
+		}
+	}
+
 	// Bind the correct Framebuffer
 	if (p_to_backbuffer) {
-		glBindFramebuffer(GL_FRAMEBUFFER, render_target ? render_target->backbuffer_fbo : 0);
+		GLES1::TextureStorage::get_singleton()->bind_framebuffer(render_target ? render_target->backbuffer_fbo : 0);
 		glActiveTexture(screen_tex_unit);
 		GLES1::Texture *tex = GLES1::TextureStorage::get_singleton()->get_texture(default_canvas_texture);
 		if (tex) {
 			glBindTexture(GL_TEXTURE_2D, tex->tex_id);
 		}
 	} else {
-		glBindFramebuffer(GL_FRAMEBUFFER, render_target ? render_target->fbo : 0);
+		GLES1::TextureStorage::get_singleton()->bind_framebuffer(render_target ? render_target->fbo : 0);
 		glActiveTexture(screen_tex_unit);
 		if (render_target) {
 			glBindTexture(GL_TEXTURE_2D, render_target->backbuffer);
@@ -587,6 +608,8 @@ void RasterizerCanvasGLES1::reset_canvas() {
 
 	glBindBuffer(GL_ARRAY_BUFFER, 0);
 	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+
+	state.state_dirty = true;
 }
 
 void RasterizerCanvasGLES1::set_debug_redraw(bool p_enabled, double p_time, const Color &p_color) {
@@ -1594,6 +1617,30 @@ void RasterizerCanvasGLES1::free_polygon(PolygonID p_polygon) {
 
 void RasterizerCanvasGLES1::set_time(double p_time) {
 	state.time = p_time;
+}
+
+bool RasterizerCanvasGLES1::is_context_lost() const {
+	if (data.canvas_quad_vertices != 0) {
+		return glIsBuffer(data.canvas_quad_vertices) == GL_FALSE;
+	}
+
+	// If it's 0, it hasn't been initialized yet.
+	return false;
+}
+
+void RasterizerCanvasGLES1::force_context_recovery() {
+	ERR_PRINT("GLES1: EGL Context Loss Detected. Recreating GL VBOs...");
+			
+	// Wipe dead handles to 0 so glGenBuffers doesn't complain, 
+	// then re-initialize the core VBOs.
+	data.canvas_quad_vertices = 0;
+	data.polygon_buffer = 0;
+	data.polygon_index_buffer = 0;
+	data.ninepatch_vertices = 0;
+	data.ninepatch_elements = 0;
+			
+	initialize();
+	reset_canvas();
 }
 
 RasterizerCanvasGLES1 *RasterizerCanvasGLES1::singleton = nullptr;

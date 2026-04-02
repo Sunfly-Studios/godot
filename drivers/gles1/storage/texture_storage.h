@@ -139,6 +139,7 @@ namespace GLES1 {
 #define glRenderbufferStorageOES glRenderbufferStorage
 #define glFramebufferRenderbufferOES glFramebufferRenderbuffer
 #define glDeleteRenderbuffersOES glDeleteRenderbuffers
+#define glIsFramebufferOES glIsFramebuffer
 #endif
 
 enum DefaultGLTexture {

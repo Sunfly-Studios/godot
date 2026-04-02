@@ -124,6 +124,8 @@ protected:
 		RID render_target;
 		double time = 0.0;
 
+		bool state_dirty = true;
+
 		RS::CanvasItemTextureFilter default_filter = RS::CANVAS_ITEM_TEXTURE_FILTER_NEAREST;
 		RS::CanvasItemTextureRepeat default_repeat = RS::CANVAS_ITEM_TEXTURE_REPEAT_DISABLED;
 		RS::CanvasItemTextureFilter current_filter = RS::CANVAS_ITEM_TEXTURE_FILTER_MAX;
@@ -152,6 +154,9 @@ public:
 	virtual void set_time(double p_time);
 
 	void reset_canvas();
+
+	bool is_context_lost() const;
+	void force_context_recovery();
 
 	// The Core Rendering Loop
 	virtual void canvas_render_items_begin(const Color &p_modulate, Light *p_light, const Transform2D &p_base_transform);
