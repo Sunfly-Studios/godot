@@ -33,6 +33,7 @@
 #include "config.h"
 
 #include "drivers/gles1/rasterizer_gles1.h"
+#include "drivers/gles_common/error_macros.h"
 
 #ifdef WEB_ENABLED
 #include <emscripten/html5_webgl.h>
@@ -86,6 +87,7 @@ Config::Config() {
 	}
 #else
 	const GLubyte *extension_string = glGetString(GL_EXTENSIONS);
+	GL_CHECK_ERROR("GLES1::Config::setup: glGetString(GL_EXTENSIONS)");
 	if (extension_string != nullptr) {
 		const GLubyte *start = extension_string;
 		const GLubyte *end = extension_string + strlen((const char *)extension_string);
@@ -106,8 +108,8 @@ Config::Config() {
 	GLint result_2[2] = { 0, 0 };
 
 	glGetIntegerv(GL_MAX_TEXTURE_UNITS, &result);
-	max_texture_units = (result >= 2) ? result : 2; // Minimum 3 texture unit required by spec
-    max_texture_image_units = max_texture_units;
+	max_texture_units = (result >= 2) ? result : 2; // Minimum 2 texture unit required by spec
+	max_texture_image_units = max_texture_units;
 
 	glGetIntegerv(GL_MAX_TEXTURE_SIZE, &result);
 	max_texture_size = (result >= 64) ? result : 1024;
@@ -130,6 +132,8 @@ Config::Config() {
 
 	glGetIntegerv(GL_MAX_TEXTURE_STACK_DEPTH, &result);
 	max_texture_stack_depth = (result >= 0) ? result : 2;
+
+	GL_CHECK_ERROR("GLES1::Config::setup: Base glGetIntegerv limits");
 
 	// GLES1 doesn't support UBOs
 	max_uniform_buffer_size = 0;
@@ -158,11 +162,13 @@ Config::Config() {
 		max_palette_matrices = result;
 		glGetIntegerv(GL_MAX_VERTEX_UNITS_OES, &result);
 		max_vertex_units = result;
+		GL_CHECK_ERROR("GLES1::Config::setup: Matrix palette glGetIntegerv");
 	}
 
 	support_anisotropic_filter = extensions.has("GL_EXT_texture_filter_anisotropic");
 	if (support_anisotropic_filter) {
 		glGetFloatv(_GL_MAX_TEXTURE_MAX_ANISOTROPY_EXT, &anisotropic_level);
+		GL_CHECK_ERROR("GLES1::Config::setup: glGetFloatv Anisotropic");
 		anisotropic_level = MIN(float(1 << int(GLOBAL_GET("rendering/textures/default_filters/anisotropic_filtering_level"))), anisotropic_level);
 	}
 
@@ -209,12 +215,14 @@ Config::Config() {
 
 	// Workarounds
 	const GLubyte *renderer_str = glGetString(GL_RENDERER);
+	GL_CHECK_ERROR("GLES1::Config::setup: glGetString(GL_RENDERER) for workarounds");
+
 	const String rendering_device_name = renderer_str ? String::utf8((const char *)renderer_str) : String();
 	if (rendering_device_name.left(13) == "Adreno (TM) 3") {
 		adreno_3xx_compatibility = true;
-	} else if (rendering_device_name.contains("PowerVR")) {
-		disable_transform_feedback_shader_cache = true;
 	}
+
+	is_android_emulator = rendering_device_name.contains("Android Emulator");
 
 	if (OS::get_singleton()->get_current_rendering_driver_name() == "opengl1_angle" || OS::get_singleton()->has_feature("web")) {
 		polyfill_half2float = false;

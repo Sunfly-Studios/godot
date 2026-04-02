@@ -33,6 +33,7 @@
 #include "utilities.h"
 
 #include "drivers/gles1/rasterizer_gles1.h"
+#include "drivers/gles_common/error_macros.h"
 #include "config.h"
 #include "light_storage.h"
 #include "material_storage.h"
@@ -118,11 +119,26 @@ Vector<uint8_t> Utilities::buffer_get_data(GLenum p_target, GLuint p_buffer, uin
 		return ret;
 	}
 
-	// TODO(GLES2): GLES2 does not natively support glMapBufferRange or glGetBufferSubData.
-	// Readback requires CPU-side shadowing.
-	ERR_PRINT_ONCE("GLES1: buffer_get_data is not supported on GLES2 hardware.");
+	ERR_PRINT_ONCE("GLES1: buffer_get_data is not supported on GLES1 hardware.");
 
 	return ret;
+}
+
+bool Utilities::buffer_bind_and_validate(GLenum p_target, GLuint p_buffer) {
+	if (unlikely(p_buffer == 0)) {
+		return false;
+	}
+
+#ifdef DEBUG_ENABLED
+	if (unlikely(glIsBuffer(p_buffer) == GL_FALSE)) {
+		ERR_PRINT_ONCE("Dead VBO bound. Context loss?");
+		return false; // Alerts the caller to abort or trigger force_context_recovery()
+	}
+#endif
+
+	glBindBuffer(p_target, p_buffer);
+	GL_CHECK_ERROR("GLES1::Utilities::buffer_bind_and_validate");
+	return true;
 }
 
 /* INSTANCES */
@@ -238,6 +254,7 @@ void Utilities::visibility_notifier_initialize(RID p_notifier) {
 
 void Utilities::visibility_notifier_free(RID p_notifier) {
 	VisibilityNotifier *vn = visibility_notifier_owner.get_or_null(p_notifier);
+	ERR_FAIL_NULL(vn);
 	vn->dependency.deleted_notify(p_notifier);
 	visibility_notifier_owner.free(p_notifier);
 }
@@ -375,6 +392,7 @@ uint64_t Utilities::get_rendering_info(RS::RenderingInfo p_info) {
 
 String Utilities::get_video_adapter_name() const {
 	const GLubyte *extension_string = glGetString(GL_RENDERER);
+	GL_CHECK_ERROR("GLES1::Utilities::get_video_adapter_name");
 	if (extension_string == nullptr) {
 		return String();
 	}
@@ -387,6 +405,7 @@ String Utilities::get_video_adapter_name() const {
 
 String Utilities::get_video_adapter_vendor() const {
 	const GLubyte *vendor_string = glGetString(GL_VENDOR);
+	GL_CHECK_ERROR("GLES1::Utilities::get_video_adapter_vendor");
 	if (vendor_string == nullptr) {
 		return String();
 	}
@@ -399,6 +418,7 @@ String Utilities::get_video_adapter_vendor() const {
 
 String Utilities::get_video_adapter_api_version() const {
 	const GLubyte *version_string = glGetString(GL_VERSION);
+	GL_CHECK_ERROR("GLES1::Utilities::get_video_adapter_api_version");
 	if (version_string == nullptr) {
 		return String("1.5 unknown");
 	}
@@ -439,25 +459,11 @@ Size2i Utilities::get_maximum_viewport_size() const {
 }
 
 uint32_t Utilities::get_maximum_shader_varyings() const {
-	GLint max_varyings = 0;
-	glGetIntegerv(GL_MAX_VARYING_VECTORS, &max_varyings);
-
-	return (max_varyings >= 8) ? max_varyings : 8;
+	return 0;
 }
 
 uint64_t Utilities::get_maximum_uniform_buffer_size() const {
-	GLint result = 0;
-	glGetIntegerv(GL_MAX_FRAGMENT_UNIFORM_VECTORS, &result);
-	GLint max_frag_uniforms = (result >= 0) ? result : 16;
-
-	glGetIntegerv(GL_MAX_VERTEX_UNIFORM_VECTORS, &result);
-	GLint max_vert_uniforms = (result >= 0) ? result : 128;
-
-	GLint min_uniforms = MIN(max_frag_uniforms, max_vert_uniforms);
-	min_uniforms = (min_uniforms >= 16) ? min_uniforms : 128;
-
-	// Convert vectors to bytes (1 vector = 4 floats = 16 bytes)
-	return (uint64_t)(min_uniforms * 16);
+	return 0;
 }
 
 #endif // GLES1_ENABLED

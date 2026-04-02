@@ -42,6 +42,7 @@
 #include "servers/rendering/renderer_compositor.h"
 #include "servers/rendering/storage/texture_storage.h"
 
+#include "drivers/gles_common/error_macros.h"
 #include "drivers/gles2/shaders/canvas_sdf.glsl.gen.h"
 
 namespace GLES2 {
@@ -293,9 +294,11 @@ struct Texture {
 		}
 		glTexParameteri(target, GL_TEXTURE_MIN_FILTER, pmin);
 		glTexParameteri(target, GL_TEXTURE_MAG_FILTER, pmag);
+		GL_CHECK_ERROR("GLES2::Texture::gl_set_filter: glTexParameteri");
 
 		if (config->support_anisotropic_filter) {
 			glTexParameterf(target, _GL_TEXTURE_MAX_ANISOTROPY_EXT, anisotropy);
+			GL_CHECK_ERROR("GLES2::Texture::gl_set_filter: glTexParameterf anisotropy");
 		}
 	}
 
@@ -321,6 +324,7 @@ struct Texture {
 		}
 		glTexParameteri(target, GL_TEXTURE_WRAP_T, prep);
 		glTexParameteri(target, GL_TEXTURE_WRAP_S, prep);
+		GL_CHECK_ERROR("GLES2::Texture::gl_set_repeat: glTexParameteri");
 	}
 
 private:
@@ -733,10 +737,12 @@ public:
 
 	void bind_framebuffer(GLuint framebuffer) {
 		glBindFramebuffer(GL_FRAMEBUFFER, framebuffer);
+		GL_CHECK_ERROR("GLES2::TextureStorage::bind_framebuffer: glBindFramebuffer");
 	}
 
 	void bind_framebuffer_system() {
 		glBindFramebuffer(GL_FRAMEBUFFER, GLES2::TextureStorage::system_fbo);
+		GL_CHECK_ERROR("GLES2::TextureStorage::bind_framebuffer_system: glBindFramebuffer");
 	}
 
 	String get_framebuffer_error(GLenum p_status);

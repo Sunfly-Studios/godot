@@ -246,6 +246,10 @@
 #ifdef GLES2_ENABLED
     GLES2::TextureStorage::system_fbo = 0;
 #endif
+
+#ifdef GLES1_ENABLED
+    GLES1::TextureStorage::system_fbo = 0;
+#endif
 }
 
 @end

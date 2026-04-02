@@ -258,8 +258,6 @@ private:
 
 	mutable RID_Owner<MultiMesh, true> multimesh_owner;
 
-	MultiMesh *multimesh_dirty_list = nullptr;
-
 	_FORCE_INLINE_ void _multimesh_make_local(MultiMesh *multimesh) const;
 	_FORCE_INLINE_ void _multimesh_mark_dirty(MultiMesh *multimesh, int p_index, bool p_aabb);
 	_FORCE_INLINE_ void _multimesh_mark_all_dirty(MultiMesh *multimesh, bool p_data, bool p_aabb);
@@ -271,8 +269,6 @@ private:
 
 	_FORCE_INLINE_ void _skeleton_make_dirty(Skeleton *skeleton);
 	void _compute_skeleton(MeshInstance *p_mi, Skeleton *p_sk, uint32_t p_surface);
-
-	Skeleton *skeleton_dirty_list = nullptr;
 
 public:
 	static MeshStorage *get_singleton();

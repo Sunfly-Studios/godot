@@ -6847,7 +6847,7 @@ DisplayServerX11::DisplayServerX11(const String &p_rendering_driver, WindowMode 
 						"You can enable the OpenGL 1 driver by starting the engine from the\n"
 						"command line with the command:\n\n    \"%s\" --rendering-driver opengl1\n\n"
 						"If you recently updated your video card drivers, try rebooting.",
-							executable_name),
+							executable_name, executable_name, executable_name),
 							"Unable to initialize Vulkan video driver");
 				} else if (p_rendering_driver == "opengl3") {
 					OS::get_singleton()->alert(
@@ -6860,7 +6860,7 @@ DisplayServerX11::DisplayServerX11(const String &p_rendering_driver, WindowMode 
 						"You can enable the OpenGL 1 driver by starting the engine from the\n"
 						"command line with the command:\n\n    \"%s\" --rendering-driver opengl1\n\n"
 						"If you recently updated your video card drivers, try rebooting.",
-							executable_name),
+							executable_name, executable_name, executable_name),
 							"Unable to initialize OpenGL 3 video driver");
 				} else if (p_rendering_driver == "opengl2") {
 					OS::get_singleton()->alert(
@@ -6873,7 +6873,7 @@ DisplayServerX11::DisplayServerX11(const String &p_rendering_driver, WindowMode 
 						"You can enable the OpenGL 1 driver by starting the engine from the\n"
 						"command line with the command:\n\n    \"%s\" --rendering-driver opengl1\n\n"
 						"If you recently updated your video card drivers, try rebooting.",
-							executable_name),
+							executable_name, executable_name, executable_name),
 							"Unable to initialize OpenGL 2 video driver");
 				} else {
 					OS::get_singleton()->alert(
@@ -6886,7 +6886,7 @@ DisplayServerX11::DisplayServerX11(const String &p_rendering_driver, WindowMode 
 						"You can enable the Vulkan driver by starting the engine from the\n"
 						"command line with the command:\n\n    \"%s\" --rendering-driver vulkan\n\n"
 						"If you recently updated your video card drivers, try rebooting.",
-							executable_name),
+							executable_name, executable_name, executable_name),
 							"Unable to initialize OpenGL 1 video driver");
 				}
 				
@@ -6964,7 +6964,7 @@ DisplayServerX11::DisplayServerX11(const String &p_rendering_driver, WindowMode 
 									"You can enable the OpenGL 1.5 driver by starting the engine from the\n"
 									"command line with the command:\n\n    \"%s\" --rendering-driver opengl1\n\n"
 									"If you recently updated your video card drivers, try rebooting.",
-									executable_name),
+									executable_name, executable_name, executable_name),
 							"Unable to initialize OpenGL 3 video driver");
 	
 					ERR_FAIL_MSG("Could not initialize OpenGL 3.");
@@ -6983,15 +6983,16 @@ DisplayServerX11::DisplayServerX11(const String &p_rendering_driver, WindowMode 
 				r_error = ERR_UNAVAILABLE;
 	
 				OS::get_singleton()->alert(
-						"Your video card drivers seem not to support the required OpenGL ES 3.0 version.\n\n"
-						"If possible, consider updating your video card drivers, using the Vulkan driver, using the OpenGL ES 2 driver, or using the OpenGL ES 1.1 driver.\n\n"
-						"You can enable the Vulkan driver by starting the engine from the\n"
-						"command line with the command:\n\n    \"%s\" --rendering-driver vulkan\n\n"
-						"You can enable the OpenGL ES 2.1 driver by starting the engine from the\n"
-						"command line with the command:\n\n    \"%s\" --rendering-driver opengl2_es\n\n"
-						"You can enable the OpenGL ES 1.1 driver by starting the engine from the\n"
-						"command line with the command:\n\n    \"%s\" --rendering-driver opengl1_es\n\n"
-						"If you recently updated your video card drivers, try rebooting.",
+						vformat("Your video card drivers seem not to support the required OpenGL ES 3.0 version.\n\n"
+								"If possible, consider updating your video card drivers, using the Vulkan driver, using the OpenGL ES 2 driver, or using the OpenGL ES 1.1 driver.\n\n"
+								"You can enable the Vulkan driver by starting the engine from the\n"
+								"command line with the command:\n\n    \"%s\" --rendering-driver vulkan\n\n"
+								"You can enable the OpenGL ES 2.1 driver by starting the engine from the\n"
+								"command line with the command:\n\n    \"%s\" --rendering-driver opengl2_es\n\n"
+								"You can enable the OpenGL ES 1.1 driver by starting the engine from the\n"
+								"command line with the command:\n\n    \"%s\" --rendering-driver opengl1_es\n\n"
+								"If you recently updated your video card drivers, try rebooting.",
+								executable_name, executable_name, executable_name),
 						"Unable to initialize OpenGL ES 3.0 video driver");
 	
 				ERR_FAIL_MSG("Could not initialize OpenGL ES 3.0.");
@@ -7069,7 +7070,7 @@ DisplayServerX11::DisplayServerX11(const String &p_rendering_driver, WindowMode 
 									"You can enable the OpenGL 1.5 driver by starting the engine from the\n"
 									"command line with the command:\n\n    \"%s\" --rendering-driver opengl1\n\n"
 									"If you recently updated your video card drivers, try rebooting.",
-									executable_name),
+									executable_name, executable_name, executable_name),
 							"Unable to initialize OpenGL 2 video driver");
 	
 					ERR_FAIL_MSG("Could not initialize OpenGL 2.");
@@ -7088,17 +7089,18 @@ DisplayServerX11::DisplayServerX11(const String &p_rendering_driver, WindowMode 
 				r_error = ERR_UNAVAILABLE;
 	
 				OS::get_singleton()->alert(
-						"Your video card drivers seem not to support the required OpenGL ES 2.1 version.\n\n"
-						"If possible, consider updating your video card drivers, using the Vulkan driver, using the OpenGL ES 3.0 driver, or using the OpenGL ES 1.1 driver.\n\n"
-						"You can enable the Vulkan driver by starting the engine from the\n"
-						"command line with the command:\n\n    \"%s\" --rendering-driver vulkan\n\n"
-						"You can enable the OpenGL ES 3.0 driver by starting the engine from the\n"
-						"command line with the command:\n\n    \"%s\" --rendering-driver opengl3_es\n\n"
-						"You can enable the OpenGL ES 1.1 driver by starting the engine from the\n"
-						"command line with the command:\n\n    \"%s\" --rendering-driver opengl1_es\n\n"
-						"If you recently updated your video card drivers, try rebooting.",
+						vformat("Your video card drivers seem not to support the required OpenGL ES 2.1 version.\n\n"
+								"If possible, consider updating your video card drivers, using the Vulkan driver, using the OpenGL ES 3.0 driver, or using the OpenGL ES 1.1 driver.\n\n"
+								"You can enable the Vulkan driver by starting the engine from the\n"
+								"command line with the command:\n\n    \"%s\" --rendering-driver vulkan\n\n"
+								"You can enable the OpenGL ES 3.0 driver by starting the engine from the\n"
+								"command line with the command:\n\n    \"%s\" --rendering-driver opengl3_es\n\n"
+								"You can enable the OpenGL ES 1.1 driver by starting the engine from the\n"
+								"command line with the command:\n\n    \"%s\" --rendering-driver opengl1_es\n\n"
+								"If you recently updated your video card drivers, try rebooting.",
+								executable_name, executable_name, executable_name),
 						"Unable to initialize OpenGL ES 2.1 video driver");
-	
+
 				ERR_FAIL_MSG("Could not initialize OpenGL ES 2.1.");
 			}
 			driver_found = true;
@@ -7174,7 +7176,7 @@ DisplayServerX11::DisplayServerX11(const String &p_rendering_driver, WindowMode 
 									"You can enable the OpenGL 2.1 driver by starting the engine from the\n"
 									"command line with the command:\n\n    \"%s\" --rendering-driver opengl2\n\n"
 									"If you recently updated your video card drivers, try rebooting.",
-									executable_name),
+									executable_name, executable_name, executable_name),
 							"Unable to initialize OpenGL 1 video driver");
 	
 					ERR_FAIL_MSG("Could not initialize OpenGL 1.");
@@ -7193,15 +7195,16 @@ DisplayServerX11::DisplayServerX11(const String &p_rendering_driver, WindowMode 
 				r_error = ERR_UNAVAILABLE;
 	
 				OS::get_singleton()->alert(
-						"Your video card drivers seem not to support the required OpenGL ES 1.1 version.\n\n"
-						"If possible, consider updating your video card drivers, using the Vulkan driver, using the OpenGL ES 3.0 driver, or using the OpenGL ES 2.1 driver.\n\n"
-						"You can enable the Vulkan driver by starting the engine from the\n"
-						"command line with the command:\n\n    \"%s\" --rendering-driver vulkan\n\n"
-						"You can enable the OpenGL ES 3.0 driver by starting the engine from the\n"
-						"command line with the command:\n\n    \"%s\" --rendering-driver opengl3_es\n\n"
-						"You can enable the OpenGL ES 2.1 driver by starting the engine from the\n"
-						"command line with the command:\n\n    \"%s\" --rendering-driver opengl2_es\n\n"
-						"If you recently updated your video card drivers, try rebooting.",
+						vformat("Your video card drivers seem not to support the required OpenGL ES 1.1 version.\n\n"
+							"If possible, consider updating your video card drivers, using the Vulkan driver, using the OpenGL ES 3.0 driver, or using the OpenGL ES 2.1 driver.\n\n"
+							"You can enable the Vulkan driver by starting the engine from the\n"
+							"command line with the command:\n\n    \"%s\" --rendering-driver vulkan\n\n"
+							"You can enable the OpenGL ES 3.0 driver by starting the engine from the\n"
+							"command line with the command:\n\n    \"%s\" --rendering-driver opengl3_es\n\n"
+							"You can enable the OpenGL ES 2.1 driver by starting the engine from the\n"
+							"command line with the command:\n\n    \"%s\" --rendering-driver opengl2_es\n\n"
+							"If you recently updated your video card drivers, try rebooting.",
+							executable_name, executable_name, executable_name),
 						"Unable to initialize OpenGL ES 1.1 video driver");
 	
 				ERR_FAIL_MSG("Could not initialize OpenGL ES 1.1.");
@@ -7440,7 +7443,7 @@ DisplayServerX11::~DisplayServerX11() {
 			rendering_context->window_destroy(E.key);
 		}
 #endif
-#ifdef GLES3_ENABLED
+#if defined(GLES3_ENABLED) || defined(GLES2_ENABLED) || defined(GLES1_ENABLED)
 		if (gl_manager) {
 			gl_manager->window_destroy(E.key);
 		}
@@ -7491,7 +7494,7 @@ DisplayServerX11::~DisplayServerX11() {
 	}
 #endif
 
-#ifdef GLES3_ENABLED
+#if defined(GLES3_ENABLED) || defined(GLES2_ENABLED) || defined(GLES1_ENABLED)
 	if (gl_manager) {
 		memdelete(gl_manager);
 		gl_manager = nullptr;

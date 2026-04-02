@@ -33,6 +33,7 @@
 #include "copy_effects.h"
 #include "drivers/gles1/storage/utilities.h"
 #include "drivers/gles1/storage/texture_storage.h"
+#include "drivers/gles_common/error_macros.h"
 
 using namespace GLES1;
 
@@ -47,13 +48,14 @@ CopyEffects::CopyEffects() {
 
 	copy.shader.initialize();
 
-	// ERR_FAIL_COND(copy.shader.is_null());
 	copy.shader_version = copy.shader.version_create();
 	copy.shader.version_bind_shader(copy.shader_version, CopyShaderGLES1::MODE_DEFAULT);
 
 	// Screen Triangle VBO
 	glGenBuffers(1, &screen_triangle);
 	glBindBuffer(GL_ARRAY_BUFFER, screen_triangle);
+	GL_CHECK_ERROR("GLES1::CopyEffects setup: bind screen_triangle");
+
 	const float triangle_verts[6] = {
 		-1.0f,
 		-1.0f,
@@ -64,10 +66,12 @@ CopyEffects::CopyEffects() {
 	};
 	glBufferData(GL_ARRAY_BUFFER, sizeof(float) * 6, triangle_verts, GL_STATIC_DRAW);
 	glBindBuffer(GL_ARRAY_BUFFER, 0);
+	GL_CHECK_ERROR("GLES1::CopyEffects setup: buffer data screen_triangle");
 
 	// Screen Quad VBO
 	glGenBuffers(1, &quad);
 	glBindBuffer(GL_ARRAY_BUFFER, quad);
+	GL_CHECK_ERROR("GLES1::CopyEffects setup: bind screen_quad");
 	const float quad_verts[24] = {
 		-1.0f, -1.0f,  0.0f, 0.0f,
 		1.0f, -1.0f,  1.0f, 0.0f,
@@ -78,6 +82,7 @@ CopyEffects::CopyEffects() {
 	};
 	glBufferData(GL_ARRAY_BUFFER, sizeof(float) * 24, quad_verts, GL_STATIC_DRAW);
 	glBindBuffer(GL_ARRAY_BUFFER, 0);
+	GL_CHECK_ERROR("GLES1::CopyEffects setup: buffer data screen_quad");
 }
 
 CopyEffects::~CopyEffects() {
@@ -105,15 +110,18 @@ void CopyEffects::draw_screen_triangle() {
 	// In GLES1, we use standard client states, not attribute arrays
 	glEnableClientState(GL_VERTEX_ARRAY);
 	glVertexPointer(2, GL_FLOAT, sizeof(float) * 2, nullptr);
+	GL_CHECK_ERROR("CopyEffects::draw_screen_triangle: state setup");
 
 	// TODO(GLES1): The screen triangle doesn't use UVs in the VBO (shader computes them),
 	// but fixed-function doesn't have a shader. So this might need UVs later,
 	// but for now, just draw the vertex array.
 	glDrawArrays(GL_TRIANGLES, 0, 3);
+	GL_CHECK_ERROR("CopyEffects::draw_screen_triangle: glDrawArrays");
 
 	// Clean up state
 	glDisableClientState(GL_VERTEX_ARRAY);
 	glBindBuffer(GL_ARRAY_BUFFER, 0);
+	GL_CHECK_ERROR("CopyEffects::draw_screen_triangle: cleanup");
 }
 
 void CopyEffects::draw_screen_quad() {
@@ -125,9 +133,11 @@ void CopyEffects::draw_screen_quad() {
 
 	// Position (2 floats, stride of 4 floats)
 	glVertexPointer(2, GL_FLOAT, sizeof(float) * 4, nullptr);
+	GL_CHECK_ERROR("CopyEffects::draw_screen_quad: state setup");
 
 	// UV (2 floats, stride of 4 floats, offset by 2 floats)
 	glTexCoordPointer(2, GL_FLOAT, sizeof(float) * 4, (const void *)(sizeof(float) * 2));
+	GL_CHECK_ERROR("CopyEffects::draw_screen_quad: glDrawArrays");
 
 	glDrawArrays(GL_TRIANGLES, 0, 6);
 
@@ -135,6 +145,7 @@ void CopyEffects::draw_screen_quad() {
 	glDisableClientState(GL_VERTEX_ARRAY);
 	glDisableClientState(GL_TEXTURE_COORD_ARRAY);
 	glBindBuffer(GL_ARRAY_BUFFER, 0);
+	GL_CHECK_ERROR("CopyEffects::draw_screen_quad: cleanup");
 }
 
 void CopyEffects::copy_to_rect(const Rect2 &p_rect) {
@@ -144,6 +155,7 @@ void CopyEffects::copy_to_rect(const Rect2 &p_rect) {
 	copy.shader.version_set_uniform(CopyShaderGLES1::COPY_SECTION, p_rect.position.x, p_rect.position.y, p_rect.size.x, p_rect.size.y, copy.shader_version, CopyShaderGLES1::MODE_COPY_SECTION);
 
 	draw_screen_quad();
+	GL_CHECK_ERROR("CopyEffects::set_color");
 }
 
 void CopyEffects::copy_to_rect_3d(const Rect2 &p_rect, float p_layer, int p_type, float p_lod) {
@@ -164,6 +176,7 @@ void CopyEffects::copy_to_rect_3d(const Rect2 &p_rect, float p_layer, int p_type
 	copy.shader.version_set_uniform(CopyShaderGLES1::LOD, p_lod, copy.shader_version, variant);
 
 	draw_screen_quad();
+	GL_CHECK_ERROR("CopyEffects::copy_to_rect");
 }
 
 void CopyEffects::copy_to_and_from_rect(const Rect2 &p_rect) {
@@ -174,6 +187,7 @@ void CopyEffects::copy_to_and_from_rect(const Rect2 &p_rect) {
 	copy.shader.version_set_uniform(CopyShaderGLES1::SOURCE_SECTION, p_rect.position.x, p_rect.position.y, p_rect.size.x, p_rect.size.y, copy.shader_version, CopyShaderGLES1::MODE_COPY_SECTION_SOURCE);
 
 	draw_screen_quad();
+	GL_CHECK_ERROR("CopyEffects::copy_to_and_from_rect");
 }
 
 void CopyEffects::copy_screen(float p_multiply) {
@@ -183,6 +197,7 @@ void CopyEffects::copy_screen(float p_multiply) {
 	copy.shader.version_set_uniform(CopyShaderGLES1::MULTIPLY, p_multiply, copy.shader_version, CopyShaderGLES1::MODE_SCREEN);
 
 	draw_screen_triangle();
+	GL_CHECK_ERROR("CopyEffects::copy_screen");
 }
 
 void CopyEffects::copy_cube_to_rect(const Rect2 &p_rect) {
@@ -191,6 +206,7 @@ void CopyEffects::copy_cube_to_rect(const Rect2 &p_rect) {
 
 	copy.shader.version_set_uniform(CopyShaderGLES1::COPY_SECTION, p_rect.position.x, p_rect.position.y, p_rect.size.x, p_rect.size.y, copy.shader_version, CopyShaderGLES1::MODE_CUBE_TO_OCTAHEDRAL);
 	draw_screen_quad();
+	GL_CHECK_ERROR("CopyEffects::copy_cube_to_rect");
 }
 
 void CopyEffects::copy_cube_to_panorama(float p_mip_level) {
@@ -199,6 +215,7 @@ void CopyEffects::copy_cube_to_panorama(float p_mip_level) {
 
 	copy.shader.version_set_uniform(CopyShaderGLES1::MIP_LEVEL, p_mip_level, copy.shader_version, CopyShaderGLES1::MODE_CUBE_TO_PANORAMA);
 	draw_screen_quad();
+	GL_CHECK_ERROR("CopyEffects::copy_cube_to_panorama");
 }
 
 // Stubs for mipmapping/blur effects (GLES1 has no support for native framebuffer blit)

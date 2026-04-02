@@ -48,9 +48,6 @@ private:
 	static PostEffects *singleton;
 
 	// Use for full-screen effects. Slightly more efficient than screen_quad as this eliminates pixel overdraw along the diagonal.
-	GLuint screen_triangle = 0;
-	GLuint screen_triangle_array = 0;
-
 	void _draw_screen_triangle();
 
 public:

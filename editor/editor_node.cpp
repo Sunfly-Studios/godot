@@ -6763,7 +6763,7 @@ void EditorNode::_renderer_selected(int p_which) {
 	if (rendering_method == "gl_classic") {
 		video_restart_dialog->set_text(
 				vformat(TTR("Changing the renderer requires restarting the editor.\n\nChoosing Save & Restart will change the rendering method to:\n- Desktop platforms: %s\n- Mobile platforms: %s\n- Web platform: %s (Web platforms will be upgraded to GLES2)"),
-						renderer_request, renderer_request.replace("forward_plus", "mobile"), renderer_request.replace("gl_compatibility", "gl_legacy")));
+						renderer_request, renderer_request.replace("forward_plus", "mobile"), renderer_request.replace("gl_classic", "gl_legacy")));
 	} else if (rendering_method == "gl_legacy") {
 		video_restart_dialog->set_text(
 				vformat(TTR("Changing the renderer requires restarting the editor.\n\nChoosing Save & Restart will change the rendering method to:\n- Desktop platforms: %s\n- Mobile platforms: %s\n- Web platform: %s"),

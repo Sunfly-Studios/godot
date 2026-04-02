@@ -61,7 +61,6 @@ GL_1_5_MAPPINGS = {
         "\t\t\t\tglMultMatrixf(matrix);"
     ),
     "modulate":          "Color c = p_value;\n\t\t\t\tglColor4f(c.r, c.g, c.b, c.a);",
-    "final_modulate":    "Color c = p_value;\n\t\t\t\tglColor4f(c.r, c.g, c.b, c.a);",
     "color_in":          "Color c = p_value;\n\t\t\t\tglColor4f(c.r, c.g, c.b, c.a);",
     "point_size":        "glPointSize((float)p_value);",
     

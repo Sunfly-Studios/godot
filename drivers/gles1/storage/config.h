@@ -122,6 +122,10 @@ public:
 	bool disable_transform_feedback_shader_cache = false;
 	bool polyfill_half2float = true;
 
+	// Flag for older, buggy Android emulators
+	// (Nexus 5 API 19 and similar).
+	bool is_android_emulator = false;
+
 #ifdef ANDROID_ENABLED
 	PFNGLFRAMEBUFFERTEXTUREMULTIVIEWOVRPROC eglFramebufferTextureMultiviewOVR = nullptr;
 	PFNGLTEXSTORAGE3DMULTISAMPLEPROC eglTexStorage3DMultisample = nullptr;

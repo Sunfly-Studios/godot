@@ -42,6 +42,8 @@
 #include "servers/rendering/renderer_compositor.h"
 #include "servers/rendering/storage/texture_storage.h"
 
+#include "drivers/gles_common/error_macros.h"
+
 #include "drivers/gles1/shaders/canvas_sdf.glsl.gen.h"
 
 namespace GLES1 {
@@ -140,6 +142,7 @@ namespace GLES1 {
 #define glFramebufferRenderbufferOES glFramebufferRenderbuffer
 #define glDeleteRenderbuffersOES glDeleteRenderbuffers
 #define glIsFramebufferOES glIsFramebuffer
+#define glBlendFuncSeparateOES glBlendFuncSeparate
 #endif
 
 enum DefaultGLTexture {
@@ -328,9 +331,11 @@ struct Texture {
 		}
 		glTexParameteri(target, GL_TEXTURE_MIN_FILTER, pmin);
 		glTexParameteri(target, GL_TEXTURE_MAG_FILTER, pmag);
+		GL_CHECK_ERROR("GLES1::Texture::gl_set_filter: glTexParameteri");
 
 		if (config->support_anisotropic_filter) {
 			glTexParameterf(target, _GL_TEXTURE_MAX_ANISOTROPY_EXT, anisotropy);
+			GL_CHECK_ERROR("GLES1::Texture::gl_set_filter: glTexParameterf anisotropy");
 		}
 	}
 
@@ -356,6 +361,7 @@ struct Texture {
 		}
 		glTexParameteri(target, GL_TEXTURE_WRAP_T, prep);
 		glTexParameteri(target, GL_TEXTURE_WRAP_S, prep);
+		GL_CHECK_ERROR("GLES1::Texture::gl_set_repeat: glTexParameteri");
 	}
 
 private:
@@ -566,6 +572,7 @@ public:
 
 		return texture;
 	}
+	Texture *texture_bind_and_validate(RID p_texture, GLenum p_texture_unit, RS::CanvasItemTextureFilter p_filter, RS::CanvasItemTextureRepeat p_repeat);
 	bool owns_texture(RID p_rid) { return texture_owner.owns(p_rid); }
 
 	void texture_2d_initialize_from_texture(RID p_texture, Texture &p_tex) {
@@ -769,12 +776,14 @@ public:
 	void bind_framebuffer(GLuint framebuffer) {
 		if (GLES1::Config::get_singleton()->support_fbo) {
 			glBindFramebufferOES(GL_FRAMEBUFFER_OES, framebuffer);
+			GL_CHECK_ERROR("GLES1::TextureStorage::bind_framebuffer: glBindFramebufferOES");
 		}
 	}
 
 	void bind_framebuffer_system() {
 		if (GLES1::Config::get_singleton()->support_fbo) {
 			glBindFramebufferOES(GL_FRAMEBUFFER_OES, GLES1::TextureStorage::system_fbo);
+			GL_CHECK_ERROR("GLES1::TextureStorage::bind_framebuffer_system: glBindFramebufferOES");
 		}
 	}
 

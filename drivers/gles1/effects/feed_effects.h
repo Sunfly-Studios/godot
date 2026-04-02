@@ -47,9 +47,6 @@ private:
 
 	static FeedEffects *singleton;
 
-	GLuint screen_triangle = 0;
-	GLuint screen_triangle_array = 0;
-
 public:
 	static FeedEffects *get_singleton();
 

@@ -53,6 +53,8 @@ struct BatcherAPIGLES1 {
 	using Texture = GLES1::Texture;
 	using CanvasTexture = GLES1::CanvasTexture;
 	using Shader = GLES1::Shader;
+
+	static constexpr bool FORCE_BAKE_MODULATE = true;
 };
 
 class RasterizerCanvasGLES1 : public RendererCanvasRender, public RasterizerCanvasBatcherCommon<BatcherAPIGLES1> {

@@ -188,7 +188,7 @@ DisplayServerIOS::DisplayServerIOS(const String &p_rendering_driver, WindowMode 
 		CALayer *layer = [AppDelegate.viewController.godotView initializeRenderingForDriver:@"opengl3"];
 
 		if (!layer) {
-			ERR_FAIL_MSG("Failed to create iOS OpenGLES rendering layer.");
+			ERR_FAIL_MSG("Failed to create iOS OpenGLES 3 rendering layer.");
 		}
 
 		RasterizerGLES3::make_current(false);
@@ -200,7 +200,7 @@ DisplayServerIOS::DisplayServerIOS(const String &p_rendering_driver, WindowMode 
 		CALayer *layer = [AppDelegate.viewController.godotView initializeRenderingForDriver:@"opengl2"];
 
 		if (!layer) {
-			ERR_FAIL_MSG("Failed to create iOS OpenGLES rendering layer.");
+			ERR_FAIL_MSG("Failed to create iOS OpenGLES 2 rendering layer.");
 		}
 
 		RasterizerGLES2::make_current(false);
@@ -212,7 +212,7 @@ DisplayServerIOS::DisplayServerIOS(const String &p_rendering_driver, WindowMode 
 		CALayer *layer = [AppDelegate.viewController.godotView initializeRenderingForDriver:@"opengl1"];
 
 		if (!layer) {
-			ERR_FAIL_MSG("Failed to create iOS OpenGLES rendering layer.");
+			ERR_FAIL_MSG("Failed to create iOS OpenGLES 1 rendering layer.");
 		}
 
 		RasterizerGLES1::make_current(false);

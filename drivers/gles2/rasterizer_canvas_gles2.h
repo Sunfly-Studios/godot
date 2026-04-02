@@ -39,6 +39,7 @@
 #include "storage/material_storage.h"
 #include "storage/texture_storage.h"
 
+#include "drivers/gles_common/error_macros.h"
 #include "drivers/gles_common/batch/rasterizer_canvas_batcher_common.h"
 
 #include "drivers/gles2/shaders/canvas.glsl.gen.h"
@@ -54,6 +55,8 @@ struct BatcherAPIGLES2 {
 	using Texture = GLES2::Texture;
 	using CanvasTexture = GLES2::CanvasTexture;
 	using Shader = GLES2::Shader;
+
+	static constexpr bool FORCE_BAKE_MODULATE = false;
 };
 
 class RasterizerCanvasGLES2 : public RendererCanvasRender, public RasterizerCanvasBatcherCommon<BatcherAPIGLES2> {

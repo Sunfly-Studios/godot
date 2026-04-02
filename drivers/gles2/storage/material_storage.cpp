@@ -37,6 +37,7 @@
 #include "particles_storage.h"
 #include "texture_storage.h"
 
+#include "drivers/gles_common/error_macros.h"
 #include "drivers/gles2/rasterizer_canvas_gles2.h"
 #include "drivers/gles2/rasterizer_gles2.h"
 #include "servers/rendering/storage/variant_converters.h"
@@ -667,77 +668,6 @@ bool ShaderData::is_parameter_texture(const StringName &p_param) const {
 
 ///////////////////////////////////////////////////////////////////////////
 // MaterialData
-
-// Look up table to translate ShaderLanguage::DataType to GL_TEXTURE_*
-static const GLenum target_from_type[ShaderLanguage::TYPE_MAX] = {
-	GL_TEXTURE_2D, // TYPE_VOID,
-	GL_TEXTURE_2D, // TYPE_BOOL,
-	GL_TEXTURE_2D, // TYPE_BVEC2,
-	GL_TEXTURE_2D, // TYPE_BVEC3,
-	GL_TEXTURE_2D, // TYPE_BVEC4,
-	GL_TEXTURE_2D, // TYPE_INT,
-	GL_TEXTURE_2D, // TYPE_IVEC2,
-	GL_TEXTURE_2D, // TYPE_IVEC3,
-	GL_TEXTURE_2D, // TYPE_IVEC4,
-	GL_TEXTURE_2D, // TYPE_UINT,
-	GL_TEXTURE_2D, // TYPE_UVEC2,
-	GL_TEXTURE_2D, // TYPE_UVEC3,
-	GL_TEXTURE_2D, // TYPE_UVEC4,
-	GL_TEXTURE_2D, // TYPE_FLOAT,
-	GL_TEXTURE_2D, // TYPE_VEC2,
-	GL_TEXTURE_2D, // TYPE_VEC3,
-	GL_TEXTURE_2D, // TYPE_VEC4,
-	GL_TEXTURE_2D, // TYPE_MAT2,
-	GL_TEXTURE_2D, // TYPE_MAT3,
-	GL_TEXTURE_2D, // TYPE_MAT4,
-	GL_TEXTURE_2D, // TYPE_SAMPLER2D,
-	GL_TEXTURE_2D, // TYPE_ISAMPLER2D,
-	GL_TEXTURE_2D, // TYPE_USAMPLER2D,
-	GL_TEXTURE_2D, // TYPE_SAMPLER2DARRAY,
-	GL_TEXTURE_2D, // TYPE_ISAMPLER2DARRAY,
-	GL_TEXTURE_2D, // TYPE_USAMPLER2DARRAY,
-
-	// GLES2 does not support 3D textures,
-	// so we mask it as 2D textures.
-	GL_TEXTURE_2D, // TYPE_SAMPLER3D,
-	GL_TEXTURE_2D, // TYPE_ISAMPLER3D,
-	GL_TEXTURE_2D, // TYPE_USAMPLER3D,
-	GL_TEXTURE_CUBE_MAP, // TYPE_SAMPLERCUBE,
-	GL_TEXTURE_CUBE_MAP, // TYPE_SAMPLERCUBEARRAY,
-	GL_TEXTURE_2D, // TYPE_STRUCT
-};
-
-static const RS::CanvasItemTextureRepeat repeat_from_uniform[ShaderLanguage::REPEAT_DEFAULT + 1] = {
-	RS::CanvasItemTextureRepeat::CANVAS_ITEM_TEXTURE_REPEAT_DISABLED, // ShaderLanguage::TextureRepeat::REPEAT_DISABLE,
-	RS::CanvasItemTextureRepeat::CANVAS_ITEM_TEXTURE_REPEAT_ENABLED, // ShaderLanguage::TextureRepeat::REPEAT_ENABLE,
-	RS::CanvasItemTextureRepeat::CANVAS_ITEM_TEXTURE_REPEAT_ENABLED, // ShaderLanguage::TextureRepeat::REPEAT_DEFAULT,
-};
-
-static const RS::CanvasItemTextureRepeat repeat_from_uniform_canvas[ShaderLanguage::REPEAT_DEFAULT + 1] = {
-	RS::CanvasItemTextureRepeat::CANVAS_ITEM_TEXTURE_REPEAT_DISABLED, // ShaderLanguage::TextureRepeat::REPEAT_DISABLE,
-	RS::CanvasItemTextureRepeat::CANVAS_ITEM_TEXTURE_REPEAT_ENABLED, // ShaderLanguage::TextureRepeat::REPEAT_ENABLE,
-	RS::CanvasItemTextureRepeat::CANVAS_ITEM_TEXTURE_REPEAT_DISABLED, // ShaderLanguage::TextureRepeat::REPEAT_DEFAULT,
-};
-
-static const RS::CanvasItemTextureFilter filter_from_uniform[ShaderLanguage::FILTER_DEFAULT + 1] = {
-	RS::CanvasItemTextureFilter::CANVAS_ITEM_TEXTURE_FILTER_NEAREST, // ShaderLanguage::TextureFilter::FILTER_NEAREST,
-	RS::CanvasItemTextureFilter::CANVAS_ITEM_TEXTURE_FILTER_LINEAR, // ShaderLanguage::TextureFilter::FILTER_LINEAR,
-	RS::CanvasItemTextureFilter::CANVAS_ITEM_TEXTURE_FILTER_NEAREST_WITH_MIPMAPS, // ShaderLanguage::TextureFilter::FILTER_NEAREST_MIPMAP,
-	RS::CanvasItemTextureFilter::CANVAS_ITEM_TEXTURE_FILTER_LINEAR_WITH_MIPMAPS, // ShaderLanguage::TextureFilter::FILTER_LINEAR_MIPMAP,
-	RS::CanvasItemTextureFilter::CANVAS_ITEM_TEXTURE_FILTER_NEAREST_WITH_MIPMAPS_ANISOTROPIC, // ShaderLanguage::TextureFilter::FILTER_NEAREST_MIPMAP_ANISOTROPIC,
-	RS::CanvasItemTextureFilter::CANVAS_ITEM_TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC, // ShaderLanguage::TextureFilter::FILTER_LINEAR_MIPMAP_ANISOTROPIC,
-	RS::CanvasItemTextureFilter::CANVAS_ITEM_TEXTURE_FILTER_LINEAR_WITH_MIPMAPS, // ShaderLanguage::TextureFilter::FILTER_DEFAULT,
-};
-
-static const RS::CanvasItemTextureFilter filter_from_uniform_canvas[ShaderLanguage::FILTER_DEFAULT + 1] = {
-	RS::CanvasItemTextureFilter::CANVAS_ITEM_TEXTURE_FILTER_NEAREST, // ShaderLanguage::TextureFilter::FILTER_NEAREST,
-	RS::CanvasItemTextureFilter::CANVAS_ITEM_TEXTURE_FILTER_LINEAR, // ShaderLanguage::TextureFilter::FILTER_LINEAR,
-	RS::CanvasItemTextureFilter::CANVAS_ITEM_TEXTURE_FILTER_NEAREST_WITH_MIPMAPS, // ShaderLanguage::TextureFilter::FILTER_NEAREST_MIPMAP,
-	RS::CanvasItemTextureFilter::CANVAS_ITEM_TEXTURE_FILTER_LINEAR_WITH_MIPMAPS, // ShaderLanguage::TextureFilter::FILTER_LINEAR_MIPMAP,
-	RS::CanvasItemTextureFilter::CANVAS_ITEM_TEXTURE_FILTER_NEAREST_WITH_MIPMAPS_ANISOTROPIC, // ShaderLanguage::TextureFilter::FILTER_NEAREST_MIPMAP_ANISOTROPIC,
-	RS::CanvasItemTextureFilter::CANVAS_ITEM_TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC, // ShaderLanguage::TextureFilter::FILTER_LINEAR_MIPMAP_ANISOTROPIC,
-	RS::CanvasItemTextureFilter::CANVAS_ITEM_TEXTURE_FILTER_LINEAR, // ShaderLanguage::TextureFilter::FILTER_DEFAULT,
-};
 
 void MaterialData::update_uniform_buffer(const HashMap<StringName, ShaderLanguage::ShaderNode::Uniform> &p_uniforms, const uint32_t *p_uniform_offsets, const HashMap<StringName, Variant> &p_parameters, uint8_t *p_buffer, uint32_t p_buffer_size) {
 	for (const KeyValue<StringName, ShaderLanguage::ShaderNode::Uniform> &E : p_uniforms) {
@@ -1573,6 +1503,9 @@ RID MaterialStorage::material_allocate() {
 
 void MaterialStorage::material_initialize(RID p_rid) {
 	material_owner.initialize_rid(p_rid);
+	
+	Material *material = material_owner.get_or_null(p_rid);
+	material->self = p_rid;
 }
 
 void MaterialStorage::material_free(RID p_rid) {

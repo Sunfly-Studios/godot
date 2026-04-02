@@ -38,6 +38,7 @@
 #include "core/io/image.h"
 #include "core/os/os.h"
 #include "storage/texture_storage.h"
+#include "drivers/gles_common/error_macros.h"
 
 #ifdef ANDROID_ENABLED
 #include <dlfcn.h> // Required for dlopen/dlsym
@@ -137,11 +138,13 @@ void RasterizerGLES1::clear_depth(float p_depth) {
 #ifdef GL_API_ENABLED
 	if (is_gles_over_gl()) {
 		glClearDepth(p_depth);
+		GL_CHECK_ERROR("GLES1::RasterizerGLES1::glClearDepth");
 	}
 #endif // GL_API_ENABLED
 #ifdef GLES_API_ENABLED
 	if (!is_gles_over_gl()) {
 		glClearDepthf(p_depth);
+		GL_CHECK_ERROR("GLES1::RasterizerGLES1::glClearDepthf");
 	}
 #endif // GLES_API_ENABLED
 }
@@ -414,6 +417,7 @@ RasterizerGLES1::RasterizerGLES1() {
 	// Disable OpenGL linear to sRGB conversion, because Godot will always do this conversion itself.
 	if (config->srgb_framebuffer_supported) {
 		glDisable(GL_FRAMEBUFFER_SRGB);
+		GL_CHECK_ERROR("GLES1::RasterizerGLES1::initialize: glDisable(GL_FRAMEBUFFER_SRGB)");
 	}
 }
 
@@ -426,6 +430,7 @@ void RasterizerGLES1::_blit_render_target_to_screen(RID p_render_target, Display
 
 	// Steer the draw target to the actual application window
 	GLES1::TextureStorage::get_singleton()->bind_framebuffer_system();
+	GL_CHECK_ERROR("GLES1::RasterizerGLES1::_blit_render_target_to_screen: bind_framebuffer_system");
 
 	Size2i win_size = DisplayServer::get_singleton()->window_get_size(p_screen);
 
@@ -439,6 +444,7 @@ void RasterizerGLES1::_blit_render_target_to_screen(RID p_render_target, Display
 				glClearColor(0.0, 0.0, 0.0, 1.0);
 			}
 			glClear(GL_COLOR_BUFFER_BIT);
+			GL_CHECK_ERROR("GLES1::RasterizerGLES1::_blit_render_target_to_screen: first pass clear");
 		}
 	}
 
@@ -452,6 +458,7 @@ void RasterizerGLES1::_blit_render_target_to_screen(RID p_render_target, Display
 		win_size.height - p_screen_rect.position.y - p_screen_rect.size.height,
 		vp_w,
 		vp_h);
+	GL_CHECK_ERROR("GLES1::RasterizerGLES1::_blit_render_target_to_screen: glViewport");
 
 	// Disable states that could ruin a direct copy
 	glDisable(GL_BLEND);
@@ -460,6 +467,7 @@ void RasterizerGLES1::_blit_render_target_to_screen(RID p_render_target, Display
 	glDisable(GL_SCISSOR_TEST);
 	glDisable(GL_TEXTURE_2D);
 	glDepthMask(GL_FALSE);
+	GL_CHECK_ERROR("GLES1::RasterizerGLES1::_blit_render_target_to_screen: disable states");
 
 	// Bind the RenderTarget's color texture
 	glActiveTexture(GL_TEXTURE0);
@@ -471,6 +479,7 @@ void RasterizerGLES1::_blit_render_target_to_screen(RID p_render_target, Display
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+	GL_CHECK_ERROR("GLES1::RasterizerGLES1::_blit_render_target_to_screen: texture setup");
 
 	// Unbind VBOs so glVertexPointer reads from our local CPU array
 	glBindBuffer(GL_ARRAY_BUFFER, 0);
@@ -478,10 +487,19 @@ void RasterizerGLES1::_blit_render_target_to_screen(RID p_render_target, Display
 
 	glDisableClientState(GL_COLOR_ARRAY);
 	glColor4f(1.0f, 1.0f, 1.0f, 1.0f);
+	GL_CHECK_ERROR("GLES1::RasterizerGLES1::_blit_render_target_to_screen: VBO unbind and color reset");
 
 	// Reset the texture matrix
 	glMatrixMode(GL_TEXTURE);
 	glLoadIdentity();
+	glEnable(GL_TEXTURE_2D);
+
+	// Ensure matrices are clean for NDC drawing
+	glMatrixMode(GL_PROJECTION);
+	glLoadIdentity();
+	glMatrixMode(GL_MODELVIEW);
+	glLoadIdentity();
+	GL_CHECK_ERROR("GLES1::RasterizerGLES1::_blit_render_target_to_screen: matrix resets");
 
 	// Godot 4 renders to FBOs upside down.
 	// We must invert the UVs when copying to the system screen.
@@ -490,14 +508,6 @@ void RasterizerGLES1::_blit_render_target_to_screen(RID p_render_target, Display
 		// If overridden (e.g., XR), it wasn't rendered upside down.
 		flip_y = false;
 	}
-
-	glEnable(GL_TEXTURE_2D);
-
-	// Ensure matrices are clean for NDC drawing
-	glMatrixMode(GL_PROJECTION);
-	glLoadIdentity();
-	glMatrixMode(GL_MODELVIEW);
-	glLoadIdentity();
 
 	float uvs[8] = {};
 	if (flip_y) {
@@ -535,8 +545,10 @@ void RasterizerGLES1::_blit_render_target_to_screen(RID p_render_target, Display
 
 	glVertexPointer(2, GL_FLOAT, 0, vertices);
 	glTexCoordPointer(2, GL_FLOAT, 0, uvs);
+	GL_CHECK_ERROR("GLES1::RasterizerGLES1::_blit_render_target_to_screen: pointer setup");
 
 	glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+	GL_CHECK_ERROR("GLES1::RasterizerGLES1::_blit_render_target_to_screen: glDrawArrays");
 
 	glDisableClientState(GL_VERTEX_ARRAY);
 	glDisableClientState(GL_TEXTURE_COORD_ARRAY);
@@ -547,6 +559,7 @@ void RasterizerGLES1::_blit_render_target_to_screen(RID p_render_target, Display
 
 	// Restore global depth mask
 	glDepthMask(GL_TRUE);
+	GL_CHECK_ERROR("_blit_render_target_to_screen: cleanup");
 }
 
 // is this p_screen useless in a multi window environment?
@@ -572,10 +585,15 @@ void RasterizerGLES1::set_boot_image(const Ref<Image> &p_image, const Color &p_c
 	GLES1::TextureStorage::get_singleton()->bind_framebuffer_system();
 	glViewport(0, 0, win_size.width, win_size.height);
 	glEnable(GL_BLEND);
-	glBlendFuncSeparate(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_ZERO, GL_ONE);
+	if (GLES1::Config::get_singleton()->support_blend_func_separate) {
+		glBlendFuncSeparateOES(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_ZERO, GL_ONE);
+	} else {
+		glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+	}
 	glDepthMask(GL_FALSE);
 	glClearColor(p_color.r, p_color.g, p_color.b, 1.0);
 	glClear(GL_COLOR_BUFFER_BIT);
+	GL_CHECK_ERROR("GLES1::RasterizerGLES1::set_boot_image: viewport and clear");
 
 	RID texture = texture_storage->texture_allocate();
 	texture_storage->texture_2d_initialize(texture, p_image);
@@ -615,11 +633,13 @@ void RasterizerGLES1::set_boot_image(const Ref<Image> &p_image, const Color &p_c
 	glActiveTexture(GL_TEXTURE0);
 	glEnable(GL_TEXTURE_2D);
 	glBindTexture(GL_TEXTURE_2D, t->tex_id);
+	GL_CHECK_ERROR("GLES1::RasterizerGLES1::set_boot_image: texture bind");
 
 	glDisable(GL_CULL_FACE);
 	glDisable(GL_DEPTH_TEST);
 	glDisable(GL_SCISSOR_TEST);
 	glDisableClientState(GL_COLOR_ARRAY);
+	GL_CHECK_ERROR("GLES1::RasterizerGLES1::set_boot_image: disable states");
 
 	// Ensure the texture is multiplied by pure white,
 	// not whatever ghost color was left over
@@ -627,7 +647,12 @@ void RasterizerGLES1::set_boot_image(const Ref<Image> &p_image, const Color &p_c
 
 	// Godot's logo has a transparent background.
 	glEnable(GL_BLEND);
-	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+	if (GLES1::Config::get_singleton()->support_blend_func_separate) {
+		glBlendFuncSeparateOES(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_ZERO, GL_ONE);
+	} else {
+		glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+	}
+	GL_CHECK_ERROR("GLES1::RasterizerGLES1::set_boot_image: blend and color setup");
 
 	copy_effects->copy_to_rect(screenrect);
 
@@ -635,6 +660,7 @@ void RasterizerGLES1::set_boot_image(const Ref<Image> &p_image, const Color &p_c
 	glBindTexture(GL_TEXTURE_2D, 0);
 	glDisable(GL_TEXTURE_2D);
 	glDisable(GL_BLEND);
+	GL_CHECK_ERROR("GLES1::RasterizerGLES1::set_boot_image: cleanup");
 
 	DisplayServer::get_singleton()->swap_buffers();
 

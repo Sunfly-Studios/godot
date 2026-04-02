@@ -7260,7 +7260,7 @@ if (IsWow64Process2) {
 			}
 		}
 	}
-#endif
+#endif // GLES3_ENABLED
 
 #if defined(GLES2_ENABLED)
 	{
@@ -7365,14 +7365,14 @@ if (IsWow64Process2) {
 			}
 		}
 	}
-#endif
+#endif // GLES2_ENABLED
 
-#if defined(GLES2_ENABLED)
+#if defined(GLES1_ENABLED)
 	{
-		bool fallback = GLOBAL_GET("rendering/gl_legacy/fallback_to_angle");
+		bool fallback = GLOBAL_GET("rendering/gl_classic/fallback_to_angle");
 		bool show_warning = true;
 
-		if (rendering_driver == "opengl2") {
+		if (rendering_driver == "opengl1") {
 			// There's no native OpenGL drivers on Windows for ARM, always enable fallback.
 #if defined(__arm__) || defined(__aarch64__) || defined(_M_ARM) || defined(_M_ARM64)
 			fallback = true;
@@ -7460,7 +7460,7 @@ if (IsWow64Process2) {
 		}
 		if (rendering_driver == "opengl1") {
 			gl_manager_native = memnew(GLManagerNative_Windows(1, 5));
-			tested_drivers.set_flag(DRIVER_ID_COMPAT_OPENGL2);
+			tested_drivers.set_flag(DRIVER_ID_COMPAT_OPENGL1);
 
 			if (gl_manager_native->initialize() != OK) {
 				memdelete(gl_manager_native);
@@ -7470,7 +7470,7 @@ if (IsWow64Process2) {
 			}
 		}
 	}
-#endif
+#endif // GLES1_ENABLED
 
 	bool should_create_main_window = true;
 	bool no_redirection_bitmap = false;

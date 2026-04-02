@@ -213,23 +213,20 @@ def configure(env: "SConsEnvironment"):
     env.Append(CPPDEFINES=["WEB_ENABLED", "UNIX_ENABLED", "UNIX_SOCKET_UNAVAILABLE"])
 
     if env["opengl3"] or env["opengl2"] or env["opengl1"]:
-        # TODO(GLES2 & GLES1): We require a bit of logic here.
-        # Web platforms only know GLES2 (WebGL 1.0) or higher,
-        # so it cannot be disabled (but GLES3 and GLES1 can).
-        # But we also need to make sure that if we somehow
-        # try to build _only_ a GLES1 world, we stop the build to
-        # force at least GLES2 or GLES3.
-        # Or better, simply enable GLES2 silently.
-        # For now in the C++ side, we just request WebGL 1
-        # regardless if GLES2 OR GLES1 are enabled.
+        # Web platforms only support GLES2 (WebGL 1.0) or higher.
+        # If a build attempts to force only GLES1, silently enable GLES2 
+        # to ensure the C++ fallback logic is actually compiled.
+        if env["opengl1"] and not env["opengl2"] and not env["opengl3"]:
+            env["opengl2"] = True
+            print_info("Web platform requires GLES2 or higher. Enabling GLES2.")
+        elif env["opengl1"]:
+            print_info("Web platform requires GLES2 or higher. GLES1 flag ignored.")
+
         if env["opengl3"]:
             env.AppendUnique(CPPDEFINES=["GLES3_ENABLED"])
         
         if env["opengl2"]:
             env.AppendUnique(CPPDEFINES=["GLES2_ENABLED"])
-
-        if env["opengl1"]:
-            print_info("Web platform only support GLES2 or higher. GLES1 ignored.")
         
         # This setting just makes WebGL 2 APIs available, it does NOT disable WebGL 1.
         env.Append(LINKFLAGS=["-sMAX_WEBGL_VERSION=2"])

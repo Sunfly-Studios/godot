@@ -33,6 +33,7 @@
 
 #ifdef GLES2_ENABLED
 
+#include "drivers/gles_common/error_macros.h"
 #include "core/config/project_settings.h"
 #include "core/io/dir_access.h"
 #include "core/io/image.h"
@@ -128,11 +129,13 @@ void RasterizerGLES2::clear_depth(float p_depth) {
 #ifdef GL_API_ENABLED
 	if (is_gles_over_gl()) {
 		glClearDepth(p_depth);
+		GL_CHECK_ERROR("GLES2::RasterizerGLES2::glClearDepth");
 	}
 #endif // GL_API_ENABLED
 #ifdef GLES_API_ENABLED
 	if (!is_gles_over_gl()) {
 		glClearDepthf(p_depth);
+		GL_CHECK_ERROR("GLES2::RasterizerGLES2::glClearDepthf");
 	}
 #endif // GLES_API_ENABLED
 }
@@ -372,6 +375,7 @@ RasterizerGLES2::RasterizerGLES2() {
 	// Disable OpenGL linear to sRGB conversion, because Godot will always do this conversion itself.
 	if (config->srgb_framebuffer_supported) {
 		glDisable(GL_FRAMEBUFFER_SRGB);
+		GL_CHECK_ERROR("GLES2::RasterizerGLES2::initialize: glDisable(GL_FRAMEBUFFER_SRGB)");
 	}
 }
 
@@ -383,7 +387,8 @@ void RasterizerGLES2::_blit_render_target_to_screen(RID p_render_target, Display
 	ERR_FAIL_NULL(rt);
 
 	// Steer the draw target to the actual application window
-	glBindFramebuffer(GL_FRAMEBUFFER, GLES2::TextureStorage::system_fbo);
+	GLES2::TextureStorage::get_singleton()->bind_framebuffer_system();
+	GL_CHECK_ERROR("GLES2::RasterizerGLES2::_blit_render_target_to_screen: bind_framebuffer_system");
 
 	Size2i win_size = DisplayServer::get_singleton()->window_get_size(p_screen);
 
@@ -397,6 +402,7 @@ void RasterizerGLES2::_blit_render_target_to_screen(RID p_render_target, Display
 				glClearColor(0.0, 0.0, 0.0, 1.0);
 			}
 			glClear(GL_COLOR_BUFFER_BIT);
+			GL_CHECK_ERROR("GLES2::RasterizerGLES2::_blit_render_target_to_screen: first pass clear");
 		}
 	}
 
@@ -410,6 +416,7 @@ void RasterizerGLES2::_blit_render_target_to_screen(RID p_render_target, Display
 		win_size.height - p_screen_rect.position.y - p_screen_rect.size.height,
 		vp_w,
 		vp_h);
+	GL_CHECK_ERROR("GLES2::RasterizerGLES2::_blit_render_target_to_screen: glViewport");
 
 	// Disable states that could ruin a direct copy
 	glDisable(GL_BLEND);
@@ -417,6 +424,7 @@ void RasterizerGLES2::_blit_render_target_to_screen(RID p_render_target, Display
 	glDisable(GL_CULL_FACE);
 	glDisable(GL_SCISSOR_TEST);
 	glDepthMask(GL_FALSE);
+	GL_CHECK_ERROR("GLES2::RasterizerGLES2::_blit_render_target_to_screen: disable states");
 
 	// Bind the RenderTarget's color texture
 	glActiveTexture(GL_TEXTURE0);
@@ -427,6 +435,7 @@ void RasterizerGLES2::_blit_render_target_to_screen(RID p_render_target, Display
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+	GL_CHECK_ERROR("GLES2::RasterizerGLES2::_blit_render_target_to_screen: texture setup");
 
 	// Godot 4 renders to FBOs upside down.
 	// We must invert the UVs when copying to the system screen.
@@ -478,6 +487,7 @@ void RasterizerGLES2::set_boot_image(const Ref<Image> &p_image, const Color &p_c
 	glDepthMask(GL_FALSE);
 	glClearColor(p_color.r, p_color.g, p_color.b, 1.0);
 	glClear(GL_COLOR_BUFFER_BIT);
+	GL_CHECK_ERROR("GLES2::RasterizerGLES2::set_boot_image: viewport and clear");
 
 	RID texture = texture_storage->texture_allocate();
 	texture_storage->texture_2d_initialize(texture, p_image);
@@ -516,8 +526,11 @@ void RasterizerGLES2::set_boot_image(const Ref<Image> &p_image, const Color &p_c
 	t->gl_set_filter(p_use_filter ? RS::CANVAS_ITEM_TEXTURE_FILTER_LINEAR : RS::CANVAS_ITEM_TEXTURE_FILTER_NEAREST);
 	glActiveTexture(GL_TEXTURE0);
 	glBindTexture(GL_TEXTURE_2D, t->tex_id);
+	GL_CHECK_ERROR("GLES2::RasterizerGLES2::set_boot_image: texture bind");
+
 	copy_effects->copy_to_rect(screenrect);
 	glBindTexture(GL_TEXTURE_2D, 0);
+	GL_CHECK_ERROR("GLES2::RasterizerGLES2::set_boot_image: cleanup");
 
 	DisplayServer::get_singleton()->swap_buffers();
 

@@ -35,6 +35,7 @@
 #include "core/io/dir_access.h"
 #include "core/io/file_access.h"
 
+#include "drivers/gles_common/error_macros.h"
 #include "drivers/gles2/rasterizer_gles2.h"
 #include "drivers/gles2/storage/config.h"
 
@@ -567,29 +568,10 @@ String ShaderGLES2::_version_get_sha1(Version *p_version) const {
 #endif
 
 bool ShaderGLES2::_load_from_cache(Version *p_version) {
-//#ifdef WEB_ENABLED // not supported in webgl
-	//return false;
-//#else
-//#if !defined(ANDROID_ENABLED) && !defined(IOS_ENABLED)
-//	if (RasterizerGLES3::is_gles_over_gl() && (glProgramBinary == nullptr)) { // ARB_get_program_binary extension not available.
-//		return false;
-//	}
-//#endif
 	return false;
-// #endif // WEB_ENABLED
 }
 
 void ShaderGLES2::_save_to_cache(Version *p_version) {
-// #ifdef WEB_ENABLED // not supported in webgl
-// 	return;
-// #else
-// 	ERR_FAIL_COND(!shader_cache_dir_valid);
-// #if !defined(ANDROID_ENABLED) && !defined(IOS_ENABLED)
-// 	if (RasterizerGLES3::is_gles_over_gl() && (glGetProgramBinary == nullptr)) { // ARB_get_program_binary extension not available.
-// 		return;
-// 	}
-// #endif
-// #endif // WEB_ENABLED
 }
 
 void ShaderGLES2::_clear_version(Version *p_version) {

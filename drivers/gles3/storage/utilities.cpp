@@ -268,6 +268,7 @@ void Utilities::visibility_notifier_initialize(RID p_notifier) {
 
 void Utilities::visibility_notifier_free(RID p_notifier) {
 	VisibilityNotifier *vn = visibility_notifier_owner.get_or_null(p_notifier);
+	ERR_FAIL_NULL(vn);
 	vn->dependency.deleted_notify(p_notifier);
 	visibility_notifier_owner.free(p_notifier);
 }

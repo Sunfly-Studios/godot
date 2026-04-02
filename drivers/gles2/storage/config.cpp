@@ -32,6 +32,7 @@
 
 #include "config.h"
 
+#include "drivers/gles_common/error_macros.h"
 #include "drivers/gles2/rasterizer_gles2.h"
 
 #ifdef WEB_ENABLED
@@ -60,6 +61,7 @@ Config::Config() {
 	}
 #else
 	const GLubyte *extension_string = glGetString(GL_EXTENSIONS);
+	GL_CHECK_ERROR("GLES2::Config::setup: glGetString(GL_EXTENSIONS)");
 	if (extension_string != nullptr) {
 		const GLubyte *start = extension_string;
 		const GLubyte *end = extension_string + strlen((const char *)extension_string);
@@ -119,6 +121,8 @@ Config::Config() {
 	max_viewport_size[0] = (result_2[0] >= 64) ? result_2[0] : 2048;
 	max_viewport_size[1] = (result_2[1] >= 64) ? result_2[1] : 2048;
 
+	GL_CHECK_ERROR("GLES2::Config::setup: Base glGetIntegerv limits");
+
 	// GLES2 does not support UBO
 	max_uniform_buffer_size = 0;
 
@@ -129,6 +133,7 @@ Config::Config() {
 	support_anisotropic_filter = extensions.has("GL_EXT_texture_filter_anisotropic");
 	if (support_anisotropic_filter) {
 		glGetFloatv(_GL_MAX_TEXTURE_MAX_ANISOTROPY_EXT, &anisotropic_level);
+		GL_CHECK_ERROR("GLES2::Config::setup: glGetFloatv Anisotropic");
 		anisotropic_level = MIN(float(1 << int(GLOBAL_GET("rendering/textures/default_filters/anisotropic_filtering_level"))), anisotropic_level);
 	}
 
@@ -157,6 +162,8 @@ Config::Config() {
 
 	// Adreno 3xx Compatibility / Workarounds
 	const GLubyte *renderer_str = glGetString(GL_RENDERER);
+	GL_CHECK_ERROR("GLES2::Config::setup: glGetString(GL_RENDERER) for workarounds");
+
 	const String rendering_device_name = renderer_str ? String::utf8((const char *)renderer_str) : String();
 	if (rendering_device_name.left(13) == "Adreno (TM) 3") {
 		// Adreno 3xx devices are notorious for breaking with complex shader paths
@@ -165,12 +172,9 @@ Config::Config() {
 		disable_transform_feedback_shader_cache = true;
 	}
 
-	if (OS::get_singleton()->get_current_rendering_driver_name() == "opengl2_angle") {
+	if (OS::get_singleton()->get_current_rendering_driver_name() == "opengl2_angle" || OS::get_singleton()->has_feature("web")) {
 		polyfill_half2float = false;
 	}
-#ifdef WEB_ENABLED
-	polyfill_half2float = false;
-#endif
 }
 
 Config::~Config() {

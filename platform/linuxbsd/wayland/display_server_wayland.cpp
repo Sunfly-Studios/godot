@@ -43,18 +43,18 @@
 #include "servers/rendering/renderer_rd/renderer_compositor_rd.h"
 #endif
 
-#if defined(GLES3_ENABLED) || defined(GLES2_ENABLED) || defined(GLES1_ENABLED) || defined(GLES1_ENABLED)
+#if defined(GLES3_ENABLED) || defined(GLES2_ENABLED) || defined(GLES1_ENABLED)
 #include "detect_prime_egl.h"
 
 #ifdef GLES3_ENABLED
 #include "drivers/gles3/rasterizer_gles3.h"
 #endif // GLES3_ENABLED
 
-#if GLES2_ENABLED
+#ifdef GLES2_ENABLED
 #include "drivers/gles2/rasterizer_gles2.h"
 #endif // GLES2_ENABLED
 
-#if GLES1_ENABLED
+#ifdef GLES1_ENABLED
 #include "drivers/gles1/rasterizer_gles1.h"
 #endif // GLES1_ENABLED
 
@@ -1517,16 +1517,18 @@ DisplayServerWayland::DisplayServerWayland(const String &p_rendering_driver, Win
 						"You can enable the OpenGL 1 driver by starting the engine from the\n"
 						"command line with the command:\n\n    \"%s\" --rendering-driver opengl1\n\n"
 						"If you recently updated your video card drivers, try rebooting.",
-							executable_name),
+							executable_name, executable_name, executable_name),
 						"Unable to initialize Vulkan video driver");
 				} else if (p_rendering_driver == "opengl3") {
 					OS::get_singleton()->alert(
 					vformat("Your video card drivers seem not to support the required OpenGL 3 version.\n\n"
-						"If possible, consider updating your video card drivers or using the OpenGL 2 driver.\n\n"
+						"If possible, consider updating your video card drivers, using the OpenGL 2 driver, or using the OpenGL 1 driver.\n\n"
 						"You can enable the OpenGL 2 driver by starting the engine from the\n"
 						"command line with the command:\n\n    \"%s\" --rendering-driver opengl2\n\n"
+						"You can enable the OpenGL 1 driver by starting the engine from the\n"
+						"command line with the command:\n\n    \"%s\" --rendering-driver opengl1\n\n"
 						"If you recently updated your video card drivers, try rebooting.",
-							executable_name),
+							executable_name, executable_name),
 						"Unable to initialize OpenGL 3 video driver");
 				} else if (p_rendering_driver == "opengl2") {
 					OS::get_singleton()->alert(
@@ -1630,7 +1632,7 @@ DisplayServerWayland::DisplayServerWayland(const String &p_rendering_driver, Win
 										"You can enable the OpenGL 1.5 driver by starting the engine from the\n"
 										"command line with the command:\n\n    \"%s\" --rendering-driver opengl1\n\n"
 										"If you recently updated your video card drivers, try rebooting.",
-										executable_name),
+										executable_name, executable_name, executable_name),
 								"Unable to initialize OpenGL video driver");
 	
 						ERR_FAIL_MSG("Could not initialize OpenGL.");
@@ -1659,7 +1661,7 @@ DisplayServerWayland::DisplayServerWayland(const String &p_rendering_driver, Win
 									"You can enable the OpenGL ES 1.1 driver by starting the engine from the\n"
 									"command line with the command:\n\n    \"%s\" --rendering-driver opengl1_es\n\n"
 									"If you recently updated your video card drivers, try rebooting.",
-									executable_name),
+									executable_name, executable_name, executable_name),
 							"Unable to initialize OpenGL ES video driver");
 	
 					ERR_FAIL_MSG("Could not initialize OpenGL ES.");
@@ -1749,7 +1751,7 @@ DisplayServerWayland::DisplayServerWayland(const String &p_rendering_driver, Win
 										"You can enable the OpenGL 1.5 driver by starting the engine from the\n"
 										"command line with the command:\n\n    \"%s\" --rendering-driver opengl1\n\n"
 										"If you recently updated your video card drivers, try rebooting.",
-										executable_name),
+										executable_name, executable_name, executable_name),
 								"Unable to initialize OpenGL video driver");
 	
 						ERR_FAIL_MSG("Could not initialize OpenGL.");
@@ -1778,7 +1780,7 @@ DisplayServerWayland::DisplayServerWayland(const String &p_rendering_driver, Win
 									"You can enable the OpenGL 1.1 driver by starting the engine from the\n"
 									"command line with the command:\n\n    \"%s\" --rendering-driver opengl1_es\n\n"
 									"If you recently updated your video card drivers, try rebooting.",
-									executable_name),
+									executable_name, executable_name, executable_name),
 							"Unable to initialize OpenGL ES video driver");
 	
 					ERR_FAIL_MSG("Could not initialize OpenGL ES.");
@@ -1868,7 +1870,7 @@ DisplayServerWayland::DisplayServerWayland(const String &p_rendering_driver, Win
 										"You can enable the OpenGL 2.1 driver by starting the engine from the\n"
 										"command line with the command:\n\n    \"%s\" --rendering-driver opengl2\n\n"
 										"If you recently updated your video card drivers, try rebooting.",
-										executable_name),
+										executable_name, executable_name, executable_name),
 								"Unable to initialize OpenGL video driver");
 	
 						ERR_FAIL_MSG("Could not initialize OpenGL.");
@@ -1897,7 +1899,7 @@ DisplayServerWayland::DisplayServerWayland(const String &p_rendering_driver, Win
 									"You can enable the OpenGL ES 2.1 driver by starting the engine from the\n"
 									"command line with the command:\n\n    \"%s\" --rendering-driver opengl2_es\n\n"
 									"If you recently updated your video card drivers, try rebooting.",
-									executable_name),
+									executable_name, executable_name, executable_name),
 							"Unable to initialize OpenGL ES video driver");
 	
 					ERR_FAIL_MSG("Could not initialize OpenGL ES.");
@@ -1908,7 +1910,7 @@ DisplayServerWayland::DisplayServerWayland(const String &p_rendering_driver, Win
 			}
 		}
 	}
-#endif // GLES2_ENABLED
+#endif // GLES1_ENABLED
 
 
 	if (!driver_found) {

@@ -594,6 +594,9 @@ class Godot(private val context: Context) {
 				"opengl2" -> {
 					GodotGLRenderView(host, this, godotInputHandler, xrMode, useDebugOpengl, shouldBeTransparent, 2, 1)
 				}
+				"opengl1" -> {
+					GodotGLRenderView(host, this, godotInputHandler, xrMode, useDebugOpengl, shouldBeTransparent, 1, 5)
+				}
 				else -> {
 					throw IllegalStateException("No native renderer is available.")
 				}
@@ -974,7 +977,8 @@ class Godot(private val context: Context) {
 	private fun canFallbackToOpenGL(): Boolean {
 		return (
 			java.lang.Boolean.parseBoolean(GodotLib.getGlobal("rendering/rendering_device/fallback_to_opengl3")) ||
-			java.lang.Boolean.parseBoolean(GodotLib.getGlobal("rendering/rendering_device/fallback_to_opengl2"))
+			java.lang.Boolean.parseBoolean(GodotLib.getGlobal("rendering/rendering_device/fallback_to_opengl2")) ||
+			java.lang.Boolean.parseBoolean(GodotLib.getGlobal("rendering/rendering_device/fallback_to_opengl1"))
 		)
 	}
 

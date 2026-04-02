@@ -232,8 +232,6 @@ private:
 	mutable RID_Owner<ReflectionProbeInstance> reflection_probe_instance_owner;
 
 	/* LIGHTMAP */
-	float lightmap_probe_capture_update_speed = 4;
-
 	mutable RID_Owner<Lightmap, true> lightmap_owner;
 
 	/* LIGHTMAP INSTANCE */
@@ -279,7 +277,6 @@ private:
 		HashMap<RID, uint32_t> shadow_owners;
 	};
 
-	uint64_t shadow_atlas_realloc_tolerance_msec = 500;
 	RID_Owner<ShadowAtlas> shadow_atlas_owner;
 
 	void _shadow_atlas_invalidate_shadow(ShadowAtlas::Quadrant::Shadow *p_shadow, RID p_atlas, ShadowAtlas *p_shadow_atlas, uint32_t p_quadrant, uint32_t p_shadow_idx);

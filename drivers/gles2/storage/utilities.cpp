@@ -33,6 +33,7 @@
 #include "utilities.h"
 
 #include "drivers/gles2/rasterizer_gles2.h"
+#include "drivers/gles_common/error_macros.h"
 #include "config.h"
 #include "light_storage.h"
 #include "material_storage.h"
@@ -238,6 +239,7 @@ void Utilities::visibility_notifier_initialize(RID p_notifier) {
 
 void Utilities::visibility_notifier_free(RID p_notifier) {
 	VisibilityNotifier *vn = visibility_notifier_owner.get_or_null(p_notifier);
+	ERR_FAIL_NULL(vn);
 	vn->dependency.deleted_notify(p_notifier);
 	visibility_notifier_owner.free(p_notifier);
 }
@@ -374,19 +376,38 @@ uint64_t Utilities::get_rendering_info(RS::RenderingInfo p_info) {
 }
 
 String Utilities::get_video_adapter_name() const {
-	const String rendering_device_name = String::utf8((const char *)glGetString(GL_RENDERER));
+	const GLubyte *extension_string = glGetString(GL_RENDERER);
+	GL_CHECK_ERROR("GLES2::Utilities::get_video_adapter_name");
+	if (extension_string == nullptr) {
+		return String();
+	}
+
+	const String rendering_device_name = String::utf8((const char *)extension_string);
+
 	// NVIDIA suffixes all GPU model names with "/PCIe/SSE2" in OpenGL (but not Vulkan). This isn't necessary to display nowadays, so it can be trimmed.
 	return rendering_device_name.trim_suffix("/PCIe/SSE2");
 }
 
 String Utilities::get_video_adapter_vendor() const {
-	const String rendering_device_vendor = String::utf8((const char *)glGetString(GL_VENDOR));
+	const GLubyte *vendor_string = glGetString(GL_VENDOR);
+	GL_CHECK_ERROR("GLES2::Utilities::get_video_adapter_vendor");
+	if (vendor_string == nullptr) {
+		return String();
+	}
+
+	const String rendering_device_vendor = String::utf8((const char *)vendor_string);
+	
 	// NVIDIA suffixes its vendor name with " Corporation". This is neither necessary to process nor display.
 	return rendering_device_vendor.trim_suffix(" Corporation");
 }
 
 String Utilities::get_video_adapter_api_version() const {
-	const String full_version = String::utf8((const char *)glGetString(GL_VERSION));
+	const GLubyte *version_string = glGetString(GL_VERSION);
+	GL_CHECK_ERROR("GLES2::Utilities::get_video_adapter_api_version");
+	if (version_string == nullptr) {
+		return String("2.1 unknown");
+	}
+	const String full_version = String::utf8((const char *)version_string);
 
 	// GL_VERSION strings typically start with the version number followed by a space.
 	// Example: "4.6.0 NVIDIA 572.83" or "2.1.0 Build 123"

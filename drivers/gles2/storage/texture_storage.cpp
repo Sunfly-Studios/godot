@@ -158,10 +158,6 @@ void TextureStorage::canvas_texture_set_texture_repeat(RID p_canvas_texture, RS:
 
 /* Texture API */
 
-static inline Error _get_gl_uncompressed_format(const Ref<Image> &p_image, Image::Format p_format, Image::Format &r_real_format, GLenum &r_gl_format, GLenum &r_gl_internal_format, GLenum &r_gl_type) {
-    return ERR_UNAVAILABLE;
-}
-
 Ref<Image> TextureStorage::_get_gl_image_and_format(const Ref<Image> &p_image, Image::Format p_format, Image::Format &r_real_format, GLenum &r_gl_format, GLenum &r_gl_internal_format, GLenum &r_gl_type, bool &r_compressed, bool p_force_decompress) const {
 	Config *config = Config::get_singleton();
 	r_gl_format = 0;
@@ -415,6 +411,7 @@ Ref<Image> TextureStorage::_get_gl_image_and_format(const Ref<Image> &p_image, I
 RID TextureStorage::texture_allocate() {
 	Texture texture;
 	glGenTextures(1, &texture.tex_id);
+	GL_CHECK_ERROR("GLES2::TextureStorage::texture_allocate: glGenTextures");
 
 	ERR_FAIL_COND_V_MSG(texture.tex_id == 0, RID(), "GLES2: Failed to generate texture ID. GL Context might be lost or out of memory.");
 
@@ -452,9 +449,11 @@ void TextureStorage::texture_free(RID p_rid) {
 	if (must_free_data) {
 		if (GLES2::Utilities::get_singleton()->has_texture_data(tex->tex_id)) {
 			GLES2::Utilities::get_singleton()->texture_free_data(tex->tex_id);
+			GL_CHECK_ERROR("GLES2::TextureStorage::texture_free: utilities texture_free_data");
 		} else {
 			// This was an eagerly allocated empty shell.
 			glDeleteTextures(1, &tex->tex_id);
+			GL_CHECK_ERROR("GLES2::TextureStorage::texture_free: glDeleteTextures (empty shell)");
 		}
 		tex->tex_id = 0;
 	}
@@ -723,6 +722,7 @@ void TextureStorage::texture_replace(RID p_texture, RID p_by_texture) {
 	// Destroy the old physical GL texture
 	if (!tex->is_proxy && tex->tex_id != 0) {
 		GLES2::Utilities::get_singleton()->texture_free_data(tex->tex_id);
+		GL_CHECK_ERROR("GLES2::TextureStorage::texture_replace: utilities texture_free_data (old texture)");
 	}
 
 	Vector<RID> old_proxies = tex->proxies;
@@ -844,6 +844,63 @@ void TextureStorage::_texture_set_data(RID p_texture, const Ref<Image> &p_image,
 	ERR_FAIL_COND_MSG(read.size() < expected_size, "GLES2: Image data vector size is smaller than expected image size. Memory corruption risk.");
 
 	const uint8_t *read_ptr = read.ptr();
+	
+#ifdef BIG_ENDIAN_ENABLED
+	if (compressed) {
+		// Call ptrw() to safely detach and allow modification of the byte array
+		uint8_t *write_ptr = read.ptrw();
+		int total_size = read.size();
+		Image::Format img_format = img->get_format();
+
+		if (img_format == Image::FORMAT_DXT1) {
+			for (int i = 0; i < total_size; i += 8) {
+				uint16_t *c0 = (uint16_t *)&write_ptr[i];
+				uint16_t *c1 = (uint16_t *)&write_ptr[i + 2];
+				uint32_t *idx = (uint32_t *)&write_ptr[i + 4];
+				*c0 = BSWAP16(*c0);
+				*c1 = BSWAP16(*c1);
+				*idx = BSWAP32(*idx);
+			}
+		} else if (img_format == Image::FORMAT_DXT3) {
+			for (int i = 0; i < total_size; i += 16) {
+				// DXT3 Alpha is 4x 16-bit words
+				uint16_t *a = (uint16_t *)&write_ptr[i];
+				for (int j = 0; j < 4; j++) {
+					a[j] = BSWAP16(a[j]);
+				}
+
+				// DXT3 Color block
+				uint16_t *c0 = (uint16_t *)&write_ptr[i + 8];
+				uint16_t *c1 = (uint16_t *)&write_ptr[i + 10];
+				uint32_t *idx = (uint32_t *)&write_ptr[i + 12];
+				*c0 = BSWAP16(*c0);
+				*c1 = BSWAP16(*c1);
+				*idx = BSWAP32(*idx);
+			}
+		} else if (img_format == Image::FORMAT_DXT5) {
+			for (int i = 0; i < total_size; i += 16) {
+				// The Alpha block (bytes 0-7) consists of 2 single-byte alphas and a 48-bit index.
+				// Big Endian GPUs universally expect these 8 bytes
+				// to be swapped as four 16-bit words.
+				uint16_t *a = (uint16_t *)&write_ptr[i];
+				for (int j = 0; j < 4; j++) {
+					a[j] = BSWAP16(a[j]);
+				}
+
+				// The color block (bytes 8-15) is identical to DXT1
+				uint16_t *c0 = (uint16_t *)&write_ptr[i + 8];
+				uint16_t *c1 = (uint16_t *)&write_ptr[i + 10];
+				uint32_t *idx = (uint32_t *)&write_ptr[i + 12];
+				*c0 = BSWAP16(*c0);
+				*c1 = BSWAP16(*c1);
+				*idx = BSWAP32(*idx);
+			}
+		}
+		// Re-assign read_ptr in case calling ptrw()
+		// triggered a memory reallocation
+		read_ptr = read.ptr();
+	}
+#endif
 
 	glActiveTexture(GL_TEXTURE0);
 	glBindTexture(texture->target, texture->tex_id);
@@ -854,6 +911,7 @@ void TextureStorage::_texture_set_data(RID p_texture, const Ref<Image> &p_image,
 	glTexParameteri(texture->target, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 	glTexParameteri(texture->target, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
 	glTexParameteri(texture->target, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+	GL_CHECK_ERROR("GLES2::TextureStorage::_texture_set_data: glTexParameteri");
 
 	int mipmaps = img->has_mipmaps() ? img->get_mipmap_count() + 1 : 1;
 	int w = img->get_width();
@@ -867,9 +925,11 @@ void TextureStorage::_texture_set_data(RID p_texture, const Ref<Image> &p_image,
 		if (compressed) {
 			glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
 			glCompressedTexImage2D(blit_target, i, internal_format, w, h, 0, size, read_ptr + ofs);
+			GL_CHECK_ERROR("GLES2::TextureStorage::_texture_set_data: glCompressedTexImage2D");
 		} else {
 			glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
 			glTexImage2D(blit_target, i, internal_format, w, h, 0, format, type, read_ptr + ofs);
+			GL_CHECK_ERROR("GLES2::TextureStorage::_texture_set_data: glTexImage2D");
 		}
 
 		tsize += size;
@@ -1053,6 +1113,7 @@ void TextureStorage::_update_render_target(RenderTarget *rt) {
 
 	// FBO Generation
 	glGenFramebuffers(1, &rt->fbo);
+	GL_CHECK_ERROR("GLES2::TextureStorage::_update_render_target: glGenFramebuffers");
 	ERR_FAIL_COND_MSG(rt->fbo == 0, "GLES2: Failed to generate Framebuffer Object. Context lost?");
 	glBindFramebuffer(GL_FRAMEBUFFER, rt->fbo);
 
@@ -1082,6 +1143,7 @@ void TextureStorage::_update_render_target(RenderTarget *rt) {
 		glBindTexture(texture_target, rt->color);
 
 		glTexImage2D(texture_target, 0, rt->color_internal_format, rt->size.x, rt->size.y, 0, rt->color_format, rt->color_type, nullptr);
+		GL_CHECK_ERROR("GLES2::TextureStorage::_update_render_target: glTexImage2D color allocation");
 
 		// Force the texture parameters immediately after creating the color texture,
 		// otherwise shenanigans will happen (a.k.a, a very useful black screen).
@@ -1089,6 +1151,7 @@ void TextureStorage::_update_render_target(RenderTarget *rt) {
 		glTexParameteri(texture_target, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
 		glTexParameteri(texture_target, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
 		glTexParameteri(texture_target, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+		GL_CHECK_ERROR("GLES2::TextureStorage::_update_render_target: glTexParameteri color");
 
 		texture->gl_set_filter(RS::CANVAS_ITEM_TEXTURE_FILTER_NEAREST);
 		texture->gl_set_repeat(RS::CANVAS_ITEM_TEXTURE_REPEAT_DISABLED);
@@ -1099,6 +1162,7 @@ void TextureStorage::_update_render_target(RenderTarget *rt) {
 	}
 
 	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, texture_target, rt->color, 0);
+	GL_CHECK_ERROR("GLES2::TextureStorage::_update_render_target: glFramebufferTexture2D color attach");
 
 	if (rt->overridden.depth.is_valid()) {
 		texture = get_texture(rt->overridden.depth);
@@ -1109,12 +1173,16 @@ void TextureStorage::_update_render_target(RenderTarget *rt) {
 		}
 		rt->depth = texture->tex_id;
 		glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, texture_target, rt->depth, 0);
+		GL_CHECK_ERROR("GLES2::TextureStorage::_update_render_target: glFramebufferTexture2D depth override attach");
 	} else {
 		// Use a Renderbuffer for depth.
 		glGenRenderbuffers(1, &rt->depth);
 		glBindRenderbuffer(GL_RENDERBUFFER, rt->depth);
 		glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT16, rt->size.x, rt->size.y);
+		GL_CHECK_ERROR("GLES2::TextureStorage::_update_render_target: glRenderbufferStorage depth allocation");
+
 		glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, rt->depth);
+		GL_CHECK_ERROR("GLES2::TextureStorage::_update_render_target: glFramebufferRenderbuffer depth attach");
 
 		if (!GLES2::Utilities::get_singleton()->has_texture_data(rt->color)) {
 			GLES2::Utilities::get_singleton()->texture_allocated_data(rt->depth, rt->size.x * rt->size.y * rt->view_count * 3, "Render target depth texture");
@@ -1184,16 +1252,19 @@ void TextureStorage::_clear_render_target(RenderTarget *rt) {
 
 	if (rt->fbo != 0 && rt->fbo != system_fbo) {
 		glDeleteFramebuffers(1, &rt->fbo);
+		GL_CHECK_ERROR("GLES2::TextureStorage::_clear_render_target: glDeleteFramebuffers");
 		rt->fbo = 0;
 	}
 
 	if (rt->color != 0 && !rt->overridden.color.is_valid()) {
 		glDeleteTextures(1, &rt->color);
+		GL_CHECK_ERROR("GLES2::TextureStorage::_clear_render_target: glDeleteTextures (color)");
 		rt->color = 0;
 	}
 
 	if (rt->depth != 0 && !rt->overridden.depth.is_valid()) {
 		glDeleteRenderbuffers(1, &rt->depth);
+		GL_CHECK_ERROR("GLES2::TextureStorage::_clear_render_target: glDeleteRenderbuffers (backbuffer)");
 		rt->depth = 0;
 	}
 }

@@ -80,6 +80,7 @@ public:
 
 	// Buffer size is specified in bytes
 	static Vector<uint8_t> buffer_get_data(GLenum p_target, GLuint p_buffer, uint32_t p_buffer_size);
+	bool buffer_bind_and_validate(GLenum p_target, GLuint p_buffer);
 
 	// Allocate memory with glBufferData. Does not handle resizing.
 	_FORCE_INLINE_ void buffer_allocate_data(GLenum p_target, GLuint p_id, uint32_t p_size, const void *p_data, GLenum p_usage, String p_name = "") {

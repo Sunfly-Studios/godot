@@ -47,11 +47,6 @@ private:
 	static CubemapFilter *singleton;
 
 	// Use for full-screen effects. Slightly more efficient than screen_quad as this eliminates pixel overdraw along the diagonal.
-	GLuint screen_triangle = 0;
-	GLuint screen_triangle_array = 0;
-
-	uint32_t ggx_samples = 128;
-
 public:
 	static CubemapFilter *get_singleton() {
 		return singleton;

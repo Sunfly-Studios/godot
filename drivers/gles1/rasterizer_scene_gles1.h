@@ -171,9 +171,6 @@ private:
 		RID overdraw_shader;
 	} scene_globals;
 
-	GLES1::SceneMaterialData *default_material_data_ptr = nullptr;
-	GLES1::SceneMaterialData *overdraw_material_data_ptr = nullptr;
-
 	/* LIGHT INSTANCE */
 
 	struct LightData {

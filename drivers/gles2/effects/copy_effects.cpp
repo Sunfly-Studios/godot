@@ -31,6 +31,7 @@
 #ifdef GLES2_ENABLED
 
 #include "copy_effects.h"
+#include "drivers/gles_common/error_macros.h"
 #include "drivers/gles2/storage/utilities.h"
 #include "drivers/gles2/storage/texture_storage.h"
 
@@ -47,13 +48,13 @@ CopyEffects::CopyEffects() {
 
 	copy.shader.initialize();
 
-	// ERR_FAIL_COND(copy.shader.is_null());
 	copy.shader_version = copy.shader.version_create();
 	copy.shader.version_bind_shader(copy.shader_version, CopyShaderGLES2::MODE_DEFAULT);
 
 	// Screen Triangle VBO
 	glGenBuffers(1, &screen_triangle);
 	glBindBuffer(GL_ARRAY_BUFFER, screen_triangle);
+	GL_CHECK_ERROR("GLES2::CopyEffects setup: bind screen_triangle");
 	const float triangle_verts[6] = {
 		-1.0f,
 		-1.0f,
@@ -64,10 +65,12 @@ CopyEffects::CopyEffects() {
 	};
 	glBufferData(GL_ARRAY_BUFFER, sizeof(float) * 6, triangle_verts, GL_STATIC_DRAW);
 	glBindBuffer(GL_ARRAY_BUFFER, 0);
+	GL_CHECK_ERROR("GLES2::CopyEffects setup: buffer data screen_triangle");
 
 	// Screen Quad VBO
 	glGenBuffers(1, &quad);
 	glBindBuffer(GL_ARRAY_BUFFER, quad);
+	GL_CHECK_ERROR("GLES2::CopyEffects setup: bind screen_quad");
 	const float quad_verts[24] = {
 		-1.0f, -1.0f,  0.0f, 0.0f,
 		1.0f, -1.0f,  1.0f, 0.0f,
@@ -78,6 +81,7 @@ CopyEffects::CopyEffects() {
 	};
 	glBufferData(GL_ARRAY_BUFFER, sizeof(float) * 24, quad_verts, GL_STATIC_DRAW);
 	glBindBuffer(GL_ARRAY_BUFFER, 0);
+	GL_CHECK_ERROR("GLES2::CopyEffects setup: buffer data screen_quad");
 }
 
 CopyEffects::~CopyEffects() {

@@ -68,46 +68,44 @@ public:
 		}
 	};
 
+	// Updated from `float`s
+	// to `uint8_t`s for performance.
 	struct BatchColor {
-		float r, g, b, a;
+		uint8_t r, g, b, a;
+
 		void set_white() {
-			r = 1.0f;
-			g = 1.0f;
-			b = 1.0f;
-			a = 1.0f;
+			r = 255;
+			g = 255;
+			b = 255;
+			a = 255;
 		}
 		void set(const Color &p_c) {
-			r = p_c.r;
-			g = p_c.g;
-			b = p_c.b;
-			a = p_c.a;
+			r = (uint8_t)CLAMP(p_c.r * 255.0f, 0.0f, 255.0f);
+			g = (uint8_t)CLAMP(p_c.g * 255.0f, 0.0f, 255.0f);
+			b = (uint8_t)CLAMP(p_c.b * 255.0f, 0.0f, 255.0f);
+			a = (uint8_t)CLAMP(p_c.a * 255.0f, 0.0f, 255.0f);
 		}
 		void set(float rr, float gg, float bb, float aa) {
-			r = rr;
-			g = gg;
-			b = bb;
-			a = aa;
+			r = (uint8_t)CLAMP(rr * 255.0f, 0.0f, 255.0f);
+			g = (uint8_t)CLAMP(gg * 255.0f, 0.0f, 255.0f);
+			b = (uint8_t)CLAMP(bb * 255.0f, 0.0f, 255.0f);
+			a = (uint8_t)CLAMP(aa * 255.0f, 0.0f, 255.0f);
 		}
 		bool operator==(const BatchColor &p_c) const {
 			return (r == p_c.r) && (g == p_c.g) && (b == p_c.b) && (a == p_c.a);
 		}
-		bool operator!=(const BatchColor &p_c) const { return (*this == p_c) == false; }
+		bool operator!=(const BatchColor &p_c) const { return !(*this == p_c); }
 		bool equals(const Color &p_c) const {
-			return (r == p_c.r) && (g == p_c.g) && (b == p_c.b) && (a == p_c.a);
+			return (r == (uint8_t)CLAMP(p_c.r * 255.0f, 0.0f, 255.0f)) &&
+					(g == (uint8_t)CLAMP(p_c.g * 255.0f, 0.0f, 255.0f)) &&
+					(b == (uint8_t)CLAMP(p_c.b * 255.0f, 0.0f, 255.0f)) &&
+					(a == (uint8_t)CLAMP(p_c.a * 255.0f, 0.0f, 255.0f));
 		}
-		const float *get_data() const { return &r; }
+		const uint8_t *get_data() const { return &r; }
 
 #if defined(TOOLS_ENABLED) && defined(DEBUG_ENABLED)
 		String to_string() const {
-			String sz = "{";
-			const float *data = get_data();
-			for (int c = 0; c < 4; c++) {
-				float f = data[c];
-				int val = ((f * 255.0f) + 0.5f);
-				sz += String(Variant(val)) + " ";
-			}
-			sz += "}";
-			return sz;
+			return "{" + itos(r) + " " + itos(g) + " " + itos(b) + " " + itos(a) + "}";
 		}
 #endif
 	};

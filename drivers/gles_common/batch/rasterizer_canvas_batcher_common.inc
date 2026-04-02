@@ -206,7 +206,7 @@ bool RasterizerCanvasBatcherCommon<T_API>::try_join_item(RendererCanvasRender::I
 
 	// Copy the final modulate since Godot calculates
 	// this upstream
-	r_ris.final_modulate = p_ci->final_modulate;
+	r_ris.final_modulate = p_ci->final_modulate * r_ris.item_group_modulate;
 
 	// Material changes break batches
 	if (p_ci->material != r_ris.canvas_last_material) {
@@ -635,7 +635,9 @@ void RasterizerCanvasBatcherCommon<T_API>::flush_render_batches(RendererCanvasRe
 		case BatcherEnums::FVF_REGULAR:
 			break;
 		case BatcherEnums::FVF_COLOR: {
-			if (!bdata.vertex_colors.size()) {
+			bool contains_non_polygons = (p_sequence_batch_type_flags & ~BatcherEnums::BTF_POLY) != 0;
+
+			if (!bdata.vertex_colors.size() || contains_non_polygons) {
 				_translate_batches_to_larger_FVF<BatchVertexColored, false, false, false>(p_sequence_batch_type_flags);
 			} else {
 				_translate_batches_to_vertex_colored_FVF();
@@ -707,6 +709,12 @@ bool RasterizerCanvasBatcherCommon<T_API>::prefill_joined_item(FillState &r_fill
 			} break;
 
 			case RendererCanvasRender::Item::Command::TYPE_RECT: {
+				// Ensure VBO alignment for the static index buffer.
+				// If a previous polygon broke the 4-vertex alignment, force a flush.
+				if (bdata.total_verts % 4 != 0) {
+					*p_command_start = command;
+					return true; 
+				}
 				RendererCanvasRender::Item::CommandRect *rect = static_cast<RendererCanvasRender::Item::CommandRect *>(command);
 
 				bool send_light_angles = false;
@@ -733,6 +741,11 @@ bool RasterizerCanvasBatcherCommon<T_API>::prefill_joined_item(FillState &r_fill
 			} break;
 
 			case RendererCanvasRender::Item::Command::TYPE_NINEPATCH: {
+				// Ensure VBO alignment for the static index buffer.
+				if (bdata.total_verts % 4 != 0) {
+					*p_command_start = command;
+					return true; 
+				}
 				RendererCanvasRender::Item::CommandNinePatch *np = static_cast<RendererCanvasRender::Item::CommandNinePatch *>(command);
 
 				if ((np->axis_x != RS::NINE_PATCH_STRETCH) || (np->axis_y != RS::NINE_PATCH_STRETCH)) {
@@ -851,7 +864,7 @@ void RasterizerCanvasBatcherCommon<T_API>::_translate_batches_to_larger_FVF(uint
 	bool include_poly_color = false;
 
 	if (p_sequence_batch_type_flags & BatcherEnums::BTF_POLY) {
-		include_poly_color = INCLUDE_LIGHT_ANGLES | INCLUDE_MODULATE | INCLUDE_LARGE;
+		include_poly_color = true;
 	}
 
 	bdata.unit_vertices.prepare(sizeof(BATCH_VERTEX_TYPE));
@@ -1151,7 +1164,7 @@ bool RasterizerCanvasBatcherCommon<T_API>::_prefill_rect(RendererCanvasRender::I
 	const bool use_modulate = bdata.use_modulate;
 	Color col = rect->modulate;
 
-	if (!use_large_verts && multiply_final_modulate) {
+	if (T_API::FORCE_BAKE_MODULATE || (!use_large_verts && multiply_final_modulate)) {
 		col *= r_fill_state.final_modulate;
 	}
 
@@ -1505,7 +1518,8 @@ bool RasterizerCanvasBatcherCommon<T_API>::_prefill_polygon(RendererCanvasRender
 	}
 
 	Color modulate = Color(1, 1, 1, 1);
-	if (!use_large_verts && multiply_final_modulate) {
+	
+	if (T_API::FORCE_BAKE_MODULATE || (!use_large_verts && multiply_final_modulate)) {
 		modulate = r_fill_state.final_modulate;
 	}
 

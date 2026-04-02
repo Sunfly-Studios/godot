@@ -559,7 +559,9 @@ ShaderCreateDialog::ShaderCreateDialog() {
 
 	validation_panel = memnew(EditorValidationPanel);
 	validation_panel->add_line(MSG_ID_SHADER, TTR("Shader path/name is valid."));
-	validation_panel->add_line(MSG_ID_PATH, TTR("Will create a new shader file."));
+	if (OS::get_singleton()->get_current_rendering_method() != "gl_classic") {
+		validation_panel->add_line(MSG_ID_PATH, TTR("Will create a new shader file."));
+	}
 	validation_panel->add_line(MSG_ID_BUILT_IN);
 	validation_panel->set_update_callback(callable_mp(this, &ShaderCreateDialog::_update_dialog));
 	validation_panel->set_accept_button(get_ok_button());

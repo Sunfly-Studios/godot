@@ -222,29 +222,11 @@ String ShaderGLES1::_version_get_sha1(Version *p_version) const {
 #endif
 
 bool ShaderGLES1::_load_from_cache(Version *p_version) {
-//#ifdef WEB_ENABLED // not supported in webgl
-	//return false;
-//#else
-//#if !defined(ANDROID_ENABLED) && !defined(IOS_ENABLED)
-//	if (RasterizerGLES3::is_gles_over_gl() && (glProgramBinary == nullptr)) { // ARB_get_program_binary extension not available.
-//		return false;
-//	}
-//#endif
 	return false;
-// #endif // WEB_ENABLED
 }
 
 void ShaderGLES1::_save_to_cache(Version *p_version) {
-// #ifdef WEB_ENABLED // not supported in webgl
-// 	return;
-// #else
-// 	ERR_FAIL_COND(!shader_cache_dir_valid);
-// #if !defined(ANDROID_ENABLED) && !defined(IOS_ENABLED)
-// 	if (RasterizerGLES3::is_gles_over_gl() && (glGetProgramBinary == nullptr)) { // ARB_get_program_binary extension not available.
-// 		return;
-// 	}
-// #endif
-// #endif // WEB_ENABLED
+
 }
 
 void ShaderGLES1::_clear_version(Version *p_version) {

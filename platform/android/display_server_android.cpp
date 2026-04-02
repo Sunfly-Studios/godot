@@ -446,13 +446,13 @@ int64_t DisplayServerAndroid::window_get_native_handle(HandleType p_handle_type,
 		}
 #if defined(GLES3_ENABLED) || defined(GLES2_ENABLED) || defined(GLES1_ENABLED)
 		case DISPLAY_HANDLE: {
-			if (rendering_driver == "opengl3" || rendering_driver == "opengl2") {
+			if (rendering_driver.begins_with("opengl")) {
 				return reinterpret_cast<int64_t>(eglGetCurrentDisplay());
 			}
 			return 0;
 		}
 		case OPENGL_CONTEXT: {
-			if (rendering_driver == "opengl3" || rendering_driver == "opengl2") {
+			if (rendering_driver.begins_with("opengl")) {
 				return reinterpret_cast<int64_t>(eglGetCurrentContext());
 			}
 			return 0;
