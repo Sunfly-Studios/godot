@@ -31,6 +31,7 @@
 package org.godotengine.godot.io.directory
 
 import android.annotation.SuppressLint
+import android.annotation.TargetApi
 import android.content.Context
 import android.os.Build
 import android.os.storage.StorageManager
@@ -50,6 +51,22 @@ internal class FilesystemDirectoryAccess(private val context: Context, private v
 
 	companion object {
 		private val TAG = FilesystemDirectoryAccess::class.java.simpleName
+	}
+
+	private object CompatibilityStorageManagerMethodsShim {
+		@TargetApi(Build.VERSION_CODES.N)
+		fun getDriveCount(storageManager: StorageManager): Int {
+			return storageManager.storageVolumes.size
+		}
+
+		@TargetApi(Build.VERSION_CODES.N)
+		fun getDriveDescription(storageManager: StorageManager, driveIndex: Int, context: Context): String {
+			if (driveIndex < 0 || driveIndex >= storageManager.storageVolumes.size) {
+				return ""
+			}
+			val storageVolume = storageManager.storageVolumes[driveIndex]
+			return storageVolume.getDescription(context)
+		}
 	}
 
 	private data class DirData(val dirFile: File, val files: Array<File>, var current: Int = 0)
@@ -151,7 +168,7 @@ internal class FilesystemDirectoryAccess(private val context: Context, private v
 
 	override fun getDriveCount(): Int {
 		return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-			storageManager.storageVolumes.size
+			CompatibilityStorageManagerMethodsShim.getDriveCount(storageManager)
 		} else {
 			0
 		}
@@ -161,13 +178,7 @@ internal class FilesystemDirectoryAccess(private val context: Context, private v
 		if (Build.VERSION.SDK_INT < Build.VERSION_CODES.N) {
 			return ""
 		}
-
-		if (drive < 0 || drive >= storageManager.storageVolumes.size) {
-			return ""
-		}
-
-		val storageVolume = storageManager.storageVolumes[drive]
-		return storageVolume.getDescription(context)
+		return CompatibilityStorageManagerMethodsShim.getDriveDescription(storageManager, drive, context)
 	}
 
 	override fun makeDir(dir: String): Boolean {

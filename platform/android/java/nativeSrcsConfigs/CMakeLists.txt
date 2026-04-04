@@ -26,6 +26,8 @@ add_definitions(
         -DVULKAN_ENABLED
         -DANDROID_ENABLED
         -DGLES3_ENABLED
+        -DGLES2_ENABLED
+        -DGLES1_ENABLED
         -DTOOLS_ENABLED
         -DDEBUG_ENABLED
         -DRD_ENABLED

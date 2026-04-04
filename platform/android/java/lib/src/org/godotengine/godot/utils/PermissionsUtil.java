@@ -46,6 +46,7 @@ import android.util.Log;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
+import android.annotation.TargetApi;
 import androidx.core.content.ContextCompat;
 
 import java.util.ArrayList;
@@ -68,6 +69,28 @@ public final class PermissionsUtil {
 	public static final int REQUEST_SINGLE_PERMISSION_REQ_CODE = 1002;
 	public static final int REQUEST_MANAGE_EXTERNAL_STORAGE_REQ_CODE = 2002;
 	public static final int REQUEST_INSTALL_PACKAGES_REQ_CODE = 3002;
+
+	private static class CompatibilityPermissionMethodsShim {
+		@TargetApi(Build.VERSION_CODES.R)
+		static boolean isExternalStorageManager() {
+			return Environment.isExternalStorageManager();
+		}
+
+		@TargetApi(Build.VERSION_CODES.O)
+		static boolean canRequestPackageInstalls(PackageManager pm) {
+			return pm.canRequestPackageInstalls();
+		}
+
+		@TargetApi(Build.VERSION_CODES.P)
+		static int getProtection(PermissionInfo info) {
+			return info.getProtection();
+		}
+
+		@TargetApi(Build.VERSION_CODES.M)
+		static void requestPermissions(Activity activity, String[] permissions, int requestCode) {
+			activity.requestPermissions(permissions, requestCode);
+		}
+	}
 
 	private PermissionsUtil() {
 	}
@@ -97,7 +120,7 @@ public final class PermissionsUtil {
 		for (String permission : permissions) {
 			try {
 				if (permission.equals(Manifest.permission.MANAGE_EXTERNAL_STORAGE)) {
-					if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && !Environment.isExternalStorageManager()) {
+					if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && !CompatibilityPermissionMethodsShim.isExternalStorageManager()) {
 						Log.d(TAG, "Requesting permission " + permission);
 						try {
 							Intent intent = new Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION);
@@ -110,7 +133,7 @@ public final class PermissionsUtil {
 						dispatchedPermissionsRequest = true;
 					}
 				} else if (permission.equals(Manifest.permission.REQUEST_INSTALL_PACKAGES)) {
-					if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && !activity.getPackageManager().canRequestPackageInstalls()) {
+					if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && !CompatibilityPermissionMethodsShim.canRequestPackageInstalls(activity.getPackageManager())) {
 						try {
 							Intent intent = new Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES);
 							intent.setData(Uri.parse(String.format("package:%s", activity.getPackageName())));
@@ -122,7 +145,7 @@ public final class PermissionsUtil {
 					}
 				} else {
 					PermissionInfo permissionInfo = getPermissionInfo(activity, permission);
-					int protectionLevel = Build.VERSION.SDK_INT >= Build.VERSION_CODES.P ? permissionInfo.getProtection() : permissionInfo.protectionLevel;
+					int protectionLevel = Build.VERSION.SDK_INT >= Build.VERSION_CODES.P ? CompatibilityPermissionMethodsShim.getProtection(permissionInfo) : permissionInfo.protectionLevel;
 					if ((protectionLevel & PermissionInfo.PROTECTION_DANGEROUS) == PermissionInfo.PROTECTION_DANGEROUS && ContextCompat.checkSelfPermission(activity, permission) != PackageManager.PERMISSION_GRANTED) {
 						Log.d(TAG, "Requesting permission " + permission);
 						requestedPermissions.add(permission);
@@ -135,7 +158,7 @@ public final class PermissionsUtil {
 		}
 
 		if (!requestedPermissions.isEmpty()) {
-			activity.requestPermissions(requestedPermissions.toArray(new String[0]), requestCode);
+			CompatibilityPermissionMethodsShim.requestPermissions(activity, requestedPermissions.toArray(new String[0]), requestCode);
 			dispatchedPermissionsRequest = true;
 		}
 
@@ -244,12 +267,12 @@ public final class PermissionsUtil {
 		for (String manifestPermission : manifestPermissions) {
 			try {
 				if (manifestPermission.equals(Manifest.permission.MANAGE_EXTERNAL_STORAGE)) {
-					if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && Environment.isExternalStorageManager()) {
+					if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && CompatibilityPermissionMethodsShim.isExternalStorageManager()) {
 						grantedPermissions.add(manifestPermission);
 					}
 				} else {
 					PermissionInfo permissionInfo = getPermissionInfo(context, manifestPermission);
-					int protectionLevel = Build.VERSION.SDK_INT >= Build.VERSION_CODES.P ? permissionInfo.getProtection() : permissionInfo.protectionLevel;
+					int protectionLevel = Build.VERSION.SDK_INT >= Build.VERSION_CODES.P ? CompatibilityPermissionMethodsShim.getProtection(permissionInfo) : permissionInfo.protectionLevel;
 					if ((protectionLevel & PermissionInfo.PROTECTION_DANGEROUS) == PermissionInfo.PROTECTION_DANGEROUS && ContextCompat.checkSelfPermission(context, manifestPermission) == PackageManager.PERMISSION_GRANTED) {
 						grantedPermissions.add(manifestPermission);
 					}

@@ -34,14 +34,16 @@ import org.godotengine.godot.GodotLib;
 
 import android.app.Activity;
 import android.content.Context;
+import android.os.Build;
 import android.os.Bundle;
 import android.speech.tts.TextToSpeech;
 import android.speech.tts.UtteranceProgressListener;
-import android.speech.tts.Voice;
 import android.util.Log;
 
 import androidx.annotation.Keep;
+import android.annotation.TargetApi;
 
+import java.util.HashMap;
 import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.Set;
@@ -73,8 +75,54 @@ public class GodotTTS extends UtteranceProgressListener {
 	private boolean speaking;
 	private boolean paused;
 	private boolean ttsInitialized = false;
+
+	// Shim class.
+	private static class CompatibilityTtsMethodsShim {
+		@TargetApi(Build.VERSION_CODES.LOLLIPOP)
+		static void setVoiceByName(TextToSpeech synth, String voiceName) {
+			java.util.Set<android.speech.tts.Voice> voices = synth.getVoices();
+			if (voices != null) {
+				for (android.speech.tts.Voice v : voices) {
+					if (v.getName().equals(voiceName)) {
+						synth.setVoice(v);
+						break;
+					}
+				}
+			}
+		}
+
+		@TargetApi(Build.VERSION_CODES.LOLLIPOP)
+		static String[] getVoiceList(TextToSpeech synth) {
+			java.util.Set<android.speech.tts.Voice> voices = synth.getVoices();
+			if (voices == null) {
+				return new String[0];
+			}
+			String[] list = new String[voices.size()];
+			int i = 0;
+			for (android.speech.tts.Voice v : voices) {
+				list[i++] = v.getLocale().toString() + ";" + v.getName();
+			}
+			return list;
+		}
+
+		@TargetApi(Build.VERSION_CODES.LOLLIPOP)
+		static void speak(TextToSpeech synth, String text, int mode, float volume, String utteranceId) {
+			Bundle params = new Bundle();
+			params.putFloat(TextToSpeech.Engine.KEY_PARAM_VOLUME, volume);
+			synth.speak(text, mode, params, utteranceId);
+		}
+	}
+
 	public GodotTTS(Context context) {
 		this.context = context;
+	}
+
+	@SuppressWarnings("deprecation")
+	private void speakLegacy(String text, int mode, float volume, String utteranceId) {
+		HashMap<String, String> params = new HashMap<>();
+		params.put(TextToSpeech.Engine.KEY_PARAM_VOLUME, String.valueOf(volume));
+		params.put(TextToSpeech.Engine.KEY_PARAM_UTTERANCE_ID, utteranceId);
+		synth.speak(text, mode, params);
 	}
 
 	private void updateTTS() {
@@ -93,28 +141,23 @@ public class GodotTTS extends UtteranceProgressListener {
 					return;
 				}
 
-				Set<Voice> voices = synth.getVoices();
-				if (voices != null) {
-					for (Voice v : voices) {
-						if (v.getName().equals(message.voice)) {
-							synth.setVoice(v);
-							break;
-						}
-					}
+				if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+					CompatibilityTtsMethodsShim.setVoiceByName(synth, message.voice);
 				}
 
 				synth.setPitch(message.pitch);
 				synth.setSpeechRate(message.rate);
-
-				Bundle params = new Bundle();
-				params.putFloat(TextToSpeech.Engine.KEY_PARAM_VOLUME, message.volume / 100.f);
 
 				lastUtterance = message;
 				lastUtterance.start = 0;
 				lastUtterance.offset = 0;
 				paused = false;
 
-				synth.speak(message.text, mode, params, String.valueOf(message.id));
+				if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+					CompatibilityTtsMethodsShim.speak(synth, message.text, mode, message.volume / 100.f, String.valueOf(message.id));
+				} else {
+					speakLegacy(message.text, mode, message.volume / 100.f, String.valueOf(message.id));
+				}
 				speaking = true;
 			}
 		}
@@ -256,26 +299,22 @@ public class GodotTTS extends UtteranceProgressListener {
 			if (lastUtterance != null && paused) {
 				int mode = TextToSpeech.QUEUE_FLUSH;
 
-				Set<Voice> voices = synth.getVoices();
-				if (voices != null) {
-					for (Voice v : voices) {
-						if (v.getName().equals(lastUtterance.voice)) {
-							synth.setVoice(v);
-							break;
-						}
-					}
+				if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+					CompatibilityTtsMethodsShim.setVoiceByName(synth, lastUtterance.voice);
 				}
 				synth.setPitch(lastUtterance.pitch);
 				synth.setSpeechRate(lastUtterance.rate);
-
-				Bundle params = new Bundle();
-				params.putFloat(TextToSpeech.Engine.KEY_PARAM_VOLUME, lastUtterance.volume / 100.f);
 
 				lastUtterance.start = lastUtterance.offset;
 				lastUtterance.offset = 0;
 				paused = false;
 
-				synth.speak(lastUtterance.text.substring(lastUtterance.start), mode, params, String.valueOf(lastUtterance.id));
+				String textToSpeak = lastUtterance.text.substring(lastUtterance.start);
+				if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+					CompatibilityTtsMethodsShim.speak(synth, textToSpeak, mode, lastUtterance.volume / 100.f, String.valueOf(lastUtterance.id));
+				} else {
+					speakLegacy(textToSpeak, mode, lastUtterance.volume / 100.f, String.valueOf(lastUtterance.id));
+				}
 				speaking = true;
 			} else {
 				paused = false;
@@ -313,18 +352,12 @@ public class GodotTTS extends UtteranceProgressListener {
 			return new String[0];
 		}
 
-		Set<Voice> voices = synth.getVoices();
-		// Prevent nullptr if OS has no voices installed.
-		if (voices == null) {
+		if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+			return CompatibilityTtsMethodsShim.getVoiceList(synth);
+		} else {
+			// Pre-Lollipop fallback
 			return new String[0];
 		}
-
-		String[] list = new String[voices.size()];
-		int i = 0;
-		for (Voice v : voices) {
-			list[i++] = v.getLocale().toString() + ";" + v.getName();
-		}
-		return list;
 	}
 
 	/**

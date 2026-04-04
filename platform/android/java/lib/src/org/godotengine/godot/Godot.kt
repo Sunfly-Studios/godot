@@ -31,6 +31,7 @@
 package org.godotengine.godot
 
 import android.annotation.SuppressLint
+import android.annotation.TargetApi
 import android.app.Activity
 import android.app.AlertDialog
 import android.content.*
@@ -87,7 +88,6 @@ import java.util.*
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicReference
 
-
 /**
  * Core component used to interface with the native layer of the engine.
  *
@@ -108,6 +108,26 @@ class Godot(private val context: Context) {
 		 * @return true if this is an editor build, false if this is a template build
 		 */
 		fun isEditorBuild() = BuildConfig.FLAVOR == EDITOR_FLAVOR
+	}
+
+	// Shim class
+	private class CompatibilityMethodsShim {
+		companion object {
+			@TargetApi(Build.VERSION_CODES.O)
+			fun vibrate(vibrator: Vibrator, effect: VibrationEffect) {
+				vibrator.vibrate(effect)
+			}
+
+			@TargetApi(Build.VERSION_CODES.O)
+			fun createOneShot(ms: Long, amp: Int): VibrationEffect {
+				return VibrationEffect.createOneShot(ms, amp)
+			}
+			
+			@TargetApi(Build.VERSION_CODES.N)
+			fun hasSystemFeature(pm: PackageManager, feature: String, version: Int): Boolean {
+				return pm.hasSystemFeature(feature, version)
+			}
+		}
 	}
 
 	private val mSensorManager: SensorManager = context.getSystemService(Context.SENSOR_SERVICE) as SensorManager
@@ -990,13 +1010,13 @@ class Godot(private val context: Context) {
 			return false
 		}
 		if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-			if (!packageManager.hasSystemFeature(PackageManager.FEATURE_VULKAN_HARDWARE_LEVEL, 1)) {
+			if (!CompatibilityMethodsShim.hasSystemFeature(packageManager, PackageManager.FEATURE_VULKAN_HARDWARE_LEVEL, 1)) {
 				// Optional requirements.. log as warning if missing
 				Log.w(TAG, "The vulkan hardware level does not meet the minimum requirement: 1")
 			}
 
 			// Check for api version 1.0
-			return packageManager.hasSystemFeature(PackageManager.FEATURE_VULKAN_HARDWARE_VERSION, 0x400003)
+			return CompatibilityMethodsShim.hasSystemFeature(packageManager, PackageManager.FEATURE_VULKAN_HARDWARE_VERSION, 0x400003)
 		}
 		return false
 	}
@@ -1137,23 +1157,9 @@ class Godot(private val context: Context) {
 	private fun vibrate(durationMs: Int, amplitude: Int) {
 		if (durationMs > 0 && requestPermission("VIBRATE")) {
 			if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-				if (amplitude <= -1) {
-					vibratorService.vibrate(
-						VibrationEffect.createOneShot(
-							durationMs.toLong(),
-							VibrationEffect.DEFAULT_AMPLITUDE
-						)
-					)
-				} else {
-					vibratorService.vibrate(
-						VibrationEffect.createOneShot(
-							durationMs.toLong(),
-							amplitude
-						)
-					)
-				}
+				val effect = CompatibilityMethodsShim.createOneShot(durationMs.toLong(), amplitude)
+				CompatibilityMethodsShim.vibrate(vibratorService, effect)
 			} else {
-				// deprecated in API 26
 				vibratorService.vibrate(durationMs.toLong())
 			}
 		}

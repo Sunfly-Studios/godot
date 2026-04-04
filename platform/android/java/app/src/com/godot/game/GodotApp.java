@@ -34,9 +34,9 @@ import org.godotengine.godot.Godot;
 import org.godotengine.godot.GodotActivity;
 
 import android.os.Bundle;
+import android.os.Build;
 import android.util.Log;
 
-import androidx.activity.EdgeToEdge;
 import androidx.core.splashscreen.SplashScreen;
 
 import com.godot.game.BuildConfig;
@@ -69,8 +69,9 @@ public class GodotApp extends GodotActivity {
 
 	@Override
 	public void onCreate(Bundle savedInstanceState) {
-		SplashScreen.installSplashScreen(this);
-		EdgeToEdge.enable(this);
+		if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+			SplashScreen.installSplashScreen(this);
+		}
 		super.onCreate(savedInstanceState);
 	}
 

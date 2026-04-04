@@ -32,7 +32,7 @@
         android:icon="@mipmap/themed_icon"
         android:label="${editorAppName}${editorBuildSuffix}"
         android:requestLegacyExternalStorage="true"
-        android:theme="@style/GodotEditorSplashScreenTheme"
+        android:theme="@android:style/Theme.Black.NoTitleBar.Fullscreen"
         tools:ignore="GoogleAppIndexingWarning">
         <profileable
             android:shell="true"
@@ -66,7 +66,7 @@
             android:launchMode="singleTask"
             android:process=":GodotGame"
             android:autoRemoveFromRecents="true"
-            android:theme="@style/GodotGameTheme"
+            android:theme="@android:style/Theme.Black.NoTitleBar.Fullscreen"
             android:supportsPictureInPicture="true">
             <layout
                 android:defaultWidth="@dimen/editor_default_window_width"
@@ -78,7 +78,7 @@
             android:exported="false"
             android:icon="@mipmap/ic_play_window"
             android:label="@string/godot_game_activity_name"
-            android:theme="@style/GodotEmbeddedGameTheme"
+            android:theme="@android:style/Theme.Black.NoTitleBar.Fullscreen"
             android:taskAffinity=":embed"
             android:excludeFromRecents="true"
             android:launchMode="singleTask"

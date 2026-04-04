@@ -68,12 +68,12 @@ def get_android_ndk_root(env: "SConsEnvironment"):
 
 # This is kept in sync with the value in 'platform/android/java/app/config.gradle'.
 def get_ndk_version():
-    return "28.1.13356709"
+    return "25.2.9519653"
 
 
 # This is kept in sync with the value in 'platform/android/java/app/config.gradle'.
 def get_min_target_api():
-    return 21
+    return 19
 
 
 def get_flags():
@@ -125,6 +125,12 @@ def configure(env: "SConsEnvironment"):
             % (get_min_target_api(), get_min_target_api())
         )
         env["ndk_platform"] = "android-" + str(get_min_target_api())
+    elif "64" in env["arch"] and get_min_sdk_version(env["ndk_platform"]) < 21:
+        print_warning(
+            "Minimum supported Android target api for 64-bit targets is 21. Forcing target api 21."
+        )
+        env["ndk_platform"] = "android-" + str("21")
+
 
     install_ndk_if_needed(env)
     ndk_root = env["ANDROID_NDK_ROOT"]
@@ -216,9 +222,14 @@ def configure(env: "SConsEnvironment"):
         if has_swappy:
             env.Append(LIBPATH=["#thirdparty/swappy-frame-pacing/x86_64"])
     elif env["arch"] == "arm32":
-        env.Append(CCFLAGS=["-march=armv7-a", "-mfloat-abi=softfp", "-mfpu=vfpv3-d16"])
-        env.Append(CPPDEFINES=["__ARM_ARCH_7__", "__ARM_ARCH_7A__"])
-        env.Append(CPPDEFINES=["__ARM_NEON__"])
+        if get_min_target_api() >= 21:
+            env.Append(CCFLAGS=["-march=armv7-a", "-mfloat-abi=softfp", "-mfpu=vfpv3-d16"])
+            env.Append(CPPDEFINES=["__ARM_ARCH_7__", "__ARM_ARCH_7A__"])
+            env.Append(CPPDEFINES=["__ARM_NEON__"])
+        else:
+            env.Append(CCFLAGS=["-march=armv7-a", "-mfloat-abi=softfp", "-mfpu=neon"])
+            env.Append(CPPDEFINES=["__ARM_ARCH_7__", "__ARM_ARCH_7A__"])
+        
         if has_swappy:
             env.Append(LIBPATH=["#thirdparty/swappy-frame-pacing/armeabi-v7a"])
     elif env["arch"] == "arm64":
@@ -234,6 +245,7 @@ def configure(env: "SConsEnvironment"):
     env.Append(LINKFLAGS=["-Wl,--gc-sections", "-Wl,--no-undefined", "-Wl,-z,now"])
     env.Append(LINKFLAGS=["-Wl,--build-id"])
     env.Append(LINKFLAGS=["-Wl,-soname,libgodot_android.so"])
+    env.Append(LINKFLAGS=["-Wl,-z,max-page-size=16384"])
 
     env.Prepend(CPPPATH=["#platform/android"])
     env.Append(CPPDEFINES=["ANDROID_ENABLED", "UNIX_ENABLED"])
@@ -249,7 +261,7 @@ def configure(env: "SConsEnvironment"):
 
     if env["opengl1"]:
         env.Append(CPPDEFINES=["GLES1_ENABLED"])
-        env.Append(LIBS=["GLESv1"])
+        env.Append(LIBS=["GLESv1_CM"])
 
     if env["opengl2"]:
         env.Append(CPPDEFINES=["GLES2_ENABLED"])

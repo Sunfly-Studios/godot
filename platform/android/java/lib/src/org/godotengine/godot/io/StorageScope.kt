@@ -30,6 +30,7 @@
 
 package org.godotengine.godot.io
 
+import android.annotation.TargetApi
 import android.content.Context
 import android.os.Build
 import android.os.Environment
@@ -64,6 +65,13 @@ internal enum class StorageScope {
 
 		companion object {
 			internal const val ASSETS_PREFIX = "assets://"
+		}
+
+		private object CompatibilityStorageMethodsShim {
+			@TargetApi(Build.VERSION_CODES.R)
+			fun isExternalStorageManager(): Boolean {
+				return Environment.isExternalStorageManager()
+			}
 		}
 
 		private val internalAppDir: String? = context.filesDir.canonicalPath
@@ -104,7 +112,7 @@ internal enum class StorageScope {
 			// If we have 'All Files Access' permission, we can access all directories without
 			// restriction.
 			if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R
-				&& Environment.isExternalStorageManager()) {
+				&& CompatibilityStorageMethodsShim.isExternalStorageManager()) {
 				return APP
 			}
 

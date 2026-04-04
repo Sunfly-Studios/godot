@@ -44,9 +44,10 @@ import android.view.View
 import android.view.WindowManager
 import android.widget.TextView
 import android.widget.Toast
-import androidx.activity.enableEdgeToEdge
+// import androidx.activity.enableEdgeToEdge
 import androidx.annotation.CallSuper
 import androidx.core.content.edit
+import android.os.Build
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.core.view.isVisible
 import androidx.window.layout.WindowMetricsCalculator
@@ -211,11 +212,15 @@ abstract class BaseGodotEditor : GodotActivity(), GameMenuFragment.GameMenuListe
 	}
 
 	override fun onCreate(savedInstanceState: Bundle?) {
-		installSplashScreen()
+		if (Build.VERSION.SDK_INT >= 21) {
+			installSplashScreen()
+		}
 
 		val editorWindowInfo = getEditorWindowInfo()
 		if (editorWindowInfo == EDITOR_MAIN_INFO || editorWindowInfo == RUN_GAME_INFO) {
-			enableEdgeToEdge()
+			if (Build.VERSION.SDK_INT >= 21) {
+				// enableEdgeToEdge()
+			}
 		}
 
 		// We exclude certain permissions from the set we request at startup, as they'll be

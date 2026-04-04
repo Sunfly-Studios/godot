@@ -463,8 +463,15 @@ void OS_Android::_load_system_font_config() const {
 	parser.instantiate();
 	ERR_FAIL_COND(parser.is_null());
 
-	Error err = parser->open(String(getenv("ANDROID_ROOT")).path_join("/etc/fonts.xml"));
+	String android_root = String(getenv("ANDROID_ROOT"));
+	if (android_root.is_empty()) {
+		android_root = "/system";
+	}
+
+	Error err = parser->open(android_root.path_join("/etc/fonts.xml"));
+
 	if (err == OK) {
+		// Modern parsing (API 21+)
 		bool in_font_node = false;
 		String fb, fn;
 		FontInfo fi;
@@ -572,7 +579,92 @@ void OS_Android::_load_system_font_config() const {
 		}
 		parser->close();
 	} else {
-		ERR_PRINT("Unable to load font config");
+		// Legacy parsing (API < 21)
+		Vector<String> legacy_files;
+		legacy_files.push_back(android_root.path_join("/etc/system_fonts.xml"));
+		legacy_files.push_back(android_root.path_join("/etc/fallback_fonts.xml"));
+		
+		bool loaded_any = false;
+
+		for (int i = 0; i < legacy_files.size(); i++) {
+			if (parser->open(legacy_files[i]) == OK) {
+				loaded_any = true;
+				
+				bool in_nameset = false;
+				bool in_fileset = false;
+				bool in_name = false;
+				bool in_file = false;
+				
+				String current_family;
+				Vector<String> current_aliases;
+
+				while (parser->read() == OK) {
+					if (parser->get_node_type() == XMLParser::NODE_ELEMENT) {
+						String node_name = parser->get_node_name();
+						if (node_name == "family") {
+							current_family = String();
+							current_aliases.clear();
+						} else if (node_name == "nameset") {
+							in_nameset = true;
+						} else if (node_name == "fileset") {
+							in_fileset = true;
+						} else if (node_name == "name" && in_nameset) {
+							in_name = true;
+						} else if (node_name == "file" && in_fileset) {
+							in_file = true;
+						}
+					} else if (parser->get_node_type() == XMLParser::NODE_TEXT) {
+						String text = parser->get_node_data().strip_edges();
+						if (in_name && !text.is_empty()) {
+							if (current_family.is_empty()) {
+								current_family = text; // First name is the main family
+							} else {
+								current_aliases.push_back(text); // Subsequent names are aliases
+							}
+						} else if (in_file && !text.is_empty()) {
+							FontInfo fi;
+							fi.filename = text;
+							fi.font_name = current_family.is_empty() ? "sans-serif" : current_family;
+							
+							// fallback_fonts.xml families generally don't have namesets
+							if (current_family.is_empty()) {
+								fi.priority = 5; 
+							}
+
+							// Legacy XML didn't have weight/style attributes, it relied on the OS 
+							// parsing the TrueType names. We can approximate it from the filename.
+							String lower_filename = text.to_lower();
+							fi.weight = lower_filename.contains("-bold") ? 700 : 400;
+							fi.italic = lower_filename.contains("-italic");
+
+							fonts.push_back(fi);
+							font_names.insert(fi.font_name);
+						}
+					} else if (parser->get_node_type() == XMLParser::NODE_ELEMENT_END) {
+						String node_name = parser->get_node_name();
+						if (node_name == "nameset") {
+							in_nameset = false;
+						} else if (node_name == "fileset") {
+							in_fileset = false;
+						} else if (node_name == "name") {
+							in_name = false;
+						} else if (node_name == "file") {
+							in_file = false;
+						} else if (node_name == "family") {
+							// Register gathered aliases
+							for (int j = 0; j < current_aliases.size(); j++) {
+								font_aliases[current_aliases[j]] = current_family;
+							}
+						}
+					}
+				}
+				parser->close();
+			}
+		}
+
+		if (!loaded_any) {
+			ERR_PRINT("Unable to load font config (neither modern nor legacy files found)");
+		}
 	}
 
 	font_config_loaded = true;

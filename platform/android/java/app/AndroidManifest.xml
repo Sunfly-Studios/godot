@@ -5,6 +5,8 @@
     android:versionName="1.0"
     android:installLocation="auto" >
 
+    <uses-sdk tools:overrideLibrary="androidx.core.splashscreen, androidx.activity" />
+
     <supports-screens
         android:smallScreens="true"
         android:normalScreens="true"
@@ -42,7 +44,7 @@
         <activity
             android:name=".GodotApp"
             android:label="@string/godot_project_name_string"
-            android:theme="@style/GodotAppSplashTheme"
+            android:theme="@android:style/Theme.Black.NoTitleBar.Fullscreen"
             android:launchMode="singleInstancePerTask"
             android:excludeFromRecents="false"
             android:exported="true"

@@ -53,6 +53,10 @@ import android.view.KeyEvent;
 import android.view.MotionEvent;
 import android.view.PointerIcon;
 import android.view.SurfaceView;
+import android.annotation.TargetApi;
+import android.content.Context;
+import android.util.Log;
+import android.view.View;
 
 import androidx.annotation.Keep;
 
@@ -81,7 +85,35 @@ class GodotGLRenderView extends GLSurfaceView implements GodotRenderView {
 	private final Godot godot;
 	private final GodotInputHandler inputHandler;
 	private final GodotRenderer godotRenderer;
-	private final SparseArray<PointerIcon> customPointerIcons = new SparseArray<>();
+	private final SparseArray<Object> customPointerIcons = new SparseArray<>();
+
+	// Shim class
+	private static class CompatibilityViewShim {
+		@TargetApi(Build.VERSION_CODES.O)
+		static void requestPointerCapture(View view) {
+			view.requestPointerCapture();
+		}
+
+		@TargetApi(Build.VERSION_CODES.O)
+		static void releasePointerCapture(View view) {
+			view.releasePointerCapture();
+		}
+
+		@TargetApi(Build.VERSION_CODES.N)
+		static void setPointerIcon(View view, Object icon) {
+			view.setPointerIcon((android.view.PointerIcon) icon);
+		}
+
+		@TargetApi(Build.VERSION_CODES.N)
+		static Object getSystemIcon(Context context, int type) {
+			return android.view.PointerIcon.getSystemIcon(context, type);
+		}
+
+		@TargetApi(Build.VERSION_CODES.N)
+		static Object createPointerIcon(Bitmap bitmap, float x, float y) {
+			return android.view.PointerIcon.create(bitmap, x, y);
+		}
+	}
 
 	public GodotGLRenderView(
 		GodotHost host,
@@ -100,7 +132,8 @@ class GodotGLRenderView extends GLSurfaceView implements GodotRenderView {
 		this.inputHandler = inputHandler;
 		this.godotRenderer = new GodotRenderer();
 		if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-			setPointerIcon(PointerIcon.getSystemIcon(getContext(), PointerIcon.TYPE_DEFAULT));
+			// 1000 is PointerIcon.TYPE_DEFAULT.
+			CompatibilityViewShim.setPointerIcon(this, CompatibilityViewShim.getSystemIcon(getContext(), 1000));
 		}
 		init(xrMode, shouldBeTranslucent, useDebugOpengl, glMajor, glMinor);
 	}
@@ -187,21 +220,25 @@ class GodotGLRenderView extends GLSurfaceView implements GodotRenderView {
 
 	@Override
 	public void onPointerCaptureChange(boolean hasCapture) {
-		super.onPointerCaptureChange(hasCapture);
+		if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+			// super.onPointerCaptureChange(hasCapture); 
+		}
 		inputHandler.onPointerCaptureChange(hasCapture);
 	}
 
 	@Override
 	public void requestPointerCapture() {
-		if (canCapturePointer()) {
-			super.requestPointerCapture();
+		if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+			CompatibilityViewShim.requestPointerCapture(this);
 			inputHandler.onPointerCaptureChange(true);
 		}
 	}
 
 	@Override
 	public void releasePointerCapture() {
-		super.releasePointerCapture();
+		if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+			CompatibilityViewShim.releasePointerCapture(this);
+		}
 		inputHandler.onPointerCaptureChange(false);
 	}
 
@@ -228,7 +265,12 @@ class GodotGLRenderView extends GLSurfaceView implements GodotRenderView {
 					}
 				}
 
-				PointerIcon customPointerIcon = PointerIcon.create(bitmap, hotSpotX, hotSpotY);
+				if (bitmap == null) {
+					Log.w("Godot", "Failed to load pointer icon: " + imagePath);
+					return; // Safely abort without crashing
+				}
+
+				Object customPointerIcon = CompatibilityViewShim.createPointerIcon(bitmap, hotSpotX, hotSpotY);
 				customPointerIcons.put(pointerType, customPointerIcon);
 			} catch (Exception e) {
 				// Reset the custom pointer icon
@@ -245,21 +287,13 @@ class GodotGLRenderView extends GLSurfaceView implements GodotRenderView {
 	public void setPointerIcon(final int pointerType) {
 		if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
 			host.getActivity().runOnUiThread(() -> {
-				PointerIcon pointerIcon = customPointerIcons.get(pointerType);
+				Object pointerIcon = customPointerIcons.get(pointerType);
 				if (pointerIcon == null) {
-					pointerIcon = PointerIcon.getSystemIcon(getContext(), pointerType);
+					pointerIcon = CompatibilityViewShim.getSystemIcon(getContext(), pointerType);
 				}
-				GodotGLRenderView.super.setPointerIcon(pointerIcon);
+				CompatibilityViewShim.setPointerIcon(this, pointerIcon);
 			});
 		}
-	}
-
-	@Override
-	public PointerIcon onResolvePointerIcon(MotionEvent me, int pointerIndex) {
-		if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-			return getPointerIcon();
-		}
-		return super.onResolvePointerIcon(me, pointerIndex);
 	}
 
 	private void init(XRMode xrMode, boolean translucent, boolean useDebugOpengl, int glMajor, int glMinor) {

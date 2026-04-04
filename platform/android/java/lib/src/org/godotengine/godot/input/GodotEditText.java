@@ -32,6 +32,7 @@ package org.godotengine.godot.input;
 
 import org.godotengine.godot.*;
 
+import android.annotation.TargetApi;
 import android.content.Context;
 import android.content.res.Configuration;
 import android.os.Build;
@@ -91,6 +92,13 @@ public class GodotEditText extends EditText {
 			if (edit != null) {
 				edit.handleMessage(msg);
 			}
+		}
+	}
+
+	private static class CompatibilityKeyListenerShim {
+		@TargetApi(Build.VERSION_CODES.O)
+		static android.text.method.KeyListener getDigitsKeyListener(Locale locale) {
+			return android.text.method.DigitsKeyListener.getInstance(locale);
 		}
 	}
 
@@ -170,9 +178,9 @@ public class GodotEditText extends EditText {
 
 					if (!TextUtils.isEmpty(acceptCharacters)) {
 						if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-							edit.setKeyListener(DigitsKeyListener.getInstance(Locale.getDefault()));
+							edit.setKeyListener(CompatibilityKeyListenerShim.getDigitsKeyListener(Locale.getDefault()));
 						} else {
-							edit.setKeyListener(DigitsKeyListener.getInstance(acceptCharacters));
+							edit.setKeyListener(android.text.method.DigitsKeyListener.getInstance(acceptCharacters));
 						}
 					}
 

@@ -33,6 +33,8 @@ package org.godotengine.godot;
 import org.godotengine.godot.error.Error;
 import org.godotengine.godot.input.GodotEditText;
 
+import android.annotation.TargetApi;
+import android.view.View;
 import android.app.Activity;
 import android.content.Intent;
 import android.content.pm.ActivityInfo;
@@ -45,8 +47,9 @@ import android.text.TextUtils;
 import android.util.DisplayMetrics;
 import android.util.Log;
 import android.view.Display;
-import android.view.DisplayCutout;
-import android.view.WindowInsets;
+
+// import android.view.DisplayCutout;
+// import android.view.WindowInsets;
 
 import androidx.core.content.FileProvider;
 
@@ -71,6 +74,47 @@ public class GodotIO {
 	final int SCREEN_SENSOR_LANDSCAPE = 4;
 	final int SCREEN_SENSOR_PORTRAIT = 5;
 	final int SCREEN_SENSOR = 6;
+
+	private static class CompatibilityViewMethodsShim {
+		@TargetApi(Build.VERSION_CODES.P)
+		static void adjustSafeAreaForCutout(View decorView, int[] result) {
+			android.view.WindowInsets insets = decorView.getRootWindowInsets();
+			if (insets != null) {
+				android.view.DisplayCutout cutout = insets.getDisplayCutout();
+				if (cutout != null) {
+					int insetLeft = cutout.getSafeInsetLeft();
+					int insetTop = cutout.getSafeInsetTop();
+					result[0] = insetLeft;
+					result[1] = insetTop;
+					result[2] -= insetLeft + cutout.getSafeInsetRight();
+					result[3] -= insetTop + cutout.getSafeInsetBottom();
+				}
+			}
+		}
+
+		@TargetApi(Build.VERSION_CODES.P)
+		static int[] getDisplayCutouts(View decorView) {
+			android.view.WindowInsets insets = decorView.getRootWindowInsets();
+			if (insets == null) {
+				return new int[0];
+			}
+			android.view.DisplayCutout cutout = insets.getDisplayCutout();
+			if (cutout == null) {
+				return new int[0];
+			}
+			List<Rect> rects = cutout.getBoundingRects();
+			int cutouts = rects.size();
+			int[] result = new int[cutouts * 4];
+			int index = 0;
+			for (Rect rect : rects) {
+				result[index++] = rect.left;
+				result[index++] = rect.top;
+				result[index++] = rect.width();
+				result[index++] = rect.height();
+			}
+			return result;
+		}
+	}
 
 	GodotIO(Activity p_activity) {
 		activity = p_activity;
@@ -195,16 +239,7 @@ public class GodotIO {
 
 		int[] result = { rect.left, rect.top, rect.right, rect.bottom };
 		if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-			WindowInsets insets = activity.getWindow().getDecorView().getRootWindowInsets();
-			DisplayCutout cutout = insets.getDisplayCutout();
-			if (cutout != null) {
-				int insetLeft = cutout.getSafeInsetLeft();
-				int insetTop = cutout.getSafeInsetTop();
-				result[0] = insetLeft;
-				result[1] = insetTop;
-				result[2] -= insetLeft + cutout.getSafeInsetRight();
-				result[3] -= insetTop + cutout.getSafeInsetBottom();
-			}
+			CompatibilityViewMethodsShim.adjustSafeAreaForCutout(activity.getWindow().getDecorView(), result);
 		}
 		return result;
 	}
@@ -212,20 +247,8 @@ public class GodotIO {
 	public int[] getDisplayCutouts() {
 		if (Build.VERSION.SDK_INT < Build.VERSION_CODES.P)
 			return new int[0];
-		DisplayCutout cutout = activity.getWindow().getDecorView().getRootWindowInsets().getDisplayCutout();
-		if (cutout == null)
-			return new int[0];
-		List<Rect> rects = cutout.getBoundingRects();
-		int cutouts = rects.size();
-		int[] result = new int[cutouts * 4];
-		int index = 0;
-		for (Rect rect : rects) {
-			result[index++] = rect.left;
-			result[index++] = rect.top;
-			result[index++] = rect.width();
-			result[index++] = rect.height();
-		}
-		return result;
+		
+		return CompatibilityViewMethodsShim.getDisplayCutouts(activity.getWindow().getDecorView());
 	}
 
 	public boolean hasHardwareKeyboard() {

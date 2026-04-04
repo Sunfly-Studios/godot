@@ -35,6 +35,7 @@ import org.godotengine.godot.vulkan.VkRenderer;
 import org.godotengine.godot.vulkan.VkSurfaceView;
 
 import android.annotation.SuppressLint;
+import android.annotation.TargetApi;
 import android.content.Context;
 import android.content.res.AssetManager;
 import android.graphics.Bitmap;
@@ -48,6 +49,7 @@ import android.view.KeyEvent;
 import android.view.MotionEvent;
 import android.view.PointerIcon;
 import android.view.SurfaceView;
+import android.view.View;
 
 import androidx.annotation.Keep;
 
@@ -60,6 +62,34 @@ class GodotVulkanRenderView extends VkSurfaceView implements GodotRenderView {
 	private final VkRenderer mRenderer;
 	private final SparseArray<PointerIcon> customPointerIcons = new SparseArray<>();
 
+	// Shim class
+	private static class CompatibilityViewShim {
+		@TargetApi(Build.VERSION_CODES.O)
+		static void requestPointerCapture(View view) {
+			view.requestPointerCapture();
+		}
+
+		@TargetApi(Build.VERSION_CODES.O)
+		static void releasePointerCapture(View view) {
+			view.releasePointerCapture();
+		}
+
+		@TargetApi(Build.VERSION_CODES.N)
+		static void setPointerIcon(View view, Object icon) {
+			view.setPointerIcon((android.view.PointerIcon) icon);
+		}
+
+		@TargetApi(Build.VERSION_CODES.N)
+		static Object getSystemIcon(Context context, int type) {
+			return android.view.PointerIcon.getSystemIcon(context, type);
+		}
+
+		@TargetApi(Build.VERSION_CODES.N)
+		static Object createPointerIcon(Bitmap bitmap, float x, float y) {
+			return android.view.PointerIcon.create(bitmap, x, y);
+		}
+	}
+
 	public GodotVulkanRenderView(GodotHost host, Godot godot, GodotInputHandler inputHandler, boolean shouldBeTranslucent) {
 		super(host.getActivity());
 
@@ -68,7 +98,8 @@ class GodotVulkanRenderView extends VkSurfaceView implements GodotRenderView {
 		mInputHandler = inputHandler;
 		mRenderer = new VkRenderer();
 		if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-			setPointerIcon(PointerIcon.getSystemIcon(getContext(), PointerIcon.TYPE_DEFAULT));
+			// 1000 is PointerIcon.TYPE_DEFAULT.
+			CompatibilityViewShim.setPointerIcon(this, CompatibilityViewShim.getSystemIcon(getContext(), 1000));
 		}
 		setFocusableInTouchMode(true);
 		setClickable(false);
@@ -165,21 +196,25 @@ class GodotVulkanRenderView extends VkSurfaceView implements GodotRenderView {
 
 	@Override
 	public void requestPointerCapture() {
-		if (canCapturePointer()) {
-			super.requestPointerCapture();
+		if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+			CompatibilityViewShim.requestPointerCapture(this);
 			mInputHandler.onPointerCaptureChange(true);
 		}
 	}
 
 	@Override
 	public void releasePointerCapture() {
-		super.releasePointerCapture();
+		if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+			CompatibilityViewShim.releasePointerCapture(this);
+		}
 		mInputHandler.onPointerCaptureChange(false);
 	}
 
 	@Override
 	public void onPointerCaptureChange(boolean hasCapture) {
-		super.onPointerCaptureChange(hasCapture);
+		if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+			// super.onPointerCaptureChange(hasCapture); 
+		}
 		mInputHandler.onPointerCaptureChange(hasCapture);
 	}
 
@@ -210,8 +245,8 @@ class GodotVulkanRenderView extends VkSurfaceView implements GodotRenderView {
 					return; // Safely abort without crashing
 				}
 
-				PointerIcon customPointerIcon = PointerIcon.create(bitmap, hotSpotX, hotSpotY);
-				customPointerIcons.put(pointerType, customPointerIcon);
+				Object customPointerIcon = CompatibilityViewShim.createPointerIcon(bitmap, hotSpotX, hotSpotY);
+				customPointerIcons.put(pointerType, (PointerIcon)customPointerIcon);
 			} catch (Exception e) {
 				Log.e("Godot", "Error configuring pointer icon", e);
 				customPointerIcons.delete(pointerType);
@@ -227,20 +262,12 @@ class GodotVulkanRenderView extends VkSurfaceView implements GodotRenderView {
 	public void setPointerIcon(final int pointerType) {
 		if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
 			host.getActivity().runOnUiThread(() -> {
-				PointerIcon pointerIcon = customPointerIcons.get(pointerType);
+				Object pointerIcon = customPointerIcons.get(pointerType);
 				if (pointerIcon == null) {
-					pointerIcon = PointerIcon.getSystemIcon(getContext(), pointerType);
+					pointerIcon = CompatibilityViewShim.getSystemIcon(getContext(), pointerType);
 				}
-				GodotVulkanRenderView.super.setPointerIcon(pointerIcon);
+				CompatibilityViewShim.setPointerIcon(this, pointerIcon);
 			});
 		}
-	}
-
-	@Override
-	public PointerIcon onResolvePointerIcon(MotionEvent me, int pointerIndex) {
-		if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-			return getPointerIcon();
-		}
-		return super.onResolvePointerIcon(me, pointerIndex);
 	}
 }

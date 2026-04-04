@@ -54,6 +54,7 @@ import android.view.ScaleGestureDetector;
 import android.view.Surface;
 import android.view.WindowManager;
 
+import android.annotation.TargetApi;
 import androidx.annotation.NonNull;
 
 import java.util.Collections;
@@ -66,6 +67,28 @@ import java.util.concurrent.atomic.AtomicInteger;
  */
 public class GodotInputHandler implements InputManager.InputDeviceListener, SensorEventListener {
 	private static final String TAG = GodotInputHandler.class.getSimpleName();
+
+	private static class CompatibilityInputMethodShim {
+		@TargetApi(Build.VERSION_CODES.M)
+		static void setStylusScaleEnabled(ScaleGestureDetector detector, boolean enabled) {
+			detector.setStylusScaleEnabled(enabled);
+		}
+
+		@TargetApi(Build.VERSION_CODES.M)
+		static boolean onGenericMotionEvent(GestureDetector detector, MotionEvent event) {
+			return detector.onGenericMotionEvent(event);
+		}
+
+		@TargetApi(Build.VERSION_CODES.P)
+		static boolean isExternal(InputDevice device) {
+			return device.isExternal();
+		}
+
+		@TargetApi(Build.VERSION_CODES.LOLLIPOP)
+		static boolean supportsSource(InputDevice device, int source) {
+			return device.supportsSource(source);
+		}
+	}
 
 	private static final int ROTARY_INPUT_VERTICAL_AXIS = 1;
 	private static final int ROTARY_INPUT_HORIZONTAL_AXIS = 0;
@@ -111,7 +134,7 @@ public class GodotInputHandler implements InputManager.InputDeviceListener, Sens
 		this.gestureDetector.setIsLongpressEnabled(false);
 		this.scaleGestureDetector = new ScaleGestureDetector(context, godotGestureHandler);
 		if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-			this.scaleGestureDetector.setStylusScaleEnabled(true);
+			CompatibilityInputMethodShim.setStylusScaleEnabled(this.scaleGestureDetector, true);
 		}
 	}
 
@@ -287,7 +310,7 @@ public class GodotInputHandler implements InputManager.InputDeviceListener, Sens
 			return false;
 		}
 
-		if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && gestureDetector.onGenericMotionEvent(event)) {
+		if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && CompatibilityInputMethodShim.onGenericMotionEvent(gestureDetector, event)) {
 			// The gesture detector has handled the event.
 			return true;
 		}
@@ -338,17 +361,20 @@ public class GodotInputHandler implements InputManager.InputDeviceListener, Sens
 		}
 
 		// Device may be an external keyboard; store the device id
-		if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q &&
-				device.supportsSource(InputDevice.SOURCE_KEYBOARD) &&
-				device.isExternal() &&
-				device.getKeyboardType() == InputDevice.KEYBOARD_TYPE_ALPHABETIC) {
-			mHardwareKeyboardIds.add(deviceId);
+		if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+			if (CompatibilityInputMethodShim.supportsSource(device, InputDevice.SOURCE_KEYBOARD)) {
+				if (CompatibilityInputMethodShim.isExternal(device) && device.getKeyboardType() == InputDevice.KEYBOARD_TYPE_ALPHABETIC) {
+					mHardwareKeyboardIds.add(deviceId);
+				}
+			}
 		}
 
 		// Device may not be a joystick or gamepad
-		if (!device.supportsSource(InputDevice.SOURCE_GAMEPAD) &&
-				!device.supportsSource(InputDevice.SOURCE_JOYSTICK)) {
-			return;
+		if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+			if (!CompatibilityInputMethodShim.supportsSource(device, InputDevice.SOURCE_GAMEPAD) &&
+					!CompatibilityInputMethodShim.supportsSource(device, InputDevice.SOURCE_JOYSTICK)) {
+				return;
+			}
 		}
 
 		for (String name : JOYPAD_IGNORE_LIST) {
@@ -470,7 +496,8 @@ public class GodotInputHandler implements InputManager.InputDeviceListener, Sens
 				boolean mouseSource =
 						((eventSource & InputDevice.SOURCE_MOUSE) == InputDevice.SOURCE_MOUSE) ||
 						((eventSource & (InputDevice.SOURCE_TOUCHSCREEN | InputDevice.SOURCE_STYLUS)) == InputDevice.SOURCE_STYLUS);
-				if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+				if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && 
+						event.isFromSource(InputDevice.SOURCE_ROTARY_ENCODER)) {
 					mouseSource = mouseSource ||
 							((eventSource & InputDevice.SOURCE_MOUSE_RELATIVE) == InputDevice.SOURCE_MOUSE_RELATIVE);
 				}
@@ -773,6 +800,13 @@ public class GodotInputHandler implements InputManager.InputDeviceListener, Sens
 
 	private void updateCachedRotation() {
 		cachedRotation = windowManager.getDefaultDisplay().getRotation();
+	}
+
+	private boolean isDeviceExternal(InputDevice device) {
+		if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+			return CompatibilityInputMethodShim.isExternal(device);
+		}
+		return false;
 	}
 
 	public void onConfigurationChanged(Configuration newConfig) {

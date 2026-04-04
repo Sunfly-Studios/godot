@@ -87,6 +87,7 @@ public class RegularContextFactory implements GLSurfaceView.EGLContextFactory {
 		} else {
 			context = egl.eglCreateContext(display, eglConfig, EGL10.EGL_NO_CONTEXT, attrib_list);
 		}
+
 		GLUtils.checkEglError(TAG, "After eglCreateContext", egl);
 		return context;
 	}
