@@ -64,7 +64,7 @@ if env["builtin_embree"]:
 
     env_raycast.Prepend(CPPPATH=[thirdparty_dir, thirdparty_dir + "include"])
     
-    if env["sse2"]:
+    if env["sse_level"] == "2":
         env_raycast.Append(CPPDEFINES=["EMBREE_TARGET_SSE2", "EMBREE_LOWEST_ISA", "TASKING_INTERNAL"])
     else:
         env_raycast.Append(CPPDEFINES=["EMBREE_LOWEST_ISA", "TASKING_INTERNAL"])
@@ -86,10 +86,11 @@ if env["builtin_embree"]:
 
     if env["arch"] != "x86_64" or env.msvc:
         # Embree needs those, it will automatically use SSE2NEON in ARM
-        if env["sse2"]:
+        if env["sse_level"] == 2:
             env_thirdparty.Append(CPPDEFINES=["__SSE2__", "__SSE__"])
-        else:
+        elif env["sse_level"] == 1:
             env_thirdparty.Append(CPPDEFINES=["__SSE__"])
+
 
     if env["platform"] == "web":
         env_thirdparty.Append(CXXFLAGS=["-msimd128"])

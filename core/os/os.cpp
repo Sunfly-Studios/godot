@@ -641,17 +641,21 @@ bool OS::has_feature(const String &p_feature) {
 
 #if defined(__x86_64__) || defined(__amd64__) || defined(__i386__) || defined(_M_X64) || defined(_M_IX86)
 	#if defined(__x86_64__) || defined(__amd64__) || defined(_M_X64)
-		if (p_feature == "sse" || p_feature == "sse2") {
+		if (p_feature == "mmx" || p_feature == "sse" || p_feature == "sse2") {
 			return true;
 		}
 	#else
-		#if defined(NO_SSE2)
+		#if __SSE_LEVEL__ == 2
+			// (Checking for "sse2" implies "sse" and "mmx" is also supported).
+			if (p_feature == "mmx" || p_feature == "sse" || p_feature == "sse2") {
+				return true;
+			}
+		#elif __SSE_LEVEL__ == 1
 			if (p_feature == "sse") {
 				return true;
 			}
 		#else
-			// (Checking for "sse2" implies "sse" is also supported).
-			if (p_feature == "sse" || p_feature == "sse2") {
+			if (p_feature == "mmx") {
 				return true;
 			}
 		#endif

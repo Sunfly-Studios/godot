@@ -1,5 +1,5 @@
 def can_build(env, platform):
-    if not env["sse2"]:
+    if env["sse_level"] != "2":
         return False
     if env["arch"].startswith("rv"):
         return False

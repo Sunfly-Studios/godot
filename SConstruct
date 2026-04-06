@@ -240,7 +240,7 @@ opts.Add(BoolVariable("engine_update_check", "Enable engine update checks in the
 opts.Add(BoolVariable("steamapi", "Enable minimal SteamAPI integration for usage time tracking (editor only)", False))
 opts.Add("cache_path", "Path to a directory where SCons cache files will be stored. No value disables the cache.", "")
 opts.Add("cache_limit", "Max size (in GiB) for the SCons cache. 0 means no limit.", "0")
-opts.Add(BoolVariable("sse2", "Compile with SSE2 support", True))
+opts.Add("sse_level", "Dictates the level of SSE used for x86 builds. Where 0 = MMX, 1 = SSE, 2 = SSE2", "2")
 opts.Add(BoolVariable("older_linux", "Enable some codepaths for older Linux (GLIBC < 2.11)", False))
 
 # Thirdparty libraries
@@ -708,12 +708,14 @@ elif env.msvc:
 
 # Default architecture flags.
 if env["arch"] == "x86_32":
-    if env["sse2"]:
+    if env["sse_level"] == "2":
         if env.msvc:
             env.Append(CCFLAGS=["/arch:SSE2"])
         else:
             env.Append(CCFLAGS=["-msse2", "-mfpmath=sse", "-mstackrealign"])
-    else:
+        
+        env.Append(CPPDEFINES=[("__SSE_LEVEL__", "2")])
+    elif env["sse_level"] == "1":
         if env.msvc:
             if env["use_llvm"]:
                 # Force clang-cl to 32-bit mode
@@ -727,7 +729,30 @@ if env["arch"] == "x86_32":
             # It will automatically fallback to 387 for doubles (since SSE1 can't handle them).
             # But be explicit never hurts anyway.
             env.Append(CCFLAGS=["-msse", "-mno-sse2", "-mfpmath=sse,387"])
-        env.Append(CPPDEFINES=["NO_SSE2"])
+        
+        env.Append(CPPDEFINES=[("__SSE_LEVEL__", "1")])
+    else: # MMX
+        if env.msvc:
+            if env["use_llvm"]:
+                env.Append(CCFLAGS=["-m32"])
+                env.Append(LINKFLAGS=["-m32"])
+            
+            # /arch:IA32 disables SSE/SSE2 defaults in modern MSVC
+            # It forces standard floating-point operations to use the x87 FPU.
+            env.Append(CCFLAGS=["/arch:IA32"])
+        else:
+            env.Append(CCFLAGS=["-mmmx", "-mno-sse", "-mno-sse2", "-mfpmath=387"])
+            
+        env.Append(CPPDEFINES=[("__SSE_LEVEL__", "0")])
+
+elif env["arch"] == "x86_64":
+    # x86_64 guarantees at least SSE2 or higher.
+    if env["sse_level"] != "2":
+        print_warning("x86_64 requires SSE2. Enabling SSE2.")
+        env["sse_level"] = "2"
+    
+    env.Append(CPPDEFINES=[("__SSE_LEVEL__", "2")])
+
 
 detect_and_set_32_bit_arch(env)
 
@@ -998,8 +1023,11 @@ if env["precision"] == "double":
 
 suffix += "." + env["arch"]
 
-if not env["sse2"]:
-    suffix += ".sse1"
+if env["sse_level"] != "2":
+    if env["sse_level"] == "1":
+        suffix += ".sse1"
+    else:
+        suffix += ".mmx"
 
 if not env["threads"]:
     suffix += ".nothreads"

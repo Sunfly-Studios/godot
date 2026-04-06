@@ -8,7 +8,7 @@
 
 JPH_NAMESPACE_BEGIN
 
-#if defined(JPH_CPU_WASM) || defined(NO_SSE2)
+#if defined(JPH_CPU_WASM) || __SSE_LEVEL__ < 2
 
 // Not supported
 

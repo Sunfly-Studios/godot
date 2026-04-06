@@ -82,6 +82,7 @@ void EditorExportPlatformOpenHarmony::get_preset_features(const Ref<EditorExport
 		r_features->push_back("arm64");
 	} else if (architecture == "x86_64") {
 		r_features->push_back("x86_64");
+		r_features->push_back("mmx");
 		r_features->push_back("sse");
 		r_features->push_back("sse2");
 	}

@@ -52,7 +52,7 @@ if env["builtin_libpng"]:
             thirdparty_obj += neon_sources
     elif env["arch"].startswith("x86"):
         env_thirdparty.Append(CPPDEFINES=["PNG_INTEL_SSE"])
-        if env["sse2"]:
+        if env["sse_level"] == "2":
             env_thirdparty.add_source_files(thirdparty_obj, thirdparty_dir + "intel/intel_init.c")
             env_thirdparty.add_source_files(thirdparty_obj, thirdparty_dir + "intel/filter_sse2_intrinsics.c")
     elif env["arch"] == "loongarch64":

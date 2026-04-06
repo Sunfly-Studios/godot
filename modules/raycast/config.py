@@ -1,5 +1,5 @@
 def can_build(env, platform):
-    if not env["sse2"]:
+    if env["sse_level"] != "2":
         return False
     
     # Supported architectures and platforms depend on the Embree library.

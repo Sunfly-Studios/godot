@@ -45,8 +45,13 @@ void EditorExportPlatformPC::get_preset_features(const Ref<EditorExportPreset> &
 	}
 
 	if (architecture == "x86_64" || architecture == "x86_32") {
+#if __SSE_LEVEL__ >= 0
+		r_features->push_back("mmx");
+#endif
+#if __SSE_LEVEL__ >= 1
 		r_features->push_back("sse");
-#ifndef NO_SSE2
+#endif
+#if __SSE_LEVEL__ >= 2
 		r_features->push_back("sse2");
 #endif
 	}

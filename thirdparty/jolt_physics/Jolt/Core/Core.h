@@ -127,7 +127,7 @@
 	#else
 		#define JPH_CPU_ADDRESS_BITS 32
 	#endif
-	#if !defined(NO_SSE2)
+	#if __SSE_LEVEL__ >= 2
 		#define JPH_USE_SSE
 	#endif
 	#define JPH_VECTOR_ALIGNMENT 16

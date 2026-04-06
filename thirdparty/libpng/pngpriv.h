@@ -212,7 +212,7 @@
 #         define PNG_INTEL_SSE_IMPLEMENTATION 3
 #      elif defined(__SSSE3__)
 #         define PNG_INTEL_SSE_IMPLEMENTATION 2
-#      elif !defined(NO_SSE2)
+#      elif __SSE_LEVEL__ >= 2
 #        if defined(__SSE2__) || defined(_M_X64) || defined(_M_AMD64) || \
          (defined(_M_IX86_FP) && _M_IX86_FP >= 2)
 #           define PNG_INTEL_SSE_IMPLEMENTATION 1

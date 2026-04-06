@@ -60,6 +60,7 @@ void EditorExportPlatformIOS::get_preset_features(const Ref<EditorExportPreset> 
 		r_features->push_back(arch);
 
 		if (arch == "x86_64") {
+			r_features->push_back("mmx");
 			r_features->push_back("sse");
 			r_features->push_back("sse2");
 		}

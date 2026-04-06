@@ -206,9 +206,9 @@ def configure(env: "SConsEnvironment"):
         env.Append(CPPDEFINES=[("_FILE_OFFSET_BITS", 64)])
 
     if env["arch"] == "x86_32":
-        if not env["sse2"]:
+        if env["sse_level"] < "2":
             # 32-bit Android builds require SSE2.
-            env["sse2"] = True
+            env["sse_level"] = "2"
         env.Append(CCFLAGS=["-mstackrealign"])
         if has_swappy:
             env.Append(LIBPATH=["#thirdparty/swappy-frame-pacing/x86"])
