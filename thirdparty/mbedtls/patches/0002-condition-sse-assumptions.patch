@@ -1,0 +1,24 @@
+diff --git a/thirdparty/mbedtls/include/mbedtls/mbedtls_config.h b/thirdparty/mbedtls/include/mbedtls/mbedtls_config.h
+index 45feb5eccb..50a198ed71 100644
+--- a/thirdparty/mbedtls/include/mbedtls/mbedtls_config.h
++++ b/thirdparty/mbedtls/include/mbedtls/mbedtls_config.h
+@@ -2316,7 +2316,9 @@
+  *
+  * This modules adds support for the AES-NI instructions on x86.
+  */
++#if __SSE_LEVEL__ >= 2
+ #define MBEDTLS_AESNI_C
++#endif
+ 
+ /**
+  * \def MBEDTLS_AESCE_C
+@@ -3089,7 +3091,9 @@
+  *
+  * This modules adds support for the VIA PadLock on x86.
+  */
++#if __SSE_LEVEL__ >= 2
+ #define MBEDTLS_PADLOCK_C
++#endif
+ 
+ /**
+  * \def MBEDTLS_PEM_PARSE_C

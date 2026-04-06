@@ -2316,7 +2316,9 @@
  *
  * This modules adds support for the AES-NI instructions on x86.
  */
+#if __SSE_LEVEL__ >= 2
 #define MBEDTLS_AESNI_C
+#endif
 
 /**
  * \def MBEDTLS_AESCE_C
@@ -3089,7 +3091,9 @@
  *
  * This modules adds support for the VIA PadLock on x86.
  */
+#if __SSE_LEVEL__ >= 2
 #define MBEDTLS_PADLOCK_C
+#endif
 
 /**
  * \def MBEDTLS_PEM_PARSE_C
