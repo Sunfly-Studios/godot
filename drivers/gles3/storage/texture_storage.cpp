@@ -384,20 +384,12 @@ static inline Error _get_gl_uncompressed_format(const Ref<Image> &p_image, Image
 		case Image::FORMAT_RGBA4444: {
 			r_gl_internal_format = GL_RGBA4;
 			r_gl_format = GL_RGBA;
-#ifdef BIG_ENDIAN_ENABLED
-            r_gl_type = GL_UNSIGNED_SHORT_4_4_4_4_REV; // Flip for BE
-#else
             r_gl_type = GL_UNSIGNED_SHORT_4_4_4_4;
-#endif
 		} break;
 		case Image::FORMAT_RGB565: {
 			r_gl_internal_format = GL_RGB565;
 			r_gl_format = GL_RGB;
-#ifdef BIG_ENDIAN_ENABLED
-            r_gl_type = GL_UNSIGNED_SHORT_5_6_5_REV; // Flip for BE
-#else
             r_gl_type = GL_UNSIGNED_SHORT_5_6_5;
-#endif
 		} break;
 		case Image::FORMAT_RF: {
 			if (config->float_texture_linear_supported) {

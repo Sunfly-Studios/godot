@@ -86,9 +86,9 @@ if env["builtin_embree"]:
 
     if env["arch"] != "x86_64" or env.msvc:
         # Embree needs those, it will automatically use SSE2NEON in ARM
-        if env["sse_level"] == 2:
+        if env["sse_level"] == "2":
             env_thirdparty.Append(CPPDEFINES=["__SSE2__", "__SSE__"])
-        elif env["sse_level"] == 1:
+        elif env["sse_level"] == "1":
             env_thirdparty.Append(CPPDEFINES=["__SSE__"])
 
 
