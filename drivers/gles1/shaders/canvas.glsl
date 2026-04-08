@@ -69,14 +69,21 @@ attribute highp vec4 instance_custom_data; //attrib:12
 #endif
 
 #ifdef USE_SKELETON
-uniform highp sampler2D skeleton_texture; // texunit:-3
-uniform highp ivec2 skeleton_texture_size;
 uniform highp mat4 skeleton_transform;
 uniform highp mat4 skeleton_transform_inverse;
+
+#ifdef USE_SKELETON_UNIFORM
+// Fallback for hardware without Vertex Texture Fetch
+uniform highp mat4 bone_transforms[64]; 
+#else
+uniform highp sampler2D skeleton_texture; // texunit:-3
+uniform highp ivec2 skeleton_texture_size;
+#endif
+
 #endif
 
 varying vec2 uv_interp;
-varying vec4 color_interp;
+varying mediump vec4 color_interp;
 
 #ifdef USE_ATTRIB_MODULATE
 // modulate doesn't need interpolating but we need to send it to the fragment shader
@@ -237,28 +244,27 @@ void main() {
 #endif
 
 #ifdef USE_SKELETON
-
 	// look up transform from the "pose texture"
 	if (bone_weights != vec4(0.0)) {
 		highp mat4 bone_transform = mat4(0.0);
-
 		for (int i = 0; i < 4; i++) {
+#ifdef USE_SKELETON_UNIFORM
+			// Fast uniform array lookup
+			highp mat4 b = bone_transforms[int(bone_indices[i])];
+#else
 			ivec2 tex_ofs = ivec2(int(bone_indices[i]) * 2, 0);
-
 			highp mat4 b = mat4(
 					texel2DFetch(skeleton_texture, skeleton_texture_size, tex_ofs + ivec2(0, 0)),
 					texel2DFetch(skeleton_texture, skeleton_texture_size, tex_ofs + ivec2(1, 0)),
 					vec4(0.0, 0.0, 1.0, 0.0),
 					vec4(0.0, 0.0, 0.0, 1.0));
-
+#endif
 			bone_transform += b * bone_weights[i];
 		}
 
 		mat4 bone_matrix = skeleton_transform * transpose(bone_transform) * skeleton_transform_inverse;
-
 		outvec = bone_matrix * outvec;
 	}
-
 #endif
 
 	uv_interp = uv;

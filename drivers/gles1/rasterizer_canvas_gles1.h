@@ -135,6 +135,7 @@ protected:
 	} state;
 
 	RID default_canvas_texture;
+	int maximum_attributes = 0;
 
 	// Internal bindings
 	void _set_texture_rect_mode(bool p_texture_rect, bool p_light_angle = false, bool p_modulate = false, bool p_large_vertex = false);

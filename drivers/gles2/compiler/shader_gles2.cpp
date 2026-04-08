@@ -173,6 +173,9 @@ void ShaderGLES2::_build_variant_code(StringBuilder &builder, uint32_t p_variant
 	if (p_version->uniforms.length() > 0) {
 		builder.append("#define MATERIAL_UNIFORMS_USED\n");
 	}
+	if (GLES2::Config::get_singleton()->max_vertex_texture_image_units == 0) {
+		builder.append("#define USE_SKELETON_UNIFORM\n");
+	}
 
 	for (const KeyValue<StringName, CharString> &E : p_version->code_sections) {
 		builder.append(String("#define ") + String(E.key) + "_CODE_USED\n");
@@ -264,6 +267,7 @@ static void _display_error_with_code(const String &p_error, const String &p_code
 
 void ShaderGLES2::_get_uniform_locations(Version::Specialization &spec, Version *p_version) {
 	glUseProgram(spec.id);
+	GL_CHECK_ERROR("ShaderGLES2::_get_uniform_locations: glUseProgram");
 
 	spec.uniform_location.resize(uniform_count);
 	for (int i = 0; i < uniform_count; i++) {
@@ -278,6 +282,8 @@ void ShaderGLES2::_get_uniform_locations(Version::Specialization &spec, Version 
 			} else {
 				glUniform1i(loc, texunit_pairs[i].index);
 			}
+			// Catch wrap-around or out-of-bounds texture units
+			GL_CHECK_ERROR("ShaderGLES2::_get_uniform_locations: glUniform1i (texunit_pairs)");
 		}
 	}
 
@@ -303,6 +309,7 @@ void ShaderGLES2::_get_uniform_locations(Version::Specialization &spec, Version 
 
 void ShaderGLES2::_compile_specialization(Version::Specialization &spec, uint32_t p_variant, Version *p_version, uint64_t p_specialization) {
 	spec.id = glCreateProgram();
+	GL_CHECK_ERROR("ShaderGLES2::_compile_specialization: glCreateProgram");
 	spec.ok = false;
 	GLint status;
 
@@ -312,6 +319,7 @@ void ShaderGLES2::_compile_specialization(Version::Specialization &spec, uint32_
 		_build_variant_code(builder, p_variant, p_version, STAGE_TYPE_VERTEX, p_specialization);
 
 		spec.vert_id = glCreateShader(GL_VERTEX_SHADER);
+		GL_CHECK_ERROR("ShaderGLES2::_compile_specialization: glCreateShader (Vertex)");
 		String builder_string = builder.as_string();
 		if (builder_string.contains("#extension")) {
 			// This path is for even stricter GPUs
@@ -340,6 +348,7 @@ void ShaderGLES2::_compile_specialization(Version::Specialization &spec, uint32_
 		const char *cstr = cs.ptr();
 		glShaderSource(spec.vert_id, 1, &cstr, nullptr);
 		glCompileShader(spec.vert_id);
+		GL_CHECK_ERROR("ShaderGLES2::_compile_specialization: glCompileShader (Vertex)");
 
 		glGetShaderiv(spec.vert_id, GL_COMPILE_STATUS, &status);
 		if (status == GL_FALSE) {
@@ -379,6 +388,7 @@ void ShaderGLES2::_compile_specialization(Version::Specialization &spec, uint32_
 		_build_variant_code(builder, p_variant, p_version, STAGE_TYPE_FRAGMENT, p_specialization);
 
 		spec.frag_id = glCreateShader(GL_FRAGMENT_SHADER);
+		GL_CHECK_ERROR("ShaderGLES2::_compile_specialization: glCreateShader (Fragment)");
 		String builder_string = builder.as_string();
 		if (builder_string.contains("#extension")) {
 			Vector<String> lines = builder_string.split("\n");
@@ -404,6 +414,7 @@ void ShaderGLES2::_compile_specialization(Version::Specialization &spec, uint32_
 		const char *cstr = cs.ptr();
 		glShaderSource(spec.frag_id, 1, &cstr, nullptr);
 		glCompileShader(spec.frag_id);
+		GL_CHECK_ERROR("ShaderGLES2::_compile_specialization: glCompileShader (Fragment)");
 
 		glGetShaderiv(spec.frag_id, GL_COMPILE_STATUS, &status);
 		if (status == GL_FALSE) {
@@ -445,13 +456,21 @@ void ShaderGLES2::_compile_specialization(Version::Specialization &spec, uint32_
 
 	glAttachShader(spec.id, spec.frag_id);
 	glAttachShader(spec.id, spec.vert_id);
+	GL_CHECK_ERROR("ShaderGLES2::_compile_specialization: glAttachShader");
 
 	// Bind attributes before linking
+	GLint max_attribs = 8;
+	glGetIntegerv(GL_MAX_VERTEX_ATTRIBS, &max_attribs);
+
 	for (int i = 0; i < attribute_pair_count; i++) {
-		glBindAttribLocation(spec.id, attribute_pairs[i].index, attribute_pairs[i].name);
+		if (attribute_pairs[i].index < max_attribs) {
+			glBindAttribLocation(spec.id, attribute_pairs[i].index, attribute_pairs[i].name);
+		}
 	}
+	GL_CHECK_ERROR("ShaderGLES2::_compile_specialization: glBindAttribLocation");
 
 	glLinkProgram(spec.id);
+	GL_CHECK_ERROR("ShaderGLES2::_compile_specialization: glLinkProgram");
 
 	glGetProgramiv(spec.id, GL_LINK_STATUS, &status);
 	if (status == GL_FALSE) {

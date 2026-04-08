@@ -735,12 +735,12 @@ public:
 	virtual void render_target_set_velocity_target_size(RID p_render_target, const Size2i &p_target_size) override {}
 	virtual Size2i render_target_get_velocity_target_size(RID p_render_target) const override { return Size2i(); }
 
-	void bind_framebuffer(GLuint framebuffer) {
+	void bind_framebuffer(GLuint framebuffer) const {
 		glBindFramebuffer(GL_FRAMEBUFFER, framebuffer);
 		GL_CHECK_ERROR("GLES2::TextureStorage::bind_framebuffer: glBindFramebuffer");
 	}
 
-	void bind_framebuffer_system() {
+	void bind_framebuffer_system() const {
 		glBindFramebuffer(GL_FRAMEBUFFER, GLES2::TextureStorage::system_fbo);
 		GL_CHECK_ERROR("GLES2::TextureStorage::bind_framebuffer_system: glBindFramebuffer");
 	}

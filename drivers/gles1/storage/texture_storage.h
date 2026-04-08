@@ -773,14 +773,14 @@ public:
 	virtual void render_target_set_velocity_target_size(RID p_render_target, const Size2i &p_target_size) override {}
 	virtual Size2i render_target_get_velocity_target_size(RID p_render_target) const override { return Size2i(); }
 
-	void bind_framebuffer(GLuint framebuffer) {
+	void bind_framebuffer(GLuint framebuffer) const {
 		if (GLES1::Config::get_singleton()->support_fbo) {
 			glBindFramebufferOES(GL_FRAMEBUFFER_OES, framebuffer);
 			GL_CHECK_ERROR("GLES1::TextureStorage::bind_framebuffer: glBindFramebufferOES");
 		}
 	}
 
-	void bind_framebuffer_system() {
+	void bind_framebuffer_system() const {
 		if (GLES1::Config::get_singleton()->support_fbo) {
 			glBindFramebufferOES(GL_FRAMEBUFFER_OES, GLES1::TextureStorage::system_fbo);
 			GL_CHECK_ERROR("GLES1::TextureStorage::bind_framebuffer_system: glBindFramebufferOES");

@@ -36,6 +36,7 @@
 #include "core/config/project_settings.h"
 #include "core/string/string_buffer.h"
 #include "core/string/string_builder.h"
+#include "drivers/gles2/storage/config.h"
 
 static String _mktab(int p_level) {
 	String tb;
@@ -249,6 +250,23 @@ String ShaderCompilerGLES2::_dump_node_code(ShaderLanguage::Node *p_node, int p_
 					max_texture_uniforms = MAX(max_texture_uniforms, E.value.texture_order + 1);
 				}
 			}
+
+			if (GLES2::Config::get_singleton()) {
+				int max_hw_textures = GLES2::Config::get_singleton()->max_texture_image_units;
+
+				// Godot's internal 2D shader heavily maps to the top end of the texture units:
+				// diffuse(0), skeleton(-3), screen(-4), shadow(-5), light/normal(-6), specular(-7)
+				// To guarantee no overlap, we reserve 7 units.
+				// On an 8-unit GPU (like a Pi 3 VC4), this leaves exactly 1 safe unit for custom shaders.
+				int available_custom_textures = MAX(0, max_hw_textures - 7);
+
+				if (max_texture_uniforms > available_custom_textures) {
+					ERR_PRINT(vformat("GLES2: Shader uses %d texture uniforms, but the current hardware only safely supports %d. "
+									  "Texture corruption or silent rendering failures will occur.",
+							max_texture_uniforms, available_custom_textures));
+				}
+			}
+
 			r_gen_code.texture_uniforms.resize(max_texture_uniforms);
 
 			StringBuilder vertex_global;

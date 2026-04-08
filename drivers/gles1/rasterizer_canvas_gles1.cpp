@@ -204,6 +204,12 @@ void RasterizerCanvasGLES1::initialize() {
 	state.using_light = nullptr;
 	state.using_skeleton = false;
 
+	// Don't just assume maxium attributes for the engine
+	// and instead query from the hardware.
+	GLint max_attribs;
+	glGetIntegerv(GL_MAX_VERTEX_ATTRIBS, &max_attribs);
+	maximum_attributes = MIN((int)RS::ARRAY_MAX, max_attribs);
+
 	// Batcher Initialisation
 	batch_initialize();
 
@@ -470,7 +476,10 @@ void RasterizerCanvasGLES1::canvas_begin(RID p_to_render_target, bool p_to_backb
 	} else {
 		render_target_size = DisplayServer::get_singleton()->window_get_size();
 	}
-	glViewport(0, 0, render_target_size.x, render_target_size.y);
+	GLsizei vp_w = MAX(0, (int)render_target_size.x);
+	GLsizei vp_h = MAX(0, (int)render_target_size.y);
+
+	glViewport(0, 0, vp_w, vp_h);
 	GL_CHECK_ERROR("GLES1::Canvas::canvas_begin: glViewport");
 
 	reset_canvas();
@@ -544,9 +553,11 @@ void RasterizerCanvasGLES1::canvas_end() {
 	} else {
 		render_target_size = DisplayServer::get_singleton()->window_get_size();
 	}
+	GLsizei vp_w = MAX(0, (int)render_target_size.x);
+	GLsizei vp_h = MAX(0, (int)render_target_size.y);
 
-	glViewport(0, 0, render_target_size.x, render_target_size.y);
-	glScissor(0, 0, render_target_size.x, render_target_size.y);
+	glViewport(0, 0, vp_w, vp_h);
+	glScissor(0, 0, vp_w, vp_h);
 	GL_CHECK_ERROR("GLES1::Canvas::canvas_end: reset viewport/scissor");
 
 	state.using_skeleton = false;
@@ -1356,7 +1367,7 @@ void RasterizerCanvasGLES1::render_batches(Item::Command *const *p_commands, Ite
 									if (s->version_count > 0 && s->versions) {
 										GLES1::Mesh::Surface::Version *v = &s->versions[0];
 
-										for (int k = 0; k < RS::ARRAY_MAX - 1; k++) {
+										for (int k = 0; k < maximum_attributes - 1; k++) {
 											if (v->attribs[k].enabled) {
 												if (k == RS::ARRAY_VERTEX) {
 													glEnableClientState(GL_VERTEX_ARRAY);

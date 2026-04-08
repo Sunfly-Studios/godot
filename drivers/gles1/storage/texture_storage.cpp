@@ -433,6 +433,7 @@ void TextureStorage::texture_free(RID p_rid) {
 
 	if (tex->canvas_texture) {
 		memdelete(tex->canvas_texture);
+		tex->canvas_texture = nullptr;
 	}
 
 	bool must_free_data = false;
@@ -593,6 +594,7 @@ void TextureStorage::texture_proxy_initialize(RID p_texture, RID p_base) {
 
 	// The proxy inherits the exact GL state and ID of its base
 	tex->copy_from(*base);
+	tex->canvas_texture = nullptr;
 	tex->is_proxy = true;
 	tex->proxy_to = p_base;
 
@@ -643,6 +645,7 @@ void TextureStorage::texture_proxy_update(RID p_texture, RID p_proxy_to) {
 	}
 
 	tex->copy_from(*base);
+	tex->canvas_texture = nullptr;
 	tex->is_proxy = true;
 	tex->proxy_to = p_proxy_to;
 
@@ -696,27 +699,139 @@ Ref<Image> TextureStorage::texture_2d_get(RID p_texture) const {
 	Texture *tex = texture_owner.get_or_null(p_texture);
 	ERR_FAIL_NULL_V(tex, Ref<Image>());
 
-	// Return the cached image since GLES1 can't read it back natively
-	if (tex->image_cache_2d.is_valid()) {
+#ifdef TOOLS_ENABLED
+	if (tex->image_cache_2d.is_valid() && !tex->is_render_target) {
 		return tex->image_cache_2d;
 	}
-
-#ifdef DEV_ENABLED
-	WARN_PRINT_ONCE("CPU Image cache is empty for this texture, and GLES1 cannot read back directly.");
 #endif
-	return Ref<Image>();
+
+	Ref<Image> image;
+
+	if (!Config::get_singleton()->support_fbo) {
+		WARN_PRINT_ONCE("GLES1: CPU Image cache is empty and FBOs are not supported by the hardware. Cannot read back texture.");
+		return Ref<Image>();
+	}
+
+	Vector<uint8_t> data;
+	int data_size = Image::get_image_data_size(tex->alloc_width, tex->alloc_height, Image::FORMAT_RGBA8, false);
+
+	// Pad the buffer to protect against buggy legacy drivers
+	data.resize(data_size * 2);
+	uint8_t *w = data.ptrw();
+
+	GLint previous_fbo = 0;
+	glGetIntegerv(GL_FRAMEBUFFER_BINDING, &previous_fbo);
+	GL_CHECK_ERROR("GLES1::TextureStorage::texture_2d_get: glGetIntegerv (framebuffer)");
+
+	GLuint temp_framebuffer = 0;
+	glGenFramebuffersOES(1, &temp_framebuffer);
+	GL_CHECK_ERROR("GLES1::TextureStorage::texture_2d_get: glGenFramebuffers");
+
+	GLuint temp_color_texture = 0;
+	glGenTextures(1, &temp_color_texture);
+	GL_CHECK_ERROR("GLES1::TextureStorage::texture_2d_get: glGenTextures");
+
+	bind_framebuffer(temp_framebuffer);
+	GL_CHECK_ERROR("GLES1::TextureStorage::texture_2d_get: bind_framebuffer");
+
+	glBindTexture(GL_TEXTURE_2D, temp_color_texture);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, tex->alloc_width, tex->alloc_height, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
+	GL_CHECK_ERROR("GLES1::TextureStorage::texture_2d_get: glTexImage2D");
+
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, temp_color_texture, 0);
+	GL_CHECK_ERROR("GLES1::TextureStorage::texture_2d_get: glFramebufferTexture2D");
+
+	GLenum status = glCheckFramebufferStatus(GL_FRAMEBUFFER);
+	if (status != GL_FRAMEBUFFER_COMPLETE) {
+		bind_framebuffer(previous_fbo);
+		glDeleteTextures(1, &temp_color_texture);
+		glDeleteFramebuffersOES(1, &temp_framebuffer);
+		ERR_FAIL_V_MSG(Ref<Image>(), "GLES1: FBO incomplete during texture_2d_get fallback readback.");
+	}
+
+	// Setup rendering state
+	glDepthMask(GL_FALSE);
+	glDisable(GL_DEPTH_TEST);
+	glDisable(GL_CULL_FACE);
+	glDisable(GL_BLEND);
+	glDepthFunc(GL_LEQUAL);
+	glColorMask(1, 1, 1, 1);
+	GL_CHECK_ERROR("GLES1::TextureStorage::texture_2d_get: render state setup");
+
+	glActiveTexture(GL_TEXTURE0);
+	glEnable(GL_TEXTURE_2D);
+	glBindTexture(GL_TEXTURE_2D, tex->tex_id);
+	GL_CHECK_ERROR("GLES1::TextureStorage::texture_2d_get: texture bind");
+
+	// Backup matrices before we flatten them
+	glMatrixMode(GL_PROJECTION);
+	glPushMatrix();
+	glMatrixMode(GL_MODELVIEW);
+	glPushMatrix();
+
+	glViewport(0, 0, tex->alloc_width, tex->alloc_height);
+	glClearColor(0.0, 0.0, 0.0, 0.0);
+	glClear(GL_COLOR_BUFFER_BIT);
+	GL_CHECK_ERROR("GLES1::TextureStorage::texture_2d_get: glClear");
+
+	CopyEffects::get_singleton()->copy_to_rect(Rect2(0, 0, 1, 1));
+	GL_CHECK_ERROR("GLES1::TextureStorage::texture_2d_get: copy_to_rect");
+
+	// Clean up GLES1 specific texture state
+	glDisable(GL_TEXTURE_2D);
+
+	// Restore matrices
+	glPopMatrix();
+	glMatrixMode(GL_PROJECTION);
+	glPopMatrix();
+	glMatrixMode(GL_MODELVIEW);
+	GL_CHECK_ERROR("GLES1::TextureStorage::texture_2d_get: matrix restore");
+
+	// Read the pixels back
+	glReadPixels(0, 0, tex->alloc_width, tex->alloc_height, GL_RGBA, GL_UNSIGNED_BYTE, &w[0]);
+	GL_CHECK_ERROR("GLES1::TextureStorage::texture_2d_get: glReadPixels");
+
+	// Cleanup
+	bind_framebuffer(previous_fbo);
+	glDeleteTextures(1, &temp_color_texture);
+	glDeleteFramebuffersOES(1, &temp_framebuffer);
+	GL_CHECK_ERROR("GLES1::TextureStorage::texture_2d_get: cleanup glDelete");
+
+	data.resize(data_size);
+
+	ERR_FAIL_COND_V(data.is_empty(), Ref<Image>());
+	image = Image::create_from_data(tex->width, tex->height, false, Image::FORMAT_RGBA8, data);
+	ERR_FAIL_COND_V(image.is_null() || image->is_empty(), Ref<Image>());
+
+	if (tex->format != Image::FORMAT_RGBA8) {
+		image->convert(tex->format);
+	}
+
+	if (tex->mipmaps > 1) {
+		image->generate_mipmaps();
+	}
+
+#ifdef TOOLS_ENABLED
+	if (Engine::get_singleton()->is_editor_hint() && !tex->is_render_target) {
+		tex->image_cache_2d = image;
+	}
+#endif
+
+	return image;
 }
 
 Ref<Image> TextureStorage::texture_2d_layer_get(RID p_texture, int p_layer) const {
-	return Ref<Image>();
+	ERR_FAIL_V_MSG(Ref<Image>(), "2D layered textures are currently not supported by GLES1");
 }
 
 Vector<Ref<Image>> TextureStorage::_texture_3d_read_framebuffer(GLES1::Texture *p_texture) const {
-	ERR_FAIL_V_MSG(Vector<Ref<Image>>(), "Trying to get a 3D framebuffer with the GLES2 driver, which doesn't support 3D Textures!");
+	ERR_FAIL_V_MSG(Vector<Ref<Image>>(), "Trying to get a 3D framebuffer with the GLES1 driver, which doesn't support 3D Textures!");
 }
 
 Vector<Ref<Image>> TextureStorage::texture_3d_get(RID p_texture) const {
-	ERR_FAIL_V_MSG(Vector<Ref<Image>>(), "Trying to get a 3D texture with the GLES2 driver, which doesn't support 3D Textures!");
+	ERR_FAIL_V_MSG(Vector<Ref<Image>>(), "Trying to get a 3D texture with the GLES1 driver, which doesn't support 3D Textures!");
 }
 
 void TextureStorage::texture_replace(RID p_texture, RID p_by_texture) {
@@ -735,7 +850,7 @@ void TextureStorage::texture_replace(RID p_texture, RID p_by_texture) {
 
 	// Steal the GL state and ID from the new texture
 	tex->copy_from(*by_tex);
-	tex->proxies = old_proxies; // Restore the proxies list!
+	tex->proxies = old_proxies;
 	tex->is_proxy = false;
 
 	// Notify all proxy textures (the UI elements) that their base has a new ID/Size
@@ -743,6 +858,7 @@ void TextureStorage::texture_replace(RID p_texture, RID p_by_texture) {
 		Texture *proxy = texture_owner.get_or_null(tex->proxies[i]);
 		if (proxy) {
 			proxy->copy_from(*tex);
+			proxy->canvas_texture = nullptr;
 			proxy->is_proxy = true;
 			proxy->proxy_to = p_texture;
 		}
@@ -750,6 +866,7 @@ void TextureStorage::texture_replace(RID p_texture, RID p_by_texture) {
 
 	// We consumed by_tex, so clear its GL ID to prevent texture_free from destroying our new texture!
 	by_tex->tex_id = 0;
+	by_tex->canvas_texture = nullptr;
 	texture_free(p_by_texture);
 }
 
