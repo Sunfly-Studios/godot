@@ -106,7 +106,6 @@ if env["builtin_embree"]:
                 "-fno-delete-null-pointer-checks",
                 "-fwrapv",
                 "-fsigned-char",
-                "-fno-strict-aliasing",
                 "-fno-tree-vectorize",
                 "-fvisibility=hidden",
                 "-fvisibility-inlines-hidden",
