@@ -144,7 +144,7 @@ if env["builtin_zstd"]:
         "decompress/zstd_decompress.c",
     ]
     if (
-        env["platform"] in ["android", "ios", "linuxbsd", "macos", "windows"]
+        env["platform"] in ["android", "ios", "linuxbsd", "macos"]
         and env["arch"] == "x86_64"
         and not env.msvc
     ):
@@ -155,6 +155,11 @@ if env["builtin_zstd"]:
     env_thirdparty.Prepend(CPPPATH=[thirdparty_zstd_dir, thirdparty_zstd_dir + "common"])
     env_thirdparty.Append(CPPDEFINES=["ZSTD_STATIC_LINKING_ONLY"])
     env.Prepend(CPPPATH=thirdparty_zstd_dir)
+
+    if env["platform"] == "windows" and not env.msvc:
+        env_thirdparty.Append(CPPDEFINES=["ZSTD_DISABLE_ASM"])
+        env.Append(CPPDEFINES=["ZSTD_DISABLE_ASM"])
+
     # Also needed in main env includes will trigger warnings
     env.Append(CPPDEFINES=["ZSTD_STATIC_LINKING_ONLY"])
 
