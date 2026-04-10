@@ -3024,19 +3024,22 @@ namespace astc_helpers
 		}
 
 		uint128 get_reversed_bits() const
-		{
-			uint128 res;
+        {
+            uint128 res;
+            
+            uint32_t src[4] = {};
+            memcpy(src, this, 16); 
+            
+            uint32_t dst[4] = {};
+            dst[0] = rev_dword(src[3]);
+            dst[1] = rev_dword(src[2]);
+            dst[2] = rev_dword(src[1]);
+            dst[3] = rev_dword(src[0]);
+            
+            memcpy(&res, dst, 16);
 
-			const uint32_t* pSrc = (const uint32_t*)this;
-			uint32_t* pDst = (uint32_t*)&res;
-
-			pDst[0] = rev_dword(pSrc[3]);
-			pDst[1] = rev_dword(pSrc[2]);
-			pDst[2] = rev_dword(pSrc[1]);
-			pDst[3] = rev_dword(pSrc[0]);
-
-			return res;
-		}
+            return res;
+        }
 
 		uint128 get_byteswapped() const
 		{

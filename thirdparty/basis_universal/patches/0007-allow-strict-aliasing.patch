@@ -1,0 +1,94 @@
+diff --git a/thirdparty/basis_universal/transcoder/basisu.h b/thirdparty/basis_universal/transcoder/basisu.h
+index c1cc0fbe42..f848cc9629 100644
+--- a/thirdparty/basis_universal/transcoder/basisu.h
++++ b/thirdparty/basis_universal/transcoder/basisu.h
+@@ -175,6 +175,18 @@ namespace basisu
+ 	template<typename T> inline T open_range_check(T v, T minv, T maxv) { assert(v >= minv && v < maxv); BASISU_NOTE_UNUSED(minv); BASISU_NOTE_UNUSED(maxv); return v; }
+ 	template<typename T> inline T open_range_check(T v, T maxv) { assert(v < maxv); BASISU_NOTE_UNUSED(maxv); return v; }
+ 
++	template <typename T>
++	inline T safe_read(const void *p_ptr) {
++		alignas(alignof(T)) uint8_t buf[sizeof(T)] = {};
++		memcpy(buf, p_ptr, sizeof(T));
++		return *reinterpret_cast<const T *>(buf);
++	}
++	
++	template <typename T>
++	inline void safe_write(void *p_ptr, const T &p_val) {
++		memcpy(p_ptr, &p_val, sizeof(T));
++	}
++
+ 	// Open interval
+ 	inline bool in_bounds(int v, int l, int h)
+ 	{
+diff --git a/thirdparty/basis_universal/transcoder/basisu_astc_helpers.h b/thirdparty/basis_universal/transcoder/basisu_astc_helpers.h
+index 09a234b2ae..b264607286 100644
+--- a/thirdparty/basis_universal/transcoder/basisu_astc_helpers.h
++++ b/thirdparty/basis_universal/transcoder/basisu_astc_helpers.h
+@@ -3024,19 +3024,22 @@ namespace astc_helpers
+ 		}
+ 
+ 		uint128 get_reversed_bits() const
+-		{
+-			uint128 res;
+-
+-			const uint32_t* pSrc = (const uint32_t*)this;
+-			uint32_t* pDst = (uint32_t*)&res;
+-
+-			pDst[0] = rev_dword(pSrc[3]);
+-			pDst[1] = rev_dword(pSrc[2]);
+-			pDst[2] = rev_dword(pSrc[1]);
+-			pDst[3] = rev_dword(pSrc[0]);
+-
+-			return res;
+-		}
++        {
++            uint128 res;
++            
++            uint32_t src[4] = {};
++            memcpy(src, this, 16); 
++            
++            uint32_t dst[4] = {};
++            dst[0] = rev_dword(src[3]);
++            dst[1] = rev_dword(src[2]);
++            dst[2] = rev_dword(src[1]);
++            dst[3] = rev_dword(src[0]);
++            
++            memcpy(&res, dst, 16);
++
++            return res;
++        }
+ 
+ 		uint128 get_byteswapped() const
+ 		{
+diff --git a/thirdparty/basis_universal/transcoder/basisu_transcoder.cpp b/thirdparty/basis_universal/transcoder/basisu_transcoder.cpp
+index 621001716c..c03982c2ad 100644
+--- a/thirdparty/basis_universal/transcoder/basisu_transcoder.cpp
++++ b/thirdparty/basis_universal/transcoder/basisu_transcoder.cpp
+@@ -447,7 +447,7 @@ namespace basist
+ 
+ 		inline bool are_all_selectors_the_same() const
+ 		{
+-			uint32_t v = *reinterpret_cast<const uint32_t*>(&m_bytes[4]);
++			uint32_t v = basisu::safe_read<uint32_t>(&m_bytes[4]);
+ 
+ 			if ((v == 0xFFFFFFFF) || (v == 0xFFFF) || (!v) || (v == 0xFFFF0000))
+ 				return true;
+@@ -12512,7 +12512,7 @@ namespace basist
+ 		}
+ 
+ 		uint32_t byte_bit_offset = bit_offset & 7U;
+-		const uint16_t w = *(const uint16_t *)(&pBuf[bit_offset >> 3U]);
++		const uint16_t w = basisu::safe_read<uint16_t>(&pBuf[bit_offset >> 3U]);
+ 		bit_offset += codesize;
+ 		return (w >> byte_bit_offset) & ((1U << codesize) - 1U);
+ 	}
+@@ -12567,7 +12567,7 @@ namespace basist
+ 		else
+ 		{
+ 			uint32_t byte_bit_offset = bit_offset & 7U;
+-			const uint16_t w = *(const uint16_t*)(&pBuf[bit_offset >> 3U]);
++			const uint16_t w = basisu::safe_read<uint16_t>(&pBuf[bit_offset >> 3U]);
+ 			bit_offset += codesize;
+ 			return (w >> byte_bit_offset) & ((1U << codesize) - 1U);
+ 		}

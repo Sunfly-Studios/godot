@@ -447,7 +447,7 @@ namespace basist
 
 		inline bool are_all_selectors_the_same() const
 		{
-			uint32_t v = *reinterpret_cast<const uint32_t*>(&m_bytes[4]);
+			uint32_t v = basisu::safe_read<uint32_t>(&m_bytes[4]);
 
 			if ((v == 0xFFFFFFFF) || (v == 0xFFFF) || (!v) || (v == 0xFFFF0000))
 				return true;
@@ -12512,7 +12512,7 @@ namespace basist
 		}
 
 		uint32_t byte_bit_offset = bit_offset & 7U;
-		const uint16_t w = *(const uint16_t *)(&pBuf[bit_offset >> 3U]);
+		const uint16_t w = basisu::safe_read<uint16_t>(&pBuf[bit_offset >> 3U]);
 		bit_offset += codesize;
 		return (w >> byte_bit_offset) & ((1U << codesize) - 1U);
 	}
@@ -12567,7 +12567,7 @@ namespace basist
 		else
 		{
 			uint32_t byte_bit_offset = bit_offset & 7U;
-			const uint16_t w = *(const uint16_t*)(&pBuf[bit_offset >> 3U]);
+			const uint16_t w = basisu::safe_read<uint16_t>(&pBuf[bit_offset >> 3U]);
 			bit_offset += codesize;
 			return (w >> byte_bit_offset) & ((1U << codesize) - 1U);
 		}

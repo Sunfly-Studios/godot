@@ -1,6 +1,5 @@
 // basisu.h
 // Copyright (C) 2019-2024 Binomial LLC. All Rights Reserved.
-// Important: If compiling with gcc, be sure strict aliasing is disabled: -fno-strict-aliasing
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -174,6 +173,18 @@ namespace basisu
 
 	template<typename T> inline T open_range_check(T v, T minv, T maxv) { assert(v >= minv && v < maxv); BASISU_NOTE_UNUSED(minv); BASISU_NOTE_UNUSED(maxv); return v; }
 	template<typename T> inline T open_range_check(T v, T maxv) { assert(v < maxv); BASISU_NOTE_UNUSED(maxv); return v; }
+
+	template <typename T>
+	inline T safe_read(const void *p_ptr) {
+		alignas(alignof(T)) uint8_t buf[sizeof(T)] = {};
+		memcpy(buf, p_ptr, sizeof(T));
+		return *reinterpret_cast<const T *>(buf);
+	}
+	
+	template <typename T>
+	inline void safe_write(void *p_ptr, const T &p_val) {
+		memcpy(p_ptr, &p_val, sizeof(T));
+	}
 
 	// Open interval
 	inline bool in_bounds(int v, int l, int h)

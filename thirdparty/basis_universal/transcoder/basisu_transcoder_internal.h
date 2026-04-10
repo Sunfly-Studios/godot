@@ -1,7 +1,6 @@
 // basisu_transcoder_internal.h - Universal texture format transcoder library.
 // Copyright (C) 2019-2024 Binomial LLC. All Rights Reserved.
 //
-// Important: If compiling with gcc, be sure strict aliasing is disabled: -fno-strict-aliasing
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
