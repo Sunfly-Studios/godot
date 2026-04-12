@@ -367,13 +367,13 @@ bool PackedSourcePCK::try_open_pack(const String &p_path, bool p_replace_files, 
 	if (enc_directory) {
 		Ref<FileAccessEncrypted> fae;
 		fae.instantiate();
-		#ifdef DEBUG_ENABLED
-			ERR_FAIL_COND_V_MSG(fae.is_null(), false, "Can't open encrypted pack directory.");
-		#else
-			if (fae.is_null()) {
-				return false;
-			}
-		#endif
+#ifdef DEBUG_ENABLED
+		ERR_FAIL_COND_V_MSG(fae.is_null(), false, "Can't open encrypted pack directory.");
+#else
+		if (fae.is_null()) {
+			return false;
+		}
+#endif
 
 		Vector<uint8_t> key;
 		key.resize(32);
@@ -382,13 +382,13 @@ bool PackedSourcePCK::try_open_pack(const String &p_path, bool p_replace_files, 
 		}
 
 		Error err = fae->open_and_parse(f, key, FileAccessEncrypted::MODE_READ, false);
-		#ifdef DEBUG_ENABLED
-			ERR_FAIL_COND_V_MSG(err, false, "Can't open encrypted pack directory.");
-		#else
-			if (err) {
-				return false;
-			}
-		#endif
+#ifdef DEBUG_ENABLED
+		ERR_FAIL_COND_V_MSG(err, false, "Can't open encrypted pack directory.");
+#else
+		if (err) {
+			return false;
+		}
+#endif
 		f = fae;
 		
 		// FileAccessEncrypted wraps the original file, so ensure
@@ -719,7 +719,13 @@ FileAccessPack::FileAccessPack(const String &p_path, PackedData::PackedFile *p_f
 	if (pf.encrypted) {
 		Ref<FileAccessEncrypted> fae;
 		fae.instantiate();
+#if DEBUG_ENABLED
 		ERR_FAIL_COND_MSG(fae.is_null(), vformat("Can't open encrypted pack-referenced file '%s'.", String(pf.pack)));
+#else
+		if (fae.is_null()) {
+			return;
+		}
+#endif
 
 		Vector<uint8_t> key;
 		key.resize(32);
@@ -728,7 +734,13 @@ FileAccessPack::FileAccessPack(const String &p_path, PackedData::PackedFile *p_f
 		}
 
 		Error err = fae->open_and_parse(f, key, FileAccessEncrypted::MODE_READ, false);
+#if DEBUG_ENABLED
 		ERR_FAIL_COND_MSG(err, vformat("Can't open encrypted pack-referenced file '%s'.", String(pf.pack)));
+#else
+		if (err != OK) {
+			return;
+		}
+#endif
 		f = fae;
 #ifdef BIG_ENDIAN_ENABLED
 		f->set_big_endian(true);

@@ -247,7 +247,13 @@ Error PCKPacker::flush_and_sign(const Ref<CryptoKey> &p_sign_key, bool p_verbose
 		ERR_FAIL_COND_V(tls_ctx.is_null(), ERR_CANT_CREATE);
 
 		signature = tls_ctx->sign(HashingContext::HASH_SHA256, directory_hash, p_sign_key);
+#if DEBUG_ENABLED
 		ERR_FAIL_COND_V_MSG(signature.is_empty(), ERR_CANT_CREATE, "Pack directory signing failed.");
+#else
+		if (signature.is_empty()) {
+			return ERR_CANT_CREATE;
+		}
+#endif
 	}
 
 	if (fae.is_valid()) {
