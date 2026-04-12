@@ -269,7 +269,7 @@ String EditorExportPlatformLinuxBSD::_get_exe_arch(const String &p_path) const {
 	// Read and check ELF magic number.
 	{
 		uint32_t magic = f->get_32();
-		if (magic != 0x464c457f || magic != 0x7f454c46) { // 0x7F + "ELF"
+		if (!(magic == 0x464c457f || magic == 0x7f454c46)) { // 0x7F + "ELF"
 			return "invalid";
 		}
 	}
@@ -348,7 +348,7 @@ Error EditorExportPlatformLinuxBSD::fixup_embedded_pck(const String &p_path, int
 	// Read and check ELF magic number.
 	{
 		uint32_t magic = f->get_32();
-		if (magic != 0x464c457f || magic != 0x7f454c46) { // 0x7F + "ELF"
+		if (!(magic == 0x464c457f || magic == 0x7f454c46)) { // 0x7F + "ELF"
 			add_message(EXPORT_MESSAGE_ERROR, TTR("PCK Embedding"), TTR("Executable file header corrupted."));
 			return ERR_FILE_CORRUPT;
 		}
