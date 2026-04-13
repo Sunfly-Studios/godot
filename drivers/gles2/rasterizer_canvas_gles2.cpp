@@ -1277,9 +1277,7 @@ void RasterizerCanvasGLES2::render_batches(Item::Command *const *p_commands, Ite
 						case Item::Command::TYPE_POLYGON: {
 							Item::CommandPolygon *polygon = static_cast<Item::CommandPolygon *>(command);
 
-							if (polygon->primitive == RS::PRIMITIVE_TRIANGLES) {
-								_legacy_draw_poly_triangles(polygon, p_material);
-							}
+							_legacy_draw_polygon(polygon, p_material);
 						} break;
 
 						case Item::Command::TYPE_PRIMITIVE: {
@@ -1511,7 +1509,7 @@ void RasterizerCanvasGLES2::_legacy_draw_line(Item::CommandPrimitive *p_pr, GLES
 	_legacy_draw_primitive(p_pr, p_material);
 }
 
-void RasterizerCanvasGLES2::_legacy_draw_poly_triangles(Item::CommandPolygon *p_poly, GLES2::CanvasMaterialData *p_material) {
+void RasterizerCanvasGLES2::_legacy_draw_polygon(Item::CommandPolygon *p_poly, GLES2::CanvasMaterialData *p_material) {
 	if (!polygon_cache.has(p_poly->polygon.polygon_id)) {
 		return;
 	}
@@ -1549,7 +1547,7 @@ void RasterizerCanvasGLES2::_legacy_draw_poly_triangles(Item::CommandPolygon *p_
 		data.polygon_buffer_size = next_power_of_2(total_size);
 	}
 	glBufferData(GL_ARRAY_BUFFER, data.polygon_buffer_size, nullptr, GL_DYNAMIC_DRAW);
-	GL_CHECK_ERROR("GLES2::Canvas::_legacy_draw_poly_triangles: buffer orphan");
+	GL_CHECK_ERROR("GLES2::Canvas::_legacy_draw_polygon: buffer orphan");
 
 	uint32_t offset = 0;
 
@@ -1568,7 +1566,7 @@ void RasterizerCanvasGLES2::_legacy_draw_poly_triangles(Item::CommandPolygon *p_
 	} else {
 		glDisableVertexAttribArray(RS::ARRAY_TEX_UV);
 	}
-	GL_CHECK_ERROR("GLES2::Canvas::_legacy_draw_poly_triangles: buffer subdata and pointers");
+	GL_CHECK_ERROR("GLES2::Canvas::_legacy_draw_polygon: buffer subdata and pointers");
 
 	// Colors
 	if (pd.colors.size() == 1) {
@@ -1584,6 +1582,28 @@ void RasterizerCanvasGLES2::_legacy_draw_poly_triangles(Item::CommandPolygon *p_
 		// No color
 		glDisableVertexAttribArray(RS::ARRAY_COLOR);
 		glVertexAttrib4f(RS::ARRAY_COLOR, 1.0f, 1.0f, 1.0f, 1.0f); // Default white
+	}
+
+	// Map primitive type
+	GLenum gl_primitive = GL_TRIANGLES;
+	switch (p_poly->primitive) {
+		case RS::PRIMITIVE_POINTS:
+			gl_primitive = GL_POINTS;
+			break;
+		case RS::PRIMITIVE_LINES:
+			gl_primitive = GL_LINES;
+			break;
+		case RS::PRIMITIVE_LINE_STRIP:
+			gl_primitive = GL_LINE_STRIP;
+			break;
+		case RS::PRIMITIVE_TRIANGLES:
+			gl_primitive = GL_TRIANGLES;
+			break;
+		case RS::PRIMITIVE_TRIANGLE_STRIP:
+			gl_primitive = GL_TRIANGLE_STRIP;
+			break;
+		default:
+			break;
 	}
 
 	// Draw
@@ -1615,11 +1635,11 @@ void RasterizerCanvasGLES2::_legacy_draw_poly_triangles(Item::CommandPolygon *p_
 		glBufferData(GL_ELEMENT_ARRAY_BUFFER, data.polygon_index_buffer_size, nullptr, GL_DYNAMIC_DRAW);
 		glBufferSubData(GL_ELEMENT_ARRAY_BUFFER, 0, index_size, indices_16.ptr());
 
-		glDrawElements(GL_TRIANGLES, index_count, GL_UNSIGNED_SHORT, nullptr);
+		glDrawElements(gl_primitive, index_count, GL_UNSIGNED_SHORT, nullptr);
 		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
 	} else {
 		// Draw arrays if no indices
-		glDrawArrays(GL_TRIANGLES, 0, pd.points.size());
+		glDrawArrays(gl_primitive, 0, pd.points.size());
 	}
 
 	// Cleanup
@@ -1627,7 +1647,7 @@ void RasterizerCanvasGLES2::_legacy_draw_poly_triangles(Item::CommandPolygon *p_
 	glDisableVertexAttribArray(RS::ARRAY_TEX_UV);
 	glDisableVertexAttribArray(RS::ARRAY_COLOR);
 	glBindBuffer(GL_ARRAY_BUFFER, 0);
-	GL_CHECK_ERROR("GLES2::Canvas::_legacy_draw_poly_triangles: glDrawArrays");
+	GL_CHECK_ERROR("GLES2::Canvas::_legacy_draw_polygon: cleanup");
 }
 
 void RasterizerCanvasGLES2::_set_texture_rect_mode(bool p_texture_rect, bool p_light_angle, bool p_modulate, bool p_large_vertex) {

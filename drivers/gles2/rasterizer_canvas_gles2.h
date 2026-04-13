@@ -145,7 +145,7 @@ protected:
 	void _bind_quad_buffer();
 
 	inline void _buffer_orphan_and_upload(unsigned int p_buffer_size_bytes, unsigned int p_offset_bytes, unsigned int p_data_size_bytes, const void *p_data, GLenum p_target, GLenum p_usage, bool p_optional_orphan) const;
-	void _legacy_draw_poly_triangles(Item::CommandPolygon *p_poly, GLES2::CanvasMaterialData *p_material);
+	void _legacy_draw_polygon(Item::CommandPolygon *p_poly, GLES2::CanvasMaterialData *p_material);
 	void _legacy_draw_primitive(Item::CommandPrimitive *p_pr, GLES2::CanvasMaterialData *p_material);
 	void _legacy_draw_line(Item::CommandPrimitive *p_pr, GLES2::CanvasMaterialData *p_material);
 	void _draw_gui_primitive(int p_points, const Vector2 *p_vertices, const Color *p_colors, const Vector2 *p_uvs, const float *p_light_angles = nullptr);
