@@ -163,6 +163,9 @@ void ShaderGLES2::_build_variant_code(StringBuilder &builder, uint32_t p_variant
 	if (p_stage_type == STAGE_TYPE_FRAGMENT && GLES2::Config::get_singleton()->support_frag_depth) {
 		builder.append("#extension GL_EXT_frag_depth : enable\n");
 	}
+	if (p_stage_type == STAGE_TYPE_FRAGMENT && GLES2::Config::get_singleton()->texture_lod_supported) {
+		builder.append("#extension GL_EXT_shader_texture_lod : enable\n");
+	}
 
 	for (int i = 0; i < specialization_count; i++) {
 		if (p_specialization & (uint64_t(1) << uint64_t(i))) {

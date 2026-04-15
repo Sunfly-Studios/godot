@@ -292,6 +292,18 @@ struct Texture {
 				return;
 			} break;
 		}
+
+		// Bind texture before modifying parameters
+		GLint prev_tex = 0;
+
+		if (target == GL_TEXTURE_CUBE_MAP) {
+			glGetIntegerv(GL_TEXTURE_BINDING_CUBE_MAP, &prev_tex);
+		} else {
+			glGetIntegerv(GL_TEXTURE_BINDING_2D, &prev_tex);
+		}
+		glBindTexture(target, tex_id);
+		GL_CHECK_ERROR("GLES2::Texture::gl_set_filter: glBindTexture");
+
 		glTexParameteri(target, GL_TEXTURE_MIN_FILTER, pmin);
 		glTexParameteri(target, GL_TEXTURE_MAG_FILTER, pmag);
 		GL_CHECK_ERROR("GLES2::Texture::gl_set_filter: glTexParameteri");
@@ -300,6 +312,9 @@ struct Texture {
 			glTexParameterf(target, _GL_TEXTURE_MAX_ANISOTROPY_EXT, anisotropy);
 			GL_CHECK_ERROR("GLES2::Texture::gl_set_filter: glTexParameterf anisotropy");
 		}
+
+		// Restore previous texture
+		glBindTexture(target, prev_tex);
 	}
 
 	void gl_set_repeat(RS::CanvasItemTextureRepeat p_repeat) {
@@ -322,9 +337,23 @@ struct Texture {
 				return;
 			} break;
 		}
+		// Bind texture before modifying parameters
+		GLint prev_tex = 0;
+
+		if (target == GL_TEXTURE_CUBE_MAP) {
+			glGetIntegerv(GL_TEXTURE_BINDING_CUBE_MAP, &prev_tex);
+		} else {
+			glGetIntegerv(GL_TEXTURE_BINDING_2D, &prev_tex);
+		}
+		glBindTexture(target, tex_id);
+		GL_CHECK_ERROR("GLES2::Texture::gl_set_repeat: glBindTexture");
+
 		glTexParameteri(target, GL_TEXTURE_WRAP_T, prep);
 		glTexParameteri(target, GL_TEXTURE_WRAP_S, prep);
 		GL_CHECK_ERROR("GLES2::Texture::gl_set_repeat: glTexParameteri");
+
+		// Restore previous texture
+		glBindTexture(target, prev_tex);
 	}
 
 private:
@@ -348,7 +377,7 @@ struct RenderTarget {
 
 	bool was_used = false;
 	bool hdr = false; // For Legacy this effects both 2D and 3D rendering!
-	GLuint color_internal_format = GL_RGBA8;
+	GLuint color_internal_format = GL_RGBA;
 	GLuint color_format = GL_RGBA;
 	GLuint color_type = GL_UNSIGNED_BYTE;
 	uint32_t color_format_size = 4;

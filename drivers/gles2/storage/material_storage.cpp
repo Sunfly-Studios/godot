@@ -707,17 +707,39 @@ void MaterialData::update_textures(const HashMap<StringName, Variant> &p_paramet
 		if (V && V->value.get_type() == Variant::ARRAY) {
 			Array tex_array = V->value;
 			for (int j = 0; j < array_size; j++) {
-				RID gl_texture = texture_storage->texture_gl_get_default(GLES2::DEFAULT_GL_TEXTURE_WHITE);
+				RID gl_texture;
+				if (p_default_textures.has(uniform_name) && p_default_textures[uniform_name].has(j)) {
+					gl_texture = p_default_textures[uniform_name][j];
+				} else {
+					gl_texture = texture_storage->texture_gl_get_default(
+						GLES2::DEFAULT_GL_TEXTURE_WHITE
+					);
+				}
+
 				if (j < tex_array.size() && tex_array[j].get_type() == Variant::RID) {
-					gl_texture = tex_array[j];
+					RID requested = tex_array[j];
+					if (texture_storage->owns_texture(requested)) {
+						gl_texture = requested;
+					}
 				}
 				p_textures[k++] = gl_texture;
 			}
 		} else {
 			// Single texture or fallback
-			RID gl_texture = texture_storage->texture_gl_get_default(GLES2::DEFAULT_GL_TEXTURE_WHITE);
+			RID gl_texture;
+			if (p_default_textures.has(uniform_name) && p_default_textures[uniform_name].has(0)) {
+				gl_texture = p_default_textures[uniform_name][0];
+			} else {
+				gl_texture = texture_storage->texture_gl_get_default(
+					GLES2::DEFAULT_GL_TEXTURE_WHITE
+				);
+			}
+
 			if (V && V->value.get_type() == Variant::RID) {
-				gl_texture = V->value;
+				RID requested = V->value;
+				if (texture_storage->owns_texture(requested)) {
+					gl_texture = requested;
+				}
 			}
 
 			// Fill the entire array span even if the user only provided one texture
@@ -1796,7 +1818,7 @@ CanvasShaderData::CanvasShaderData() {
 }
 
 CanvasShaderData::~CanvasShaderData() {
-	if (version.is_valid()) {
+	if (version.is_valid() && MaterialStorage::get_singleton()) {
 		MaterialStorage::get_singleton()->shaders.canvas_shader.version_free(version);
 	}
 }
@@ -1813,7 +1835,11 @@ void CanvasMaterialData::update_parameters(const HashMap<StringName, Variant> &p
 void CanvasMaterialData::bind_uniforms() {
 	GLint prog = 0;
 	glGetIntegerv(GL_CURRENT_PROGRAM, &prog);
-	ERR_FAIL_COND(prog == 0);
+	if (unlikely(prog == 0)) {
+		// Guarantee baseline texture unit before error exit
+		glActiveTexture(GL_TEXTURE0);
+		ERR_FAIL_MSG("GLES2: CanvasMaterialData failed to bind uniforms because GL_CURRENT_PROGRAM is 0.");
+	}
 
 	// Unpack the custom UBO data and push via glUniform
 	if (!ubo_data.is_empty()) {
@@ -1843,52 +1869,146 @@ void CanvasMaterialData::bind_uniforms() {
 
 			uint32_t offset = shader_data->ubo_offsets[E.value.order];
 			const uint8_t *val_ptr = &data[offset];
+			int count = E.value.array_size > 0 ? E.value.array_size : 1;
 
-			// Translate the std140 bytes into raw GLES2 bindings
-			switch (E.value.type) {
-				case ShaderLanguage::TYPE_BOOL:
-				case ShaderLanguage::TYPE_INT:
-				case ShaderLanguage::TYPE_UINT:
-					glUniform1i(loc, *(const int32_t *)val_ptr);
-					break;
-				case ShaderLanguage::TYPE_FLOAT:
-					glUniform1f(loc, *(const float *)val_ptr);
-					break;
-				case ShaderLanguage::TYPE_VEC2:
-					glUniform2f(loc, ((const float *)val_ptr)[0], ((const float *)val_ptr)[1]);
-					break;
-				case ShaderLanguage::TYPE_VEC3:
-					glUniform3f(loc, ((const float *)val_ptr)[0], ((const float *)val_ptr)[1], ((const float *)val_ptr)[2]);
-					break;
-				case ShaderLanguage::TYPE_VEC4:
-					glUniform4f(loc, ((const float *)val_ptr)[0], ((const float *)val_ptr)[1], ((const float *)val_ptr)[2], ((const float *)val_ptr)[3]);
-					break;
-				case ShaderLanguage::TYPE_MAT4:
-					glUniformMatrix4fv(loc, 1, GL_FALSE, (const GLfloat *)val_ptr);
-					break;
-				case ShaderLanguage::TYPE_MAT2: {
-					float m[4] = {};
-					m[0] = ((const float *)val_ptr)[0];
-					m[1] = ((const float *)val_ptr)[1];
-					m[2] = ((const float *)val_ptr)[4];
-					m[3] = ((const float *)val_ptr)[5];
-					glUniformMatrix2fv(loc, 1, GL_FALSE, m);
-				} break;
-				case ShaderLanguage::TYPE_MAT3: {
-					float m[9] = {};
-					m[0] = ((const float *)val_ptr)[0];
-					m[1] = ((const float *)val_ptr)[1];
-					m[2] = ((const float *)val_ptr)[2];
-					m[3] = ((const float *)val_ptr)[4];
-					m[4] = ((const float *)val_ptr)[5];
-					m[5] = ((const float *)val_ptr)[6];
-					m[6] = ((const float *)val_ptr)[8];
-					m[7] = ((const float *)val_ptr)[9];
-					m[8] = ((const float *)val_ptr)[10];
-					glUniformMatrix3fv(loc, 1, GL_FALSE, m);
-				} break;
-				default:
-					break;
+			if (count > 1) {
+				// Uniform Arrays require unpacking from std140 before submitting to GLES2
+				switch (E.value.type) {
+					case ShaderLanguage::TYPE_BOOL:
+					case ShaderLanguage::TYPE_INT:
+					case ShaderLanguage::TYPE_UINT: {
+						LocalVector<int32_t> tmp;
+						tmp.resize(count);
+						for (int i = 0; i < count; i++) {
+							tmp[i] = *(const int32_t *)&val_ptr[i * 16]; // std140 arrays align to 16 bytes
+						}
+						glUniform1iv(loc, count, tmp.ptr());
+					} break;
+					case ShaderLanguage::TYPE_FLOAT: {
+						LocalVector<float> tmp;
+						tmp.resize(count);
+						for (int i = 0; i < count; i++) {
+							tmp[i] = *(const float *)&val_ptr[i * 16];
+						}
+						glUniform1fv(loc, count, tmp.ptr());
+					} break;
+					case ShaderLanguage::TYPE_VEC2: {
+						LocalVector<float> tmp;
+						tmp.resize(count * 2);
+						for (int i = 0; i < count; i++) {
+							tmp[i * 2 + 0] = ((const float *)&val_ptr[i * 16])[0];
+							tmp[i * 2 + 1] = ((const float *)&val_ptr[i * 16])[1];
+						}
+						glUniform2fv(loc, count, tmp.ptr());
+					} break;
+					case ShaderLanguage::TYPE_VEC3: {
+						LocalVector<float> tmp;
+						tmp.resize(count * 3);
+						for (int i = 0; i < count; i++) {
+							tmp[i * 3 + 0] = ((const float *)&val_ptr[i * 16])[0];
+							tmp[i * 3 + 1] = ((const float *)&val_ptr[i * 16])[1];
+							tmp[i * 3 + 2] = ((const float *)&val_ptr[i * 16])[2];
+						}
+						glUniform3fv(loc, count, tmp.ptr());
+					} break;
+					case ShaderLanguage::TYPE_VEC4: {
+						LocalVector<float> tmp;
+						tmp.resize(count * 4);
+						for (int i = 0; i < count; i++) {
+							tmp[i * 4 + 0] = ((const float *)&val_ptr[i * 16])[0];
+							tmp[i * 4 + 1] = ((const float *)&val_ptr[i * 16])[1];
+							tmp[i * 4 + 2] = ((const float *)&val_ptr[i * 16])[2];
+							tmp[i * 4 + 3] = ((const float *)&val_ptr[i * 16])[3];
+						}
+						glUniform4fv(loc, count, tmp.ptr());
+					} break;
+					case ShaderLanguage::TYPE_MAT2: {
+						LocalVector<float> tmp;
+						tmp.resize(count * 4);
+						for (int i = 0; i < count; i++) {
+							tmp[i * 4 + 0] = ((const float *)&val_ptr[i * 32])[0];
+							tmp[i * 4 + 1] = ((const float *)&val_ptr[i * 32])[1];
+							tmp[i * 4 + 2] = ((const float *)&val_ptr[i * 32])[4];
+							tmp[i * 4 + 3] = ((const float *)&val_ptr[i * 32])[5];
+						}
+						glUniformMatrix2fv(loc, count, GL_FALSE, tmp.ptr());
+					} break;
+					case ShaderLanguage::TYPE_MAT3: {
+						LocalVector<float> tmp;
+						tmp.resize(count * 9);
+						for (int i = 0; i < count; i++) {
+							tmp[i * 9 + 0] = ((const float *)&val_ptr[i * 48])[0];
+							tmp[i * 9 + 1] = ((const float *)&val_ptr[i * 48])[1];
+							tmp[i * 9 + 2] = ((const float *)&val_ptr[i * 48])[2];
+							tmp[i * 9 + 3] = ((const float *)&val_ptr[i * 48])[4];
+							tmp[i * 9 + 4] = ((const float *)&val_ptr[i * 48])[5];
+							tmp[i * 9 + 5] = ((const float *)&val_ptr[i * 48])[6];
+							tmp[i * 9 + 6] = ((const float *)&val_ptr[i * 48])[8];
+							tmp[i * 9 + 7] = ((const float *)&val_ptr[i * 48])[9];
+							tmp[i * 9 + 8] = ((const float *)&val_ptr[i * 48])[10];
+						}
+						glUniformMatrix3fv(loc, count, GL_FALSE, tmp.ptr());
+					} break;
+					case ShaderLanguage::TYPE_MAT4: {
+						LocalVector<float> tmp;
+						tmp.resize(count * 16);
+						for (int i = 0; i < count; i++) {
+							for (int j = 0; j < 16; j++) {
+								tmp[i * 16 + j] = ((const float *)&val_ptr[i * 64])[j];
+							}
+						}
+						glUniformMatrix4fv(loc, count, GL_FALSE, tmp.ptr());
+					} break;
+					default:
+						break;
+				}
+			} else {
+				// Translate the std140 bytes into raw GLES2 bindings (Single Element)
+				switch (E.value.type) {
+					case ShaderLanguage::TYPE_BOOL:
+					case ShaderLanguage::TYPE_INT:
+					case ShaderLanguage::TYPE_UINT:
+						glUniform1i(loc, *(const int32_t *)val_ptr);
+						break;
+					case ShaderLanguage::TYPE_FLOAT:
+						glUniform1f(loc, *(const float *)val_ptr);
+						break;
+					case ShaderLanguage::TYPE_VEC2:
+						glUniform2f(loc, ((const float *)val_ptr)[0], ((const float *)val_ptr)[1]);
+						break;
+					case ShaderLanguage::TYPE_VEC3:
+						glUniform3f(loc, ((const float *)val_ptr)[0], ((const float *)val_ptr)[1], ((const float *)val_ptr)[2]);
+						break;
+					case ShaderLanguage::TYPE_VEC4:
+						glUniform4f(loc, ((const float *)val_ptr)[0], ((const float *)val_ptr)[1], ((const float *)val_ptr)[2], ((const float *)val_ptr)[3]);
+						break;
+					case ShaderLanguage::TYPE_MAT4:
+						glUniformMatrix4fv(loc, 1, GL_FALSE, (const GLfloat *)val_ptr);
+						break;
+					case ShaderLanguage::TYPE_MAT2: {
+						float m[4] = {};
+						m[0] = ((const float *)val_ptr)[0];
+						m[1] = ((const float *)val_ptr)[1];
+						m[2] = ((const float *)val_ptr)[4];
+						m[3] = ((const float *)val_ptr)[5];
+						glUniformMatrix2fv(loc, 1, GL_FALSE, m);
+					} break;
+					case ShaderLanguage::TYPE_MAT3: {
+						float m[9] = {};
+						m[0] = ((const float *)val_ptr)[0];
+						m[1] = ((const float *)val_ptr)[1];
+						m[2] = ((const float *)val_ptr)[2];
+						m[3] = ((const float *)val_ptr)[4];
+						m[4] = ((const float *)val_ptr)[5];
+						m[5] = ((const float *)val_ptr)[6];
+						m[6] = ((const float *)val_ptr)[8];
+						m[7] = ((const float *)val_ptr)[9];
+						m[8] = ((const float *)val_ptr)[10];
+						glUniformMatrix3fv(loc, 1, GL_FALSE, m);
+					} break;
+					default:
+						break;
+				}
 			}
 		}
 	}
@@ -1902,12 +2022,11 @@ void CanvasMaterialData::bind_uniforms() {
 	int max_texture_units = GLES2::Config::get_singleton()->max_texture_image_units;
 	int max_custom_textures = MAX(1, max_texture_units - 8); // Reserve top 8 for engine
 
-	for (int ti = 0; ti < texture_cache.size(); ti++) {
-		if (unlikely(ti >= max_custom_textures)) {
-			ERR_PRINT_ONCE(vformat("GLES2: Custom shader uses too many textures! Hardware limit is %d. Skipping remainder.", max_custom_textures));
-			break;
-		}
+	// Start at 1 to preserve GL_TEXTURE0,
+	// which is reserved
+	int current_tex_unit = 1;
 
+	for (int ti = 0; ti < texture_cache.size(); ti++) {
 		const ShaderCompiler::GeneratedCode::Texture &texture_uniform = texture_uniforms[texture_uniform_index];
 
 		// Tell the custom shader which texture unit to read from
@@ -1920,14 +2039,38 @@ void CanvasMaterialData::bind_uniforms() {
 			tex_loc = glGetUniformLocation(prog, tex_name.utf8().get_data());
 		}
 
-		if (tex_loc >= 0) {
-			glUniform1i(tex_loc, ti);
-		}
+		if (texture_uniform.hint == ShaderLanguage::ShaderNode::Uniform::HINT_SCREEN_TEXTURE) {
+			// Map directly to the engine's backbuffer texture unit.
+			if (tex_loc >= 0) {
+				glUniform1i(tex_loc + texture_uniform_count, max_texture_units - 4);
+			}
+		} else if (texture_uniform.hint == ShaderLanguage::ShaderNode::Uniform::HINT_NORMAL_ROUGHNESS_TEXTURE) {
+			// TODO(GLES2): Map screen normal hints to the dedicated normal
+			// unit after implementing screen normals later
+			if (tex_loc >= 0) {
+				glUniform1i(tex_loc + texture_uniform_count, max_texture_units - 6);
+			}
+		} else {
+			// Standard custom texture mapping
+			if (unlikely(current_tex_unit >= max_custom_textures)) {
+				ERR_PRINT_ONCE(vformat("GLES2: Custom shader uses too many textures! Hardware limit is %d. Skipping remainder.", max_custom_textures));
+				break;
+			}
 
-		GLES2::Texture *texture = GLES2::TextureStorage::get_singleton()->get_texture(textures[ti]);
-		if (texture) {
-			glActiveTexture(GL_TEXTURE0 + ti);
-			glBindTexture(GL_TEXTURE_2D, texture->tex_id);
+			if (tex_loc >= 0) {
+				glUniform1i(tex_loc + texture_uniform_count, current_tex_unit);
+			}
+
+			glActiveTexture(GL_TEXTURE0 + current_tex_unit);
+
+			GLES2::Texture *texture = GLES2::TextureStorage::get_singleton()->get_texture(textures[ti]);
+			if (texture && texture->tex_id != 0) {
+				glBindTexture(texture->target, texture->tex_id);
+			} else {
+				glBindTexture(GL_TEXTURE_2D, 0);
+			}
+
+			current_tex_unit++;
 		}
 
 		texture_uniform_count++;
@@ -1936,6 +2079,10 @@ void CanvasMaterialData::bind_uniforms() {
 			texture_uniform_count = 0;
 		}
 	}
+
+	// Reset active texture to 0 so we don't accidentally break the geometry drawing
+	// pass that happens immediately after this function returns.
+	glActiveTexture(GL_TEXTURE0);
 }
 
 CanvasMaterialData::~CanvasMaterialData() {
@@ -1973,7 +2120,7 @@ SkyShaderData::SkyShaderData() {
 }
 
 SkyShaderData::~SkyShaderData() {
-	if (version.is_valid()) {
+	if (version.is_valid() && MaterialStorage::get_singleton()) {
 		MaterialStorage::get_singleton()->shaders.sky_shader.version_free(version);
 	}
 }
@@ -2076,7 +2223,7 @@ SceneShaderData::SceneShaderData() {
 }
 
 SceneShaderData::~SceneShaderData() {
-	if (version.is_valid()) {
+	if (version.is_valid() && MaterialStorage::get_singleton()) {
 		MaterialStorage::get_singleton()->shaders.scene_shader.version_free(version);
 	}
 }
@@ -2131,7 +2278,7 @@ RS::ShaderNativeSourceCode ParticlesShaderData::get_native_source_code() const {
 }
 
 ParticlesShaderData::~ParticlesShaderData() {
-	if (version.is_valid()) {
+	if (version.is_valid() && MaterialStorage::get_singleton()) {
 		MaterialStorage::get_singleton()->shaders.particles_process_shader.version_free(version);
 	}
 }

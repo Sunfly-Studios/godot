@@ -56,15 +56,13 @@ CopyEffects::CopyEffects() {
 	glBindBuffer(GL_ARRAY_BUFFER, screen_triangle);
 	GL_CHECK_ERROR("GLES1::CopyEffects setup: bind screen_triangle");
 
-	const float triangle_verts[6] = {
-		-1.0f,
-		-1.0f,
-		3.0f,
-		-1.0f,
-		-1.0f,
-		3.0f,
+	const float triangle_verts[12] = {
+		// Pos            // UV
+		-1.0f,  -1.0f,    0.0f, 0.0f,
+		 3.0f,  -1.0f,    2.0f, 0.0f,
+		-1.0f,   3.0f,    0.0f, 2.0f,
 	};
-	glBufferData(GL_ARRAY_BUFFER, sizeof(float) * 6, triangle_verts, GL_STATIC_DRAW);
+	glBufferData(GL_ARRAY_BUFFER, sizeof(float) * 12, triangle_verts, GL_STATIC_DRAW);
 	glBindBuffer(GL_ARRAY_BUFFER, 0);
 	GL_CHECK_ERROR("GLES1::CopyEffects setup: buffer data screen_triangle");
 
@@ -107,27 +105,34 @@ void CopyEffects::set_color(const Color &p_color, const Rect2i &p_region) {
 void CopyEffects::draw_screen_triangle() {
 	glBindBuffer(GL_ARRAY_BUFFER, screen_triangle);
 
-	// In GLES1, we use standard client states, not attribute arrays
 	glEnableClientState(GL_VERTEX_ARRAY);
-	glVertexPointer(2, GL_FLOAT, sizeof(float) * 2, nullptr);
+	glEnableClientState(GL_TEXTURE_COORD_ARRAY);
+
+	// Set pointers of 4 floats (2 pos, 2 uv)
+	glVertexPointer(2, GL_FLOAT, sizeof(float) * 4, nullptr);
+	glTexCoordPointer(2, GL_FLOAT, sizeof(float) * 4, (const void *)(sizeof(float) * 2));
 	GL_CHECK_ERROR("CopyEffects::draw_screen_triangle: state setup");
 
-	// TODO(GLES1): The screen triangle doesn't use UVs in the VBO (shader computes them),
-	// but fixed-function doesn't have a shader. So this might need UVs later,
-	// but for now, just draw the vertex array.
+	// Draw the triangle
 	glDrawArrays(GL_TRIANGLES, 0, 3);
 	GL_CHECK_ERROR("CopyEffects::draw_screen_triangle: glDrawArrays");
 
 	// Clean up state
 	glDisableClientState(GL_VERTEX_ARRAY);
+	glDisableClientState(GL_TEXTURE_COORD_ARRAY);
 	glBindBuffer(GL_ARRAY_BUFFER, 0);
+	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+
+	// Stop matrix bleed from source_section
+	glMatrixMode(GL_TEXTURE);
+	glLoadIdentity();
+	glMatrixMode(GL_MODELVIEW);
 	GL_CHECK_ERROR("CopyEffects::draw_screen_triangle: cleanup");
 }
 
 void CopyEffects::draw_screen_quad() {
 	glBindBuffer(GL_ARRAY_BUFFER, quad);
 
-	// Enable fixed-function client states
 	glEnableClientState(GL_VERTEX_ARRAY);
 	glEnableClientState(GL_TEXTURE_COORD_ARRAY);
 
@@ -145,6 +150,12 @@ void CopyEffects::draw_screen_quad() {
 	glDisableClientState(GL_VERTEX_ARRAY);
 	glDisableClientState(GL_TEXTURE_COORD_ARRAY);
 	glBindBuffer(GL_ARRAY_BUFFER, 0);
+	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+
+	// Stop matrix bleed from source_section
+	glMatrixMode(GL_TEXTURE);
+	glLoadIdentity();
+	glMatrixMode(GL_MODELVIEW);
 	GL_CHECK_ERROR("CopyEffects::draw_screen_quad: cleanup");
 }
 

@@ -390,7 +390,18 @@ void RasterizerGLES2::_blit_render_target_to_screen(RID p_render_target, Display
 	GLES2::TextureStorage::get_singleton()->bind_framebuffer_system();
 	GL_CHECK_ERROR("GLES2::RasterizerGLES2::_blit_render_target_to_screen: bind_framebuffer_system");
 
+#if defined(ANDROID_ENABLED) || defined(__ANDROID__)
+	// Defense against Android OS lifecycle race conditions.
+	if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
+		return; 
+	}
+#endif
+
 	Size2i win_size = DisplayServer::get_singleton()->window_get_size(p_screen);
+
+	if (win_size.width <= 0 || win_size.height <= 0) {
+		return;
+	}
 
 	if (p_first) {
 		if (p_screen_rect.position != Vector2() || p_screen_rect.size != rt->size) {
@@ -415,7 +426,8 @@ void RasterizerGLES2::_blit_render_target_to_screen(RID p_render_target, Display
 		p_screen_rect.position.x,
 		win_size.height - p_screen_rect.position.y - p_screen_rect.size.height,
 		vp_w,
-		vp_h);
+		vp_h
+	);
 	GL_CHECK_ERROR("GLES2::RasterizerGLES2::_blit_render_target_to_screen: glViewport");
 
 	// Disable states that could ruin a direct copy
@@ -425,6 +437,11 @@ void RasterizerGLES2::_blit_render_target_to_screen(RID p_render_target, Display
 	glDisable(GL_SCISSOR_TEST);
 	glDepthMask(GL_FALSE);
 	GL_CHECK_ERROR("GLES2::RasterizerGLES2::_blit_render_target_to_screen: disable states");
+
+	// Prevent vertex attribute bleed
+	for (int i = 0; i < RS::ARRAY_MAX; i++) {
+		glDisableVertexAttribArray(i);
+	}
 
 	// Bind the RenderTarget's color texture
 	glActiveTexture(GL_TEXTURE0);
@@ -455,6 +472,7 @@ void RasterizerGLES2::_blit_render_target_to_screen(RID p_render_target, Display
 
 	// Clean up
 	glBindTexture(GL_TEXTURE_2D, 0);
+	glActiveTexture(GL_TEXTURE0);
 
 	// Restore global depth mask
 	glDepthMask(GL_TRUE);
@@ -481,6 +499,13 @@ void RasterizerGLES2::set_boot_image(const Ref<Image> &p_image, const Color &p_c
 	win_size.height = MAX(1, win_size.height);
 
 	glBindFramebuffer(GL_FRAMEBUFFER, GLES2::TextureStorage::system_fbo);
+
+#if defined(ANDROID_ENABLED) || defined(__ANDROID__)
+	if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
+		return;
+	}
+#endif
+
 	glViewport(0, 0, win_size.width, win_size.height);
 	glEnable(GL_BLEND);
 	glBlendFuncSeparate(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_ZERO, GL_ONE);
@@ -528,11 +553,19 @@ void RasterizerGLES2::set_boot_image(const Ref<Image> &p_image, const Color &p_c
 	glBindTexture(GL_TEXTURE_2D, t->tex_id);
 	GL_CHECK_ERROR("GLES2::RasterizerGLES2::set_boot_image: texture bind");
 
+	for (int i = 0; i < RS::ARRAY_MAX; i++) {
+		glDisableVertexAttribArray(i);
+	}
+
 	copy_effects->copy_to_rect(screenrect);
 	glBindTexture(GL_TEXTURE_2D, 0);
 	GL_CHECK_ERROR("GLES2::RasterizerGLES2::set_boot_image: cleanup");
 
 	DisplayServer::get_singleton()->swap_buffers();
+
+	// Prevent bleed
+	glDepthMask(GL_TRUE);
+	glDisable(GL_BLEND);
 
 	texture_storage->texture_free(texture);
 }

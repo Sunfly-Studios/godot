@@ -2465,9 +2465,10 @@ Error Main::setup(const char *execpath, int argc, char *argv[], bool p_second_ph
 
 	// Handle project manager defaults independently.
 	if (rendering_driver.is_empty() && rendering_method.is_empty() && project_manager) {
-		// TODO(GLES1): Make Classic the preferred one once
-		// we get 2D working and solid.
-#ifdef GLES2_ENABLED
+#if defined(GLES1_ENABLED)
+		rendering_driver = "opengl1";
+		rendering_method = "gl_classic";
+#elif defined(GLES2_ENABLED)
 		rendering_driver = "opengl2";
 		rendering_method = "gl_legacy";
 #elif defined(GLES3_ENABLED)

@@ -189,7 +189,9 @@ Ref<Image> TextureStorage::_get_gl_image_and_format(const Ref<Image> &p_image, I
 			r_gl_type = GL_UNSIGNED_BYTE;
 		} break;
 		case Image::FORMAT_RG8: {
+#if DEBUG_ENABLED
 			ERR_PRINT_ONCE("RG8 Format is not supported by GLES1, converting to RGB.");
+#endif
 			if (image.is_valid()) {
 				image->convert(Image::FORMAT_RGB8);
 			}
@@ -749,11 +751,54 @@ Ref<Image> TextureStorage::texture_2d_get(RID p_texture) const {
 	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, temp_color_texture, 0);
 	GL_CHECK_ERROR("GLES1::TextureStorage::texture_2d_get: glFramebufferTexture2D");
 
+	// Capture states
+	GLboolean prev_depth_test = 0, prev_cull_face = 0, prev_blend = 0;
+	glGetBooleanv(GL_DEPTH_TEST, &prev_depth_test);
+	glGetBooleanv(GL_CULL_FACE, &prev_cull_face);
+	glGetBooleanv(GL_BLEND, &prev_blend);
+
+	GLint prev_depth_func = 0;
+	glGetIntegerv(GL_DEPTH_FUNC, &prev_depth_func);
+
+	GLboolean prev_depth_mask = 0;
+	glGetBooleanv(GL_DEPTH_WRITEMASK, &prev_depth_mask);
+
+	GLboolean prev_color_mask[4] = {};
+	glGetBooleanv(GL_COLOR_WRITEMASK, prev_color_mask);
+
+	GLfloat prev_clear_color[4] = {};
+	glGetFloatv(GL_COLOR_CLEAR_VALUE, prev_clear_color);
+
+	GLint prev_active_tex = 0;
+	glGetIntegerv(GL_ACTIVE_TEXTURE, &prev_active_tex);
+	glActiveTexture(GL_TEXTURE0);
+	GLint prev_bound_tex = 0;
+	glGetIntegerv(GL_TEXTURE_BINDING_2D, &prev_bound_tex);
+	GL_CHECK_ERROR("GLES1::TextureStorage::texture_2d_get: state capture");
+
 	GLenum status = glCheckFramebufferStatus(GL_FRAMEBUFFER);
 	if (status != GL_FRAMEBUFFER_COMPLETE) {
 		bind_framebuffer(previous_fbo);
 		glDeleteTextures(1, &temp_color_texture);
 		glDeleteFramebuffersOES(1, &temp_framebuffer);
+
+		// Restore states before early-out
+		if (prev_depth_test) {
+			glEnable(GL_DEPTH_TEST);
+		}
+		if (prev_cull_face) {
+			glEnable(GL_CULL_FACE);
+		}
+		if (prev_blend) {
+			glEnable(GL_BLEND);
+		}
+		glDepthFunc(prev_depth_func);
+		glDepthMask(prev_depth_mask);
+		glColorMask(prev_color_mask[0], prev_color_mask[1], prev_color_mask[2], prev_color_mask[3]);
+		glClearColor(prev_clear_color[0], prev_clear_color[1], prev_clear_color[2], prev_clear_color[3]);
+		glBindTexture(GL_TEXTURE_2D, prev_bound_tex);
+		glActiveTexture(prev_active_tex);
+
 		ERR_FAIL_V_MSG(Ref<Image>(), "GLES1: FBO incomplete during texture_2d_get fallback readback.");
 	}
 
@@ -805,10 +850,30 @@ Ref<Image> TextureStorage::texture_2d_get(RID p_texture) const {
 	glDeleteFramebuffersOES(1, &temp_framebuffer);
 	GL_CHECK_ERROR("GLES1::TextureStorage::texture_2d_get: cleanup glDelete");
 
+	// Restore all states
+	if (prev_depth_test) {
+		glEnable(GL_DEPTH_TEST);
+	}
+	if (prev_cull_face) {
+		glEnable(GL_CULL_FACE);
+	}
+	if (prev_blend) {
+		glEnable(GL_BLEND);
+	}
+
+	glDepthFunc(prev_depth_func);
+	glDepthMask(prev_depth_mask);
+	glColorMask(prev_color_mask[0], prev_color_mask[1], prev_color_mask[2], prev_color_mask[3]);
+	glClearColor(prev_clear_color[0], prev_clear_color[1], prev_clear_color[2], prev_clear_color[3]);
+
+	glBindTexture(GL_TEXTURE_2D, prev_bound_tex);
+	glActiveTexture(prev_active_tex);
+	GL_CHECK_ERROR("GLES1::TextureStorage::texture_2d_get: state restore");
+
 	data.resize(data_size);
 
 	ERR_FAIL_COND_V(data.is_empty(), Ref<Image>());
-	image = Image::create_from_data(tex->width, tex->height, false, Image::FORMAT_RGBA8, data);
+	image = Image::create_from_data(tex->alloc_width, tex->alloc_height, false, Image::FORMAT_RGBA8, data);
 	ERR_FAIL_COND_V(image.is_null() || image->is_empty(), Ref<Image>());
 
 	if (tex->format != Image::FORMAT_RGBA8) {
@@ -915,7 +980,13 @@ void TextureStorage::texture_set_force_redraw_if_visible(RID p_texture, bool p_e
 }
 
 Size2 TextureStorage::texture_size_with_proxy(RID p_texture) {
-	return Size2();
+	const Texture *texture = texture_owner.get_or_null(p_texture);
+	ERR_FAIL_NULL_V(texture, Size2());
+	if (texture->is_proxy && texture->proxy_to.is_valid()) {
+		const Texture *proxy = texture_owner.get_or_null(texture->proxy_to);
+		return Size2(proxy->width, proxy->height);
+	}
+	return Size2(texture->width, texture->height);
 }
 
 void TextureStorage::texture_rd_initialize(RID p_texture, const RID &p_rd_texture, const RS::TextureLayeredType p_layer_type) {
@@ -1031,7 +1102,14 @@ void TextureStorage::_texture_set_data(RID p_texture, const Ref<Image> &p_image,
 	}
 #endif
 
+	// Capture previous state
+	GLint prev_active_tex = 0;
+	glGetIntegerv(GL_ACTIVE_TEXTURE, &prev_active_tex);
 	glActiveTexture(GL_TEXTURE0);
+	GLint prev_bound_tex = 0;
+	glGetIntegerv(GL_TEXTURE_BINDING_2D, &prev_bound_tex);
+	GL_CHECK_ERROR("GLES1::TextureStorage::_texture_set_data: texture state capture");
+
 	glBindTexture(texture->target, texture->tex_id);
 
 	// Default to Clamp-to-Edge to prevent possible NPOT black screens.
@@ -1069,6 +1147,12 @@ void TextureStorage::_texture_set_data(RID p_texture, const Ref<Image> &p_image,
 	texture->total_data_size = tsize;
 	texture->stored_cube_sides |= (1 << p_layer);
 	texture->mipmaps = mipmaps;
+
+	// Restore state
+	glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
+	glBindTexture(texture->target, prev_bound_tex);
+	glActiveTexture(prev_active_tex);
+	GL_CHECK_ERROR("GLES1::TextureStorage::_texture_set_data: texture state capture restore");
 }
 
 void TextureStorage::_texture_set_3d_data(RID p_texture, const Vector<Ref<Image>> &p_data, bool p_initialize) {
@@ -1298,6 +1382,30 @@ void TextureStorage::_update_render_target(RenderTarget *rt) {
 		rt->image_format = Image::FORMAT_RGB8;
 	}
 
+	// Capture state
+	GLint prev_scissor_test = 0;
+	glGetIntegerv(GL_SCISSOR_TEST, &prev_scissor_test);
+
+	GLboolean prev_depth_mask = 0;
+	glGetBooleanv(GL_DEPTH_WRITEMASK, &prev_depth_mask);
+
+	GLboolean prev_color_mask[4] = {};
+	glGetBooleanv(GL_COLOR_WRITEMASK, prev_color_mask);
+
+	GLfloat prev_clear_color[4] = {};
+	glGetFloatv(GL_COLOR_CLEAR_VALUE, prev_clear_color);
+
+	GLint prev_active_tex = 0;
+	glGetIntegerv(GL_ACTIVE_TEXTURE, &prev_active_tex);
+	glActiveTexture(GL_TEXTURE0);
+
+	GLint prev_bound_tex = 0;
+	glGetIntegerv(GL_TEXTURE_BINDING_2D, &prev_bound_tex);
+
+	GLint prev_renderbuffer = 0;
+	glGetIntegerv(GL_RENDERBUFFER_BINDING_OES, &prev_renderbuffer);
+	GL_CHECK_ERROR("GLES1::TextureStorage::_update_render_target: state capture");
+
 	glDisable(GL_SCISSOR_TEST);
 	glColorMask(1, 1, 1, 1);
 	glDepthMask(GL_FALSE);
@@ -1316,6 +1424,17 @@ void TextureStorage::_update_render_target(RenderTarget *rt) {
 		if (unlikely(!texture)) {
 			glDeleteFramebuffersOES(1, &rt->fbo);
 			rt->fbo = 0;
+
+			if (prev_scissor_test) {
+				glEnable(GL_SCISSOR_TEST);
+			}
+			glDepthMask(prev_depth_mask);
+			glColorMask(prev_color_mask[0], prev_color_mask[1], prev_color_mask[2], prev_color_mask[3]);
+			glClearColor(prev_clear_color[0], prev_clear_color[1], prev_clear_color[2], prev_clear_color[3]);
+			glBindRenderbufferOES(GL_RENDERBUFFER_OES, prev_renderbuffer);
+			glBindTexture(GL_TEXTURE_2D, prev_bound_tex);
+			glActiveTexture(prev_active_tex);
+
 			ERR_FAIL_MSG("GLES1: Missing texture for Render Target.");
 		}
 		rt->color = texture->tex_id;
@@ -1325,6 +1444,17 @@ void TextureStorage::_update_render_target(RenderTarget *rt) {
 		if (unlikely(!texture)) {
 			glDeleteFramebuffersOES(1, &rt->fbo);
 			rt->fbo = 0;
+
+			if (prev_scissor_test) {
+				glEnable(GL_SCISSOR_TEST);
+			}
+			glDepthMask(prev_depth_mask);
+			glColorMask(prev_color_mask[0], prev_color_mask[1], prev_color_mask[2], prev_color_mask[3]);
+			glClearColor(prev_clear_color[0], prev_clear_color[1], prev_clear_color[2], prev_clear_color[3]);
+			glBindRenderbufferOES(GL_RENDERBUFFER_OES, prev_renderbuffer);
+			glBindTexture(GL_TEXTURE_2D, prev_bound_tex);
+			glActiveTexture(prev_active_tex);
+
 			ERR_FAIL_MSG("GLES1: Missing texture for Render Target.");
 		}
 
@@ -1332,6 +1462,17 @@ void TextureStorage::_update_render_target(RenderTarget *rt) {
 		if (unlikely(rt->color == 0)) {
 			glDeleteFramebuffersOES(1, &rt->fbo);
 			rt->fbo = 0;
+
+			if (prev_scissor_test) {
+				glEnable(GL_SCISSOR_TEST);
+			}
+			glDepthMask(prev_depth_mask);
+			glColorMask(prev_color_mask[0], prev_color_mask[1], prev_color_mask[2], prev_color_mask[3]);
+			glClearColor(prev_clear_color[0], prev_clear_color[1], prev_clear_color[2], prev_clear_color[3]);
+			glBindRenderbufferOES(GL_RENDERBUFFER_OES, prev_renderbuffer);
+			glBindTexture(GL_TEXTURE_2D, prev_bound_tex);
+			glActiveTexture(prev_active_tex);
+
 			ERR_FAIL_MSG("GLES1: Failed to generate color texture for RenderTarget.");
 		}
 		glBindTexture(texture_target, rt->color);
@@ -1362,6 +1503,17 @@ void TextureStorage::_update_render_target(RenderTarget *rt) {
 		if (unlikely(!texture)) {
 			glDeleteFramebuffersOES(1, &rt->fbo);
 			rt->fbo = 0;
+
+			if (prev_scissor_test) {
+				glEnable(GL_SCISSOR_TEST);
+			}
+			glDepthMask(prev_depth_mask);
+			glColorMask(prev_color_mask[0], prev_color_mask[1], prev_color_mask[2], prev_color_mask[3]);
+			glClearColor(prev_clear_color[0], prev_clear_color[1], prev_clear_color[2], prev_clear_color[3]);
+			glBindRenderbufferOES(GL_RENDERBUFFER_OES, prev_renderbuffer);
+			glBindTexture(GL_TEXTURE_2D, prev_bound_tex);
+			glActiveTexture(prev_active_tex);
+
 			ERR_FAIL_MSG("GLES1: Missing texture for Render Target.");
 		}
 		rt->depth = texture->tex_id;
@@ -1385,6 +1537,17 @@ void TextureStorage::_update_render_target(RenderTarget *rt) {
 	GLenum status = glCheckFramebufferStatusOES(GL_FRAMEBUFFER_OES);
 	if (status != GL_FRAMEBUFFER_COMPLETE_OES) {
 		glDeleteFramebuffersOES(1, &rt->fbo);
+
+		if (prev_scissor_test) {
+			glEnable(GL_SCISSOR_TEST);
+		}
+		glDepthMask(prev_depth_mask);
+		glColorMask(prev_color_mask[0], prev_color_mask[1], prev_color_mask[2], prev_color_mask[3]);
+		glClearColor(prev_clear_color[0], prev_clear_color[1], prev_clear_color[2], prev_clear_color[3]);
+		glBindRenderbufferOES(GL_RENDERBUFFER_OES, prev_renderbuffer);
+		glBindTexture(GL_TEXTURE_2D, prev_bound_tex);
+		glActiveTexture(prev_active_tex);
+
 		if (rt->overridden.color.is_null()) {
 			GLES1::Utilities::get_singleton()->texture_free_data(rt->color);
 		}
@@ -1433,6 +1596,17 @@ void TextureStorage::_update_render_target(RenderTarget *rt) {
 	glClearColor(0, 0, 0, 0);
 	glClear(GL_COLOR_BUFFER_BIT);
 	bind_framebuffer(system_fbo);
+
+	if (prev_scissor_test) {
+		glEnable(GL_SCISSOR_TEST);
+	}
+	glDepthMask(prev_depth_mask);
+	glColorMask(prev_color_mask[0], prev_color_mask[1], prev_color_mask[2], prev_color_mask[3]);
+	glClearColor(prev_clear_color[0], prev_clear_color[1], prev_clear_color[2], prev_clear_color[3]);
+	glBindRenderbufferOES(GL_RENDERBUFFER_OES, prev_renderbuffer);
+	glBindTexture(GL_TEXTURE_2D, prev_bound_tex);
+	glActiveTexture(prev_active_tex);
+	GL_CHECK_ERROR("GLES1::TextureStorage::_update_render_target: state restore");
 }
 
 void TextureStorage::_create_render_target_backbuffer(RenderTarget *rt) {
@@ -1776,11 +1950,31 @@ void TextureStorage::render_target_do_clear_request(RID p_render_target) {
 	// Steer the GPU to the correct framebuffer
 	bind_framebuffer(rt->fbo);
 
+	// Capture and neutralize masks that restrict glClear
+	GLint prev_scissor_test = 0;
+	glGetIntegerv(GL_SCISSOR_TEST, &prev_scissor_test);
+	GLboolean prev_color_mask[4] = {};
+	glGetBooleanv(GL_COLOR_WRITEMASK, prev_color_mask);
+	GLfloat prev_clear_color[4] = {};
+	glGetFloatv(GL_COLOR_CLEAR_VALUE, prev_clear_color);
+	GL_CHECK_ERROR("GLES1::TextureStorage::render_target_do_clear_request: state capture");
+
+	glDisable(GL_SCISSOR_TEST);
+	glColorMask(1, 1, 1, 1);
+
 	// Paint the color.
 	glClearColor(rt->clear_color.r, rt->clear_color.g, rt->clear_color.b, rt->clear_color.a);
 	glClear(GL_COLOR_BUFFER_BIT);
 
 	rt->clear_requested = false;
+
+	// Restore states to exact previous condition
+	if (prev_scissor_test) {
+		glEnable(GL_SCISSOR_TEST);
+	}
+	glColorMask(prev_color_mask[0], prev_color_mask[1], prev_color_mask[2], prev_color_mask[3]);
+	glClearColor(prev_clear_color[0], prev_clear_color[1], prev_clear_color[2], prev_clear_color[3]);
+	GL_CHECK_ERROR("GLES1::TextureStorage::render_target_do_clear_request: state restore");
 
 	// Reset back to the main window
 	bind_framebuffer(system_fbo);
@@ -1867,6 +2061,13 @@ void TextureStorage::render_target_copy_to_back_buffer(RID p_render_target, cons
 	RenderTarget *rt = render_target_owner.get_or_null(p_render_target);
 	ERR_FAIL_NULL(rt);
 
+	GLint prev_active_tex = 0;
+	glGetIntegerv(GL_ACTIVE_TEXTURE, &prev_active_tex);
+	glActiveTexture(GL_TEXTURE0);
+	GLint prev_bound_tex = 0;
+	glGetIntegerv(GL_TEXTURE_BINDING_2D, &prev_bound_tex);
+	GL_CHECK_ERROR("GLES1::TextureStorage::render_target_copy_to_back_buffer: glGetIntegerv GL_TEXTURE0 texture state hijack");
+
 	// Generate the backbuffer texture
 	if (rt->backbuffer == 0) {
 		glGenTextures(1, &rt->backbuffer);
@@ -1902,7 +2103,9 @@ void TextureStorage::render_target_copy_to_back_buffer(RID p_render_target, cons
 	GL_CHECK_ERROR("GLES1::TextureStorage::render_target_copy_to_back_buffer: glCopyTexSubImage2D");
 
 	// Clean up
-	glBindTexture(GL_TEXTURE_2D, 0);
+	glBindTexture(GL_TEXTURE_2D, prev_bound_tex);
+	glActiveTexture(prev_active_tex);
+	GL_CHECK_ERROR("GLES1::TextureStorage::render_target_copy_to_back_buffer: glGetIntegerv GL_TEXTURE0 texture state restore");
 }
 
 void TextureStorage::render_target_clear_back_buffer(RID p_render_target, const Rect2i &p_region, const Color &p_color) {

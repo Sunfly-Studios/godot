@@ -622,7 +622,7 @@ public:
 	}
 };
 
-} // namespace GLES2
+} // namespace GLES1
 
 #endif // GLES1_ENABLED
 

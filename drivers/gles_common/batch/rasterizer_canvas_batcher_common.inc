@@ -116,12 +116,6 @@ void RasterizerCanvasBatcherCommon<T_API>::batch_canvas_render_items_begin(const
 		bdata.settings_use_batching = (Engine::get_singleton()->get_frames_drawn() % 2) == 0;
 	}
 
-	if (!bdata.settings_use_batching) {
-		return;
-	}
-
-	_calculate_scissor_threshold_area();
-
 	// Set up render item state for all Z-indexes
 	_render_item_state.reset();
 	_render_item_state.item_group_modulate = p_modulate;
@@ -129,6 +123,12 @@ void RasterizerCanvasBatcherCommon<T_API>::batch_canvas_render_items_begin(const
 	_render_item_state.item_group_base_transform = p_base_transform;
 	_render_item_state.light_region.reset();
 	_render_item_state.join_batch_break = false;
+
+	if (!bdata.settings_use_batching) {
+		return;
+	}
+
+	_calculate_scissor_threshold_area();
 
 	bdata.join_across_z_indices = true;
 
@@ -232,7 +232,7 @@ void RasterizerCanvasBatcherCommon<T_API>::record_items(RendererCanvasRender::It
 		if (!s) {
 			bdata.sort_items.grow();
 			s = bdata.sort_items.request();
-			ERR_FAIL_NULL_MSG(s, "GLES2 Canvas Batcher: Failed to allocate BSortItem even after growing array.");
+			ERR_FAIL_NULL_MSG(s, "GLES Canvas Batcher: Failed to allocate BSortItem even after growing array.");
 		}
 
 		s->item = p_item_list;
@@ -777,7 +777,7 @@ bool RasterizerCanvasBatcherCommon<T_API>::prefill_joined_item(FillState &r_fill
 			case RendererCanvasRender::Item::Command::TYPE_POLYGON: {
 				RendererCanvasRender::Item::CommandPolygon *polygon = static_cast<RendererCanvasRender::Item::CommandPolygon *>(command);
 
-				// The GLES2 2D Batcher is heavily optimized for triangles.
+				// The GLES2/GLES1 2D Batcher is heavily optimized for triangles.
 				// If the polygon is lines or points, route it to the unbatched fallback.
 				if (polygon->primitive != RS::PRIMITIVE_TRIANGLES) {
 					_prefill_default_batch(r_fill_state, command, *p_item);
@@ -1356,7 +1356,16 @@ bool RasterizerCanvasBatcherCommon<T_API>::_prefill_rect(RendererCanvasRender::I
 template <typename T_API>
 template <bool SEND_LIGHT_ANGLES>
 bool RasterizerCanvasBatcherCommon<T_API>::_prefill_ninepatch(RendererCanvasRender::Item::CommandNinePatch *p_np, FillState &r_fill_state, RendererCanvasRender::Item::Command **p_command_start, RendererCanvasRender::Item::Command *p_command, RendererCanvasRender::Item *p_item, bool multiply_final_modulate) {
-	typename T_API::Texture *tex = T_API::TextureStorage::get_singleton()->get_texture(p_np->texture);
+	// Properly unwrap the RID
+	RID diffuse_rid = p_np->texture;
+	if (diffuse_rid.is_valid()) {
+		typename T_API::CanvasTexture *ct = T_API::TextureStorage::get_singleton()->get_canvas_texture(diffuse_rid);
+		if (ct && ct->diffuse.is_valid()) {
+			diffuse_rid = ct->diffuse;
+		}
+	}
+
+	typename T_API::Texture *tex = T_API::TextureStorage::get_singleton()->get_texture(diffuse_rid);
 
 	if (!tex || tex->width == 0 || tex->height == 0) {
 		return false;
@@ -1385,6 +1394,24 @@ bool RasterizerCanvasBatcherCommon<T_API>::_prefill_ninepatch(RendererCanvasRend
 		screen_scale = MIN(1.0f, screen_scale);
 	}
 
+	// Clamp screen margins to prevent the geometry from flipping inside out
+	float draw_margin_left = p_np->margin[SIDE_LEFT] * screen_scale;
+	float draw_margin_right = p_np->margin[SIDE_RIGHT] * screen_scale;
+	float draw_margin_top = p_np->margin[SIDE_TOP] * screen_scale;
+	float draw_margin_bottom = p_np->margin[SIDE_BOTTOM] * screen_scale;
+
+	if (draw_margin_left + draw_margin_right > p_np->rect.size.x) {
+		float ratio = p_np->rect.size.x / (draw_margin_left + draw_margin_right);
+		draw_margin_left *= ratio;
+		draw_margin_right *= ratio;
+	}
+
+	if (draw_margin_top + draw_margin_bottom > p_np->rect.size.y) {
+		float ratio = p_np->rect.size.y / (draw_margin_top + draw_margin_bottom);
+		draw_margin_top *= ratio;
+		draw_margin_bottom *= ratio;
+	}
+
 	Rect2 &rt = trect.rect;
 	Rect2 &src = trect.source;
 
@@ -1393,31 +1420,32 @@ bool RasterizerCanvasBatcherCommon<T_API>::_prefill_ninepatch(RendererCanvasRend
 	float tex_margin_top = p_np->margin[SIDE_TOP];
 	float tex_margin_bottom = p_np->margin[SIDE_BOTTOM];
 
+	// Tiny epsilon to the inner UV margins
+	// to prevent GL_LINEAR NPOT bleed
+	constexpr float EPS = 0.01f; 
+
 	float x[4] = {
 		(float)p_np->rect.position.x,
-		(float)(p_np->rect.position.x + (tex_margin_left * screen_scale)),
-		(float)(p_np->rect.position.x + p_np->rect.size.x - (tex_margin_right * screen_scale)),
+		(float)(p_np->rect.position.x + draw_margin_left),
+		(float)(p_np->rect.position.x + p_np->rect.size.x - draw_margin_right),
 		(float)(p_np->rect.position.x + p_np->rect.size.x)
 	};
-
 	float y[4] = {
 		(float)p_np->rect.position.y,
-		(float)(p_np->rect.position.y + (tex_margin_top * screen_scale)),
-		(float)(p_np->rect.position.y + p_np->rect.size.y - (tex_margin_bottom * screen_scale)),
+		(float)(p_np->rect.position.y + draw_margin_top),
+		(float)(p_np->rect.position.y + p_np->rect.size.y - draw_margin_bottom),
 		(float)(p_np->rect.position.y + p_np->rect.size.y)
 	};
-
 	float u[4] = {
 		(float)source.position.x,
-		(float)(source.position.x + tex_margin_left),
-		(float)(source.position.x + source.size.x - tex_margin_right),
+		(float)(source.position.x + tex_margin_left) + (tex_margin_left > 0 ? EPS : 0),
+		(float)(source.position.x + source.size.x - tex_margin_right) - (tex_margin_right > 0 ? EPS : 0),
 		(float)(source.position.x + source.size.x)
 	};
-
 	float v[4] = {
 		(float)source.position.y,
-		(float)(source.position.y + tex_margin_top),
-		(float)(source.position.y + source.size.y - tex_margin_bottom),
+		(float)(source.position.y + tex_margin_top) + (tex_margin_top > 0 ? EPS : 0),
+		(float)(source.position.y + source.size.y - tex_margin_bottom) - (tex_margin_bottom > 0 ? EPS : 0),
 		(float)(source.position.y + source.size.y)
 	};
 
@@ -1479,6 +1507,11 @@ bool RasterizerCanvasBatcherCommon<T_API>::_prefill_polygon(RendererCanvasRender
 
 	int num_verts_to_draw = num_inds > 0 ? num_inds : num_points;
 
+	if (unlikely(num_verts_to_draw > bdata.vertices.max_size())) {
+		_prefill_default_batch(r_fill_state, p_command, *p_item);
+		return false; 
+	}
+
 	BatchVertex *bvs = bdata.vertices.request(num_verts_to_draw);
 	if (!bvs) {
 		*p_command_start = p_command;
@@ -1532,6 +1565,11 @@ bool RasterizerCanvasBatcherCommon<T_API>::_prefill_polygon(RendererCanvasRender
 
 	if (old_batch_tex_id != r_fill_state.batch_tex_id) {
 		change_batch = true;
+	}
+
+	if (!r_fill_state.curr_batch->color.equals(modulate)) {
+		change_batch = true;
+		bdata.total_color_changes++;
 	}
 
 	if (change_batch) {
@@ -1609,7 +1647,7 @@ bool RasterizerCanvasBatcherCommon<T_API>::_prefill_polygon(RendererCanvasRender
 		int ind = num_inds > 0 ? indices_ptr[n] : n;
 
 		if (unlikely(ind < 0 || ind >= num_points)) {
-			ERR_PRINT("GLES2 Batcher: Polygon index out of bounds!");
+			ERR_PRINT("GLES Batcher: Polygon index out of bounds!");
 			ind = 0; 
 		}
 
@@ -1717,7 +1755,7 @@ int RasterizerCanvasBatcherCommon<T_API>::_batch_find_or_create_tex(const RID &p
 			new_batch_tex.tile_mode = BatchTex::TILE_NORMAL;
 
 			// Check if the texture is a Non-Power of Two (NPOT)
-			// GLES2 struggles with NPOT repeating textures, so we force it in the shader if true.
+			// GLES2/GLES1 struggles with NPOT repeating textures, so we force it in the shader if true.
 			bool is_pot = (
 				(next_power_of_2(texture->alloc_width) == (unsigned int)texture->alloc_width) &&
 				(next_power_of_2(texture->alloc_height) == (unsigned int)texture->alloc_height)

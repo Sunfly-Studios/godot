@@ -296,8 +296,27 @@ String ShaderCompilerGLES2::_dump_node_code(ShaderLanguage::Node *p_node, int p_
 					tex.array_size = E.value.array_size;
 					tex.global = E.value.scope == ShaderLanguage::ShaderNode::Uniform::SCOPE_GLOBAL;
 
+					// Flag the screen texture and its mipmaps
+					if (tex.hint == ShaderLanguage::ShaderNode::Uniform::HINT_SCREEN_TEXTURE ||
+							tex.hint == ShaderLanguage::ShaderNode::Uniform::HINT_DEPTH_TEXTURE ||
+							tex.hint == ShaderLanguage::ShaderNode::Uniform::HINT_NORMAL_ROUGHNESS_TEXTURE) {
+						r_gen_code.uses_screen_texture = true;
+
+						if (E.value.filter == ShaderLanguage::FILTER_LINEAR_MIPMAP ||
+								E.value.filter == ShaderLanguage::FILTER_NEAREST_MIPMAP ||
+								E.value.filter == ShaderLanguage::FILTER_LINEAR_MIPMAP_ANISOTROPIC ||
+								E.value.filter == ShaderLanguage::FILTER_NEAREST_MIPMAP_ANISOTROPIC) {
+							r_gen_code.uses_screen_texture_mipmaps = true;
+						}
+					}
+
 					// Assign to the index so the 2D batcher knows where it is.
 					r_gen_code.texture_uniforms.write[E.value.texture_order] = tex;
+
+					// Inject the _pixel_size uniform
+					uniform_code += "uniform highp vec2 ";
+					uniform_code += _mkid(E.key);
+					uniform_code += "_pixel_size;\n";
 				}
 
 				uniform_string += uniform_code.as_string();

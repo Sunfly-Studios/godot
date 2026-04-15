@@ -432,7 +432,19 @@ void RasterizerGLES1::_blit_render_target_to_screen(RID p_render_target, Display
 	GLES1::TextureStorage::get_singleton()->bind_framebuffer_system();
 	GL_CHECK_ERROR("GLES1::RasterizerGLES1::_blit_render_target_to_screen: bind_framebuffer_system");
 
+#if defined(ANDROID_ENABLED) || defined(__ANDROID__)
+	// If the OS reclaims the physical surface while the GL thread is mid-frame
+	// FBO 0 becomes incomplete.
+	if (glCheckFramebufferStatusOES(GL_FRAMEBUFFER_OES) != GL_FRAMEBUFFER_COMPLETE_OES) {
+		return;
+	}
+#endif
+
 	Size2i win_size = DisplayServer::get_singleton()->window_get_size(p_screen);
+
+	if (win_size.width <= 0 || win_size.height <= 0) {
+		return;
+	}
 
 	if (p_first) {
 		if (p_screen_rect.position != Vector2() || p_screen_rect.size != rt->size) {
@@ -485,6 +497,9 @@ void RasterizerGLES1::_blit_render_target_to_screen(RID p_render_target, Display
 	glBindBuffer(GL_ARRAY_BUFFER, 0);
 	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
 
+	glClientActiveTexture(GL_TEXTURE0);
+
+	glDisableClientState(GL_NORMAL_ARRAY);
 	glDisableClientState(GL_COLOR_ARRAY);
 	glColor4f(1.0f, 1.0f, 1.0f, 1.0f);
 	GL_CHECK_ERROR("GLES1::RasterizerGLES1::_blit_render_target_to_screen: VBO unbind and color reset");
@@ -660,6 +675,7 @@ void RasterizerGLES1::set_boot_image(const Ref<Image> &p_image, const Color &p_c
 	glBindTexture(GL_TEXTURE_2D, 0);
 	glDisable(GL_TEXTURE_2D);
 	glDisable(GL_BLEND);
+	glDepthMask(GL_TRUE);
 	GL_CHECK_ERROR("GLES1::RasterizerGLES1::set_boot_image: cleanup");
 
 	DisplayServer::get_singleton()->swap_buffers();

@@ -94,7 +94,7 @@ varying vec4 modulate_interp;
 uniform vec4 final_modulate;
 #endif
 
-uniform highp vec2 color_texpixel_size;
+uniform highp vec2 color_texture_pixel_size;
 
 #ifdef USE_TEXTURE_RECT
 
@@ -199,6 +199,11 @@ void main() {
 
 	{
 		vec2 src_vtx = outvec.xy;
+		// Map Godot 4 built-ins for user shaders
+		mat4 model_matrix = extra_matrix_instance;
+		mat4 canvas_matrix = modelview_matrix;
+		mat4 screen_matrix = projection_matrix;
+
 		/* clang-format off */
 
 #CODE : VERTEX
@@ -339,7 +344,7 @@ void main() {
 
 uniform sampler2D color_texture; // texunit:0
 /* clang-format on */
-uniform highp vec2 color_texpixel_size;
+uniform highp vec2 color_texture_pixel_size;
 uniform mediump sampler2D normal_texture; // texunit:-6
 
 varying mediump vec2 uv_interp;

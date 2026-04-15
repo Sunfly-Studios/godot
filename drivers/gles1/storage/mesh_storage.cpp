@@ -107,6 +107,11 @@ void MeshStorage::mesh_add_surface(RID p_mesh, const RS::SurfaceData &p_surface)
 	s->format = p_surface.format;
 	s->primitive = p_surface.primitive;
 
+	GLint prev_array_buffer = 0;
+	GLint prev_element_buffer = 0;
+	glGetIntegerv(GL_ARRAY_BUFFER_BINDING, &prev_array_buffer);
+	glGetIntegerv(GL_ELEMENT_ARRAY_BUFFER_BINDING, &prev_element_buffer);
+
 	// Vertex data
 	if (p_surface.vertex_data.size()) {
 		glGenBuffers(1, &s->vertex_buffer);
@@ -144,9 +149,58 @@ void MeshStorage::mesh_add_surface(RID p_mesh, const RS::SurfaceData &p_surface)
 		s->index_buffer_size = p_surface.index_data.size();
 	}
 
-	glBindBuffer(GL_ARRAY_BUFFER, 0);
-	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+	glBindBuffer(GL_ARRAY_BUFFER, prev_array_buffer);
+	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, prev_element_buffer);
 	GL_CHECK_ERROR("GLES1::MeshStorage::mesh_add_surface: glBindBuffer (unbind)");
+
+	// Parse format bitfield into OpenGL attributes
+	s->version_count = 1;
+	s->versions = (Mesh::Surface::Version *)memalloc(sizeof(Mesh::Surface::Version));
+	ERR_FAIL_NULL(s->versions);
+	Mesh::Surface::Version *v = &s->versions[0];
+
+	for (int i = 0; i < RS::ARRAY_MAX; i++) {
+		v->attribs[i].enabled = false;
+		v->attribs[i].size = 0;
+		v->attribs[i].stride = 0;
+		v->attribs[i].type = 0;
+		v->attribs[i].offset = 0;
+	}
+
+	uint64_t format = p_surface.format;
+
+	// Map vertex buffer (positions)
+	int vertex_stride = p_surface.vertex_count > 0 ? (p_surface.vertex_data.size() / p_surface.vertex_count) : 0;
+
+	if (format & RS::ARRAY_FORMAT_VERTEX) {
+		v->attribs[RS::ARRAY_VERTEX].enabled = true;
+		v->attribs[RS::ARRAY_VERTEX].size = (format & RS::ARRAY_FLAG_USE_2D_VERTICES) ? 2 : 3;
+		v->attribs[RS::ARRAY_VERTEX].type = GL_FLOAT;
+		v->attribs[RS::ARRAY_VERTEX].stride = vertex_stride;
+		v->attribs[RS::ARRAY_VERTEX].offset = 0;
+	}
+
+	// Map attribute buffer (colors & UVs)
+	int attr_stride = (p_surface.vertex_count > 0 && p_surface.attribute_data.size() > 0) ? (p_surface.attribute_data.size() / p_surface.vertex_count) : 0;
+	int current_attr_offset = 0;
+
+	if (format & RS::ARRAY_FORMAT_COLOR) {
+		v->attribs[RS::ARRAY_COLOR].enabled = true;
+		v->attribs[RS::ARRAY_COLOR].size = 4;
+		v->attribs[RS::ARRAY_COLOR].type = GL_UNSIGNED_BYTE;
+		v->attribs[RS::ARRAY_COLOR].stride = attr_stride;
+		v->attribs[RS::ARRAY_COLOR].offset = current_attr_offset;
+		current_attr_offset += 4;
+	}
+
+	if (format & RS::ARRAY_FORMAT_TEX_UV) {
+		v->attribs[RS::ARRAY_TEX_UV].enabled = true;
+		v->attribs[RS::ARRAY_TEX_UV].size = 2;
+		v->attribs[RS::ARRAY_TEX_UV].type = GL_FLOAT;
+		v->attribs[RS::ARRAY_TEX_UV].stride = attr_stride;
+		v->attribs[RS::ARRAY_TEX_UV].offset = current_attr_offset;
+		current_attr_offset += 8;
+	}
 
 	s->vertex_count = p_surface.vertex_count;
 	s->aabb = p_surface.aabb;
@@ -204,11 +258,16 @@ void MeshStorage::mesh_surface_update_vertex_region(RID p_mesh, int p_surface, i
 	ERR_FAIL_COND(p_offset + data_size > mesh->surfaces[p_surface]->vertex_buffer_size);
 	const uint8_t *r = p_data.ptr();
 
+	// Capture
+	GLint prev_array_buffer = 0;
+	glGetIntegerv(GL_ARRAY_BUFFER_BINDING, &prev_array_buffer);
+
 	glBindBuffer(GL_ARRAY_BUFFER, mesh->surfaces[p_surface]->vertex_buffer);
 	glBufferSubData(GL_ARRAY_BUFFER, p_offset, data_size, r);
 	GL_CHECK_ERROR("GLES1::MeshStorage::mesh_surface_update_vertex_region: glBufferSubData");
 
-	glBindBuffer(GL_ARRAY_BUFFER, 0);
+	// Restore
+	glBindBuffer(GL_ARRAY_BUFFER, prev_array_buffer);
 }
 
 void MeshStorage::mesh_surface_update_attribute_region(RID p_mesh, int p_surface, int p_offset, const Vector<uint8_t> &p_data) {
@@ -221,11 +280,16 @@ void MeshStorage::mesh_surface_update_attribute_region(RID p_mesh, int p_surface
 	ERR_FAIL_COND(p_offset + data_size > mesh->surfaces[p_surface]->attribute_buffer_size);
 	const uint8_t *r = p_data.ptr();
 
+	// Capture
+	GLint prev_array_buffer = 0;
+	glGetIntegerv(GL_ARRAY_BUFFER_BINDING, &prev_array_buffer);
+
 	glBindBuffer(GL_ARRAY_BUFFER, mesh->surfaces[p_surface]->attribute_buffer);
 	glBufferSubData(GL_ARRAY_BUFFER, p_offset, data_size, r);
 	GL_CHECK_ERROR("GLES1::MeshStorage::mesh_surface_update_attribute_region: glBufferSubData");
 
-	glBindBuffer(GL_ARRAY_BUFFER, 0);
+	// Restore
+	glBindBuffer(GL_ARRAY_BUFFER, prev_array_buffer);
 }
 
 void MeshStorage::mesh_surface_update_skin_region(RID p_mesh, int p_surface, int p_offset, const Vector<uint8_t> &p_data) {
@@ -356,7 +420,34 @@ void MeshStorage::_mesh_surface_generate_version_for_input_mask(Mesh::Surface::V
 }
 
 void MeshStorage::mesh_surface_remove(RID p_mesh, int p_surface) {
+	Mesh *mesh = mesh_owner.get_or_null(p_mesh);
+	ERR_FAIL_NULL(mesh);
+	ERR_FAIL_UNSIGNED_INDEX((uint32_t)p_surface, mesh->surface_count);
 
+	_mesh_surface_clear(mesh, p_surface);
+
+	// Shift remaining surfaces down
+	for (uint32_t i = p_surface; i < mesh->surface_count - 1; i++) {
+		mesh->surfaces[i] = mesh->surfaces[i + 1];
+	}
+
+	mesh->surface_count--;
+	if (mesh->surface_count == 0) {
+		memfree(mesh->surfaces);
+		mesh->surfaces = nullptr;
+	} else {
+		mesh->surfaces = (Mesh::Surface **)memrealloc(mesh->surfaces, sizeof(Mesh::Surface *) * mesh->surface_count);
+		ERR_FAIL_NULL(mesh->surfaces);
+	}
+
+	// Sync instances to prevent them
+	// referencing the removed surface
+	for (MeshInstance *mi : mesh->instances) {
+		_mesh_instance_remove_surface(mi, p_surface);
+	}
+
+	mesh->material_cache.clear();
+	mesh->dependency.changed_notify(Dependency::DEPENDENCY_CHANGED_MESH);
 }
 
 /* MESH INSTANCE API */
@@ -419,7 +510,15 @@ void MeshStorage::_mesh_instance_add_surface(MeshInstance *mi, Mesh *mesh, uint3
 }
 
 void MeshStorage::_mesh_instance_remove_surface(MeshInstance *mi, int p_surface) {
+	ERR_FAIL_UNSIGNED_INDEX((uint32_t)p_surface, mi->surfaces.size());
 
+	// Free the host memory for the version trackers.
+	if (mi->surfaces[p_surface].versions) {
+		memfree(mi->surfaces[p_surface].versions);
+	}
+
+	mi->surfaces.remove_at(p_surface);
+	mi->dirty = true;
 }
 
 void MeshStorage::mesh_instance_check_for_update(RID p_mesh_instance) {
@@ -453,8 +552,25 @@ void MeshStorage::_multimesh_initialize(RID p_rid) {
 }
 
 void MeshStorage::_multimesh_free(RID p_rid) {
-	// Remove from interpolator.
+	MultiMesh *multimesh = multimesh_owner.get_or_null(p_rid);
+	ERR_FAIL_NULL(multimesh);
 
+	_interpolation_data.notify_free_multimesh(p_rid);
+	_update_dirty_multimeshes();
+
+	_multimesh_allocate_data(p_rid, 0, RS::MULTIMESH_TRANSFORM_2D);
+
+	if (multimesh->buffer != 0) {
+		glDeleteBuffers(1, &multimesh->buffer);
+		GL_CHECK_ERROR("GLES1::MeshStorage::_multimesh_free: glDeleteBuffers");
+	}
+
+	if (multimesh->data_cache_dirty_regions) {
+		memdelete_arr(multimesh->data_cache_dirty_regions);
+	}
+
+	multimesh->dependency.deleted_notify(p_rid);
+	multimesh_owner.free(p_rid);
 }
 
 void MeshStorage::_multimesh_allocate_data(RID p_multimesh, int p_instances, RS::MultimeshTransformFormat p_transform_format, bool p_use_colors, bool p_use_custom_data, bool p_use_indirect) {

@@ -141,6 +141,8 @@ void ShaderEditorPlugin::edit(Object *p_object) {
 	EditedShader es;
 
 	ShaderInclude *si = Object::cast_to<ShaderInclude>(p_object);
+	String current_renderer = OS::get_singleton()->get_current_rendering_method();
+
 	if (si != nullptr) {
 		for (uint32_t i = 0; i < edited_shaders.size(); i++) {
 			if (edited_shaders[i].shader_inc.ptr() == si) {
@@ -157,6 +159,10 @@ void ShaderEditorPlugin::edit(Object *p_object) {
 		shader_tabs->add_child(es.shader_editor);
 	} else {
 		Shader *s = Object::cast_to<Shader>(p_object);
+
+		ERR_FAIL_NULL(s);
+		ERR_FAIL_COND_EDMSG(current_renderer == "gl_classic", TTR("Cannot open custom .gdshader files when using the Classic renderer."));
+
 		for (uint32_t i = 0; i < edited_shaders.size(); i++) {
 			if (edited_shaders[i].shader.ptr() == s) {
 				shader_tabs->set_current_tab(i);

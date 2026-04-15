@@ -90,14 +90,8 @@ static String _include_function(const String &p_path, void *userpointer) {
 
 Error ResourceImporterShaderFile::import(ResourceUID::ID p_source_id, const String &p_source_file, const String &p_save_path, const HashMap<StringName, Variant> &p_options, List<String> *r_platform_variants, List<String> *r_gen_files, Variant *r_metadata) {
 	/* STEP 1, Read shader code */
-	bool is_opengl_render = (
-		OS::get_singleton()->get_current_rendering_method() == "gl_compatibility" ||
-		OS::get_singleton()->get_current_rendering_method() == "gl_legacy" ||
-
-		// GLES1 doesn't support shaders but is included here anyway.
-		OS::get_singleton()->get_current_rendering_method() == "gl_classic"
-	);
-	ERR_FAIL_COND_V_EDMSG(is_opengl_render, ERR_UNAVAILABLE, "Cannot import custom .glsl shaders when using the Compatibility, Legacy or Classic renderer. Please switch to the Forward+ or Mobile renderer to use custom shaders.");
+	bool is_opengl_renderer = OS::get_singleton()->get_current_rendering_method().begins_with("gl_");
+	ERR_FAIL_COND_V_EDMSG(is_opengl_renderer, ERR_UNAVAILABLE, "Cannot import custom .glsl shaders when using the Compatibility, Legacy, or Classic renderer. Please switch to the Forward+ or Mobile renderer to use custom shaders.");
 	ERR_FAIL_COND_V_EDMSG((DisplayServer::get_singleton()->get_name() == "headless"), ERR_UNAVAILABLE, "Cannot import custom .glsl shaders when running in headless mode.");
 
 	Error err;

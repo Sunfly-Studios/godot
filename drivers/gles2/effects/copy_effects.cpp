@@ -111,6 +111,10 @@ void CopyEffects::draw_screen_triangle() {
 	glVertexAttribPointer(RS::ARRAY_VERTEX, 2, GL_FLOAT, GL_FALSE, sizeof(float) * 2, nullptr);
 	glEnableVertexAttribArray(RS::ARRAY_VERTEX);
 
+	// Disable bleed attributes
+	glDisableVertexAttribArray(RS::ARRAY_TEX_UV);
+	glDisableVertexAttribArray(RS::ARRAY_COLOR);
+
 	glDrawArrays(GL_TRIANGLES, 0, 3);
 
 	// Clean up state
@@ -127,7 +131,8 @@ void CopyEffects::draw_screen_quad() {
 
     // UV (Offset by 2 floats / 8 bytes)
     glVertexAttribPointer(RS::ARRAY_TEX_UV, 2, GL_FLOAT, GL_FALSE, sizeof(float) * 4, (const void *)(sizeof(float) * 2));
-    glEnableVertexAttribArray(RS::ARRAY_TEX_UV);
+	glEnableVertexAttribArray(RS::ARRAY_TEX_UV);
+	glDisableVertexAttribArray(RS::ARRAY_COLOR);
 
     glDrawArrays(GL_TRIANGLES, 0, 6);
 

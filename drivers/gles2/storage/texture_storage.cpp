@@ -500,7 +500,7 @@ void TextureStorage::texture_2d_initialize(RID p_texture, const Ref<Image> &p_im
 
 		bool is_po2 = (texture->width == po2_width) && (texture->height == po2_height);
 
-		if (!is_po2 && p_image->has_mipmaps()) {
+		if (!is_po2) {
 			texture->alloc_width = po2_width;
 			texture->alloc_height = po2_height;
 			texture->resize_to_po2 = true;
@@ -727,12 +727,17 @@ Ref<Image> TextureStorage::texture_2d_get(RID p_texture) const {
 	bind_framebuffer(temp_framebuffer);
 	GL_CHECK_ERROR("GLES2::TextureStorage::texture_2d_get: glBindFramebuffer");
 
+	// Isolate texture binding
+	glActiveTexture(GL_TEXTURE0);
 	glBindTexture(GL_TEXTURE_2D, temp_color_texture);
 	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, tex->alloc_width, tex->alloc_height, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
 	GL_CHECK_ERROR("GLES2::TextureStorage::texture_2d_get: glTexImage2D");
 
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+
 	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, temp_color_texture, 0);
 	GL_CHECK_ERROR("GLES2::TextureStorage::texture_2d_get: glFramebufferTexture2D");
 
@@ -745,6 +750,16 @@ Ref<Image> TextureStorage::texture_2d_get(RID p_texture) const {
 		ERR_FAIL_V_MSG(Ref<Image>(), "GLES2: FBO incomplete during texture_2d_get fallback readback.");
 	}
 
+	// Save existing state before modifying
+	GLboolean depth_mask_prev;
+	glGetBooleanv(GL_DEPTH_WRITEMASK, &depth_mask_prev);
+	GLint depth_func_prev;
+	glGetIntegerv(GL_DEPTH_FUNC, &depth_func_prev);
+
+	GLboolean blend_enabled = glIsEnabled(GL_BLEND);
+	GLboolean cull_enabled = glIsEnabled(GL_CULL_FACE);
+	GLboolean depth_test_enabled = glIsEnabled(GL_DEPTH_TEST);
+
 	// Setup rendering state for the readback draw call
 	glDepthMask(GL_FALSE);
 	glDisable(GL_DEPTH_TEST);
@@ -756,6 +771,11 @@ Ref<Image> TextureStorage::texture_2d_get(RID p_texture) const {
 
 	glActiveTexture(GL_TEXTURE0);
 	glBindTexture(GL_TEXTURE_2D, tex->tex_id);
+
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 	GL_CHECK_ERROR("GLES2::TextureStorage::texture_2d_get: glBindTexture (target)");
 
 	glViewport(0, 0, tex->alloc_width, tex->alloc_height);
@@ -771,17 +791,31 @@ Ref<Image> TextureStorage::texture_2d_get(RID p_texture) const {
 	glReadPixels(0, 0, tex->alloc_width, tex->alloc_height, GL_RGBA, GL_UNSIGNED_BYTE, &w[0]);
 	GL_CHECK_ERROR("GLES2::TextureStorage::texture_2d_get: glReadPixels");
 
-	// Cleanup & Restore
+	// Cleanup
 	bind_framebuffer(previous_fbo);
 	glDeleteTextures(1, &temp_color_texture);
 	glDeleteFramebuffers(1, &temp_framebuffer);
 	GL_CHECK_ERROR("GLES2::TextureStorage::texture_2d_get: cleanup glDelete");
 
+	// Restore global state
+	glDepthMask(depth_mask_prev);
+	glDepthFunc(depth_func_prev);
+	if (blend_enabled) {
+		glEnable(GL_BLEND);
+	}
+	if (cull_enabled) {
+		glEnable(GL_CULL_FACE);
+	}
+	if (depth_test_enabled) {
+		glEnable(GL_DEPTH_TEST);
+	}
+
 	// Resize the data vector back to its exact required size
 	data.resize(data_size);
 
 	ERR_FAIL_COND_V(data.is_empty(), Ref<Image>());
-	image = Image::create_from_data(tex->width, tex->height, false, Image::FORMAT_RGBA8, data);
+
+	image = Image::create_from_data(tex->alloc_width, tex->alloc_height, false, Image::FORMAT_RGBA8, data);
 	ERR_FAIL_COND_V(image.is_null() || image->is_empty(), Ref<Image>());
 
 	if (tex->format != Image::FORMAT_RGBA8) {
@@ -892,7 +926,13 @@ void TextureStorage::texture_set_force_redraw_if_visible(RID p_texture, bool p_e
 }
 
 Size2 TextureStorage::texture_size_with_proxy(RID p_texture) {
-	return Size2();
+	const Texture *texture = texture_owner.get_or_null(p_texture);
+	ERR_FAIL_NULL_V(texture, Size2());
+	if (texture->is_proxy && texture->proxy_to.is_valid()) {
+		const Texture *proxy = texture_owner.get_or_null(texture->proxy_to);
+		return Size2(proxy->width, proxy->height);
+	}
+	return Size2(texture->width, texture->height);
 }
 
 void TextureStorage::texture_rd_initialize(RID p_texture, const RID &p_rd_texture, const RS::TextureLayeredType p_layer_type) {
@@ -1043,6 +1083,7 @@ void TextureStorage::_texture_set_data(RID p_texture, const Ref<Image> &p_image,
 		h = MAX(1, h >> 1);
 	}
 
+	glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
 	texture->total_data_size = tsize;
 	texture->stored_cube_sides |= (1 << p_layer);
 	texture->mipmaps = mipmaps;
@@ -1210,6 +1251,14 @@ void TextureStorage::_update_render_target(RenderTarget *rt) {
 		rt->image_format = Image::FORMAT_RGB8;
 	}
 
+	// Save state
+	GLint previous_fbo = 0;
+	glGetIntegerv(GL_FRAMEBUFFER_BINDING, &previous_fbo);
+
+	GLboolean scissor_enabled = glIsEnabled(GL_SCISSOR_TEST);
+	GLboolean depth_mask_prev;
+	glGetBooleanv(GL_DEPTH_WRITEMASK, &depth_mask_prev);
+
 	glDisable(GL_SCISSOR_TEST);
 	glColorMask(1, 1, 1, 1);
 	glDepthMask(GL_FALSE);
@@ -1246,6 +1295,9 @@ void TextureStorage::_update_render_target(RenderTarget *rt) {
 			rt->fbo = 0;
 			ERR_FAIL_MSG("GLES2: Failed to generate color texture for RenderTarget.");
 		}
+
+		// Safe binding
+		glActiveTexture(GL_TEXTURE0);
 		glBindTexture(texture_target, rt->color);
 
 		glTexImage2D(texture_target, 0, rt->color_internal_format, rt->size.x, rt->size.y, 0, rt->color_format, rt->color_type, nullptr);
@@ -1314,6 +1366,12 @@ void TextureStorage::_update_render_target(RenderTarget *rt) {
 			texture->active = false;
 		}
 		WARN_PRINT("Could not create render target FBO, status: " + get_framebuffer_error(status));
+
+		// Restore state
+		if (scissor_enabled) {
+			glEnable(GL_SCISSOR_TEST);
+		}
+		glDepthMask(depth_mask_prev);
 		return;
 	}
 
@@ -1341,11 +1399,50 @@ void TextureStorage::_update_render_target(RenderTarget *rt) {
 	// Clear out FBO rubbish/garbage
 	glClearColor(0, 0, 0, 0);
 	glClear(GL_COLOR_BUFFER_BIT);
-	glBindFramebuffer(GL_FRAMEBUFFER, system_fbo);
+	glBindFramebuffer(GL_FRAMEBUFFER, previous_fbo);
+
+	// Restore state
+	if (scissor_enabled) {
+		glEnable(GL_SCISSOR_TEST);
+	}
+	glDepthMask(depth_mask_prev);
 }
 
 void TextureStorage::_create_render_target_backbuffer(RenderTarget *rt) {
+	ERR_FAIL_COND_MSG(rt->backbuffer_fbo != 0, "Cannot allocate RenderTarget backbuffer: already initialized.");
+	ERR_FAIL_COND(rt->direct_to_screen);
 
+	// Protect active texture.
+	glActiveTexture(GL_TEXTURE0);
+	GLint previous_tex = 0;
+	glGetIntegerv(GL_TEXTURE_BINDING_2D, &previous_tex);
+
+	glGenTextures(1, &rt->backbuffer);
+	glBindTexture(GL_TEXTURE_2D, rt->backbuffer);
+
+	// Allocate the texture memory to match the FBO
+	glTexImage2D(GL_TEXTURE_2D, 0, rt->color_internal_format, rt->size.width, rt->size.height, 0, rt->color_format, rt->color_type, nullptr);
+
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+	GL_CHECK_ERROR("GLES2::TextureStorage::_create_render_target_backbuffer: texture alloc");
+
+	glGenFramebuffers(1, &rt->backbuffer_fbo);
+	bind_framebuffer(rt->backbuffer_fbo);
+	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, rt->backbuffer, 0);
+
+	GLenum status = glCheckFramebufferStatus(GL_FRAMEBUFFER);
+	if (status != GL_FRAMEBUFFER_COMPLETE) {
+		WARN_PRINT("GLES2: Backbuffer FBO incomplete.");
+	}
+
+	// Clean previous bind
+	glBindTexture(GL_TEXTURE_2D, previous_tex);
+
+	// Safely return to system FBO
+	bind_framebuffer_system();
 }
 
 void GLES2::TextureStorage::check_backbuffer(RenderTarget *rt, const bool uses_screen_texture, const bool uses_depth_texture) {
@@ -1370,8 +1467,20 @@ void TextureStorage::_clear_render_target(RenderTarget *rt) {
 
 	if (rt->depth != 0 && !rt->overridden.depth.is_valid()) {
 		glDeleteRenderbuffers(1, &rt->depth);
-		GL_CHECK_ERROR("GLES2::TextureStorage::_clear_render_target: glDeleteRenderbuffers (backbuffer)");
+		GL_CHECK_ERROR("GLES2::TextureStorage::_clear_render_target: glDeleteRenderbuffers (depth)");
 		rt->depth = 0;
+	}
+
+	if (rt->backbuffer != 0) {
+		glDeleteTextures(1, &rt->backbuffer);
+		GL_CHECK_ERROR("GLES2::TextureStorage::_clear_render_target: glDeleteRenderbuffers (backbuffer)");
+		rt->backbuffer = 0;
+	}
+
+	if (rt->backbuffer_fbo != 0) {
+		glDeleteFramebuffers(1, &rt->backbuffer_fbo);
+		GL_CHECK_ERROR("GLES2::TextureStorage::_clear_render_target: glDeleteRenderbuffers (backbuffer_fbo)");
+		rt->backbuffer_fbo = 0;
 	}
 }
 
@@ -1677,9 +1786,20 @@ void TextureStorage::render_target_do_clear_request(RID p_render_target) {
 	// Steer the GPU to the correct framebuffer
 	glBindFramebuffer(GL_FRAMEBUFFER, rt->fbo);
 
+	// Bypass active scissors and masks
+	GLboolean scissor_enabled = glIsEnabled(GL_SCISSOR_TEST);
+	if (scissor_enabled) {
+		glDisable(GL_SCISSOR_TEST);
+	}
+	glColorMask(1, 1, 1, 1);
+
 	// Paint the color.
 	glClearColor(rt->clear_color.r, rt->clear_color.g, rt->clear_color.b, rt->clear_color.a);
 	glClear(GL_COLOR_BUFFER_BIT);
+
+	if (scissor_enabled) {
+		glEnable(GL_SCISSOR_TEST);
+	}
 
 	rt->clear_requested = false;
 
@@ -1765,7 +1885,67 @@ void TextureStorage::render_target_sdf_process(RID p_render_target) {
 }
 
 void TextureStorage::render_target_copy_to_back_buffer(RID p_render_target, const Rect2i &p_region, bool p_gen_mipmaps) {
+	RenderTarget *rt = render_target_owner.get_or_null(p_render_target);
+	ERR_FAIL_NULL(rt);
 
+	if (rt->backbuffer == 0) {
+		_create_render_target_backbuffer(rt);
+	}
+
+	// Save previous FBO state to be safe
+	GLint previous_fbo = 0;
+	glGetIntegerv(GL_FRAMEBUFFER_BINDING, &previous_fbo);
+
+	// Prevent GL_TEXTURE0 being overwritten mid-draw
+	glActiveTexture(GL_TEXTURE0);
+	GLint previous_tex0 = 0;
+	glGetIntegerv(GL_TEXTURE_BINDING_2D, &previous_tex0);
+
+	bind_framebuffer(rt->fbo);
+
+	glActiveTexture(GL_TEXTURE0);
+	glBindTexture(GL_TEXTURE_2D, rt->backbuffer);
+
+	Rect2i region = p_region;
+	if (region == Rect2i()) {
+		region = Rect2i(0, 0, rt->size.width, rt->size.height);
+	}
+
+	// Ensure region is within physical bounds
+	region.position.x = MAX(0, region.position.x);
+	region.position.y = MAX(0, region.position.y);
+	region.size.width = MIN(region.size.width, rt->size.width - region.position.x);
+	region.size.height = MIN(region.size.height, rt->size.height - region.position.y);
+
+	// Fast GLES2 sub image copy from the active framebuffer
+	glCopyTexSubImage2D(
+		GL_TEXTURE_2D,
+		0,
+		region.position.x,
+		region.position.y,
+		region.position.x,
+		region.position.y,
+		region.size.width,
+		region.size.height
+	);
+	GL_CHECK_ERROR("GLES2::TextureStorage::render_target_copy_to_back_buffer: glCopyTexSubImage2D");
+
+	if (p_gen_mipmaps) {
+		render_target_gen_back_buffer_mipmaps(p_render_target, region);
+	} else {
+		// Ensure we aren't expecting mipmaps if they weren't generated
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	}
+
+	// Re-bind the backbuffer to the engine's reserved screen_texture unit
+	// so the custom shader can actually read it when drawing
+	// occurs immediately after this.
+	glActiveTexture(GL_TEXTURE0 + GLES2::Config::get_singleton()->max_texture_image_units - 4);
+	glBindTexture(GL_TEXTURE_2D, rt->backbuffer);
+	glActiveTexture(GL_TEXTURE0);
+	glBindTexture(GL_TEXTURE_2D, previous_tex0);
+
+	bind_framebuffer(previous_fbo);
 }
 
 void TextureStorage::render_target_clear_back_buffer(RID p_render_target, const Rect2i &p_region, const Color &p_color) {
@@ -1773,7 +1953,28 @@ void TextureStorage::render_target_clear_back_buffer(RID p_render_target, const 
 }
 
 void TextureStorage::render_target_gen_back_buffer_mipmaps(RID p_render_target, const Rect2i &p_region) {
+	RenderTarget *rt = render_target_owner.get_or_null(p_render_target);
+	ERR_FAIL_NULL(rt);
 
+	if (rt->backbuffer == 0) {
+		return;
+	}
+
+	glActiveTexture(GL_TEXTURE0);
+	glBindTexture(GL_TEXTURE_2D, rt->backbuffer);
+
+	bool is_npot = (
+		rt->size.width & (rt->size.width - 1)
+	) != 0 || (rt->size.height & (rt->size.height - 1)) != 0;
+
+	if (is_npot && !GLES2::Config::get_singleton()->support_npot_repeat_mipmap) {
+		// Fall back to linear filtering.
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	} else {
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+		glGenerateMipmap(GL_TEXTURE_2D);
+		GL_CHECK_ERROR("GLES2::TextureStorage::render_target_gen_back_buffer_mipmaps: glGenerateMipmap");
+	}
 }
 
 #endif // GLES2_ENABLED

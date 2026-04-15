@@ -22,7 +22,8 @@ GL_1_5_MAPPINGS = {
         "\t\t\t\t\t\tmatrix[i * 4 + j] = p.columns[i][j];\n"
         "\t\t\t\t\t}\n"
         "\t\t\t\t}\n"
-        "\t\t\t\tglLoadMatrixf(matrix);"
+        "\t\t\t\tglLoadMatrixf(matrix);\n"
+        "\t\t\t\tglMatrixMode(GL_MODELVIEW);"
     ),
     "modelview_matrix": (
         "glMatrixMode(GL_MODELVIEW);\n"
@@ -61,6 +62,7 @@ GL_1_5_MAPPINGS = {
         "\t\t\t\tglMultMatrixf(matrix);"
     ),
     "modulate":          "Color c = p_value;\n\t\t\t\tglColor4f(c.r, c.g, c.b, c.a);",
+    "final_modulate":    "Color c = p_value;\n\t\t\t\tglColor4f(c.r, c.g, c.b, c.a);",
     "color_in":          "Color c = p_value;\n\t\t\t\tglColor4f(c.r, c.g, c.b, c.a);",
     "point_size":        "glPointSize((float)p_value);",
     
@@ -89,7 +91,12 @@ GL_1_5_MAPPINGS = {
         "\t\t\t\telse { Color c = p_value; dr = Rect2(c.r, c.g, c.b, c.a); }\n"
         "\t\t\t\tglMatrixMode(GL_MODELVIEW);\n"
         "\t\t\t\tglTranslatef(dr.position.x, dr.position.y, 0.0f);\n"
-        "\t\t\t\tglScalef(Math::abs(dr.size.x), Math::abs(dr.size.y), 1.0f);"
+        "\t\t\t\tglScalef(Math::abs(dr.size.x), Math::abs(dr.size.y), 1.0f);\n"
+        "\t\t\t\tif (dr.size.x < 0) {\n"
+        "\t\t\t\t\t// Emulate shader 'vertex.xy = vertex.yx' via local matrix swap\n"
+        "\t\t\t\t\tGLfloat transpose[16] = {0,1,0,0, 1,0,0,0, 0,0,1,0, 0,0,0,1};\n"
+        "\t\t\t\t\tglMultMatrixf(transpose);\n"
+        "\t\t\t\t}\n"
     ),
     "src_rect": (
         "Rect2 sr;\n"

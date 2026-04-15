@@ -112,6 +112,7 @@ public:
 
 	bool support_instancing = false;
 	bool support_frag_depth = false;
+	bool texture_lod_supported = true;
 
 #ifdef ANDROID_ENABLED
 	PFNGLFRAMEBUFFERTEXTUREMULTIVIEWOVRPROC eglFramebufferTextureMultiviewOVR = nullptr;

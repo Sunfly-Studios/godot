@@ -188,6 +188,30 @@ public:
 	virtual void set_debug_redraw(bool p_enabled, double p_time, const Color &p_color) override;
 	virtual uint32_t get_pipeline_compilations(RS::PipelineSource p_source) override;
 
+	GLenum get_gl_primitive_type(RS::PrimitiveType primitive) {
+		GLenum gl_primitive = GL_TRIANGLES;
+		switch (primitive) {
+			case RS::PRIMITIVE_POINTS:
+				gl_primitive = GL_POINTS;
+				break;
+			case RS::PRIMITIVE_LINES:
+				gl_primitive = GL_LINES;
+				break;
+			case RS::PRIMITIVE_LINE_STRIP:
+				gl_primitive = GL_LINE_STRIP;
+				break;
+			case RS::PRIMITIVE_TRIANGLES:
+				gl_primitive = GL_TRIANGLES;
+				break;
+			case RS::PRIMITIVE_TRIANGLE_STRIP:
+				gl_primitive = GL_TRIANGLE_STRIP;
+				break;
+			default:
+				break;
+		}
+		return gl_primitive;
+	}
+
 private:
 	// The Batcher Bridge
 	void canvas_render_items_implementation(Item *p_item_list, int p_z, const Color &p_modulate, Light *p_light, const Transform2D &p_base_transform);

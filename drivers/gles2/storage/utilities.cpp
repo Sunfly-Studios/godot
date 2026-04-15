@@ -358,6 +358,27 @@ void Utilities::set_debug_generate_wireframes(bool p_generate) {
 }
 
 bool Utilities::has_os_feature(const String &p_feature) const {
+	Config *config = Config::get_singleton();
+	if (!config) {
+		return false;
+	}
+
+	if (p_feature == "s3tc") {
+		return config->s3tc_supported;
+	}
+	if (p_feature == "bptc") {
+		return config->bptc_supported;
+	}
+	if (p_feature == "etc2") {
+		return config->etc2_supported;
+	}
+	if (p_feature == "astc") {
+		return config->astc_supported;
+	}
+	if (p_feature == "rgtc") {
+		return config->rgtc_supported;
+	}
+
 	return false;
 }
 
@@ -409,22 +430,36 @@ String Utilities::get_video_adapter_api_version() const {
 	}
 	const String full_version = String::utf8((const char *)version_string);
 
-	// GL_VERSION strings typically start with the version number followed by a space.
-	// Example: "4.6.0 NVIDIA 572.83" or "2.1.0 Build 123"
-	String version_num = full_version.get_slice(" ", 0);
+	int version_start = 0;
+	String api_prefix = "";
+
+	// Mobile and WebGL drivers prefix the version string.
+	if (full_version.begins_with("OpenGL ES-CM ")) {
+		api_prefix = "OpenGL ES-CM ";
+	} else if (full_version.begins_with("OpenGL ES ")) {
+		api_prefix = "OpenGL ES ";
+	} else if (full_version.begins_with("WebGL ")) {
+		api_prefix = "WebGL ";
+	}
+	
+	version_start = api_prefix.length();
+
+	// Extract the version number (e.g., "4.6.0" or "3.2")
+	String remainder = full_version.substr(version_start);
+	String version_num = remainder.get_slice(" ", 0);
 
 	// Safely parse the major and minor versions.
 	int major = version_num.get_slice(".", 0).to_int();
 	int minor = version_num.get_slice(".", 1).to_int();
 
-	// If the driver hands us anything higher than OpenGL 2.1,
+	// If the driver hands us anything higher than OpenGL 2.1 / GLES 2.0,
 	// it's a superset context.
 	if (major > 2 || (major == 2 && minor > 1)) {
-		// Extract the vendor-specific suffix (e.g., " NVIDIA 572.83")
-		int space_idx = full_version.find(" ");
+		// Extract the vendor-specific suffix (e.g., " NVIDIA 572.83" or " v1.r49p1...")
+		int space_idx = full_version.find(" ", version_start);
 		String vendor_info = space_idx != -1 ? full_version.substr(space_idx) : "";
 
-		return vformat("2.1 (emulated via %s)%s", version_num, vendor_info);
+		return vformat("2.1 (emulated via %s%s)%s", api_prefix, version_num, vendor_info);
 	}
 
 	return full_version;

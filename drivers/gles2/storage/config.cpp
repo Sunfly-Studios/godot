@@ -84,6 +84,7 @@ Config::Config() {
 	rgtc_supported = extensions.has("GL_EXT_texture_compression_rgtc") || extensions.has("GL_ARB_texture_compression_rgtc") || extensions.has("EXT_texture_compression_rgtc");
 	support_instancing = extensions.has("GL_EXT_draw_instanced") || extensions.has("GL_ANGLE_instanced_arrays") || extensions.has("GL_ARB_draw_instanced");
 	support_frag_depth = extensions.has("GL_EXT_frag_depth");
+	texture_lod_supported = extensions.has("GL_EXT_shader_texture_lod");
 
 	if (RasterizerGLES2::is_gles_over_gl()) {
 		float_texture_supported = true;
@@ -91,6 +92,7 @@ Config::Config() {
 		s3tc_supported = true;
 		support_npot_repeat_mipmap = true;
 		support_32_bits_indices = true;
+		texture_lod_supported = true;
 	} else {
 		float_texture_supported = extensions.has("GL_OES_texture_float") || extensions.has("GL_EXT_color_buffer_float");
 		etc2_supported = true;
