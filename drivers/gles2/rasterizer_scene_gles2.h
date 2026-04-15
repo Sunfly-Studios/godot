@@ -37,6 +37,7 @@
 #include "core/templates/paged_allocator.h"
 #include "core/templates/rid_owner.h"
 #include "core/templates/self_list.h"
+#include "drivers/gles_common/batch/rasterizer_scene_batcher_common.h"
 #include "drivers/gles2/shaders/effects/cubemap_filter.glsl.gen.h"
 #include "drivers/gles2/shaders/sky.glsl.gen.h"
 #include "scene/resources/mesh.h"
@@ -100,8 +101,18 @@ struct RenderDataGLES2 {
 };
 
 class RasterizerCanvasGLES2;
+class RasterizerSceneGLES2;
 
-class RasterizerSceneGLES2 : public RendererSceneRender {
+struct BatcherAPISceneGLES2 {
+	using Scene = RasterizerSceneGLES2;
+	using MaterialData = GLES2::SceneMaterialData;
+
+	static constexpr bool FORCE_BAKE_MODULATE = false;
+};
+
+class RasterizerSceneGLES2 : public RendererSceneRender, public RasterizerSceneBatcherCommon<BatcherAPISceneGLES2> {
+	friend class RasterizerSceneBatcherCommon<BatcherAPISceneGLES2>;
+
 public:
 	enum RenderListType {
 		RENDER_LIST_OPAQUE, //used for opaque objects
@@ -873,6 +884,14 @@ public:
 	void light_projectors_set_filter(RS::LightProjectorFilter p_filter) override;
 	virtual void lightmaps_set_bicubic_filter(bool p_enable) override;
 
+private:
+	// The Batcher Bridge
+
+	void scene_render_items_implementation(RenderGeometryInstance **p_instances, int p_count, const Transform3D &p_camera_transform, bool p_transparent);
+	void render_batches(RenderGeometryInstance *p_first_instance, RID p_material);
+	void _batch_upload_buffers();
+
+public:
 	RasterizerSceneGLES2();
 	~RasterizerSceneGLES2();
 };

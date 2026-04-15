@@ -37,6 +37,7 @@
 #include "core/templates/paged_allocator.h"
 #include "core/templates/rid_owner.h"
 #include "core/templates/self_list.h"
+#include "drivers/gles_common/batch/rasterizer_scene_batcher_common.h"
 #include "drivers/gles1/shaders/effects/cubemap_filter.glsl.gen.h"
 #include "drivers/gles1/shaders/sky.glsl.gen.h"
 #include "scene/resources/mesh.h"
@@ -100,8 +101,18 @@ struct RenderDataGLES1 {
 };
 
 class RasterizerCanvasGLES1;
+class RasterizerSceneGLES1;
 
-class RasterizerSceneGLES1 : public RendererSceneRender {
+struct BatcherAPISceneGLES1 {
+	using Scene = RasterizerSceneGLES1;
+	using MaterialData = GLES1::SceneMaterialData;
+
+	static constexpr bool FORCE_BAKE_MODULATE = true;
+};
+
+class RasterizerSceneGLES1 : public RendererSceneRender, public RasterizerSceneBatcherCommon<BatcherAPISceneGLES1> {
+	friend class RasterizerSceneBatcherCommon<BatcherAPISceneGLES1>;
+
 public:
 	enum RenderListType {
 		RENDER_LIST_OPAQUE, //used for opaque objects

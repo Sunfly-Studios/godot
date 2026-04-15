@@ -43,7 +43,6 @@
 #include "drivers/gles1/shaders/canvas.glsl.gen.h"
 #include "drivers/gles1/shaders/canvas_occlusion.glsl.gen.h"
 
-class RasterizerSceneGLES1;
 class RasterizerCanvasGLES1;
 
 struct BatcherAPIGLES1 {

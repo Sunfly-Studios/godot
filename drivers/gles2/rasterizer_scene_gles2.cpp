@@ -380,6 +380,9 @@ void RasterizerSceneGLES2::lightmaps_set_bicubic_filter(bool p_enable) {
 
 RasterizerSceneGLES2::RasterizerSceneGLES2() {
 	singleton = this;
+
+	batch_constructor();
+	batch_initialize();
 }
 
 RasterizerSceneGLES2::~RasterizerSceneGLES2() {

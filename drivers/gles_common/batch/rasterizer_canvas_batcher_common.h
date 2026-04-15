@@ -320,8 +320,8 @@ public:
 			fvf = BatcherEnums::FVF_REGULAR;
 		}
 
-		GLuint gl_vertex_buffer;
-		GLuint gl_index_buffer;
+		uint32_t gl_vertex_buffer;
+		uint32_t gl_index_buffer;
 
 		uint32_t max_quads;
 		uint32_t vertex_buffer_size_units;
