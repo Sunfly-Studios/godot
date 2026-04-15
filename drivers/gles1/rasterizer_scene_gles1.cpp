@@ -50,7 +50,23 @@
 RasterizerSceneGLES1 *RasterizerSceneGLES1::singleton = nullptr;
 
 RenderGeometryInstance *RasterizerSceneGLES1::geometry_instance_create(RID p_base) {
-    return nullptr;
+	RS::InstanceType type = RSG::utilities->get_base_type(p_base);
+	ERR_FAIL_COND_V(!((1 << type) & RS::INSTANCE_GEOMETRY_MASK), nullptr);
+
+	GeometryInstanceGLES1 *ginstance = geometry_instance_alloc.alloc();
+	ginstance->data = memnew(GeometryInstanceGLES1::Data);
+
+	ERR_FAIL_NULL_V(ginstance->data, nullptr);
+
+	ginstance->data->base = p_base;
+	ginstance->data->base_type = type;
+	ginstance->data->dependency_tracker.userdata = ginstance;
+	ginstance->data->dependency_tracker.changed_callback = _geometry_instance_dependency_changed;
+	ginstance->data->dependency_tracker.deleted_callback = _geometry_instance_dependency_deleted;
+
+	ginstance->_mark_dirty();
+
+	return ginstance;
 }
 
 uint32_t RasterizerSceneGLES1::geometry_instance_get_pair_mask() {
@@ -66,7 +82,16 @@ void RasterizerSceneGLES1::GeometryInstanceGLES1::pair_reflection_probe_instance
 }
 
 void RasterizerSceneGLES1::geometry_instance_free(RenderGeometryInstance *p_geometry_instance) {
-
+	GeometryInstanceGLES1 *ginstance = static_cast<GeometryInstanceGLES1 *>(p_geometry_instance);
+	ERR_FAIL_NULL(ginstance);
+	GeometryInstanceSurface *surf = ginstance->surface_caches;
+	while (surf) {
+		GeometryInstanceSurface *next = surf->next;
+		geometry_instance_surface_alloc.free(surf);
+		surf = next;
+	}
+	memdelete(ginstance->data);
+	geometry_instance_alloc.free(ginstance);
 }
 
 void RasterizerSceneGLES1::GeometryInstanceGLES1::_mark_dirty() {

@@ -1567,8 +1567,6 @@ void TextureStorage::render_target_set_direct_to_screen(RID p_render_target, boo
 	if (p_direct_to_screen == rt->direct_to_screen) {
 		return;
 	}
-	// When setting DIRECT_TO_SCREEN, you need to clear before the value is set, but allocate after as
-	// those functions change how they operate depending on the value of DIRECT_TO_SCREEN
 	_clear_render_target(rt);
 	rt->direct_to_screen = p_direct_to_screen;
 	if (rt->direct_to_screen) {

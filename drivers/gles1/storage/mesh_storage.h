@@ -270,6 +270,8 @@ private:
 	_FORCE_INLINE_ void _skeleton_make_dirty(Skeleton *skeleton);
 	void _compute_skeleton(MeshInstance *p_mi, Skeleton *p_sk, uint32_t p_surface);
 
+	Skeleton *skeleton_dirty_list = nullptr;
+
 public:
 	static MeshStorage *get_singleton();
 
@@ -317,49 +319,140 @@ public:
 	virtual void mesh_clear(RID p_mesh) override;
 	virtual void mesh_surface_remove(RID p_mesh, int p_surface) override;
 
+	// TODO(GLES1): All of these below where literally copy-pasted
+	// from GLES3 driver code. Need to verify if these work
+	// and if not, accomodate.
 	_FORCE_INLINE_ const RID *mesh_get_surface_count_and_materials(RID p_mesh, uint32_t &r_surface_count) {
-        return nullptr;
+		Mesh *mesh = mesh_owner.get_or_null(p_mesh);
+		ERR_FAIL_NULL_V(mesh, nullptr);
+		r_surface_count = mesh->surface_count;
+		if (r_surface_count == 0) {
+			return nullptr;
+		}
+		if (mesh->material_cache.is_empty()) {
+			mesh->material_cache.resize(mesh->surface_count);
+			for (uint32_t i = 0; i < r_surface_count; i++) {
+				mesh->material_cache.write[i] = mesh->surfaces[i]->material;
+			}
+		}
+
+		return mesh->material_cache.ptr();
 	}
 
 	_FORCE_INLINE_ void *mesh_get_surface(RID p_mesh, uint32_t p_surface_index) {
-		return nullptr;
+		Mesh *mesh = mesh_owner.get_or_null(p_mesh);
+		ERR_FAIL_NULL_V(mesh, nullptr);
+		ERR_FAIL_UNSIGNED_INDEX_V(p_surface_index, mesh->surface_count, nullptr);
+
+		return mesh->surfaces[p_surface_index];
 	}
 
 	_FORCE_INLINE_ RID mesh_get_shadow_mesh(RID p_mesh) {
-        return RID();
+		Mesh *mesh = mesh_owner.get_or_null(p_mesh);
+		ERR_FAIL_NULL_V(mesh, RID());
+
+		return mesh->shadow_mesh;
 	}
 
 	_FORCE_INLINE_ RS::PrimitiveType mesh_surface_get_primitive(void *p_surface) {
-        return RS::PRIMITIVE_POINTS;
+		Mesh::Surface *surface = reinterpret_cast<Mesh::Surface *>(p_surface);
+		ERR_FAIL_NULL_V(surface, RS::PRIMITIVE_POINTS);
+		return surface->primitive;
 	}
 
 	_FORCE_INLINE_ bool mesh_surface_has_lod(void *p_surface) const {
-        return false;
+		Mesh::Surface *s = reinterpret_cast<Mesh::Surface *>(p_surface);
+		ERR_FAIL_NULL_V(s, false);
+		return s->lod_count > 0;
 	}
 
 	_FORCE_INLINE_ uint32_t mesh_surface_get_vertices_drawn_count(void *p_surface) const {
-        return 0;
+		Mesh::Surface *s = reinterpret_cast<Mesh::Surface *>(p_surface);
+		ERR_FAIL_NULL_V(s, false);
+		return s->index_count ? s->index_count : s->vertex_count;
 	}
 
 	_FORCE_INLINE_ uint32_t mesh_surface_get_lod(void *p_surface, float p_model_scale, float p_distance_threshold, float p_mesh_lod_threshold, uint32_t &r_index_count) const {
-        return 0;
+		Mesh::Surface *s = reinterpret_cast<Mesh::Surface *>(p_surface);
+		ERR_FAIL_NULL_V(s, 0);
+
+		int32_t current_lod = -1;
+		r_index_count = s->index_count;
+
+		for (uint32_t i = 0; i < s->lod_count; i++) {
+			float screen_size = s->lods[i].edge_length * p_model_scale / p_distance_threshold;
+			if (screen_size > p_mesh_lod_threshold) {
+				break;
+			}
+			current_lod = i;
+		}
+		if (current_lod == -1) {
+			return 0;
+		} else {
+			r_index_count = s->lods[current_lod].index_count;
+			return current_lod + 1;
+		}
     }
 
 	_FORCE_INLINE_ GLuint mesh_surface_get_index_buffer(void *p_surface, uint32_t p_lod) const {
-        return 0;
+		Mesh::Surface *s = reinterpret_cast<Mesh::Surface *>(p_surface);
+		ERR_FAIL_NULL_V(s, -1);
+
+		if (p_lod == 0) {
+			return s->index_buffer;
+		} else {
+			return s->lods[p_lod - 1].index_buffer;
+		}
     }
 
 	_FORCE_INLINE_ GLuint mesh_surface_get_index_buffer_wireframe(void *p_surface) const {
+		Mesh::Surface *s = reinterpret_cast<Mesh::Surface *>(p_surface);
+		ERR_FAIL_NULL_V(s, -1);
+
+		if (s->wireframe) {
+			return s->wireframe->index_buffer;
+		}
+
 		return 0;
 	}
 
 	_FORCE_INLINE_ GLenum mesh_surface_get_index_type(void *p_surface) const {
-		return GL_UNSIGNED_SHORT;
+		Mesh::Surface *s = reinterpret_cast<Mesh::Surface *>(p_surface);
+		ERR_FAIL_NULL_V(s, -1);
+
+		return (s->vertex_count <= 65536 && s->vertex_count > 0) ? GL_UNSIGNED_SHORT : GL_UNSIGNED_INT;
 	}
 
 	// Use this to cache Vertex Array Objects so they are only generated once
 	_FORCE_INLINE_ void mesh_surface_get_vertex_arrays_and_format(void *p_surface, uint64_t p_input_mask, GLuint &r_vertex_array_gl) {
+		Mesh::Surface *s = reinterpret_cast<Mesh::Surface *>(p_surface);
+		ERR_FAIL_NULL(s);
 
+		s->version_lock.lock();
+
+		// There will never be more than 3 or 4 versions, so iterating is the fastest way.
+
+		for (uint32_t i = 0; i < s->version_count; i++) {
+			if (s->versions[i].input_mask != p_input_mask) {
+				continue;
+			}
+			// We have this version, hooray.
+			r_vertex_array_gl = s->versions[i].vertex_array;
+			s->version_lock.unlock();
+			return;
+		}
+
+		uint32_t version = s->version_count;
+		s->version_count++;
+		s->versions = (Mesh::Surface::Version *)memrealloc(s->versions, sizeof(Mesh::Surface::Version) * s->version_count);
+
+		ERR_FAIL_NULL(s->versions);
+
+		_mesh_surface_generate_version_for_input_mask(s->versions[version], s, p_input_mask);
+
+		r_vertex_array_gl = s->versions[version].vertex_array;
+
+		s->version_lock.unlock();
     }
 
 	/* MESH INSTANCE API */
@@ -378,7 +471,40 @@ public:
 	// TODO: considering hashing versions with multimesh buffer RID.
 	// Doing so would allow us to avoid specifying multimesh buffer pointers every frame and may improve performance.
 	_FORCE_INLINE_ void mesh_instance_surface_get_vertex_arrays_and_format(RID p_mesh_instance, uint32_t p_surface_index, uint64_t p_input_mask, GLuint &r_vertex_array_gl) {
+		MeshInstance *mi = mesh_instance_owner.get_or_null(p_mesh_instance);
+		ERR_FAIL_NULL(mi);
+		Mesh *mesh = mi->mesh;
+		ERR_FAIL_NULL(mesh);
+		ERR_FAIL_UNSIGNED_INDEX(p_surface_index, mesh->surface_count);
 
+		MeshInstance::Surface *mis = &mi->surfaces[p_surface_index];
+		Mesh::Surface *s = mesh->surfaces[p_surface_index];
+
+		s->version_lock.lock();
+
+		//there will never be more than, at much, 3 or 4 versions, so iterating is the fastest way
+
+		for (uint32_t i = 0; i < mis->version_count; i++) {
+			if (mis->versions[i].input_mask != p_input_mask) {
+				continue;
+			}
+			//we have this version, hooray
+			r_vertex_array_gl = mis->versions[i].vertex_array;
+			s->version_lock.unlock();
+			return;
+		}
+
+		uint32_t version = mis->version_count;
+		mis->version_count++;
+		mis->versions = (Mesh::Surface::Version *)memrealloc(mis->versions, sizeof(Mesh::Surface::Version) * mis->version_count);
+
+		ERR_FAIL_NULL(mis->versions);
+
+		_mesh_surface_generate_version_for_input_mask(mis->versions[version], s, p_input_mask, mis);
+
+		r_vertex_array_gl = mis->versions[version].vertex_array;
+
+		s->version_lock.unlock();
     }
 
 	/* MULTIMESH API */
@@ -420,35 +546,54 @@ public:
 	void _update_dirty_multimeshes();
 
 	_FORCE_INLINE_ RS::MultimeshTransformFormat multimesh_get_transform_format(RID p_multimesh) const {
-        return RS::MULTIMESH_TRANSFORM_3D;
+		MultiMesh *multimesh = multimesh_owner.get_or_null(p_multimesh);
+		ERR_FAIL_NULL_V(multimesh, RS::MULTIMESH_TRANSFORM_3D);
+		return multimesh->xform_format;
 	}
 
 	_FORCE_INLINE_ bool multimesh_uses_colors(RID p_multimesh) const {
-        return false;
+		MultiMesh *multimesh = multimesh_owner.get_or_null(p_multimesh);
+		ERR_FAIL_NULL_V(multimesh, false);
+		return multimesh->uses_colors;
 	}
 
 	_FORCE_INLINE_ bool multimesh_uses_custom_data(RID p_multimesh) const {
-        return false;
+		MultiMesh *multimesh = multimesh_owner.get_or_null(p_multimesh);
+		ERR_FAIL_NULL_V(multimesh, false);
+		return multimesh->uses_custom_data;
 	}
 
 	_FORCE_INLINE_ uint32_t multimesh_get_instances_to_draw(RID p_multimesh) const {
-        return 0;
+		MultiMesh *multimesh = multimesh_owner.get_or_null(p_multimesh);
+		ERR_FAIL_NULL_V(multimesh, 0);
+		if (multimesh->visible_instances >= 0) {
+			return multimesh->visible_instances;
+		}
+		return multimesh->instances;
 	}
 
 	_FORCE_INLINE_ GLuint multimesh_get_gl_buffer(RID p_multimesh) const {
-        return 0;
+		MultiMesh *multimesh = multimesh_owner.get_or_null(p_multimesh);
+		ERR_FAIL_NULL_V(multimesh, 0);
+		return multimesh->buffer;
 	}
 
 	_FORCE_INLINE_ uint32_t multimesh_get_stride(RID p_multimesh) const {
-        return 0;
+		MultiMesh *multimesh = multimesh_owner.get_or_null(p_multimesh);
+		ERR_FAIL_NULL_V(multimesh, 0);
+		return multimesh->stride_cache;
 	}
 
 	_FORCE_INLINE_ uint32_t multimesh_get_color_offset(RID p_multimesh) const {
-        return 0;
+		MultiMesh *multimesh = multimesh_owner.get_or_null(p_multimesh);
+		ERR_FAIL_NULL_V(multimesh, 0);
+		return multimesh->color_offset_cache;
 	}
 
 	_FORCE_INLINE_ uint32_t multimesh_get_custom_data_offset(RID p_multimesh) const {
-        return 0;
+		MultiMesh *multimesh = multimesh_owner.get_or_null(p_multimesh);
+		ERR_FAIL_NULL_V(multimesh, 0);
+		return multimesh->custom_data_offset_cache;
 	}
 
 	/* SKELETON API */
@@ -473,7 +618,7 @@ public:
 	void _update_dirty_skeletons();
 
 	_FORCE_INLINE_ bool skeleton_is_valid(RID p_skeleton) {
-        return false;
+		return skeleton_owner.get_or_null(p_skeleton) != nullptr;
 	}
 };
 

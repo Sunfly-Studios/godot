@@ -219,7 +219,9 @@ Ref<Image> TextureStorage::_get_gl_image_and_format(const Ref<Image> &p_image, I
 			r_gl_type = GL_UNSIGNED_BYTE;
 		} break;
 		case Image::FORMAT_RGF: {
+#if DEBUG_ENABLED
 			ERR_PRINT_ONCE("RGF Format is not supported by GLES1, converting to RGB8.");
+#endif
 			if (image.is_valid()) {
 				image->convert(Image::FORMAT_RGB8);
 			}
@@ -229,7 +231,9 @@ Ref<Image> TextureStorage::_get_gl_image_and_format(const Ref<Image> &p_image, I
 			r_gl_type = GL_UNSIGNED_BYTE;
 		} break;
 		case Image::FORMAT_RGBF: {
+#if DEBUG_ENABLED
 			ERR_PRINT_ONCE("RGB float texture not supported by GLES1, converting to RGB8.");
+#endif
 			if (image.is_valid()) {
 				image->convert(Image::FORMAT_RGB8);
 			}
@@ -239,7 +243,9 @@ Ref<Image> TextureStorage::_get_gl_image_and_format(const Ref<Image> &p_image, I
 			r_gl_type = GL_UNSIGNED_BYTE;
 		} break;
 		case Image::FORMAT_RGBAF: {
+#if DEBUG_ENABLED
 			ERR_PRINT_ONCE("RGBA float texture not supported, converting to RGBA8.");
+#endif
 			if (image.is_valid()) {
 				image->convert(Image::FORMAT_RGBA8);
 			}
@@ -1660,8 +1666,6 @@ void TextureStorage::render_target_set_direct_to_screen(RID p_render_target, boo
 	if (p_direct_to_screen == rt->direct_to_screen) {
 		return;
 	}
-	// When setting DIRECT_TO_SCREEN, you need to clear before the value is set, but allocate after as
-	// those functions change how they operate depending on the value of DIRECT_TO_SCREEN
 	_clear_render_target(rt);
 	rt->direct_to_screen = p_direct_to_screen;
 	if (rt->direct_to_screen) {

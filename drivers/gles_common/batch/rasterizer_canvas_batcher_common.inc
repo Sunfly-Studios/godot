@@ -277,7 +277,7 @@ void RasterizerCanvasBatcherCommon<T_API>::join_sorted_items() {
 			if (!joined) {
 				bdata.items_joined.grow();
 				joined = bdata.items_joined.request();
-				ERR_FAIL_NULL_MSG(joined, "GLES2 Canvas Batcher: Failed to allocate BSortItem even after growing array.");
+				ERR_FAIL_NULL_MSG(joined, "GLES Canvas Batcher: Failed to allocate BSortItem even after growing array.");
 			}
 			_render_item_state.joined_item = joined;
 
@@ -293,7 +293,7 @@ void RasterizerCanvasBatcherCommon<T_API>::join_sorted_items() {
 			if (!r) {
 				bdata.item_refs.grow();
 				r = bdata.item_refs.request();
-				ERR_FAIL_NULL_MSG(r, "GLES2 Canvas Batcher: Failed to allocate BSortItem even after growing array.");
+				ERR_FAIL_NULL_MSG(r, "GLES Canvas Batcher: Failed to allocate BSortItem even after growing array.");
 			}
 			r->item = ci;
 			r->final_modulate = _render_item_state.final_modulate;
@@ -306,7 +306,7 @@ void RasterizerCanvasBatcherCommon<T_API>::join_sorted_items() {
 			if (!r) {
 				bdata.item_refs.grow();
 				r = bdata.item_refs.request();
-				ERR_FAIL_NULL_MSG(r, "GLES2 Canvas Batcher: Failed to allocate BSortItem even after growing array.");
+				ERR_FAIL_NULL_MSG(r, "GLES Canvas Batcher: Failed to allocate BSortItem even after growing array.");
 			}
 			r->item = ci;
 			r->final_modulate = _render_item_state.final_modulate;
