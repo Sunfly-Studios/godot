@@ -44,8 +44,10 @@
 #include <cerrno>
 #include <csignal>
 
-#ifndef sighandler_t
-typedef typeof(void(int)) *sighandler_t;
+#if defined(__FreeBSD__)
+typedef sig_t sighandler_t;
+#elif !defined(__GLIBC__) && !defined(sighandler_t)
+typedef void (*sighandler_t)(int);
 #endif
 
 Error FileAccessUnixPipe::open_existing(int p_rfd, int p_wfd, bool p_blocking) {
