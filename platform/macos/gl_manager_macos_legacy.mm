@@ -127,7 +127,6 @@ void GLManagerLegacy_MacOS::window_destroy(DisplayServer::WindowID p_window_id) 
 
 	GLWindow &win = windows[p_window_id];
 	
-	// Break the retain cycle between NSOpenGLContext and NSView. 
 	// Without this, the OpenGL context may permanently leak into VRAM.
 	[win.context clearDrawable];
 
@@ -210,8 +209,11 @@ NSOpenGLContext *GLManagerLegacy_MacOS::get_context(DisplayServer::WindowID p_wi
 	return win.context;
 }
 
-GLManagerLegacy_MacOS::GLManagerLegacy_MacOS() {
+GLManagerLegacy_MacOS::GLManagerLegacy_MacOS(int p_gles_major, int p_gles_minor) {
 	NSBundle *framework = [NSBundle bundleWithPath:@"/System/Library/Frameworks/OpenGL.framework"];
+	
+	gles_major = p_gles_major;
+	gles_minor = p_gles_minor;
 	if (framework) {
 		void *library_handle = dlopen([framework.executablePath UTF8String], RTLD_NOW);
 		if (library_handle) {

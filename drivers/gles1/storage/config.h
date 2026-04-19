@@ -53,6 +53,12 @@ class Config {
 private:
 	static Config *singleton;
 
+	// Probing algorithms
+	void _flush_gl_errors();
+	bool _probe_texture_parameterf(GLenum p_target, GLenum p_pname, GLfloat p_param);
+	bool _probe_texture_parameteri(GLenum p_target, GLenum p_pname, GLint p_param);
+	bool _probe_texture_envi(GLenum p_target, GLenum p_pname, GLint p_param);
+
 public:
 	// General Settings
 	bool use_nearest_mip_filter = false;
@@ -81,6 +87,7 @@ public:
 	int64_t max_renderable_elements = 0;
 	int64_t max_renderable_lights = 0;
 	int64_t max_lights_per_object = 0;
+	float anisotropic_level = 0.0f;
 
 	// Extension Tracking
 	HashSet<String> extensions;
@@ -102,7 +109,13 @@ public:
 	bool support_blend_equation_separate = false; // GL_OES_blend_equation_separate
 	bool support_mirrored_repeat = false; // GL_OES_texture_mirrored_repeat
 	bool support_anisotropic_filter = false; // GL_EXT_texture_filter_anisotropic
-	float anisotropic_level = 0.0f;
+
+	// 3D
+	bool support_vao = false; // GL_OES_vertex_array_object
+	bool support_vertex_half_float = false; // GL_OES_vertex_half_float
+	bool support_texture_env_add = false; // GL_OES_texture_env_add / GL_EXT_texture_env_add
+	bool support_texture_env_dot3 = false; // GL_OES_texture_env_dot3 / GL_EXT_texture_env_dot3
+	bool support_point_size_array = false; // GL_OES_point_size_array
 
 	// Texture Formats
 	bool float_texture_supported = false; // GL_OES_texture_float

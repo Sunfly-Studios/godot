@@ -71,6 +71,56 @@ using namespace GLES1;
 
 Config *Config::singleton = nullptr;
 
+void Config::_flush_gl_errors() {
+	while (glGetError() != GL_NO_ERROR) {
+		// Flush the error state
+	}
+}
+
+bool Config::_probe_texture_parameterf(GLenum p_target, GLenum p_pname, GLfloat p_param) {
+	_flush_gl_errors();
+
+	GLuint dummy_tex;
+	glGenTextures(1, &dummy_tex);
+	glBindTexture(p_target, dummy_tex);
+
+	glTexParameterf(p_target, p_pname, p_param);
+	bool supported = (glGetError() == GL_NO_ERROR);
+
+	glBindTexture(p_target, 0);
+	glDeleteTextures(1, &dummy_tex);
+
+	_flush_gl_errors();
+	return supported;
+}
+
+bool Config::_probe_texture_parameteri(GLenum p_target, GLenum p_pname, GLint p_param) {
+	_flush_gl_errors();
+
+	GLuint dummy_tex;
+	glGenTextures(1, &dummy_tex);
+	glBindTexture(p_target, dummy_tex);
+
+	glTexParameteri(p_target, p_pname, p_param);
+	bool supported = (glGetError() == GL_NO_ERROR);
+
+	glBindTexture(p_target, 0);
+	glDeleteTextures(1, &dummy_tex);
+
+	_flush_gl_errors();
+	return supported;
+}
+
+bool Config::_probe_texture_envi(GLenum p_target, GLenum p_pname, GLint p_param) {
+	_flush_gl_errors();
+
+	glTexEnvi(p_target, p_pname, p_param);
+	bool supported = (glGetError() == GL_NO_ERROR);
+
+	_flush_gl_errors();
+	return supported;
+}
+
 Config::Config() {
 	singleton = this;
 
@@ -142,7 +192,6 @@ Config::Config() {
 	support_fbo = extensions.has("GL_OES_framebuffer_object") || extensions.has("GL_EXT_framebuffer_object");
 	support_npot = extensions.has("GL_OES_texture_npot") || extensions.has("GL_ARB_texture_non_power_of_two");
 	support_blend_func_separate = extensions.has("GL_OES_blend_func_separate") || extensions.has("GL_EXT_blend_func_separate");
-	support_texture_env_combine = extensions.has("GL_OES_texture_env_crossbar") || extensions.has("GL_ARB_texture_env_combine") || extensions.has("GL_EXT_texture_env_combine");
 	support_point_sprite = extensions.has("GL_OES_point_sprite") || extensions.has("GL_ARB_point_sprite");
 	support_matrix_palette = extensions.has("GL_OES_matrix_palette");
 	support_draw_texture = extensions.has("GL_OES_draw_texture");
@@ -157,19 +206,35 @@ Config::Config() {
 	support_32_bits_indices = extensions.has("GL_OES_element_index_uint");
 	support_npot_repeat_mipmap = extensions.has("GL_OES_texture_npot");
 
-	if (support_matrix_palette) {
-		glGetIntegerv(GL_MAX_PALETTE_MATRICES_OES, &result);
-		max_palette_matrices = result;
-		glGetIntegerv(GL_MAX_VERTEX_UNITS_OES, &result);
-		max_vertex_units = result;
-		GL_CHECK_ERROR("GLES1::Config::setup: Matrix palette glGetIntegerv");
+	// 3D
+	support_vao = extensions.has("GL_OES_vertex_array_object");
+	support_vertex_half_float = extensions.has("GL_OES_vertex_half_float");
+	support_texture_env_add = extensions.has("GL_OES_texture_env_add") || extensions.has("GL_EXT_texture_env_add");
+	support_texture_env_dot3 = extensions.has("GL_OES_texture_env_dot3") || extensions.has("GL_EXT_texture_env_dot3");
+	support_point_size_array = extensions.has("GL_OES_point_size_array");
+
+	// Just because the extension exists doesn't
+	// mean the GLES1 wrapper accepts GL_COMBINE.
+	support_texture_env_combine = extensions.has("GL_OES_texture_env_crossbar") || extensions.has("GL_ARB_texture_env_combine") || extensions.has("GL_EXT_texture_env_combine");
+	if (support_texture_env_combine) {
+#ifndef GL_COMBINE
+#define GL_COMBINE 0x8570
+#endif
+		if (!_probe_texture_envi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_COMBINE)) {
+			support_texture_env_combine = false;
+		}
 	}
 
 	support_anisotropic_filter = extensions.has("GL_EXT_texture_filter_anisotropic");
 	if (support_anisotropic_filter) {
-		glGetFloatv(_GL_MAX_TEXTURE_MAX_ANISOTROPY_EXT, &anisotropic_level);
-		GL_CHECK_ERROR("GLES1::Config::setup: glGetFloatv Anisotropic");
-		anisotropic_level = MIN(float(1 << int(GLOBAL_GET("rendering/textures/default_filters/anisotropic_filtering_level"))), anisotropic_level);
+		if (_probe_texture_parameterf(GL_TEXTURE_2D, _GL_TEXTURE_MAX_ANISOTROPY_EXT, 1.0f)) {
+			glGetFloatv(_GL_MAX_TEXTURE_MAX_ANISOTROPY_EXT, &anisotropic_level);
+			GL_CHECK_ERROR("GLES1::Config::setup: glGetFloatv Anisotropic");
+			anisotropic_level = MIN(float(1 << int(GLOBAL_GET("rendering/textures/default_filters/anisotropic_filtering_level"))), anisotropic_level);
+		} else {
+			support_anisotropic_filter = false;
+			anisotropic_level = 1.0f;
+		}
 	}
 
 	if (RasterizerGLES1::is_gles_over_gl()) {

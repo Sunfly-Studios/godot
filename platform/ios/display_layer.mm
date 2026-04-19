@@ -89,20 +89,21 @@
 			kEAGLDrawablePropertyColorFormat,
 			nil];
 
-	// Create GL ES 3, GL ES 2 or GL ES 1 context
-	if (GLOBAL_GET("rendering/renderer/rendering_method") == "gl_compatibility") {
+	// Create GLES 3, GLES 2, or GLES 1 context
+	String render_method = GLOBAL_GET("rendering/renderer/rendering_method");
+	if (render_method == "gl_compatibility") {
 		context = [[EAGLContext alloc] initWithAPI:kEAGLRenderingAPIOpenGLES3];
 		if (!context) {
 			NSLog(@"Godot iOS: Failed to create OpenGL ES 3.0 context!");
 			return;
 		}
-	} else if (GLOBAL_GET("rendering/renderer/rendering_method") == "gl_legacy") {
+	} else if (render_method == "gl_legacy") {
 		context = [[EAGLContext alloc] initWithAPI:kEAGLRenderingAPIOpenGLES2];
 		if (!context) {
 			NSLog(@"Godot iOS: Failed to create OpenGL ES 2.1 context!");
 			return;
 		}
-	} else if (GLOBAL_GET("rendering/renderer/rendering_method") == "gl_classic") {
+	} else if (render_method == "gl_classic") {
 		context = [[EAGLContext alloc] initWithAPI:kEAGLRenderingAPIOpenGLES1];
 		if (!context) {
 			NSLog(@"Godot iOS: Failed to create OpenGL ES 1.1 context!");
@@ -201,21 +202,15 @@
 	}
 
 #ifdef GLES3_ENABLED
-    if (rendering_method == "gl_compatibility") {
-        GLES3::TextureStorage::system_fbo = viewFramebuffer;
-    }
+	GLES3::TextureStorage::system_fbo = viewFramebuffer;
 #endif
 
 #ifdef GLES2_ENABLED
-    if (rendering_method == "gl_legacy") {
-        GLES2::TextureStorage::system_fbo = viewFramebuffer;
-    }
+	GLES2::TextureStorage::system_fbo = viewFramebuffer;
 #endif
 
 #ifdef GLES1_ENABLED
-    if (rendering_method == "gl_classic") {
-        GLES1::TextureStorage::system_fbo = viewFramebuffer;
-    }
+	GLES1::TextureStorage::system_fbo = viewFramebuffer;
 #endif
 
 	return YES;
@@ -240,15 +235,15 @@
 	}
 	
 #ifdef GLES3_ENABLED
-    GLES3::TextureStorage::system_fbo = 0;
+	GLES3::TextureStorage::system_fbo = 0;
 #endif
 
 #ifdef GLES2_ENABLED
-    GLES2::TextureStorage::system_fbo = 0;
+	GLES2::TextureStorage::system_fbo = 0;
 #endif
 
 #ifdef GLES1_ENABLED
-    GLES1::TextureStorage::system_fbo = 0;
+	GLES1::TextureStorage::system_fbo = 0;
 #endif
 }
 

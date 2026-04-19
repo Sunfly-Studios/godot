@@ -4107,7 +4107,6 @@ DisplayServerMacOS::DisplayServerMacOS(const String &p_rendering_driver, WindowM
 				ERR_FAIL_MSG("Could not initialize " + rendering_driver);
 			}
 		}
-		driver_found = true;
 	}
 #endif
 

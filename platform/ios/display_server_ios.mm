@@ -152,7 +152,6 @@ DisplayServerIOS::DisplayServerIOS(const String &p_rendering_driver, WindowMode 
 				ERR_FAIL_MSG("Could not initialize " + rendering_driver);
 			}
 		}
-		driver_found = true;
 	}
 
 	if (rendering_context) {

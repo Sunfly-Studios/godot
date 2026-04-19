@@ -214,10 +214,6 @@ typedef void(GLAPIENTRY *DebugMessageCallbackARB)(DEBUGPROCARB callback, const v
 
 void RasterizerGLES1::initialize() {
 	Engine::get_singleton()->print_header(vformat("OpenGL API %s - Classic - Using Device: %s - %s", RS::get_singleton()->get_video_adapter_api_version(), RS::get_singleton()->get_video_adapter_vendor(), RS::get_singleton()->get_video_adapter_name()));
-
-	// Legacy OpenGL contexts cannot be safely shared across multiple OS windows.
-	// We force all popups and tooltips to render internally to the main window.
-	ProjectSettings::get_singleton()->set("display/window/subwindows/embed_subwindows", true);
 }
 
 void RasterizerGLES1::finalize() {
@@ -296,7 +292,7 @@ RasterizerGLES1::RasterizerGLES1() {
 			glad_loaded = true;
 		}
 	} else {
-		if (has_egl && !glad_loaded && gladLoadGLES2((GLADloadfunc)&_egl_load_function_wrapper_gles1)) {
+		if (has_egl && !glad_loaded && gladLoadGLES1((GLADloadfunc)&_egl_load_function_wrapper_gles1)) {
 			glad_loaded = true;
 		}
 	}
@@ -524,6 +520,12 @@ void RasterizerGLES1::_blit_render_target_to_screen(RID p_render_target, Display
 		flip_y = false;
 	}
 
+#ifdef WINDOWS_ENABLED
+	if (screen_flipped_y) {
+		flip_y = !flip_y;
+	}
+#endif
+
 	float uvs[8] = {};
 	if (flip_y) {
 		// Upside down UVs
@@ -635,9 +637,14 @@ void RasterizerGLES1::set_boot_image(const Ref<Image> &p_image, const Color &p_c
 		screenrect.position += ((Size2(win_size.width, win_size.height) - screenrect.size) / 2.0).floor();
 	}
 
-	// Flip Y.
-	screenrect.position.y = win_size.y - screenrect.position.y;
-	screenrect.size.y = -screenrect.size.y;
+#ifdef WINDOWS_ENABLED
+	if (!screen_flipped_y)
+#endif
+	{
+		// Flip Y.
+		screenrect.position.y = win_size.y - screenrect.position.y;
+		screenrect.size.y = -screenrect.size.y;
+	}
 
 	// Normalize texture coordinates to window size.
 	screenrect.position /= win_size;

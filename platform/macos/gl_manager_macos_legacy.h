@@ -88,10 +88,7 @@ public:
 
 	NSOpenGLContext *get_context(DisplayServer::WindowID p_window_id);
 
-	GLManagerLegacy_MacOS(int p_gles_major, int p_gles_minor) {
-		gles_major = p_gles_major;
-		gles_minor = p_gles_minor;
-	}
+	GLManagerLegacy_MacOS(int p_gles_major, int p_gles_minor);
 	~GLManagerLegacy_MacOS();
 };
 

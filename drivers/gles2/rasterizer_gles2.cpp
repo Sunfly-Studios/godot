@@ -462,6 +462,12 @@ void RasterizerGLES2::_blit_render_target_to_screen(RID p_render_target, Display
 		flip_y = false;
 	}
 
+#ifdef WINDOWS_ENABLED
+	if (screen_flipped_y) {
+		flip_y = !flip_y;
+	}
+#endif
+
 	if (flip_y) {
 		// Start Y at 1.0, and go down by -1.0
 		copy_effects->copy_to_rect(Rect2(0.0, 1.0, 1.0, -1.0));
@@ -539,9 +545,14 @@ void RasterizerGLES2::set_boot_image(const Ref<Image> &p_image, const Color &p_c
 		screenrect.position += ((Size2(win_size.width, win_size.height) - screenrect.size) / 2.0).floor();
 	}
 
-	// Flip Y.
-	screenrect.position.y = win_size.y - screenrect.position.y;
-	screenrect.size.y = -screenrect.size.y;
+#ifdef WINDOWS_ENABLED
+	if (!screen_flipped_y)
+#endif
+	{
+		// Flip Y.
+		screenrect.position.y = win_size.y - screenrect.position.y;
+		screenrect.size.y = -screenrect.size.y;
+	}
 
 	// Normalize texture coordinates to window size.
 	screenrect.position /= win_size;
