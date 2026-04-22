@@ -461,7 +461,7 @@ private:
 		bool region_is_all = false;
 
 		const VertexFormatInfo *vf_info = nullptr;
-		D3D12_VERTEX_BUFFER_VIEW vertex_buffer_views[8] = {};
+		D3D12_VERTEX_BUFFER_VIEW vertex_buffer_views[D3D12_IA_VERTEX_INPUT_RESOURCE_SLOT_COUNT] = {};
 		uint32_t vertex_buffer_count = 0;
 	};
 
