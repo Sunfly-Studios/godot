@@ -385,6 +385,7 @@ bool RasterizerCanvasBatcherCommon<T_API>::sort_items_from(int p_start) {
 		return false;
 	}
 	const RendererCanvasRender::Item::Command *command_start = start.item->commands;
+	ERR_FAIL_NULL_V(command_start, false);
 	if (command_start->type != RendererCanvasRender::Item::Command::TYPE_RECT && command_start->type != RendererCanvasRender::Item::Command::TYPE_POLYGON) {
 		return false;
 	}
@@ -429,6 +430,7 @@ bool RasterizerCanvasBatcherCommon<T_API>::sort_items_from(int p_start) {
 		}
 
 		RendererCanvasRender::Item *test_item = test_sort_item->item;
+		ERR_FAIL_NULL_V(test_item, false);
 
 		// if the test item overlaps the second item, we can't swap, AT ALL
 		// because swapping an item OVER this one would cause artefacts
@@ -448,6 +450,9 @@ bool RasterizerCanvasBatcherCommon<T_API>::sort_items_from(int p_start) {
 		// in the intersection test above
 		for (int sn = 2; sn < test; sn++) {
 			BSortItem *sandwich_neighbour = &bdata.sort_items[p_start + sn];
+			if (unlikely(!sandwich_neighbour)) {
+				continue;
+			}
 
 			// check if the test item hits the sandwich moving backward
 			if (test_item->global_rect_cache.intersects(sandwich_neighbour->item->global_rect_cache)) {
@@ -687,15 +692,16 @@ bool RasterizerCanvasBatcherCommon<T_API>::prefill_joined_item(FillState &r_fill
 	while (command) {
 		switch (command->type) {
 			case RendererCanvasRender::Item::Command::TYPE_TRANSFORM: {
+				RendererCanvasRender::Item::CommandTransform *transform = static_cast<RendererCanvasRender::Item::CommandTransform *>(command);
+				ERR_FAIL_NULL_V(transform, true);
+				
+				const Transform2D &extra_matrix = transform->xform;
 				if (r_fill_state.extra_matrix_sent) {
 					_prefill_default_batch(r_fill_state, command, *p_item);
 
-					RendererCanvasRender::Item::CommandTransform *transform = static_cast<RendererCanvasRender::Item::CommandTransform *>(command);
-					const Transform2D &extra_matrix = transform->xform;
 					r_fill_state.transform_combined = p_item->final_transform * extra_matrix;
 				} else {
-					RendererCanvasRender::Item::CommandTransform *transform = static_cast<RendererCanvasRender::Item::CommandTransform *>(command);
-					const Transform2D &extra_matrix = transform->xform;
+					ERR_FAIL_NULL_V(transform, true);
 
 					if (r_fill_state.use_hardware_transform) {
 						r_fill_state.transform_combined = extra_matrix;
@@ -716,6 +722,7 @@ bool RasterizerCanvasBatcherCommon<T_API>::prefill_joined_item(FillState &r_fill
 					return true; 
 				}
 				RendererCanvasRender::Item::CommandRect *rect = static_cast<RendererCanvasRender::Item::CommandRect *>(command);
+				ERR_FAIL_NULL_V(rect, true);
 
 				bool send_light_angles = false;
 				if (rect->texture.is_valid()) {
@@ -747,6 +754,7 @@ bool RasterizerCanvasBatcherCommon<T_API>::prefill_joined_item(FillState &r_fill
 					return true; 
 				}
 				RendererCanvasRender::Item::CommandNinePatch *np = static_cast<RendererCanvasRender::Item::CommandNinePatch *>(command);
+				ERR_FAIL_NULL_V(np, true);
 
 				if ((np->axis_x != RS::NINE_PATCH_STRETCH) || (np->axis_y != RS::NINE_PATCH_STRETCH)) {
 					// Non-stretch ninepatches are complex, push them to unbatched fallback
@@ -776,6 +784,7 @@ bool RasterizerCanvasBatcherCommon<T_API>::prefill_joined_item(FillState &r_fill
 
 			case RendererCanvasRender::Item::Command::TYPE_POLYGON: {
 				RendererCanvasRender::Item::CommandPolygon *polygon = static_cast<RendererCanvasRender::Item::CommandPolygon *>(command);
+				ERR_FAIL_NULL_V(polygon, true);
 
 				// The GLES2/GLES1 2D Batcher is heavily optimized for triangles.
 				// If the polygon is lines or points, route it to the unbatched fallback.
@@ -917,14 +926,17 @@ void RasterizerCanvasBatcherCommon<T_API>::_translate_batches_to_larger_FVF(uint
 
 						if constexpr (INCLUDE_LIGHT_ANGLES) {
 							BatchVertexLightAngled *lv = (BatchVertexLightAngled *)cv;
+							ERR_FAIL_NULL(lv);
 							lv->light_angle = source_batch_uses_light_angles ? *source_light_angles++ : 0.0f;
 						}
 						if constexpr (INCLUDE_MODULATE) {
 							BatchVertexModulated *mv = (BatchVertexModulated *)cv;
+							ERR_FAIL_NULL(mv);
 							mv->modulate = *source_vertex_modulates++;
 						}
 						if constexpr (INCLUDE_LARGE) {
 							BatchVertexLarge *lv = (BatchVertexLarge *)cv;
+							ERR_FAIL_NULL(lv);
 							lv->transform = *source_vertex_transforms++;
 						}
 					}
@@ -960,14 +972,17 @@ void RasterizerCanvasBatcherCommon<T_API>::_translate_batches_to_larger_FVF(uint
 
 					if constexpr (INCLUDE_LIGHT_ANGLES) {
 						BatchVertexLightAngled *lv = (BatchVertexLightAngled *)cv;
+						ERR_FAIL_NULL(lv);
 						lv->light_angle = source_batch_uses_light_angles ? *source_light_angles++ : 0.0f;
 					}
 					if constexpr (INCLUDE_MODULATE) {
 						BatchVertexModulated *mv = (BatchVertexModulated *)cv;
+						ERR_FAIL_NULL(mv);
 						mv->modulate = *source_vertex_modulates++;
 					}
 					if constexpr (INCLUDE_LARGE) {
 						BatchVertexLarge *lv = (BatchVertexLarge *)cv;
+						ERR_FAIL_NULL(lv);
 						lv->transform = *source_vertex_transforms++;
 					}
 				}
@@ -1020,9 +1035,12 @@ bool RasterizerCanvasBatcherCommon<T_API>::_light_scissor_begin(const Rect2 &p_i
 	}
 
 	int y = cliprect.position.y + cliprect.size.y;
-	glEnable(GL_SCISSOR_TEST);
-	glScissor(cliprect.position.x, y, cliprect.size.width, cliprect.size.height);
-
+	get_this()->gl_enable_scissor(
+		cliprect.position.x,
+		y,
+		cliprect.size.width,
+		cliprect.size.height
+	);
 	return true;
 }
 
@@ -1093,6 +1111,7 @@ bool RasterizerCanvasBatcherCommon<T_API>::_detect_item_batch_break(RenderItemSt
 
 			case RendererCanvasRender::Item::Command::TYPE_NINEPATCH: {
 				RendererCanvasRender::Item::CommandNinePatch *np = static_cast<RendererCanvasRender::Item::CommandNinePatch *>(command);
+				ERR_FAIL_NULL_V(np, true);
 
 				if ((np->axis_x != RS::NINE_PATCH_STRETCH) || (np->axis_y != RS::NINE_PATCH_STRETCH)) {
 					return true;
@@ -1212,9 +1231,13 @@ bool RasterizerCanvasBatcherCommon<T_API>::_prefill_rect(RendererCanvasRender::I
 	Vector2 maxs = mins + rect->rect.size;
 
 	BatchVertex *bA = &bvs[0];
+	ERR_FAIL_NULL_V(bA, false);
 	BatchVertex *bB = &bvs[1];
+	ERR_FAIL_NULL_V(bB, false);
 	BatchVertex *bC = &bvs[2];
+	ERR_FAIL_NULL_V(bC, false);
 	BatchVertex *bD = &bvs[3];
+	ERR_FAIL_NULL_V(bD, false);
 
 	bA->pos.set(mins.x, mins.y);
 	bB->pos.set(maxs.x, mins.y);
@@ -1622,7 +1645,7 @@ bool RasterizerCanvasBatcherCommon<T_API>::_prefill_polygon(RendererCanvasRender
 		}
 
 		float angle = 0.0f;
-		const float TWO_PI = Math_PI * 2.0f;
+		constexpr float TWO_PI = Math_PI * 2.0f;
 
 		if (r_fill_state.transform_mode != TM_NONE) {
 			const Transform2D &tr = r_fill_state.transform_combined;
@@ -1735,14 +1758,8 @@ int RasterizerCanvasBatcherCommon<T_API>::_batch_find_or_create_tex(const RID &p
 	typename T_API::Texture *texture = T_API::TextureStorage::get_singleton()->get_texture(diffuse_rid);
 
 	if (texture) {
-		int w = texture->width;
-		int h = texture->height;
-		if (!w || !h) {
-			w = 1;
-			h = 1;
-		}
-		w = MAX(1, texture->width);
-		h = MAX(1, texture->height);
+		int w = MAX(1, texture->width);
+		int h = MAX(1, texture->height);
 		new_batch_tex.tex_pixel_size.set(1.0f / w, 1.0f / h);
 	} else {
 		new_batch_tex.tex_pixel_size.set(1.0f, 1.0f);

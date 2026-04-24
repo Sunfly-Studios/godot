@@ -277,6 +277,7 @@ void RasterizerCanvasGLES2::_bind_canvas_texture(RID p_texture, RS::CanvasItemTe
 		// If it's a raw texture, it might have an embedded CanvasTexture
 		if (!t->canvas_texture) {
 			t->canvas_texture = memnew(GLES2::CanvasTexture);
+			ERR_FAIL_NULL(t->canvas_texture);
 			t->canvas_texture->diffuse = p_texture;
 		}
 
@@ -695,8 +696,25 @@ void RasterizerCanvasGLES2::canvas_render_items(RID p_to_render_target, Item *p_
 	// Kick off the batcher loops
 	canvas_render_items_begin(p_modulate, p_light_list, p_canvas_transform);
 	
-	// TODO(GLES2): Hardcoding p_z to 0 for now until Z-layer sorting is fully ported
-	canvas_render_items_internal(p_item_list, 0, p_modulate, p_light_list, p_canvas_transform);
+	Item *current_item = p_item_list;
+
+	// Do Z ordering sequentially based on
+	// canvas/clip boundaries.
+	int current_z = 0;
+
+	while (current_item) {
+		Item *next_item = current_item->next;
+
+		// Break the list temporarily to feed it cleanly into the batcher
+		current_item->next = nullptr;
+
+		canvas_render_items_internal(current_item, current_z, p_modulate, p_light_list, p_canvas_transform);
+
+		// Restore the chain for any subsequent passes
+		current_item->next = next_item;
+		current_item = next_item;
+		current_z++;
+	}
 	
 	canvas_render_items_end();
 
@@ -747,19 +765,33 @@ void RasterizerCanvasGLES2::canvas_render_items_implementation(Item *p_item_list
 			const BItemJoined &joined_item = bdata.items_joined[j];
 			Item *first_item = bdata.item_refs[joined_item.first_item_ref].item;
 
+			if (unlikely(!first_item)) {
+				continue;
+			}
+
+			bool light_scissor_enabled = false;
+			if (p_light && bdata.settings_scissor_lights) {
+				// Use the cached transform and rect directly
+				light_scissor_enabled = _light_scissor_begin(
+					joined_item.bounding_rect,
+					p_light->xform_cache,
+					p_light->rect_cache,
+					0
+				);
+			}
+
 			// Make sure we set current clip for scissor testing.
-			if (ris.current_clip != first_item->final_clip_owner || reclip) {
+			if (!light_scissor_enabled && (ris.current_clip != first_item->final_clip_owner || reclip)) {
 				ris.current_clip = first_item->final_clip_owner;
 				if (ris.current_clip) {
-					glEnable(GL_SCISSOR_TEST);
-					int x = ris.current_clip->final_clip_rect.position.x;
-					int y = ris.current_clip->final_clip_rect.position.y;
-					int w = ris.current_clip->final_clip_rect.size.x;
-					int h = ris.current_clip->final_clip_rect.size.y;
-					glScissor(x, y, w, h);
+					int x = MAX(1, ris.current_clip->final_clip_rect.position.x);
+					int y = MAX(1, ris.current_clip->final_clip_rect.position.y);
+					int w = MAX(1, ris.current_clip->final_clip_rect.size.x);
+					int h = MAX(1, ris.current_clip->final_clip_rect.size.y);
+					gl_enable_scissor(x, y, w, h);
 					GL_CHECK_ERROR("GLES2::Canvas::render_items: glScissor setup");
 				} else {
-					glDisable(GL_SCISSOR_TEST);
+					gl_disable_scissor();
 					GL_CHECK_ERROR("GLES2::Canvas::render_items: glScissor disable");
 				}
 				reclip = false;
@@ -767,7 +799,7 @@ void RasterizerCanvasGLES2::canvas_render_items_implementation(Item *p_item_list
 
 			// Extract the CanvasMaterialData
 			GLES2::CanvasMaterialData *mat_data = nullptr;
-			if (first_item && first_item->material.is_valid()) {
+			if (first_item->material.is_valid()) {
 				GLES2::Material *material = GLES2::MaterialStorage::get_singleton()->get_material(first_item->material);
 				if (material && material->data) {
 					mat_data = static_cast<GLES2::CanvasMaterialData *>(material->data);
@@ -786,23 +818,38 @@ void RasterizerCanvasGLES2::canvas_render_items_implementation(Item *p_item_list
 
 			// Pass the joined_item and the extracted material into the render step
 			render_joined_item_commands(joined_item, ris.current_clip, reclip, mat_data, false);
+
+			// Clean up light scissor if we hijacked it for this batch
+			if (light_scissor_enabled) {
+				reclip = true;
+				gl_disable_scissor();
+			}
 		}
 	} else {
 		// Legacy / Immediate render fallback
 		Item *ci = p_item_list;
 		while (ci) {
-			if (ris.current_clip != ci->final_clip_owner || reclip) {
+			bool light_scissor_enabled = false;
+			if (p_light && bdata.settings_scissor_lights) {
+				light_scissor_enabled = _light_scissor_begin(
+					ci->global_rect_cache,
+					p_light->xform_cache,
+					p_light->rect_cache,
+					0
+				);
+			}
+
+			if (!light_scissor_enabled && (ris.current_clip != ci->final_clip_owner || reclip)) {
 				ris.current_clip = ci->final_clip_owner;
 				if (ris.current_clip) {
-					glEnable(GL_SCISSOR_TEST);
-					int x = ris.current_clip->final_clip_rect.position.x;
-					int y = ris.current_clip->final_clip_rect.position.y;
-					int w = ris.current_clip->final_clip_rect.size.x;
-					int h = ris.current_clip->final_clip_rect.size.y;
-					glScissor(x, y, w, h);
+					int x = MAX(1, ris.current_clip->final_clip_rect.position.x);
+					int y = MAX(1, ris.current_clip->final_clip_rect.position.y);
+					int w = MAX(1, ris.current_clip->final_clip_rect.size.x);
+					int h = MAX(1, ris.current_clip->final_clip_rect.size.y);
+					gl_enable_scissor(x, y, w, h);
 					GL_CHECK_ERROR("GLES2::Canvas::render_items: glScissor setup");
 				} else {
-					glDisable(GL_SCISSOR_TEST);
+					gl_disable_scissor();
 					GL_CHECK_ERROR("GLES2::Canvas::render_items: glScissor disable");
 				}
 				reclip = false;
@@ -828,13 +875,19 @@ void RasterizerCanvasGLES2::canvas_render_items_implementation(Item *p_item_list
 			}
 
 			_legacy_canvas_item_render_commands(ci, ris.current_clip, reclip, mat_data);
+
+			if (light_scissor_enabled) {
+				reclip = true;
+				gl_disable_scissor();
+			}
+
 			ci = ci->next;
 		}
 	}
 
 	// Clean up scissor test if it was left enabled by a clip
 	if (ris.current_clip && !reclip) {
-		glDisable(GL_SCISSOR_TEST);
+		gl_disable_scissor();
 	}
 
 	if (time_used) {
@@ -848,6 +901,15 @@ void RasterizerCanvasGLES2::canvas_render_items_internal(Item *p_item_list, int 
 
 void RasterizerCanvasGLES2::canvas_render_items_end() {
 	batch_canvas_render_items_end();
+}
+
+void RasterizerCanvasGLES2::gl_enable_scissor(int p_x, int p_y, int p_width, int p_height) const {
+	glEnable(GL_SCISSOR_TEST);
+	glScissor(p_x, p_y, p_width, p_height);
+}
+
+void RasterizerCanvasGLES2::gl_disable_scissor() const {
+	glDisable(GL_SCISSOR_TEST);
 }
 
 void RasterizerCanvasGLES2::_batch_upload_buffers() {
@@ -1061,6 +1123,7 @@ void RasterizerCanvasGLES2::render_batches(Item::Command *const *p_commands, Ite
 					switch (command->type) {
 						case Item::Command::TYPE_RECT: {
 							Item::CommandRect *r = static_cast<Item::CommandRect *>(command);
+							ERR_FAIL_NULL(r);
 
 							// Clean state
 							// (so that rubbish/garbage doesn't ruin stuff later)
@@ -1146,6 +1209,7 @@ void RasterizerCanvasGLES2::render_batches(Item::Command *const *p_commands, Ite
 
 						case Item::Command::TYPE_NINEPATCH: {
 							Item::CommandNinePatch *np = static_cast<Item::CommandNinePatch *>(command);
+							ERR_FAIL_NULL(np);
 
 							_set_texture_rect_mode(false);
 
@@ -1279,18 +1343,19 @@ void RasterizerCanvasGLES2::render_batches(Item::Command *const *p_commands, Ite
 
 						case Item::Command::TYPE_CLIP_IGNORE: {
 							Item::CommandClipIgnore *ci = static_cast<Item::CommandClipIgnore *>(command);
+							ERR_FAIL_NULL(ci);
+
 							if (p_current_clip) {
 								if (ci->ignore != r_reclip) {
 									if (ci->ignore) {
-										glDisable(GL_SCISSOR_TEST);
+										gl_disable_scissor();
 										r_reclip = true;
 									} else {
-										glEnable(GL_SCISSOR_TEST);
-										int x = p_current_clip->final_clip_rect.position.x;
-										int y = p_current_clip->final_clip_rect.position.y;
-										int w = p_current_clip->final_clip_rect.size.x;
-										int h = p_current_clip->final_clip_rect.size.y;
-										glScissor(x, y, w, h);
+										int x = MAX(1, p_current_clip->final_clip_rect.position.x);
+										int y = MAX(1, p_current_clip->final_clip_rect.position.y);
+										int w = MAX(1, p_current_clip->final_clip_rect.size.x);
+										int h = MAX(1, p_current_clip->final_clip_rect.size.y);
+										gl_enable_scissor(x, y, w, h);
 										GL_CHECK_ERROR("GLES2::Canvas::render_batches: Item::Command::TYPE_CLIP_IGNORE: glScissor");
 										r_reclip = false;
 									}
@@ -1300,12 +1365,14 @@ void RasterizerCanvasGLES2::render_batches(Item::Command *const *p_commands, Ite
 
 						case Item::Command::TYPE_POLYGON: {
 							Item::CommandPolygon *polygon = static_cast<Item::CommandPolygon *>(command);
+							ERR_FAIL_NULL(polygon);
 
 							_legacy_draw_polygon(polygon, p_material);
 						} break;
 
 						case Item::Command::TYPE_PRIMITIVE: {
 							Item::CommandPrimitive *pr = static_cast<Item::CommandPrimitive *>(command);
+							ERR_FAIL_NULL(pr);
 
 							switch (pr->point_count) {
 								case 2: {
@@ -1319,6 +1386,7 @@ void RasterizerCanvasGLES2::render_batches(Item::Command *const *p_commands, Ite
 
 						case Item::Command::TYPE_MESH: {
 							Item::CommandMesh *mesh_cmd = static_cast<Item::CommandMesh *>(command);
+							ERR_FAIL_NULL(mesh_cmd);
 
 							_set_texture_rect_mode(false);
 
@@ -1365,6 +1433,10 @@ void RasterizerCanvasGLES2::render_batches(Item::Command *const *p_commands, Ite
 								for (uint32_t j = 0; j < mesh_data->surface_count; j++) {
 									GLES2::Mesh::Surface *s = mesh_data->surfaces[j];
 
+									if (unlikely(!s)) {
+										continue;
+									}
+
 									glBindBuffer(GL_ARRAY_BUFFER, s->vertex_buffer);
 
 									if (s->index_count > 0) {
@@ -1375,6 +1447,10 @@ void RasterizerCanvasGLES2::render_batches(Item::Command *const *p_commands, Ite
 									// Setup vertex attributes from the cached Version struct
 									if (s->version_count > 0 && s->versions) {
 										GLES2::Mesh::Surface::Version *v = &s->versions[0];
+
+										if (unlikely(!v)) {
+											continue;
+										}
 
 										for (int k = 0; k < maximum_attributes; k++) {
 											if (v->attribs[k].enabled) {
@@ -1435,6 +1511,8 @@ void RasterizerCanvasGLES2::render_batches(Item::Command *const *p_commands, Ite
 
 						case Item::Command::TYPE_TRANSFORM: {
 							Item::CommandTransform *transform = static_cast<Item::CommandTransform *>(command);
+							ERR_FAIL_NULL(transform);
+
 							state.uniforms.extra_matrix = transform->xform;
 							state.canvas_shader->version_set_uniform(CanvasShaderGLES2::EXTRA_MATRIX, state.uniforms.extra_matrix, state.shader_version, state.mode_variant, state.specialization);
 						} break;
