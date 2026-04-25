@@ -34,6 +34,8 @@
 #include "core/error/error_macros.h"
 #include "core/typedefs.h"
 
+#include <functional> // for std::less
+
 #define ERR_BAD_COMPARE(cond)                                         \
 	if (unlikely(cond)) {                                             \
 		ERR_PRINT("bad comparison function; sorting will be broken"); \
@@ -42,7 +44,9 @@
 
 template <typename T>
 struct _DefaultComparator {
-	_FORCE_INLINE_ bool operator()(const T &a, const T &b) const { return (a < b); }
+	_FORCE_INLINE_ bool operator()(const T &a, const T &b) const {
+		return std::less<T>{}(a, b);
+	}
 };
 
 #ifdef DEBUG_ENABLED
@@ -251,9 +255,17 @@ public:
 	inline void unguarded_linear_insert(int64_t p_last, T p_value, T *p_array) const {
 		int64_t next = p_last - 1;
 		while (compare(p_value, p_array[next])) {
+#ifdef DEBUG_ENABLED
 			if constexpr (Validate) {
 				ERR_BAD_COMPARE(next == 0);
 			}
+#else
+			// Silences GCC warning about invoking
+			// UB.
+			if constexpr (unlikely(next == 0)) {
+				break;
+			}
+#endif
 			p_array[p_last] = p_array[next];
 			p_last = next;
 			next--;

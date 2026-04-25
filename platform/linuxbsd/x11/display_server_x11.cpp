@@ -3072,7 +3072,9 @@ bool DisplayServerX11::window_get_flag(WindowFlags p_flag, WindowID p_window) co
 				unsigned char *data = nullptr;
 				if (XGetWindowProperty(x11_display, wd.x11_window, prop, 0, sizeof(Hints), False, AnyPropertyType, &type, &format, &len, &remaining, &data) == Success) {
 					if (data && (format == 32) && (len >= 5)) {
-						borderless = !(reinterpret_cast<Hints *>(data)->decorations);
+						Hints hints;
+						memcpy(&hints, data, sizeof(Hints));
+						borderless = !(hints.decorations);
 					}
 					if (data) {
 						XFree(data);

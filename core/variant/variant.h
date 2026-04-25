@@ -61,6 +61,8 @@
 #include "core/variant/callable.h"
 #include "core/variant/dictionary.h"
 
+#include <functional> // for std::less
+
 class Object;
 class RefCounted;
 
@@ -917,7 +919,7 @@ struct StringLikeVariantOrder {
 		if (p_lhs.is_string() && p_rhs.is_string()) {
 			return p_lhs.operator String() < p_rhs.operator String();
 		}
-		return p_lhs < p_rhs;
+		return std::less<>{}(p_lhs, p_rhs);
 	}
 
 	_ALWAYS_INLINE_ bool operator()(const Variant &p_lhs, const Variant &p_rhs) const {
