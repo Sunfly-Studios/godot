@@ -233,6 +233,7 @@ void RasterizerGLES1::finalize() {
 	memdelete(texture_storage);
 	memdelete(utilities);
 	memdelete(config);
+	memdelete(polyfill);
 }
 
 RasterizerGLES1 *RasterizerGLES1::singleton = nullptr;
@@ -395,6 +396,7 @@ RasterizerGLES1::RasterizerGLES1() {
 	// OpenGL needs to be initialized before initializing the Rasterizers
 	config = memnew(GLES1::Config);
 	utilities = memnew(GLES1::Utilities);
+	polyfill = memnew(GLES1::Polyfill);
 	texture_storage = memnew(GLES1::TextureStorage);
 	material_storage = memnew(GLES1::MaterialStorage);
 	mesh_storage = memnew(GLES1::MeshStorage);

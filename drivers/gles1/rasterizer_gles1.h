@@ -50,6 +50,7 @@
 #include "storage/particles_storage.h"
 #include "storage/texture_storage.h"
 #include "storage/utilities.h"
+#include "polyfill_gles1.h"
 
 class RasterizerGLES1 : public RendererCompositor {
 private:
@@ -79,6 +80,7 @@ protected:
 	GLES1::Glow *glow = nullptr;
 	GLES1::PostEffects *post_effects = nullptr;
 	GLES1::FeedEffects *feed_effects = nullptr;
+	GLES1::Polyfill *polyfill = nullptr;
 	RasterizerCanvasGLES1 *canvas = nullptr;
 	RasterizerSceneGLES1 *scene = nullptr;
 	static RasterizerGLES1 *singleton;
