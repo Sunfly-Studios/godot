@@ -32,8 +32,8 @@
 
 #include "config.h"
 
-#include "drivers/gles_common/error_macros.h"
 #include "drivers/gles2/rasterizer_gles2.h"
+#include "drivers/gles_common/error_macros.h"
 
 #ifdef WEB_ENABLED
 #include <emscripten/html5_webgl.h>
@@ -44,6 +44,46 @@ using namespace GLES2;
 #define _GL_MAX_TEXTURE_MAX_ANISOTROPY_EXT 0x84FF
 
 Config *Config::singleton = nullptr;
+
+void Config::_flush_gl_errors() {
+	while (glGetError() != GL_NO_ERROR) {
+		// Flush the error state
+	}
+}
+
+bool Config::_probe_texture_parameterf(GLenum p_target, GLenum p_pname, GLfloat p_param) {
+	_flush_gl_errors();
+
+	GLuint dummy_tex;
+	glGenTextures(1, &dummy_tex);
+	glBindTexture(p_target, dummy_tex);
+
+	glTexParameterf(p_target, p_pname, p_param);
+	bool supported = (glGetError() == GL_NO_ERROR);
+
+	glBindTexture(p_target, 0);
+	glDeleteTextures(1, &dummy_tex);
+
+	_flush_gl_errors();
+	return supported;
+}
+
+bool Config::_probe_texture_parameteri(GLenum p_target, GLenum p_pname, GLint p_param) {
+	_flush_gl_errors();
+
+	GLuint dummy_tex;
+	glGenTextures(1, &dummy_tex);
+	glBindTexture(p_target, dummy_tex);
+
+	glTexParameteri(p_target, p_pname, p_param);
+	bool supported = (glGetError() == GL_NO_ERROR);
+
+	glBindTexture(p_target, 0);
+	glDeleteTextures(1, &dummy_tex);
+
+	_flush_gl_errors();
+	return supported;
+}
 
 Config::Config() {
 	singleton = this;
@@ -77,6 +117,7 @@ Config::Config() {
 	}
 #endif
 
+	// Base extensions
 	bptc_supported = extensions.has("GL_ARB_texture_compression_bptc") || extensions.has("EXT_texture_compression_bptc");
 	astc_supported = extensions.has("GL_KHR_texture_compression_astc") || extensions.has("GL_OES_texture_compression_astc") || extensions.has("GL_KHR_texture_compression_astc_ldr") || extensions.has("GL_KHR_texture_compression_astc_hdr");
 	astc_hdr_supported = extensions.has("GL_KHR_texture_compression_astc_hdr");
@@ -86,6 +127,18 @@ Config::Config() {
 	support_frag_depth = extensions.has("GL_EXT_frag_depth");
 	texture_lod_supported = extensions.has("GL_EXT_shader_texture_lod");
 
+	// More extensions
+	support_vao = extensions.has("GL_OES_vertex_array_object") || extensions.has("GL_ARB_vertex_array_object");
+	support_vertex_half_float = extensions.has("GL_OES_vertex_half_float");
+	support_texture_half_float = extensions.has("GL_OES_texture_half_float");
+	support_depth24 = extensions.has("GL_OES_depth24");
+	support_depth32 = extensions.has("GL_OES_depth32");
+	support_packed_depth_stencil = extensions.has("GL_OES_packed_depth_stencil");
+	support_blend_equation_separate = extensions.has("GL_OES_blend_equation_separate");
+	support_draw_buffers = extensions.has("GL_EXT_draw_buffers");
+	support_texture_rg = extensions.has("GL_EXT_texture_rg");
+	external_texture_supported = extensions.has("GL_OES_EGL_image_external");
+
 	if (RasterizerGLES2::is_gles_over_gl()) {
 		float_texture_supported = true;
 		etc2_supported = false;
@@ -93,6 +146,13 @@ Config::Config() {
 		support_npot_repeat_mipmap = true;
 		support_32_bits_indices = true;
 		texture_lod_supported = true;
+
+		// Desktop OpenGL almost universally supports these
+		support_vao = true;
+		support_depth24 = true;
+		support_packed_depth_stencil = true;
+		support_blend_equation_separate = true;
+		support_draw_buffers = true;
 	} else {
 		float_texture_supported = extensions.has("GL_OES_texture_float") || extensions.has("GL_EXT_color_buffer_float");
 		etc2_supported = true;
@@ -134,9 +194,16 @@ Config::Config() {
 
 	support_anisotropic_filter = extensions.has("GL_EXT_texture_filter_anisotropic");
 	if (support_anisotropic_filter) {
-		glGetFloatv(_GL_MAX_TEXTURE_MAX_ANISOTROPY_EXT, &anisotropic_level);
-		GL_CHECK_ERROR("GLES2::Config::setup: glGetFloatv Anisotropic");
-		anisotropic_level = MIN(float(1 << int(GLOBAL_GET("rendering/textures/default_filters/anisotropic_filtering_level"))), anisotropic_level);
+		// Probe Anisotropic filter support to ensure
+		// it doesn't crash despite the extension string
+		if (_probe_texture_parameterf(GL_TEXTURE_2D, _GL_TEXTURE_MAX_ANISOTROPY_EXT, 1.0f)) {
+			glGetFloatv(_GL_MAX_TEXTURE_MAX_ANISOTROPY_EXT, &anisotropic_level);
+			GL_CHECK_ERROR("GLES2::Config::setup: glGetFloatv Anisotropic");
+			anisotropic_level = MIN(float(1 << int(GLOBAL_GET("rendering/textures/default_filters/anisotropic_filtering_level"))), anisotropic_level);
+		} else {
+			support_anisotropic_filter = false;
+			anisotropic_level = 1.0f;
+		}
 	}
 
 	// Cache 3D texture support

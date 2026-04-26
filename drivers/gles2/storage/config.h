@@ -53,6 +53,11 @@ class Config {
 private:
 	static Config *singleton;
 
+	// Probing algorithms
+	void _flush_gl_errors();
+	bool _probe_texture_parameterf(GLenum p_target, GLenum p_pname, GLfloat p_param);
+	bool _probe_texture_parameteri(GLenum p_target, GLenum p_pname, GLint p_param);
+
 public:
 	bool use_nearest_mip_filter = false;
 	bool use_depth_prepass = true;
@@ -73,8 +78,14 @@ public:
 
 	HashSet<String> extensions;
 
+	// Texture Formats
 	bool float_texture_supported = false;
 	bool float_texture_linear_supported = false;
+	bool support_3d_textures = false; // GL_OES_texture_3D
+	bool support_texture_half_float = false; // GL_OES_texture_half_float
+	bool support_texture_rg = false; // GL_EXT_texture_rg
+
+	// Compression Formats
 	bool s3tc_supported = false;
 	bool rgtc_supported = false;
 	bool bptc_supported = false;
@@ -84,35 +95,41 @@ public:
 	bool astc_layered_supported = false;
 	bool srgb_framebuffer_supported = false;
 
+	// Overrides / Features
 	bool force_vertex_shading = false;
 	bool multi_bounce_occlusion = false;
 
+	// Filtering
 	bool support_anisotropic_filter = false;
 	float anisotropic_level = 0.0f;
 
+	// MSAA & Multiview
 	GLint msaa_max_samples = 0;
 	bool msaa_supported = false;
 	bool msaa_multiview_supported = false;
 	bool rt_msaa_supported = false;
 	bool rt_msaa_multiview_supported = false;
 	bool multiview_supported = false;
-	bool external_texture_supported = false;
-	bool support_32_bits_indices = false;
+
+	// Extensions
+	bool external_texture_supported = false; // GL_OES_EGL_image_external
+	bool support_32_bits_indices = false; // GL_OES_element_index_uint
+	bool support_instancing = false; // GL_EXT_draw_instanced / GL_ANGLE_instanced_arrays
+	bool support_frag_depth = false; // GL_EXT_frag_depth
+	bool texture_lod_supported = true; // GL_EXT_shader_texture_lod
+	bool support_vao = false; // GL_OES_vertex_array_object
+	bool support_vertex_half_float = false; // GL_OES_vertex_half_float
+	bool support_depth24 = false; // GL_OES_depth24
+	bool support_depth32 = false; // GL_OES_depth32
+	bool support_packed_depth_stencil = false; // GL_OES_packed_depth_stencil
+	bool support_blend_equation_separate = false; // GL_OES_blend_equation_separate
+	bool support_draw_buffers = false; // GL_EXT_draw_buffers
+
+	// Compatibility / Workarounds
 	bool adreno_3xx_compatibility = false;
-	bool support_3d_textures = false;
-
-	// Adreno 3XX compatibility.
-	bool disable_particles_workaround = false; // Set to 'true' to disable 'GPUParticles'.
-
-	// PowerVR GE 8320 workaround.
-	bool disable_transform_feedback_shader_cache = false;
-
-	// ANGLE shader workaround.
-	bool polyfill_half2float = true;
-
-	bool support_instancing = false;
-	bool support_frag_depth = false;
-	bool texture_lod_supported = true;
+	bool disable_particles_workaround = true; // Set to 'true' to disable 'GPUParticles'.
+	bool disable_transform_feedback_shader_cache = false; // PowerVR GE 8320 workaround.
+	bool polyfill_half2float = true; // ANGLE shader workaround.
 
 #ifdef ANDROID_ENABLED
 	PFNGLFRAMEBUFFERTEXTUREMULTIVIEWOVRPROC eglFramebufferTextureMultiviewOVR = nullptr;
