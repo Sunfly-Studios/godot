@@ -590,8 +590,8 @@ namespace basisu
 		bool write_output_files_and_compute_stats();
 		error_code encode_slices_to_uastc_hdr();
 		error_code encode_slices_to_uastc();
-		bool generate_mipmaps(const imagef& img, basisu::vector<imagef>& mips, bool has_alpha);
-		bool generate_mipmaps(const image &img, basisu::vector<image> &mips, bool has_alpha);
+		bool generate_mipmaps(const imagef& img, basisu::vector<imagef>& mips_levels, bool has_alpha);
+		bool generate_mipmaps(const image &img, basisu::vector<image> &mips_levels, bool has_alpha);
 		bool validate_texture_type_constraints();
 		bool validate_ktx2_constraints();
 		void get_dfd(uint8_vec& dfd, const basist::ktx2_header& hdr);
