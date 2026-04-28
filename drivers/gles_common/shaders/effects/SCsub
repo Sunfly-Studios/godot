@@ -1,0 +1,25 @@
+#!/usr/bin/env python
+from misc.utility.scons_hints import *
+
+Import("env")
+
+# find all include files
+gl_include_files = [str(f) for f in Glob("*_inc.glsl")]
+
+# find all shader code(all glsl files excluding our include files)
+glsl_files = [str(f) for f in Glob("*.glsl") if str(f) not in gl_include_files]
+
+# compile shaders
+for glsl_file in glsl_files:
+    if "GLES2_GLSL" in env["BUILDERS"]:
+        target_gles2 = f"#drivers/gles2/shaders/effects/{glsl_file}.gen.h"
+        
+        # Explicitly bind the target and source (to let SCons know)
+        node_gles2 = env.GLES2_GLSL(target=target_gles2, source=glsl_file)
+        env.Depends(node_gles2, gl_include_files + ["#gles2_builders.py"])
+
+    if "GLES1_GLSL" in env["BUILDERS"]:
+        target_gles1 = f"#drivers/gles1/shaders/effects/{glsl_file}.gen.h"
+        
+        node_gles1 = env.GLES1_GLSL(target=target_gles1, source=glsl_file)
+        env.Depends(node_gles1, gl_include_files + ["#gles1_builders.py"])

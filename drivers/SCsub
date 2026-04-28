@@ -43,6 +43,7 @@ if env["d3d12"]:
         Exit(255)
     SConscript("d3d12/SCsub")
 if env["opengl3"] or env["opengl2"] or env["opengl1"]:
+    SConscript("gles_common/SCsub")
     SConscript("gl_context/SCsub")
     SConscript("egl/SCsub")
 

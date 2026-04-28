@@ -3,31 +3,6 @@ from misc.utility.scons_hints import *
 
 Import("env")
 
-if "GLES2_GLSL" in env["BUILDERS"]:
-    # find all include files
-    gl_include_files = [str(f) for f in Glob("*_inc.glsl")]
+# The actual shader files are in `gles_common/shaders`
 
-    # find all shader code(all glsl files excluding our include files)
-    glsl_files = [str(f) for f in Glob("*.glsl") if str(f) not in gl_include_files]
-
-    # make sure we recompile shaders if include files change
-    env.Depends([f + ".gen.h" for f in glsl_files], gl_include_files + ["#gles2_builders.py"])
-
-    # compile shaders
-
-    # as we have a few, not yet, converted files we name the ones we want to include:
-    env.GLES2_GLSL("canvas.glsl")
-    env.GLES2_GLSL("feed.glsl")
-    env.GLES2_GLSL("scene.glsl")
-    env.GLES2_GLSL("sky.glsl")
-    env.GLES2_GLSL("canvas_occlusion.glsl")
-    env.GLES2_GLSL("canvas_sdf.glsl")
-    env.GLES2_GLSL("particles.glsl")
-    env.GLES2_GLSL("particles_copy.glsl")
-    env.GLES2_GLSL("skeleton.glsl")
-
-    # once we finish conversion we can introduce this to cover all files:
-    # for glsl_file in glsl_files:
-    #     env.GLES2_GLSL(glsl_file)
-
-SConscript("effects/SCsub")
+env.add_source_files(env.drivers_sources, "*.cpp")

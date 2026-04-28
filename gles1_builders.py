@@ -664,8 +664,16 @@ def build_gles_header(
 
 
 def build_gles1_headers(target, source, env):
-    for x in source:
-        build_gles_header(str(x), include="drivers/gles1/transpiler/shader_gles1.h", class_suffix="GLES1", gles_version = 1)
+    for t, s in zip(target, source):
+        out_path = str(t)
+        os.makedirs(os.path.dirname(out_path), exist_ok=True)
+        build_gles_header(
+            filename=str(s), 
+            include="drivers/gles1/transpiler/shader_gles1.h", 
+            class_suffix="GLES1", 
+            optional_output_filename=out_path, 
+            gles_version=1
+        )
 
 
 def to_byte_array(lines):

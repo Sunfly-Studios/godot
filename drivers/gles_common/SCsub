@@ -6,3 +6,4 @@ Import("env")
 env.add_source_files(env.drivers_sources, "*.cpp")
 
 SConscript("batch/SCsub")
+SConscript("shaders/SCsub")
