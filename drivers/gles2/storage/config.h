@@ -124,10 +124,12 @@ public:
 	bool support_packed_depth_stencil = false; // GL_OES_packed_depth_stencil
 	bool support_blend_equation_separate = false; // GL_OES_blend_equation_separate
 	bool support_draw_buffers = false; // GL_EXT_draw_buffers
+	bool support_transform_feedback = false; // GL_EXT_transform_feedback
+	bool support_mapbuffer = false; // GL_OES_mapbuffer
 
 	// Compatibility / Workarounds
 	bool adreno_3xx_compatibility = false;
-	bool disable_particles_workaround = true; // Set to 'true' to disable 'GPUParticles'.
+	bool disable_particles_workaround = false; // Set to 'true' to disable 'GPUParticles'.
 	bool disable_transform_feedback_shader_cache = false; // PowerVR GE 8320 workaround.
 	bool polyfill_half2float = true; // ANGLE shader workaround.
 

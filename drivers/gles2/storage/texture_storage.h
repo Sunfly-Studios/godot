@@ -43,6 +43,12 @@
 #include "servers/rendering/storage/texture_storage.h"
 
 #include "drivers/gles_common/error_macros.h"
+#include "drivers/gles_common/common_defines.h"
+
+// This polyfill is added here otherwise
+// this may crash on Desktop
+// (because of missing _OES extensions)
+#include "drivers/gles2/polyfill_gles2.h"
 #include "drivers/gles2/shaders/canvas_sdf.glsl.gen.h"
 
 namespace GLES2 {

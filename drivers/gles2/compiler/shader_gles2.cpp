@@ -92,10 +92,15 @@ void ShaderGLES2::_setup(
 		const char *p_vertex_code, const char *p_fragment_code, const char *p_name,
 		int p_uniform_count, const char **p_uniforms,
 		int p_attribute_count, const AttributePair *p_attributes,
+		int p_feedback_count, const Feedback *p_feedbacks,
 		int p_texunit_count, const TexUnitPair *p_texunits,
 		int p_specialization_count, const Specialization *p_specializations,
 		int p_variant_count, const char **p_variants) {
 	name = p_name;
+
+	// Clear the chunks
+	stage_templates[STAGE_TYPE_VERTEX].chunks.clear();
+	stage_templates[STAGE_TYPE_FRAGMENT].chunks.clear();
 
 	if (p_vertex_code) {
 		_add_stage(p_vertex_code, STAGE_TYPE_VERTEX);
@@ -108,6 +113,8 @@ void ShaderGLES2::_setup(
 	uniform_count = p_uniform_count;
 	attribute_pairs = p_attributes;
 	attribute_pair_count = p_attribute_count;
+	feedbacks = p_feedbacks;
+	feedback_count = p_feedback_count;
 	texunit_pairs = p_texunits;
 	texunit_pair_count = p_texunit_count;
 	specializations = p_specializations;
@@ -166,6 +173,12 @@ void ShaderGLES2::_build_variant_code(StringBuilder &builder, uint32_t p_variant
 	if (p_stage_type == STAGE_TYPE_FRAGMENT && GLES2::Config::get_singleton()->texture_lod_supported) {
 		builder.append("#extension GL_EXT_shader_texture_lod : enable\n");
 	}
+	if (GLES2::Config::get_singleton()->support_transform_feedback) {
+		// Only require the EXT extension if we are on mobile/web GLES.
+		if (!RasterizerGLES2::is_gles_over_gl()) {
+			builder.append("#extension GL_EXT_transform_feedback : enable\n");
+		}
+	}
 
 	for (int i = 0; i < specialization_count; i++) {
 		if (p_specialization & (uint64_t(1) << uint64_t(i))) {
@@ -192,6 +205,9 @@ void ShaderGLES2::_build_variant_code(StringBuilder &builder, uint32_t p_variant
 	}
 	if (p_stage_type == STAGE_TYPE_FRAGMENT && GLES2::Config::get_singleton()->support_frag_depth) {
 		builder.append("#define gl_FragDepth gl_FragDepthEXT\n");
+	}
+	if (GLES2::Config::get_singleton()->support_transform_feedback) {
+		builder.append("#define USE_TRANSFORM_FEEDBACK\n");
 	}
 
 	// GLES2 Texture Polyfills
@@ -368,6 +384,7 @@ void ShaderGLES2::_compile_specialization(Version::Specialization &spec, uint32_
 					iloglen = 4096;
 				}
 				char *ilogmem = (char *)Memory::alloc_static(iloglen + 1);
+				ERR_FAIL_NULL_MSG(ilogmem, "Vertex shader compilation failed: out of memory");
 				memset(ilogmem, 0, iloglen + 1);
 
 				GLsizei returned_length = 0;
@@ -434,6 +451,7 @@ void ShaderGLES2::_compile_specialization(Version::Specialization &spec, uint32_
 					iloglen = 4096; // buggy driver fallback
 				}
 				char *ilogmem = (char *)Memory::alloc_static(iloglen + 1);
+				ERR_FAIL_NULL_MSG(ilogmem, "Fragment shader compilation failed: out of memory");
 				memset(ilogmem, 0, iloglen + 1);
 
 				GLsizei returned_length = 0;
@@ -458,8 +476,10 @@ void ShaderGLES2::_compile_specialization(Version::Specialization &spec, uint32_
 	}
 
 	glAttachShader(spec.id, spec.frag_id);
+	GL_CHECK_ERROR("ShaderGLES2::_compile_specialization: glAttachShader (Fragment)");
+
 	glAttachShader(spec.id, spec.vert_id);
-	GL_CHECK_ERROR("ShaderGLES2::_compile_specialization: glAttachShader");
+	GL_CHECK_ERROR("ShaderGLES2::_compile_specialization: glAttachShader (Vertex)");
 
 	// Bind attributes before linking
 	GLint max_attribs = 8;
@@ -472,9 +492,29 @@ void ShaderGLES2::_compile_specialization(Version::Specialization &spec, uint32_
 	}
 	GL_CHECK_ERROR("ShaderGLES2::_compile_specialization: glBindAttribLocation");
 
+	// Bind transform feedback varyings before linking
+	if (feedback_count > 0 && GLES2::Config::get_singleton()->support_transform_feedback) {
+		LocalVector<const char *> feedback_names;
+		for (int i = 0; i < feedback_count; i++) {
+			if (feedbacks[i].specialization == 0 || (p_specialization & feedbacks[i].specialization)) {
+				feedback_names.push_back(feedbacks[i].name);
+			}
+		}
+
+		if (feedback_names.size() > 0) {
+			if (RasterizerGLES2::is_gles_over_gl()) {
+				glTransformFeedbackVaryings(spec.id, feedback_names.size(), feedback_names.ptr(), GL_INTERLEAVED_ATTRIBS);
+			} else {
+				glTransformFeedbackVaryingsEXT(spec.id, feedback_names.size(), feedback_names.ptr(), GL_INTERLEAVED_ATTRIBS_EXT);
+			}
+			GL_CHECK_ERROR("ShaderGLES2::_compile_specialization: glTransformFeedbackVaryings");
+		}
+	}
+
 	glLinkProgram(spec.id);
 	GL_CHECK_ERROR("ShaderGLES2::_compile_specialization: glLinkProgram");
 
+	glGetProgramiv(spec.id, GL_LINK_STATUS, &status);
 	glGetProgramiv(spec.id, GL_LINK_STATUS, &status);
 	if (status == GL_FALSE) {
 		GLsizei iloglen;
@@ -493,10 +533,11 @@ void ShaderGLES2::_compile_specialization(Version::Specialization &spec, uint32_
 			iloglen = 4096;
 		}
 		char *ilogmem = (char *)Memory::alloc_static(iloglen + 1);
+		ERR_FAIL_NULL_MSG(ilogmem, "Program linking failed: out of memory");
 		memset(ilogmem, 0, iloglen + 1);
 
 		GLsizei returned_length = 0;
-		glGetShaderInfoLog(spec.id, iloglen, &returned_length, ilogmem);
+		glGetProgramInfoLog(spec.id, iloglen, &returned_length, ilogmem);
 
 		String err_string = name + ": Program linking failed:\n" + ilogmem;
 		_display_error_with_code(err_string, String());

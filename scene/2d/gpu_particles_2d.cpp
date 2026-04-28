@@ -369,17 +369,25 @@ PackedStringArray GPUParticles2D::get_configuration_warnings() const {
 			}
 		}
 	}
-	bool is_opengl_renderer = (
-		OS::get_singleton()->get_current_rendering_method() == "gl_compatibility" ||
-		OS::get_singleton()->get_current_rendering_method() == "gl_legacy"
-	);
+
+	const bool is_classic_gl = OS::get_singleton()->get_current_rendering_method() == "gl_classic";
+	const bool is_legacy_gl = OS::get_singleton()->get_current_rendering_method() == "gl_legacy";
+	const bool is_compatibility_gl = OS::get_singleton()->get_current_rendering_method() == "gl_compatibility";
+	const bool is_opengl_renderer = is_classic_gl || is_legacy_gl || is_compatibility_gl;
 
 	if (trail_enabled && is_opengl_renderer) {
 		warnings.push_back(RTR("Particle trails are only available when using the Forward+ or Mobile renderers."));
 	}
 
 	if (sub_emitter != NodePath() && is_opengl_renderer) {
-		warnings.push_back(RTR("Particle sub-emitters are not available when using the Compatibility or Legacy renderer."));
+		warnings.push_back(RTR("Particle sub-emitters are not available when using the Compatibility, Legacy or Classic renderers."));
+	}
+
+	if (is_classic_gl || is_legacy_gl) {
+		// Slightly adapted from Godot 3.x ;)
+		warnings.push_back(
+			RTR("GPU-based particles are not supported by the Legacy, or Classic renderers.\nUse the CPUParticles2D node instead. You can use the \"Convert to CPUParticles2D\" toolbar option for this purpose.")
+		);
 	}
 
 	return warnings;

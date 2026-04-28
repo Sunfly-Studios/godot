@@ -663,7 +663,10 @@ void ShaderData::get_instance_param_list(List<RendererMaterialStorage::InstanceS
 }
 
 bool ShaderData::is_parameter_texture(const StringName &p_param) const {
-    return false;
+	if (uniforms.has(p_param)) {
+		return uniforms[p_param].texture_order >= 0;
+	}
+	return false;
 }
 
 ///////////////////////////////////////////////////////////////////////////

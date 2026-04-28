@@ -221,40 +221,56 @@ Ref<Image> TextureStorage::_get_gl_image_and_format(const Ref<Image> &p_image, I
 			r_gl_type = GL_UNSIGNED_BYTE;
 		} break;
 		case Image::FORMAT_RGF: {
-#if DEBUG_ENABLED
-			ERR_PRINT_ONCE("RGF Format is not supported by GLES1, converting to RGB8.");
-#endif
-			if (image.is_valid()) {
-				image->convert(Image::FORMAT_RGB8);
+			if (config->float_texture_supported) {
+				r_real_format = Image::FORMAT_RGBF;
+				if (image.is_valid()) {
+					image->convert(Image::FORMAT_RGBF);
+				}
+				r_gl_internal_format = GL_RGB;
+				r_gl_format = GL_RGB;
+				r_gl_type = GL_FLOAT;
+			} else {
+				ERR_PRINT_ONCE("Float textures not supported by GLES1, converting RGF to RGB8.");
+				if (image.is_valid()) {
+					image->convert(Image::FORMAT_RGB8);
+				}
+				r_real_format = Image::FORMAT_RGB8;
+				r_gl_internal_format = GL_RGB;
+				r_gl_format = GL_RGB;
+				r_gl_type = GL_UNSIGNED_BYTE;
 			}
-			r_real_format = Image::FORMAT_RGB8;
-			r_gl_internal_format = GL_RGB;
-			r_gl_format = GL_RGB;
-			r_gl_type = GL_UNSIGNED_BYTE;
 		} break;
 		case Image::FORMAT_RGBF: {
-#if DEBUG_ENABLED
-			ERR_PRINT_ONCE("RGB float texture not supported by GLES1, converting to RGB8.");
-#endif
-			if (image.is_valid()) {
-				image->convert(Image::FORMAT_RGB8);
+			if (config->float_texture_supported) {
+				r_gl_internal_format = GL_RGB;
+				r_gl_format = GL_RGB;
+				r_gl_type = GL_FLOAT;
+			} else {
+				ERR_PRINT_ONCE("RGB float texture not supported by GLES1, converting to RGB8.");
+				if (image.is_valid()) {
+					image->convert(Image::FORMAT_RGB8);
+				}
+				r_real_format = Image::FORMAT_RGB8;
+				r_gl_internal_format = GL_RGB;
+				r_gl_format = GL_RGB;
+				r_gl_type = GL_UNSIGNED_BYTE;
 			}
-			r_real_format = Image::FORMAT_RGB8;
-			r_gl_internal_format = GL_RGB;
-			r_gl_format = GL_RGB;
-			r_gl_type = GL_UNSIGNED_BYTE;
 		} break;
 		case Image::FORMAT_RGBAF: {
-#if DEBUG_ENABLED
-			ERR_PRINT_ONCE("RGBA float texture not supported, converting to RGBA8.");
-#endif
-			if (image.is_valid()) {
-				image->convert(Image::FORMAT_RGBA8);
+			if (config->float_texture_supported) {
+				r_gl_internal_format = GL_RGBA;
+				r_gl_format = GL_RGBA;
+				r_gl_type = GL_FLOAT;
+			} else {
+				ERR_PRINT_ONCE("RGBA float texture not supported by GLES1, converting to RGBA8.");
+				if (image.is_valid()) {
+					image->convert(Image::FORMAT_RGBA8);
+				}
+				r_real_format = Image::FORMAT_RGBA8;
+				r_gl_internal_format = GL_RGBA;
+				r_gl_format = GL_RGBA;
+				r_gl_type = GL_UNSIGNED_BYTE;
 			}
-			r_real_format = Image::FORMAT_RGBA8;
-			r_gl_internal_format = GL_RGBA;
-			r_gl_format = GL_RGBA;
-			r_gl_type = GL_UNSIGNED_BYTE;
 		} break;
 		case Image::FORMAT_RH:
 		case Image::FORMAT_RGH:
@@ -520,6 +536,9 @@ void TextureStorage::texture_2d_initialize(RID p_texture, const Ref<Image> &p_im
 	}
 
 	_texture_set_data(p_texture, p_image, 0, true);
+	if (!GLES1::Utilities::get_singleton()->has_texture_data(texture->tex_id)) {
+		GLES1::Utilities::get_singleton()->texture_allocated_data(texture->tex_id, texture->total_data_size, "Texture 2D");
+	}
 }
 
 void TextureStorage::texture_external_initialize(RID p_texture, int p_width, int p_height, uint64_t p_external_buffer) {
@@ -913,7 +932,11 @@ void TextureStorage::texture_replace(RID p_texture, RID p_by_texture) {
 
 	// Destroy the old physical GL texture
 	if (!tex->is_proxy && tex->tex_id != 0) {
-		GLES1::Utilities::get_singleton()->texture_free_data(tex->tex_id);
+		if (GLES1::Utilities::get_singleton()->has_texture_data(tex->tex_id)) {
+			GLES1::Utilities::get_singleton()->texture_free_data(tex->tex_id);
+		} else {
+			glDeleteTextures(1, &tex->tex_id);
+		}
 		GL_CHECK_ERROR("GLES1::TextureStorage::texture_replace: utilities texture_free_data (old texture)");
 	}
 

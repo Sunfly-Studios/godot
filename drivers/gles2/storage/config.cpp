@@ -138,6 +138,8 @@ Config::Config() {
 	support_draw_buffers = extensions.has("GL_EXT_draw_buffers");
 	support_texture_rg = extensions.has("GL_EXT_texture_rg");
 	external_texture_supported = extensions.has("GL_OES_EGL_image_external");
+	support_transform_feedback = extensions.has("GL_EXT_transform_feedback") || extensions.has("GL_NV_transform_feedback") || extensions.has("GL_ARB_transform_feedback2");
+	support_mapbuffer = extensions.has("GL_OES_mapbuffer") || extensions.has("GL_NV_copy_buffer");
 
 	if (RasterizerGLES2::is_gles_over_gl()) {
 		float_texture_supported = true;
@@ -153,6 +155,7 @@ Config::Config() {
 		support_packed_depth_stencil = true;
 		support_blend_equation_separate = true;
 		support_draw_buffers = true;
+		support_mapbuffer = true;
 	} else {
 		float_texture_supported = extensions.has("GL_OES_texture_float") || extensions.has("GL_EXT_color_buffer_float");
 		etc2_supported = true;

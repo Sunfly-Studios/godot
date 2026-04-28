@@ -246,6 +246,7 @@ private:
 	/* Mesh Instance API */
 
 	mutable RID_Owner<MeshInstance> mesh_instance_owner;
+	MultiMesh *multimesh_dirty_list = nullptr;
 
 	void _mesh_instance_clear(MeshInstance *mi);
 	void _mesh_instance_add_surface(MeshInstance *mi, Mesh *mesh, uint32_t p_surface);

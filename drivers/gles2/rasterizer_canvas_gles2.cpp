@@ -1084,8 +1084,26 @@ void RasterizerCanvasGLES2::_batch_render_generic(const Batch &p_batch, GLES2::C
 
 void RasterizerCanvasGLES2::render_batches(Item::Command *const *p_commands, Item *p_current_clip, bool &r_reclip, GLES2::CanvasMaterialData *p_material) {
 	int num_batches = bdata.batches.size();
-
 	Transform2D base_extra = state.uniforms.extra_matrix;
+
+	// Extract and apply the CanvasItemMaterial blend mode
+	bool transparent_rt = false;
+	if (state.render_target != RID()) {
+		GLES2::RenderTarget *rt = GLES2::TextureStorage::get_singleton()->get_render_target(state.render_target);
+		if (rt && rt->is_transparent) {
+			transparent_rt = true;
+		}
+	} else {
+		transparent_rt = true; // Backbuffer
+	}
+
+	GLES2::CanvasShaderData::BlendMode blend_mode = GLES2::CanvasShaderData::BLEND_MODE_MIX;
+	if (p_material && p_material->shader_data) {
+		blend_mode = p_material->shader_data->blend_mode;
+	}
+
+	// Blend modes
+	set_gl_blend_mode(blend_mode, transparent_rt);
 
 	for (int batch_num = 0; batch_num < num_batches; batch_num++) {
 		const Batch &batch = bdata.batches[batch_num];
@@ -1341,6 +1359,179 @@ void RasterizerCanvasGLES2::render_batches(Item::Command *const *p_commands, Ite
 							glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
 						} break;
 
+						case Item::Command::TYPE_MULTIMESH: {
+							Item::CommandMultiMesh *mmesh = static_cast<Item::CommandMultiMesh *>(command);
+							ERR_FAIL_NULL(mmesh);
+
+							GLES2::MultiMesh *multi_mesh = GLES2::MeshStorage::get_singleton()->get_multimesh(mmesh->multimesh);
+							if (!multi_mesh || multi_mesh->data_cache.is_empty()) {
+								break;
+							}
+
+							GLES2::Mesh *mesh_data = GLES2::MeshStorage::get_singleton()->get_mesh(multi_mesh->mesh);
+							if (!mesh_data) {
+								break;
+							}
+
+							_set_texture_rect_mode(false);
+
+							// The enums will now exist and compile!
+							state.specialization |= CanvasShaderGLES2::USE_INSTANCING;
+							if (multi_mesh->uses_custom_data) {
+								state.specialization |= CanvasShaderGLES2::USE_INSTANCE_CUSTOM;
+							}
+
+							bool rebind = state.canvas_shader->version_bind_shader(state.shader_version, state.mode_variant, state.specialization);
+
+							RS::CanvasItemTextureRepeat repeat = state.default_repeat;
+							if (batch.item && batch.item->texture_repeat != RS::CANVAS_ITEM_TEXTURE_REPEAT_DEFAULT) {
+								repeat = batch.item->texture_repeat;
+							} else if (p_current_clip && p_current_clip->texture_repeat != RS::CANVAS_ITEM_TEXTURE_REPEAT_DEFAULT) {
+								repeat = p_current_clip->texture_repeat;
+							}
+
+							RS::CanvasItemTextureFilter filter = state.default_filter;
+							if (batch.item && batch.item->texture_filter != RS::CANVAS_ITEM_TEXTURE_FILTER_DEFAULT) {
+								filter = batch.item->texture_filter;
+							} else if (p_current_clip && p_current_clip->texture_filter != RS::CANVAS_ITEM_TEXTURE_FILTER_DEFAULT) {
+								filter = p_current_clip->texture_filter;
+							}
+
+							_bind_canvas_texture(mmesh->texture, filter, repeat);
+							if (state.texpixel_size != Size2(0.0, 0.0)) {
+								state.canvas_shader->version_set_uniform(CanvasShaderGLES2::COLOR_TEXTURE_PIXEL_SIZE, state.texpixel_size, state.shader_version, state.mode_variant, state.specialization);
+							}
+
+							int amount = multi_mesh->visible_instances;
+							if (amount == -1) {
+								amount = multi_mesh->instances;
+							}
+
+							if (amount <= 0) {
+								break;
+							}
+
+							uint32_t stride = multi_mesh->stride_cache;
+							uint32_t color_ofs = multi_mesh->color_offset_cache;
+							uint32_t custom_data_ofs = multi_mesh->custom_data_offset_cache;
+
+							const float *base_buffer = multi_mesh->data_cache.ptr();
+							ERR_FAIL_NULL(base_buffer);
+
+							Transform2D mesh_base_extra = state.uniforms.extra_matrix;
+							Color base_modulate = state.uniforms.final_modulate;
+
+							state.uniforms.extra_matrix = mesh_base_extra;
+							state.uniforms.final_modulate = base_modulate;
+							_set_canvas_uniforms();
+
+							if (rebind && p_material) {
+								p_material->bind_uniforms();
+							}
+
+							for (uint32_t j = 0; j < mesh_data->surface_count; j++) {
+								GLES2::Mesh::Surface *s = mesh_data->surfaces[j];
+								if (unlikely(!s)) {
+									continue;
+								}
+
+								glBindBuffer(GL_ARRAY_BUFFER, s->vertex_buffer);
+								if (s->index_count > 0) {
+									glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, s->index_buffer);
+								}
+								GL_CHECK_ERROR("GLES2::Canvas::render_batches: TYPE_MULTIMESH bind VBO/IBO");
+
+								if (s->version_count > 0 && s->versions) {
+									GLES2::Mesh::Surface::Version *v = &s->versions[0];
+
+									if (unlikely(!v)) {
+										continue;
+									}
+
+									for (int k = 0; k < maximum_attributes; k++) {
+										if (v->attribs[k].enabled) {
+											if (k == RS::ARRAY_VERTEX) {
+												glBindBuffer(GL_ARRAY_BUFFER, s->vertex_buffer);
+											} else {
+												glBindBuffer(GL_ARRAY_BUFFER, s->attribute_buffer);
+											}
+
+											GLboolean normalize = v->attribs[k].normalized;
+											if (k == RS::ARRAY_COLOR && v->attribs[k].type == GL_UNSIGNED_BYTE) {
+												normalize = GL_TRUE;
+											}
+
+											glEnableVertexAttribArray(k);
+											glVertexAttribPointer(k, v->attribs[k].size, v->attribs[k].type, normalize, v->attribs[k].stride, (const void *)(uintptr_t)v->attribs[k].offset);
+										} else {
+											glDisableVertexAttribArray(k);
+											if (k == RS::ARRAY_COLOR) {
+												glVertexAttrib4f(RS::ARRAY_COLOR, 1.0f, 1.0f, 1.0f, 1.0f);
+											}
+										}
+									}
+								}
+								GL_CHECK_ERROR("GLES2::Canvas::render_batches: TYPE_MULTIMESH setup client pointers");
+
+								GLenum gl_primitive = get_gl_primitive_type(s->primitive);
+								bool needs_32_bit = s->vertex_count >= (1 << 16);
+								GLenum index_type = needs_32_bit ? GL_UNSIGNED_INT : GL_UNSIGNED_SHORT;
+
+								for (int k = 0; k < amount; k++) {
+									const float *buffer = base_buffer + k * stride;
+
+									if (unlikely(!buffer)) {
+										continue;
+									}
+
+									// Godot 4 natively packs 2D MultiMesh transforms in ROW-MAJOR layout
+									glVertexAttrib4f(8, buffer[0], buffer[1], 0.0f, buffer[3]);
+									glVertexAttrib4f(9, buffer[4], buffer[5], 0.0f, buffer[7]);
+									glVertexAttrib4f(10, 0.0f, 0.0f, 1.0f, 0.0f);
+
+									if (multi_mesh->uses_colors) {
+										const float *color_data = buffer + color_ofs;
+										glVertexAttrib4f(11, color_data[0], color_data[1], color_data[2], color_data[3]);
+									} else {
+										glVertexAttrib4f(11, 1.0f, 1.0f, 1.0f, 1.0f);
+									}
+
+									if (multi_mesh->uses_custom_data) {
+										const float *custom_data = buffer + custom_data_ofs;
+										glVertexAttrib4f(12, custom_data[0], custom_data[1], custom_data[2], custom_data[3]);
+									} else {
+										glVertexAttrib4f(12, 0.0f, 0.0f, 0.0f, 0.0f);
+									}
+
+									if (s->index_count > 0) {
+										if (unlikely(needs_32_bit && !GLES2::Config::get_singleton()->support_32_bits_indices)) {
+											ERR_PRINT_ONCE("GLES2: Device does not support 32-bit indices for large MultiMeshes.");
+										} else {
+											glDrawElements(gl_primitive, s->index_count, index_type, nullptr);
+											GL_CHECK_ERROR("GLES2::Canvas::render_batches: TYPE_MULTIMESH glDrawElements");
+										}
+									} else {
+										glDrawArrays(gl_primitive, 0, s->vertex_count);
+										GL_CHECK_ERROR("GLES2::Canvas::render_batches: TYPE_MULTIMESH glDrawArrays");
+									}
+								}
+
+								for (int k = 0; k < maximum_attributes; k++) {
+									glDisableVertexAttribArray(k);
+									if (k == RS::ARRAY_COLOR) {
+										glVertexAttrib4f(RS::ARRAY_COLOR, 1.0f, 1.0f, 1.0f, 1.0f);
+									}
+								}
+							}
+
+							// Restore specializations back to normal for the next items
+							state.specialization &= ~CanvasShaderGLES2::USE_INSTANCING;
+							state.specialization &= ~CanvasShaderGLES2::USE_INSTANCE_CUSTOM;
+
+							glBindBuffer(GL_ARRAY_BUFFER, 0);
+							glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+						} break;
+
 						case Item::Command::TYPE_CLIP_IGNORE: {
 							Item::CommandClipIgnore *ci = static_cast<Item::CommandClipIgnore *>(command);
 							ERR_FAIL_NULL(ci);
@@ -1517,8 +1708,20 @@ void RasterizerCanvasGLES2::render_batches(Item::Command *const *p_commands, Ite
 							state.canvas_shader->version_set_uniform(CanvasShaderGLES2::EXTRA_MATRIX, state.uniforms.extra_matrix, state.shader_version, state.mode_variant, state.specialization);
 						} break;
 
+						case Item::Command::TYPE_ANIMATION_SLICE: {
+							const Item::CommandAnimationSlice *as = static_cast<const Item::CommandAnimationSlice *>(command);
+							ERR_FAIL_NULL(as);
+
+							// double current_time = RSG::rasterizer->get_total_time();
+							// double local_time = Math::fposmod(current_time - as->offset, as->animation_length);
+							// skipping = !(local_time >= as->slice_begin && local_time < as->slice_end);
+
+							RenderingServerDefault::redraw_request(); // animation visible means redraw request
+
+						} break;
+
 						default: {
-							// MULTIMESH, PARTICLES, etc.
+							// PARTICLES, etc.
 							print_verbose("NOT IMPLEMENTED COMMAND TYPE:");
 							print_verbose(command->type);
 						} break;
@@ -1838,7 +2041,6 @@ RasterizerCanvasGLES2::~RasterizerCanvasGLES2() {
 	GLES2::TextureStorage::get_singleton()->canvas_texture_free(default_canvas_texture);
 
 	// Free buffers
-	GLES2::Utilities::get_singleton()->buffer_free_data(data.canvas_quad_vertices);
 	GLES2::Utilities::get_singleton()->buffer_free_data(data.canvas_quad_vertices);
 	GLES2::Utilities::get_singleton()->buffer_free_data(data.ninepatch_vertices);
 	GLES2::Utilities::get_singleton()->buffer_free_data(data.ninepatch_elements);

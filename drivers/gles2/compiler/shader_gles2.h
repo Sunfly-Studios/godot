@@ -171,6 +171,8 @@ private:
 	int uniform_count = 0;
 	const AttributePair *attribute_pairs = nullptr;
 	int attribute_pair_count = 0;
+	const Feedback *feedbacks = nullptr;
+	int feedback_count = 0;
 	const TexUnitPair *texunit_pairs = nullptr;
 	int texunit_pair_count = 0;
 	int specialization_count = 0;
@@ -185,11 +187,12 @@ private:
 protected:
 	ShaderGLES2();
 	void _setup(
-		const char *p_vertex_code, const char *p_fragment_code, const char *p_name, 
-		int p_uniform_count, const char **p_uniforms, 
-		int p_attribute_count, const AttributePair *p_attributes, 
-		int p_texunit_count, const TexUnitPair *p_texunits, 
-		int p_specialization_count, const Specialization *p_specializations, 
+		const char *p_vertex_code, const char *p_fragment_code, const char *p_name,
+		int p_uniform_count, const char **p_uniforms,
+		int p_attribute_count, const AttributePair *p_attributes,
+		int p_feedback_count, const Feedback *p_feedbacks,
+		int p_texunit_count, const TexUnitPair *p_texunits,
+		int p_specialization_count, const Specialization *p_specializations,
 		int p_variant_count, const char **p_variants
 	);
 

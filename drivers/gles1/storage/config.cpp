@@ -205,6 +205,7 @@ Config::Config() {
 	support_mirrored_repeat = extensions.has("GL_OES_texture_mirrored_repeat");
 	support_32_bits_indices = extensions.has("GL_OES_element_index_uint");
 	support_npot_repeat_mipmap = extensions.has("GL_OES_texture_npot");
+	support_mapbuffer = extensions.has("GL_OES_mapbuffer") || extensions.has("GL_NV_copy_buffer");
 
 	// 3D
 	support_vao = extensions.has("GL_OES_vertex_array_object");
@@ -255,6 +256,7 @@ Config::Config() {
 		support_32_bits_indices = true;
 		support_npot_repeat_mipmap = true;
 		srgb_framebuffer_supported = true;
+		support_mapbuffer = true;
 	} else {
 		float_texture_supported = extensions.has("GL_OES_texture_float") || extensions.has("GL_EXT_color_buffer_float");
 		etc1_supported = extensions.has("GL_OES_compressed_ETC1_RGB8_texture");

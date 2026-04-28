@@ -143,7 +143,7 @@ protected:
 	void _set_canvas_uniforms();
 	void _bind_quad_buffer();
 
-	inline void _buffer_orphan_and_upload(unsigned int p_buffer_size_bytes, unsigned int p_offset_bytes, unsigned int p_data_size_bytes, const void *p_data, GLenum p_target, GLenum p_usage, bool p_optional_orphan) const;
+	_FORCE_INLINE_ void _buffer_orphan_and_upload(unsigned int p_buffer_size_bytes, unsigned int p_offset_bytes, unsigned int p_data_size_bytes, const void *p_data, GLenum p_target, GLenum p_usage, bool p_optional_orphan) const;
 	void _legacy_draw_polygon(Item::CommandPolygon *p_poly, GLES2::CanvasMaterialData *p_material);
 	void _legacy_draw_primitive(Item::CommandPrimitive *p_pr, GLES2::CanvasMaterialData *p_material);
 	void _legacy_draw_line(Item::CommandPrimitive *p_pr, GLES2::CanvasMaterialData *p_material);
@@ -188,7 +188,7 @@ public:
 	virtual void set_debug_redraw(bool p_enabled, double p_time, const Color &p_color) override;
 	virtual uint32_t get_pipeline_compilations(RS::PipelineSource p_source) override;
 
-	GLenum get_gl_primitive_type(RS::PrimitiveType primitive) {
+	_FORCE_INLINE_ GLenum get_gl_primitive_type(RS::PrimitiveType primitive) {
 		GLenum gl_primitive = GL_TRIANGLES;
 		switch (primitive) {
 			case RS::PRIMITIVE_POINTS:
@@ -210,6 +210,60 @@ public:
 				break;
 		}
 		return gl_primitive;
+	}
+
+	_FORCE_INLINE_ void set_gl_blend_mode(
+		GLES2::CanvasShaderData::BlendMode blend_mode,
+		bool transparent_rt
+	) {
+		glEnable(GL_BLEND);
+		switch (blend_mode) {
+			case GLES2::CanvasShaderData::BLEND_MODE_DISABLED: {
+				glDisable(GL_BLEND);
+			} break;
+			case GLES2::CanvasShaderData::BLEND_MODE_MIX: {
+				glBlendEquation(GL_FUNC_ADD);
+				if (transparent_rt) {
+					glBlendFuncSeparate(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
+				} else {
+					glBlendFuncSeparate(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_ZERO, GL_ONE);
+				}
+			} break;
+			case GLES2::CanvasShaderData::BLEND_MODE_ADD: {
+				glBlendEquation(GL_FUNC_ADD);
+				if (transparent_rt) {
+					glBlendFuncSeparate(GL_SRC_ALPHA, GL_ONE, GL_SRC_ALPHA, GL_ONE);
+				} else {
+					glBlendFuncSeparate(GL_SRC_ALPHA, GL_ONE, GL_ZERO, GL_ONE);
+				}
+			} break;
+			case GLES2::CanvasShaderData::BLEND_MODE_SUB: {
+				glBlendEquation(GL_FUNC_REVERSE_SUBTRACT);
+				if (transparent_rt) {
+					glBlendFuncSeparate(GL_SRC_ALPHA, GL_ONE, GL_SRC_ALPHA, GL_ONE);
+				} else {
+					glBlendFuncSeparate(GL_SRC_ALPHA, GL_ONE, GL_ZERO, GL_ONE);
+				}
+			} break;
+			case GLES2::CanvasShaderData::BLEND_MODE_MUL: {
+				glBlendEquation(GL_FUNC_ADD);
+				if (transparent_rt) {
+					glBlendFuncSeparate(GL_DST_COLOR, GL_ZERO, GL_DST_ALPHA, GL_ZERO);
+				} else {
+					glBlendFuncSeparate(GL_DST_COLOR, GL_ZERO, GL_ZERO, GL_ONE);
+				}
+			} break;
+			case GLES2::CanvasShaderData::BLEND_MODE_PMALPHA: {
+				glBlendEquation(GL_FUNC_ADD);
+				if (transparent_rt) {
+					glBlendFuncSeparate(GL_ONE, GL_ONE_MINUS_SRC_ALPHA, GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
+				} else {
+					glBlendFuncSeparate(GL_ONE, GL_ONE_MINUS_SRC_ALPHA, GL_ZERO, GL_ONE);
+				}
+			} break;
+			default:
+				break;
+		}
 	}
 
 private:

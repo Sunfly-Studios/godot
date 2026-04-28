@@ -184,9 +184,10 @@ def include_file_in_gles_header(filename: str, header_data: GLESHeaderStruct, de
                     bind = bind.replace("attrib:", "").strip()
                     header_data.attributes += [(name, bind)]
 
-        if (line.strip().find("out ") == 0 or line.strip().find("flat ") == 0) and line.find("tfb:") != -1:
+        if (line.strip().find("out ") == 0 or line.strip().find("flat ") == 0 or line.strip().find("varying ") == 0) and line.find("tfb:") != -1:
             uline = line.replace("flat ", "")
             uline = uline.replace("out ", "")
+            uline = uline.replace("varying ", "")
             uline = uline.replace("highp ", "")
             uline = uline.replace(";", "")
             uline = uline[uline.find(" ") :].strip()
@@ -574,25 +575,22 @@ def build_gles_header(
         else:
             fd.write("\t\tstatic AttributePair *_attribute_pairs=nullptr;\n")
 
-    # TODO(GLES2): Eventually uncomment this out when
-    # we upgrade and actually use the shaders from this
-    # generator later (maybe in the 3D)
     feedback_count = 0
-    # if header_data.feedbacks and gles_version >= 3:
-    #     fd.write("\t\tstatic const Feedback _feedbacks[]={\n")
-    #     for x in header_data.feedbacks:
-    #         name = x[0]
-    #         spec = x[1]
-    #         if spec in specializations_found:
-    #             fd.write('\t\t\t{"' + name + '",' + str(1 << specializations_found.index(spec)) + "},\n")
-    #         else:
-    #             fd.write('\t\t\t{"' + name + '",0},\n')
-    #
-    #         feedback_count += 1
-    #
-    #     fd.write("\t\t};\n\n")
-    # else:
-        # fd.write("\t\tstatic const Feedback* _feedbacks=nullptr;\n")
+    if header_data.feedbacks:
+        fd.write("\t\tstatic const Feedback _feedbacks[]={\n")
+        for x in header_data.feedbacks:
+            name = x[0]
+            spec = x[1]
+            if spec in specializations_found:
+                fd.write('\t\t\t{"' + name + '",' + str(1 << specializations_found.index(spec)) + "},\n")
+            else:
+                fd.write('\t\t\t{"' + name + '",0},\n')
+
+            feedback_count += 1
+
+        fd.write("\t\t};\n\n")
+    else:
+        fd.write("\t\tstatic const Feedback* _feedbacks=nullptr;\n")
 
     readable_vert = "\n".join(header_data.vertex_lines).replace("*/", "* /")
     fd.write(f"/*\n=== VERTEX CODE ===\n{readable_vert}\n=============================\n*/\n")
@@ -633,6 +631,8 @@ def build_gles_header(
             + ",_uniform_strings,"
             + str(len(header_data.attributes))
             + ",_attribute_pairs,"
+            + str(feedback_count)
+            + ",_feedbacks,"
             + str(len(header_data.texunits))
             + ",_texunit_pairs,"
             + str(len(header_data.specialization_names))

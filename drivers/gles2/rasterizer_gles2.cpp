@@ -224,6 +224,7 @@ void RasterizerGLES2::finalize() {
 	memdelete(texture_storage);
 	memdelete(utilities);
 	memdelete(config);
+	memdelete(polyfill);
 }
 
 RasterizerGLES2 *RasterizerGLES2::singleton = nullptr;
@@ -357,6 +358,7 @@ RasterizerGLES2::RasterizerGLES2() {
 	// OpenGL needs to be initialized before initializing the Rasterizers
 	config = memnew(GLES2::Config);
 	utilities = memnew(GLES2::Utilities);
+	polyfill = memnew(GLES2::Polyfill);
 	texture_storage = memnew(GLES2::TextureStorage);
 	material_storage = memnew(GLES2::MaterialStorage);
 	mesh_storage = memnew(GLES2::MeshStorage);

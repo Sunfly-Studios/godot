@@ -215,6 +215,100 @@ public:
 		return gl_primitive;
 	}
 
+	_FORCE_INLINE_ void set_gl_blend_mode(
+		GLES1::CanvasShaderData::BlendMode blend_mode,
+		bool transparent_rt
+	) {
+		glEnable(GL_BLEND);
+		switch (blend_mode) {
+			case GLES1::CanvasShaderData::BLEND_MODE_DISABLED: {
+				glDisable(GL_BLEND);
+			} break;
+			case GLES1::CanvasShaderData::BLEND_MODE_MIX: {
+				glBlendEquation(GL_FUNC_ADD);
+				if (transparent_rt) {
+					if (GLES1::Config::get_singleton()->support_blend_func_separate) {
+						glBlendFuncSeparateOES(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
+					} else {
+						glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+					}
+				} else {
+					if (GLES1::Config::get_singleton()->support_blend_func_separate) {
+						glBlendFuncSeparateOES(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_ZERO, GL_ONE);
+					} else {
+						glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+					}
+				}
+			} break;
+			case GLES1::CanvasShaderData::BLEND_MODE_ADD: {
+				glBlendEquation(GL_FUNC_ADD);
+				if (transparent_rt) {
+					if (GLES1::Config::get_singleton()->support_blend_func_separate) {
+						glBlendFuncSeparateOES(GL_SRC_ALPHA, GL_ONE, GL_SRC_ALPHA, GL_ONE);
+					} else {
+						glBlendFunc(GL_SRC_ALPHA, GL_ONE);
+					}
+				} else {
+					if (GLES1::Config::get_singleton()->support_blend_func_separate) {
+						glBlendFuncSeparateOES(GL_SRC_ALPHA, GL_ONE, GL_ZERO, GL_ONE);
+					} else {
+						glBlendFunc(GL_SRC_ALPHA, GL_ONE);
+					}
+				}
+			} break;
+			case GLES1::CanvasShaderData::BLEND_MODE_SUB: {
+				glBlendEquation(GL_FUNC_REVERSE_SUBTRACT);
+				if (transparent_rt) {
+					if (GLES1::Config::get_singleton()->support_blend_func_separate) {
+						glBlendFuncSeparateOES(GL_SRC_ALPHA, GL_ONE, GL_SRC_ALPHA, GL_ONE);
+					} else {
+						glBlendFunc(GL_SRC_ALPHA, GL_ONE);
+					}
+				} else {
+					if (GLES1::Config::get_singleton()->support_blend_func_separate) {
+						glBlendFuncSeparateOES(GL_SRC_ALPHA, GL_ONE, GL_ZERO, GL_ONE);
+					} else {
+						glBlendFunc(GL_SRC_ALPHA, GL_ONE);
+					}
+				}
+			} break;
+			case GLES1::CanvasShaderData::BLEND_MODE_MUL: {
+				glBlendEquation(GL_FUNC_ADD);
+				if (transparent_rt) {
+					if (GLES1::Config::get_singleton()->support_blend_func_separate) {
+						glBlendFuncSeparateOES(GL_DST_COLOR, GL_ZERO, GL_DST_ALPHA, GL_ZERO);
+					} else {
+						glBlendFunc(GL_DST_COLOR, GL_ZERO);
+					}
+				} else {
+					if (GLES1::Config::get_singleton()->support_blend_func_separate) {
+						glBlendFuncSeparateOES(GL_DST_COLOR, GL_ZERO, GL_ZERO, GL_ONE);
+					} else {
+						glBlendFunc(GL_DST_COLOR, GL_ZERO);
+					}
+				}
+			} break;
+			case GLES1::CanvasShaderData::BLEND_MODE_PMALPHA: {
+				glBlendEquation(GL_FUNC_ADD);
+				if (transparent_rt) {
+					if (GLES1::Config::get_singleton()->support_blend_func_separate) {
+						glBlendFuncSeparateOES(GL_ONE, GL_ONE_MINUS_SRC_ALPHA, GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
+					} else {
+						glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
+					}
+				} else {
+					if (GLES1::Config::get_singleton()->support_blend_func_separate) {
+						glBlendFuncSeparateOES(GL_ONE, GL_ONE_MINUS_SRC_ALPHA, GL_ZERO, GL_ONE);
+					} else {
+						glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
+					}
+				}
+			} break;
+			default:
+				break;
+		}
+	}
+
 private:
 	// The Batcher Bridge
 	void canvas_render_items_implementation(Item *p_item_list, int p_z, const Color &p_modulate, Light *p_light, const Transform2D &p_base_transform);

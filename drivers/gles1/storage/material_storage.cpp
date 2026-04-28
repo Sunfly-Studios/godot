@@ -1258,6 +1258,16 @@ GLES1::ShaderData *GLES1::_create_canvas_shader_func() {
 
 void CanvasMaterialData::update_parameters(const HashMap<StringName, Variant> &p_parameters, bool p_uniform_dirty, bool p_textures_dirty) {
 	update_parameters_internal(p_parameters, p_uniform_dirty, p_textures_dirty, shader_data->uniforms, shader_data->ubo_offsets.ptr(), shader_data->texture_uniforms, shader_data->default_texture_params, shader_data->ubo_size, false);
+
+	if (p_parameters.has("particles_anim_h_frames")) {
+		particles_anim_h_frames = p_parameters["particles_anim_h_frames"];
+	}
+	if (p_parameters.has("particles_anim_v_frames")) {
+		particles_anim_v_frames = p_parameters["particles_anim_v_frames"];
+	}
+	if (p_parameters.has("particles_anim_loop")) {
+		particles_anim_loop = p_parameters["particles_anim_loop"];
+	}
 }
 
 void CanvasMaterialData::bind_uniforms() {

@@ -109,6 +109,7 @@ public:
 	bool support_blend_equation_separate = false; // GL_OES_blend_equation_separate
 	bool support_mirrored_repeat = false; // GL_OES_texture_mirrored_repeat
 	bool support_anisotropic_filter = false; // GL_EXT_texture_filter_anisotropic
+	bool support_mapbuffer = false; // GL_OES_mapbuffer
 
 	// 3D
 	bool support_vao = false; // GL_OES_vertex_array_object

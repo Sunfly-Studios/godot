@@ -623,11 +623,17 @@ public:
 	virtual void material_update_dependency(RID p_material, DependencyTracker *p_instance) override;
 
 	_FORCE_INLINE_ uint32_t material_get_shader_id(RID p_material) {
-        return 0;
+		Material *material = material_owner.get_or_null(p_material);
+		ERR_FAIL_NULL_V(material, 0);
+		return material->shader_id;
 	}
 
 	_FORCE_INLINE_ MaterialData *material_get_data(RID p_material, RS::ShaderMode p_shader_mode) {
-        return nullptr;
+		Material *material = material_owner.get_or_null(p_material);
+		if (!material || material->shader_mode != p_shader_mode) {
+			return nullptr;
+		}
+		return material->data;
 	}
 };
 

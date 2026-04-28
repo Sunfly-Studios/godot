@@ -1030,8 +1030,26 @@ void RasterizerCanvasGLES1::_batch_render_generic(const Batch &p_batch, GLES1::C
 
 void RasterizerCanvasGLES1::render_batches(Item::Command *const *p_commands, Item *p_current_clip, bool &r_reclip, GLES1::CanvasMaterialData *p_material) {
 	int num_batches = bdata.batches.size();
-
 	Transform2D base_extra = state.uniforms.extra_matrix;
+
+	// Extract and apply the CanvasItemMaterial blend mode
+	bool transparent_rt = false;
+	if (state.render_target != RID()) {
+		GLES1::RenderTarget *rt = GLES1::TextureStorage::get_singleton()->get_render_target(state.render_target);
+		if (rt && rt->is_transparent) {
+			transparent_rt = true;
+		}
+	} else {
+		transparent_rt = true; // Backbuffer
+	}
+
+	GLES1::CanvasShaderData::BlendMode blend_mode = GLES1::CanvasShaderData::BLEND_MODE_MIX;
+	if (p_material && p_material->shader_data) {
+		blend_mode = p_material->shader_data->blend_mode;
+	}
+
+	// Blend modes
+	set_gl_blend_mode(blend_mode, transparent_rt);
 
 	for (int batch_num = 0; batch_num < num_batches; batch_num++) {
 		const Batch &batch = bdata.batches[batch_num];
@@ -1485,6 +1503,256 @@ void RasterizerCanvasGLES1::render_batches(Item::Command *const *p_commands, Ite
 							glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
 						} break;
 
+						case Item::Command::TYPE_MULTIMESH: {
+							Item::CommandMultiMesh *mmesh = static_cast<Item::CommandMultiMesh *>(command);
+							ERR_FAIL_NULL(mmesh);
+
+							GLES1::MultiMesh *multi_mesh = GLES1::MeshStorage::get_singleton()->get_multimesh(mmesh->multimesh);
+							if (!multi_mesh || multi_mesh->data_cache.is_empty()) {
+								break;
+							}
+
+							GLES1::Mesh *mesh_data = GLES1::MeshStorage::get_singleton()->get_mesh(multi_mesh->mesh);
+							if (!mesh_data) {
+								break;
+							}
+
+							_set_texture_rect_mode(false);
+
+							state.specialization |= CanvasShaderGLES1::USE_INSTANCING;
+							if (multi_mesh->uses_custom_data) {
+								state.specialization |= CanvasShaderGLES1::USE_INSTANCE_CUSTOM;
+							}
+
+							bool rebind = state.canvas_shader->version_bind_shader(state.shader_version, state.mode_variant, state.specialization);
+
+							RS::CanvasItemTextureRepeat repeat = state.default_repeat;
+							if (batch.item && batch.item->texture_repeat != RS::CANVAS_ITEM_TEXTURE_REPEAT_DEFAULT) {
+								repeat = batch.item->texture_repeat;
+							} else if (p_current_clip && p_current_clip->texture_repeat != RS::CANVAS_ITEM_TEXTURE_REPEAT_DEFAULT) {
+								repeat = p_current_clip->texture_repeat;
+							}
+
+							RS::CanvasItemTextureFilter filter = state.default_filter;
+							if (batch.item && batch.item->texture_filter != RS::CANVAS_ITEM_TEXTURE_FILTER_DEFAULT) {
+								filter = batch.item->texture_filter;
+							} else if (p_current_clip && p_current_clip->texture_filter != RS::CANVAS_ITEM_TEXTURE_FILTER_DEFAULT) {
+								filter = p_current_clip->texture_filter;
+							}
+
+							_bind_canvas_texture(mmesh->texture, filter, repeat);
+							glEnable(GL_TEXTURE_2D);
+
+							if (state.texpixel_size != Size2(0.0, 0.0)) {
+								state.canvas_shader->version_set_uniform(CanvasShaderGLES1::COLOR_TEXTURE_PIXEL_SIZE, state.texpixel_size, state.shader_version, state.mode_variant, state.specialization);
+							}
+
+							int amount = multi_mesh->visible_instances;
+							if (amount == -1) {
+								amount = multi_mesh->instances;
+							}
+
+							if (amount <= 0) {
+								break;
+							}
+
+							uint32_t stride = multi_mesh->stride_cache;
+							uint32_t color_ofs = multi_mesh->color_offset_cache;
+							uint32_t custom_data_ofs = multi_mesh->custom_data_offset_cache;
+
+							const float *base_buffer = multi_mesh->data_cache.ptr();
+							ERR_FAIL_NULL(base_buffer);
+
+							Transform2D mesh_base_extra = state.uniforms.extra_matrix;
+							Color base_modulate = state.uniforms.final_modulate;
+
+							if (rebind && p_material) {
+								p_material->bind_uniforms();
+							}
+
+							for (uint32_t j = 0; j < mesh_data->surface_count; j++) {
+								GLES1::Mesh::Surface *s = mesh_data->surfaces[j];
+
+								if (unlikely(!s)) {
+									continue;
+								}
+
+								glBindBuffer(GL_ARRAY_BUFFER, s->vertex_buffer);
+
+								if (s->index_count > 0) {
+									glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, s->index_buffer);
+								}
+								GL_CHECK_ERROR("GLES1::Canvas::render_batches: TYPE_MULTIMESH bind VBO/IBO");
+
+								// Set up client pointers
+								if (s->version_count > 0 && s->versions) {
+									GLES1::Mesh::Surface::Version *v = &s->versions[0];
+
+									if (unlikely(!v)) {
+										continue;
+									}
+
+									for (int k = 0; k < maximum_attributes; k++) {
+										if (v->attribs[k].enabled) {
+											if (k == RS::ARRAY_VERTEX) {
+												glBindBuffer(GL_ARRAY_BUFFER, s->vertex_buffer);
+												glEnableClientState(GL_VERTEX_ARRAY);
+												glVertexPointer(v->attribs[k].size, v->attribs[k].type, v->attribs[k].stride, (const void *)(uintptr_t)v->attribs[k].offset);
+											} else if (k == RS::ARRAY_COLOR) {
+												// If the MultiMesh drives the color, we must suppress
+												// the mesh's innate vertex colors
+												// so glColor4f takes priority over the pipeline.
+												if (multi_mesh->uses_colors) {
+													glDisableClientState(GL_COLOR_ARRAY);
+												} else {
+													glBindBuffer(GL_ARRAY_BUFFER, s->attribute_buffer);
+													glEnableClientState(GL_COLOR_ARRAY);
+													glColorPointer(v->attribs[k].size, v->attribs[k].type, v->attribs[k].stride, (const void *)(uintptr_t)v->attribs[k].offset);
+												}
+											} else if (k == RS::ARRAY_TEX_UV) {
+												glBindBuffer(GL_ARRAY_BUFFER, s->attribute_buffer);
+												glEnableClientState(GL_TEXTURE_COORD_ARRAY);
+												glTexCoordPointer(v->attribs[k].size, v->attribs[k].type, v->attribs[k].stride, (const void *)(uintptr_t)v->attribs[k].offset);
+											}
+										} else {
+											if (k == RS::ARRAY_VERTEX) {
+												glDisableClientState(GL_VERTEX_ARRAY);
+											} else if (k == RS::ARRAY_COLOR) {
+												glDisableClientState(GL_COLOR_ARRAY);
+											} else if (k == RS::ARRAY_TEX_UV) {
+												glDisableClientState(GL_TEXTURE_COORD_ARRAY);
+											}
+										}
+									}
+									GL_CHECK_ERROR("GLES1::Canvas::render_batches: TYPE_MULTIMESH setup client pointers");
+								}
+
+								GLenum gl_primitive = get_gl_primitive_type(s->primitive);
+								bool needs_32_bit = s->vertex_count >= (1 << 16);
+								GLenum index_type = needs_32_bit ? GL_UNSIGNED_INT : GL_UNSIGNED_SHORT;
+
+								// Instancing
+								for (int k = 0; k < amount; k++) {
+									const float *buffer = base_buffer + k * stride;
+
+									if (unlikely(!buffer)) {
+										continue;
+									}
+
+									// Transform matrix
+									Transform2D instance_xform;
+									instance_xform.columns[0][0] = buffer[0]; // X.x
+									instance_xform.columns[1][0] = buffer[1]; // Y.x
+									instance_xform.columns[2][0] = buffer[3]; // Origin.x
+									instance_xform.columns[0][1] = buffer[4]; // X.y
+									instance_xform.columns[1][1] = buffer[5]; // Y.y
+									instance_xform.columns[2][1] = buffer[7]; // Origin.y
+
+									// Modulate / Color
+									if (multi_mesh->uses_colors) {
+										const float *color_data = buffer + color_ofs;
+
+										if (unlikely(!color_data)) {
+											continue;
+										}
+
+										Color instance_color(color_data[0], color_data[1], color_data[2], color_data[3]);
+										state.uniforms.final_modulate = base_modulate * instance_color;
+									} else {
+										state.uniforms.final_modulate = base_modulate;
+									}
+
+									// Custom data (particles animation UV slicing)
+									if (multi_mesh->uses_custom_data && p_material) {
+										int h_frames = MAX(1, p_material->particles_anim_h_frames);
+										int v_frames = MAX(1, p_material->particles_anim_v_frames);
+
+										if (h_frames * v_frames > 1) {
+											const float *custom_data = buffer + custom_data_ofs;
+
+											if (unlikely(!custom_data)) {
+												continue;
+											}
+
+											// CPUParticles2D packs the animation phase (0.0 to 1.0) into custom.z (index 2)
+											float anim_phase = custom_data[2];
+
+											bool loop = p_material->particles_anim_loop;
+
+											float total_frames = (float)(h_frames * v_frames);
+											float particle_frame = Math::floor(anim_phase * total_frames);
+
+											if (!loop) {
+												particle_frame = CLAMP(particle_frame, 0.0f, total_frames - 1.0f);
+											} else {
+												particle_frame = Math::fmod(particle_frame, total_frames);
+											}
+
+											float offset_x = Math::fmod(particle_frame, (float)h_frames) / (float)h_frames;
+											float offset_y = Math::floor((particle_frame + 0.5f) / (float)h_frames) / (float)v_frames;
+
+											// Hijack the texture matrix to slice the sprite sheet per instance
+											glMatrixMode(GL_TEXTURE);
+											glLoadIdentity();
+											glTranslatef(offset_x, offset_y, 0.0f);
+											glScalef(1.0f / (float)h_frames, 1.0f / (float)v_frames, 1.0f);
+											glMatrixMode(GL_MODELVIEW);
+
+											// The base MultiMesh quad is sized for the full atlas.
+											// So, it needs to physically scale down the instance matrix
+											// so the quad matches a single frame's size.
+											instance_xform.columns[0][0] /= (float)h_frames;
+											instance_xform.columns[0][1] /= (float)h_frames;
+											instance_xform.columns[1][0] /= (float)v_frames;
+											instance_xform.columns[1][1] /= (float)v_frames;
+										}
+									}
+
+									state.uniforms.extra_matrix = mesh_base_extra * instance_xform;
+
+									// Re upload uniforms per instance to route the new matrices
+									_set_canvas_uniforms();
+
+									// Always issue the modulate fallback so it pushes glColor4f
+									glColor4f(state.uniforms.final_modulate.r, state.uniforms.final_modulate.g, state.uniforms.final_modulate.b, state.uniforms.final_modulate.a);
+
+									if (s->index_count > 0) {
+										if (unlikely(needs_32_bit && !GLES1::Config::get_singleton()->support_32_bits_indices)) {
+											ERR_PRINT_ONCE("GLES1: Device does not support 32-bit indices for large MultiMeshes.");
+										} else {
+											glDrawElements(gl_primitive, s->index_count, index_type, nullptr);
+											GL_CHECK_ERROR("GLES1::Canvas::render_batches: TYPE_MULTIMESH glDrawElements");
+										}
+									} else {
+										glDrawArrays(gl_primitive, 0, s->vertex_count);
+										GL_CHECK_ERROR("GLES1::Canvas::render_batches: TYPE_MULTIMESH glDrawArrays");
+									}
+								}
+
+								// Clean up attributes
+								glDisableClientState(GL_VERTEX_ARRAY);
+								glDisableClientState(GL_TEXTURE_COORD_ARRAY);
+								glDisableClientState(GL_COLOR_ARRAY);
+							}
+
+							state.specialization &= ~CanvasShaderGLES1::USE_INSTANCING;
+							state.specialization &= ~CanvasShaderGLES1::USE_INSTANCE_CUSTOM;
+
+							// Restore matrices/colors
+							state.uniforms.extra_matrix = mesh_base_extra;
+							state.uniforms.final_modulate = base_modulate;
+
+							_set_canvas_uniforms();
+
+							// Reset the texture matrix
+							glMatrixMode(GL_TEXTURE);
+							glLoadIdentity();
+							glMatrixMode(GL_MODELVIEW);
+
+							glBindBuffer(GL_ARRAY_BUFFER, 0);
+							glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+						} break;
+
 						case Item::Command::TYPE_TRANSFORM: {
 							Item::CommandTransform *transform = static_cast<Item::CommandTransform *>(command);
 							ERR_FAIL_NULL(transform);
@@ -1496,8 +1764,20 @@ void RasterizerCanvasGLES1::render_batches(Item::Command *const *p_commands, Ite
 							state.canvas_shader->version_set_uniform(CanvasShaderGLES1::EXTRA_MATRIX, state.uniforms.extra_matrix, state.shader_version, state.mode_variant, state.specialization);
 						} break;
 
+						case Item::Command::TYPE_ANIMATION_SLICE: {
+							const Item::CommandAnimationSlice *as = static_cast<const Item::CommandAnimationSlice *>(command);
+							ERR_FAIL_NULL(as);
+
+							// double current_time = RSG::rasterizer->get_total_time();
+							// double local_time = Math::fposmod(current_time - as->offset, as->animation_length);
+							// skipping = !(local_time >= as->slice_begin && local_time < as->slice_end);
+
+							RenderingServerDefault::redraw_request(); // animation visible means redraw request
+
+						} break;
+
 						default: {
-							// MULTIMESH, PARTICLES, etc.
+							// PARTICLES, etc.
 							print_verbose("NOT IMPLEMENTED COMMAND TYPE:");
 							print_verbose(command->type);
 						} break;

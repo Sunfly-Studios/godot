@@ -23,7 +23,8 @@ GL_1_5_MAPPINGS = {
         "\t\t\t\t\t}\n"
         "\t\t\t\t}\n"
         "\t\t\t\tglLoadMatrixf(matrix);\n"
-        "\t\t\t\tglMatrixMode(GL_MODELVIEW);"
+        "\t\t\t\tglMatrixMode(GL_MODELVIEW);\n"
+        "\t\t\t\tGL_CHECK_ERROR(\"ShaderGLES1::_apply_gles1_state: projection_matrix\");"
     ),
     "modelview_matrix": (
         "glMatrixMode(GL_MODELVIEW);\n"
@@ -41,7 +42,8 @@ GL_1_5_MAPPINGS = {
         "\t\t\t\t\tmatrix[8]=tr.basis.rows[0][2]; matrix[9]=tr.basis.rows[1][2]; matrix[10]=tr.basis.rows[2][2]; matrix[11]=0;\n"
         "\t\t\t\t\tmatrix[12]=tr.origin.x; matrix[13]=tr.origin.y; matrix[14]=tr.origin.z; matrix[15]=1;\n"
         "\t\t\t\t}\n"
-        "\t\t\t\tglLoadMatrixf(matrix);"
+        "\t\t\t\tglLoadMatrixf(matrix);\n"
+        "\t\t\t\tGL_CHECK_ERROR(\"ShaderGLES1::_apply_gles1_state: modelview_matrix\");"
     ),
     "extra_matrix": ( # Godot canvas applies extra_matrix after modelview
         "glMatrixMode(GL_MODELVIEW);\n"
@@ -59,12 +61,28 @@ GL_1_5_MAPPINGS = {
         "\t\t\t\t\tmatrix[8]=tr.basis.rows[0][2]; matrix[9]=tr.basis.rows[1][2]; matrix[10]=tr.basis.rows[2][2]; matrix[11]=0;\n"
         "\t\t\t\t\tmatrix[12]=tr.origin.x; matrix[13]=tr.origin.y; matrix[14]=tr.origin.z; matrix[15]=1;\n"
         "\t\t\t\t}\n"
-        "\t\t\t\tglMultMatrixf(matrix);"
+        "\t\t\t\tglMultMatrixf(matrix);\n"
+        "\t\t\t\tGL_CHECK_ERROR(\"ShaderGLES1::_apply_gles1_state: extra_matrix\");"
     ),
-    "modulate":          "Color c = p_value;\n\t\t\t\tglColor4f(c.r, c.g, c.b, c.a);",
-    "final_modulate":    "Color c = p_value;\n\t\t\t\tglColor4f(c.r, c.g, c.b, c.a);",
-    "color_in":          "Color c = p_value;\n\t\t\t\tglColor4f(c.r, c.g, c.b, c.a);",
-    "point_size":        "glPointSize((float)p_value);",
+    "modulate": (
+        "Color c = p_value;\n"
+        "\t\t\t\tglColor4f(c.r, c.g, c.b, c.a);\n"
+        "\t\t\t\tGL_CHECK_ERROR(\"ShaderGLES1::_apply_gles1_state: modulate\");"
+    ),
+    "final_modulate": (
+        "Color c = p_value;\n"
+        "\t\t\t\tglColor4f(c.r, c.g, c.b, c.a);\n"
+        "\t\t\t\tGL_CHECK_ERROR(\"ShaderGLES1::_apply_gles1_state: final_modulate\");"
+    ),
+    "color_in": (
+        "Color c = p_value;\n"
+        "\t\t\t\tglColor4f(c.r, c.g, c.b, c.a);\n"
+        "\t\t\t\tGL_CHECK_ERROR(\"ShaderGLES1::_apply_gles1_state: color_in\");"
+    ),
+    "point_size": (
+        "glPointSize((float)p_value);\n"
+        "\t\t\t\tGL_CHECK_ERROR(\"ShaderGLES1::_apply_gles1_state: point_size\");"
+    ),
     
     # copy.glsl specific overrides
     "copy_section": (
@@ -75,7 +93,8 @@ GL_1_5_MAPPINGS = {
         "\t\t\t\tglLoadIdentity();\n"
         "\t\t\t\t// copy_section is x,y,w,h in 0-1. Map -1..1 NDC to this rect.\n"
         "\t\t\t\tglTranslatef(-1.0f + (cs.x * 2.0f) + cs.z, -1.0f + (cs.y * 2.0f) + cs.w, 0.0f);\n"
-        "\t\t\t\tglScalef(cs.z, cs.w, 1.0f);"
+        "\t\t\t\tglScalef(cs.z, cs.w, 1.0f);\n"
+        "\t\t\t\tGL_CHECK_ERROR(\"ShaderGLES1::_apply_gles1_state: copy_section\");"
     ),
     "source_section": (
         "Vector4 ss = p_value;\n"
@@ -83,7 +102,8 @@ GL_1_5_MAPPINGS = {
         "\t\t\t\tglLoadIdentity();\n"
         "\t\t\t\tglTranslatef(ss.x, ss.y, 0.0f);\n"
         "\t\t\t\tglScalef(ss.z, ss.w, 1.0f);\n"
-        "\t\t\t\tglMatrixMode(GL_MODELVIEW);"
+        "\t\t\t\tglMatrixMode(GL_MODELVIEW);\n"
+        "\t\t\t\tGL_CHECK_ERROR(\"ShaderGLES1::_apply_gles1_state: source_section\");"
     ),
     "dst_rect": (
         "Rect2 dr;\n"
@@ -97,6 +117,7 @@ GL_1_5_MAPPINGS = {
         "\t\t\t\t\tGLfloat transpose[16] = {0,1,0,0, 1,0,0,0, 0,0,1,0, 0,0,0,1};\n"
         "\t\t\t\t\tglMultMatrixf(transpose);\n"
         "\t\t\t\t}\n"
+        "\t\t\t\tGL_CHECK_ERROR(\"ShaderGLES1::_apply_gles1_state: dst_rect\");"
     ),
     "src_rect": (
         "Rect2 sr;\n"
@@ -106,7 +127,8 @@ GL_1_5_MAPPINGS = {
         "\t\t\t\tglLoadIdentity();\n"
         "\t\t\t\tglTranslatef(sr.position.x, sr.position.y, 0.0f);\n"
         "\t\t\t\tglScalef(sr.size.x, sr.size.y, 1.0f);\n"
-        "\t\t\t\tglMatrixMode(GL_MODELVIEW);"
+        "\t\t\t\tglMatrixMode(GL_MODELVIEW);\n"
+        "\t\t\t\tGL_CHECK_ERROR(\"ShaderGLES1::_apply_gles1_state: src_rect\");"
     ),
 }
 
@@ -347,7 +369,8 @@ def build_gles_header(
         out_file_base.replace(".glsl.gen.h", "").title().replace("_", "").replace(".", "") + "Shader" + class_suffix
     )
     fd.write("\n\n")
-    fd.write('#include "' + include + '"\n\n\n')
+    fd.write('#include "' + include + '"\n')
+    fd.write('#include "drivers/gles_common/error_macros.h"' + '\n\n\n') # for error checking
     fd.write("class " + out_file_class + " : public Shader" + class_suffix + " {\n\n")
 
     fd.write("public:\n\n")
@@ -367,7 +390,7 @@ def build_gles_header(
                 for line in GL_1_5_MAPPINGS[x].split("\n"):
                     fd.write("\t\t\t\t" + line + "\n")
             else:
-                fd.write("\t\t\t\t// Unmapped uniform: " + x + " - silently ignore\n")
+                fd.write("\t\t\t\t// Unmapped uniform: " + x + " - ignored\n")
             fd.write("\t\t\t} break;\n")
         fd.write("\t\t\tdefault: break;\n")
         fd.write("\t\t}\n")

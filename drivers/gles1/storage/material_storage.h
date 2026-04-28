@@ -185,6 +185,12 @@ ShaderData *_create_canvas_shader_func();
 struct CanvasMaterialData : public MaterialData {
 	CanvasShaderData *shader_data = nullptr;
 
+	// For particles that have texture
+	// atlas in them.
+	int particles_anim_h_frames = 1;
+	int particles_anim_v_frames = 1;
+	bool particles_anim_loop = false;
+
 	virtual void set_render_priority(int p_priority) {}
 	virtual void set_next_pass(RID p_pass) {}
 	virtual void update_parameters(const HashMap<StringName, Variant> &p_parameters, bool p_uniform_dirty, bool p_textures_dirty);
