@@ -634,11 +634,31 @@ MaterialStorage::MaterialStorage() {
 }
 
 MaterialStorage::~MaterialStorage() {
-	//shaders.copy.version_free(shaders.copy_version);
+	if (global_shader_uniforms.buffer_values != nullptr) {
+		memdelete_arr(global_shader_uniforms.buffer_values);
+		global_shader_uniforms.buffer_values = nullptr;
+	}
+	if (global_shader_uniforms.buffer_usage != nullptr) {
+		memdelete_arr(global_shader_uniforms.buffer_usage);
+		global_shader_uniforms.buffer_usage = nullptr;
+	}
+	if (global_shader_uniforms.buffer_dirty_regions != nullptr) {
+		memdelete_arr(global_shader_uniforms.buffer_dirty_regions);
+		global_shader_uniforms.buffer_dirty_regions = nullptr;
+	}
 
-	memdelete_arr(global_shader_uniforms.buffer_values);
-	memdelete_arr(global_shader_uniforms.buffer_usage);
-	memdelete_arr(global_shader_uniforms.buffer_dirty_regions);
+	if (shaders.canvas_shader.default_version.is_valid()) {
+		shaders.canvas_shader.version_free(shaders.canvas_shader.default_version);
+	}
+	if (shaders.scene_shader.default_version.is_valid()) {
+		shaders.scene_shader.version_free(shaders.scene_shader.default_version);
+	}
+	if (shaders.particles_process_shader.default_version.is_valid()) {
+		shaders.particles_process_shader.version_free(shaders.particles_process_shader.default_version);
+	}
+	if (shaders.sky_shader.default_version.is_valid()) {
+		shaders.sky_shader.version_free(shaders.sky_shader.default_version);
+	}
 
 	// Clear the update queue
 	while (material_update_list.first()) {

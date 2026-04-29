@@ -86,10 +86,16 @@ void process() {
 ParticlesStorage::~ParticlesStorage() {
 	singleton = nullptr;
 	GLES2::MaterialStorage *material_storage = GLES2::MaterialStorage::get_singleton();
-	ERR_FAIL_NULL(material_storage);
 
-	material_storage->material_free(particles_shader.default_material);
-	material_storage->shader_free(particles_shader.default_shader);
+	if (material_storage) {
+		material_storage->material_free(particles_shader.default_material);
+		material_storage->shader_free(particles_shader.default_shader);
+
+		if (particles_shader.default_shader_version.is_valid()) {
+			material_storage->shaders.particles_process_shader.version_free(particles_shader.default_shader_version);
+		}
+	}
+
 	particles_shader.copy_shader.version_free(particles_shader.copy_shader_version);
 }
 

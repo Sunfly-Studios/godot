@@ -118,8 +118,8 @@ void MeshStorage::mesh_add_surface(RID p_mesh, const RS::SurfaceData &p_surface)
 		GL_CHECK_ERROR("GLES1::MeshStorage::mesh_add_surface: glGenBuffers (vertex buffer)");
 
 		glBindBuffer(GL_ARRAY_BUFFER, s->vertex_buffer);
-		glBufferData(GL_ARRAY_BUFFER, p_surface.vertex_data.size(), p_surface.vertex_data.ptr(), (s->format & RS::ARRAY_FLAG_USE_DYNAMIC_UPDATE) ? GL_DYNAMIC_DRAW : GL_STATIC_DRAW);
-		GL_CHECK_ERROR("GLES1::MeshStorage::mesh_add_surface: glBufferData (vertex buffer)");
+		GLES1::Utilities::get_singleton()->buffer_allocate_data(GL_ARRAY_BUFFER, s->vertex_buffer, p_surface.vertex_data.size(), p_surface.vertex_data.ptr(), (s->format & RS::ARRAY_FLAG_USE_DYNAMIC_UPDATE) ? GL_DYNAMIC_DRAW : GL_STATIC_DRAW, "Mesh vertex buffer");
+		GL_CHECK_ERROR("GLES1::MeshStorage::mesh_add_surface: buffer_allocate_data (vertex buffer)");
 
 		s->vertex_buffer_size = p_surface.vertex_data.size();
 	}
@@ -130,8 +130,8 @@ void MeshStorage::mesh_add_surface(RID p_mesh, const RS::SurfaceData &p_surface)
 		GL_CHECK_ERROR("GLES1::MeshStorage::mesh_add_surface: glGenBuffers (attributes buffer)");
 
 		glBindBuffer(GL_ARRAY_BUFFER, s->attribute_buffer);
-		glBufferData(GL_ARRAY_BUFFER, p_surface.attribute_data.size(), p_surface.attribute_data.ptr(), (s->format & RS::ARRAY_FLAG_USE_DYNAMIC_UPDATE) ? GL_DYNAMIC_DRAW : GL_STATIC_DRAW);
-		GL_CHECK_ERROR("GLES1::MeshStorage::mesh_add_surface: glBufferData (attributes buffer)");
+		GLES1::Utilities::get_singleton()->buffer_allocate_data(GL_ARRAY_BUFFER, s->attribute_buffer, p_surface.attribute_data.size(), p_surface.attribute_data.ptr(), (s->format & RS::ARRAY_FLAG_USE_DYNAMIC_UPDATE) ? GL_DYNAMIC_DRAW : GL_STATIC_DRAW, "Mesh attribute buffer");
+		GL_CHECK_ERROR("GLES1::MeshStorage::mesh_add_surface: buffer_allocate_data (attributes buffer)");
 
 		s->attribute_buffer_size = p_surface.attribute_data.size();
 	}
@@ -142,8 +142,8 @@ void MeshStorage::mesh_add_surface(RID p_mesh, const RS::SurfaceData &p_surface)
 		GL_CHECK_ERROR("GLES1::MeshStorage::mesh_add_surface: glGenBuffers (indices buffer)");
 
 		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, s->index_buffer);
-		glBufferData(GL_ELEMENT_ARRAY_BUFFER, p_surface.index_data.size(), p_surface.index_data.ptr(), GL_STATIC_DRAW);
-		GL_CHECK_ERROR("GLES1::MeshStorage::mesh_add_surface: glBufferData (indices buffer)");
+		GLES1::Utilities::get_singleton()->buffer_allocate_data(GL_ELEMENT_ARRAY_BUFFER, s->index_buffer, p_surface.index_data.size(), p_surface.index_data.ptr(), GL_STATIC_DRAW, "Mesh index buffer");
+		GL_CHECK_ERROR("GLES1::MeshStorage::mesh_add_surface: buffer_allocate_data (indices buffer)");
 
 		s->index_count = p_surface.index_count;
 		s->index_buffer_size = p_surface.index_data.size();
@@ -227,7 +227,27 @@ void MeshStorage::mesh_add_surface(RID p_mesh, const RS::SurfaceData &p_surface)
 }
 
 void MeshStorage::_mesh_surface_clear(Mesh *mesh, int p_surface) {
+	Mesh::Surface *s = mesh->surfaces[p_surface];
+	ERR_FAIL_NULL(s);
 
+	if (s->vertex_buffer != 0) {
+		GLES1::Utilities::get_singleton()->buffer_free_data(s->vertex_buffer);
+	}
+	if (s->attribute_buffer != 0) {
+		GLES1::Utilities::get_singleton()->buffer_free_data(s->attribute_buffer);
+	}
+	if (s->index_buffer != 0) {
+		GLES1::Utilities::get_singleton()->buffer_free_data(s->index_buffer);
+	}
+	if (s->skin_buffer != 0) {
+		GLES1::Utilities::get_singleton()->buffer_free_data(s->skin_buffer);
+	}
+
+	if (s->versions) {
+		memfree(s->versions);
+	}
+
+	memdelete(s);
 }
 
 int MeshStorage::mesh_get_blend_shape_count(RID p_mesh) const {
@@ -381,20 +401,24 @@ void MeshStorage::mesh_clear(RID p_mesh) {
 		Mesh::Surface *s = mesh->surfaces[i];
 
 		if (s->vertex_buffer != 0) {
-			glDeleteBuffers(1, &s->vertex_buffer);
-			GL_CHECK_ERROR("GLES1::MeshStorage::mesh_clear: glDeleteBuffers (vertex buffer)");
+			GLES1::Utilities::get_singleton()->buffer_free_data(s->vertex_buffer);
+			s->vertex_buffer = 0;
+			GL_CHECK_ERROR("GLES1::MeshStorage::mesh_clear: buffer_free_data (vertex buffer)");
 		}
 		if (s->attribute_buffer != 0) {
-			glDeleteBuffers(1, &s->attribute_buffer);
-			GL_CHECK_ERROR("GLES1::MeshStorage::mesh_clear: glDeleteBuffers (attributes buffer)");
+			GLES1::Utilities::get_singleton()->buffer_free_data(s->attribute_buffer);
+			s->attribute_buffer = 0;
+			GL_CHECK_ERROR("GLES1::MeshStorage::mesh_clear: buffer_free_data (attributes buffer)");
 		}
 		if (s->skin_buffer != 0) {
-			glDeleteBuffers(1, &s->skin_buffer);
-			GL_CHECK_ERROR("GLES1::MeshStorage::mesh_clear: glDeleteBuffers (skin buffer)");
+			GLES1::Utilities::get_singleton()->buffer_free_data(s->skin_buffer);
+			s->skin_buffer = 0;
+			GL_CHECK_ERROR("GLES1::MeshStorage::mesh_clear: buffer_free_data (skin buffer)");
 		}
 		if (s->index_buffer != 0) {
-			glDeleteBuffers(1, &s->index_buffer);
-			GL_CHECK_ERROR("GLES1::MeshStorage::mesh_clear: glDeleteBuffers (indices buffer)");
+			GLES1::Utilities::get_singleton()->buffer_free_data(s->index_buffer);
+			s->index_buffer = 0;
+			GL_CHECK_ERROR("GLES1::MeshStorage::mesh_clear: buffer_free_data (indices buffer)");
 		}
 
 		if (s->versions) {
@@ -552,11 +576,14 @@ void MeshStorage::_multimesh_initialize(RID p_rid) {
 	MultiMesh *multimesh = multimesh_owner.get_or_null(p_rid);
 	ERR_FAIL_NULL(multimesh);
 
-	// TODO(GLES1):
 	// Create a backing GL buffer just in case it's used for 3D later.
-	// !!! IF THERE IS LEAKS AFTER THIS. HERE IT IS !!!
 	glGenBuffers(1, &multimesh->buffer);
 	GL_CHECK_ERROR("GLES1::MeshStorage::_multimesh_initialize: glGenBuffers");
+
+	// Pre-register empty size to tracking cache
+	glBindBuffer(GL_ARRAY_BUFFER, multimesh->buffer);
+	GLES1::Utilities::get_singleton()->buffer_allocate_data(GL_ARRAY_BUFFER, multimesh->buffer, 0, nullptr, GL_DYNAMIC_DRAW, "MultiMesh buffer");
+	glBindBuffer(GL_ARRAY_BUFFER, 0);
 }
 
 void MeshStorage::_multimesh_free(RID p_rid) {
@@ -611,9 +638,9 @@ void MeshStorage::_multimesh_allocate_data(RID p_multimesh, int p_instances, RS:
 
 	// Orphan the VRAM buffer and allocate the correct size
 	glBindBuffer(GL_ARRAY_BUFFER, multimesh->buffer);
-	glBufferData(GL_ARRAY_BUFFER, data_size * sizeof(float), nullptr, GL_DYNAMIC_DRAW);
+	GLES1::Utilities::get_singleton()->buffer_resize_data(GL_ARRAY_BUFFER, multimesh->buffer, data_size * sizeof(float), nullptr, GL_DYNAMIC_DRAW, "MultiMesh buffer");
 	glBindBuffer(GL_ARRAY_BUFFER, 0);
-	GL_CHECK_ERROR("GLES1::MeshStorage::_multimesh_allocate_data: glBufferData");
+	GL_CHECK_ERROR("GLES1::MeshStorage::_multimesh_allocate_data: buffer_resize_data");
 }
 
 int MeshStorage::_multimesh_get_instance_count(RID p_multimesh) const {
@@ -990,7 +1017,11 @@ void MeshStorage::skeleton_initialize(RID p_rid) {
 }
 
 void MeshStorage::skeleton_free(RID p_rid) {
+	Skeleton *skeleton = skeleton_owner.get_or_null(p_rid);
+	ERR_FAIL_NULL(skeleton);
 
+	skeleton->dependency.deleted_notify(p_rid);
+	skeleton_owner.free(p_rid);
 }
 
 void MeshStorage::_skeleton_make_dirty(Skeleton *skeleton) {

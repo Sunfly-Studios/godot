@@ -98,6 +98,27 @@ public:
 		buffer_allocs_cache[p_id] = resource_allocation;
 	}
 
+	_FORCE_INLINE_ bool has_buffer_data(GLuint p_id) const {
+		return buffer_allocs_cache.has(p_id);
+	}
+
+	_FORCE_INLINE_ void buffer_resize_data(GLenum p_target, GLuint p_id, uint32_t p_size, const void *p_data, GLenum p_usage, String p_name = "") {
+		glBufferData(p_target, p_size, p_data, p_usage);
+		if (!buffer_allocs_cache.has(p_id)) {
+			ResourceAllocation resource_allocation;
+			resource_allocation.size = p_size;
+#ifdef DEV_ENABLED
+			resource_allocation.name = p_name + ": " + itos((uint64_t)p_id);
+#endif
+			buffer_allocs_cache[p_id] = resource_allocation;
+			buffer_mem_cache += p_size;
+		} else {
+			buffer_mem_cache -= buffer_allocs_cache[p_id].size;
+			buffer_mem_cache += p_size;
+			buffer_allocs_cache[p_id].size = p_size;
+		}
+	}
+
 	_FORCE_INLINE_ void buffer_free_data(GLuint p_id) {
 		ERR_FAIL_COND(!buffer_allocs_cache.has(p_id));
 		glDeleteBuffers(1, &p_id);

@@ -62,7 +62,7 @@ CopyEffects::CopyEffects() {
 		 3.0f,  -1.0f,    2.0f, 0.0f,
 		-1.0f,   3.0f,    0.0f, 2.0f,
 	};
-	glBufferData(GL_ARRAY_BUFFER, sizeof(float) * 12, triangle_verts, GL_STATIC_DRAW);
+	GLES1::Utilities::get_singleton()->buffer_allocate_data(GL_ARRAY_BUFFER, screen_triangle, sizeof(float) * 12, triangle_verts, GL_STATIC_DRAW, "CopyEffects Screen Triangle");
 	glBindBuffer(GL_ARRAY_BUFFER, 0);
 	GL_CHECK_ERROR("GLES1::CopyEffects setup: buffer data screen_triangle");
 
@@ -78,7 +78,7 @@ CopyEffects::CopyEffects() {
 		1.0f,  1.0f,  1.0f, 1.0f,
 		-1.0f,  1.0f,  0.0f, 1.0f,
 	};
-	glBufferData(GL_ARRAY_BUFFER, sizeof(float) * 24, quad_verts, GL_STATIC_DRAW);
+	GLES1::Utilities::get_singleton()->buffer_allocate_data(GL_ARRAY_BUFFER, quad, sizeof(float) * 24, quad_verts, GL_STATIC_DRAW, "CopyEffects Screen Quad");
 	glBindBuffer(GL_ARRAY_BUFFER, 0);
 	GL_CHECK_ERROR("GLES1::CopyEffects setup: buffer data screen_quad");
 }

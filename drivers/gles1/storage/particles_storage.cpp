@@ -109,7 +109,34 @@ bool ParticlesStorage::particles_get_emitting(RID p_particles) {
 }
 
 void ParticlesStorage::_particles_free_data(Particles *particles) {
+	ERR_FAIL_NULL(particles);
 
+	particles->userdata_count = 0;
+	particles->instance_buffer_size_cache = 0;
+	particles->instance_buffer_stride_cache = 0;
+	particles->num_attrib_arrays_cache = 0;
+	particles->process_buffer_stride_cache = 0;
+
+	if (particles->front_process_buffer != 0) {
+		GLES1::Utilities::get_singleton()->buffer_free_data(particles->front_process_buffer);
+		GLES1::Utilities::get_singleton()->buffer_free_data(particles->front_instance_buffer);
+		particles->front_process_buffer = 0;
+		particles->front_instance_buffer = 0;
+
+		GLES1::Utilities::get_singleton()->buffer_free_data(particles->back_process_buffer);
+		GLES1::Utilities::get_singleton()->buffer_free_data(particles->back_instance_buffer);
+		particles->back_process_buffer = 0;
+		particles->back_instance_buffer = 0;
+	}
+
+	if (particles->sort_buffer != 0) {
+		GLES1::Utilities::get_singleton()->buffer_free_data(particles->last_frame_buffer);
+		GLES1::Utilities::get_singleton()->buffer_free_data(particles->sort_buffer);
+		particles->last_frame_buffer = 0;
+		particles->sort_buffer = 0;
+		particles->sort_buffer_filled = false;
+		particles->last_frame_buffer_filled = false;
+	}
 }
 
 void ParticlesStorage::particles_set_amount(RID p_particles, int p_amount) {

@@ -111,8 +111,8 @@ void RasterizerCanvasGLES2::initialize() {
 			1, 0
 		};
 
-		glBufferData(GL_ARRAY_BUFFER, sizeof(float) * 8, qv, GL_STATIC_DRAW);
-		GL_CHECK_ERROR("GLES2::Canvas::initialize: glBufferData quad");
+		GLES2::Utilities::get_singleton()->buffer_allocate_data(GL_ARRAY_BUFFER, data.canvas_quad_vertices, sizeof(float) * 8, qv, GL_STATIC_DRAW, "Canvas Quad");
+		GL_CHECK_ERROR("GLES2::Canvas::initialize: buffer_allocate_data quad");
 		glBindBuffer(GL_ARRAY_BUFFER, 0);
 	}
 
@@ -125,8 +125,8 @@ void RasterizerCanvasGLES2::initialize() {
 		glGenBuffers(1, &data.polygon_buffer);
 		GL_CHECK_ERROR("GLES2::Canvas::initialize: glGenBuffers poly");
 		glBindBuffer(GL_ARRAY_BUFFER, data.polygon_buffer);
-		glBufferData(GL_ARRAY_BUFFER, poly_size, nullptr, GL_DYNAMIC_DRAW);
-		GL_CHECK_ERROR("GLES2::Canvas::initialize: glBufferData poly");
+		GLES2::Utilities::get_singleton()->buffer_allocate_data(GL_ARRAY_BUFFER, data.polygon_buffer, poly_size, nullptr, GL_DYNAMIC_DRAW, "Canvas Polygon Buffer");
+		GL_CHECK_ERROR("GLES2::Canvas::initialize: buffer_allocate_data poly");
 		data.polygon_buffer_size = poly_size;
 		glBindBuffer(GL_ARRAY_BUFFER, 0);
 
@@ -137,8 +137,8 @@ void RasterizerCanvasGLES2::initialize() {
 		glGenBuffers(1, &data.polygon_index_buffer);
 		GL_CHECK_ERROR("GLES2::Canvas::initialize: glGenBuffers poly index");
 		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, data.polygon_index_buffer);
-		glBufferData(GL_ELEMENT_ARRAY_BUFFER, index_size, nullptr, GL_DYNAMIC_DRAW);
-		GL_CHECK_ERROR("GLES2::Canvas::initialize: glBufferData poly index");
+		GLES2::Utilities::get_singleton()->buffer_allocate_data(GL_ELEMENT_ARRAY_BUFFER, data.polygon_index_buffer, index_size, nullptr, GL_DYNAMIC_DRAW, "Canvas Polygon Index Buffer");
+		GL_CHECK_ERROR("GLES2::Canvas::initialize: buffer_allocate_data poly index");
 		data.polygon_index_buffer_size = index_size;
 		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
 	}
@@ -148,8 +148,8 @@ void RasterizerCanvasGLES2::initialize() {
 		glGenBuffers(1, &data.ninepatch_vertices);
 		GL_CHECK_ERROR("GLES2::Canvas::initialize: glGenBuffers ninepatch");
 		glBindBuffer(GL_ARRAY_BUFFER, data.ninepatch_vertices);
-		glBufferData(GL_ARRAY_BUFFER, sizeof(float) * (16 + 16) * 2, nullptr, GL_DYNAMIC_DRAW);
-		GL_CHECK_ERROR("GLES2::Canvas::initialize: glBufferData ninepatch");
+		GLES2::Utilities::get_singleton()->buffer_allocate_data(GL_ARRAY_BUFFER, data.ninepatch_vertices, sizeof(float) * (16 + 16) * 2, nullptr, GL_DYNAMIC_DRAW, "Canvas Ninepatch Vertices");
+		GL_CHECK_ERROR("GLES2::Canvas::initialize: buffer_allocate_data ninepatch");
 		glBindBuffer(GL_ARRAY_BUFFER, 0);
 
 		glGenBuffers(1, &data.ninepatch_elements);
@@ -192,8 +192,8 @@ void RasterizerCanvasGLES2::initialize() {
 		};
 #undef _EIDX
 
-		glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(elems), elems, GL_STATIC_DRAW);
-		GL_CHECK_ERROR("GLES2::Canvas::initialize: glBufferData ninepatch index");
+		GLES2::Utilities::get_singleton()->buffer_allocate_data(GL_ELEMENT_ARRAY_BUFFER, data.ninepatch_elements, sizeof(elems), elems, GL_STATIC_DRAW, "Canvas Ninepatch Elements");
+		GL_CHECK_ERROR("GLES2::Canvas::initialize: buffer_allocate_data ninepatch index");
 		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
 	}
 
@@ -216,8 +216,8 @@ void RasterizerCanvasGLES2::initialize() {
 		glGenBuffers(1, &bdata.gl_vertex_buffer);
 		GL_CHECK_ERROR("GLES2::Canvas::initialize: glGenBuffers batcher");
 		glBindBuffer(GL_ARRAY_BUFFER, bdata.gl_vertex_buffer);
-		glBufferData(GL_ARRAY_BUFFER, bdata.vertex_buffer_size_bytes, nullptr, GL_DYNAMIC_DRAW);
-		GL_CHECK_ERROR("GLES2::Canvas::initialize: glBufferData batcher");
+		GLES2::Utilities::get_singleton()->buffer_allocate_data(GL_ARRAY_BUFFER, bdata.gl_vertex_buffer, bdata.vertex_buffer_size_bytes, nullptr, GL_DYNAMIC_DRAW, "Canvas Batcher Vertices");
+		GL_CHECK_ERROR("GLES2::Canvas::initialize: buffer_allocate_data batcher");
 		glBindBuffer(GL_ARRAY_BUFFER, 0);
 
 		// Pre-fill index buffer.
@@ -245,8 +245,8 @@ void RasterizerCanvasGLES2::initialize() {
 #endif
 		}
 
-		glBufferData(GL_ELEMENT_ARRAY_BUFFER, bdata.index_buffer_size_bytes, indices.ptr(), GL_STATIC_DRAW);
-		GL_CHECK_ERROR("GLES2::Canvas::initialize: glBufferData batcher index");
+		GLES2::Utilities::get_singleton()->buffer_allocate_data(GL_ELEMENT_ARRAY_BUFFER, bdata.gl_index_buffer, bdata.index_buffer_size_bytes, indices.ptr(), GL_STATIC_DRAW, "Canvas Batcher Indices");
+		GL_CHECK_ERROR("GLES2::Canvas::initialize: buffer_allocate_data batcher index");
 		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
 	}
 }
