@@ -1131,6 +1131,7 @@ void RasterizerCanvasGLES2::_batch_render_generic(const Batch &p_batch, GLES2::C
 
 void RasterizerCanvasGLES2::render_batches(Item::Command *const *p_commands, Item *p_current_clip, bool &r_reclip, GLES2::CanvasMaterialData *p_material) {
 	int num_batches = bdata.batches.size();
+	bool skipping = false;
 	Transform2D base_extra = state.uniforms.extra_matrix;
 
 	// Extract and apply the CanvasItemMaterial blend mode
@@ -1185,10 +1186,17 @@ void RasterizerCanvasGLES2::render_batches(Item::Command *const *p_commands, Ite
 
 				Item::Command *command = batch.first_command;
 				for (uint32_t i = 0; i < batch.num_commands && command != nullptr; i++, command = command->next) {
+					if (skipping && command->type != Item::Command::TYPE_ANIMATION_SLICE) {
+						command = command->next;
+						continue;
+					}
+
 					switch (command->type) {
 						case Item::Command::TYPE_RECT: {
 							Item::CommandRect *r = static_cast<Item::CommandRect *>(command);
-							ERR_FAIL_NULL(r);
+							if (unlikely(!r)) {
+								continue;
+							}
 
 							// Clean state
 							// (so that rubbish/garbage doesn't ruin stuff later)
@@ -1272,7 +1280,9 @@ void RasterizerCanvasGLES2::render_batches(Item::Command *const *p_commands, Ite
 
 						case Item::Command::TYPE_NINEPATCH: {
 							Item::CommandNinePatch *np = static_cast<Item::CommandNinePatch *>(command);
-							ERR_FAIL_NULL(np);
+							if (unlikely(!np)) {
+								continue;
+							}
 
 							_set_texture_rect_mode(false);
 
@@ -1408,7 +1418,9 @@ void RasterizerCanvasGLES2::render_batches(Item::Command *const *p_commands, Ite
 
 						case Item::Command::TYPE_MULTIMESH: {
 							Item::CommandMultiMesh *mmesh = static_cast<Item::CommandMultiMesh *>(command);
-							ERR_FAIL_NULL(mmesh);
+							if (unlikely(!mmesh)) {
+								continue;
+							}
 
 							GLES2::MultiMesh *multi_mesh = GLES2::MeshStorage::get_singleton()->get_multimesh(mmesh->multimesh);
 							if (!multi_mesh || multi_mesh->data_cache.is_empty()) {
@@ -1581,7 +1593,9 @@ void RasterizerCanvasGLES2::render_batches(Item::Command *const *p_commands, Ite
 
 						case Item::Command::TYPE_CLIP_IGNORE: {
 							Item::CommandClipIgnore *ci = static_cast<Item::CommandClipIgnore *>(command);
-							ERR_FAIL_NULL(ci);
+							if (unlikely(!ci)) {
+								continue;
+							}
 
 							if (p_current_clip) {
 								if (ci->ignore != r_reclip) {
@@ -1603,14 +1617,18 @@ void RasterizerCanvasGLES2::render_batches(Item::Command *const *p_commands, Ite
 
 						case Item::Command::TYPE_POLYGON: {
 							Item::CommandPolygon *polygon = static_cast<Item::CommandPolygon *>(command);
-							ERR_FAIL_NULL(polygon);
+							if (unlikely(!polygon)) {
+								continue;
+							}
 
 							_legacy_draw_polygon(polygon, p_material);
 						} break;
 
 						case Item::Command::TYPE_PRIMITIVE: {
 							Item::CommandPrimitive *pr = static_cast<Item::CommandPrimitive *>(command);
-							ERR_FAIL_NULL(pr);
+							if (unlikely(!pr)) {
+								continue;
+							}
 
 							switch (pr->point_count) {
 								case 2: {
@@ -1624,7 +1642,9 @@ void RasterizerCanvasGLES2::render_batches(Item::Command *const *p_commands, Ite
 
 						case Item::Command::TYPE_MESH: {
 							Item::CommandMesh *mesh_cmd = static_cast<Item::CommandMesh *>(command);
-							ERR_FAIL_NULL(mesh_cmd);
+							if (unlikely(!mesh_cmd)) {
+								continue;
+							}
 
 							_set_texture_rect_mode(false);
 
@@ -1749,7 +1769,9 @@ void RasterizerCanvasGLES2::render_batches(Item::Command *const *p_commands, Ite
 
 						case Item::Command::TYPE_TRANSFORM: {
 							Item::CommandTransform *transform = static_cast<Item::CommandTransform *>(command);
-							ERR_FAIL_NULL(transform);
+							if (unlikely(!transform)) {
+								continue;
+							}
 
 							state.uniforms.extra_matrix = transform->xform;
 							state.canvas_shader->version_set_uniform(CanvasShaderGLES2::EXTRA_MATRIX, state.uniforms.extra_matrix, state.shader_version, state.mode_variant, state.specialization);
@@ -1757,20 +1779,21 @@ void RasterizerCanvasGLES2::render_batches(Item::Command *const *p_commands, Ite
 
 						case Item::Command::TYPE_ANIMATION_SLICE: {
 							const Item::CommandAnimationSlice *as = static_cast<const Item::CommandAnimationSlice *>(command);
-							ERR_FAIL_NULL(as);
+							if (unlikely(!as)) {
+								continue;
+							}
 
-							// double current_time = RSG::rasterizer->get_total_time();
-							// double local_time = Math::fposmod(current_time - as->offset, as->animation_length);
-							// skipping = !(local_time >= as->slice_begin && local_time < as->slice_end);
+							double current_time = RSG::rasterizer->get_total_time();
+							double local_time = Math::fposmod(current_time - as->offset, as->animation_length);
+							skipping = !(local_time >= as->slice_begin && local_time < as->slice_end);
 
 							RenderingServerDefault::redraw_request(); // animation visible means redraw request
-
 						} break;
 
+						case Item::Command::TYPE_PARTICLES:
+						case Item::Command::TYPE_CALLBACK:
 						default: {
-							// PARTICLES, etc.
-							print_verbose("NOT IMPLEMENTED COMMAND TYPE:");
-							print_verbose(command->type);
+							// Not supported
 						} break;
 					}
 				}
