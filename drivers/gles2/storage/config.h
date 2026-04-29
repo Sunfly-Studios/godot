@@ -132,6 +132,7 @@ public:
 	bool disable_particles_workaround = false; // Set to 'true' to disable 'GPUParticles'.
 	bool disable_transform_feedback_shader_cache = false; // PowerVR GE 8320 workaround.
 	bool polyfill_half2float = true; // ANGLE shader workaround.
+	bool is_android_emulator = false;
 
 #ifdef ANDROID_ENABLED
 	PFNGLFRAMEBUFFERTEXTUREMULTIVIEWOVRPROC eglFramebufferTextureMultiviewOVR = nullptr;

@@ -833,6 +833,45 @@ void RasterizerCanvasGLES1::gl_disable_scissor() const {
 	glDisable(GL_SCISSOR_TEST);
 }
 
+void RasterizerCanvasGLES1::_bind_quad_buffer() const {
+	glBindBuffer(GL_ARRAY_BUFFER, data.canvas_quad_vertices);
+	glEnableClientState(GL_VERTEX_ARRAY);
+	glEnableClientState(GL_TEXTURE_COORD_ARRAY);
+	glVertexPointer(2, GL_FLOAT, 0, nullptr);
+	glTexCoordPointer(2, GL_FLOAT, 0, nullptr);
+}
+
+_FORCE_INLINE_ void RasterizerCanvasGLES1::_buffer_orphan_and_upload(unsigned int p_buffer_size_bytes, unsigned int p_offset_bytes, unsigned int p_data_size_bytes, const void *p_data, GLenum p_target, GLenum p_usage, bool p_optional_orphan) const {
+	ERR_FAIL_COND((p_offset_bytes + p_data_size_bytes) > p_buffer_size_bytes);
+
+	if (!p_optional_orphan) {
+		if (GLES1::Config::get_singleton()->is_android_emulator && p_offset_bytes == 0 && p_buffer_size_bytes == p_data_size_bytes) {
+			// Workaround: Buggy emulators crash or race on standard orphaning.
+			// Passing the exact size and data directly to glBufferData forces a safe internal reallocation.
+			glBufferData(p_target, p_buffer_size_bytes, p_data, p_usage);
+			return;
+		}
+
+		glBufferData(p_target, p_buffer_size_bytes, nullptr, p_usage);
+#ifdef RASTERIZER_EXTRA_CHECKS
+		// fill with garbage off the end of the array
+		if (p_buffer_size_bytes) {
+			unsigned int start = p_offset_bytes + p_data_size_bytes;
+			unsigned int end = start + 1024;
+			if (end < p_buffer_size_bytes) {
+				uint8_t *garbage = SAFE_ALLOCA_ARRAY(uint8_t, 1024);
+				for (int n = 0; n < 1024; n++) {
+					garbage[n] = Math::random(0, 255);
+				}
+				glBufferSubData(p_target, start, 1024, garbage);
+			}
+		}
+#endif
+	}
+
+	glBufferSubData(p_target, p_offset_bytes, p_data_size_bytes, p_data);
+}
+
 void RasterizerCanvasGLES1::_batch_upload_buffers() {
 	if (bdata.vertices.size() == 0) {
 		return;
@@ -872,18 +911,12 @@ void RasterizerCanvasGLES1::_batch_upload_buffers() {
 		data_ptr = bdata.unit_vertices.get_data();
 	}
 
+	uint32_t alloc_size = bdata.vertex_buffer_size_bytes;
 	if (GLES1::Config::get_singleton()->is_android_emulator) {
-		// Emulators crash or give up on nullptr orphaning, but glBufferSubData causes
-		// race conditions with in-flight GPU memory. Passing the exact size and data
-		// directly to glBufferData forces a safe internal reallocation.
-		glBufferData(GL_ARRAY_BUFFER, buffer_bytes, data_ptr, GL_DYNAMIC_DRAW);
-		GL_CHECK_ERROR("GLES1::Canvas::batch_upload: glBufferData emulator workaround");
-	} else {
-		// Standard Hardware. Orphan the buffer first, then SubData.
-		glBufferData(GL_ARRAY_BUFFER, bdata.vertex_buffer_size_bytes, nullptr, GL_DYNAMIC_DRAW);
-		glBufferSubData(GL_ARRAY_BUFFER, 0, buffer_bytes, data_ptr);
-		GL_CHECK_ERROR("GLES1::Canvas::batch_upload: glBufferSubData standard");
+		alloc_size = buffer_bytes; // Emulator workaround: shrink allocation
 	}
+	_buffer_orphan_and_upload(alloc_size, 0, buffer_bytes, data_ptr, GL_ARRAY_BUFFER, GL_DYNAMIC_DRAW, false);
+	GL_CHECK_ERROR("GLES1::Canvas::batch_upload: _buffer_orphan_and_upload");
 	glBindBuffer(GL_ARRAY_BUFFER, 0);
 }
 
@@ -1134,11 +1167,7 @@ void RasterizerCanvasGLES1::render_batches(Item::Command *const *p_commands, Ite
 							glColor4f(combined_color.r, combined_color.g, combined_color.b, combined_color.a);
 
 							// Bind the default quad buffer
-							glBindBuffer(GL_ARRAY_BUFFER, data.canvas_quad_vertices);
-							glEnableClientState(GL_VERTEX_ARRAY);
-							glEnableClientState(GL_TEXTURE_COORD_ARRAY);
-							glVertexPointer(2, GL_FLOAT, 0, nullptr);
-							glTexCoordPointer(2, GL_FLOAT, 0, nullptr);
+							_bind_quad_buffer();
 
 							// Calculate rects
 							Rect2 src_rect = (r->flags & CANVAS_RECT_REGION) ? Rect2(r->source.position * state.texpixel_size, r->source.size * state.texpixel_size) : Rect2(0, 0, 1, 1);
@@ -1307,15 +1336,16 @@ void RasterizerCanvasGLES1::render_batches(Item::Command *const *p_commands, Ite
 							}
 
 							glBindBuffer(GL_ARRAY_BUFFER, data.ninepatch_vertices);
-							glBufferData(GL_ARRAY_BUFFER, sizeof(float) * (16 + 16) * 2, buffer, GL_DYNAMIC_DRAW);
-							GL_CHECK_ERROR("GLES1::Canvas::render_batches: TYPE_NINEPATCH glBufferData");
+							constexpr uint32_t buffer_size = sizeof(float) * (16 + 16) * 2;
+							_buffer_orphan_and_upload(buffer_size, 0, buffer_size, buffer, GL_ARRAY_BUFFER, GL_DYNAMIC_DRAW, false);
+							GL_CHECK_ERROR("GLES1::Canvas::render_batches: TYPE_NINEPATCH buffer upload");
 
 							glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, data.ninepatch_elements);
 
 							glEnableClientState(GL_VERTEX_ARRAY);
 							glEnableClientState(GL_TEXTURE_COORD_ARRAY);
 							glDisableClientState(GL_COLOR_ARRAY);
-
+							
 							glVertexPointer(2, GL_FLOAT, 4 * sizeof(float), nullptr);
 							glTexCoordPointer(2, GL_FLOAT, 4 * sizeof(float), (const void *)(sizeof(float) * 2));
 							GL_CHECK_ERROR("GLES1::Canvas::render_batches: TYPE_NINEPATCH client states");
@@ -1817,20 +1847,17 @@ void RasterizerCanvasGLES1::_draw_gui_primitive(int p_points, const Vector2 *p_v
 	if (total_size > data.polygon_buffer_size) {
 		data.polygon_buffer_size = next_power_of_2(total_size);
 	}
-	glBufferData(GL_ARRAY_BUFFER, data.polygon_buffer_size, nullptr, GL_DYNAMIC_DRAW);
-	GL_CHECK_ERROR("GLES1::Canvas::_draw_gui_primitive: buffer orphan");
-
 	uint32_t offset = 0;
 
 	// Vertices
-	glBufferSubData(GL_ARRAY_BUFFER, offset, vertex_size, p_vertices);
+	_buffer_orphan_and_upload(data.polygon_buffer_size, offset, vertex_size, p_vertices, GL_ARRAY_BUFFER, GL_DYNAMIC_DRAW, false);
 	glEnableClientState(GL_VERTEX_ARRAY);
 	glVertexPointer(2, GL_FLOAT, 0, (const void *)(uintptr_t)offset);
 	offset += vertex_size;
 
 	// Colors
 	if (p_colors) {
-		glBufferSubData(GL_ARRAY_BUFFER, offset, color_size, p_colors);
+		_buffer_orphan_and_upload(data.polygon_buffer_size, offset, color_size, p_colors, GL_ARRAY_BUFFER, GL_DYNAMIC_DRAW, true);
 		glEnableClientState(GL_COLOR_ARRAY);
 		glColorPointer(4, GL_FLOAT, 0, (const void *)(uintptr_t)offset);
 		offset += color_size;
@@ -1842,7 +1869,7 @@ void RasterizerCanvasGLES1::_draw_gui_primitive(int p_points, const Vector2 *p_v
 
 	// UVs
 	if (p_uvs) {
-		glBufferSubData(GL_ARRAY_BUFFER, offset, uv_size, p_uvs);
+		_buffer_orphan_and_upload(data.polygon_buffer_size, offset, uv_size, p_uvs, GL_ARRAY_BUFFER, GL_DYNAMIC_DRAW, true);
 		glEnableClientState(GL_TEXTURE_COORD_ARRAY);
 		glTexCoordPointer(2, GL_FLOAT, 0, (const void *)(uintptr_t)offset);
 		offset += uv_size;
@@ -1944,20 +1971,17 @@ void RasterizerCanvasGLES1::_legacy_draw_polygon(Item::CommandPolygon *p_poly, G
 	if (total_size > data.polygon_buffer_size) {
 		data.polygon_buffer_size = next_power_of_2(total_size);
 	}
-	glBufferData(GL_ARRAY_BUFFER, data.polygon_buffer_size, nullptr, GL_DYNAMIC_DRAW);
-	GL_CHECK_ERROR("GLES1::Canvas::_legacy_draw_polygon: buffer orphan");
-
 	uint32_t offset = 0;
-
+	
 	// Points
-	glBufferSubData(GL_ARRAY_BUFFER, offset, points_size, pd.points.ptr());
+	_buffer_orphan_and_upload(data.polygon_buffer_size, offset, points_size, pd.points.ptr(), GL_ARRAY_BUFFER, GL_DYNAMIC_DRAW, false);
 	glEnableClientState(GL_VERTEX_ARRAY);
 	glVertexPointer(2, GL_FLOAT, 0, (const void *)(uintptr_t)offset);
 	offset += points_size;
 
 	// UVs
 	if (uvs_size > 0) {
-		glBufferSubData(GL_ARRAY_BUFFER, offset, uvs_size, pd.uvs.ptr());
+		_buffer_orphan_and_upload(data.polygon_buffer_size, offset, uvs_size, pd.uvs.ptr(), GL_ARRAY_BUFFER, GL_DYNAMIC_DRAW, true);
 		glEnableClientState(GL_TEXTURE_COORD_ARRAY);
 		glTexCoordPointer(2, GL_FLOAT, 0, (const void *)(uintptr_t)offset);
 		offset += uvs_size;
@@ -1987,7 +2011,7 @@ void RasterizerCanvasGLES1::_legacy_draw_polygon(Item::CommandPolygon *p_poly, G
 				precalced_colors[n] = vcol;
 			}
 
-			glBufferSubData(GL_ARRAY_BUFFER, offset, colors_size, precalced_colors);
+			_buffer_orphan_and_upload(data.polygon_buffer_size, offset, colors_size, precalced_colors, GL_ARRAY_BUFFER, GL_DYNAMIC_DRAW, true);
 			glEnableClientState(GL_COLOR_ARRAY);
 			glColorPointer(4, GL_FLOAT, 0, (const void *)(uintptr_t)offset);
 		}
@@ -2028,9 +2052,7 @@ void RasterizerCanvasGLES1::_legacy_draw_polygon(Item::CommandPolygon *p_poly, G
 			data.polygon_index_buffer_size = next_power_of_2(index_size);
 		}
 
-		glBufferData(GL_ELEMENT_ARRAY_BUFFER, data.polygon_index_buffer_size, nullptr, GL_DYNAMIC_DRAW);
-		glBufferSubData(GL_ELEMENT_ARRAY_BUFFER, 0, index_size, indices_16.ptr());
-
+		_buffer_orphan_and_upload(data.polygon_index_buffer_size, 0, index_size, indices_16.ptr(), GL_ELEMENT_ARRAY_BUFFER, GL_DYNAMIC_DRAW, false);
 		glDrawElements(gl_primitive, index_count, GL_UNSIGNED_SHORT, nullptr);
 		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
 	} else {

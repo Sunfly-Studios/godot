@@ -244,6 +244,8 @@ Config::Config() {
 		disable_transform_feedback_shader_cache = true;
 	}
 
+	is_android_emulator = rendering_device_name.contains("Android Emulator");
+
 	if (OS::get_singleton()->get_current_rendering_driver_name() == "opengl2_angle" || OS::get_singleton()->has_feature("web")) {
 		polyfill_half2float = false;
 	}

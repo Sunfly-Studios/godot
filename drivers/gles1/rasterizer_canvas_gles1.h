@@ -141,9 +141,9 @@ protected:
 	void _set_texture_rect_mode(bool p_texture_rect, bool p_light_angle = false, bool p_modulate = false, bool p_large_vertex = false);
 	void _bind_canvas_texture(RID p_texture, RS::CanvasItemTextureFilter p_base_filter, RS::CanvasItemTextureRepeat p_base_repeat);
 	void _set_canvas_uniforms();
-	void _bind_quad_buffer();
+	void _bind_quad_buffer() const;
 
-	inline void _buffer_orphan_and_upload(unsigned int p_buffer_size_bytes, unsigned int p_offset_bytes, unsigned int p_data_size_bytes, const void *p_data, GLenum p_target, GLenum p_usage, bool p_optional_orphan) const;
+	_FORCE_INLINE_ void _buffer_orphan_and_upload(unsigned int p_buffer_size_bytes, unsigned int p_offset_bytes, unsigned int p_data_size_bytes, const void *p_data, GLenum p_target, GLenum p_usage, bool p_optional_orphan) const;
 	void _legacy_draw_polygon(Item::CommandPolygon *p_poly, GLES1::CanvasMaterialData *p_material);
 	void _legacy_draw_primitive(Item::CommandPrimitive *p_pr, GLES1::CanvasMaterialData *p_material);
 	void _legacy_draw_line(Item::CommandPrimitive *p_pr, GLES1::CanvasMaterialData *p_material);
