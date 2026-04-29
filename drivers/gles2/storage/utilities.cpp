@@ -459,7 +459,7 @@ String Utilities::get_video_adapter_api_version() const {
 		int space_idx = full_version.find(" ", version_start);
 		String vendor_info = space_idx != -1 ? full_version.substr(space_idx) : "";
 
-		return vformat("2.1 (emulated via %s%s)%s", api_prefix, version_num, vendor_info);
+		return vformat("2.1 (backed by %s%s)%s", api_prefix, version_num, vendor_info);
 	}
 
 	return full_version;
