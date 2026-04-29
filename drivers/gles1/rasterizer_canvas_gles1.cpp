@@ -580,6 +580,7 @@ void RasterizerCanvasGLES1::reset_canvas() {
 	glEnable(GL_BLEND);
 	glDisable(GL_LIGHTING);
 	glDisable(GL_ALPHA_TEST);
+	glDisable(GL_TEXTURE_2D);
 	glTexEnvf(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE);
 	GL_CHECK_ERROR("GLES1::Canvas::reset_canvas: states");
 
@@ -927,8 +928,10 @@ void RasterizerCanvasGLES1::_batch_render_generic(const Batch &p_batch, GLES1::C
 	const bool use_modulate = bdata.use_modulate;
 	const bool use_large_verts = bdata.use_large_verts;
 	const bool colored_verts = (
-		bdata.use_colored_vertices || use_light_angles ||
-		use_modulate || use_large_verts
+		bdata.use_colored_vertices ||
+		use_light_angles ||
+		use_modulate ||
+		use_large_verts
 	);
 
 	int sizeof_vert = 0;
@@ -1046,6 +1049,8 @@ void RasterizerCanvasGLES1::_batch_render_generic(const Batch &p_batch, GLES1::C
 	glDisableClientState(GL_VERTEX_ARRAY);
 	glDisableClientState(GL_TEXTURE_COORD_ARRAY);
 	glDisableClientState(GL_COLOR_ARRAY);
+	glDisable(GL_TEXTURE_2D);
+
 	glBindBuffer(GL_ARRAY_BUFFER, 0);
 	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
 
@@ -1217,6 +1222,7 @@ void RasterizerCanvasGLES1::render_batches(Item::Command *const *p_commands, Ite
 							glBindBuffer(GL_ARRAY_BUFFER, 0);
 							glDisableClientState(GL_VERTEX_ARRAY);
 							glDisableClientState(GL_TEXTURE_COORD_ARRAY);
+							glDisable(GL_TEXTURE_2D);
 							
 							state.specialization &= ~(CanvasShaderGLES1::USE_FORCE_REPEAT);
 						} break;
@@ -1357,6 +1363,7 @@ void RasterizerCanvasGLES1::render_batches(Item::Command *const *p_commands, Ite
 							glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
 							glDisableClientState(GL_VERTEX_ARRAY);
 							glDisableClientState(GL_TEXTURE_COORD_ARRAY);
+							glDisable(GL_TEXTURE_2D);
 						} break;
 
 						case Item::Command::TYPE_CLIP_IGNORE: {
@@ -1438,6 +1445,8 @@ void RasterizerCanvasGLES1::render_batches(Item::Command *const *p_commands, Ite
 							}
 
 							_bind_canvas_texture(mesh_cmd->texture, filter, repeat);
+							glEnable(GL_TEXTURE_2D);
+
 							if (state.texpixel_size != Size2(0.0, 0.0)) {
 								state.canvas_shader->version_set_uniform(CanvasShaderGLES1::COLOR_TEXTURE_PIXEL_SIZE, state.texpixel_size, state.shader_version, state.mode_variant, state.specialization);
 							}
@@ -1445,6 +1454,36 @@ void RasterizerCanvasGLES1::render_batches(Item::Command *const *p_commands, Ite
 							// Fetch and Draw Mesh Data
 							GLES1::Mesh *mesh_data = GLES1::MeshStorage::get_singleton()->get_mesh(mesh_cmd->mesh);
 							if (mesh_data) {
+								bool apply_tu1 = GLES1::Config::get_singleton()->max_texture_image_units >= 2;
+								if (apply_tu1) {
+									glActiveTexture(GL_TEXTURE1);
+									glEnable(GL_TEXTURE_2D);
+									RID white_tex_rid = GLES1::TextureStorage::get_singleton()->texture_gl_get_default(GLES1::DEFAULT_GL_TEXTURE_WHITE);
+									GLES1::Texture *tex_white = GLES1::TextureStorage::get_singleton()->get_texture(white_tex_rid);
+									if (tex_white) {
+										glBindTexture(GL_TEXTURE_2D, tex_white->tex_id);
+									}
+
+									glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_COMBINE);
+									glTexEnvi(GL_TEXTURE_ENV, GL_COMBINE_RGB, GL_MODULATE);
+									glTexEnvi(GL_TEXTURE_ENV, GL_SRC0_RGB, GL_PREVIOUS);
+									glTexEnvi(GL_TEXTURE_ENV, GL_SRC1_RGB, GL_CONSTANT);
+									glTexEnvi(GL_TEXTURE_ENV, GL_COMBINE_ALPHA, GL_MODULATE);
+									glTexEnvi(GL_TEXTURE_ENV, GL_SRC0_ALPHA, GL_PREVIOUS);
+									glTexEnvi(GL_TEXTURE_ENV, GL_SRC1_ALPHA, GL_CONSTANT);
+									GL_CHECK_ERROR("GLES1::Canvas::render_batches: Item::Command::TYPE_MESH: tu1 glTexEnvi");
+
+									float env_color[4] = {
+										state.uniforms.final_modulate.r,
+										state.uniforms.final_modulate.g,
+										state.uniforms.final_modulate.b,
+										state.uniforms.final_modulate.a
+									};
+									glTexEnvfv(GL_TEXTURE_ENV, GL_TEXTURE_ENV_COLOR, env_color);
+									GL_CHECK_ERROR("GLES1::Canvas::render_batches: Item::Command::TYPE_MESH: tu1 glTexEnvfv");
+									glActiveTexture(GL_TEXTURE0);
+								}
+
 								// Loop using the double pointer array
 								for (uint32_t j = 0; j < mesh_data->surface_count; j++) {
 									GLES1::Mesh::Surface *s = mesh_data->surfaces[j];
@@ -1459,6 +1498,8 @@ void RasterizerCanvasGLES1::render_batches(Item::Command *const *p_commands, Ite
 										glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, s->index_buffer);
 									}
 									GL_CHECK_ERROR("GLES1::Canvas::render_batches: TYPE_MESH bind VBO/IBO");
+
+									bool surface_has_colors = false;
 
 									// Setup vertex attributes from the cached Version struct
 									if (s->version_count > 0 && s->versions) {
@@ -1477,6 +1518,7 @@ void RasterizerCanvasGLES1::render_batches(Item::Command *const *p_commands, Ite
 													glVertexPointer(v->attribs[k].size, v->attribs[k].type, v->attribs[k].stride, (const void *)(uintptr_t)v->attribs[k].offset);
 												} else if (k == RS::ARRAY_COLOR) {
 													// Colors live in the attribute buffer
+													surface_has_colors = true;
 													glBindBuffer(GL_ARRAY_BUFFER, s->attribute_buffer);
 													glEnableClientState(GL_COLOR_ARRAY);
 													glColorPointer(v->attribs[k].size, v->attribs[k].type, v->attribs[k].stride, (const void *)(uintptr_t)v->attribs[k].offset);
@@ -1501,6 +1543,17 @@ void RasterizerCanvasGLES1::render_batches(Item::Command *const *p_commands, Ite
 										GL_CHECK_ERROR("GLES1::Canvas::render_batches: TYPE_MESH setup client pointers");
 									}
 
+									// Setup TU1 specifically for this surface
+									if (apply_tu1) {
+										glActiveTexture(GL_TEXTURE1);
+										if (surface_has_colors) {
+											glEnable(GL_TEXTURE_2D);
+										} else {
+											glDisable(GL_TEXTURE_2D);
+										}
+										glActiveTexture(GL_TEXTURE0);
+									}
+
 									// Draw call using the correct index count and vertex count
 									GLenum gl_primitive = get_gl_primitive_type(s->primitive);
 									if (s->index_count > 0) {
@@ -1523,6 +1576,14 @@ void RasterizerCanvasGLES1::render_batches(Item::Command *const *p_commands, Ite
 									glDisableClientState(GL_TEXTURE_COORD_ARRAY);
 									glDisableClientState(GL_COLOR_ARRAY);
 								}
+
+								// Clean up texture trick
+								if (apply_tu1) {
+									glActiveTexture(GL_TEXTURE1);
+									glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE);
+									glDisable(GL_TEXTURE_2D);
+									glActiveTexture(GL_TEXTURE0);
+								}
 							}
 
 							// Restore state
@@ -1531,6 +1592,7 @@ void RasterizerCanvasGLES1::render_batches(Item::Command *const *p_commands, Ite
 
 							glBindBuffer(GL_ARRAY_BUFFER, 0);
 							glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+							glDisable(GL_TEXTURE_2D);
 						} break;
 
 						case Item::Command::TYPE_MULTIMESH: {
@@ -1600,6 +1662,27 @@ void RasterizerCanvasGLES1::render_batches(Item::Command *const *p_commands, Ite
 								p_material->bind_uniforms();
 							}
 
+							bool apply_tu1 = GLES1::Config::get_singleton()->max_texture_image_units >= 2;
+							if (apply_tu1) {
+								glActiveTexture(GL_TEXTURE1);
+								glEnable(GL_TEXTURE_2D);
+								RID white_tex_rid = GLES1::TextureStorage::get_singleton()->texture_gl_get_default(GLES1::DEFAULT_GL_TEXTURE_WHITE);
+								GLES1::Texture *tex_white = GLES1::TextureStorage::get_singleton()->get_texture(white_tex_rid);
+								if (tex_white) {
+									glBindTexture(GL_TEXTURE_2D, tex_white->tex_id);
+								}
+
+								glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_COMBINE);
+								glTexEnvi(GL_TEXTURE_ENV, GL_COMBINE_RGB, GL_MODULATE);
+								glTexEnvi(GL_TEXTURE_ENV, GL_SRC0_RGB, GL_PREVIOUS);
+								glTexEnvi(GL_TEXTURE_ENV, GL_SRC1_RGB, GL_CONSTANT);
+								glTexEnvi(GL_TEXTURE_ENV, GL_COMBINE_ALPHA, GL_MODULATE);
+								glTexEnvi(GL_TEXTURE_ENV, GL_SRC0_ALPHA, GL_PREVIOUS);
+								glTexEnvi(GL_TEXTURE_ENV, GL_SRC1_ALPHA, GL_CONSTANT);
+								GL_CHECK_ERROR("GLES1::Canvas::render_batches: TYPE_MULTIMESH tu1 glTexEnvi");
+								glActiveTexture(GL_TEXTURE0);
+							}
+
 							for (uint32_t j = 0; j < mesh_data->surface_count; j++) {
 								GLES1::Mesh::Surface *s = mesh_data->surfaces[j];
 
@@ -1613,6 +1696,8 @@ void RasterizerCanvasGLES1::render_batches(Item::Command *const *p_commands, Ite
 									glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, s->index_buffer);
 								}
 								GL_CHECK_ERROR("GLES1::Canvas::render_batches: TYPE_MULTIMESH bind VBO/IBO");
+
+								bool surface_has_colors = false;
 
 								// Set up client pointers
 								if (s->version_count > 0 && s->versions) {
@@ -1635,6 +1720,7 @@ void RasterizerCanvasGLES1::render_batches(Item::Command *const *p_commands, Ite
 												if (multi_mesh->uses_colors) {
 													glDisableClientState(GL_COLOR_ARRAY);
 												} else {
+													surface_has_colors = true;
 													glBindBuffer(GL_ARRAY_BUFFER, s->attribute_buffer);
 													glEnableClientState(GL_COLOR_ARRAY);
 													glColorPointer(v->attribs[k].size, v->attribs[k].type, v->attribs[k].stride, (const void *)(uintptr_t)v->attribs[k].offset);
@@ -1655,6 +1741,17 @@ void RasterizerCanvasGLES1::render_batches(Item::Command *const *p_commands, Ite
 										}
 									}
 									GL_CHECK_ERROR("GLES1::Canvas::render_batches: TYPE_MULTIMESH setup client pointers");
+								}
+
+								// Setup TU1 specifically for this surface
+								if (apply_tu1) {
+									glActiveTexture(GL_TEXTURE1);
+									if (surface_has_colors) {
+										glEnable(GL_TEXTURE_2D);
+									} else {
+										glDisable(GL_TEXTURE_2D);
+									}
+									glActiveTexture(GL_TEXTURE0);
 								}
 
 								GLenum gl_primitive = get_gl_primitive_type(s->primitive);
@@ -1743,6 +1840,20 @@ void RasterizerCanvasGLES1::render_batches(Item::Command *const *p_commands, Ite
 									// Re upload uniforms per instance to route the new matrices
 									_set_canvas_uniforms();
 
+									// Update TU1's color only if it's active
+									if (apply_tu1 && surface_has_colors) {
+										glActiveTexture(GL_TEXTURE1);
+										float env_color[4] = {
+											state.uniforms.final_modulate.r,
+											state.uniforms.final_modulate.g,
+											state.uniforms.final_modulate.b,
+											state.uniforms.final_modulate.a
+										};
+										glTexEnvfv(GL_TEXTURE_ENV, GL_TEXTURE_ENV_COLOR, env_color);
+										GL_CHECK_ERROR("GLES1::Canvas::render_batches: TYPE_MULTIMESH tu1 glTexEnvfv");
+										glActiveTexture(GL_TEXTURE0);
+									}
+
 									// Always issue the modulate fallback so it pushes glColor4f
 									glColor4f(state.uniforms.final_modulate.r, state.uniforms.final_modulate.g, state.uniforms.final_modulate.b, state.uniforms.final_modulate.a);
 
@@ -1779,8 +1890,17 @@ void RasterizerCanvasGLES1::render_batches(Item::Command *const *p_commands, Ite
 							glLoadIdentity();
 							glMatrixMode(GL_MODELVIEW);
 
+							// Clean up tu1
+							if (apply_tu1) {
+								glActiveTexture(GL_TEXTURE1);
+								glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE);
+								glDisable(GL_TEXTURE_2D);
+								glActiveTexture(GL_TEXTURE0);
+							}
+
 							glBindBuffer(GL_ARRAY_BUFFER, 0);
 							glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+							glDisable(GL_TEXTURE_2D);
 						} break;
 
 						case Item::Command::TYPE_TRANSFORM: {
@@ -1873,8 +1993,12 @@ void RasterizerCanvasGLES1::_draw_gui_primitive(int p_points, const Vector2 *p_v
 		glEnableClientState(GL_TEXTURE_COORD_ARRAY);
 		glTexCoordPointer(2, GL_FLOAT, 0, (const void *)(uintptr_t)offset);
 		offset += uv_size;
+
+		// Ensure texture mapping is on
+		glEnable(GL_TEXTURE_2D);
 	} else {
 		glDisableClientState(GL_TEXTURE_COORD_ARRAY);
+		glDisable(GL_TEXTURE_2D);
 	}
 	GL_CHECK_ERROR("GLES1::Canvas::_draw_gui_primitive: buffer subdata and pointers");
 
@@ -1895,6 +2019,7 @@ void RasterizerCanvasGLES1::_draw_gui_primitive(int p_points, const Vector2 *p_v
 	glDisableClientState(GL_VERTEX_ARRAY);
 	glDisableClientState(GL_TEXTURE_COORD_ARRAY);
 	glDisableClientState(GL_COLOR_ARRAY);
+	glDisable(GL_TEXTURE_2D);
 	glBindBuffer(GL_ARRAY_BUFFER, 0);
 	GL_CHECK_ERROR("GLES1::Canvas::_draw_gui_primitive: glBindBuffer");
 }
@@ -1914,8 +2039,16 @@ void RasterizerCanvasGLES1::_legacy_draw_primitive(Item::CommandPrimitive *p_pr,
 	_bind_canvas_texture(p_pr->texture, state.default_filter, state.default_repeat);
 	state.canvas_shader->version_set_uniform(CanvasShaderGLES1::COLOR_TEXTURE_PIXEL_SIZE, state.texpixel_size, state.shader_version, state.mode_variant, state.specialization);
 
+	if (p_pr->texture.is_valid() || p_pr->uvs) {
+		glEnable(GL_TEXTURE_2D);
+	} else {
+		glDisable(GL_TEXTURE_2D);
+	}
+
 	// Bake the colors before sending them down the pipeline
 	Color *baked_colors = SAFE_ALLOCA_ARRAY(Color, p_pr->point_count);
+	ERR_FAIL_NULL(baked_colors);
+
 	if (baked_colors) {
 		for (uint32_t i = 0; i < p_pr->point_count; i++) {
 			baked_colors[i] = p_pr->colors[i] * state.uniforms.final_modulate;
@@ -1924,6 +2057,9 @@ void RasterizerCanvasGLES1::_legacy_draw_primitive(Item::CommandPrimitive *p_pr,
 	} else {
 		_draw_gui_primitive(p_pr->point_count, p_pr->points, p_pr->colors, p_pr->uvs);
 	}
+
+	glDisable(GL_TEXTURE_2D);
+	GL_CHECK_ERROR("GLES1::Canvas::_legacy_draw_primitive: cleanup");
 }
 
 void RasterizerCanvasGLES1::_legacy_draw_line(Item::CommandPrimitive *p_pr, GLES1::CanvasMaterialData *p_material) {
@@ -1999,6 +2135,8 @@ void RasterizerCanvasGLES1::_legacy_draw_polygon(Item::CommandPolygon *p_poly, G
 	} else if (use_vertex_colors) {
 		// Vertex colored polygon
 		Color *precalced_colors = SAFE_ALLOCA_ARRAY(Color, points_count);
+		ERR_FAIL_NULL(precalced_colors);
+
 		if (precalced_colors) {
 			int num_colors_specified = MIN((int)pd.colors.size(), (int)points_count);
 			Color vcol = pd.colors[0] * state.uniforms.final_modulate;
@@ -2073,6 +2211,7 @@ void RasterizerCanvasGLES1::_legacy_draw_polygon(Item::CommandPolygon *p_poly, G
 	glDisableClientState(GL_VERTEX_ARRAY);
 	glDisableClientState(GL_TEXTURE_COORD_ARRAY);
 	glDisableClientState(GL_COLOR_ARRAY);
+	glDisable(GL_TEXTURE_2D);
 	glBindBuffer(GL_ARRAY_BUFFER, 0);
 	GL_CHECK_ERROR("GLES1::Canvas::_legacy_draw_polygon: cleanup");
 }
