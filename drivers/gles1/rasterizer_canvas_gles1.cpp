@@ -2060,7 +2060,7 @@ void RasterizerCanvasGLES1::_legacy_draw_primitive(Item::CommandPrimitive *p_pr,
 	_bind_canvas_texture(p_pr->texture, state.default_filter, state.default_repeat);
 	state.canvas_shader->version_set_uniform(CanvasShaderGLES1::COLOR_TEXTURE_PIXEL_SIZE, state.texpixel_size, state.shader_version, state.mode_variant, state.specialization);
 
-	if (p_pr->texture.is_valid() || p_pr->uvs) {
+	if (p_pr->texture.is_valid()) {
 		glEnable(GL_TEXTURE_2D);
 	} else {
 		glDisable(GL_TEXTURE_2D);

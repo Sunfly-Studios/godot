@@ -428,7 +428,11 @@ void ParticlesStorage::_particles_process(Particles *p_particles, double p_delta
 	if (!m) {
 		m = static_cast<ParticleProcessMaterialData *>(material_storage->material_get_data(particles_shader.default_material, RS::SHADER_PARTICLES));
 	}
-	ERR_FAIL_NULL(m);
+	if (likely(!m)) {
+		// Since we don't have shaders, it is OK for this
+		// to fail twice when "trying" to decode GPUParticles
+		return;
+	}
 
 	ParticlesShaderGLES1::ShaderVariant variant = ParticlesShaderGLES1::MODE_DEFAULT;
 	uint32_t specialization = 0;
@@ -777,7 +781,18 @@ void ParticlesStorage::particles_collision_initialize(RID p_rid) {
 }
 
 void ParticlesStorage::particles_collision_free(RID p_rid) {
+	ParticlesCollision *particles_collision = particles_collision_owner.get_or_null(p_rid);
+	ERR_FAIL_NULL(particles_collision);
 
+	if (particles_collision->heightfield_texture != 0) {
+		GLES1::Utilities::get_singleton()->texture_free_data(particles_collision->heightfield_texture);
+		particles_collision->heightfield_texture = 0;
+		glDeleteFramebuffersOES(1, &particles_collision->heightfield_fb);
+		GL_CHECK_ERROR("ParticlesStorage::particles_collision_free: glDeleteFramebuffersOES");
+		particles_collision->heightfield_fb = 0;
+	}
+	particles_collision->dependency.deleted_notify(p_rid);
+	particles_collision_owner.free(p_rid);
 }
 
 GLuint ParticlesStorage::particles_collision_get_heightfield_framebuffer(RID p_particles_collision) const {

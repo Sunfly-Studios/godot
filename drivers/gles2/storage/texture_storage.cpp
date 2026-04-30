@@ -1371,8 +1371,8 @@ void TextureStorage::_update_render_target(RenderTarget *rt) {
 		glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, rt->depth);
 		GL_CHECK_ERROR("GLES2::TextureStorage::_update_render_target: glFramebufferRenderbuffer depth attach");
 
-		if (!GLES2::Utilities::get_singleton()->has_texture_data(rt->color)) {
-			GLES2::Utilities::get_singleton()->texture_allocated_data(rt->depth, rt->size.x * rt->size.y * rt->view_count * 3, "Render target depth texture");
+		if (!GLES2::Utilities::get_singleton()->has_render_buffer_data(rt->depth)) {
+			GLES2::Utilities::get_singleton()->render_buffer_allocated_data(rt->depth, rt->size.x * rt->size.y * rt->view_count * 3, "Render target depth buffer");
 		}
 	}
 
@@ -1452,6 +1452,10 @@ void TextureStorage::_create_render_target_backbuffer(RenderTarget *rt) {
 	// Allocate the texture memory to match the FBO
 	glTexImage2D(GL_TEXTURE_2D, 0, rt->color_internal_format, rt->size.width, rt->size.height, 0, rt->color_format, rt->color_type, nullptr);
 
+	if (!GLES2::Utilities::get_singleton()->has_texture_data(rt->backbuffer)) {
+		GLES2::Utilities::get_singleton()->texture_allocated_data(rt->backbuffer, rt->size.width * rt->size.height * rt->color_format_size, "Render target backbuffer");
+	}
+
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
@@ -1489,26 +1493,44 @@ void TextureStorage::_clear_render_target(RenderTarget *rt) {
 	}
 
 	if (rt->color != 0 && !rt->overridden.color.is_valid()) {
-		glDeleteTextures(1, &rt->color);
+		if (GLES2::Utilities::get_singleton()->has_texture_data(rt->color)) {
+			GLES2::Utilities::get_singleton()->texture_free_data(rt->color);
+		} else {
+			glDeleteTextures(1, &rt->color);
+		}
 		GL_CHECK_ERROR("GLES2::TextureStorage::_clear_render_target: glDeleteTextures (color)");
 		rt->color = 0;
+
+		Texture *texture = texture_owner.get_or_null(rt->texture);
+		if (texture) {
+			texture->tex_id = 0;
+			texture->active = false;
+		}
 	}
 
 	if (rt->depth != 0 && !rt->overridden.depth.is_valid()) {
-		glDeleteRenderbuffers(1, &rt->depth);
+		if (GLES2::Utilities::get_singleton()->has_render_buffer_data(rt->depth)) {
+			GLES2::Utilities::get_singleton()->render_buffer_free_data(rt->depth);
+		} else {
+			glDeleteRenderbuffers(1, &rt->depth);
+		}
 		GL_CHECK_ERROR("GLES2::TextureStorage::_clear_render_target: glDeleteRenderbuffers (depth)");
 		rt->depth = 0;
 	}
 
 	if (rt->backbuffer != 0) {
-		glDeleteTextures(1, &rt->backbuffer);
-		GL_CHECK_ERROR("GLES2::TextureStorage::_clear_render_target: glDeleteRenderbuffers (backbuffer)");
+		if (GLES2::Utilities::get_singleton()->has_texture_data(rt->backbuffer)) {
+			GLES2::Utilities::get_singleton()->texture_free_data(rt->backbuffer);
+		} else {
+			glDeleteTextures(1, &rt->backbuffer);
+		}
+		GL_CHECK_ERROR("GLES2::TextureStorage::_clear_render_target: glDeleteTextures (backbuffer)");
 		rt->backbuffer = 0;
 	}
 
 	if (rt->backbuffer_fbo != 0) {
 		glDeleteFramebuffers(1, &rt->backbuffer_fbo);
-		GL_CHECK_ERROR("GLES2::TextureStorage::_clear_render_target: glDeleteRenderbuffers (backbuffer_fbo)");
+		GL_CHECK_ERROR("GLES2::TextureStorage::_clear_render_target: glDeleteFramebuffers (backbuffer_fbo)");
 		rt->backbuffer_fbo = 0;
 	}
 }
@@ -1535,13 +1557,34 @@ void TextureStorage::render_target_free(RID p_rid) {
 	RenderTarget *rt = render_target_owner.get_or_null(p_rid);
 	if (rt) {
 		_clear_render_target(rt);
+
+		for (const KeyValue<uint32_t, RenderTarget::RTOverridden::FBOCacheEntry> &E : rt->overridden.fbo_cache) {
+			GLuint fbo_id = E.value.fbo;
+			if (fbo_id != 0 && fbo_id != system_fbo) {
+				glDeleteFramebuffers(1, &fbo_id);
+				GL_CHECK_ERROR("GLES2::TextureStorage::render_target_free: glDeleteFramebuffers cache");
+			}
+			for (int i = 0; i < E.value.allocated_textures.size(); i++) {
+				GLuint tex_id = E.value.allocated_textures[i];
+				if (GLES2::Utilities::get_singleton()->has_texture_data(tex_id)) {
+					GLES2::Utilities::get_singleton()->texture_free_data(tex_id);
+					GL_CHECK_ERROR("GLES2::TextureStorage::render_target_free: texture_free_data cache");
+				} else if (GLES2::Utilities::get_singleton()->has_render_buffer_data(tex_id)) {
+					GLES2::Utilities::get_singleton()->render_buffer_free_data(tex_id);
+					GL_CHECK_ERROR("GLES2::TextureStorage::render_target_free: render_buffer_free_data cache");
+				} else {
+					glDeleteTextures(1, &tex_id);
+					GL_CHECK_ERROR("GLES2::TextureStorage::render_target_free: glDeleteTextures cache");
+				}
+			}
+		}
+		rt->overridden.fbo_cache.clear();
+
 		// If the RenderTarget owns a proxy texture, mark it for deletion too
 		if (rt->texture.is_valid()) {
 			texture_free(rt->texture);
 		}
-		if (rt->overridden.color.is_null()) {
-			texture_free(rt->texture);
-		}
+
 		render_target_owner.free(p_rid);
 	}
 }

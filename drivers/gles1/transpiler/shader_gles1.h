@@ -194,48 +194,7 @@ protected:
 	);
 
 	_FORCE_INLINE_ bool _version_bind_shader(RID p_version, int p_variant, uint64_t p_specialization) {
-		ERR_FAIL_INDEX_V(p_variant, variant_count, false);
-
-		Version *version = version_owner.get_or_null(p_version);
-		ERR_FAIL_NULL_V(version, false);
-
-		if (version->variants.size() == 0) {
-			_initialize_version(version); //may lack initialization
-		}
-
-		Version::Specialization *spec = version->variants[p_variant].lookup_ptr(p_specialization);
-		if (!spec) {
-			if (false) {
-				// Queue load this specialization and use defaults in the meantime (TODO)
-
-				spec = version->variants[p_variant].lookup_ptr(specialization_default_mask);
-			} else {
-				// lock the map before compiling and inserting.
-				MutexLock lock(variant_set_mutex);
-
-				// Double-check it didn't compile while we were waiting for the lock
-				spec = version->variants[p_variant].lookup_ptr(p_specialization);
-				if (!spec) {
-					Version::Specialization s;
-					_compile_specialization(s, p_variant, version, p_specialization);
-					version->variants[p_variant].insert(p_specialization, s);
-					spec = version->variants[p_variant].lookup_ptr(p_specialization);
-					if (shader_cache_dir_valid) {
-						_save_to_cache(version);
-					}
-				}
-			}
-		} else if (spec->build_queued) {
-			// Still queued, wait
-			spec = version->variants[p_variant].lookup_ptr(specialization_default_mask);
-		}
-
-		if (!spec || !spec->ok) {
-			WARN_PRINT_ONCE("shader failed to compile, unable to bind shader.");
-			return false;
-		}
-
-		current_shader = spec;
+		// Muck
 		return true;
 	}
 

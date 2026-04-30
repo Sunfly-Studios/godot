@@ -146,6 +146,10 @@ public:
 		render_buffer_allocs_cache.erase(p_id);
 	}
 
+	_FORCE_INLINE_ bool has_render_buffer_data(GLuint p_id) const {
+		return render_buffer_allocs_cache.has(p_id);
+	}
+
 	// Records that data was allocated for state tracking purposes.
 	// Size is measured in bytes.
 	_FORCE_INLINE_ void texture_allocated_data(GLuint p_id, uint32_t p_size, String p_name = "") {
