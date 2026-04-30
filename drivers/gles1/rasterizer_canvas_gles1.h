@@ -143,7 +143,7 @@ protected:
 	void _set_canvas_uniforms();
 	void _bind_quad_buffer() const;
 
-	_FORCE_INLINE_ void _buffer_orphan_and_upload(unsigned int p_buffer_size_bytes, unsigned int p_offset_bytes, unsigned int p_data_size_bytes, const void *p_data, GLenum p_target, GLenum p_usage, bool p_optional_orphan) const;
+	_FORCE_INLINE_ bool _buffer_orphan_and_upload(unsigned int p_buffer_size_bytes, unsigned int p_offset_bytes, unsigned int p_data_size_bytes, const void *p_data, GLenum p_target, GLenum p_usage, bool p_optional_orphan) const;
 	void _legacy_draw_polygon(Item::CommandPolygon *p_poly, GLES1::CanvasMaterialData *p_material);
 	void _legacy_draw_primitive(Item::CommandPrimitive *p_pr, GLES1::CanvasMaterialData *p_material);
 	void _legacy_draw_line(Item::CommandPrimitive *p_pr, GLES1::CanvasMaterialData *p_material);
@@ -307,6 +307,20 @@ public:
 			default:
 				break;
 		}
+	}
+
+	_FORCE_INLINE_ bool check_orphan_success(bool success) {
+		if (unlikely(!success)) {
+			glBindBuffer(GL_ARRAY_BUFFER, 0);
+			glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+			glDisableClientState(GL_VERTEX_ARRAY);
+			glDisableClientState(GL_TEXTURE_COORD_ARRAY);
+			glDisableClientState(GL_COLOR_ARRAY);
+			glDisable(GL_TEXTURE_2D);
+			ERR_PRINT("GLES1: Failed to upload buffer orphan. Out of memory. Dropping geometry.");
+			return false;
+		}
+		return true;
 	}
 
 private:

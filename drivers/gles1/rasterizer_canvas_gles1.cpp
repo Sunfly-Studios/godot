@@ -699,7 +699,7 @@ void RasterizerCanvasGLES1::canvas_render_items_implementation(Item *p_item_list
 			const BItemJoined &joined_item = bdata.items_joined[j];
 			Item *first_item = bdata.item_refs[joined_item.first_item_ref].item;
 
-			if (unlikely(!first_item)) {
+			if (!first_item) {
 				continue;
 			}
 
@@ -842,15 +842,22 @@ void RasterizerCanvasGLES1::_bind_quad_buffer() const {
 	glTexCoordPointer(2, GL_FLOAT, 0, nullptr);
 }
 
-_FORCE_INLINE_ void RasterizerCanvasGLES1::_buffer_orphan_and_upload(unsigned int p_buffer_size_bytes, unsigned int p_offset_bytes, unsigned int p_data_size_bytes, const void *p_data, GLenum p_target, GLenum p_usage, bool p_optional_orphan) const {
-	ERR_FAIL_COND((p_offset_bytes + p_data_size_bytes) > p_buffer_size_bytes);
+_FORCE_INLINE_ bool RasterizerCanvasGLES1::_buffer_orphan_and_upload(unsigned int p_buffer_size_bytes, unsigned int p_offset_bytes, unsigned int p_data_size_bytes, const void *p_data, GLenum p_target, GLenum p_usage, bool p_optional_orphan) const {
+	ERR_FAIL_COND_V((p_offset_bytes + p_data_size_bytes) > p_buffer_size_bytes, false);
+
+	// Flush all errors
+	while (glGetError() != GL_NO_ERROR);
 
 	if (!p_optional_orphan) {
 		if (GLES1::Config::get_singleton()->is_android_emulator && p_offset_bytes == 0 && p_buffer_size_bytes == p_data_size_bytes) {
 			// Workaround: Buggy emulators crash or race on standard orphaning.
 			// Passing the exact size and data directly to glBufferData forces a safe internal reallocation.
 			glBufferData(p_target, p_buffer_size_bytes, p_data, p_usage);
-			return;
+
+			if (unlikely(glGetError() == GL_OUT_OF_MEMORY)) {
+				return false; // Fast fail
+			}
+			return true;
 		}
 
 		glBufferData(p_target, p_buffer_size_bytes, nullptr, p_usage);
@@ -871,6 +878,10 @@ _FORCE_INLINE_ void RasterizerCanvasGLES1::_buffer_orphan_and_upload(unsigned in
 	}
 
 	glBufferSubData(p_target, p_offset_bytes, p_data_size_bytes, p_data);
+	if (unlikely(glGetError() == GL_OUT_OF_MEMORY)) {
+		return false; // Fast fail
+	}
+	return true;
 }
 
 void RasterizerCanvasGLES1::_batch_upload_buffers() {
@@ -916,8 +927,10 @@ void RasterizerCanvasGLES1::_batch_upload_buffers() {
 	if (GLES1::Config::get_singleton()->is_android_emulator) {
 		alloc_size = buffer_bytes; // Emulator workaround: shrink allocation
 	}
+
+	// We ignore the result here and always unbind to clean
+	// the state.
 	_buffer_orphan_and_upload(alloc_size, 0, buffer_bytes, data_ptr, GL_ARRAY_BUFFER, GL_DYNAMIC_DRAW, false);
-	GL_CHECK_ERROR("GLES1::Canvas::batch_upload: _buffer_orphan_and_upload");
 	glBindBuffer(GL_ARRAY_BUFFER, 0);
 }
 
@@ -1131,9 +1144,6 @@ void RasterizerCanvasGLES1::render_batches(Item::Command *const *p_commands, Ite
 					switch (command->type) {
 						case Item::Command::TYPE_RECT: {
 							Item::CommandRect *r = static_cast<Item::CommandRect *>(command);
-							if (unlikely(!r)) {
-								continue;
-							}
 
 							// Clean state
 							// (so that rubbish/garbage doesn't ruin stuff later)
@@ -1237,10 +1247,6 @@ void RasterizerCanvasGLES1::render_batches(Item::Command *const *p_commands, Ite
 
 						case Item::Command::TYPE_NINEPATCH: {
 							Item::CommandNinePatch *np = static_cast<Item::CommandNinePatch *>(command);
-							if (unlikely(!np)) {
-								continue;
-							}
-
 							_set_texture_rect_mode(false);
 
 							bool rebind = state.canvas_shader->version_bind_shader(state.shader_version, state.mode_variant, state.specialization);
@@ -1353,8 +1359,10 @@ void RasterizerCanvasGLES1::render_batches(Item::Command *const *p_commands, Ite
 
 							glBindBuffer(GL_ARRAY_BUFFER, data.ninepatch_vertices);
 							constexpr uint32_t buffer_size = sizeof(float) * (16 + 16) * 2;
-							_buffer_orphan_and_upload(buffer_size, 0, buffer_size, buffer, GL_ARRAY_BUFFER, GL_DYNAMIC_DRAW, false);
-							GL_CHECK_ERROR("GLES1::Canvas::render_batches: TYPE_NINEPATCH buffer upload");
+							bool upload_success = _buffer_orphan_and_upload(buffer_size, 0, buffer_size, buffer, GL_ARRAY_BUFFER, GL_DYNAMIC_DRAW, false);
+							if (!check_orphan_success(upload_success)) {
+								return;
+							}
 
 							glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, data.ninepatch_elements);
 
@@ -1378,9 +1386,6 @@ void RasterizerCanvasGLES1::render_batches(Item::Command *const *p_commands, Ite
 
 						case Item::Command::TYPE_CLIP_IGNORE: {
 							Item::CommandClipIgnore *ci = static_cast<Item::CommandClipIgnore *>(command);
-							if (unlikely(!ci)) {
-								continue;
-							}
 
 							if (p_current_clip) {
 								if (ci->ignore != r_reclip) {
@@ -1402,17 +1407,11 @@ void RasterizerCanvasGLES1::render_batches(Item::Command *const *p_commands, Ite
 
 						case Item::Command::TYPE_POLYGON: {
 							Item::CommandPolygon *polygon = static_cast<Item::CommandPolygon *>(command);
-							if (unlikely(!polygon)) {
-								continue;
-							}
 							_legacy_draw_polygon(polygon, p_material);
 						} break;
 
 						case Item::Command::TYPE_PRIMITIVE: {
 							Item::CommandPrimitive *pr = static_cast<Item::CommandPrimitive *>(command);
-							if (unlikely(!pr)) {
-								continue;
-							}
 
 							switch (pr->point_count) {
 								case 2: {
@@ -1426,9 +1425,6 @@ void RasterizerCanvasGLES1::render_batches(Item::Command *const *p_commands, Ite
 
 						case Item::Command::TYPE_MESH: {
 							Item::CommandMesh *mesh_cmd = static_cast<Item::CommandMesh *>(command);
-							if (unlikely(!mesh_cmd)) {
-								continue;
-							}
 							_set_texture_rect_mode(false);
 
 							// Bind Shader and stack the item's material (if any)
@@ -1506,7 +1502,7 @@ void RasterizerCanvasGLES1::render_batches(Item::Command *const *p_commands, Ite
 								for (uint32_t j = 0; j < mesh_data->surface_count; j++) {
 									GLES1::Mesh::Surface *s = mesh_data->surfaces[j];
 
-									if (unlikely(!s)) {
+									if (!s) {
 										continue;
 									}
 
@@ -1523,7 +1519,7 @@ void RasterizerCanvasGLES1::render_batches(Item::Command *const *p_commands, Ite
 									if (s->version_count > 0 && s->versions) {
 										GLES1::Mesh::Surface::Version *v = &s->versions[0];
 
-										if (unlikely(!v)) {
+										if (!v) {
 											continue;
 										}
 
@@ -1615,9 +1611,6 @@ void RasterizerCanvasGLES1::render_batches(Item::Command *const *p_commands, Ite
 
 						case Item::Command::TYPE_MULTIMESH: {
 							Item::CommandMultiMesh *mmesh = static_cast<Item::CommandMultiMesh *>(command);
-							if (unlikely(!mmesh)) {
-								continue;
-							}
 
 							GLES1::MultiMesh *multi_mesh = GLES1::MeshStorage::get_singleton()->get_multimesh(mmesh->multimesh);
 							if (!multi_mesh || multi_mesh->data_cache.is_empty()) {
@@ -1706,7 +1699,7 @@ void RasterizerCanvasGLES1::render_batches(Item::Command *const *p_commands, Ite
 							for (uint32_t j = 0; j < mesh_data->surface_count; j++) {
 								GLES1::Mesh::Surface *s = mesh_data->surfaces[j];
 
-								if (unlikely(!s)) {
+								if (!s) {
 									continue;
 								}
 
@@ -1723,7 +1716,7 @@ void RasterizerCanvasGLES1::render_batches(Item::Command *const *p_commands, Ite
 								if (s->version_count > 0 && s->versions) {
 									GLES1::Mesh::Surface::Version *v = &s->versions[0];
 
-									if (unlikely(!v)) {
+									if (!v) {
 										continue;
 									}
 
@@ -1782,7 +1775,7 @@ void RasterizerCanvasGLES1::render_batches(Item::Command *const *p_commands, Ite
 								for (int k = 0; k < amount; k++) {
 									const float *buffer = base_buffer + k * stride;
 
-									if (unlikely(!buffer)) {
+									if (!buffer) {
 										continue;
 									}
 
@@ -1799,7 +1792,7 @@ void RasterizerCanvasGLES1::render_batches(Item::Command *const *p_commands, Ite
 									if (multi_mesh->uses_colors) {
 										const float *color_data = buffer + color_ofs;
 
-										if (unlikely(!color_data)) {
+										if (!color_data) {
 											continue;
 										}
 
@@ -1817,7 +1810,7 @@ void RasterizerCanvasGLES1::render_batches(Item::Command *const *p_commands, Ite
 										if (h_frames * v_frames > 1) {
 											const float *custom_data = buffer + custom_data_ofs;
 
-											if (unlikely(!custom_data)) {
+											if (!custom_data) {
 												continue;
 											}
 
@@ -1925,9 +1918,6 @@ void RasterizerCanvasGLES1::render_batches(Item::Command *const *p_commands, Ite
 
 						case Item::Command::TYPE_TRANSFORM: {
 							Item::CommandTransform *transform = static_cast<Item::CommandTransform *>(command);
-							if (unlikely(!transform)) {
-								continue;
-							}
 							state.uniforms.extra_matrix = transform->xform;
 
 							// Reload the base modelview matrix so glMultMatrixf
@@ -1938,9 +1928,6 @@ void RasterizerCanvasGLES1::render_batches(Item::Command *const *p_commands, Ite
 
 						case Item::Command::TYPE_ANIMATION_SLICE: {
 							const Item::CommandAnimationSlice *as = static_cast<const Item::CommandAnimationSlice *>(command);
-							if (unlikely(!as)) {
-								continue;
-							}
 
 							double current_time = RSG::rasterizer->get_total_time();
 							double local_time = Math::fposmod(current_time - as->offset, as->animation_length);
@@ -1974,7 +1961,7 @@ void RasterizerCanvasGLES1::render_batches(Item::Command *const *p_commands, Ite
 }
 
 void RasterizerCanvasGLES1::_draw_gui_primitive(int p_points, const Vector2 *p_vertices, const Color *p_colors, const Vector2 *p_uvs, const float *p_light_angles) {
-	if (unlikely(p_points <= 0)) {
+	if (p_points <= 0) {
 		return;
 	}
 	glBindBuffer(GL_ARRAY_BUFFER, data.polygon_buffer);
@@ -1993,14 +1980,21 @@ void RasterizerCanvasGLES1::_draw_gui_primitive(int p_points, const Vector2 *p_v
 	uint32_t offset = 0;
 
 	// Vertices
-	_buffer_orphan_and_upload(data.polygon_buffer_size, offset, vertex_size, p_vertices, GL_ARRAY_BUFFER, GL_DYNAMIC_DRAW, false);
+	bool upload_success = _buffer_orphan_and_upload(data.polygon_buffer_size, offset, vertex_size, p_vertices, GL_ARRAY_BUFFER, GL_DYNAMIC_DRAW, false);
+	if (!check_orphan_success(upload_success)) {
+		return;
+	}
+	
 	glEnableClientState(GL_VERTEX_ARRAY);
 	glVertexPointer(2, GL_FLOAT, 0, (const void *)(uintptr_t)offset);
 	offset += vertex_size;
 
 	// Colors
 	if (p_colors) {
-		_buffer_orphan_and_upload(data.polygon_buffer_size, offset, color_size, p_colors, GL_ARRAY_BUFFER, GL_DYNAMIC_DRAW, true);
+		upload_success = _buffer_orphan_and_upload(data.polygon_buffer_size, offset, color_size, p_colors, GL_ARRAY_BUFFER, GL_DYNAMIC_DRAW, true);
+		if (!check_orphan_success(upload_success)) {
+			return;
+		}
 		glEnableClientState(GL_COLOR_ARRAY);
 		glColorPointer(4, GL_FLOAT, 0, (const void *)(uintptr_t)offset);
 		offset += color_size;
@@ -2012,7 +2006,11 @@ void RasterizerCanvasGLES1::_draw_gui_primitive(int p_points, const Vector2 *p_v
 
 	// UVs
 	if (p_uvs) {
-		_buffer_orphan_and_upload(data.polygon_buffer_size, offset, uv_size, p_uvs, GL_ARRAY_BUFFER, GL_DYNAMIC_DRAW, true);
+		upload_success = _buffer_orphan_and_upload(data.polygon_buffer_size, offset, uv_size, p_uvs, GL_ARRAY_BUFFER, GL_DYNAMIC_DRAW, true);
+		if (!check_orphan_success(upload_success)) {
+			return;
+		}
+
 		glEnableClientState(GL_TEXTURE_COORD_ARRAY);
 		glTexCoordPointer(2, GL_FLOAT, 0, (const void *)(uintptr_t)offset);
 		offset += uv_size;
@@ -2070,9 +2068,7 @@ void RasterizerCanvasGLES1::_legacy_draw_primitive(Item::CommandPrimitive *p_pr,
 
 	// Bake the colors before sending them down the pipeline
 	Color *baked_colors = SAFE_ALLOCA_ARRAY(Color, p_pr->point_count);
-	ERR_FAIL_NULL(baked_colors);
-
-	if (baked_colors) {
+	if (likely(baked_colors)) {
 		for (uint32_t i = 0; i < p_pr->point_count; i++) {
 			baked_colors[i] = p_pr->colors[i] * state.uniforms.final_modulate;
 		}
@@ -2133,14 +2129,22 @@ void RasterizerCanvasGLES1::_legacy_draw_polygon(Item::CommandPolygon *p_poly, G
 	uint32_t offset = 0;
 	
 	// Points
-	_buffer_orphan_and_upload(data.polygon_buffer_size, offset, points_size, pd.points.ptr(), GL_ARRAY_BUFFER, GL_DYNAMIC_DRAW, false);
+	bool upload_success = _buffer_orphan_and_upload(data.polygon_buffer_size, offset, points_size, pd.points.ptr(), GL_ARRAY_BUFFER, GL_DYNAMIC_DRAW, false);
+	if (!check_orphan_success(upload_success)) {
+		return;
+	}
+
 	glEnableClientState(GL_VERTEX_ARRAY);
 	glVertexPointer(2, GL_FLOAT, 0, (const void *)(uintptr_t)offset);
 	offset += points_size;
 
 	// UVs
 	if (uvs_size > 0) {
-		_buffer_orphan_and_upload(data.polygon_buffer_size, offset, uvs_size, pd.uvs.ptr(), GL_ARRAY_BUFFER, GL_DYNAMIC_DRAW, true);
+		upload_success = _buffer_orphan_and_upload(data.polygon_buffer_size, offset, uvs_size, pd.uvs.ptr(), GL_ARRAY_BUFFER, GL_DYNAMIC_DRAW, true);
+		if (!check_orphan_success(upload_success)) {
+			return;
+		}
+
 		glEnableClientState(GL_TEXTURE_COORD_ARRAY);
 		glTexCoordPointer(2, GL_FLOAT, 0, (const void *)(uintptr_t)offset);
 		offset += uvs_size;
@@ -2172,7 +2176,11 @@ void RasterizerCanvasGLES1::_legacy_draw_polygon(Item::CommandPolygon *p_poly, G
 				precalced_colors[n] = vcol;
 			}
 
-			_buffer_orphan_and_upload(data.polygon_buffer_size, offset, colors_size, precalced_colors, GL_ARRAY_BUFFER, GL_DYNAMIC_DRAW, true);
+			upload_success = _buffer_orphan_and_upload(data.polygon_buffer_size, offset, colors_size, precalced_colors, GL_ARRAY_BUFFER, GL_DYNAMIC_DRAW, true);
+			if (!check_orphan_success(upload_success)) {
+				return;
+			}
+
 			glEnableClientState(GL_COLOR_ARRAY);
 			glColorPointer(4, GL_FLOAT, 0, (const void *)(uintptr_t)offset);
 		}
@@ -2213,7 +2221,11 @@ void RasterizerCanvasGLES1::_legacy_draw_polygon(Item::CommandPolygon *p_poly, G
 			data.polygon_index_buffer_size = next_power_of_2(index_size);
 		}
 
-		_buffer_orphan_and_upload(data.polygon_index_buffer_size, 0, index_size, indices_16.ptr(), GL_ELEMENT_ARRAY_BUFFER, GL_DYNAMIC_DRAW, false);
+		upload_success = _buffer_orphan_and_upload(data.polygon_index_buffer_size, 0, index_size, indices_16.ptr(), GL_ELEMENT_ARRAY_BUFFER, GL_DYNAMIC_DRAW, false);
+		if (!check_orphan_success(upload_success)) {
+			return;
+		}
+
 		glDrawElements(gl_primitive, index_count, GL_UNSIGNED_SHORT, nullptr);
 		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
 	} else {

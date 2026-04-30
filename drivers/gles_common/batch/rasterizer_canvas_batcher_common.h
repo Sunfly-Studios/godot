@@ -595,6 +595,15 @@ protected:
 	}
 
 public:
+	// Requests a new batch object (optionally blank)
+	// with automatic growth.
+	// 
+	// !!! IMPORTANT !!!
+	// When running on a device low on memory,
+	// this function will return `nullptr` if it fails.
+	// Make sure to check if it actually
+	// succeeds OR fails to not trigger
+	// a hard-crash to the engine later down the line.
 	Batch *_batch_request_new(bool p_blank = true) {
 		Batch *batch = bdata.batches.request();
 		if (!batch) {
@@ -606,8 +615,11 @@ public:
 			bdata.batches_temp.grow();
 
 			// this should always succeed after growing
+			// keyword _should_.
 			batch = bdata.batches.request();
-			RAST_DEBUG_ASSERT(batch);
+			if (unlikely(!batch)) {
+				return nullptr;
+			}
 		}
 
 		if (p_blank) {
