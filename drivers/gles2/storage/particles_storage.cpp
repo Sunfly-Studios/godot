@@ -724,11 +724,7 @@ void ParticlesStorage::_particles_update_instance_buffer(Particles *particles, c
 
 	glBindBuffer(GL_ARRAY_BUFFER, particles->back_process_buffer);
 
-	if (RasterizerGLES2::is_gles_over_gl()) {
-		glBindBufferBase(GL_TRANSFORM_FEEDBACK_BUFFER, 0, particles->front_instance_buffer);
-	} else {
-		glBindBufferBaseEXT(GL_TRANSFORM_FEEDBACK_BUFFER_EXT, 0, particles->front_instance_buffer);
-	}
+	glBindBufferBaseEXT(GL_TRANSFORM_FEEDBACK_BUFFER_EXT, 0, particles->front_instance_buffer);
 	GL_CHECK_ERROR("ParticlesStorage::_particles_update_instance_buffer: glBindBufferBase");
 
 	if (particles->draw_order == RS::PARTICLES_DRAW_ORDER_LIFETIME) {
@@ -742,17 +738,10 @@ void ParticlesStorage::_particles_update_instance_buffer(Particles *particles, c
 	}
 	GL_CHECK_ERROR("ParticlesStorage::_particles_update_instance_buffer: glVertexAttribPointer");
 
-	if (RasterizerGLES2::is_gles_over_gl()) {
-		glBeginTransformFeedback(GL_POINTS);
-		glDrawArrays(GL_POINTS, 0, particles->amount);
-		glEndTransformFeedback();
-		glBindBufferBase(GL_TRANSFORM_FEEDBACK_BUFFER, 0, 0);
-	} else {
-		glBeginTransformFeedbackEXT(GL_POINTS);
-		glDrawArrays(GL_POINTS, 0, particles->amount);
-		glEndTransformFeedbackEXT();
-		glBindBufferBaseEXT(GL_TRANSFORM_FEEDBACK_BUFFER_EXT, 0, 0);
-	}
+	glBeginTransformFeedbackEXT(GL_POINTS);
+	glDrawArrays(GL_POINTS, 0, particles->amount);
+	glEndTransformFeedbackEXT();
+	glBindBufferBaseEXT(GL_TRANSFORM_FEEDBACK_BUFFER_EXT, 0, 0);
 	GL_CHECK_ERROR("ParticlesStorage::_particles_update_instance_buffer: glDrawArrays");
 
 	for (uint32_t j = 0; j < particles->num_attrib_arrays_cache; j++) {

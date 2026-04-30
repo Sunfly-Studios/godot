@@ -44,16 +44,17 @@
 #include "thirdparty/glad/glad/gl.h"
 
 namespace GLES2 {
-    struct Polyfill {
-        // Framebuffer extensions
+	struct Polyfill {
+		// Framebuffer extensions
 		static PFNGLBINDBUFFERBASEPROC bindBufferBase;
 		static PFNGLBEGINTRANSFORMFEEDBACKPROC beginTransformFeedback;
 		static PFNGLENDTRANSFORMFEEDBACKPROC endTransformFeedback;
 		static PFNGLBINDBUFFERRANGEPROC bindBufferRange;
+		static PFNGLTRANSFORMFEEDBACKVARYINGSPROC transformFeedbackVaryings;
 
-        Polyfill();
-        ~Polyfill() = default;
-    };
+		Polyfill();
+		~Polyfill() = default;
+	};
 }
 
 // The engine code needs the macros to point to these,
@@ -79,17 +80,24 @@ namespace GLES2 {
 	} while (0)
 
 #undef glEndTransformFeedbackEXT
-#define glEndTransformFeedbackEXT()           \
-	do {                                                            \
-		if (likely(GLES2::Polyfill::endTransformFeedback))        \
-			GLES2::Polyfill::endTransformFeedback(); \
-	} while (0)
-
-#undef glEndTransformFeedbackEXT
 #define glEndTransformFeedbackEXT()                        \
 	do {                                                   \
 		if (likely(GLES2::Polyfill::endTransformFeedback)) \
 			GLES2::Polyfill::endTransformFeedback();       \
+	} while (0)
+	
+#undef glBindBufferRangeEXT
+#define glBindBufferRangeEXT(target, index, buffer, offset, size)                  \
+	do {                                                                           \
+		if (likely(GLES2::Polyfill::bindBufferRange))                              \
+			GLES2::Polyfill::bindBufferRange(target, index, buffer, offset, size); \
+	} while (0)
+	
+#undef glTransformFeedbackVaryingsEXT
+#define glTransformFeedbackVaryingsEXT(program, count, varyings, bufferMode)                  \
+	do {                                                                                      \
+		if (likely(GLES2::Polyfill::transformFeedbackVaryings))                               \
+			GLES2::Polyfill::transformFeedbackVaryings(program, count, varyings, bufferMode); \
 	} while (0)
 
 #endif // POLYFILL_GLES2_IMPL

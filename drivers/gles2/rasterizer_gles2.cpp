@@ -441,7 +441,11 @@ void RasterizerGLES2::_blit_render_target_to_screen(RID p_render_target, Display
 	GL_CHECK_ERROR("GLES2::RasterizerGLES2::_blit_render_target_to_screen: disable states");
 
 	// Prevent vertex attribute bleed
-	for (int i = 0; i < RS::ARRAY_MAX; i++) {
+	GLint max_attribs = 8;
+	glGetIntegerv(GL_MAX_VERTEX_ATTRIBS, &max_attribs);
+	int attrib_limit = MIN((int)RS::ARRAY_MAX, max_attribs);
+	
+	for (int i = 0; i < attrib_limit; i++) {
 		glDisableVertexAttribArray(i);
 	}
 
@@ -566,7 +570,10 @@ void RasterizerGLES2::set_boot_image(const Ref<Image> &p_image, const Color &p_c
 	glBindTexture(GL_TEXTURE_2D, t->tex_id);
 	GL_CHECK_ERROR("GLES2::RasterizerGLES2::set_boot_image: texture bind");
 
-	for (int i = 0; i < RS::ARRAY_MAX; i++) {
+	GLint max_attribs = 8;
+	glGetIntegerv(GL_MAX_VERTEX_ATTRIBS, &max_attribs);
+	int attrib_limit = MIN((int)RS::ARRAY_MAX, max_attribs);
+	for (int i = 0; i < attrib_limit; i++) {
 		glDisableVertexAttribArray(i);
 	}
 

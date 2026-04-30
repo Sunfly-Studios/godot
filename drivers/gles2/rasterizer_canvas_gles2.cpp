@@ -48,11 +48,11 @@
 #include "storage/texture_storage.h"
 
 [[maybe_unused]] _FORCE_INLINE_ static uint32_t _indices_to_primitives(RS::PrimitiveType p_primitive, uint32_t p_indices) {
-    return 0;
+	return 0;
 }
 
 RID RasterizerCanvasGLES2::light_create() {
-    return RID();
+	return RID();
 }
 
 void RasterizerCanvasGLES2::light_set_texture(RID p_rid, RID p_texture) {
@@ -76,7 +76,7 @@ void RasterizerCanvasGLES2::render_sdf(RID p_render_target, LightOccluderInstanc
 }
 
 RID RasterizerCanvasGLES2::occluder_polygon_create() {
-    return RID();
+	return RID();
 }
 
 void RasterizerCanvasGLES2::occluder_polygon_set_shape(RID p_occluder, const Vector<Vector2> &p_points, bool p_closed) {
@@ -1182,7 +1182,7 @@ void RasterizerCanvasGLES2::render_batches(Item::Command *const *p_commands, Ite
 		switch (batch.type) {
 			case BatcherEnums::BT_DEFAULT: {
 				Transform2D prev_matrix = state.uniforms.modelview_matrix;
-            	Color prev_modulate = state.uniforms.final_modulate;
+				Color prev_modulate = state.uniforms.final_modulate;
 
 				if (batch.item) {
 					state.uniforms.modelview_matrix = batch.item->final_transform;
@@ -1545,23 +1545,36 @@ void RasterizerCanvasGLES2::render_batches(Item::Command *const *p_commands, Ite
 									}
 
 									// Godot 4 natively packs 2D MultiMesh transforms in ROW-MAJOR layout
-									glVertexAttrib4f(8, buffer[0], buffer[1], 0.0f, buffer[3]);
-									glVertexAttrib4f(9, buffer[4], buffer[5], 0.0f, buffer[7]);
-									glVertexAttrib4f(10, 0.0f, 0.0f, 1.0f, 0.0f);
-
-									if (multi_mesh->uses_colors) {
-										const float *color_data = buffer + color_ofs;
-										glVertexAttrib4f(11, color_data[0], color_data[1], color_data[2], color_data[3]);
-									} else {
-										glVertexAttrib4f(11, 1.0f, 1.0f, 1.0f, 1.0f);
+									if (maximum_attributes > 8) {
+										glVertexAttrib4f(8, buffer[0], buffer[1], 0.0f, buffer[3]);
 									}
 
-									if (multi_mesh->uses_custom_data) {
-										const float *custom_data = buffer + custom_data_ofs;
-										glVertexAttrib4f(12, custom_data[0], custom_data[1], custom_data[2], custom_data[3]);
-									} else {
-										glVertexAttrib4f(12, 0.0f, 0.0f, 0.0f, 0.0f);
+									if (maximum_attributes > 9) {
+										glVertexAttrib4f(9, buffer[4], buffer[5], 0.0f, buffer[7]);
 									}
+									
+									if (maximum_attributes > 10) {
+										glVertexAttrib4f(10, 0.0f, 0.0f, 1.0f, 0.0f);
+									}
+									
+									if (maximum_attributes > 11) {
+										if (multi_mesh->uses_colors) {
+											const float *color_data = buffer + color_ofs;
+											glVertexAttrib4f(11, color_data[0], color_data[1], color_data[2], color_data[3]);
+										} else {
+											glVertexAttrib4f(11, 1.0f, 1.0f, 1.0f, 1.0f);
+										}                                        
+									}
+									
+									if (maximum_attributes > 12) {
+										if (multi_mesh->uses_custom_data) {
+											const float *custom_data = buffer + custom_data_ofs;
+											glVertexAttrib4f(12, custom_data[0], custom_data[1], custom_data[2], custom_data[3]);
+										} else {
+											glVertexAttrib4f(12, 0.0f, 0.0f, 0.0f, 0.0f);
+										}
+									}
+
 
 									if (s->index_count > 0) {
 										if (unlikely(needs_32_bit && !GLES2::Config::get_singleton()->support_32_bits_indices)) {

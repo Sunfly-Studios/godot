@@ -36,6 +36,8 @@ namespace GLES2 {
 PFNGLBINDBUFFERBASEPROC Polyfill::bindBufferBase = nullptr;
 PFNGLBEGINTRANSFORMFEEDBACKPROC Polyfill::beginTransformFeedback = nullptr;
 PFNGLENDTRANSFORMFEEDBACKPROC Polyfill::endTransformFeedback = nullptr;
+PFNGLBINDBUFFERRANGEPROC Polyfill::bindBufferRange = nullptr;
+PFNGLTRANSFORMFEEDBACKVARYINGSPROC Polyfill::transformFeedbackVaryings = nullptr;
 
 Polyfill::Polyfill() {
 	// BindBufferBase
@@ -46,10 +48,10 @@ Polyfill::Polyfill() {
 	}
 
 	// BindBufferRange
-	if (glBindBufferBase != nullptr) {
-		bindBufferBase = glBindBufferBase;
-	} else if (glBindBufferBaseEXT != nullptr) {
-		bindBufferBase = (PFNGLBINDBUFFERBASEPROC)glBindBufferBaseEXT;
+	if (glBindBufferRange != nullptr) {
+		bindBufferRange = glBindBufferRange;
+	} else if (glBindBufferRangeEXT != nullptr) {
+		bindBufferRange = (PFNGLBINDBUFFERRANGEPROC)glBindBufferRangeEXT;
 	}
 
 	// BeginTransformFeedback
@@ -64,6 +66,13 @@ Polyfill::Polyfill() {
 		endTransformFeedback = glEndTransformFeedback;
 	} else if (glEndTransformFeedbackEXT != nullptr) {
 		endTransformFeedback = (PFNGLENDTRANSFORMFEEDBACKPROC)glEndTransformFeedbackEXT;
+	}
+	
+	// TransformFeedbackVaryings
+	if (glTransformFeedbackVaryings != nullptr) {
+		transformFeedbackVaryings = glTransformFeedbackVaryings;
+	} else if (glTransformFeedbackVaryingsEXT != nullptr) {
+		transformFeedbackVaryings = (PFNGLTRANSFORMFEEDBACKVARYINGSPROC)glTransformFeedbackVaryingsEXT;
 	}
 }
 } //namespace GLES2

@@ -150,7 +150,6 @@ Config::Config() {
 		texture_lod_supported = true;
 
 		// Desktop OpenGL almost universally supports these
-		support_vao = true;
 		support_depth24 = true;
 		support_packed_depth_stencil = true;
 		support_blend_equation_separate = true;
@@ -233,15 +232,32 @@ Config::Config() {
 	max_lights_per_object = GLOBAL_GET("rendering/limits/opengl/max_lights_per_object");
 
 	// Adreno 3xx Compatibility / Workarounds
+	_flush_gl_errors();
 	const GLubyte *renderer_str = glGetString(GL_RENDERER);
-	GL_CHECK_ERROR("GLES2::Config::setup: glGetString(GL_RENDERER) for workarounds");
-
-	const String rendering_device_name = renderer_str ? String::utf8((const char *)renderer_str) : String();
+	const GLubyte *version_str = glGetString(GL_VERSION);
+	GLenum err_render = glGetError();
+	
+	String rendering_device_name = "Unknown";
+	String version_string = "Unknown";
+	if (err_render == GL_NO_ERROR) {
+		if (renderer_str != nullptr) {
+			rendering_device_name = String::utf8((const char *)renderer_str);
+		}
+		if (version_str != nullptr) {
+			version_string = String::utf8((const char *)version_str);
+		}
+	}
+	
 	if (rendering_device_name.left(13) == "Adreno (TM) 3") {
-		// Adreno 3xx devices are notorious for breaking with complex shader paths
 		adreno_3xx_compatibility = true;
 	} else if (rendering_device_name.contains("PowerVR")) {
 		disable_transform_feedback_shader_cache = true;
+	}
+	
+	// Mesa 9 GLSL compiler liar workaround
+	if (rendering_device_name.contains("llvmpipe") && version_string.contains("Mesa 9")) {
+		support_instancing = false;
+		texture_lod_supported = false;
 	}
 
 	is_android_emulator = rendering_device_name.contains("Android Emulator");

@@ -164,7 +164,7 @@ void ShaderGLES2::_build_variant_code(StringBuilder &builder, uint32_t p_variant
 	}
 
 	// Hardware extensions
-	if (GLES2::Config::get_singleton()->support_instancing) {
+	if (p_stage_type == STAGE_TYPE_FRAGMENT && GLES2::Config::get_singleton()->support_instancing) {
 		builder.append("#extension GL_EXT_draw_instanced : enable\n");
 	}
 	if (p_stage_type == STAGE_TYPE_FRAGMENT && GLES2::Config::get_singleton()->support_frag_depth) {
@@ -172,6 +172,11 @@ void ShaderGLES2::_build_variant_code(StringBuilder &builder, uint32_t p_variant
 	}
 	if (p_stage_type == STAGE_TYPE_FRAGMENT && GLES2::Config::get_singleton()->texture_lod_supported) {
 		builder.append("#extension GL_EXT_shader_texture_lod : enable\n");
+	}
+	if (p_stage_type == STAGE_TYPE_VERTEX && GLES2::Config::get_singleton()->support_transform_feedback) {
+		if (!RasterizerGLES2::is_gles_over_gl()) {
+			builder.append("#extension GL_EXT_transform_feedback : enable\n");
+		}
 	}
 	if (GLES2::Config::get_singleton()->support_transform_feedback) {
 		// Only require the EXT extension if we are on mobile/web GLES.
@@ -200,7 +205,7 @@ void ShaderGLES2::_build_variant_code(StringBuilder &builder, uint32_t p_variant
 	builder.append("\n"); // make sure defines begin at newline
 
 	// Polyfills
-	if (GLES2::Config::get_singleton()->support_instancing) {
+	if (p_stage_type == STAGE_TYPE_VERTEX && GLES2::Config::get_singleton()->support_instancing) {
 		builder.append("#define gl_InstanceID gl_InstanceIDEXT\n");
 	}
 	if (p_stage_type == STAGE_TYPE_FRAGMENT && GLES2::Config::get_singleton()->support_frag_depth) {
@@ -502,12 +507,8 @@ void ShaderGLES2::_compile_specialization(Version::Specialization &spec, uint32_
 		}
 
 		if (feedback_names.size() > 0) {
-			if (RasterizerGLES2::is_gles_over_gl()) {
-				glTransformFeedbackVaryings(spec.id, feedback_names.size(), feedback_names.ptr(), GL_INTERLEAVED_ATTRIBS);
-			} else {
-				glTransformFeedbackVaryingsEXT(spec.id, feedback_names.size(), feedback_names.ptr(), GL_INTERLEAVED_ATTRIBS_EXT);
-			}
-			GL_CHECK_ERROR("ShaderGLES2::_compile_specialization: glTransformFeedbackVaryings");
+			glTransformFeedbackVaryingsEXT(spec.id, feedback_names.size(), feedback_names.ptr(), GL_INTERLEAVED_ATTRIBS_EXT);
+			GL_CHECK_ERROR("ShaderGLES2::_compile_specialization: glTransformFeedbackVaryingsEXT");
 		}
 	}
 
