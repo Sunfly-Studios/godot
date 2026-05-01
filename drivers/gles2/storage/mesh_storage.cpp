@@ -112,6 +112,7 @@ void MeshStorage::mesh_add_surface(RID p_mesh, const RS::SurfaceData &p_surface)
 	glGetIntegerv(GL_ARRAY_BUFFER_BINDING, &prev_array_buffer);
 	GLint prev_element_buffer = 0;
 	glGetIntegerv(GL_ELEMENT_ARRAY_BUFFER_BINDING, &prev_element_buffer);
+	GL_CHECK_ERROR("GLES2::MeshStorage::mesh_add_surface: glGetIntegerv state protections");
 
 	Mesh::Surface *s = memnew(Mesh::Surface);
 	ERR_FAIL_NULL(s);
@@ -606,10 +607,15 @@ void MeshStorage::_multimesh_initialize(RID p_rid) {
 	glGenBuffers(1, &multimesh->buffer);
 	GL_CHECK_ERROR("GLES2::MeshStorage::_multimesh_initialize: glGenBuffers");
 
+	GLint prev_buffer = 0;
+	glGetIntegerv(GL_ARRAY_BUFFER_BINDING, &prev_buffer);
+	GL_CHECK_ERROR("GLES2::MeshStorage::_multimesh_initialize: glGetIntegerv GL_ARRAY_BUFFER_BINDING");
+
 	// Pre-register empty size to tracking cache to satisfy strict un-allocations
 	glBindBuffer(GL_ARRAY_BUFFER, multimesh->buffer);
 	GLES2::Utilities::get_singleton()->buffer_allocate_data(GL_ARRAY_BUFFER, multimesh->buffer, 0, nullptr, GL_DYNAMIC_DRAW, "MultiMesh buffer");
-	glBindBuffer(GL_ARRAY_BUFFER, 0);
+	glBindBuffer(GL_ARRAY_BUFFER, prev_buffer);
+	GL_CHECK_ERROR("GLES2::MeshStorage::_multimesh_initialize: buffer_allocate_data and state restore");
 }
 
 void MeshStorage::_multimesh_free(RID p_rid) {

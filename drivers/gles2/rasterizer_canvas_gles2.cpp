@@ -206,6 +206,7 @@ void RasterizerCanvasGLES2::initialize() {
 	// and instead query from the hardware.
 	GLint max_attribs = 8;
 	glGetIntegerv(GL_MAX_VERTEX_ATTRIBS, &max_attribs);
+	GL_CHECK_ERROR("GLES2::Canvas::initialize: glGetIntegerv GL_MAX_VERTEX_ATTRIBS");
 	maximum_attributes = MIN((int)RS::ARRAY_MAX, max_attribs);
 
 	// Batcher Initialisation
@@ -513,6 +514,7 @@ void RasterizerCanvasGLES2::canvas_begin(RID p_to_render_target, bool p_to_backb
 		if (tex) {
 			glBindTexture(GL_TEXTURE_2D, tex->tex_id);
 		}
+		GL_CHECK_ERROR("GLES2::Canvas::canvas_begin: bind backbuffer tex");
 	} else {
 		GLES2::TextureStorage::get_singleton()->bind_framebuffer(render_target ? render_target->fbo : 0);
 		GL_CHECK_ERROR("GLES2::Canvas::canvas_begin: bind fbo");
@@ -520,12 +522,14 @@ void RasterizerCanvasGLES2::canvas_begin(RID p_to_render_target, bool p_to_backb
 		if (render_target) {
 			glBindTexture(GL_TEXTURE_2D, render_target->backbuffer);
 		}
+		GL_CHECK_ERROR("GLES2::Canvas::canvas_begin: bind fbo tex");
 	}
 
 	// Reset the active texture back to 0 immediately after,
 	// otherwise, the very next draw call may accidentally bind
 	// its diffuse texture to the screen texture unit.
 	glActiveTexture(GL_TEXTURE0);
+	GL_CHECK_ERROR("GLES2::Canvas::canvas_begin: reset glActiveTexture");
 
 	// Set blending and clear buffers if needed
 	if ((render_target && render_target->is_transparent) || p_to_backbuffer) {
@@ -533,6 +537,7 @@ void RasterizerCanvasGLES2::canvas_begin(RID p_to_render_target, bool p_to_backb
 	} else {
 		glBlendFuncSeparate(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_ZERO, GL_ONE);
 	}
+	GL_CHECK_ERROR("GLES2::Canvas::canvas_begin: glBlendFuncSeparate");
 
 	if (render_target && render_target->clear_requested) {
 		const Color &col = render_target->clear_color;
@@ -565,6 +570,7 @@ void RasterizerCanvasGLES2::canvas_begin(RID p_to_render_target, bool p_to_backb
 	if (tex_white) {
 		glBindTexture(GL_TEXTURE_2D, tex_white->tex_id);
 	}
+	GL_CHECK_ERROR("GLES2::Canvas::canvas_begin: bind white tex");
 
 	// Purge all lingering vertex attribute states
 	glVertexAttrib4f(RS::ARRAY_COLOR, 1.0f, 1.0f, 1.0f, 1.0f);
@@ -574,7 +580,8 @@ void RasterizerCanvasGLES2::canvas_begin(RID p_to_render_target, bool p_to_backb
 
 	glVertexAttrib4f(RS::ARRAY_COLOR, 1, 1, 1, 1);
 	glDisableVertexAttribArray(RS::ARRAY_COLOR);
-
+	GL_CHECK_ERROR("GLES2::Canvas::canvas_begin: reset attribs");
+	
 	// Calculate Projection Matrix
 	// Godot 4 seems to expect 3D transforms even in 2D.
 	Transform3D canvas_transform;

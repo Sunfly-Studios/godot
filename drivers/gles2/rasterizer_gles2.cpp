@@ -357,22 +357,55 @@ RasterizerGLES2::RasterizerGLES2() {
 
 	// OpenGL needs to be initialized before initializing the Rasterizers
 	config = memnew(GLES2::Config);
+	ERR_FAIL_NULL(config);
+
 	utilities = memnew(GLES2::Utilities);
+	ERR_FAIL_NULL(utilities);
+
 	polyfill = memnew(GLES2::Polyfill);
+	ERR_FAIL_NULL(polyfill);
+
 	texture_storage = memnew(GLES2::TextureStorage);
+	ERR_FAIL_NULL(texture_storage);
+
 	material_storage = memnew(GLES2::MaterialStorage);
+	ERR_FAIL_NULL(material_storage);
+
 	mesh_storage = memnew(GLES2::MeshStorage);
+	ERR_FAIL_NULL(mesh_storage);
+
 	particles_storage = memnew(GLES2::ParticlesStorage);
+	ERR_FAIL_NULL(particles_storage);
+
 	light_storage = memnew(GLES2::LightStorage);
+	ERR_FAIL_NULL(light_storage);
+
 	copy_effects = memnew(GLES2::CopyEffects);
+	ERR_FAIL_NULL(copy_effects);
+
 	cubemap_filter = memnew(GLES2::CubemapFilter);
+	ERR_FAIL_NULL(cubemap_filter);
+
 	glow = memnew(GLES2::Glow);
+	ERR_FAIL_NULL(glow);
+
 	post_effects = memnew(GLES2::PostEffects);
+	ERR_FAIL_NULL(post_effects);
+
 	feed_effects = memnew(GLES2::FeedEffects);
+	ERR_FAIL_NULL(feed_effects);
+
 	gi = memnew(GLES2::GI);
+	ERR_FAIL_NULL(gi);
+
 	fog = memnew(GLES2::Fog);
+	ERR_FAIL_NULL(fog);
+
 	canvas = memnew(RasterizerCanvasGLES2());
+	ERR_FAIL_NULL(canvas);
+
 	scene = memnew(RasterizerSceneGLES2());
+	ERR_FAIL_NULL(scene);
 
 	// Disable OpenGL linear to sRGB conversion, because Godot will always do this conversion itself.
 	if (config->srgb_framebuffer_supported) {

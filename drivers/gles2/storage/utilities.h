@@ -34,6 +34,7 @@
 #ifdef GLES2_ENABLED
 
 #include "servers/rendering/storage/utilities.h"
+#include "drivers/gles_common/error_macros.h"
 
 #include "platform_gl.h"
 
@@ -84,6 +85,7 @@ public:
 	// Allocate memory with glBufferData. Does not handle resizing.
 	_FORCE_INLINE_ void buffer_allocate_data(GLenum p_target, GLuint p_id, uint32_t p_size, const void *p_data, GLenum p_usage, String p_name = "") {
 		glBufferData(p_target, p_size, p_data, p_usage);
+		GL_CHECK_ERROR("GLES2::Utilities::buffer_allocate_data");
 		buffer_mem_cache += p_size;
 
 #ifdef DEV_ENABLED
@@ -104,6 +106,7 @@ public:
 
 	_FORCE_INLINE_ void buffer_resize_data(GLenum p_target, GLuint p_id, uint32_t p_size, const void *p_data, GLenum p_usage, String p_name = "") {
 		glBufferData(p_target, p_size, p_data, p_usage);
+		GL_CHECK_ERROR("GLES2::Utilities::buffer_resize_data");
 		if (!buffer_allocs_cache.has(p_id)) {
 			ResourceAllocation resource_allocation;
 			resource_allocation.size = p_size;
@@ -122,6 +125,7 @@ public:
 	_FORCE_INLINE_ void buffer_free_data(GLuint p_id) {
 		ERR_FAIL_COND(!buffer_allocs_cache.has(p_id));
 		glDeleteBuffers(1, &p_id);
+		GL_CHECK_ERROR("GLES2::Utilities::buffer_free_data");
 		buffer_mem_cache -= buffer_allocs_cache[p_id].size;
 		buffer_allocs_cache.erase(p_id);
 	}
@@ -142,6 +146,7 @@ public:
 	_FORCE_INLINE_ void render_buffer_free_data(GLuint p_id) {
 		ERR_FAIL_COND(!render_buffer_allocs_cache.has(p_id));
 		glDeleteRenderbuffers(1, &p_id);
+		GL_CHECK_ERROR("GLES2::Utilities::render_buffer_free_data");
 		render_buffer_mem_cache -= render_buffer_allocs_cache[p_id].size;
 		render_buffer_allocs_cache.erase(p_id);
 	}
@@ -168,6 +173,7 @@ public:
 	_FORCE_INLINE_ void texture_free_data(GLuint p_id) {
 		ERR_FAIL_COND(!texture_allocs_cache.has(p_id));
 		glDeleteTextures(1, &p_id);
+		GL_CHECK_ERROR("GLES2::Utilities::texture_free_data");
 		texture_mem_cache -= texture_allocs_cache[p_id].size;
 		texture_allocs_cache.erase(p_id);
 	}

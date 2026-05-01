@@ -191,7 +191,13 @@ Config::Config() {
 	max_uniform_buffer_size = 0;
 
 	GLint max_varyings = 0;
-	glGetIntegerv(GL_MAX_VARYING_VECTORS, &max_varyings);
+	if (RasterizerGLES2::is_gles_over_gl()) {
+		glGetIntegerv(GL_MAX_VARYING_FLOATS, &max_varyings);
+		max_varyings /= 4; // Convert floats to vectors
+	} else {
+		glGetIntegerv(GL_MAX_VARYING_VECTORS, &max_varyings);
+	}
+	GL_CHECK_ERROR("GLES2::Config::setup: glGetIntegerv VARYINGS");
 	max_shader_varyings = (uint32_t)max_varyings;
 
 	support_anisotropic_filter = extensions.has("GL_EXT_texture_filter_anisotropic");

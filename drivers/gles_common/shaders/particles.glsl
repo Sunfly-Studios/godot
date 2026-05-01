@@ -9,6 +9,8 @@ MODE_3D = false
 
 #[vertex]
 
+#include "stdlib_inc.glsl"
+
 #define SDF_MAX_LENGTH 16384.0
 
 uniform highp vec4 global_shader_uniforms[256];

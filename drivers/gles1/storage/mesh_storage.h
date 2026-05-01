@@ -63,6 +63,9 @@ struct Mesh {
 		GLuint vertex_buffer = 0;
 		GLuint attribute_buffer = 0;
 		GLuint skin_buffer = 0;
+		Vector<uint8_t> vertex_buffer_fallback;
+		Vector<uint8_t> attribute_buffer_fallback;
+		Vector<uint8_t> skin_buffer_fallback;
 		uint32_t vertex_count = 0;
 		uint32_t vertex_buffer_size = 0;
 		uint32_t attribute_buffer_size = 0;
@@ -81,6 +84,7 @@ struct Mesh {
 		uint32_t version_count = 0;
 
 		GLuint index_buffer = 0;
+		Vector<uint8_t> index_buffer_fallback;
 		uint32_t index_count = 0;
 		uint32_t index_buffer_size = 0;
 

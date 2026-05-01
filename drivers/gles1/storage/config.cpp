@@ -189,29 +189,31 @@ Config::Config() {
 	max_uniform_buffer_size = 0;
 
 	// Extensions
-	support_fbo = extensions.has("GL_OES_framebuffer_object") || extensions.has("GL_EXT_framebuffer_object");
-	support_npot = extensions.has("GL_OES_texture_npot") || extensions.has("GL_ARB_texture_non_power_of_two");
-	support_blend_func_separate = extensions.has("GL_OES_blend_func_separate") || extensions.has("GL_EXT_blend_func_separate");
-	support_point_sprite = extensions.has("GL_OES_point_sprite") || extensions.has("GL_ARB_point_sprite");
+	support_fbo = extensions.has("GL_OES_framebuffer_object") || extensions.has("GL_EXT_framebuffer_object") || extensions.has("GL_ARB_framebuffer_object");
+	support_vbo = extensions.has("GL_ARB_vertex_buffer_object") || extensions.has("GL_OES_mapbuffer");
+	support_npot = extensions.has("GL_OES_texture_npot") || extensions.has("GL_ARB_texture_non_power_of_two") || extensions.has("GL_APPLE_texture_2D_limited_npot");
+	support_blend_func_separate = extensions.has("GL_OES_blend_func_separate") || extensions.has("GL_EXT_blend_func_separate") || extensions.has("GL_ARB_draw_buffers_blend");
+	support_point_sprite = extensions.has("GL_OES_point_sprite") || extensions.has("GL_ARB_point_sprite") || extensions.has("GL_NV_point_sprite");
 	support_matrix_palette = extensions.has("GL_OES_matrix_palette");
 	support_draw_texture = extensions.has("GL_OES_draw_texture");
-	support_cubemap = extensions.has("GL_OES_texture_cube_map");
-	support_generate_mipmap = extensions.has("GL_OES_generate_mipmap");
+	support_cubemap = extensions.has("GL_OES_texture_cube_map") || extensions.has("GL_ARB_texture_cube_map");
+	support_generate_mipmap = extensions.has("GL_OES_generate_mipmap") || extensions.has("GL_SGIS_generate_mipmap");
 	support_depth24 = extensions.has("GL_OES_depth24");
 	support_depth32 = extensions.has("GL_OES_depth32");
-	support_packed_depth_stencil = extensions.has("GL_OES_packed_depth_stencil");
-	support_blend_subtract = extensions.has("GL_OES_blend_subtract");
-	support_blend_equation_separate = extensions.has("GL_OES_blend_equation_separate");
-	support_mirrored_repeat = extensions.has("GL_OES_texture_mirrored_repeat");
+	support_packed_depth_stencil = extensions.has("GL_OES_packed_depth_stencil") || extensions.has("GL_EXT_packed_depth_stencil");
+	support_blend_subtract = extensions.has("GL_OES_blend_subtract") || extensions.has("GL_EXT_blend_subtract");
+	support_blend_equation_separate = extensions.has("GL_OES_blend_equation_separate") || extensions.has("GL_EXT_blend_equation_separate");
+	support_mirrored_repeat = extensions.has("GL_OES_texture_mirrored_repeat") || extensions.has("GL_ARB_texture_mirrored_repeat");
 	support_32_bits_indices = extensions.has("GL_OES_element_index_uint");
-	support_npot_repeat_mipmap = extensions.has("GL_OES_texture_npot");
-	support_mapbuffer = extensions.has("GL_OES_mapbuffer") || extensions.has("GL_NV_copy_buffer");
+	support_npot_repeat_mipmap = extensions.has("GL_OES_texture_npot") || extensions.has("GL_ARB_texture_non_power_of_two");
+	support_mapbuffer = extensions.has("GL_OES_mapbuffer") || extensions.has("GL_NV_copy_buffer") || extensions.has("GL_ARB_map_buffer_range");
+	srgb_framebuffer_supported = extensions.has("GL_ARB_framebuffer_sRGB") || extensions.has("GL_EXT_framebuffer_sRGB");
 
 	// 3D
-	support_vao = extensions.has("GL_OES_vertex_array_object");
-	support_vertex_half_float = extensions.has("GL_OES_vertex_half_float");
-	support_texture_env_add = extensions.has("GL_OES_texture_env_add") || extensions.has("GL_EXT_texture_env_add");
-	support_texture_env_dot3 = extensions.has("GL_OES_texture_env_dot3") || extensions.has("GL_EXT_texture_env_dot3");
+	support_vao = extensions.has("GL_OES_vertex_array_object") || extensions.has("GL_ARB_vertex_array_object") || extensions.has("GL_APPLE_vertex_array_object");
+	support_vertex_half_float = extensions.has("GL_OES_vertex_half_float") || extensions.has("GL_ARB_half_float_pixel");
+	support_texture_env_add = extensions.has("GL_OES_texture_env_add") || extensions.has("GL_EXT_texture_env_add") || extensions.has("GL_ARB_texture_env_add");
+	support_texture_env_dot3 = extensions.has("GL_OES_texture_env_dot3") || extensions.has("GL_EXT_texture_env_dot3") || extensions.has("GL_ARB_texture_env_dot3");
 	support_point_size_array = extensions.has("GL_OES_point_size_array");
 
 	// Just because the extension exists doesn't
@@ -255,7 +257,6 @@ Config::Config() {
 		support_generate_mipmap = true;
 		support_32_bits_indices = true;
 		support_npot_repeat_mipmap = true;
-		srgb_framebuffer_supported = true;
 		support_mapbuffer = true;
 	} else {
 		float_texture_supported = extensions.has("GL_OES_texture_float") || extensions.has("GL_EXT_color_buffer_float");
@@ -281,10 +282,23 @@ Config::Config() {
 	max_lights_per_object = GLOBAL_GET("rendering/limits/opengl/max_lights_per_object");
 
 	// Workarounds
+	_flush_gl_errors();
 	const GLubyte *renderer_str = glGetString(GL_RENDERER);
-	GL_CHECK_ERROR("GLES1::Config::setup: glGetString(GL_RENDERER) for workarounds");
+	const GLubyte *version_str = glGetString(GL_VERSION);
+	GLenum err_render = glGetError();
 
-	const String rendering_device_name = renderer_str ? String::utf8((const char *)renderer_str) : String();
+	String rendering_device_name = "Unknown";
+	String version_string = "Unknown";
+
+	if (err_render == GL_NO_ERROR) {
+		if (renderer_str != nullptr) {
+			rendering_device_name = String::utf8((const char *)renderer_str);
+		}
+		if (version_str != nullptr) {
+			version_string = String::utf8((const char *)version_str);
+		}
+	}
+
 	if (rendering_device_name.left(13) == "Adreno (TM) 3") {
 		adreno_3xx_compatibility = true;
 	}
@@ -293,6 +307,32 @@ Config::Config() {
 
 	if (OS::get_singleton()->get_current_rendering_driver_name() == "opengl1_angle" || OS::get_singleton()->has_feature("web")) {
 		polyfill_half2float = false;
+	}
+
+	// If running over desktop OpenGL, we require at least
+	// OpenGL 1.5 for VBOs and FBOs. Legacy contexts may
+	// advertise these extensions but lack proper functional support.
+	if (RasterizerGLES1::is_gles_over_gl()) {
+		// Extract "1.4" from strings like "1.4 Mesa 7.7.1-DEVEL" or "4.6.0 NVIDIA..."
+		String gl_ver = version_string.get_slice(" ", 0);
+		PackedStringArray gl_ver_parts = gl_ver.split(".");
+		
+		if (gl_ver_parts.size() >= 2) {
+			int major = gl_ver_parts[0].to_int();
+			int minor = gl_ver_parts[1].to_int();
+			
+			if (major < 1 || (major == 1 && minor < 5)) {
+				if (support_fbo) {
+					WARN_PRINT("GLES1: OpenGL version is lower than 1.5. Disabling FBOs.");
+					support_fbo = false;
+				}
+				
+				if (support_vbo) {
+					WARN_PRINT("GLES1: OpenGL version is lower than 1.5. Disabling VBOs.");
+					support_vbo = false;
+				}
+			}
+		}
 	}
 }
 

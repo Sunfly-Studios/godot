@@ -42,6 +42,7 @@
 
 #include "drivers/gles1/shaders/canvas.glsl.gen.h"
 #include "drivers/gles1/shaders/canvas_occlusion.glsl.gen.h"
+#include "polyfill_gles1.h"
 
 class RasterizerCanvasGLES1;
 

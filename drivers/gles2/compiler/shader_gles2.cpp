@@ -290,6 +290,10 @@ static void _display_error_with_code(const String &p_error, const String &p_code
 }
 
 void ShaderGLES2::_get_uniform_locations(Version::Specialization &spec, Version *p_version) {
+	GLint active_program = 0;
+	glGetIntegerv(GL_CURRENT_PROGRAM, &active_program);
+	GL_CHECK_ERROR("ShaderGLES2::_get_uniform_locations: glGetIntegerv");
+
 	glUseProgram(spec.id);
 	GL_CHECK_ERROR("ShaderGLES2::_get_uniform_locations: glUseProgram");
 
@@ -328,7 +332,8 @@ void ShaderGLES2::_get_uniform_locations(Version::Specialization &spec, Version 
 		glUniform1iv(location, texture_uniform_bindings.size(), texture_uniform_bindings.ptr());
 	}
 
-	glUseProgram(0);
+	glUseProgram(active_program);
+	GL_CHECK_ERROR("ShaderGLES2::_get_uniform_locations: glUseProgram (restore)");
 }
 
 void ShaderGLES2::_compile_specialization(Version::Specialization &spec, uint32_t p_variant, Version *p_version, uint64_t p_specialization) {
@@ -448,6 +453,10 @@ void ShaderGLES2::_compile_specialization(Version::Specialization &spec, uint32_
 
 			if (iloglen < 0) {
 				glDeleteShader(spec.frag_id);
+				if (spec.vert_id != 0) {
+					glDeleteShader(spec.vert_id);
+					spec.vert_id = 0;
+				}
 				glDeleteProgram(spec.id);
 				spec.id = 0;
 				ERR_PRINT("No OpenGL fragment shader compiler log.");
@@ -516,7 +525,6 @@ void ShaderGLES2::_compile_specialization(Version::Specialization &spec, uint32_
 	GL_CHECK_ERROR("ShaderGLES2::_compile_specialization: glLinkProgram");
 
 	glGetProgramiv(spec.id, GL_LINK_STATUS, &status);
-	glGetProgramiv(spec.id, GL_LINK_STATUS, &status);
 	if (status == GL_FALSE) {
 		GLsizei iloglen;
 		glGetProgramiv(spec.id, GL_INFO_LOG_LENGTH, &iloglen);
@@ -550,6 +558,17 @@ void ShaderGLES2::_compile_specialization(Version::Specialization &spec, uint32_
 		spec.id = 0;
 		ERR_FAIL();
 	}
+
+	// Detach and delete shaders
+	glDetachShader(spec.id, spec.frag_id);
+	GL_CHECK_ERROR("ShaderGLES2::_compile_specialization: glDetachShader (Fragment)");
+	glDeleteShader(spec.frag_id);
+	spec.frag_id = 0;
+
+	glDetachShader(spec.id, spec.vert_id);
+	GL_CHECK_ERROR("ShaderGLES2::_compile_specialization: glDetachShader (Vertex)");
+	glDeleteShader(spec.vert_id);
+	spec.vert_id = 0;
 
 	_get_uniform_locations(spec, p_version);
 	spec.ok = true;

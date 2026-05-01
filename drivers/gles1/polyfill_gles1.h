@@ -44,12 +44,12 @@
 #include "thirdparty/glad/glad/gl.h"
 
 namespace GLES1 {
-    struct Polyfill {
-        // Framebuffer extensions
+	struct Polyfill {
+		// Framebuffer extensions
 		static PFNGLBINDFRAMEBUFFERPROC bindFramebuffer;
 		static PFNGLISFRAMEBUFFERPROC isFramebuffer;
 		static PFNGLCHECKFRAMEBUFFERSTATUSPROC checkFrameBufferStatus;
-		static PFNGLDELETEBUFFERSPROC deleteFrameBuffers;
+		static PFNGLDELETEFRAMEBUFFERSPROC deleteFrameBuffers;
 		static PFNGLGENFRAMEBUFFERSPROC genFrameBuffers;
 		static PFNGLGENRENDERBUFFERSPROC genRenderBuffers;
 		static PFNGLFRAMEBUFFERTEXTURE2DPROC framebufferTexture2D;
@@ -61,19 +61,28 @@ namespace GLES1 {
 		// Blend extensions
 		static PFNGLBLENDFUNCSEPARATEPROC blendFuncSeparate;
 
-        Polyfill();
-        ~Polyfill() = default;
-    };
-}
+		// Buffer (VBO) extensions
+		static PFNGLGENBUFFERSPROC genBuffers;
+		static PFNGLBINDBUFFERPROC bindBuffer;
+		static PFNGLBUFFERDATAPROC bufferData;
+		static PFNGLBUFFERSUBDATAPROC bufferSubData;
+		static PFNGLDELETEBUFFERSPROC deleteBuffers;
+		static PFNGLISBUFFERPROC isBuffer;
 
-// The engine code needs the macros to point to these,
-// but our polyfill needs the macros to point to the
-// original GLAD pointers.
-//
-// The solution to this is to #undef the GLAD macros in the header,
-// but hide that part from the implementation file.
+		// Multitexture extensions
+		static PFNGLACTIVETEXTUREPROC activeTexture;
+		static PFNGLCLIENTACTIVETEXTUREPROC clientActiveTexture;
+
+		Polyfill();
+		~Polyfill() = default;
+	};
+} //namespace GLES1
+
 #ifndef POLYFILL_GLES1_IMPL
 
+// -----------------------------------------
+// FBO Macros
+// -----------------------------------------
 #undef glBindFramebufferOES
 #define glBindFramebufferOES(target, framebuffer)                  \
 	do {                                                           \
@@ -151,6 +160,65 @@ namespace GLES1 {
 #undef glCheckFramebufferStatusOES
 #define glCheckFramebufferStatusOES(target) \
 	(likely(GLES1::Polyfill::checkFrameBufferStatus) ? GLES1::Polyfill::checkFrameBufferStatus(target) : 0)
+
+// -----------------------------------------
+// VBO Macros (Overrides Core calls too)
+// -----------------------------------------
+#undef glGenBuffers
+#define glGenBuffers(n, buffers)                     \
+	do {                                             \
+		if (likely(GLES1::Polyfill::genBuffers))     \
+			GLES1::Polyfill::genBuffers(n, buffers); \
+	} while (0)
+
+#undef glBindBuffer
+#define glBindBuffer(target, buffer)                     \
+	do {                                                 \
+		if (likely(GLES1::Polyfill::bindBuffer))         \
+			GLES1::Polyfill::bindBuffer(target, buffer); \
+	} while (0)
+
+#undef glBufferData
+#define glBufferData(target, size, data, usage)                     \
+	do {                                                            \
+		if (likely(GLES1::Polyfill::bufferData))                    \
+			GLES1::Polyfill::bufferData(target, size, data, usage); \
+	} while (0)
+
+#undef glBufferSubData
+#define glBufferSubData(target, offset, size, data)                     \
+	do {                                                                \
+		if (likely(GLES1::Polyfill::bufferSubData))                     \
+			GLES1::Polyfill::bufferSubData(target, offset, size, data); \
+	} while (0)
+
+#undef glDeleteBuffers
+#define glDeleteBuffers(n, buffers)                     \
+	do {                                                \
+		if (likely(GLES1::Polyfill::deleteBuffers))     \
+			GLES1::Polyfill::deleteBuffers(n, buffers); \
+	} while (0)
+
+#undef glIsBuffer
+#define glIsBuffer(buffer) \
+	(likely(GLES1::Polyfill::isBuffer) ? GLES1::Polyfill::isBuffer(buffer) : GL_FALSE)
+
+// -----------------------------------------
+// Multitexture Macros
+// -----------------------------------------
+#undef glActiveTexture
+#define glActiveTexture(texture)                     \
+	do {                                             \
+		if (likely(GLES1::Polyfill::activeTexture))  \
+			GLES1::Polyfill::activeTexture(texture); \
+	} while (0)
+
+#undef glClientActiveTexture
+#define glClientActiveTexture(texture)                     \
+	do {                                                   \
+		if (likely(GLES1::Polyfill::clientActiveTexture))  \
+			GLES1::Polyfill::clientActiveTexture(texture); \
+	} while (0)
 
 #endif // POLYFILL_GLES1_IMPL
 

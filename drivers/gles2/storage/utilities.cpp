@@ -480,18 +480,37 @@ Size2i Utilities::get_maximum_viewport_size() const {
 
 uint32_t Utilities::get_maximum_shader_varyings() const {
 	GLint max_varyings = 0;
-	glGetIntegerv(GL_MAX_VARYING_VECTORS, &max_varyings);
+	
+	if (RasterizerGLES2::is_gles_over_gl()) {
+		glGetIntegerv(GL_MAX_VARYING_FLOATS, &max_varyings);
+		max_varyings /= 4; // Convert floats to vectors
+	} else {
+		glGetIntegerv(GL_MAX_VARYING_VECTORS, &max_varyings);
+	}
+	GL_CHECK_ERROR("GLES2::Utilities::get_maximum_shader_varyings: glGetIntegerv");
 
 	return (max_varyings >= 8) ? max_varyings : 8;
 }
 
 uint64_t Utilities::get_maximum_uniform_buffer_size() const {
 	GLint result = 0;
-	glGetIntegerv(GL_MAX_FRAGMENT_UNIFORM_VECTORS, &result);
-	GLint max_frag_uniforms = (result >= 0) ? result : 16;
+	GLint max_frag_uniforms = 16;
+	GLint max_vert_uniforms = 128;
 
-	glGetIntegerv(GL_MAX_VERTEX_UNIFORM_VECTORS, &result);
-	GLint max_vert_uniforms = (result >= 0) ? result : 128;
+	if (RasterizerGLES2::is_gles_over_gl()) {
+		glGetIntegerv(GL_MAX_FRAGMENT_UNIFORM_COMPONENTS, &result);
+		max_frag_uniforms = (result >= 0) ? (result / 4) : 16;
+
+		glGetIntegerv(GL_MAX_VERTEX_UNIFORM_COMPONENTS, &result);
+		max_vert_uniforms = (result >= 0) ? (result / 4) : 128;
+	} else {
+		glGetIntegerv(GL_MAX_FRAGMENT_UNIFORM_VECTORS, &result);
+		max_frag_uniforms = (result >= 0) ? result : 16;
+
+		glGetIntegerv(GL_MAX_VERTEX_UNIFORM_VECTORS, &result);
+		max_vert_uniforms = (result >= 0) ? result : 128;
+	}
+	GL_CHECK_ERROR("GLES2::Utilities::get_maximum_uniform_buffer_size: glGetIntegerv");
 
 	GLint min_uniforms = MIN(max_frag_uniforms, max_vert_uniforms);
 	min_uniforms = (min_uniforms >= 16) ? min_uniforms : 128;

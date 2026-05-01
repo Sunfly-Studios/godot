@@ -539,23 +539,28 @@ void ParticlesStorage::_particles_update_buffers(Particles *particles) {
 		glGenBuffers(1, &particles->front_instance_buffer);
 		GL_CHECK_ERROR("GLES1::ParticlesStorage::_particles_update_buffers: glGenBuffers front_instance");
 
-		glBindBuffer(GL_ARRAY_BUFFER, particles->front_process_buffer);
-		GLES1::Utilities::get_singleton()->buffer_allocate_data(GL_ARRAY_BUFFER, particles->front_process_buffer, particles->process_buffer_stride_cache * total_amount, data.ptr(), GL_DYNAMIC_DRAW, "Particles front process buffer");
-
-		glBindBuffer(GL_ARRAY_BUFFER, particles->front_instance_buffer);
-		GLES1::Utilities::get_singleton()->buffer_allocate_data(GL_ARRAY_BUFFER, particles->front_instance_buffer, particles->instance_buffer_size_cache, instance_data.ptr(), GL_DYNAMIC_DRAW, "Particles front instance buffer");
+		if (likely(particles->front_process_buffer != 0)) {
+			glBindBuffer(GL_ARRAY_BUFFER, particles->front_process_buffer);
+			GLES1::Utilities::get_singleton()->buffer_allocate_data(GL_ARRAY_BUFFER, particles->front_process_buffer, particles->process_buffer_stride_cache * total_amount, data.ptr(), GL_DYNAMIC_DRAW, "Particles front process buffer");
+		}
+		if (likely(particles->front_instance_buffer != 0)) {
+			glBindBuffer(GL_ARRAY_BUFFER, particles->front_instance_buffer);
+			GLES1::Utilities::get_singleton()->buffer_allocate_data(GL_ARRAY_BUFFER, particles->front_instance_buffer, particles->instance_buffer_size_cache, instance_data.ptr(), GL_DYNAMIC_DRAW, "Particles front instance buffer");
+		}
 
 		glGenBuffers(1, &particles->back_process_buffer);
 		GL_CHECK_ERROR("GLES1::ParticlesStorage::_particles_update_buffers: glGenBuffers back_process");
 		glGenBuffers(1, &particles->back_instance_buffer);
 		GL_CHECK_ERROR("GLES1::ParticlesStorage::_particles_update_buffers: glGenBuffers back_instance");
 
-		glBindBuffer(GL_ARRAY_BUFFER, particles->back_process_buffer);
-		GLES1::Utilities::get_singleton()->buffer_allocate_data(GL_ARRAY_BUFFER, particles->back_process_buffer, particles->process_buffer_stride_cache * total_amount, data.ptr(), GL_DYNAMIC_DRAW, "Particles back process buffer");
-
-		glBindBuffer(GL_ARRAY_BUFFER, particles->back_instance_buffer);
-		GLES1::Utilities::get_singleton()->buffer_allocate_data(GL_ARRAY_BUFFER, particles->back_instance_buffer, particles->instance_buffer_size_cache, instance_data.ptr(), GL_DYNAMIC_DRAW, "Particles back instance buffer");
-
+		if (likely(particles->back_process_buffer != 0)) {
+			glBindBuffer(GL_ARRAY_BUFFER, particles->back_process_buffer);
+			GLES1::Utilities::get_singleton()->buffer_allocate_data(GL_ARRAY_BUFFER, particles->back_process_buffer, particles->process_buffer_stride_cache * total_amount, data.ptr(), GL_DYNAMIC_DRAW, "Particles back process buffer");
+		}
+		if (likely(particles->back_instance_buffer != 0)) {
+			glBindBuffer(GL_ARRAY_BUFFER, particles->back_instance_buffer);
+			GLES1::Utilities::get_singleton()->buffer_allocate_data(GL_ARRAY_BUFFER, particles->back_instance_buffer, particles->instance_buffer_size_cache, instance_data.ptr(), GL_DYNAMIC_DRAW, "Particles back instance buffer");
+		}
 		glBindBuffer(GL_ARRAY_BUFFER, 0);
 	}
 }
@@ -565,13 +570,19 @@ void ParticlesStorage::_particles_allocate_history_buffers(Particles *particles)
 	if (particles->sort_buffer == 0) {
 		glGenBuffers(1, &particles->last_frame_buffer);
 		GL_CHECK_ERROR("ParticlesStorage::_particles_allocate_history_buffers: glGenBuffers last_frame");
-		glBindBuffer(GL_ARRAY_BUFFER, particles->last_frame_buffer);
-		GLES1::Utilities::get_singleton()->buffer_allocate_data(GL_ARRAY_BUFFER, particles->last_frame_buffer, particles->instance_buffer_size_cache, nullptr, GL_DYNAMIC_DRAW, "Particles last frame buffer");
+		
+		if (likely(particles->last_frame_buffer != 0)) {
+			glBindBuffer(GL_ARRAY_BUFFER, particles->last_frame_buffer);
+			GLES1::Utilities::get_singleton()->buffer_allocate_data(GL_ARRAY_BUFFER, particles->last_frame_buffer, particles->instance_buffer_size_cache, nullptr, GL_DYNAMIC_DRAW, "Particles last frame buffer");
+		}
 
 		glGenBuffers(1, &particles->sort_buffer);
 		GL_CHECK_ERROR("ParticlesStorage::_particles_allocate_history_buffers: glGenBuffers sort_buffer");
-		glBindBuffer(GL_ARRAY_BUFFER, particles->sort_buffer);
-		GLES1::Utilities::get_singleton()->buffer_allocate_data(GL_ARRAY_BUFFER, particles->sort_buffer, particles->instance_buffer_size_cache, nullptr, GL_DYNAMIC_DRAW, "Particles sort buffer");
+		
+		if (likely(particles->sort_buffer != 0)) {
+			glBindBuffer(GL_ARRAY_BUFFER, particles->sort_buffer);
+			GLES1::Utilities::get_singleton()->buffer_allocate_data(GL_ARRAY_BUFFER, particles->sort_buffer, particles->instance_buffer_size_cache, nullptr, GL_DYNAMIC_DRAW, "Particles sort buffer");
+		}
 
 		particles->sort_buffer_filled = false;
 		particles->last_frame_buffer_filled = false;
@@ -666,7 +677,7 @@ void ParticlesStorage::update_particles() {
 			_particles_allocate_history_buffers(particles);
 			SWAP(particles->last_frame_buffer, particles->sort_buffer);
 
-			if (GLES1::Config::get_singleton()->support_mapbuffer) {
+			if (GLES1::Config::get_singleton()->support_mapbuffer && particles->back_instance_buffer != 0 && particles->last_frame_buffer != 0) {
 				glBindBuffer(GL_ARRAY_BUFFER, particles->back_instance_buffer);
 				// Query standard mapbuffer.
 				void *read_ptr = glMapBufferOES(GL_ARRAY_BUFFER, GL_MAP_READ_BIT_OES);

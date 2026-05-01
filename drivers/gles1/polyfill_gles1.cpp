@@ -32,22 +32,38 @@
 #include "polyfill_gles1.h"
 
 namespace GLES1 {
-// Define the static pointers
-PFNGLBINDFRAMEBUFFERPROC Polyfill::bindFramebuffer = nullptr;
-PFNGLISFRAMEBUFFERPROC Polyfill::isFramebuffer = nullptr;
-PFNGLBLENDFUNCSEPARATEPROC Polyfill::blendFuncSeparate = nullptr;
-PFNGLCHECKFRAMEBUFFERSTATUSPROC Polyfill::checkFrameBufferStatus = nullptr;
-PFNGLDELETEBUFFERSPROC Polyfill::deleteFrameBuffers = nullptr;
-PFNGLGENFRAMEBUFFERSPROC Polyfill::genFrameBuffers = nullptr;
-PFNGLGENRENDERBUFFERSPROC Polyfill::genRenderBuffers = nullptr;
-PFNGLFRAMEBUFFERTEXTURE2DPROC Polyfill::framebufferTexture2D = nullptr;
-PFNGLBINDRENDERBUFFERPROC Polyfill::bindRenderBuffer = nullptr;
-PFNGLRENDERBUFFERSTORAGEPROC Polyfill::renderBufferStorage = nullptr;
-PFNGLFRAMEBUFFERRENDERBUFFERPROC Polyfill::frameBufferRenderBuffer = nullptr;
-PFNGLDELETERENDERBUFFERSPROC Polyfill::deleteRenderBuffers = nullptr;
+	// Define the static pointers
+
+	// FBOs
+	PFNGLBINDFRAMEBUFFERPROC Polyfill::bindFramebuffer = nullptr;
+	PFNGLISFRAMEBUFFERPROC Polyfill::isFramebuffer = nullptr;
+	PFNGLBLENDFUNCSEPARATEPROC Polyfill::blendFuncSeparate = nullptr;
+	PFNGLCHECKFRAMEBUFFERSTATUSPROC Polyfill::checkFrameBufferStatus = nullptr;
+	PFNGLDELETEFRAMEBUFFERSPROC Polyfill::deleteFrameBuffers = nullptr;
+	PFNGLGENFRAMEBUFFERSPROC Polyfill::genFrameBuffers = nullptr;
+	PFNGLGENRENDERBUFFERSPROC Polyfill::genRenderBuffers = nullptr;
+	PFNGLFRAMEBUFFERTEXTURE2DPROC Polyfill::framebufferTexture2D = nullptr;
+	PFNGLBINDRENDERBUFFERPROC Polyfill::bindRenderBuffer = nullptr;
+	PFNGLRENDERBUFFERSTORAGEPROC Polyfill::renderBufferStorage = nullptr;
+	PFNGLFRAMEBUFFERRENDERBUFFERPROC Polyfill::frameBufferRenderBuffer = nullptr;
+	PFNGLDELETERENDERBUFFERSPROC Polyfill::deleteRenderBuffers = nullptr;
+
+	// VBOs
+	PFNGLGENBUFFERSPROC Polyfill::genBuffers = nullptr;
+	PFNGLBINDBUFFERPROC Polyfill::bindBuffer = nullptr;
+	PFNGLBUFFERDATAPROC Polyfill::bufferData = nullptr;
+	PFNGLBUFFERSUBDATAPROC Polyfill::bufferSubData = nullptr;
+	PFNGLDELETEBUFFERSPROC Polyfill::deleteBuffers = nullptr;
+	PFNGLISBUFFERPROC Polyfill::isBuffer = nullptr;
+
+	// Multitexture
+	PFNGLACTIVETEXTUREPROC Polyfill::activeTexture = nullptr;
+	PFNGLCLIENTACTIVETEXTUREPROC Polyfill::clientActiveTexture = nullptr;
 
 Polyfill::Polyfill() {
-	// BindFramebuffer
+	// ===============================
+	// Framebuffer
+	// ===============================
 	if (glBindFramebuffer != nullptr) {
 		bindFramebuffer = glBindFramebuffer;
 	} else if (glBindFramebufferOES != nullptr) {
@@ -56,7 +72,6 @@ Polyfill::Polyfill() {
 		bindFramebuffer = (PFNGLBINDFRAMEBUFFERPROC)glBindFramebufferEXT;
 	}
 
-	// IsFramebuffer
 	if (glIsFramebuffer != nullptr) {
 		isFramebuffer = glIsFramebuffer;
 	} else if (glIsFramebufferOES != nullptr) {
@@ -65,7 +80,6 @@ Polyfill::Polyfill() {
 		isFramebuffer = (PFNGLISFRAMEBUFFERPROC)glIsFramebufferEXT;
 	}
 
-	// BlendFuncSeparate
 	if (glBlendFuncSeparate != nullptr) {
 		blendFuncSeparate = glBlendFuncSeparate;
 	} else if (glBlendFuncSeparateOES != nullptr) {
@@ -74,7 +88,6 @@ Polyfill::Polyfill() {
 		blendFuncSeparate = (PFNGLBLENDFUNCSEPARATEPROC)glBlendFuncSeparateEXT;
 	}
 
-	// CheckFramebufferStatus
 	if (glCheckFramebufferStatus != nullptr) {
 		checkFrameBufferStatus = glCheckFramebufferStatus;
 	} else if (glCheckFramebufferStatusOES != nullptr) {
@@ -83,7 +96,6 @@ Polyfill::Polyfill() {
 		checkFrameBufferStatus = (PFNGLCHECKFRAMEBUFFERSTATUSPROC)glCheckFramebufferStatusEXT;
 	}
 
-	// DeleteFramebuffers
 	if (glDeleteFramebuffers != nullptr) {
 		deleteFrameBuffers = glDeleteFramebuffers;
 	} else if (glDeleteFramebuffersOES != nullptr) {
@@ -92,7 +104,6 @@ Polyfill::Polyfill() {
 		deleteFrameBuffers = (PFNGLDELETEFRAMEBUFFERSPROC)glDeleteFramebuffersEXT;
 	}
 
-	// GenFramebuffers
 	if (glGenFramebuffers != nullptr) {
 		genFrameBuffers = glGenFramebuffers;
 	} else if (glGenFramebuffersOES != nullptr) {
@@ -101,7 +112,6 @@ Polyfill::Polyfill() {
 		genFrameBuffers = (PFNGLGENFRAMEBUFFERSPROC)glGenFramebuffersEXT;
 	}
 
-	// GenRenderBuffers
 	if (glGenRenderbuffers != nullptr) {
 		genRenderBuffers = glGenRenderbuffers;
 	} else if (glGenRenderbuffersOES != nullptr) {
@@ -110,7 +120,6 @@ Polyfill::Polyfill() {
 		genRenderBuffers = (PFNGLGENRENDERBUFFERSPROC)glGenRenderbuffersEXT;
 	}
 
-	// RenderbufferStorage
 	if (glRenderbufferStorage != nullptr) {
 		renderBufferStorage = glRenderbufferStorage;
 	} else if (glRenderbufferStorageOES != nullptr) {
@@ -127,7 +136,6 @@ Polyfill::Polyfill() {
 		deleteRenderBuffers = (PFNGLDELETERENDERBUFFERSPROC)glDeleteRenderbuffersEXT;
 	}
 
-	// BindRenderbuffer
 	if (glBindRenderbuffer != nullptr) {
 		bindRenderBuffer = glBindRenderbuffer;
 	} else if (glBindRenderbufferOES != nullptr) {
@@ -136,7 +144,6 @@ Polyfill::Polyfill() {
 		bindRenderBuffer = (PFNGLBINDRENDERBUFFERPROC)glBindRenderbufferEXT;
 	}
 
-	// BindRenderbuffer
 	if (glFramebufferRenderbuffer != nullptr) {
 		frameBufferRenderBuffer = glFramebufferRenderbuffer;
 	} else if (glFramebufferRenderbufferOES != nullptr) {
@@ -145,7 +152,6 @@ Polyfill::Polyfill() {
 		frameBufferRenderBuffer = (PFNGLFRAMEBUFFERRENDERBUFFERPROC)glFramebufferRenderbufferEXT;
 	}
 
-	// FramebufferTexture2DOES
 	if (glFramebufferTexture2D != nullptr) {
 		framebufferTexture2D = glFramebufferTexture2D;
 	} else if (glFramebufferTexture2DOES != nullptr) {
@@ -153,5 +159,60 @@ Polyfill::Polyfill() {
 	} else if (glFramebufferTexture2DEXT != nullptr) {
 		framebufferTexture2D = (PFNGLFRAMEBUFFERTEXTURE2DPROC)glFramebufferTexture2DEXT;
 	}
+
+	// ===============================
+	// VBOs
+	// ===============================
+	if (glGenBuffers != nullptr) {
+		genBuffers = glGenBuffers;
+	} else if (glGenBuffersARB != nullptr) {
+		genBuffers = (PFNGLGENBUFFERSPROC)glGenBuffersARB;
+	}
+
+	if (glBindBuffer != nullptr) {
+		bindBuffer = glBindBuffer;
+	} else if (glBindBufferARB != nullptr) {
+		bindBuffer = (PFNGLBINDBUFFERPROC)glBindBufferARB;
+	}
+
+	if (glBufferData != nullptr) {
+		bufferData = glBufferData;
+	} else if (glBufferDataARB != nullptr) {
+		bufferData = (PFNGLBUFFERDATAPROC)glBufferDataARB;
+	}
+
+	if (glBufferSubData != nullptr) {
+		bufferSubData = glBufferSubData;
+	} else if (glBufferSubDataARB != nullptr) {
+		bufferSubData = (PFNGLBUFFERSUBDATAPROC)glBufferSubDataARB;
+	}
+
+	if (glDeleteBuffers != nullptr) {
+		deleteBuffers = glDeleteBuffers;
+	} else if (glDeleteBuffersARB != nullptr) {
+		deleteBuffers = (PFNGLDELETEBUFFERSPROC)glDeleteBuffersARB;
+	}
+
+	if (glIsBuffer != nullptr) {
+		isBuffer = glIsBuffer;
+	} else if (glIsBufferARB != nullptr) {
+		isBuffer = (PFNGLISBUFFERPROC)glIsBufferARB;
+	}
+
+	// ===============================
+	// Multitexture
+	// ===============================
+	if (glActiveTexture != nullptr) {
+		activeTexture = glActiveTexture;
+	} else if (glActiveTextureARB != nullptr) {
+		activeTexture = (PFNGLACTIVETEXTUREPROC)glActiveTextureARB;
+	}
+
+	if (glClientActiveTexture != nullptr) {
+		clientActiveTexture = glClientActiveTexture;
+	} else if (glClientActiveTextureARB != nullptr) {
+		clientActiveTexture = (PFNGLCLIENTACTIVETEXTUREPROC)glClientActiveTextureARB;
+	}
 }
+
 } //namespace GLES1

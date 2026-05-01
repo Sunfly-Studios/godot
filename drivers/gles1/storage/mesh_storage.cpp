@@ -107,6 +107,11 @@ void MeshStorage::mesh_add_surface(RID p_mesh, const RS::SurfaceData &p_surface)
 	s->format = p_surface.format;
 	s->primitive = p_surface.primitive;
 
+	s->vertex_buffer = 0;
+	s->attribute_buffer = 0;
+	s->index_buffer = 0;
+	s->skin_buffer = 0;
+
 	GLint prev_array_buffer = 0;
 	GLint prev_element_buffer = 0;
 	glGetIntegerv(GL_ARRAY_BUFFER_BINDING, &prev_array_buffer);
@@ -117,9 +122,14 @@ void MeshStorage::mesh_add_surface(RID p_mesh, const RS::SurfaceData &p_surface)
 		glGenBuffers(1, &s->vertex_buffer);
 		GL_CHECK_ERROR("GLES1::MeshStorage::mesh_add_surface: glGenBuffers (vertex buffer)");
 
-		glBindBuffer(GL_ARRAY_BUFFER, s->vertex_buffer);
-		GLES1::Utilities::get_singleton()->buffer_allocate_data(GL_ARRAY_BUFFER, s->vertex_buffer, p_surface.vertex_data.size(), p_surface.vertex_data.ptr(), (s->format & RS::ARRAY_FLAG_USE_DYNAMIC_UPDATE) ? GL_DYNAMIC_DRAW : GL_STATIC_DRAW, "Mesh vertex buffer");
-		GL_CHECK_ERROR("GLES1::MeshStorage::mesh_add_surface: buffer_allocate_data (vertex buffer)");
+		if (likely(s->vertex_buffer != 0)) {
+			glBindBuffer(GL_ARRAY_BUFFER, s->vertex_buffer);
+			GLES1::Utilities::get_singleton()->buffer_allocate_data(GL_ARRAY_BUFFER, s->vertex_buffer, p_surface.vertex_data.size(), p_surface.vertex_data.ptr(), (s->format & RS::ARRAY_FLAG_USE_DYNAMIC_UPDATE) ? GL_DYNAMIC_DRAW : GL_STATIC_DRAW, "Mesh vertex buffer");
+			GL_CHECK_ERROR("GLES1::MeshStorage::mesh_add_surface: buffer_allocate_data (vertex buffer)");
+		} else {
+			WARN_PRINT_ONCE("GLES1: Failed to generate vertex buffer. Using client memory fallback.");
+			s->vertex_buffer_fallback = p_surface.vertex_data;
+		}
 
 		s->vertex_buffer_size = p_surface.vertex_data.size();
 	}
@@ -129,9 +139,14 @@ void MeshStorage::mesh_add_surface(RID p_mesh, const RS::SurfaceData &p_surface)
 		glGenBuffers(1, &s->attribute_buffer);
 		GL_CHECK_ERROR("GLES1::MeshStorage::mesh_add_surface: glGenBuffers (attributes buffer)");
 
-		glBindBuffer(GL_ARRAY_BUFFER, s->attribute_buffer);
-		GLES1::Utilities::get_singleton()->buffer_allocate_data(GL_ARRAY_BUFFER, s->attribute_buffer, p_surface.attribute_data.size(), p_surface.attribute_data.ptr(), (s->format & RS::ARRAY_FLAG_USE_DYNAMIC_UPDATE) ? GL_DYNAMIC_DRAW : GL_STATIC_DRAW, "Mesh attribute buffer");
-		GL_CHECK_ERROR("GLES1::MeshStorage::mesh_add_surface: buffer_allocate_data (attributes buffer)");
+		if (likely(s->attribute_buffer != 0)) {
+			glBindBuffer(GL_ARRAY_BUFFER, s->attribute_buffer);
+			GLES1::Utilities::get_singleton()->buffer_allocate_data(GL_ARRAY_BUFFER, s->attribute_buffer, p_surface.attribute_data.size(), p_surface.attribute_data.ptr(), (s->format & RS::ARRAY_FLAG_USE_DYNAMIC_UPDATE) ? GL_DYNAMIC_DRAW : GL_STATIC_DRAW, "Mesh attribute buffer");
+			GL_CHECK_ERROR("GLES1::MeshStorage::mesh_add_surface: buffer_allocate_data (attributes buffer)");
+		} else {
+			WARN_PRINT_ONCE("GLES1: Failed to generate attribute buffer. Using client memory fallback.");
+			s->attribute_buffer_fallback = p_surface.attribute_data;
+		}
 
 		s->attribute_buffer_size = p_surface.attribute_data.size();
 	}
@@ -141,9 +156,14 @@ void MeshStorage::mesh_add_surface(RID p_mesh, const RS::SurfaceData &p_surface)
 		glGenBuffers(1, &s->index_buffer);
 		GL_CHECK_ERROR("GLES1::MeshStorage::mesh_add_surface: glGenBuffers (indices buffer)");
 
-		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, s->index_buffer);
-		GLES1::Utilities::get_singleton()->buffer_allocate_data(GL_ELEMENT_ARRAY_BUFFER, s->index_buffer, p_surface.index_data.size(), p_surface.index_data.ptr(), GL_STATIC_DRAW, "Mesh index buffer");
-		GL_CHECK_ERROR("GLES1::MeshStorage::mesh_add_surface: buffer_allocate_data (indices buffer)");
+		if (likely(s->index_buffer != 0)) {
+			glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, s->index_buffer);
+			GLES1::Utilities::get_singleton()->buffer_allocate_data(GL_ELEMENT_ARRAY_BUFFER, s->index_buffer, p_surface.index_data.size(), p_surface.index_data.ptr(), GL_STATIC_DRAW, "Mesh index buffer");
+			GL_CHECK_ERROR("GLES1::MeshStorage::mesh_add_surface: buffer_allocate_data (indices buffer)");
+		} else {
+			WARN_PRINT_ONCE("GLES1: Failed to generate index buffer. Using client memory fallback.");
+			s->index_buffer_fallback = p_surface.index_data;
+		}
 
 		s->index_count = p_surface.index_count;
 		s->index_buffer_size = p_surface.index_data.size();
@@ -232,16 +252,27 @@ void MeshStorage::_mesh_surface_clear(Mesh *mesh, int p_surface) {
 
 	if (s->vertex_buffer != 0) {
 		GLES1::Utilities::get_singleton()->buffer_free_data(s->vertex_buffer);
+		s->vertex_buffer = 0;
 	}
+	s->vertex_buffer_fallback.clear();
+
 	if (s->attribute_buffer != 0) {
 		GLES1::Utilities::get_singleton()->buffer_free_data(s->attribute_buffer);
+		s->attribute_buffer = 0;
 	}
+	s->attribute_buffer_fallback.clear();
+
 	if (s->index_buffer != 0) {
 		GLES1::Utilities::get_singleton()->buffer_free_data(s->index_buffer);
+		s->index_buffer = 0;
 	}
+	s->index_buffer_fallback.clear();
+
 	if (s->skin_buffer != 0) {
 		GLES1::Utilities::get_singleton()->buffer_free_data(s->skin_buffer);
+		s->skin_buffer = 0;
 	}
+	s->skin_buffer_fallback.clear();
 
 	if (s->versions) {
 		memfree(s->versions);
@@ -277,17 +308,24 @@ void MeshStorage::mesh_surface_update_vertex_region(RID p_mesh, int p_surface, i
 	uint64_t data_size = p_data.size();
 	ERR_FAIL_COND(p_offset + data_size > mesh->surfaces[p_surface]->vertex_buffer_size);
 	const uint8_t *r = p_data.ptr();
+	ERR_FAIL_NULL(r);
 
-	// Capture
-	GLint prev_array_buffer = 0;
-	glGetIntegerv(GL_ARRAY_BUFFER_BINDING, &prev_array_buffer);
+	if (likely(mesh->surfaces[p_surface]->vertex_buffer != 0)) {
+		// Capture
+		GLint prev_array_buffer = 0;
+		glGetIntegerv(GL_ARRAY_BUFFER_BINDING, &prev_array_buffer);
 
-	glBindBuffer(GL_ARRAY_BUFFER, mesh->surfaces[p_surface]->vertex_buffer);
-	glBufferSubData(GL_ARRAY_BUFFER, p_offset, data_size, r);
-	GL_CHECK_ERROR("GLES1::MeshStorage::mesh_surface_update_vertex_region: glBufferSubData");
+		glBindBuffer(GL_ARRAY_BUFFER, mesh->surfaces[p_surface]->vertex_buffer);
+		glBufferSubData(GL_ARRAY_BUFFER, p_offset, data_size, r);
+		GL_CHECK_ERROR("GLES1::MeshStorage::mesh_surface_update_vertex_region: glBufferSubData");
 
-	// Restore
-	glBindBuffer(GL_ARRAY_BUFFER, prev_array_buffer);
+		// Restore
+		glBindBuffer(GL_ARRAY_BUFFER, prev_array_buffer);
+	} else {
+		uint8_t *dst = mesh->surfaces[p_surface]->vertex_buffer_fallback.ptrw();
+		ERR_FAIL_NULL(dst);
+		memcpy(dst + p_offset, r, data_size);
+	}
 }
 
 void MeshStorage::mesh_surface_update_attribute_region(RID p_mesh, int p_surface, int p_offset, const Vector<uint8_t> &p_data) {
@@ -299,17 +337,24 @@ void MeshStorage::mesh_surface_update_attribute_region(RID p_mesh, int p_surface
 	uint64_t data_size = p_data.size();
 	ERR_FAIL_COND(p_offset + data_size > mesh->surfaces[p_surface]->attribute_buffer_size);
 	const uint8_t *r = p_data.ptr();
+	ERR_FAIL_NULL(r);
 
-	// Capture
-	GLint prev_array_buffer = 0;
-	glGetIntegerv(GL_ARRAY_BUFFER_BINDING, &prev_array_buffer);
+	if (likely(mesh->surfaces[p_surface]->attribute_buffer != 0)) {
+		// Capture
+		GLint prev_array_buffer = 0;
+		glGetIntegerv(GL_ARRAY_BUFFER_BINDING, &prev_array_buffer);
 
-	glBindBuffer(GL_ARRAY_BUFFER, mesh->surfaces[p_surface]->attribute_buffer);
-	glBufferSubData(GL_ARRAY_BUFFER, p_offset, data_size, r);
-	GL_CHECK_ERROR("GLES1::MeshStorage::mesh_surface_update_attribute_region: glBufferSubData");
+		glBindBuffer(GL_ARRAY_BUFFER, mesh->surfaces[p_surface]->attribute_buffer);
+		glBufferSubData(GL_ARRAY_BUFFER, p_offset, data_size, r);
+		GL_CHECK_ERROR("GLES1::MeshStorage::mesh_surface_update_attribute_region: glBufferSubData");
 
-	// Restore
-	glBindBuffer(GL_ARRAY_BUFFER, prev_array_buffer);
+		// Restore
+		glBindBuffer(GL_ARRAY_BUFFER, prev_array_buffer);
+	} else {
+		uint8_t *dst = mesh->surfaces[p_surface]->attribute_buffer_fallback.ptrw();
+		ERR_FAIL_NULL(dst);
+		memcpy(dst + p_offset, r, data_size);
+	}
 }
 
 void MeshStorage::mesh_surface_update_skin_region(RID p_mesh, int p_surface, int p_offset, const Vector<uint8_t> &p_data) {
@@ -575,15 +620,24 @@ void MeshStorage::_multimesh_initialize(RID p_rid) {
 	multimesh_owner.initialize_rid(p_rid, MultiMesh());
 	MultiMesh *multimesh = multimesh_owner.get_or_null(p_rid);
 	ERR_FAIL_NULL(multimesh);
+	multimesh->buffer = 0;
 
 	// Create a backing GL buffer just in case it's used for 3D later.
 	glGenBuffers(1, &multimesh->buffer);
 	GL_CHECK_ERROR("GLES1::MeshStorage::_multimesh_initialize: glGenBuffers");
 
-	// Pre-register empty size to tracking cache
-	glBindBuffer(GL_ARRAY_BUFFER, multimesh->buffer);
-	GLES1::Utilities::get_singleton()->buffer_allocate_data(GL_ARRAY_BUFFER, multimesh->buffer, 0, nullptr, GL_DYNAMIC_DRAW, "MultiMesh buffer");
-	glBindBuffer(GL_ARRAY_BUFFER, 0);
+	if (likely(multimesh->buffer != 0)) {
+		GLint prev_array_buffer = 0;
+		glGetIntegerv(GL_ARRAY_BUFFER_BINDING, &prev_array_buffer);
+
+		// Pre-register empty size to tracking cache
+		glBindBuffer(GL_ARRAY_BUFFER, multimesh->buffer);
+		GLES1::Utilities::get_singleton()->buffer_allocate_data(GL_ARRAY_BUFFER, multimesh->buffer, 0, nullptr, GL_DYNAMIC_DRAW, "MultiMesh buffer");
+
+		glBindBuffer(GL_ARRAY_BUFFER, prev_array_buffer);
+	} else {
+		WARN_PRINT_ONCE("GLES1: Failed to generate MultiMesh buffer. Using client memory fallback.");
+	}
 }
 
 void MeshStorage::_multimesh_free(RID p_rid) {
@@ -637,10 +691,16 @@ void MeshStorage::_multimesh_allocate_data(RID p_multimesh, int p_instances, RS:
 	multimesh->buffer_set = false;
 
 	// Orphan the VRAM buffer and allocate the correct size
-	glBindBuffer(GL_ARRAY_BUFFER, multimesh->buffer);
-	GLES1::Utilities::get_singleton()->buffer_resize_data(GL_ARRAY_BUFFER, multimesh->buffer, data_size * sizeof(float), nullptr, GL_DYNAMIC_DRAW, "MultiMesh buffer");
-	glBindBuffer(GL_ARRAY_BUFFER, 0);
-	GL_CHECK_ERROR("GLES1::MeshStorage::_multimesh_allocate_data: buffer_resize_data");
+	if (likely(multimesh->buffer != 0)) {
+		GLint prev_array_buffer = 0;
+		glGetIntegerv(GL_ARRAY_BUFFER_BINDING, &prev_array_buffer);
+
+		glBindBuffer(GL_ARRAY_BUFFER, multimesh->buffer);
+		GLES1::Utilities::get_singleton()->buffer_resize_data(GL_ARRAY_BUFFER, multimesh->buffer, data_size * sizeof(float), nullptr, GL_DYNAMIC_DRAW, "MultiMesh buffer");
+		GL_CHECK_ERROR("GLES1::MeshStorage::_multimesh_allocate_data: buffer_resize_data");
+
+		glBindBuffer(GL_ARRAY_BUFFER, prev_array_buffer);
+	}
 }
 
 int MeshStorage::_multimesh_get_instance_count(RID p_multimesh) const {
@@ -933,10 +993,15 @@ void MeshStorage::_multimesh_set_buffer(RID p_multimesh, const Vector<float> &p_
 
 	// Pipe it to VRAM in case a 3D extension
 	// requests hardware instancing
-	if (multimesh->buffer != 0) {
+	if (likely(multimesh->buffer != 0)) {
+		GLint prev_array_buffer = 0;
+		glGetIntegerv(GL_ARRAY_BUFFER_BINDING, &prev_array_buffer);
+
 		glBindBuffer(GL_ARRAY_BUFFER, multimesh->buffer);
 		glBufferSubData(GL_ARRAY_BUFFER, 0, p_buffer.size() * sizeof(float), p_buffer.ptr());
-		glBindBuffer(GL_ARRAY_BUFFER, 0);
+		GL_CHECK_ERROR("GLES1::MeshStorage::_multimesh_set_buffer: glBufferSubData");
+
+		glBindBuffer(GL_ARRAY_BUFFER, prev_array_buffer);
 	}
 
 	multimesh->buffer_set = true;
@@ -944,6 +1009,8 @@ void MeshStorage::_multimesh_set_buffer(RID p_multimesh, const Vector<float> &p_
 	// Generate the AABB.
 	if (multimesh->mesh.is_valid() && multimesh->custom_aabb == AABB()) {
 		const float *data = p_buffer.ptr();
+		ERR_FAIL_NULL(data);
+
 		_multimesh_re_create_aabb(multimesh, data, multimesh->instances);
 		multimesh->dependency.changed_notify(Dependency::DEPENDENCY_CHANGED_AABB);
 	}

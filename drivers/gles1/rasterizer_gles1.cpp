@@ -395,27 +395,60 @@ RasterizerGLES1::RasterizerGLES1() {
 
 	// OpenGL needs to be initialized before initializing the Rasterizers
 	config = memnew(GLES1::Config);
+	ERR_FAIL_NULL(config);
+
 	utilities = memnew(GLES1::Utilities);
+	ERR_FAIL_NULL(utilities);
+
 	polyfill = memnew(GLES1::Polyfill);
+	ERR_FAIL_NULL(polyfill);
+
 	texture_storage = memnew(GLES1::TextureStorage);
+	ERR_FAIL_NULL(texture_storage);
+
 	material_storage = memnew(GLES1::MaterialStorage);
+	ERR_FAIL_NULL(material_storage);
+
 	mesh_storage = memnew(GLES1::MeshStorage);
+	ERR_FAIL_NULL(mesh_storage);
+
 	particles_storage = memnew(GLES1::ParticlesStorage);
+	ERR_FAIL_NULL(particles_storage);
+
 	light_storage = memnew(GLES1::LightStorage);
+	ERR_FAIL_NULL(light_storage);
+
 	copy_effects = memnew(GLES1::CopyEffects);
+	ERR_FAIL_NULL(copy_effects);
+
 	cubemap_filter = memnew(GLES1::CubemapFilter);
+	ERR_FAIL_NULL(cubemap_filter);
+
 	glow = memnew(GLES1::Glow);
+	ERR_FAIL_NULL(glow);
+
 	post_effects = memnew(GLES1::PostEffects);
+	ERR_FAIL_NULL(post_effects);
+
 	feed_effects = memnew(GLES1::FeedEffects);
+	ERR_FAIL_NULL(feed_effects);
+
 	gi = memnew(GLES1::GI);
+	ERR_FAIL_NULL(gi);
+
 	fog = memnew(GLES1::Fog);
+	ERR_FAIL_NULL(fog);
+
 	canvas = memnew(RasterizerCanvasGLES1());
+	ERR_FAIL_NULL(canvas);
+	
 	scene = memnew(RasterizerSceneGLES1());
+	ERR_FAIL_NULL(scene);
 
 	// Disable OpenGL linear to sRGB conversion, because Godot will always do this conversion itself.
 	if (config->srgb_framebuffer_supported) {
-		glDisable(GL_FRAMEBUFFER_SRGB);
-		GL_CHECK_ERROR("GLES1::RasterizerGLES1::initialize: glDisable(GL_FRAMEBUFFER_SRGB)");
+		glDisable(GL_FRAMEBUFFER_SRGB_EXT);
+		GL_CHECK_ERROR("GLES1::RasterizerGLES1::initialize: glDisable(GL_FRAMEBUFFER_SRGB_EXT)");
 	}
 }
 
@@ -426,7 +459,57 @@ void RasterizerGLES1::_blit_render_target_to_screen(RID p_render_target, Display
 	GLES1::RenderTarget *rt = GLES1::TextureStorage::get_singleton()->get_render_target(p_render_target);
 	ERR_FAIL_NULL(rt);
 
-	// Steer the draw target to the actual application window
+	// Abort if this render target is routing directly to the screen (no FBO)
+	// or if its color texture is invalid (0).
+	if (rt->direct_to_screen || rt->color == 0) {
+		return;
+	}
+
+	// State capture
+	GLboolean prev_blend = 0, prev_depth_test = 0, prev_cull_face = 0, prev_scissor_test = 0;
+	glGetBooleanv(GL_BLEND, &prev_blend);
+	glGetBooleanv(GL_DEPTH_TEST, &prev_depth_test);
+	glGetBooleanv(GL_CULL_FACE, &prev_cull_face);
+	glGetBooleanv(GL_SCISSOR_TEST, &prev_scissor_test);
+
+	GLboolean prev_depth_mask = 0;
+	glGetBooleanv(GL_DEPTH_WRITEMASK, &prev_depth_mask);
+
+	GLint prev_viewport[4] = {};
+	glGetIntegerv(GL_VIEWPORT, prev_viewport);
+
+	GLfloat prev_clear_color[4] = {};
+	glGetFloatv(GL_COLOR_CLEAR_VALUE, prev_clear_color);
+
+	GLfloat prev_current_color[4] = {};
+	glGetFloatv(GL_CURRENT_COLOR, prev_current_color);
+
+	GLint prev_active_tex = 0;
+	glGetIntegerv(GL_ACTIVE_TEXTURE, &prev_active_tex);
+
+	glActiveTexture(GL_TEXTURE0);
+	GLint prev_bound_tex = 0;
+	glGetIntegerv(GL_TEXTURE_BINDING_2D, &prev_bound_tex);
+	GLboolean prev_tex_2d = 0;
+	glGetBooleanv(GL_TEXTURE_2D, &prev_tex_2d);
+
+	GLint prev_client_active_tex = 0;
+	glGetIntegerv(GL_CLIENT_ACTIVE_TEXTURE, &prev_client_active_tex);
+	glClientActiveTexture(GL_TEXTURE0);
+
+	GLboolean prev_color_array = 0, prev_normal_array = 0;
+	GLboolean prev_vertex_array = 0, prev_tex_coord_array = 0;
+	glGetBooleanv(GL_COLOR_ARRAY, &prev_color_array);
+	glGetBooleanv(GL_NORMAL_ARRAY, &prev_normal_array);
+	glGetBooleanv(GL_VERTEX_ARRAY, &prev_vertex_array);
+	glGetBooleanv(GL_TEXTURE_COORD_ARRAY, &prev_tex_coord_array);
+
+	GLint prev_array_buffer = 0, prev_element_buffer = 0;
+	glGetIntegerv(GL_ARRAY_BUFFER_BINDING, &prev_array_buffer);
+	glGetIntegerv(GL_ELEMENT_ARRAY_BUFFER_BINDING, &prev_element_buffer);
+	GL_CHECK_ERROR("GLES1::RasterizerGLES1::_blit_render_target_to_screen: state capture");
+
+	// Execute blit
 	GLES1::TextureStorage::get_singleton()->bind_framebuffer_system();
 	GL_CHECK_ERROR("GLES1::RasterizerGLES1::_blit_render_target_to_screen: bind_framebuffer_system");
 
@@ -434,151 +517,275 @@ void RasterizerGLES1::_blit_render_target_to_screen(RID p_render_target, Display
 	// If the OS reclaims the physical surface while the GL thread is mid-frame
 	// FBO 0 becomes incomplete.
 	if (glCheckFramebufferStatusOES(GL_FRAMEBUFFER_OES) != GL_FRAMEBUFFER_COMPLETE_OES) {
+		// Restore state before early out
+		if (prev_blend) {
+			glEnable(GL_BLEND);
+		} else {
+			glDisable(GL_BLEND);
+		}
+		if (prev_depth_test) {
+			glEnable(GL_DEPTH_TEST);
+		} else {
+			glDisable(GL_DEPTH_TEST);
+		}
+		if (prev_cull_face) {
+			glEnable(GL_CULL_FACE);
+		} else {
+			glDisable(GL_CULL_FACE);
+		}
+		if (prev_scissor_test) {
+			glEnable(GL_SCISSOR_TEST);
+		} else {
+			glDisable(GL_SCISSOR_TEST);
+		}
+
+		glDepthMask(prev_depth_mask);
+		glViewport(prev_viewport[0], prev_viewport[1], prev_viewport[2], prev_viewport[3]);
+		glClearColor(prev_clear_color[0], prev_clear_color[1], prev_clear_color[2], prev_clear_color[3]);
+		glColor4f(prev_current_color[0], prev_current_color[1], prev_current_color[2], prev_current_color[3]);
+
+		glBindBuffer(GL_ARRAY_BUFFER, prev_array_buffer);
+		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, prev_element_buffer);
+
+		if (prev_color_array) {
+			glEnableClientState(GL_COLOR_ARRAY);
+		} else {
+			glDisableClientState(GL_COLOR_ARRAY);
+		}
+		if (prev_normal_array) {
+			glEnableClientState(GL_NORMAL_ARRAY);
+		} else {
+			glDisableClientState(GL_NORMAL_ARRAY);
+		}
+		if (prev_vertex_array) {
+			glEnableClientState(GL_VERTEX_ARRAY);
+		} else {
+			glDisableClientState(GL_VERTEX_ARRAY);
+		}
+		if (prev_tex_coord_array) {
+			glEnableClientState(GL_TEXTURE_COORD_ARRAY);
+		} else {
+			glDisableClientState(GL_TEXTURE_COORD_ARRAY);
+		}
+
+		glActiveTexture(GL_TEXTURE0);
+		glBindTexture(GL_TEXTURE_2D, prev_bound_tex);
+		if (prev_tex_2d) {
+			glEnable(GL_TEXTURE_2D);
+		} else {
+			glDisable(GL_TEXTURE_2D);
+		}
+
+		glActiveTexture(prev_active_tex);
+		glClientActiveTexture(prev_client_active_tex);
 		return;
 	}
 #endif
 
 	Size2i win_size = DisplayServer::get_singleton()->window_get_size(p_screen);
 
-	if (win_size.width <= 0 || win_size.height <= 0) {
-		return;
-	}
-
-	if (p_first) {
-		if (p_screen_rect.position != Vector2() || p_screen_rect.size != rt->size) {
-			glViewport(0, 0, win_size.width, win_size.height);
-			// Respect the FBO's transparency when clearing the OS window
-			if (rt->is_transparent) {
-				glClearColor(0.0, 0.0, 0.0, 0.0);
-			} else {
-				glClearColor(0.0, 0.0, 0.0, 1.0);
+	if (win_size.width > 0 && win_size.height > 0) {
+		if (p_first) {
+			if (p_screen_rect.position != Vector2() || p_screen_rect.size != rt->size) {
+				glViewport(0, 0, win_size.width, win_size.height);
+				// Respect the FBO's transparency when clearing the OS window
+				if (rt->is_transparent) {
+					glClearColor(0.0, 0.0, 0.0, 0.0);
+				} else {
+					glClearColor(0.0, 0.0, 0.0, 1.0);
+				}
+				glClear(GL_COLOR_BUFFER_BIT);
+				GL_CHECK_ERROR("GLES1::RasterizerGLES1::_blit_render_target_to_screen: first pass clear");
 			}
-			glClear(GL_COLOR_BUFFER_BIT);
-			GL_CHECK_ERROR("GLES1::RasterizerGLES1::_blit_render_target_to_screen: first pass clear");
 		}
-	}
 
-	// Calculate the correct viewport for the destination rect
-	// OpenGL has bottom-left origin, so we must flip the Y axis for the viewport
-	GLsizei vp_w = MAX(0, p_screen_rect.size.width);
-	GLsizei vp_h = MAX(0, p_screen_rect.size.height);
+		// Calculate the correct viewport for the destination rect
+		// OpenGL has bottom-left origin, so we must flip the Y axis for the viewport
+		GLsizei vp_w = MAX(0, p_screen_rect.size.width);
+		GLsizei vp_h = MAX(0, p_screen_rect.size.height);
 
-	glViewport(
-		p_screen_rect.position.x,
-		win_size.height - p_screen_rect.position.y - p_screen_rect.size.height,
-		vp_w,
-		vp_h);
-	GL_CHECK_ERROR("GLES1::RasterizerGLES1::_blit_render_target_to_screen: glViewport");
+		glViewport(
+			p_screen_rect.position.x,
+			win_size.height - p_screen_rect.position.y - p_screen_rect.size.height,
+			vp_w,
+			vp_h
+		);
+		GL_CHECK_ERROR("GLES1::RasterizerGLES1::_blit_render_target_to_screen: glViewport");
 
-	// Disable states that could ruin a direct copy
-	glDisable(GL_BLEND);
-	glDisable(GL_DEPTH_TEST);
-	glDisable(GL_CULL_FACE);
-	glDisable(GL_SCISSOR_TEST);
-	glDisable(GL_TEXTURE_2D);
-	glDepthMask(GL_FALSE);
-	GL_CHECK_ERROR("GLES1::RasterizerGLES1::_blit_render_target_to_screen: disable states");
+		// Disable states that could ruin a direct copy
+		glDisable(GL_BLEND);
+		glDisable(GL_DEPTH_TEST);
+		glDisable(GL_CULL_FACE);
+		glDisable(GL_SCISSOR_TEST);
+		glDepthMask(GL_FALSE);
+		GL_CHECK_ERROR("GLES1::RasterizerGLES1::_blit_render_target_to_screen: disable states");
 
-	// Bind the RenderTarget's color texture
-	glActiveTexture(GL_TEXTURE0);
-	glEnable(GL_TEXTURE_2D);
-	glBindTexture(GL_TEXTURE_2D, rt->color);
+		// Bind the RenderTarget's color texture
+		glActiveTexture(GL_TEXTURE0);
+		glEnable(GL_TEXTURE_2D);
+		glBindTexture(GL_TEXTURE_2D, rt->color);
 
-	// Make sure we don't blur the image when the RT is smaller than the screen
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-	GL_CHECK_ERROR("GLES1::RasterizerGLES1::_blit_render_target_to_screen: texture setup");
+		// Make sure we don't blur the image when the RT is smaller than the screen
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+		GL_CHECK_ERROR("GLES1::RasterizerGLES1::_blit_render_target_to_screen: texture setup");
 
-	// Unbind VBOs so glVertexPointer reads from our local CPU array
-	glBindBuffer(GL_ARRAY_BUFFER, 0);
-	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+		// Unbind VBOs so glVertexPointer reads from our local CPU array
+		glBindBuffer(GL_ARRAY_BUFFER, 0);
+		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
 
-	glClientActiveTexture(GL_TEXTURE0);
+		glClientActiveTexture(GL_TEXTURE0);
+		glDisableClientState(GL_NORMAL_ARRAY);
+		glDisableClientState(GL_COLOR_ARRAY);
+		glColor4f(1.0f, 1.0f, 1.0f, 1.0f);
+		GL_CHECK_ERROR("GLES1::RasterizerGLES1::_blit_render_target_to_screen: VBO unbind and color reset");
+		
+		// Eradicate secondary texture unit state leaks
+		if (GLES1::Config::get_singleton()->max_texture_image_units >= 2) {
+			for (int i = 1; i < GLES1::Config::get_singleton()->max_texture_image_units; i++) {
+				glActiveTexture(GL_TEXTURE0 + i);
+				glDisable(GL_TEXTURE_2D);
+				glClientActiveTexture(GL_TEXTURE0 + i);
+				glDisableClientState(GL_TEXTURE_COORD_ARRAY);
+			}
+		}
+		glActiveTexture(GL_TEXTURE0);
+		glClientActiveTexture(GL_TEXTURE0);
 
-	glDisableClientState(GL_NORMAL_ARRAY);
-	glDisableClientState(GL_COLOR_ARRAY);
-	glColor4f(1.0f, 1.0f, 1.0f, 1.0f);
-	GL_CHECK_ERROR("GLES1::RasterizerGLES1::_blit_render_target_to_screen: VBO unbind and color reset");
+		// Reset the texture matrix
+		glMatrixMode(GL_TEXTURE);
+		glPushMatrix();
+		glLoadIdentity();
 
-	// Reset the texture matrix
-	glMatrixMode(GL_TEXTURE);
-	glLoadIdentity();
-	glEnable(GL_TEXTURE_2D);
+		glMatrixMode(GL_PROJECTION);
+		glPushMatrix();
+		glLoadIdentity();
 
-	// Ensure matrices are clean for NDC drawing
-	glMatrixMode(GL_PROJECTION);
-	glLoadIdentity();
-	glMatrixMode(GL_MODELVIEW);
-	glLoadIdentity();
-	GL_CHECK_ERROR("GLES1::RasterizerGLES1::_blit_render_target_to_screen: matrix resets");
+		glMatrixMode(GL_MODELVIEW);
+		glPushMatrix();
+		glLoadIdentity();
+		GL_CHECK_ERROR("GLES1::RasterizerGLES1::_blit_render_target_to_screen: matrix resets");
 
-	// Godot 4 renders to FBOs upside down.
-	// We must invert the UVs when copying to the system screen.
-	bool flip_y = true;
-	if (rt->overridden.color.is_valid()) {
-		// If overridden (e.g., XR), it wasn't rendered upside down.
-		flip_y = false;
-	}
+		bool flip_y = true;
+		if (rt->overridden.color.is_valid()) {
+			flip_y = false;
+		}
 
+		// Godot 4 renders to FBOs upside down.
+		// We must invert the UVs when copying to the system screen.
 #ifdef WINDOWS_ENABLED
-	if (screen_flipped_y) {
-		flip_y = !flip_y;
-	}
+		if (screen_flipped_y) {
+			// If overridden (e.g., XR), it wasn't rendered upside down.
+			flip_y = !flip_y;
+		}
 #endif
 
-	float uvs[8] = {};
-	if (flip_y) {
-		// Upside down UVs
-		uvs[0] = 0.0f;
-		uvs[1] = 0.0f;
-		uvs[2] = 0.0f;
-		uvs[3] = 1.0f;
-		uvs[4] = 1.0f;
-		uvs[5] = 0.0f;
-		uvs[6] = 1.0f;
-		uvs[7] = 1.0f;
-	} else {
-		// Normal UVs
-		uvs[0] = 0.0f;
-		uvs[1] = 1.0f;
-		uvs[2] = 0.0f;
-		uvs[3] = 0.0f;
-		uvs[4] = 1.0f;
-		uvs[5] = 1.0f;
-		uvs[6] = 1.0f;
-		uvs[7] = 0.0f;
+		// Use static arrays to prevent stack pointers from becoming dangling
+		// in deferred software rasterizer pipelines.
+		static constexpr float uvs_flipped[8] = {
+			0.0f, 0.0f,
+			0.0f, 1.0f,
+			1.0f, 0.0f,
+			1.0f, 1.0f
+		};
+
+		static constexpr float uvs_normal[8] = {
+			0.0f, 1.0f,
+			0.0f, 0.0f,
+			1.0f, 1.0f,
+			1.0f, 0.0f
+		};
+
+		static constexpr float vertices[8] = {
+			-1.0f, 1.0f,
+			-1.0f, -1.0f,
+			1.0f, 1.0f,
+			1.0f, -1.0f
+		};
+
+		glEnableClientState(GL_VERTEX_ARRAY);
+		glEnableClientState(GL_TEXTURE_COORD_ARRAY);
+
+		glVertexPointer(2, GL_FLOAT, 0, vertices);
+		glTexCoordPointer(2, GL_FLOAT, 0, flip_y ? uvs_flipped : uvs_normal);
+		GL_CHECK_ERROR("GLES1::RasterizerGLES1::_blit_render_target_to_screen: pointer setup");
+
+		glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+		GL_CHECK_ERROR("GLES1::RasterizerGLES1::_blit_render_target_to_screen: glDrawArrays");
+
+		glMatrixMode(GL_TEXTURE);
+		glPopMatrix();
+		glMatrixMode(GL_PROJECTION);
+		glPopMatrix();
+		glMatrixMode(GL_MODELVIEW);
+		glPopMatrix();
 	}
 
-	// Draw full screen quad in NDC (-1 to 1)
-	float vertices[] = {
-		-1.0f, 1.0f,
-		-1.0f, -1.0f,
-		1.0f, 1.0f,
-		1.0f, -1.0f
-	};
-
-	glEnableClientState(GL_VERTEX_ARRAY);
-	glEnableClientState(GL_TEXTURE_COORD_ARRAY);
-
-	glVertexPointer(2, GL_FLOAT, 0, vertices);
-	glTexCoordPointer(2, GL_FLOAT, 0, uvs);
-	GL_CHECK_ERROR("GLES1::RasterizerGLES1::_blit_render_target_to_screen: pointer setup");
-
-	glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
-	GL_CHECK_ERROR("GLES1::RasterizerGLES1::_blit_render_target_to_screen: glDrawArrays");
-
-	glDisableClientState(GL_VERTEX_ARRAY);
-	glDisableClientState(GL_TEXTURE_COORD_ARRAY);
-
-	// Clean up
-	glBindTexture(GL_TEXTURE_2D, 0);
-	glDisable(GL_TEXTURE_2D);
+	// State restore
+	if (prev_blend) {
+		glEnable(GL_BLEND);
+	} else {
+		glDisable(GL_BLEND);
+	}
+	if (prev_depth_test) {
+		glEnable(GL_DEPTH_TEST);
+	} else {
+		glDisable(GL_DEPTH_TEST);
+	}
+	if (prev_cull_face) {
+		glEnable(GL_CULL_FACE);
+	} else {
+		glDisable(GL_CULL_FACE);
+	}
+	if (prev_scissor_test) {
+		glEnable(GL_SCISSOR_TEST);
+	} else {
+		glDisable(GL_SCISSOR_TEST);
+	}
 
 	// Restore global depth mask
-	glDepthMask(GL_TRUE);
-	GL_CHECK_ERROR("_blit_render_target_to_screen: cleanup");
+	glDepthMask(prev_depth_mask);
+	glViewport(prev_viewport[0], prev_viewport[1], prev_viewport[2], prev_viewport[3]);
+	glClearColor(prev_clear_color[0], prev_clear_color[1], prev_clear_color[2], prev_clear_color[3]);
+	glColor4f(prev_current_color[0], prev_current_color[1], prev_current_color[2], prev_current_color[3]);
+
+	glBindBuffer(GL_ARRAY_BUFFER, prev_array_buffer);
+	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, prev_element_buffer);
+
+	if (prev_color_array) {
+		glEnableClientState(GL_COLOR_ARRAY);
+	} else {
+		glDisableClientState(GL_COLOR_ARRAY);
+	}
+	if (prev_normal_array) {
+		glEnableClientState(GL_NORMAL_ARRAY);
+	} else {
+		glDisableClientState(GL_NORMAL_ARRAY);
+	}
+	if (prev_vertex_array) {
+		glEnableClientState(GL_VERTEX_ARRAY);
+	} else {
+		glDisableClientState(GL_VERTEX_ARRAY);
+	}
+	if (prev_tex_coord_array) {
+		glEnableClientState(GL_TEXTURE_COORD_ARRAY);
+	} else {
+		glDisableClientState(GL_TEXTURE_COORD_ARRAY);
+	}
+
+	glActiveTexture(GL_TEXTURE0);
+	glBindTexture(GL_TEXTURE_2D, prev_bound_tex);
+	if (prev_tex_2d) {
+		glEnable(GL_TEXTURE_2D);
+	} else {
+		glDisable(GL_TEXTURE_2D);
+	}
+
+	glActiveTexture(prev_active_tex);
+	glClientActiveTexture(prev_client_active_tex);
+	GL_CHECK_ERROR("GLES1::RasterizerGLES1::_blit_render_target_to_screen: state restore");
 }
 
 // is this p_screen useless in a multi window environment?

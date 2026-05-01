@@ -585,6 +585,9 @@ void TextureStorage::texture_2d_layered_initialize(RID p_texture, const Vector<R
 	texture.total_data_size = p_layers[0]->get_image_data_size(texture.width, texture.height, texture.format, texture.mipmaps) * texture.layers;
 	texture.active = true;
 	glGenTextures(1, &texture.tex_id);
+
+	ERR_FAIL_COND_MSG(texture.tex_id == 0, "GLES1: Failed to generate layered texture ID. GL Context lost.");
+
 	GLES2::Utilities::get_singleton()->texture_allocated_data(texture.tex_id, texture.total_data_size, "Texture Layered");
 	texture_owner.initialize_rid(p_texture, texture);
 	for (int i = 0; i < p_layers.size(); i++) {
@@ -834,7 +837,8 @@ Ref<Image> TextureStorage::texture_2d_get(RID p_texture) const {
 	if (depth_test_enabled) {
 		glEnable(GL_DEPTH_TEST);
 	}
-
+	GL_CHECK_ERROR("GLES2::TextureStorage::texture_2d_get: restore states");
+	
 	// Resize the data vector back to its exact required size
 	data.resize(data_size);
 
@@ -1077,8 +1081,19 @@ void TextureStorage::_texture_set_data(RID p_texture, const Ref<Image> &p_image,
 	}
 #endif
 
+	GLint prev_active_tex = 0;
+	glGetIntegerv(GL_ACTIVE_TEXTURE, &prev_active_tex);
+	GL_CHECK_ERROR("GLES2::TextureStorage::_texture_set_data: glGetIntegerv GL_ACTIVE_TEXTURE");
+
 	glActiveTexture(GL_TEXTURE0);
+	GL_CHECK_ERROR("GLES2::TextureStorage::_texture_set_data: glActiveTexture");
+
+	GLint prev_tex_binding = 0;
+	glGetIntegerv(GL_TEXTURE_BINDING_2D, &prev_tex_binding);
+	GL_CHECK_ERROR("GLES2::TextureStorage::_texture_set_data: glGetIntegerv GL_TEXTURE_BINDING_2D");
+
 	glBindTexture(texture->target, texture->tex_id);
+	GL_CHECK_ERROR("GLES2::TextureStorage::_texture_set_data: glBindTexture");
 
 	// Default to Clamp-to-Edge to prevent possible NPOT black screens.
 	// Default to Linear filtering so mipmap checks don't fail an incomplete texture.
@@ -1113,6 +1128,12 @@ void TextureStorage::_texture_set_data(RID p_texture, const Ref<Image> &p_image,
 	}
 
 	glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
+	GL_CHECK_ERROR("GLES2::TextureStorage::_texture_set_data: glPixelStorei 4");
+
+	glBindTexture(texture->target, prev_tex_binding);
+	glActiveTexture(prev_active_tex);
+	GL_CHECK_ERROR("GLES2::TextureStorage::_texture_set_data: restore state bindings");
+
 	texture->total_data_size = tsize;
 	texture->stored_cube_sides |= (1 << p_layer);
 	texture->mipmaps = mipmaps;

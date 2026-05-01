@@ -204,9 +204,19 @@ void DisplayServerX11::_update_real_mouse_position(const WindowData &wd) {
 }
 
 bool DisplayServerX11::_refresh_device_info() {
+	if (!XIQueryDevice || !XIFreeDeviceInfo) {
+		return false;
+	}
+	
 	int event_base, error_base;
 
 	print_verbose("XInput: Refreshing devices.");
+	
+	if (!XQueryExtension) {
+		print_verbose("XQueryExtension is null. XInput 2 not available");
+		xi.opcode = 0;
+		return false;
+	}
 
 	if (!XQueryExtension(x11_display, "XInputExtension", &xi.opcode, &event_base, &error_base)) {
 		print_verbose("XInput extension not available. Please upgrade your distribution.");
@@ -232,9 +242,13 @@ bool DisplayServerX11::_refresh_device_info() {
 	xi.pen_inverted_devices.clear();
 	xi.last_relative_time = 0;
 
-	int dev_count;
+	int dev_count = 0;
 	XIDeviceInfo *info = XIQueryDevice(x11_display, XIAllDevices, &dev_count);
 
+	if (!info) {
+		return false;
+	}
+	
 	for (int i = 0; i < dev_count; i++) {
 		XIDeviceInfo *dev = &info[i];
 		if (!dev->enabled) {
@@ -328,7 +342,13 @@ void DisplayServerX11::_flush_mouse_motion() {
 
 	for (uint32_t event_index = 0; event_index < polled_events.size(); ++event_index) {
 		XEvent &event = polled_events[event_index];
-		if (XGetEventData(x11_display, &event.xcookie) && event.xcookie.type == GenericEvent && event.xcookie.extension == xi.opcode) {
+		if (
+			event.type == GenericEvent &&
+			XGetEventData &&
+			XGetEventData(x11_display, &event.xcookie) &&
+			event.xcookie.type == GenericEvent &&
+			event.xcookie.extension == xi.opcode
+		) {
 			XIDeviceEvent *event_data = (XIDeviceEvent *)event.xcookie.data;
 			if (event_data->evtype == XI_RawMotion) {
 				XFreeEventData(x11_display, &event.xcookie);
@@ -1120,7 +1140,9 @@ int DisplayServerX11::get_screen_count() const {
 	int event_base, error_base;
 	if (xinerama_ext_ok && XineramaQueryExtension(x11_display, &event_base, &error_base)) {
 		XineramaScreenInfo *xsi = XineramaQueryScreens(x11_display, &count);
-		XFree(xsi);
+		if (xsi) {
+			XFree(xsi);
+		}
 	}
 	if (count == 0) {
 		count = XScreenCount(x11_display);
@@ -2266,38 +2288,40 @@ void DisplayServerX11::_update_size_hints(WindowID p_window) {
 	WindowMode window_mode = window_get_mode(p_window);
 	XSizeHints *xsh = XAllocSizeHints();
 
-	// Always set the position and size hints - they should be synchronized with the actual values after the window is mapped anyway
-	xsh->flags |= PPosition | PSize;
-	xsh->x = wd.position.x;
-	xsh->y = wd.position.y;
-	xsh->width = wd.size.width;
-	xsh->height = wd.size.height;
-
-	if (window_mode == WINDOW_MODE_FULLSCREEN || window_mode == WINDOW_MODE_EXCLUSIVE_FULLSCREEN) {
-		// Do not set any other hints to prevent the window manager from ignoring the fullscreen flags
-	} else if (window_get_flag(WINDOW_FLAG_RESIZE_DISABLED, p_window)) {
-		// If resizing is disabled, use the forced size
-		xsh->flags |= PMinSize | PMaxSize;
-		xsh->min_width = wd.size.x;
-		xsh->max_width = wd.size.x;
-		xsh->min_height = wd.size.y;
-		xsh->max_height = wd.size.y;
-	} else {
-		// Otherwise, just respect min_size and max_size
-		if (wd.min_size != Size2i()) {
-			xsh->flags |= PMinSize;
-			xsh->min_width = wd.min_size.x;
-			xsh->min_height = wd.min_size.y;
+	if (likely(xsh)) {
+		// Always set the position and size hints - they should be synchronized with the actual values after the window is mapped anyway
+		xsh->flags |= PPosition | PSize;
+		xsh->x = wd.position.x;
+		xsh->y = wd.position.y;
+		xsh->width = wd.size.width;
+		xsh->height = wd.size.height;
+	
+		if (window_mode == WINDOW_MODE_FULLSCREEN || window_mode == WINDOW_MODE_EXCLUSIVE_FULLSCREEN) {
+			// Do not set any other hints to prevent the window manager from ignoring the fullscreen flags
+		} else if (window_get_flag(WINDOW_FLAG_RESIZE_DISABLED, p_window)) {
+			// If resizing is disabled, use the forced size
+			xsh->flags |= PMinSize | PMaxSize;
+			xsh->min_width = wd.size.x;
+			xsh->max_width = wd.size.x;
+			xsh->min_height = wd.size.y;
+			xsh->max_height = wd.size.y;
+		} else {
+			// Otherwise, just respect min_size and max_size
+			if (wd.min_size != Size2i()) {
+				xsh->flags |= PMinSize;
+				xsh->min_width = wd.min_size.x;
+				xsh->min_height = wd.min_size.y;
+			}
+			if (wd.max_size != Size2i()) {
+				xsh->flags |= PMaxSize;
+				xsh->max_width = wd.max_size.x;
+				xsh->max_height = wd.max_size.y;
+			}
 		}
-		if (wd.max_size != Size2i()) {
-			xsh->flags |= PMaxSize;
-			xsh->max_width = wd.max_size.x;
-			xsh->max_height = wd.max_size.y;
-		}
+	
+		XSetWMNormalHints(x11_display, wd.x11_window, xsh);
+		XFree(xsh);
 	}
-
-	XSetWMNormalHints(x11_display, wd.x11_window, xsh);
-	XFree(xsh);
 }
 
 Point2i DisplayServerX11::window_get_position(WindowID p_window) const {
@@ -2337,7 +2361,9 @@ Point2i DisplayServerX11::window_get_position_with_decorations(WindowID p_window
 				x -= extents[0]; // left
 				y -= extents[2]; // top
 			}
-			XFree(data);
+			if (data) {
+				XFree(data);
+			}
 		}
 	}
 	return Size2i(x, y);
@@ -2369,7 +2395,9 @@ void DisplayServerX11::window_set_position(const Point2i &p_position, WindowID p
 					x = extents[0];
 					y = extents[2];
 				}
-				XFree(data);
+				if (data) {
+					XFree(data);
+				}
 			}
 		}
 	}
@@ -2525,7 +2553,9 @@ Size2i DisplayServerX11::window_get_size_with_decorations(WindowID p_window) con
 				w += extents[0] + extents[1]; // left, right
 				h += extents[2] + extents[3]; // top, bottom
 			}
-			XFree(data);
+			if (data) {
+				XFree(data);
+			}
 		}
 	}
 	return Size2i(w, h);
@@ -2682,7 +2712,7 @@ bool DisplayServerX11::_window_fullscreen_check(WindowID p_window) const {
 			&remaining,
 			&data);
 
-	if (result == Success) {
+	if (result == Success && data) {
 		Atom *atoms = (Atom *)data;
 		Atom wm_fullscreen = XInternAtom(x11_display, "_NET_WM_STATE_FULLSCREEN", False);
 		for (uint64_t i = 0; i < len; i++) {
@@ -3319,14 +3349,14 @@ void DisplayServerX11::cursor_set_custom_image(const Ref<Resource> &p_cursor, Cu
 		// allocate memory to contain the whole file
 		cursor_image->pixels = (XcursorPixel *)memalloc(size);
 
+		ERR_FAIL_NULL(cursor_image->pixels);
+
 		for (XcursorPixel index = 0; index < image_size; index++) {
 			int row_index = floor(index / texture_size.width);
 			int column_index = index % int(texture_size.width);
 
 			*(cursor_image->pixels + index) = image->get_pixel(column_index, row_index).to_argb32();
 		}
-
-		ERR_FAIL_NULL(cursor_image->pixels);
 
 		// Save it for a further usage
 		cursors[p_shape] = XcursorImageLoadCursor(x11_display, cursor_image);
@@ -4176,15 +4206,19 @@ void DisplayServerX11::_window_changed(XEvent *event) {
 	wd.minimized = _window_minimize_check(window_id) && !wd.fullscreen && !wd.maximized;
 
 	// Readjusting the window position if the window is being reparented by the window manager for decoration
-	Window root, parent, *children;
+	Window root, parent, *children = nullptr;
 	unsigned int nchildren;
-	if (XQueryTree(x11_display, wd.x11_window, &root, &parent, &children, &nchildren) && wd.parent != parent) {
-		wd.parent = parent;
-		if (!wd.embed_parent) {
-			window_set_position(wd.position, window_id);
+	if (XQueryTree(x11_display, wd.x11_window, &root, &parent, &children, &nchildren)) {
+		if (wd.parent != parent) {
+			wd.parent = parent;
+			if (!wd.embed_parent) {
+				window_set_position(wd.position, window_id);
+			}
+		}
+		if (children) {
+			XFree(children);
 		}
 	}
-	XFree(children);
 
 	{
 		//the position in xconfigure is not useful here, obtain it manually
@@ -4601,8 +4635,8 @@ void DisplayServerX11::process_events() {
 			}
 		}
 
-		if (XGetEventData(x11_display, &event.xcookie)) {
-			if (event.xcookie.type == GenericEvent && event.xcookie.extension == xi.opcode) {
+		if (event.type == GenericEvent &&  XGetEventData && XGetEventData(x11_display, &event.xcookie)) {
+			if (event.xcookie.extension == xi.opcode) {
 				XIDeviceEvent *event_data = (XIDeviceEvent *)event.xcookie.data;
 				switch (event_data->evtype) {
 					case XI_HierarchyChanged:
@@ -4782,7 +4816,10 @@ void DisplayServerX11::process_events() {
 				}
 			}
 		}
-		XFreeEventData(x11_display, &event.xcookie);
+		
+		if (event.type == GenericEvent && XFreeEventData) {
+			XFreeEventData(x11_display, &event.xcookie);
+		}
 
 		switch (event.type) {
 			case MapNotify: {
@@ -5547,21 +5584,21 @@ void DisplayServerX11::set_icon(const Ref<Image> &p_icon) {
 
 			// We're using long to have wordsize (32Bit build -> 32 Bits, 64 Bit build -> 64 Bits
 			Vector<long> pd;
-
 			pd.resize(2 + w * h);
 
-			pd.write[0] = w;
-			pd.write[1] = h;
+			long *pd_write = pd.ptrw();
+			pd_write[0] = w;
+			pd_write[1] = h;
 
 			const uint8_t *r = img->get_data().ptr();
 
-			long *wr = &pd.write[2];
+			long *wr = &pd_write[2];
 			uint8_t const *pr = r;
 
 			for (int i = 0; i < w * h; i++) {
 				long v = 0;
-				//    A             R             G            B
-				v |= pr[3] << 24 | pr[0] << 16 | pr[1] << 8 | pr[2];
+				//         A                        R                        G                    B
+				v |= (uint32_t)pr[3] << 24 | (uint32_t)pr[0] << 16 | (uint32_t)pr[1] << 8 | (uint32_t)pr[2];
 				*wr++ = v;
 				pr += 4;
 			}
@@ -5569,6 +5606,9 @@ void DisplayServerX11::set_icon(const Ref<Image> &p_icon) {
 			if (net_wm_icon != None) {
 				XChangeProperty(x11_display, wd.x11_window, net_wm_icon, XA_CARDINAL, 32, PropModeReplace, (unsigned char *)pd.ptr(), pd.size());
 			}
+
+			// Must synchronize inside the loop
+			XSync(x11_display, False);
 
 			if (!g_set_icon_error) {
 				break;
@@ -6243,7 +6283,7 @@ DisplayServerX11::WindowID DisplayServerX11::_create_window(WindowMode p_mode, V
 			all_event_mask.mask = all_mask_data;
 
 			XISetMask(all_event_mask.mask, XI_HierarchyChanged);
-
+			
 #ifdef TOUCH_ENABLED
 			if (xi.touch_devices.size()) {
 				XISetMask(all_event_mask.mask, XI_TouchBegin);
@@ -6252,8 +6292,9 @@ DisplayServerX11::WindowID DisplayServerX11::_create_window(WindowMode p_mode, V
 				XISetMask(all_event_mask.mask, XI_TouchOwnership);
 			}
 #endif
-
-			XISelectEvents(x11_display, wd.x11_window, &all_event_mask, 1);
+			if (XISelectEvents) {
+				XISelectEvents(x11_display, wd.x11_window, &all_event_mask, 1);            
+			}
 		}
 
 		/* set the titlebar name */
@@ -6533,13 +6574,13 @@ DisplayServerX11::DisplayServerX11(const String &p_rendering_driver, WindowMode 
 	}
 
 	if (initialize_xrender(dylibloader_verbose) != 0) {
-		r_error = ERR_UNAVAILABLE;
-		ERR_FAIL_MSG("Can't load Xrender dynamically.");
+		//r_error = ERR_UNAVAILABLE;
+		ERR_PRINT("Can't load Xrender dynamically.");
 	}
 
 	if (initialize_xinput2(dylibloader_verbose) != 0) {
-		r_error = ERR_UNAVAILABLE;
-		ERR_FAIL_MSG("Can't load Xinput2 dynamically.");
+		//r_error = ERR_UNAVAILABLE;
+		ERR_PRINT("Can't load Xinput2 dynamically.");
 	}
 #else
 #ifdef XKB_ENABLED
@@ -6637,24 +6678,32 @@ DisplayServerX11::DisplayServerX11(const String &p_rendering_driver, WindowMode 
 		int version_minor = 0;
 		int rc = XRenderQueryVersion(x11_display, &version_major, &version_minor);
 		print_verbose(vformat("Xrender %d.%d detected.", version_major, version_minor));
-		if (rc != 1 || (version_major == 0 && version_minor < 11)) {
-			ERR_PRINT("Unsupported Xrender library version.");
-			r_error = ERR_UNAVAILABLE;
-			XCloseDisplay(x11_display);
-			return;
+		if (rc != 1 || (version_major == 0 && version_minor <= 10)) {
+			print_verbose("Legacy Xrender detected.");
+			OS::get_singleton()->set_environment("GODOT_LEGACY_X11_STUB", "1");
 		}
 	}
 
 	{
-		int version_major = 2; // Report 2.2 as supported by engine, but should work with 2.1 or 2.0 library as well.
-		int version_minor = 2;
-		int rc = XIQueryVersion(x11_display, &version_major, &version_minor);
+		int version_major = 0; // Report 2.2 as supported by engine, but should work with 2.1 or 2.0 library as well.
+		int version_minor = 0;
+		// int rc = XIQueryVersion ? XIQueryVersion(x11_display, &version_major, &version_minor) : 0;
+		int rc = -1;
+		
+		if (XIQueryVersion) {
+			rc = XIQueryVersion(x11_display, &version_major, &version_minor);
+		}
+		
 		print_verbose(vformat("Xinput %d.%d detected.", version_major, version_minor));
 		if (rc != Success || (version_major < 2)) {
-			ERR_PRINT("Unsupported Xinput2 library version.");
-			r_error = ERR_UNAVAILABLE;
-			XCloseDisplay(x11_display);
-			return;
+			if (OS::get_singleton()->has_environment("GODOT_LEGACY_X11_STUB")) {
+				print_verbose("XInput 2 not found. Proceeding with legacy stub.");
+			} else {
+				ERR_PRINT("Unsupported Xinput2 library version.");
+				r_error = ERR_UNAVAILABLE;
+				XCloseDisplay(x11_display);
+				return;
+			}
 		}
 	}
 
@@ -6714,11 +6763,15 @@ DisplayServerX11::DisplayServerX11(const String &p_rendering_driver, WindowMode 
 	}
 
 	if (!_refresh_device_info()) {
-		OS::get_singleton()->alert("Your system does not support XInput 2.\n"
-								   "Please upgrade your distribution.",
+		if (OS::get_singleton()->has_environment("GODOT_LEGACY_X11_STUB")) {
+			print_verbose("Legacy X11 stub active. Ignoring missing XInput 2.");
+		} else {
+			OS::get_singleton()->alert("Your system does not support XInput 2.\n"
+										"Please upgrade your distribution.",
 				"Unable to initialize XInput");
-		r_error = ERR_UNAVAILABLE;
-		return;
+			r_error = ERR_UNAVAILABLE;
+			return;
+		}
 	}
 
 	xim = XOpenIM(x11_display, nullptr, nullptr, nullptr);
@@ -6914,6 +6967,11 @@ DisplayServerX11::DisplayServerX11(const String &p_rendering_driver, WindowMode 
 					print_verbose("Optirun/primusrun detected. Skipping GPU detection");
 					use_prime = 0;
 				}
+				
+				if (OS::get_singleton()->has_environment("GODOT_LEGACY_X11_STUB")) {
+					print_verbose("Legacy X11 stub active. Skipping GPU detection");
+					use_prime = 0;
+				}
 	
 				// Some tools use fake libGL libraries and have them override the real one using
 				// LD_LIBRARY_PATH, so we skip them. *But* Steam also sets LD_LIBRARY_PATH for its
@@ -7020,6 +7078,11 @@ DisplayServerX11::DisplayServerX11(const String &p_rendering_driver, WindowMode 
 					print_verbose("Optirun/primusrun detected. Skipping GPU detection");
 					use_prime = 0;
 				}
+				
+				if (OS::get_singleton()->has_environment("GODOT_LEGACY_X11_STUB")) {
+					print_verbose("Legacy X11 stub active. Skipping GPU detection");
+					use_prime = 0;
+				}
 	
 				// Some tools use fake libGL libraries and have them override the real one using
 				// LD_LIBRARY_PATH, so we skip them. *But* Steam also sets LD_LIBRARY_PATH for its
@@ -7124,6 +7187,11 @@ DisplayServerX11::DisplayServerX11(const String &p_rendering_driver, WindowMode 
 						getenv("PRIMUS_LOAD_GLOBAL") ||
 						getenv("BUMBLEBEE_SOCKET")) {
 					print_verbose("Optirun/primusrun detected. Skipping GPU detection");
+					use_prime = 0;
+				}
+				
+				if (OS::get_singleton()->has_environment("GODOT_LEGACY_X11_STUB")) {
+					print_verbose("Legacy X11 stub active. Skipping GPU detection");
 					use_prime = 0;
 				}
 	
@@ -7271,7 +7339,9 @@ DisplayServerX11::DisplayServerX11(const String &p_rendering_driver, WindowMode 
 		all_master_event_mask.mask = all_master_mask_data;
 		XISetMask(all_master_event_mask.mask, XI_DeviceChanged);
 		XISetMask(all_master_event_mask.mask, XI_RawMotion);
-		XISelectEvents(x11_display, DefaultRootWindow(x11_display), &all_master_event_mask, 1);
+		if (XISelectEvents) {
+			XISelectEvents(x11_display, DefaultRootWindow(x11_display), &all_master_event_mask, 1);
+		}
 	}
 
 	cursor_size = XcursorGetDefaultSize(x11_display);
@@ -7421,6 +7491,10 @@ DisplayServerX11::DisplayServerX11(const String &p_rendering_driver, WindowMode 
 }
 
 DisplayServerX11::~DisplayServerX11() {
+	if (x11_display == nullptr) {
+		return;
+	}
+	
 	// Send owned clipboard data to clipboard manager before exit.
 	Window x11_main_window = windows[MAIN_WINDOW_ID].x11_window;
 	_clipboard_transfer_ownership(XA_PRIMARY, x11_main_window);

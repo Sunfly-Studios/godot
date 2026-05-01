@@ -373,17 +373,15 @@ highp mat4 inverse(highp mat4 m) {
 
 #endif
 
-#ifndef USE_GLES_OVER_GL
-
 #if defined(TRANSPOSE_USED)
 
-highp mat2 transpose(highp mat2 m) {
+highp mat2 custom_transpose(highp mat2 m) {
 	return mat2(
 			vec2(m[0].x, m[1].x),
 			vec2(m[0].y, m[1].y));
 }
 
-highp mat3 transpose(highp mat3 m) {
+highp mat3 custom_transpose(highp mat3 m) {
 	return mat3(
 			vec3(m[0].x, m[1].x, m[2].x),
 			vec3(m[0].y, m[1].y, m[2].y),
@@ -392,13 +390,17 @@ highp mat3 transpose(highp mat3 m) {
 
 #endif
 
-highp mat4 transpose(highp mat4 m) {
+highp mat4 custom_transpose(highp mat4 m) {
 	return mat4(
 			vec4(m[0].x, m[1].x, m[2].x, m[3].x),
 			vec4(m[0].y, m[1].y, m[2].y, m[3].y),
 			vec4(m[0].z, m[1].z, m[2].z, m[3].z),
 			vec4(m[0].w, m[1].w, m[2].w, m[3].w));
 }
+
+#define transpose custom_transpose
+
+#ifndef USE_GLES_OVER_GL
 
 #if defined(OUTER_PRODUCT_USED)
 

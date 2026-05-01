@@ -66,8 +66,8 @@ public:
 	bool generate_wireframes = false;
 	bool force_vertex_shading = false;
 	bool multi_bounce_occlusion = false;
-	bool srgb_framebuffer_supported = false;
 	bool support_npot_repeat_mipmap = false;
+	bool srgb_framebuffer_supported = false; // GL_ARB_framebuffer_sRGB
 
 	// Limits
 	GLint max_texture_units = 0;
@@ -94,6 +94,7 @@ public:
 
 	// Extensions
 	bool support_fbo = false; // GL_OES_framebuffer_object
+	bool support_vbo = false; // GL_ARB_vertex_buffer_object
 	bool support_npot = false; // GL_OES_texture_npot
 	bool support_blend_func_separate = false; // GL_OES_blend_func_separate
 	bool support_texture_env_combine = false; // GL_OES_texture_env_crossbar

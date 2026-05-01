@@ -52,8 +52,10 @@ struct GLManager_X11_Private {
 
 GLManager_X11::GLDisplay::~GLDisplay() {
 	if (context) {
-		//release_current();
-		glXDestroyContext(x11_display, context->glx_context);
+		if (context->glx_context) {
+			glXMakeCurrent(x11_display, None, nullptr);
+			glXDestroyContext(x11_display, context->glx_context);
+		}
 		memdelete(context);
 		context = nullptr;
 	}
@@ -101,9 +103,26 @@ Error GLManager_X11::_create_context(GLDisplay &gl_display) {
 
 	//const char *extensions = glXQueryExtensionsString(x11_display, DefaultScreen(x11_display));
 
-	GLXCREATECONTEXTATTRIBSARBPROC glXCreateContextAttribsARB = (GLXCREATECONTEXTATTRIBSARBPROC)glXGetProcAddress((const GLubyte *)"glXCreateContextAttribsARB");
-
-	static int visual_attribs[] = {
+	GLXCREATECONTEXTATTRIBSARBPROC glXCreateContextAttribsARB = nullptr;
+	if (glXGetProcAddress != nullptr) {
+		glXCreateContextAttribsARB = (GLXCREATECONTEXTATTRIBSARBPROC)glXGetProcAddress((const GLubyte *)"glXCreateContextAttribsARB");
+	} else if (glXGetProcAddressARB != nullptr) {
+		glXCreateContextAttribsARB = (GLXCREATECONTEXTATTRIBSARBPROC)glXGetProcAddressARB((const GLubyte *)"glXCreateContextAttribsARB");
+	}
+	
+	const int* visual_attribs = nullptr;
+	
+	static const int legacy_attribs[] = {
+		GLX_RENDER_TYPE, GLX_RGBA_BIT,
+		GLX_DRAWABLE_TYPE, GLX_WINDOW_BIT,
+		GLX_DOUBLEBUFFER, true,
+		GLX_RED_SIZE, 1,
+		GLX_GREEN_SIZE, 1,
+		GLX_BLUE_SIZE, 1,
+		GLX_DEPTH_SIZE, 16,
+		None
+	};
+	static const int modern_attribs[] = {
 		GLX_RENDER_TYPE, GLX_RGBA_BIT,
 		GLX_DRAWABLE_TYPE, GLX_WINDOW_BIT,
 		GLX_DOUBLEBUFFER, true,
@@ -113,6 +132,13 @@ Error GLManager_X11::_create_context(GLDisplay &gl_display) {
 		GLX_DEPTH_SIZE, 24,
 		None
 	};
+	
+	if (OS::get_singleton()->has_environment("GODOT_LEGACY_X11_STUB")) {
+		glXCreateContextAttribsARB = nullptr;
+		visual_attribs = legacy_attribs;
+	} else {
+		visual_attribs = modern_attribs;
+	}
 
 	static int visual_attribs_layered[] = {
 		GLX_RENDER_TYPE, GLX_RGBA_BIT,
@@ -126,80 +152,77 @@ Error GLManager_X11::_create_context(GLDisplay &gl_display) {
 		None
 	};
 
-	int fbcount;
+	int fbcount = 0;
 	GLXFBConfig fbconfig = nullptr;
 	XVisualInfo *vi = nullptr;
-
-	if (OS::get_singleton()->is_layered_allowed()) {
-		GLXFBConfig *fbc = glXChooseFBConfig(x11_display, DefaultScreen(x11_display), visual_attribs_layered, &fbcount);
-		ERR_FAIL_NULL_V(fbc, ERR_UNCONFIGURED);
-
-		for (int i = 0; i < fbcount; i++) {
-			vi = (XVisualInfo *)glXGetVisualFromFBConfig(x11_display, fbc[i]);
-			if (!vi) {
-				continue;
-			}
-
-			XRenderPictFormat *pict_format = XRenderFindVisualFormat(x11_display, vi->visual);
-			if (!pict_format) {
-				XFree(vi);
-				vi = nullptr;
-				continue;
-			}
-
-			fbconfig = fbc[i];
-			if (pict_format->direct.alphaMask > 0) {
-				break;
-			}
-		}
-		XFree(fbc);
-
-		ERR_FAIL_NULL_V(fbconfig, ERR_UNCONFIGURED);
+	
+	if (OS::get_singleton()->has_environment("GODOT_LEGACY_X11_STUB")) {
+		// GLX 1.2 visual selection. 
+		static int legacy_visual_attribs[] = {
+			GLX_RGBA,
+			GLX_DOUBLEBUFFER,
+			GLX_RED_SIZE, 1,
+			GLX_GREEN_SIZE, 1,
+			GLX_BLUE_SIZE, 1,
+			GLX_DEPTH_SIZE, 16,
+			None
+		};
+		
+		vi = glXChooseVisual(x11_display, DefaultScreen(x11_display), legacy_visual_attribs);
+		ERR_FAIL_NULL_V(vi, ERR_UNCONFIGURED);
+		ERR_FAIL_NULL_V(vi->visual, ERR_UNCONFIGURED);
+		
 	} else {
-		GLXFBConfig *fbc = glXChooseFBConfig(x11_display, DefaultScreen(x11_display), visual_attribs, &fbcount);
-		ERR_FAIL_NULL_V(fbc, ERR_UNCONFIGURED);
-
-		vi = glXGetVisualFromFBConfig(x11_display, fbc[0]);
-
-		fbconfig = fbc[0];
-		XFree(fbc);
+		if (OS::get_singleton()->is_layered_allowed()) {
+			GLXFBConfig *fbc = glXChooseFBConfig(x11_display, DefaultScreen(x11_display), visual_attribs_layered, &fbcount);
+			ERR_FAIL_NULL_V(fbc, ERR_UNCONFIGURED);
+			
+			for (int i = 0; i < fbcount; i++) {
+				vi = (XVisualInfo *)glXGetVisualFromFBConfig(x11_display, fbc[i]);
+				if (!vi) {
+					continue;
+				}
+				
+				XRenderPictFormat *pict_format = XRenderFindVisualFormat(x11_display, vi->visual);
+				if (!pict_format) {
+					XFree(vi);
+					vi = nullptr;
+					continue;
+				}
+				
+				fbconfig = fbc[i];
+				if (pict_format->direct.alphaMask > 0) {
+					break;
+				}
+			}
+			XFree(fbc);
+			
+			ERR_FAIL_NULL_V(fbconfig, ERR_UNCONFIGURED);
+		} else {
+			GLXFBConfig *fbc = glXChooseFBConfig(x11_display, DefaultScreen(x11_display), visual_attribs, &fbcount);
+			ERR_FAIL_NULL_V(fbc, ERR_UNCONFIGURED);
+			
+			vi = glXGetVisualFromFBConfig(x11_display, fbc[0]);
+			
+			fbconfig = fbc[0];
+			XFree(fbc);
+		}
 	}
 
 	int (*oldHandler)(Display *, XErrorEvent *) = XSetErrorHandler(&ctxErrorHandler);
 
-	if (glXCreateContextAttribsARB) {
-		// Request a specific profile
-		switch (context_type) {
-			case GLES_3_0_COMPATIBLE: {
-				static int context_attribs[] = {
-					GLX_CONTEXT_MAJOR_VERSION_ARB, 3,
-					GLX_CONTEXT_MINOR_VERSION_ARB, 3,
-					GLX_CONTEXT_PROFILE_MASK_ARB, GLX_CONTEXT_CORE_PROFILE_BIT_ARB,
-					GLX_CONTEXT_FLAGS_ARB, GLX_CONTEXT_FORWARD_COMPATIBLE_BIT_ARB /*|GLX_CONTEXT_DEBUG_BIT_ARB*/,
-					None
-				};
-
-				gl_display.context->glx_context = glXCreateContextAttribsARB(x11_display, fbconfig, nullptr, True, context_attribs);
-			} break;
-			case GLES_2_1_COMPATIBLE: {
-				static int context_attribs[] = {
-					GLX_CONTEXT_MAJOR_VERSION_ARB, 2,
-					GLX_CONTEXT_MINOR_VERSION_ARB, 1,
-					None
-				};
-
-				gl_display.context->glx_context = glXCreateContextAttribsARB(x11_display, fbconfig, nullptr, True, context_attribs);
-			} break;
-			case GLES_1_5_COMPATIBLE: {
-				static int context_attribs[] = {
-					GLX_CONTEXT_MAJOR_VERSION_ARB, 1,
-					GLX_CONTEXT_MINOR_VERSION_ARB, 5,
-					None
-				};
-
-				gl_display.context->glx_context = glXCreateContextAttribsARB(x11_display, fbconfig, nullptr, True, context_attribs);
-			} break;
-		}
+	// Only allow ARB context creation for OpenGL 3.3 (which is a guarantee)
+	// older swrast will segfault if passed 1.5 or 2.1 attributes.
+	if (glXCreateContextAttribsARB && context_type == GLES_3_0_COMPATIBLE) {
+		static int context_attribs[] = {
+			GLX_CONTEXT_MAJOR_VERSION_ARB, 3,
+			GLX_CONTEXT_MINOR_VERSION_ARB, 3,
+			GLX_CONTEXT_PROFILE_MASK_ARB, GLX_CONTEXT_CORE_PROFILE_BIT_ARB,
+			GLX_CONTEXT_FLAGS_ARB, GLX_CONTEXT_FORWARD_COMPATIBLE_BIT_ARB /*|GLX_CONTEXT_DEBUG_BIT_ARB*/,
+			None
+		};
+		
+		gl_display.context->glx_context = glXCreateContextAttribsARB(x11_display, fbconfig, nullptr, True, context_attribs);
 	} else {
 		// Legacy approach: Give us whatever the driver has
 		if (context_type == GLES_3_0_COMPATIBLE) {
@@ -208,12 +231,36 @@ Error GLManager_X11::_create_context(GLDisplay &gl_display) {
 			WARN_PRINT("glXCreateContextAttribsARB not supported. Creating legacy OpenGL context.");
 		}
 		
-		// glXCreateNewContext is GLX 1.3 API and is guaranteed to exist
-		// (hopefully, we still catch it below if it somehow doesn't).
-		gl_display.context->glx_context = glXCreateNewContext(x11_display, fbconfig, GLX_RGBA_TYPE, nullptr, True);
+		// Prioritise first the legacy older create context.
+		if (OS::get_singleton()->has_environment("GODOT_LEGACY_X11_STUB")) {
+			gl_display.context->glx_context = glXCreateContext(x11_display, vi, nullptr, True);
+			if (unlikely(!gl_display.context->glx_context)) {
+				if (vi) {
+					XFree(vi);
+					vi = nullptr;
+				}
+				ERR_FAIL_V_MSG(ERR_UNCONFIGURED, "Failed to create legacy GLX context.");
+			}
+		} else {
+			// Newer context creation API.
+			gl_display.context->glx_context = glXCreateNewContext(x11_display, fbconfig, GLX_RGBA_TYPE, nullptr, True);
+			if (unlikely(!gl_display.context->glx_context)) {
+				if (vi) {
+					XFree(vi);
+					vi = nullptr;
+				}
+				ERR_FAIL_V_MSG(ERR_UNCONFIGURED, "Failed to create new GLX context.");
+			}
+		}
 	}
 
-	ERR_FAIL_COND_V(ctxErrorOccurred || !gl_display.context->glx_context, ERR_UNCONFIGURED);
+	if (unlikely(ctxErrorOccurred || !gl_display.context->glx_context)) {
+		if (vi) {
+			XFree(vi);
+			vi = nullptr;
+		}
+		ERR_FAIL_V(ERR_UNCONFIGURED);
+	}
 
 	XSync(x11_display, False);
 	XSetErrorHandler(oldHandler);
@@ -225,9 +272,9 @@ Error GLManager_X11::_create_context(GLDisplay &gl_display) {
 	// for later creating windows using this display
 	if (vi) {
 		gl_display.x_vi = *vi;
+		XFree(vi);
+		vi = nullptr;
 	}
-
-	XFree(vi);
 
 	return OK;
 }
@@ -278,6 +325,7 @@ Error GLManager_X11::window_create(DisplayServer::WindowID p_window_id, ::Window
 
 	if (!glXMakeCurrent(x11_display, x11_window, gl_display.context->glx_context)) {
 		ERR_PRINT("glXMakeCurrent failed");
+		return FAILED;
 	}
 
 	_internal_set_current_window(&win);
@@ -304,6 +352,7 @@ void GLManager_X11::window_destroy(DisplayServer::WindowID p_window_id) {
 	win.in_use = false;
 
 	if (_current_window == &win) {
+		release_current();
 		_current_window = nullptr;
 		_x_windisp.x11_display = nullptr;
 		_x_windisp.x11_window = -1;
@@ -380,6 +429,12 @@ void GLManager_X11::set_use_vsync(bool p_use) {
 	if (!_current_window) {
 		return;
 	}
+	
+	if (OS::get_singleton()->has_environment("GODOT_LEGACY_X11_STUB")) {
+		use_vsync = false;
+		return;
+	}
+	
 	const GLDisplay &disp = get_current_display();
 
 	int val = p_use ? 1 : 0;
