@@ -41,7 +41,7 @@
 // here, ADD IT HERE AND ROUTE IT. Otherwise it may crash
 // with nullptr exceptions.
 
-#include "thirdparty/glad/glad/gl.h"
+#include "platform_gl.h"
 
 namespace GLES2 {
 	struct Polyfill {
@@ -65,6 +65,24 @@ namespace GLES2 {
 // but hide that part from the implementation file.
 #ifndef POLYFILL_GLES2_IMPL
 
+// =========================================
+// Constants
+// =========================================
+#ifndef GL_MAX_VARYING_FLOATS
+#define GL_MAX_VARYING_FLOATS 0x8B4B
+#endif
+
+#ifndef GL_TRANSFORM_FEEDBACK_BUFFER_EXT
+#define GL_TRANSFORM_FEEDBACK_BUFFER_EXT 0x8C8E
+#endif
+
+#ifndef GL_INTERLEAVED_ATTRIBS_EXT
+#define GL_INTERLEAVED_ATTRIBS_EXT 0x8C8C
+#endif
+
+// =========================================
+// Functions
+// =========================================
 #undef glBindBufferBaseEXT
 #define glBindBufferBaseEXT(target, index, buffer)                  \
 	do {                                                           \

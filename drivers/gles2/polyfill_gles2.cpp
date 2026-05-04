@@ -40,6 +40,15 @@ PFNGLBINDBUFFERRANGEPROC Polyfill::bindBufferRange = nullptr;
 PFNGLTRANSFORMFEEDBACKVARYINGSPROC Polyfill::transformFeedbackVaryings = nullptr;
 
 Polyfill::Polyfill() {
+#if defined(ANDROID_ENABLED) || defined(IOS_ENABLED)
+	// On mobile, these are statically linked in the headers 
+	// and do not require runtime null checks or EXT fallbacks.
+	bindBufferBase = glBindBufferBase;
+	bindBufferRange = glBindBufferRange;
+	beginTransformFeedback = glBeginTransformFeedback;
+	endTransformFeedback = glEndTransformFeedback;
+	transformFeedbackVaryings = glTransformFeedbackVaryings;
+#else
 	// BindBufferBase
 	if (glBindBufferBase != nullptr) {
 		bindBufferBase = glBindBufferBase;
@@ -74,5 +83,6 @@ Polyfill::Polyfill() {
 	} else if (glTransformFeedbackVaryingsEXT != nullptr) {
 		transformFeedbackVaryings = (PFNGLTRANSFORMFEEDBACKVARYINGSPROC)glTransformFeedbackVaryingsEXT;
 	}
+#endif
 }
 } //namespace GLES2

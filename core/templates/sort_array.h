@@ -262,7 +262,7 @@ public:
 #else
 			// Silences GCC warning about invoking
 			// UB.
-			if constexpr (unlikely(next == 0)) {
+			if (unlikely(next == 0)) {
 				break;
 			}
 #endif

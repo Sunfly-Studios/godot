@@ -61,9 +61,44 @@ namespace GLES1 {
 	PFNGLCLIENTACTIVETEXTUREPROC Polyfill::clientActiveTexture = nullptr;
 
 Polyfill::Polyfill() {
+#if defined(ANDROID_ENABLED) || defined(IOS_ENABLED)
 	// ===============================
+	// Mobile Static Assignment
+	// ===============================
+	
+	// FBOs (OES extensions in mobile)
+	bindFramebuffer = (PFNGLBINDFRAMEBUFFERPROC)glBindFramebufferOES;
+	isFramebuffer = (PFNGLISFRAMEBUFFERPROC)glIsFramebufferOES;
+	blendFuncSeparate = (PFNGLBLENDFUNCSEPARATEPROC)glBlendFuncSeparateOES;
+	checkFrameBufferStatus = (PFNGLCHECKFRAMEBUFFERSTATUSPROC)glCheckFramebufferStatusOES;
+	deleteFrameBuffers = (PFNGLDELETEFRAMEBUFFERSPROC)glDeleteFramebuffersOES;
+	genFrameBuffers = (PFNGLGENFRAMEBUFFERSPROC)glGenFramebuffersOES;
+	genRenderBuffers = (PFNGLGENRENDERBUFFERSPROC)glGenRenderbuffersOES;
+	renderBufferStorage = (PFNGLRENDERBUFFERSTORAGEPROC)glRenderbufferStorageOES;
+	deleteRenderBuffers = (PFNGLDELETERENDERBUFFERSPROC)glDeleteRenderbuffersOES;
+	bindRenderBuffer = (PFNGLBINDRENDERBUFFERPROC)glBindRenderbufferOES;
+	frameBufferRenderBuffer = (PFNGLFRAMEBUFFERRENDERBUFFERPROC)glFramebufferRenderbufferOES;
+	framebufferTexture2D = (PFNGLFRAMEBUFFERTEXTURE2DPROC)glFramebufferTexture2DOES;
+
+	// VBOs (Core in mobile)
+	genBuffers = glGenBuffers;
+	bindBuffer = glBindBuffer;
+	bufferData = glBufferData;
+	bufferSubData = glBufferSubData;
+	deleteBuffers = glDeleteBuffers;
+	isBuffer = glIsBuffer;
+
+	// Multitexture (Core in mobile)
+	activeTexture = glActiveTexture;
+	clientActiveTexture = glClientActiveTexture;
+#else
+	// ===============================
+	// Desktop Dynamic Loading (GLAD)
+	// ===============================
+	
+	// =========================================
 	// Framebuffer
-	// ===============================
+	// =========================================
 	if (glBindFramebuffer != nullptr) {
 		bindFramebuffer = glBindFramebuffer;
 	} else if (glBindFramebufferOES != nullptr) {
@@ -160,9 +195,9 @@ Polyfill::Polyfill() {
 		framebufferTexture2D = (PFNGLFRAMEBUFFERTEXTURE2DPROC)glFramebufferTexture2DEXT;
 	}
 
-	// ===============================
+	// =========================================
 	// VBOs
-	// ===============================
+	// =========================================
 	if (glGenBuffers != nullptr) {
 		genBuffers = glGenBuffers;
 	} else if (glGenBuffersARB != nullptr) {
@@ -199,9 +234,9 @@ Polyfill::Polyfill() {
 		isBuffer = (PFNGLISBUFFERPROC)glIsBufferARB;
 	}
 
-	// ===============================
+	// =========================================
 	// Multitexture
-	// ===============================
+	// =========================================
 	if (glActiveTexture != nullptr) {
 		activeTexture = glActiveTexture;
 	} else if (glActiveTextureARB != nullptr) {
@@ -213,6 +248,7 @@ Polyfill::Polyfill() {
 	} else if (glClientActiveTextureARB != nullptr) {
 		clientActiveTexture = (PFNGLCLIENTACTIVETEXTUREPROC)glClientActiveTextureARB;
 	}
+#endif
 }
 
 } //namespace GLES1

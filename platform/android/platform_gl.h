@@ -35,25 +35,58 @@
 #define GLES_API_ENABLED // Allow using GLES.
 #endif
 
-#include <EGL/egl.h>
-#include <EGL/eglext.h>
-
 // Android also has a `GLES2` folder with these
 // exact same files. We don't include them here
 // because GLES3 is a superset of GLES2, which
 // includes everything GLES2 has.
+#include <EGL/egl.h>
+#include <EGL/eglext.h>
+
 #include <GLES3/gl3.h>
 #include <GLES3/gl3ext.h>
 
-// However, for GLES1, we need to include it
-// manually.
+#ifdef GLES2_ENABLED
+// Transform feedback and buffer range
+typedef void (*PFNGLBINDBUFFERBASEPROC)(GLenum target, GLuint index, GLuint buffer);
+typedef void (*PFNGLBEGINTRANSFORMFEEDBACKPROC)(GLenum primitiveMode);
+typedef void (*PFNGLENDTRANSFORMFEEDBACKPROC)(void);
+typedef void (*PFNGLBINDBUFFERRANGEPROC)(GLenum target, GLuint index, GLuint buffer, GLintptr offset, GLsizeiptr size);
+typedef void (*PFNGLTRANSFORMFEEDBACKVARYINGSPROC)(GLuint program, GLsizei count, const GLchar *const*varyings, GLenum bufferMode);
+#endif
+
 #ifdef GLES1_ENABLED
+    #define GL_GLEXT_PROTOTYPES 1
+    #include <GLES/gl.h>
+    #include <GLES/glext.h>
 
-// Unlock OES functions.
-#define GL_GLEXT_PROTOTYPES 1
+    // Multitexture
+    typedef void (*PFNGLCLIENTACTIVETEXTUREPROC)(GLenum texture);
+    typedef void (*PFNGLACTIVETEXTUREPROC)(GLenum texture);
 
-#include <GLES/gl.h>
-#include <GLES/glext.h>
+    // Buffer (VBO) extensions
+    typedef void (*PFNGLGENBUFFERSPROC)(GLsizei n, GLuint *buffers);
+    typedef void (*PFNGLBINDBUFFERPROC)(GLenum target, GLuint buffer);
+    typedef void (*PFNGLBUFFERDATAPROC)(GLenum target, GLsizeiptr size, const void *data, GLenum usage);
+    typedef void (*PFNGLBUFFERSUBDATAPROC)(GLenum target, GLintptr offset, GLsizeiptr size, const void *data);
+    typedef void (*PFNGLDELETEBUFFERSPROC)(GLsizei n, const GLuint *buffers);
+    typedef GLboolean (*PFNGLISBUFFERPROC)(GLuint buffer);
+
+    // Framebuffer extensions
+    typedef void (*PFNGLBINDFRAMEBUFFERPROC)(GLenum target, GLuint framebuffer);
+    typedef GLboolean (*PFNGLISFRAMEBUFFERPROC)(GLuint framebuffer);
+    typedef GLenum (*PFNGLCHECKFRAMEBUFFERSTATUSPROC)(GLenum target);
+    typedef void (*PFNGLDELETEFRAMEBUFFERSPROC)(GLsizei n, const GLuint *framebuffers);
+    typedef void (*PFNGLGENFRAMEBUFFERSPROC)(GLsizei n, GLuint *framebuffers);
+    typedef void (*PFNGLGENRENDERBUFFERSPROC)(GLsizei n, GLuint *renderbuffers);
+    typedef void (*PFNGLFRAMEBUFFERTEXTURE2DPROC)(GLenum target, GLenum attachment, GLenum textarget, GLuint texture, GLint level);
+    typedef void (*PFNGLBINDRENDERBUFFERPROC)(GLenum target, GLuint renderbuffer);
+    typedef void (*PFNGLRENDERBUFFERSTORAGEPROC)(GLenum target, GLenum internalformat, GLsizei width, GLsizei height);
+    typedef void (*PFNGLFRAMEBUFFERRENDERBUFFERPROC)(GLenum target, GLenum attachment, GLenum renderbuffertarget, GLuint renderbuffer);
+    typedef void (*PFNGLDELETERENDERBUFFERSPROC)(GLsizei n, const GLuint *renderbuffers);
+
+    // Blend extensions
+    typedef void (*PFNGLBLENDFUNCSEPARATEPROC)(GLenum sfactorRGB, GLenum dfactorRGB, GLenum sfactorAlpha, GLenum dfactorAlpha);
+
 #endif // GLES1_ENABLED
 
 #endif // PLATFORM_GL_H

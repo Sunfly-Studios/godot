@@ -41,7 +41,7 @@
 // here, ADD IT HERE AND ROUTE IT. Otherwise it may crash
 // with nullptr exceptions.
 
-#include "thirdparty/glad/glad/gl.h"
+#include "platform_gl.h"
 
 namespace GLES1 {
 	struct Polyfill {
@@ -80,9 +80,16 @@ namespace GLES1 {
 
 #ifndef POLYFILL_GLES1_IMPL
 
-// -----------------------------------------
+// =========================================
+// Constants
+// =========================================
+#ifndef GL_FRAMEBUFFER_SRGB_EXT
+#define GL_FRAMEBUFFER_SRGB_EXT 0x8DB9
+#endif
+
+// =========================================
 // FBO Macros
-// -----------------------------------------
+// =========================================
 #undef glBindFramebufferOES
 #define glBindFramebufferOES(target, framebuffer)                  \
 	do {                                                           \
@@ -161,9 +168,9 @@ namespace GLES1 {
 #define glCheckFramebufferStatusOES(target) \
 	(likely(GLES1::Polyfill::checkFrameBufferStatus) ? GLES1::Polyfill::checkFrameBufferStatus(target) : 0)
 
-// -----------------------------------------
+// =========================================
 // VBO Macros (Overrides Core calls too)
-// -----------------------------------------
+// =========================================
 #undef glGenBuffers
 #define glGenBuffers(n, buffers)                     \
 	do {                                             \
@@ -203,9 +210,9 @@ namespace GLES1 {
 #define glIsBuffer(buffer) \
 	(likely(GLES1::Polyfill::isBuffer) ? GLES1::Polyfill::isBuffer(buffer) : GL_FALSE)
 
-// -----------------------------------------
+// =========================================
 // Multitexture Macros
-// -----------------------------------------
+// =========================================
 #undef glActiveTexture
 #define glActiveTexture(texture)                     \
 	do {                                             \
