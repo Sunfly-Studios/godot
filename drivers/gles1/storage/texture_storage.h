@@ -198,6 +198,7 @@ struct Texture {
 	GLuint tex_id = 0;
 
 	uint16_t stored_cube_sides = 0;
+	uint32_t context_generation = 1;
 
 	RenderTarget *render_target = nullptr;
 

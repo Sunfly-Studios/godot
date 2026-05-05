@@ -158,7 +158,28 @@ Config::Config() {
 	GLint result_2[2] = { 0, 0 };
 
 	glGetIntegerv(GL_MAX_TEXTURE_UNITS, &result);
-	max_texture_units = (result >= 2) ? result : 2; // Minimum 2 texture unit required by spec
+	max_texture_units = CLAMP(result, 1, 32);
+
+	// Probe the reported limit to detect lying drivers (e.g., Android Emulators)
+	_flush_gl_errors();
+	for (int i = 0; i < max_texture_units; i++) {
+		glActiveTexture(GL_TEXTURE0 + i);
+		if (glGetError() == GL_INVALID_ENUM) {
+			max_texture_units = i;
+			break;
+		}
+
+		glClientActiveTexture(GL_TEXTURE0 + i);
+		if (glGetError() == GL_INVALID_ENUM) {
+			max_texture_units = i;
+			break;
+		}
+	}
+	glActiveTexture(GL_TEXTURE0);
+	glClientActiveTexture(GL_TEXTURE0);
+	_flush_gl_errors();
+
+	max_texture_units = MAX(max_texture_units, 2); // Minimum 2 texture units required by spec
 	max_texture_image_units = max_texture_units;
 
 	glGetIntegerv(GL_MAX_TEXTURE_SIZE, &result);
@@ -169,10 +190,34 @@ Config::Config() {
 	max_viewport_size[1] = (result_2[1] >= 64) ? result_2[1] : 1024;
 
 	glGetIntegerv(GL_MAX_LIGHTS, &result);
-	max_lights = (result >= 0) ? result : 8; // Usually 8 in GLES 1.1
+	max_lights = CLAMP(result, 0, 32);
+
+	_flush_gl_errors();
+	for (int i = 0; i < max_lights; i++) {
+		glEnable(GL_LIGHT0 + i);
+		if (glGetError() == GL_INVALID_ENUM) {
+			max_lights = i;
+			break;
+		}
+		glDisable(GL_LIGHT0 + i); // Keep state clean during probe
+	}
+	_flush_gl_errors();
+	max_lights = MAX(max_lights, 8); // Minimum 8 lights required by spec
 
 	glGetIntegerv(GL_MAX_CLIP_PLANES, &result);
-	max_clip_planes = (result >= 0) ? result : 6;
+	max_clip_planes = CLAMP(result, 0, 32);
+
+	_flush_gl_errors();
+	for (int i = 0; i < max_clip_planes; i++) {
+		glEnable(GL_CLIP_PLANE0 + i);
+		if (glGetError() == GL_INVALID_ENUM) {
+			max_clip_planes = i;
+			break;
+		}
+		glDisable(GL_CLIP_PLANE0 + i); // Keep state clean during probe
+	}
+	_flush_gl_errors();
+	max_clip_planes = MAX(max_clip_planes, 6); // Minimum 6 clip planes required by spec
 
 	glGetIntegerv(GL_MAX_MODELVIEW_STACK_DEPTH, &result);
 	max_modelview_stack_depth = (result >= 0) ? result : 16;

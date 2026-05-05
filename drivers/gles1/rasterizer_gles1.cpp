@@ -466,11 +466,10 @@ void RasterizerGLES1::_blit_render_target_to_screen(RID p_render_target, Display
 	}
 
 	// State capture
-	GLboolean prev_blend = 0, prev_depth_test = 0, prev_cull_face = 0, prev_scissor_test = 0;
-	glGetBooleanv(GL_BLEND, &prev_blend);
-	glGetBooleanv(GL_DEPTH_TEST, &prev_depth_test);
-	glGetBooleanv(GL_CULL_FACE, &prev_cull_face);
-	glGetBooleanv(GL_SCISSOR_TEST, &prev_scissor_test);
+	GLboolean prev_blend = glIsEnabled(GL_BLEND);
+	GLboolean prev_depth_test = glIsEnabled(GL_DEPTH_TEST);
+	GLboolean prev_cull_face = glIsEnabled(GL_CULL_FACE);
+	GLboolean prev_scissor_test = glIsEnabled(GL_SCISSOR_TEST);
 
 	GLboolean prev_depth_mask = 0;
 	glGetBooleanv(GL_DEPTH_WRITEMASK, &prev_depth_mask);
@@ -481,28 +480,37 @@ void RasterizerGLES1::_blit_render_target_to_screen(RID p_render_target, Display
 	GLfloat prev_clear_color[4] = {};
 	glGetFloatv(GL_COLOR_CLEAR_VALUE, prev_clear_color);
 
-	GLfloat prev_current_color[4] = {};
-	glGetFloatv(GL_CURRENT_COLOR, prev_current_color);
+	GLboolean prev_color_array = 0;
+	GLboolean prev_normal_array = 0;
+	GLboolean prev_vertex_array = 0;
+	glGetBooleanv(GL_COLOR_ARRAY, &prev_color_array);
+	glGetBooleanv(GL_NORMAL_ARRAY, &prev_normal_array);
+	glGetBooleanv(GL_VERTEX_ARRAY, &prev_vertex_array);
 
 	GLint prev_active_tex = 0;
 	glGetIntegerv(GL_ACTIVE_TEXTURE, &prev_active_tex);
 
-	glActiveTexture(GL_TEXTURE0);
-	GLint prev_bound_tex = 0;
-	glGetIntegerv(GL_TEXTURE_BINDING_2D, &prev_bound_tex);
-	GLboolean prev_tex_2d = 0;
-	glGetBooleanv(GL_TEXTURE_2D, &prev_tex_2d);
-
 	GLint prev_client_active_tex = 0;
 	glGetIntegerv(GL_CLIENT_ACTIVE_TEXTURE, &prev_client_active_tex);
-	glClientActiveTexture(GL_TEXTURE0);
 
-	GLboolean prev_color_array = 0, prev_normal_array = 0;
-	GLboolean prev_vertex_array = 0, prev_tex_coord_array = 0;
-	glGetBooleanv(GL_COLOR_ARRAY, &prev_color_array);
-	glGetBooleanv(GL_NORMAL_ARRAY, &prev_normal_array);
-	glGetBooleanv(GL_VERTEX_ARRAY, &prev_vertex_array);
-	glGetBooleanv(GL_TEXTURE_COORD_ARRAY, &prev_tex_coord_array);
+	ERR_FAIL_NULL(config);
+	GLint num_tex_units = CLAMP(config->max_texture_units, 1, 32);
+
+	GLboolean prev_tex_2d_units[32] = { 0 };
+	GLboolean prev_tex_coord_array_units[32] = { 0 };
+	GLint prev_bound_tex_units[32] = { 0 };
+
+	for (int i = 0; i < num_tex_units; i++) {
+		glActiveTexture(GL_TEXTURE0 + i);
+		prev_tex_2d_units[i] = glIsEnabled(GL_TEXTURE_2D);
+		glGetIntegerv(GL_TEXTURE_BINDING_2D, &prev_bound_tex_units[i]);
+
+		glClientActiveTexture(GL_TEXTURE0 + i);
+		glGetBooleanv(GL_TEXTURE_COORD_ARRAY, &prev_tex_coord_array_units[i]);
+	}
+
+	glActiveTexture(GL_TEXTURE0);
+	glClientActiveTexture(GL_TEXTURE0);
 
 	GLint prev_array_buffer = 0, prev_element_buffer = 0;
 	glGetIntegerv(GL_ARRAY_BUFFER_BINDING, &prev_array_buffer);
@@ -542,7 +550,6 @@ void RasterizerGLES1::_blit_render_target_to_screen(RID p_render_target, Display
 		glDepthMask(prev_depth_mask);
 		glViewport(prev_viewport[0], prev_viewport[1], prev_viewport[2], prev_viewport[3]);
 		glClearColor(prev_clear_color[0], prev_clear_color[1], prev_clear_color[2], prev_clear_color[3]);
-		glColor4f(prev_current_color[0], prev_current_color[1], prev_current_color[2], prev_current_color[3]);
 
 		glBindBuffer(GL_ARRAY_BUFFER, prev_array_buffer);
 		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, prev_element_buffer);
@@ -562,18 +569,22 @@ void RasterizerGLES1::_blit_render_target_to_screen(RID p_render_target, Display
 		} else {
 			glDisableClientState(GL_VERTEX_ARRAY);
 		}
-		if (prev_tex_coord_array) {
-			glEnableClientState(GL_TEXTURE_COORD_ARRAY);
-		} else {
-			glDisableClientState(GL_TEXTURE_COORD_ARRAY);
-		}
 
-		glActiveTexture(GL_TEXTURE0);
-		glBindTexture(GL_TEXTURE_2D, prev_bound_tex);
-		if (prev_tex_2d) {
-			glEnable(GL_TEXTURE_2D);
-		} else {
-			glDisable(GL_TEXTURE_2D);
+		for (int i = 0; i < num_tex_units; i++) {
+			glActiveTexture(GL_TEXTURE0 + i);
+			glBindTexture(GL_TEXTURE_2D, prev_bound_tex_units[i]);
+			if (prev_tex_2d_units[i]) {
+				glEnable(GL_TEXTURE_2D);
+			} else {
+				glDisable(GL_TEXTURE_2D);
+			}
+
+			glClientActiveTexture(GL_TEXTURE0 + i);
+			if (prev_tex_coord_array_units[i]) {
+				glEnableClientState(GL_TEXTURE_COORD_ARRAY);
+			} else {
+				glDisableClientState(GL_TEXTURE_COORD_ARRAY);
+			}
 		}
 
 		glActiveTexture(prev_active_tex);
@@ -643,13 +654,11 @@ void RasterizerGLES1::_blit_render_target_to_screen(RID p_render_target, Display
 		GL_CHECK_ERROR("GLES1::RasterizerGLES1::_blit_render_target_to_screen: VBO unbind and color reset");
 		
 		// Eradicate secondary texture unit state leaks
-		if (GLES1::Config::get_singleton()->max_texture_image_units >= 2) {
-			for (int i = 1; i < GLES1::Config::get_singleton()->max_texture_image_units; i++) {
-				glActiveTexture(GL_TEXTURE0 + i);
-				glDisable(GL_TEXTURE_2D);
-				glClientActiveTexture(GL_TEXTURE0 + i);
-				glDisableClientState(GL_TEXTURE_COORD_ARRAY);
-			}
+		for (int i = 1; i < num_tex_units; i++) {
+			glActiveTexture(GL_TEXTURE0 + i);
+			glDisable(GL_TEXTURE_2D);
+			glClientActiveTexture(GL_TEXTURE0 + i);
+			glDisableClientState(GL_TEXTURE_COORD_ARRAY);
 		}
 		glActiveTexture(GL_TEXTURE0);
 		glClientActiveTexture(GL_TEXTURE0);
@@ -749,7 +758,6 @@ void RasterizerGLES1::_blit_render_target_to_screen(RID p_render_target, Display
 	glDepthMask(prev_depth_mask);
 	glViewport(prev_viewport[0], prev_viewport[1], prev_viewport[2], prev_viewport[3]);
 	glClearColor(prev_clear_color[0], prev_clear_color[1], prev_clear_color[2], prev_clear_color[3]);
-	glColor4f(prev_current_color[0], prev_current_color[1], prev_current_color[2], prev_current_color[3]);
 
 	glBindBuffer(GL_ARRAY_BUFFER, prev_array_buffer);
 	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, prev_element_buffer);
@@ -769,18 +777,22 @@ void RasterizerGLES1::_blit_render_target_to_screen(RID p_render_target, Display
 	} else {
 		glDisableClientState(GL_VERTEX_ARRAY);
 	}
-	if (prev_tex_coord_array) {
-		glEnableClientState(GL_TEXTURE_COORD_ARRAY);
-	} else {
-		glDisableClientState(GL_TEXTURE_COORD_ARRAY);
-	}
 
-	glActiveTexture(GL_TEXTURE0);
-	glBindTexture(GL_TEXTURE_2D, prev_bound_tex);
-	if (prev_tex_2d) {
-		glEnable(GL_TEXTURE_2D);
-	} else {
-		glDisable(GL_TEXTURE_2D);
+	for (int i = 0; i < num_tex_units; i++) {
+		glActiveTexture(GL_TEXTURE0 + i);
+		glBindTexture(GL_TEXTURE_2D, prev_bound_tex_units[i]);
+		if (prev_tex_2d_units[i]) {
+			glEnable(GL_TEXTURE_2D);
+		} else {
+			glDisable(GL_TEXTURE_2D);
+		}
+
+		glClientActiveTexture(GL_TEXTURE0 + i);
+		if (prev_tex_coord_array_units[i]) {
+			glEnableClientState(GL_TEXTURE_COORD_ARRAY);
+		} else {
+			glDisableClientState(GL_TEXTURE_COORD_ARRAY);
+		}
 	}
 
 	glActiveTexture(prev_active_tex);

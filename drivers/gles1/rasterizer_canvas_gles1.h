@@ -221,20 +221,26 @@ public:
 		bool transparent_rt
 	) {
 		glEnable(GL_BLEND);
+
+		bool support_subtract = GLES1::Config::get_singleton()->support_blend_subtract;
+		bool support_separate = GLES1::Config::get_singleton()->support_blend_func_separate;
+
 		switch (blend_mode) {
 			case GLES1::CanvasShaderData::BLEND_MODE_DISABLED: {
 				glDisable(GL_BLEND);
 			} break;
 			case GLES1::CanvasShaderData::BLEND_MODE_MIX: {
-				glBlendEquation(GL_FUNC_ADD);
+				if (support_subtract) {
+					glBlendEquation(GL_FUNC_ADD);
+				}
 				if (transparent_rt) {
-					if (GLES1::Config::get_singleton()->support_blend_func_separate) {
+					if (support_separate) {
 						glBlendFuncSeparateOES(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
 					} else {
 						glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 					}
 				} else {
-					if (GLES1::Config::get_singleton()->support_blend_func_separate) {
+					if (support_separate) {
 						glBlendFuncSeparateOES(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_ZERO, GL_ONE);
 					} else {
 						glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
@@ -242,15 +248,17 @@ public:
 				}
 			} break;
 			case GLES1::CanvasShaderData::BLEND_MODE_ADD: {
-				glBlendEquation(GL_FUNC_ADD);
+				if (support_subtract) {
+					glBlendEquation(GL_FUNC_ADD);
+				}
 				if (transparent_rt) {
-					if (GLES1::Config::get_singleton()->support_blend_func_separate) {
+					if (support_separate) {
 						glBlendFuncSeparateOES(GL_SRC_ALPHA, GL_ONE, GL_SRC_ALPHA, GL_ONE);
 					} else {
 						glBlendFunc(GL_SRC_ALPHA, GL_ONE);
 					}
 				} else {
-					if (GLES1::Config::get_singleton()->support_blend_func_separate) {
+					if (support_separate) {
 						glBlendFuncSeparateOES(GL_SRC_ALPHA, GL_ONE, GL_ZERO, GL_ONE);
 					} else {
 						glBlendFunc(GL_SRC_ALPHA, GL_ONE);
@@ -258,31 +266,40 @@ public:
 				}
 			} break;
 			case GLES1::CanvasShaderData::BLEND_MODE_SUB: {
-				glBlendEquation(GL_FUNC_REVERSE_SUBTRACT);
-				if (transparent_rt) {
-					if (GLES1::Config::get_singleton()->support_blend_func_separate) {
-						glBlendFuncSeparateOES(GL_SRC_ALPHA, GL_ONE, GL_SRC_ALPHA, GL_ONE);
+				if (support_subtract) {
+					glBlendEquation(GL_FUNC_REVERSE_SUBTRACT);
+					if (transparent_rt) {
+						if (support_separate) {
+							glBlendFuncSeparateOES(GL_SRC_ALPHA, GL_ONE, GL_SRC_ALPHA, GL_ONE);
+						} else {
+							glBlendFunc(GL_SRC_ALPHA, GL_ONE);
+						}
 					} else {
-						glBlendFunc(GL_SRC_ALPHA, GL_ONE);
+						if (support_separate) {
+							glBlendFuncSeparateOES(GL_SRC_ALPHA, GL_ONE, GL_ZERO, GL_ONE);
+						} else {
+							glBlendFunc(GL_SRC_ALPHA, GL_ONE);
+						}
 					}
 				} else {
-					if (GLES1::Config::get_singleton()->support_blend_func_separate) {
-						glBlendFuncSeparateOES(GL_SRC_ALPHA, GL_ONE, GL_ZERO, GL_ONE);
-					} else {
-						glBlendFunc(GL_SRC_ALPHA, GL_ONE);
-					}
+					// Fallback for missing subtract extension:
+					// Simulate subtraction by using ZERO and ONE_MINUS_SRC_COLOR
+					// It's not a perfect subtract, but it's the standard GLES1.1 workaround.
+					glBlendFunc(GL_ZERO, GL_ONE_MINUS_SRC_COLOR);
 				}
 			} break;
 			case GLES1::CanvasShaderData::BLEND_MODE_MUL: {
-				glBlendEquation(GL_FUNC_ADD);
+				if (support_subtract) {
+					glBlendEquation(GL_FUNC_ADD);
+				}
 				if (transparent_rt) {
-					if (GLES1::Config::get_singleton()->support_blend_func_separate) {
+					if (support_separate) {
 						glBlendFuncSeparateOES(GL_DST_COLOR, GL_ZERO, GL_DST_ALPHA, GL_ZERO);
 					} else {
 						glBlendFunc(GL_DST_COLOR, GL_ZERO);
 					}
 				} else {
-					if (GLES1::Config::get_singleton()->support_blend_func_separate) {
+					if (support_separate) {
 						glBlendFuncSeparateOES(GL_DST_COLOR, GL_ZERO, GL_ZERO, GL_ONE);
 					} else {
 						glBlendFunc(GL_DST_COLOR, GL_ZERO);
@@ -290,15 +307,17 @@ public:
 				}
 			} break;
 			case GLES1::CanvasShaderData::BLEND_MODE_PMALPHA: {
-				glBlendEquation(GL_FUNC_ADD);
+				if (support_subtract) {
+					glBlendEquation(GL_FUNC_ADD);
+				}
 				if (transparent_rt) {
-					if (GLES1::Config::get_singleton()->support_blend_func_separate) {
+					if (support_separate) {
 						glBlendFuncSeparateOES(GL_ONE, GL_ONE_MINUS_SRC_ALPHA, GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
 					} else {
 						glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
 					}
 				} else {
-					if (GLES1::Config::get_singleton()->support_blend_func_separate) {
+					if (support_separate) {
 						glBlendFuncSeparateOES(GL_ONE, GL_ONE_MINUS_SRC_ALPHA, GL_ZERO, GL_ONE);
 					} else {
 						glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA);

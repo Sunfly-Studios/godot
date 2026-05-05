@@ -198,6 +198,10 @@ Ref<Image> TextureStorage::_get_gl_image_and_format(const Ref<Image> &p_image, I
 			ERR_PRINT_ONCE("RG8 Format is not supported by GLES1, converting to RGB.");
 #endif
 			if (image.is_valid()) {
+				if (image == p_image) {
+					image = image->duplicate();
+					ERR_FAIL_COND_V_MSG(image.is_null(), p_image, "GLES1: Out of memory during image duplication.");
+				}
 				image->convert(Image::FORMAT_RGB8);
 			}
 			r_real_format = Image::FORMAT_RGB8;
@@ -229,14 +233,24 @@ Ref<Image> TextureStorage::_get_gl_image_and_format(const Ref<Image> &p_image, I
 			if (config->float_texture_supported) {
 				r_real_format = Image::FORMAT_RGBF;
 				if (image.is_valid()) {
+					if (image == p_image) {
+						image = image->duplicate();
+						ERR_FAIL_COND_V_MSG(image.is_null(), p_image, "GLES1: Out of memory during image duplication.");
+					}
 					image->convert(Image::FORMAT_RGBF);
 				}
 				r_gl_internal_format = GL_RGB;
 				r_gl_format = GL_RGB;
 				r_gl_type = GL_FLOAT;
 			} else {
+#ifdef DEBUG_ENABLED
 				ERR_PRINT_ONCE("Float textures not supported by GLES1, converting RGF to RGB8.");
+#endif
 				if (image.is_valid()) {
+					if (image == p_image) {
+						image = image->duplicate();
+						ERR_FAIL_COND_V_MSG(image.is_null(), p_image, "GLES1: Out of memory during image duplication.");
+					}
 					image->convert(Image::FORMAT_RGB8);
 				}
 				r_real_format = Image::FORMAT_RGB8;
@@ -251,8 +265,14 @@ Ref<Image> TextureStorage::_get_gl_image_and_format(const Ref<Image> &p_image, I
 				r_gl_format = GL_RGB;
 				r_gl_type = GL_FLOAT;
 			} else {
+#ifdef DEBUG_ENABLED
 				ERR_PRINT_ONCE("RGB float texture not supported by GLES1, converting to RGB8.");
+#endif
 				if (image.is_valid()) {
+					if (image == p_image) {
+						image = image->duplicate();
+						ERR_FAIL_COND_V_MSG(image.is_null(), p_image, "GLES1: Out of memory during image duplication.");
+					}
 					image->convert(Image::FORMAT_RGB8);
 				}
 				r_real_format = Image::FORMAT_RGB8;
@@ -267,8 +287,14 @@ Ref<Image> TextureStorage::_get_gl_image_and_format(const Ref<Image> &p_image, I
 				r_gl_format = GL_RGBA;
 				r_gl_type = GL_FLOAT;
 			} else {
+#ifdef DEBUG_ENABLED
 				ERR_PRINT_ONCE("RGBA float texture not supported by GLES1, converting to RGBA8.");
+#endif
 				if (image.is_valid()) {
+					if (image == p_image) {
+						image = image->duplicate();
+						ERR_FAIL_COND_V_MSG(image.is_null(), p_image, "GLES1: Out of memory during image duplication.");
+					}
 					image->convert(Image::FORMAT_RGBA8);
 				}
 				r_real_format = Image::FORMAT_RGBA8;
@@ -451,6 +477,21 @@ RID TextureStorage::texture_allocate() {
 
 	texture.active = false;
 	texture.total_data_size = 0;
+	texture.target = GL_TEXTURE_2D;
+
+	texture.context_generation = GLES1::Config::get_singleton()->context_generation;
+
+	texture.type = Texture::TYPE_2D;
+	texture.width = 0;
+	texture.height = 0;
+	texture.alloc_width = 0;
+	texture.alloc_height = 0;
+	texture.is_proxy = false;
+	texture.is_render_target = false;
+	texture.is_from_native_handle = false;
+	texture.render_target = nullptr;
+	texture.canvas_texture = nullptr;
+	texture.proxy_to = RID();
 
 	return texture_owner.make_rid(texture);
 }
@@ -1282,22 +1323,27 @@ void TextureStorage::texture_bind(RID p_texture, uint32_t p_texture_no) {
 GLES1::Texture *TextureStorage::texture_bind_and_validate(RID p_texture, GLenum p_texture_unit, RS::CanvasItemTextureFilter p_filter, RS::CanvasItemTextureRepeat p_repeat) {
 	Texture *texture = get_texture(p_texture);
 
+	if (texture && texture->context_generation != GLES1::Config::get_singleton()->context_generation) {
+		texture->tex_id = 0; // Handle is dead/stolen by the new context
+		texture->context_generation = GLES1::Config::get_singleton()->context_generation;
+	}
+
 	if (texture && texture->tex_id == 0 && texture->active) {
 		if (texture->image_cache_2d.is_valid()) {
 #ifdef DEBUG_ENABLED
 			print_verbose("Resurrecting dead texture from CPU cache centrally.");
 #endif
 			glGenTextures(1, &texture->tex_id);
-			GL_CHECK_ERROR("GLES1::TextureStorage::texture_bind_and_validate: glGenTextures");
-
-			if (unlikely(texture->tex_id == 0)) {
-				WARN_PRINT_ONCE("GLES1: Failed to resurrect texture. Context lost.");
-				texture->active = false;
-			} else {
+			if (likely(texture->tex_id != 0)) {
 				_texture_set_data(p_texture, texture->image_cache_2d, 0, false);
+				glActiveTexture(p_texture_unit);
+				glBindTexture(texture->target, texture->tex_id);
 				if (!GLES1::Utilities::get_singleton()->has_texture_data(texture->tex_id)) {
 					GLES1::Utilities::get_singleton()->texture_allocated_data(texture->tex_id, texture->total_data_size, "Resurrected Texture");
 				}
+			} else {
+				WARN_PRINT_ONCE("GLES1: Failed to resurrect texture. Context lost.");
+				texture->active = false;
 			}
 		} else {
 			WARN_PRINT_ONCE("Cannot recover texture centrally, CPU cache is empty.");
@@ -1309,10 +1355,28 @@ GLES1::Texture *TextureStorage::texture_bind_and_validate(RID p_texture, GLenum 
 		WARN_PRINT_ONCE("Texture missing or unrecoverable. Routing to safe fallback.");
 		RID safe_fallback = texture_gl_get_default(DEFAULT_GL_TEXTURE_WHITE);
 		texture = get_texture(safe_fallback);
+
+		// Ensure the fallback itself isn't tainted.
+		if (
+			texture &&
+			texture->context_generation != GLES1::Config::get_singleton()->context_generation
+		) {
+			texture->tex_id = 0;
+			texture->context_generation = GLES1::Config::get_singleton()->context_generation;
+			glGenTextures(1, &texture->tex_id);
+			Ref<Image> white_img = Image::create_empty(8, 8, false, Image::FORMAT_RGB8);
+			white_img->fill(Color(1, 1, 1, 1));
+			texture_2d_initialize(safe_fallback, white_img);
+		}
 	}
 
 	if (likely(texture && texture->tex_id != 0)) {
 		glActiveTexture(p_texture_unit);
+
+		if (unlikely(texture->target == 0)) {
+			texture->target = GL_TEXTURE_2D;
+		}
+
 		glEnable(texture->target);
 		glBindTexture(texture->target, texture->tex_id);
 		GL_CHECK_ERROR("GLES1::TextureStorage::texture_bind_and_validate: glBindTexture");
@@ -1341,7 +1405,7 @@ GLES1::Texture *TextureStorage::texture_bind_and_validate(RID p_texture, GLenum 
 			}
 		}
 
-		// Apply filters and repeats securely
+		// Apply filters and repeats
 		texture->gl_set_filter(p_filter);
 		texture->gl_set_repeat(p_repeat);
 
@@ -1503,7 +1567,7 @@ void TextureStorage::_update_render_target(RenderTarget *rt) {
 
 	bind_framebuffer(rt->fbo);
 
-	GLenum target_color_internal_format = rt->is_transparent ? GL_RGBA8 : GL_RGB8;
+	GLenum target_color_internal_format = rt->is_transparent ? GL_RGBA : GL_RGB;
 	GLenum target_color_format = rt->is_transparent ? GL_RGBA : GL_RGB;
 
 	struct FBOFallback {

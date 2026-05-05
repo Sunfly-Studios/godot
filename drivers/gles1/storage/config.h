@@ -87,6 +87,7 @@ public:
 	int64_t max_renderable_elements = 0;
 	int64_t max_renderable_lights = 0;
 	int64_t max_lights_per_object = 0;
+	uint32_t context_generation = 1;
 	float anisotropic_level = 0.0f;
 
 	// Extension Tracking

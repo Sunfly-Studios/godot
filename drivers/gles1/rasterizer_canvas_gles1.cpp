@@ -343,7 +343,7 @@ void RasterizerCanvasGLES1::_bind_canvas_texture(RID p_texture, RS::CanvasItemTe
 		state.texture_size = Size2i(w, h);
 	}
 
-	GLint max_units = GLES1::Config::get_singleton()->max_texture_image_units;
+	GLint max_units = GLES1::Config::get_singleton()->max_texture_units;
 
 	// Normal Maps
 	if (max_units >= 2) {
@@ -448,10 +448,10 @@ void RasterizerCanvasGLES1::canvas_begin(RID p_to_render_target, bool p_to_backb
 	// Determine a safe texture unit for the screen/backbuffer.
 	// We prefer texture unit 3, but fallback to 1 (sacrificing normal maps) if limited to 2 units.
 	GLenum screen_tex_unit = GL_TEXTURE0;
-	if (config->max_texture_image_units >= 4) {
+	if (config->max_texture_units >= 4) {
 		screen_tex_unit = GL_TEXTURE3;
-	} else if (config->max_texture_image_units >= 2) {
-		screen_tex_unit = GL_TEXTURE1; 
+	} else if (config->max_texture_units >= 2) {
+		screen_tex_unit = GL_TEXTURE1;
 	}
 
 	if (render_target && render_target->fbo != 0) {
@@ -466,11 +466,12 @@ void RasterizerCanvasGLES1::canvas_begin(RID p_to_render_target, bool p_to_backb
 	if (p_to_backbuffer) {
 		GLES1::TextureStorage::get_singleton()->bind_framebuffer(render_target ? render_target->backbuffer_fbo : 0);
 		GL_CHECK_ERROR("GLES1::Canvas::canvas_begin: bind backbuffer fbo");
-		glActiveTexture(screen_tex_unit);
-		GLES1::Texture *tex = GLES1::TextureStorage::get_singleton()->get_texture(default_canvas_texture);
-		if (tex) {
-			glBindTexture(GL_TEXTURE_2D, tex->tex_id);
-		}
+		GLES1::TextureStorage::get_singleton()->texture_bind_and_validate(
+			default_canvas_texture,
+			screen_tex_unit,
+			RS::CANVAS_ITEM_TEXTURE_FILTER_NEAREST,
+			RS::CANVAS_ITEM_TEXTURE_REPEAT_DISABLED
+		);
 	} else {
 		GLES1::TextureStorage::get_singleton()->bind_framebuffer(render_target ? render_target->fbo : 0);
 		GL_CHECK_ERROR("GLES1::Canvas::canvas_begin: bind fbo");
@@ -526,13 +527,13 @@ void RasterizerCanvasGLES1::canvas_begin(RID p_to_render_target, bool p_to_backb
 	reset_canvas();
 
 	// Bind the default white texture so untextured items draw correctly
-	glActiveTexture(GL_TEXTURE0);
 	RID white_tex_rid = GLES1::TextureStorage::get_singleton()->texture_gl_get_default(GLES1::DEFAULT_GL_TEXTURE_WHITE);
-	GLES1::Texture *tex_white = GLES1::TextureStorage::get_singleton()->get_texture(white_tex_rid);
-
-	if (tex_white) {
-		glBindTexture(GL_TEXTURE_2D, tex_white->tex_id);
-	}
+	GLES1::TextureStorage::get_singleton()->texture_bind_and_validate(
+		white_tex_rid,
+		GL_TEXTURE0,
+		RS::CANVAS_ITEM_TEXTURE_FILTER_NEAREST,
+		RS::CANVAS_ITEM_TEXTURE_REPEAT_DISABLED
+	);
 
 	glColor4f(1.0f, 1.0f, 1.0f, 1.0f);
 	glDisableClientState(GL_COLOR_ARRAY);
@@ -591,7 +592,7 @@ void RasterizerCanvasGLES1::canvas_end() {
 	glDisableClientState(GL_NORMAL_ARRAY);
 
 	// Sterilize secondary TU leak
-	if (GLES1::Config::get_singleton()->max_texture_image_units >= 2) {
+	if (GLES1::Config::get_singleton()->max_texture_units >= 2) {
 		glActiveTexture(GL_TEXTURE1);
 		glDisable(GL_TEXTURE_2D);
 		glClientActiveTexture(GL_TEXTURE1);
@@ -640,9 +641,9 @@ void RasterizerCanvasGLES1::reset_canvas() {
 	glDisableClientState(GL_TEXTURE_COORD_ARRAY);
 	glDisableClientState(GL_COLOR_ARRAY);
 	glDisableClientState(GL_NORMAL_ARRAY);
-	
+
 	// Force sterilise secondary texture units
-	if (GLES1::Config::get_singleton()->max_texture_image_units >= 2) {
+	if (GLES1::Config::get_singleton()->max_texture_units >= 2) {
 		glActiveTexture(GL_TEXTURE1);
 		glDisable(GL_TEXTURE_2D);
 		glClientActiveTexture(GL_TEXTURE1);
@@ -748,13 +749,13 @@ void RasterizerCanvasGLES1::canvas_render_items_implementation(Item *p_item_list
 	reset_canvas();
 
 	// Bind default white texture to texture unit 0
-	glActiveTexture(GL_TEXTURE0);
 	RID white_tex_rid = GLES1::TextureStorage::get_singleton()->texture_gl_get_default(GLES1::DEFAULT_GL_TEXTURE_WHITE);
-	GLES1::Texture *tex_white = GLES1::TextureStorage::get_singleton()->get_texture(white_tex_rid);
-
-	if (tex_white) {
-		glBindTexture(GL_TEXTURE_2D, tex_white->tex_id);
-	}
+	GLES1::TextureStorage::get_singleton()->texture_bind_and_validate(
+		white_tex_rid,
+		GL_TEXTURE0,
+		RS::CANVAS_ITEM_TEXTURE_FILTER_NEAREST,
+		RS::CANVAS_ITEM_TEXTURE_REPEAT_DISABLED
+	);
 	GL_CHECK_ERROR("GLES1::Canvas::canvas_render_items_implementation: bind GL_TEXTURE0/GL_TEXTURE_2D");
 
 	bool reclip = false;
@@ -1233,6 +1234,7 @@ void RasterizerCanvasGLES1::render_batches(Item::Command *const *p_commands, Ite
 
 	// Blend modes
 	set_gl_blend_mode(blend_mode, transparent_rt);
+	GL_CHECK_ERROR("GLES1::Canvas::render_batches: set_gl_blend_mode");
 
 	for (int batch_num = 0; batch_num < num_batches; batch_num++) {
 		const Batch &batch = bdata.batches[batch_num];
@@ -1615,15 +1617,18 @@ void RasterizerCanvasGLES1::render_batches(Item::Command *const *p_commands, Ite
 							// Fetch and Draw Mesh Data
 							GLES1::Mesh *mesh_data = GLES1::MeshStorage::get_singleton()->get_mesh(mesh_cmd->mesh);
 							if (mesh_data) {
-								bool apply_tu1 = GLES1::Config::get_singleton()->max_texture_image_units >= 2;
+								bool apply_tu1 = (
+									GLES1::Config::get_singleton()->max_texture_units >= 2 &&
+									GLES1::Config::get_singleton()->support_texture_env_combine
+								);
 								if (apply_tu1) {
-									glActiveTexture(GL_TEXTURE1);
-									glEnable(GL_TEXTURE_2D);
 									RID white_tex_rid = GLES1::TextureStorage::get_singleton()->texture_gl_get_default(GLES1::DEFAULT_GL_TEXTURE_WHITE);
-									GLES1::Texture *tex_white = GLES1::TextureStorage::get_singleton()->get_texture(white_tex_rid);
-									if (tex_white) {
-										glBindTexture(GL_TEXTURE_2D, tex_white->tex_id);
-									}
+									GLES1::TextureStorage::get_singleton()->texture_bind_and_validate(
+										white_tex_rid,
+										GL_TEXTURE1,
+										state.default_filter,
+										state.default_repeat
+									);
 
 									glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_COMBINE);
 									glTexEnvi(GL_TEXTURE_ENV, GL_COMBINE_RGB, GL_MODULATE);
@@ -1648,9 +1653,24 @@ void RasterizerCanvasGLES1::render_batches(Item::Command *const *p_commands, Ite
 								// Loop using the double pointer array
 								for (uint32_t j = 0; j < mesh_data->surface_count; j++) {
 									GLES1::Mesh::Surface *s = mesh_data->surfaces[j];
-
+									uint32_t context_generation = GLES1::Config::get_singleton()->context_generation;
 									if (unlikely(!s)) {
 										continue;
+									}
+
+									// Context loss detection
+									if (unlikely(s->context_generation != context_generation)) {
+										s->vertex_buffer = 0;
+										s->attribute_buffer = 0;
+										s->index_buffer = 0;
+
+										if (s->versions) {
+											for (uint32_t v = 0; v < s->version_count; v++) {
+												s->versions[v].vertex_array = 0;
+											}
+										}
+
+										s->context_generation = context_generation;
 									}
 
 									bool use_vertex_vbo = s->vertex_buffer != 0;
@@ -1856,15 +1876,18 @@ void RasterizerCanvasGLES1::render_batches(Item::Command *const *p_commands, Ite
 								p_material->bind_uniforms();
 							}
 
-							bool apply_tu1 = GLES1::Config::get_singleton()->max_texture_image_units >= 2;
+							bool apply_tu1 = (
+								GLES1::Config::get_singleton()->max_texture_units >= 2 &&
+								GLES1::Config::get_singleton()->support_texture_env_combine
+							);
 							if (apply_tu1) {
-								glActiveTexture(GL_TEXTURE1);
-								glEnable(GL_TEXTURE_2D);
 								RID white_tex_rid = GLES1::TextureStorage::get_singleton()->texture_gl_get_default(GLES1::DEFAULT_GL_TEXTURE_WHITE);
-								GLES1::Texture *tex_white = GLES1::TextureStorage::get_singleton()->get_texture(white_tex_rid);
-								if (tex_white) {
-									glBindTexture(GL_TEXTURE_2D, tex_white->tex_id);
-								}
+								GLES1::TextureStorage::get_singleton()->texture_bind_and_validate(
+									white_tex_rid,
+									GL_TEXTURE1,
+									state.default_filter,
+									state.default_repeat
+								);
 
 								glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_COMBINE);
 								glTexEnvi(GL_TEXTURE_ENV, GL_COMBINE_RGB, GL_MODULATE);
@@ -1879,9 +1902,24 @@ void RasterizerCanvasGLES1::render_batches(Item::Command *const *p_commands, Ite
 
 							for (uint32_t j = 0; j < mesh_data->surface_count; j++) {
 								GLES1::Mesh::Surface *s = mesh_data->surfaces[j];
-
+								uint32_t context_generation = GLES1::Config::get_singleton()->context_generation;
 								if (unlikely(!s)) {
 									continue;
+								}
+
+								// Context loss detection
+								if (unlikely(s->context_generation != context_generation)) {
+									s->vertex_buffer = 0;
+									s->attribute_buffer = 0;
+									s->index_buffer = 0;
+
+									if (s->versions) {
+										for (uint32_t v = 0; v < s->version_count; v++) {
+											s->versions[v].vertex_array = 0;
+										}
+									}
+
+									s->context_generation = context_generation;
 								}
 
 								bool use_vertex_vbo = s->vertex_buffer != 0;
@@ -2596,7 +2634,22 @@ void RasterizerCanvasGLES1::set_time(double p_time) {
 
 bool RasterizerCanvasGLES1::is_context_lost() const {
 	if (data.canvas_quad_vertices != 0) {
-		return glIsBuffer(data.canvas_quad_vertices) == GL_FALSE;
+		// Honest drivers will flag this immediately.
+		if (glIsBuffer(data.canvas_quad_vertices) == GL_FALSE) {
+			return true;
+		}
+
+		// Liar drivers lie about glIsBuffer after silent context loss.
+		// We perform a single deliberate bind and check for GL_INVALID_OPERATION.
+		// Since this only runs at frame/canvas start,
+		// the pipeline sync cost is negligible.
+		while (glGetError() != GL_NO_ERROR); // Clear stale errors
+
+		glBindBuffer(GL_ARRAY_BUFFER, data.canvas_quad_vertices);
+		bool is_zombie = (glGetError() == GL_INVALID_OPERATION);
+		glBindBuffer(GL_ARRAY_BUFFER, 0);
+
+		return is_zombie;
 	}
 
 	// If it's 0, it hasn't been initialized yet.
@@ -2604,16 +2657,23 @@ bool RasterizerCanvasGLES1::is_context_lost() const {
 }
 
 void RasterizerCanvasGLES1::force_context_recovery() {
-	// Wipe dead handles to 0 so glGenBuffers doesn't complain, 
+	// Wipe dead handles to 0 so glGenBuffers doesn't complain,
 	// then re-initialize the core VBOs.
 	data.canvas_quad_vertices = 0;
 	data.polygon_buffer = 0;
 	data.polygon_index_buffer = 0;
 	data.ninepatch_vertices = 0;
 	data.ninepatch_elements = 0;
-			
+
+	// Sterilize the batching buffers
+	bdata.gl_vertex_buffer = 0;
+	bdata.gl_index_buffer = 0;
+
 	initialize();
 	reset_canvas();
+
+	// Broadcast the death of the context globally.
+	GLES1::Config::get_singleton()->context_generation++;
 }
 
 RasterizerCanvasGLES1 *RasterizerCanvasGLES1::singleton = nullptr;

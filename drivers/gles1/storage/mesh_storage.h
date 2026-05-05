@@ -59,6 +59,7 @@ struct Mesh {
 		};
 		RS::PrimitiveType primitive = RS::PRIMITIVE_POINTS;
 		uint64_t format = 0;
+		uint32_t context_generation = 1;
 
 		GLuint vertex_buffer = 0;
 		GLuint attribute_buffer = 0;
