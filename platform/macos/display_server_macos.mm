@@ -813,7 +813,17 @@ bool DisplayServerMacOS::has_feature(Feature p_feature) const {
 		//case FEATURE_KEEP_SCREEN_ON:
 		case FEATURE_SWAP_BUFFERS:
 		case FEATURE_TEXT_TO_SPEECH:
-		case FEATURE_EXTEND_TO_TITLE:
+		case FEATURE_EXTEND_TO_TITLE: {
+#if defined(__x86_64__)
+			if (@available(macOS 10.15, *)) {
+				return true;
+			} else {
+				return false;
+			}
+#else
+			return true;
+#endif
+		} break;
 		case FEATURE_SCREEN_CAPTURE:
 		case FEATURE_STATUS_INDICATOR:
 		case FEATURE_NATIVE_HELP:
