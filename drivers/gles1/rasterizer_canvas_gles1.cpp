@@ -49,28 +49,199 @@
 #include "storage/particles_storage.h"
 #include "storage/texture_storage.h"
 
+void RasterizerCanvasGLES1::_update_transform_2d_to_mat4(const Transform2D &p_transform, float *p_mat4) {
+	p_mat4[0] = p_transform.columns[0][0];
+	p_mat4[1] = p_transform.columns[0][1];
+	p_mat4[2] = 0;
+	p_mat4[3] = 0;
+	p_mat4[4] = p_transform.columns[1][0];
+	p_mat4[5] = p_transform.columns[1][1];
+	p_mat4[6] = 0;
+	p_mat4[7] = 0;
+	p_mat4[8] = 0;
+	p_mat4[9] = 0;
+	p_mat4[10] = 1;
+	p_mat4[11] = 0;
+	p_mat4[12] = p_transform.columns[2][0];
+	p_mat4[13] = p_transform.columns[2][1];
+	p_mat4[14] = 0;
+	p_mat4[15] = 1;
+}
+
+void RasterizerCanvasGLES1::_update_transform_2d_to_mat2x4(const Transform2D &p_transform, float *p_mat2x4) {
+	p_mat2x4[0] = p_transform.columns[0][0];
+	p_mat2x4[1] = p_transform.columns[1][0];
+	p_mat2x4[2] = 0;
+	p_mat2x4[3] = p_transform.columns[2][0];
+
+	p_mat2x4[4] = p_transform.columns[0][1];
+	p_mat2x4[5] = p_transform.columns[1][1];
+	p_mat2x4[6] = 0;
+	p_mat2x4[7] = p_transform.columns[2][1];
+}
+
+void RasterizerCanvasGLES1::_update_transform_2d_to_mat2x3(const Transform2D &p_transform, float *p_mat2x3) {
+	p_mat2x3[0] = p_transform.columns[0][0];
+	p_mat2x3[1] = p_transform.columns[0][1];
+	p_mat2x3[2] = p_transform.columns[1][0];
+	p_mat2x3[3] = p_transform.columns[1][1];
+	p_mat2x3[4] = p_transform.columns[2][0];
+	p_mat2x3[5] = p_transform.columns[2][1];
+}
+
+void RasterizerCanvasGLES1::_update_transform_to_mat4(const Transform3D &p_transform, float *p_mat4) {
+	p_mat4[0] = p_transform.basis.rows[0][0];
+	p_mat4[1] = p_transform.basis.rows[1][0];
+	p_mat4[2] = p_transform.basis.rows[2][0];
+	p_mat4[3] = 0;
+	p_mat4[4] = p_transform.basis.rows[0][1];
+	p_mat4[5] = p_transform.basis.rows[1][1];
+	p_mat4[6] = p_transform.basis.rows[2][1];
+	p_mat4[7] = 0;
+	p_mat4[8] = p_transform.basis.rows[0][2];
+	p_mat4[9] = p_transform.basis.rows[1][2];
+	p_mat4[10] = p_transform.basis.rows[2][2];
+	p_mat4[11] = 0;
+	p_mat4[12] = p_transform.origin.x;
+	p_mat4[13] = p_transform.origin.y;
+	p_mat4[14] = p_transform.origin.z;
+	p_mat4[15] = 1;
+}
+
 [[maybe_unused]] _FORCE_INLINE_ static uint32_t _indices_to_primitives(RS::PrimitiveType p_primitive, uint32_t p_indices) {
 	return 0;
 }
 
 RID RasterizerCanvasGLES1::light_create() {
-	return RID();
+	CanvasLight canvas_light;
+	return canvas_light_owner.make_rid(canvas_light);
 }
 
 void RasterizerCanvasGLES1::light_set_texture(RID p_rid, RID p_texture) {
+	CanvasLight *cl = canvas_light_owner.get_or_null(p_rid);
+	ERR_FAIL_NULL(cl);
+	if (cl->texture == p_texture) {
+		return;
+	}
 
+	cl->texture = p_texture;
 }
 
 void RasterizerCanvasGLES1::light_set_use_shadow(RID p_rid, bool p_enable) {
+	CanvasLight *cl = canvas_light_owner.get_or_null(p_rid);
+	ERR_FAIL_NULL(cl);
 
+	cl->shadow.enabled = p_enable;
 }
 
 void RasterizerCanvasGLES1::light_update_shadow(RID p_rid, int p_shadow_index, const Transform2D &p_light_xform, int p_light_mask, float p_near, float p_far, LightOccluderInstance *p_occluders, const Rect2 &p_light_rect) {
+	CanvasLight *cl = canvas_light_owner.get_or_null(p_rid);
+	ERR_FAIL_NULL(cl);
+	ERR_FAIL_COND(!cl->shadow.enabled);
 
+	cl->shadow.z_far = p_far;
+	cl->shadow.shadow_volumes.clear();
+	cl->shadow.light_to_world = p_light_xform.affine_inverse();
+
+	LightOccluderInstance *instance = p_occluders;
+	while (instance) {
+		if (instance->light_mask & p_light_mask) {
+			OccluderPolygon *oc = occluder_polygon_owner.get_or_null(instance->occluder);
+			if (oc && oc->lines.size() > 0) {
+				Transform2D xform = p_light_xform * instance->xform_cache;
+
+				for (int i = 0; i < oc->lines.size(); i += 2) {
+					Vector2 p1 = xform.xform(oc->lines[i]);
+					Vector2 p2 = xform.xform(oc->lines[i + 1]);
+
+					if (p1 == p2) {
+						continue;
+					}
+
+					if (oc->cull_mode != RS::CANVAS_OCCLUDER_POLYGON_CULL_DISABLED) {
+						Vector2 dir = (p2 - p1).normalized();
+						Vector2 normal(-dir.y, dir.x);
+						Vector2 center = (p1 + p2) * 0.5f;
+						float d = normal.dot(center);
+
+						bool front_facing = d < 0;
+						if (oc->cull_mode == RS::CANVAS_OCCLUDER_POLYGON_CULL_CLOCKWISE && !front_facing) {
+							continue;
+						}
+						if (oc->cull_mode == RS::CANVAS_OCCLUDER_POLYGON_CULL_COUNTER_CLOCKWISE && front_facing) {
+							continue;
+						}
+					}
+
+					Vector2 p1_ext = p1 + p1.normalized() * p_far;
+					Vector2 p2_ext = p2 + p2.normalized() * p_far;
+
+					cl->shadow.shadow_volumes.push_back(p1);
+					cl->shadow.shadow_volumes.push_back(p2);
+					cl->shadow.shadow_volumes.push_back(p2_ext);
+
+					cl->shadow.shadow_volumes.push_back(p1);
+					cl->shadow.shadow_volumes.push_back(p2_ext);
+					cl->shadow.shadow_volumes.push_back(p1_ext);
+				}
+			}
+		}
+		instance = instance->next;
+	}
 }
 
 void RasterizerCanvasGLES1::light_update_directional_shadow(RID p_rid, int p_shadow_index, const Transform2D &p_light_xform, int p_light_mask, float p_cull_distance, const Rect2 &p_clip_rect, LightOccluderInstance *p_occluders) {
+	CanvasLight *cl = canvas_light_owner.get_or_null(p_rid);
+	ERR_FAIL_NULL(cl);
+	ERR_FAIL_COND(!cl->shadow.enabled);
 
+	cl->shadow.directional_shadow_volumes.clear();
+	Vector2 light_dir = p_light_xform.columns[1].normalized();
+
+	LightOccluderInstance *instance = p_occluders;
+	while (instance) {
+		if (instance->light_mask & p_light_mask) {
+			OccluderPolygon *oc = occluder_polygon_owner.get_or_null(instance->occluder);
+			if (oc && oc->lines.size() > 0) {
+				Transform2D xform = instance->xform_cache;
+
+				for (int i = 0; i < oc->lines.size(); i += 2) {
+					Vector2 p1 = xform.xform(oc->lines[i]);
+					Vector2 p2 = xform.xform(oc->lines[i + 1]);
+
+					if (p1 == p2) {
+						continue;
+					}
+
+					if (oc->cull_mode != RS::CANVAS_OCCLUDER_POLYGON_CULL_DISABLED) {
+						Vector2 dir = (p2 - p1).normalized();
+						Vector2 normal(-dir.y, dir.x);
+						float d = normal.dot(light_dir);
+
+						bool front_facing = d < 0;
+						if (oc->cull_mode == RS::CANVAS_OCCLUDER_POLYGON_CULL_CLOCKWISE && !front_facing) {
+							continue;
+						}
+						if (oc->cull_mode == RS::CANVAS_OCCLUDER_POLYGON_CULL_COUNTER_CLOCKWISE && front_facing) {
+							continue;
+						}
+					}
+
+					Vector2 p1_ext = p1 + light_dir * p_cull_distance;
+					Vector2 p2_ext = p2 + light_dir * p_cull_distance;
+
+					cl->shadow.directional_shadow_volumes.push_back(p1);
+					cl->shadow.directional_shadow_volumes.push_back(p2);
+					cl->shadow.directional_shadow_volumes.push_back(p2_ext);
+
+					cl->shadow.directional_shadow_volumes.push_back(p1);
+					cl->shadow.directional_shadow_volumes.push_back(p2_ext);
+					cl->shadow.directional_shadow_volumes.push_back(p1_ext);
+				}
+			}
+		}
+		instance = instance->next;
+	}
 }
 
 void RasterizerCanvasGLES1::render_sdf(RID p_render_target, LightOccluderInstance *p_occluders) {
@@ -78,22 +249,58 @@ void RasterizerCanvasGLES1::render_sdf(RID p_render_target, LightOccluderInstanc
 }
 
 RID RasterizerCanvasGLES1::occluder_polygon_create() {
-	return RID();
+	OccluderPolygon occluder;
+	return occluder_polygon_owner.make_rid(occluder);
 }
 
 void RasterizerCanvasGLES1::occluder_polygon_set_shape(RID p_occluder, const Vector<Vector2> &p_points, bool p_closed) {
+	OccluderPolygon *oc = occluder_polygon_owner.get_or_null(p_occluder);
+	ERR_FAIL_NULL(oc);
 
+	int point_count = p_points.size();
+	if (point_count < 2) {
+		oc->line_point_count = 0;
+		oc->lines.clear();
+		return;
+	}
+
+	int line_count = p_closed ? point_count : point_count - 1;
+	oc->lines.clear();
+	oc->lines.resize(line_count * 2);
+
+	for (int i = 0; i < line_count; i++) {
+		oc->lines.write[i * 2 + 0] = p_points[i];
+		oc->lines.write[i * 2 + 1] = p_points[(i + 1) % point_count];
+	}
+
+	oc->line_point_count = line_count * 2;
+	oc->vertex_array = 1; // Mark as valid
 }
 
 void RasterizerCanvasGLES1::occluder_polygon_set_cull_mode(RID p_occluder, RS::CanvasOccluderPolygonCullMode p_mode) {
-
+	OccluderPolygon *oc = occluder_polygon_owner.get_or_null(p_occluder);
+	ERR_FAIL_NULL(oc);
+	oc->cull_mode = p_mode;
 }
 
 void RasterizerCanvasGLES1::set_shadow_texture_size(int p_size) {
-
+	// Nop
 }
 
 bool RasterizerCanvasGLES1::free(RID p_rid) {
+	if (canvas_light_owner.owns(p_rid)) {
+		CanvasLight *cl = canvas_light_owner.get_or_null(p_rid);
+		if (cl && cl->directional_tex_id != 0) {
+			glDeleteTextures(1, &cl->directional_tex_id);
+			cl->directional_tex_id = 0;
+		}
+		canvas_light_owner.free(p_rid);
+		return true;
+	} else if (occluder_polygon_owner.owns(p_rid)) {
+		occluder_polygon_set_shape(p_rid, Vector<Vector2>(), false);
+		occluder_polygon_owner.free(p_rid);
+	}
+
 	return true;
 }
 
@@ -222,12 +429,60 @@ void RasterizerCanvasGLES1::initialize() {
 		}
 	}
 
+	// Light vector map (for point light normals)
+	{
+		data.light_vector_tex = 0;
+		glGenTextures(1, &data.light_vector_tex);
+		glBindTexture(GL_TEXTURE_2D, data.light_vector_tex);
+
+		constexpr int LV_SIZE = 128;
+		Vector<uint8_t> lv_data;
+		lv_data.resize(LV_SIZE * LV_SIZE * 4);
+		uint8_t *lv_ptr = lv_data.ptrw();
+		ERR_FAIL_NULL(lv_ptr);
+
+		for (int y = 0; y < LV_SIZE; y++) {
+			for (int x = 0; x < LV_SIZE; x++) {
+				float px = 1.0f - (x / (float)(LV_SIZE - 1)) * 2.0f;
+				float py = 1.0f - (y / (float)(LV_SIZE - 1)) * 2.0f;
+				float dist_sq = px * px + py * py;
+				float pz = dist_sq < 1.0f ? Math::sqrt(1.0f - dist_sq) : 0.0f;
+
+				Vector3 v(px, py, pz);
+				if (dist_sq > 1.0f) {
+					v = Vector3(0, 0, 1);
+				} else {
+					v.normalize();
+				}
+
+				int idx = (y * LV_SIZE + x) * 4;
+				lv_ptr[idx + 0] = (uint8_t)((v.x * 0.5f + 0.5f) * 255.0f);
+				lv_ptr[idx + 1] = (uint8_t)((v.y * 0.5f + 0.5f) * 255.0f);
+				lv_ptr[idx + 2] = (uint8_t)((v.z * 0.5f + 0.5f) * 255.0f);
+				lv_ptr[idx + 3] = 255;
+			}
+		}
+
+		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, LV_SIZE, LV_SIZE, 0, GL_RGBA, GL_UNSIGNED_BYTE, lv_data.ptr());
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+		glBindTexture(GL_TEXTURE_2D, 0);
+		GL_CHECK_ERROR("GLES1::Canvas::initialize: light vector map generation");
+	}
+
 	_set_texture_rect_mode(true);
 
 	state.using_light = nullptr;
 	state.using_skeleton = false;
 
 	maximum_attributes = RS::ARRAY_MAX;
+	shadow_render.shader.initialize();
+	shadow_render.shader_version = shadow_render.shader.version_create();
+
+	// Configure limits for this driver.
+	limit_settings.light_multiplier = static_cast<float>(GLOBAL_GET("rendering/gl_classic/light_vibrancy_multiplier"));
 
 	// Batcher Initialisation
 	batch_initialize();
@@ -304,7 +559,10 @@ void RasterizerCanvasGLES1::_bind_canvas_texture(RID p_texture, RS::CanvasItemTe
 
 	// Resolve CanvasTexture
 	GLES1::CanvasTexture *ct = nullptr;
-	GLES1::Texture *t = GLES1::TextureStorage::get_singleton()->get_texture(p_texture);
+	GLES1::TextureStorage *texture_storage = GLES1::TextureStorage::get_singleton();
+	ERR_FAIL_NULL(texture_storage);
+
+	GLES1::Texture *t = texture_storage->get_texture(p_texture);
 
 	if (t) {
 		// If it's a raw texture, it might have an embedded CanvasTexture
@@ -316,12 +574,12 @@ void RasterizerCanvasGLES1::_bind_canvas_texture(RID p_texture, RS::CanvasItemTe
 		ct = t->canvas_texture;
 	} else {
 		// It's a genuine CanvasTexture RID
-		ct = GLES1::TextureStorage::get_singleton()->get_canvas_texture(p_texture);
+		ct = texture_storage->get_canvas_texture(p_texture);
 	}
 
 	if (!ct) {
 		// Completely invalid texture, bind white safely
-		RID white_tex = GLES1::TextureStorage::get_singleton()->texture_gl_get_default(GLES1::DEFAULT_GL_TEXTURE_WHITE);
+		RID white_tex = texture_storage->texture_gl_get_default(GLES1::DEFAULT_GL_TEXTURE_WHITE);
 		_bind_canvas_texture(white_tex, p_base_filter, p_base_repeat);
 		return;
 	}
@@ -331,7 +589,7 @@ void RasterizerCanvasGLES1::_bind_canvas_texture(RID p_texture, RS::CanvasItemTe
 	RS::CanvasItemTextureRepeat repeat = ct->texture_repeat != RS::CANVAS_ITEM_TEXTURE_REPEAT_DEFAULT ? ct->texture_repeat : p_base_repeat;
 
 	// Diffuse
-	GLES1::Texture *diffuse_tex = GLES1::TextureStorage::get_singleton()->texture_bind_and_validate(ct->diffuse, GL_TEXTURE0, filter, repeat);
+	GLES1::Texture *diffuse_tex = texture_storage->texture_bind_and_validate(ct->diffuse, GL_TEXTURE0, filter, repeat);
 
 	if (diffuse_tex) {
 		state.current_tex_is_rt = diffuse_tex->render_target != nullptr;
@@ -345,44 +603,164 @@ void RasterizerCanvasGLES1::_bind_canvas_texture(RID p_texture, RS::CanvasItemTe
 
 	GLint max_units = GLES1::Config::get_singleton()->max_texture_units;
 
-	// Normal Maps
-	if (max_units >= 2) {
-		GLES1::Texture *normal_tex = nullptr;
-		if (ct && ct->normal_map.is_valid()) {
-			normal_tex = GLES1::TextureStorage::get_singleton()->texture_bind_and_validate(ct->normal_map, GL_TEXTURE1, filter, repeat);
-		}
+	bool has_normal = (state.using_light && max_units >= 4 && ct->normal_map.is_valid());
+	state.normal_used = has_normal;
 
-		if (normal_tex) {
-			state.normal_used = true;
-			if (normal_tex->render_target) {
-				state.current_tex_is_rt = true;
+	if (has_normal) {
+		GLES1::Texture *normal_map = texture_storage->get_texture(ct->normal_map);
+		state.current_tex_is_rt = state.current_tex_is_rt || (normal_map && normal_map->render_target);
+
+		// TU0: Normal Map (Pass-through)
+		glActiveTexture(GL_TEXTURE0);
+		glEnable(GL_TEXTURE_2D);
+		if (normal_map) {
+			glBindTexture(GL_TEXTURE_2D, normal_map->tex_id);
+		}
+		glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_COMBINE);
+		glTexEnvi(GL_TEXTURE_ENV, GL_COMBINE_RGB, GL_REPLACE);
+		glTexEnvi(GL_TEXTURE_ENV, GL_SRC0_RGB, GL_TEXTURE);
+
+		// TU1: Light Vector Map + DOT3
+		glActiveTexture(GL_TEXTURE0 + 1);
+		glEnable(GL_TEXTURE_2D);
+
+		if (state.using_light->mode == RS::CANVAS_LIGHT_MODE_DIRECTIONAL) {
+			CanvasLight *cl = canvas_light_owner.get_or_null(state.using_light->light_internal);
+			ERR_FAIL_NULL(cl);
+
+			uint32_t current_gen = GLES1::Config::get_singleton()->context_generation;
+			if (cl->directional_tex_id == 0 || cl->context_generation != current_gen) {
+				if (cl->directional_tex_id != 0) {
+					glDeleteTextures(1, &cl->directional_tex_id);
+				}
+				glGenTextures(1, &cl->directional_tex_id);
+				cl->context_generation = current_gen;
+
+				glBindTexture(GL_TEXTURE_2D, cl->directional_tex_id);
+				glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+				glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+				glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+				glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+				glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, 1, 1, 0, GL_RGBA, GL_UNSIGNED_BYTE, cl->directional_pixel);
+				GL_CHECK_ERROR("GLES1::Canvas::_bind_canvas_texture: create directional 1x1 texture");
+			} else {
+				glBindTexture(GL_TEXTURE_2D, cl->directional_tex_id);
 			}
 		} else {
-			glActiveTexture(GL_TEXTURE1);
-			GL_CHECK_ERROR("GLES1::Canvas::_bind_canvas_texture: glActiveTexture GL_TEXTURE1 normal map");
-			glDisable(GL_TEXTURE_2D);
-			state.normal_used = false;
+			glBindTexture(GL_TEXTURE_2D, data.light_vector_tex);
 		}
+
+		glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_COMBINE);
+		glTexEnvi(GL_TEXTURE_ENV, GL_COMBINE_RGB, GL_DOT3_RGB);
+		glTexEnvi(GL_TEXTURE_ENV, GL_SRC0_RGB, GL_PREVIOUS);
+		glTexEnvi(GL_TEXTURE_ENV, GL_SRC1_RGB, GL_TEXTURE);
+		glTexEnvi(GL_TEXTURE_ENV, GL_COMBINE_ALPHA, GL_REPLACE);
+		glTexEnvi(GL_TEXTURE_ENV, GL_SRC0_ALPHA, GL_PREVIOUS);
+
+		// TU2: Diffuse Map + Modulate
+		glActiveTexture(GL_TEXTURE0 + 2);
+		glEnable(GL_TEXTURE_2D);
+		if (diffuse_tex) {
+			glBindTexture(GL_TEXTURE_2D, diffuse_tex->tex_id);
+		}
+		glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_COMBINE);
+		glTexEnvi(GL_TEXTURE_ENV, GL_COMBINE_RGB, GL_MODULATE);
+		glTexEnvi(GL_TEXTURE_ENV, GL_SRC0_RGB, GL_PREVIOUS);
+		glTexEnvi(GL_TEXTURE_ENV, GL_SRC1_RGB, GL_TEXTURE);
+		glTexEnvi(GL_TEXTURE_ENV, GL_COMBINE_ALPHA, GL_REPLACE);
+		glTexEnvi(GL_TEXTURE_ENV, GL_SRC0_ALPHA, GL_TEXTURE);
+
+		// TU3: Enabled later for Light Attenuation
+		glActiveTexture(GL_TEXTURE0 + 3);
+		glEnable(GL_TEXTURE_2D);
 	} else {
-		state.normal_used = false; // Device doesn't support enough texture units
-	}
-
-	// Specular Maps
-	if (max_units >= 3) {
-		GLES1::Texture *spec_tex = nullptr;
-		if (ct && ct->specular.is_valid()) {
-			spec_tex = GLES1::TextureStorage::get_singleton()->texture_bind_and_validate(ct->specular, GL_TEXTURE2, filter, repeat);
+		// Standard No-Normal Setup
+		glActiveTexture(GL_TEXTURE0);
+		glEnable(GL_TEXTURE_2D);
+		if (diffuse_tex) {
+			glBindTexture(GL_TEXTURE_2D, diffuse_tex->tex_id);
 		}
+		glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE);
 
-		if (spec_tex) {
-			if (spec_tex->render_target) {
-				state.current_tex_is_rt = true;
+		if (state.using_light) {
+			glActiveTexture(GL_TEXTURE0 + 1);
+			glEnable(GL_TEXTURE_2D);
+
+			// Restore Light Base Setup
+			GLES1::Texture *light_tex = texture_storage->get_texture(state.using_light->texture);
+			if (light_tex) {
+				glBindTexture(GL_TEXTURE_2D, light_tex->tex_id);
+			} else {
+				RID white_tex_rid = texture_storage->texture_gl_get_default(GLES1::DEFAULT_GL_TEXTURE_WHITE);
+				GLES1::Texture *white_tex = texture_storage->get_texture(white_tex_rid);
+				if (white_tex) {
+					glBindTexture(GL_TEXTURE_2D, white_tex->tex_id);
+				} else {
+					glBindTexture(GL_TEXTURE_2D, 0);
+				}
+			}
+
+			glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_COMBINE);
+			glTexEnvi(GL_TEXTURE_ENV, GL_COMBINE_RGB, GL_MODULATE);
+			glTexEnvi(GL_TEXTURE_ENV, GL_SRC0_RGB, GL_PREVIOUS);
+			glTexEnvi(GL_TEXTURE_ENV, GL_OPERAND0_RGB, GL_SRC_COLOR);
+
+			if (state.using_light->mode == RS::CANVAS_LIGHT_MODE_DIRECTIONAL) {
+				glTexEnvi(GL_TEXTURE_ENV, GL_SRC1_RGB, GL_PRIMARY_COLOR);
+			} else {
+				glTexEnvi(GL_TEXTURE_ENV, GL_SRC1_RGB, GL_TEXTURE);
+			}
+			glTexEnvi(GL_TEXTURE_ENV, GL_OPERAND1_RGB, GL_SRC_COLOR);
+
+			glTexEnvi(GL_TEXTURE_ENV, GL_COMBINE_ALPHA, GL_MODULATE);
+			glTexEnvi(GL_TEXTURE_ENV, GL_SRC0_ALPHA, GL_PREVIOUS);
+			glTexEnvi(GL_TEXTURE_ENV, GL_OPERAND0_ALPHA, GL_SRC_ALPHA);
+
+			if (state.using_light->mode == RS::CANVAS_LIGHT_MODE_DIRECTIONAL) {
+				glTexEnvi(GL_TEXTURE_ENV, GL_SRC1_ALPHA, GL_PRIMARY_COLOR);
+			} else {
+				glTexEnvi(GL_TEXTURE_ENV, GL_SRC1_ALPHA, GL_TEXTURE);
+			}
+			glTexEnvi(GL_TEXTURE_ENV, GL_OPERAND1_ALPHA, GL_SRC_ALPHA);
+
+			float rgb_scale = 1.0f;
+			if (state.using_light->energy > 2.0f) {
+				rgb_scale = 4.0f;
+			} else if (state.using_light->energy > 1.0f) {
+				rgb_scale = 2.0f;
+			}
+			glTexEnvf(GL_TEXTURE_ENV, GL_RGB_SCALE, rgb_scale);
+			glTexEnvf(GL_TEXTURE_ENV, GL_ALPHA_SCALE, 1.0f);
+
+			if (max_units >= 3) {
+				glActiveTexture(GL_TEXTURE0 + 2);
+				glDisable(GL_TEXTURE_2D);
+			}
+			if (max_units >= 4) {
+				glActiveTexture(GL_TEXTURE0 + 3);
+				glDisable(GL_TEXTURE_2D);
+			}
+		}
+	}
+	GL_CHECK_ERROR("GLES1::Canvas::_bind_canvas_texture: apply normal combiners");
+
+	// Specular Map
+	if (max_units >= 5) {
+		glActiveTexture(GL_TEXTURE0 + 4);
+		GL_CHECK_ERROR("GLES1::Canvas::_bind_canvas_texture: glActiveTexture specular map");
+		GLES1::Texture *specular_map = GLES1::TextureStorage::get_singleton()->get_texture(ct->specular);
+		if (!specular_map) {
+			GLES1::Texture *tex_spec = GLES1::TextureStorage::get_singleton()->get_texture(GLES1::TextureStorage::get_singleton()->texture_gl_get_default(GLES1::DEFAULT_GL_TEXTURE_WHITE));
+			if (tex_spec) {
+				glBindTexture(GL_TEXTURE_2D, tex_spec->tex_id);
+			} else {
+				glBindTexture(GL_TEXTURE_2D, 0);
 			}
 		} else {
-			glActiveTexture(GL_TEXTURE2);
-			GL_CHECK_ERROR("GLES1::Canvas::_bind_canvas_texture: glActiveTexture GL_TEXTURE2 specular map");
-			glDisable(GL_TEXTURE_2D);
+			glBindTexture(GL_TEXTURE_2D, specular_map->tex_id);
+			state.current_tex_is_rt = state.current_tex_is_rt || specular_map->render_target;
 		}
+		glDisable(GL_TEXTURE_2D);
 	}
 
 	// Reset Active Texture to 0 so we don't
@@ -408,6 +786,105 @@ void RasterizerCanvasGLES1::_set_canvas_uniforms() {
 	state.canvas_shader->version_set_uniform(CanvasShaderGLES1::FINAL_MODULATE, state.uniforms.final_modulate, state.shader_version, state.mode_variant, state.specialization);
 	state.canvas_shader->version_set_uniform(CanvasShaderGLES1::TIME, state.time, state.shader_version, state.mode_variant, state.specialization);
 
+	state.canvas_shader->version_set_uniform(CanvasShaderGLES1::FINAL_MODULATE, state.uniforms.final_modulate, state.shader_version, state.mode_variant, state.specialization);
+	state.canvas_shader->version_set_uniform(CanvasShaderGLES1::TIME, state.time, state.shader_version, state.mode_variant, state.specialization);
+
+	if (state.using_light) {
+		RendererCanvasRender::Light *light = state.using_light;
+		if (light) {
+			Color light_color = light->color * light->energy;
+			state.canvas_shader->version_set_uniform(CanvasShaderGLES1::LIGHT_COLOR, light_color, state.shader_version, state.mode_variant, state.specialization);
+			state.canvas_shader->version_set_uniform(CanvasShaderGLES1::LIGHT_OUTSIDE_ALPHA, 0.0f, state.shader_version, state.mode_variant, state.specialization);
+
+			// Inject texture matrix projection manually
+			GLint max_units = GLES1::Config::get_singleton()->max_texture_units;
+			Transform2D canvas_modelview = state.uniforms.modelview_matrix * state.uniforms.extra_matrix;
+
+			Transform2D light_matrix;
+			if (light->mode == RS::CANVAS_LIGHT_MODE_DIRECTIONAL) {
+				light_matrix = Transform2D(); // Identity
+			} else {
+				light_matrix = light->light_shader_xform.affine_inverse();
+			}
+
+			if (max_units >= 2) {
+				Transform2D final_light_matrix = light_matrix * canvas_modelview;
+				GLfloat tex_matrix[16] = {};
+				_update_transform_2d_to_mat4(final_light_matrix, tex_matrix);
+
+				glActiveTexture(GL_TEXTURE0 + 1);
+				glMatrixMode(GL_TEXTURE);
+
+				glLoadMatrixf(tex_matrix);
+
+				glMatrixMode(GL_MODELVIEW);
+
+				if (max_units >= 4 && state.normal_used) {
+					glActiveTexture(GL_TEXTURE0 + 3);
+					glMatrixMode(GL_TEXTURE);
+					glLoadMatrixf(tex_matrix); // Light attenuation must follow the world shape
+					glMatrixMode(GL_MODELVIEW);
+				}
+				glActiveTexture(GL_TEXTURE0);
+			}
+
+			if (light->mode == RS::CANVAS_LIGHT_MODE_DIRECTIONAL) {
+				state.canvas_shader->version_set_uniform(CanvasShaderGLES1::IS_DIRECTIONAL_LIGHT, 1.0f, state.shader_version, state.mode_variant, state.specialization);
+
+				Vector2 light_dir = light->xform_cache.columns[1].normalized();
+				state.canvas_shader->version_set_uniform(CanvasShaderGLES1::LIGHT_POS, -light_dir, state.shader_version, state.mode_variant, state.specialization);
+
+				if (state.normal_used) {
+					CanvasLight *cl = canvas_light_owner.get_or_null(light->light_internal);
+					ERR_FAIL_NULL(cl);
+
+					Transform2D item_inverse = canvas_modelview.affine_inverse();
+					Vector2 local_light_dir = item_inverse.basis_xform(light_dir).normalized();
+
+					// Ensure a tiny minimum baseline so flat sprites aren't completely invisible.
+					float z_height = MAX((float)light->height, 0.1f);
+					Vector3 l_dir = Vector3(-local_light_dir.x, -local_light_dir.y, z_height).normalized();
+
+					uint8_t enc_x = (uint8_t)((l_dir.x * 0.5f + 0.5f) * 255.0f);
+					uint8_t enc_y = (uint8_t)((l_dir.y * 0.5f + 0.5f) * 255.0f);
+					uint8_t enc_z = (uint8_t)((l_dir.z * 0.5f + 0.5f) * 255.0f);
+
+					if (cl->directional_pixel[0] != enc_x || cl->directional_pixel[1] != enc_y || cl->directional_pixel[2] != enc_z || cl->directional_tex_id == 0) {
+						cl->last_light_dir = local_light_dir;
+
+						cl->directional_pixel[0] = enc_x;
+						cl->directional_pixel[1] = enc_y;
+						cl->directional_pixel[2] = enc_z;
+						cl->directional_pixel[3] = 255;
+
+						if (cl->directional_tex_id != 0) {
+							glActiveTexture(GL_TEXTURE0 + 1);
+							glBindTexture(GL_TEXTURE_2D, cl->directional_tex_id);
+							glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 1, 1, GL_RGBA, GL_UNSIGNED_BYTE, cl->directional_pixel);
+							GL_CHECK_ERROR("GLES1::Canvas::_set_canvas_uniforms: update directional 1x1 texture");
+							glActiveTexture(GL_TEXTURE0);
+						}
+					}
+				}
+
+				state.canvas_shader->version_set_uniform(CanvasShaderGLES1::LIGHT_HEIGHT, light->height, state.shader_version, state.mode_variant, state.specialization);
+			} else {
+				state.canvas_shader->version_set_uniform(CanvasShaderGLES1::IS_DIRECTIONAL_LIGHT, 0.0f, state.shader_version, state.mode_variant, state.specialization);
+
+				state.canvas_shader->version_set_uniform(CanvasShaderGLES1::LIGHT_MATRIX, light->light_shader_xform.affine_inverse(), state.shader_version, state.mode_variant, state.specialization);
+				state.canvas_shader->version_set_uniform(CanvasShaderGLES1::LIGHT_MATRIX_INVERSE, light->light_shader_xform, state.shader_version, state.mode_variant, state.specialization);
+
+				Transform2D light_local = light->xform_cache.affine_inverse();
+				state.canvas_shader->version_set_uniform(CanvasShaderGLES1::LIGHT_LOCAL_MATRIX, light_local, state.shader_version, state.mode_variant, state.specialization);
+
+				Vector2 light_pos = light->xform_cache.get_origin();
+				state.canvas_shader->version_set_uniform(CanvasShaderGLES1::LIGHT_POS, light_pos, state.shader_version, state.mode_variant, state.specialization);
+
+				state.canvas_shader->version_set_uniform(CanvasShaderGLES1::LIGHT_HEIGHT, light->height, state.shader_version, state.mode_variant, state.specialization);
+			}
+		}
+	}
+
 	if (state.render_target != RID()) {
 		GLES1::RenderTarget *rt = GLES1::TextureStorage::get_singleton()->get_render_target(state.render_target);
 		if (rt) {
@@ -418,8 +895,6 @@ void RasterizerCanvasGLES1::_set_canvas_uniforms() {
 		}
 	}
 
-	// TODO(GLES1): Only added Skeletons for now,
-	// lighting will come way later (in Phase 3, probably).
 	if (state.using_skeleton) {
 		state.canvas_shader->version_set_uniform(CanvasShaderGLES1::SKELETON_TRANSFORM, state.skeleton_transform, state.shader_version, state.mode_variant, state.specialization);
 		state.canvas_shader->version_set_uniform(CanvasShaderGLES1::SKELETON_TRANSFORM_INVERSE, state.skeleton_transform_inverse, state.shader_version, state.mode_variant, state.specialization);
@@ -437,6 +912,7 @@ void RasterizerCanvasGLES1::canvas_begin(RID p_to_render_target, bool p_to_backb
 	state.render_target = p_to_render_target;
 	state.specialization = 0;
 	state.mode_variant = CanvasShaderGLES1::ShaderVariant::MODE_QUAD;
+	state.shader_version = data.canvas_shader_default_version;
 
 	GLES1::RenderTarget *render_target = GLES1::TextureStorage::get_singleton()->get_render_target(p_to_render_target);
 	GLES1::Config *config = GLES1::Config::get_singleton();
@@ -592,14 +1068,21 @@ void RasterizerCanvasGLES1::canvas_end() {
 	glDisableClientState(GL_NORMAL_ARRAY);
 
 	// Sterilize secondary TU leak
-	if (GLES1::Config::get_singleton()->max_texture_units >= 2) {
-		glActiveTexture(GL_TEXTURE1);
+	GLint max_units = GLES1::Config::get_singleton()->max_texture_units;
+	for (int i = 1; i < max_units; i++) {
+		glActiveTexture(GL_TEXTURE0 + i);
+		glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE);
+		glTexEnvf(GL_TEXTURE_ENV, GL_RGB_SCALE, 1.0f);
+		glTexEnvf(GL_TEXTURE_ENV, GL_ALPHA_SCALE, 1.0f);
 		glDisable(GL_TEXTURE_2D);
-		glClientActiveTexture(GL_TEXTURE1);
+		glClientActiveTexture(GL_TEXTURE0 + i);
 		glDisableClientState(GL_TEXTURE_COORD_ARRAY);
-		glActiveTexture(GL_TEXTURE0);
-		glClientActiveTexture(GL_TEXTURE0);
 	}
+	glActiveTexture(GL_TEXTURE0);
+	glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE);
+	glTexEnvf(GL_TEXTURE_ENV, GL_RGB_SCALE, 1.0f);
+	glTexEnvf(GL_TEXTURE_ENV, GL_ALPHA_SCALE, 1.0f);
+	glClientActiveTexture(GL_TEXTURE0);
 
 	glDisable(GL_TEXTURE_2D);
 	glColor4f(1.0f, 1.0f, 1.0f, 1.0f);
@@ -621,6 +1104,7 @@ void RasterizerCanvasGLES1::canvas_end() {
 
 	state.using_skeleton = false;
 	state.using_ninepatch = false;
+	state.using_light = nullptr;
 }
 
 void RasterizerCanvasGLES1::reset_canvas() {
@@ -643,15 +1127,29 @@ void RasterizerCanvasGLES1::reset_canvas() {
 	glDisableClientState(GL_NORMAL_ARRAY);
 
 	// Force sterilise secondary texture units
-	if (GLES1::Config::get_singleton()->max_texture_units >= 2) {
-		glActiveTexture(GL_TEXTURE1);
+	// and their matrices
+	GLint max_units = GLES1::Config::get_singleton()->max_texture_units;
+	for (int i = 1; i < max_units; i++) {
+		glActiveTexture(GL_TEXTURE0 + i);
 		glDisable(GL_TEXTURE_2D);
-		glClientActiveTexture(GL_TEXTURE1);
+
+		glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE);
+		glTexEnvf(GL_TEXTURE_ENV, GL_RGB_SCALE, 1.0f);
+		glTexEnvf(GL_TEXTURE_ENV, GL_ALPHA_SCALE, 1.0f);
+
+		glMatrixMode(GL_TEXTURE);
+		glLoadIdentity();
+		glMatrixMode(GL_MODELVIEW);
+
+		glClientActiveTexture(GL_TEXTURE0 + i);
 		glDisableClientState(GL_TEXTURE_COORD_ARRAY);
-		glActiveTexture(GL_TEXTURE0);
-		glClientActiveTexture(GL_TEXTURE0);
 	}
-	GL_CHECK_ERROR("GLES1::Canvas::reset_canvas: disable client states");
+	glActiveTexture(GL_TEXTURE0);
+	glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE);
+	glTexEnvf(GL_TEXTURE_ENV, GL_RGB_SCALE, 1.0f);
+	glTexEnvf(GL_TEXTURE_ENV, GL_ALPHA_SCALE, 1.0f);
+	glClientActiveTexture(GL_TEXTURE0);
+	GL_CHECK_ERROR("GLES1::Canvas::reset_canvas: disable client states and matrices");
 
 	if (state.transparent_render) {
 		if (GLES1::Config::get_singleton()->support_blend_func_separate) {
@@ -696,8 +1194,10 @@ void RasterizerCanvasGLES1::canvas_render_items(RID p_to_render_target, Item *p_
 	// Bind the FBO, clears it, and set Projection matrix.
 	canvas_begin(p_to_render_target, false);
 
-	// Kick off the batcher loops
-	canvas_render_items_begin(p_modulate, p_light_list, p_canvas_transform);
+	// ==========================================
+	// The base rendering pass
+	// ==========================================
+	canvas_render_items_begin(p_modulate, nullptr, p_canvas_transform);
 
 	Item *current_item = p_item_list;
 
@@ -711,15 +1211,130 @@ void RasterizerCanvasGLES1::canvas_render_items(RID p_to_render_target, Item *p_
 		// Break the list temporarily to feed it cleanly into the batcher
 		current_item->next = nullptr;
 
-		canvas_render_items_internal(current_item, current_z, p_modulate, p_light_list, p_canvas_transform);
+		canvas_render_items_internal(current_item, current_z, p_modulate, nullptr, p_canvas_transform);
 
 		// Restore the chain for any subsequent passes
 		current_item->next = next_item;
 		current_item = next_item;
 		current_z++;
 	}
-	
+
 	canvas_render_items_end();
+
+	// ==========================================
+	// The directional light pass
+	// ==========================================
+	Light *current_directional_light = p_directional_light_list;
+	while (current_directional_light) {
+		if (current_directional_light->mode != RS::CANVAS_LIGHT_MODE_DIRECTIONAL || !current_directional_light->enabled) {
+			current_directional_light = current_directional_light->directional_next_ptr;
+			continue;
+		}
+
+		// Save the chain
+		Light *next_light_ptr = current_directional_light->directional_next_ptr;
+		current_directional_light->directional_next_ptr = nullptr;
+
+		// Get the light colour and modulate
+		float multiplier = limit_settings.light_multiplier;
+		float energy = current_directional_light->energy;
+		float rgb_scale = 1.0f;
+		if (energy > 2.0f) {
+			rgb_scale = 4.0f;
+		} else if (energy > 1.0f) {
+			rgb_scale = 2.0f;
+		}
+
+		Color light_modulate = p_modulate;
+		light_modulate.r *= ((current_directional_light->color.r * energy) / rgb_scale) * multiplier;
+		light_modulate.g *= ((current_directional_light->color.g * energy) / rgb_scale) * multiplier;
+		light_modulate.b *= ((current_directional_light->color.b * energy) / rgb_scale) * multiplier;
+
+		canvas_render_items_begin(light_modulate, current_directional_light, p_canvas_transform);
+
+		current_item = p_item_list;
+		current_z = 0;
+
+		while (current_item) {
+			if (current_item->light_mask & current_directional_light->item_mask) {
+				Item *next_item = current_item->next;
+				current_item->next = nullptr;
+
+				canvas_render_items_internal(current_item, current_z, light_modulate, current_directional_light, p_canvas_transform);
+
+				current_item->next = next_item;
+			}
+			current_item = current_item->next;
+			current_z++;
+		}
+
+		canvas_render_items_end();
+
+		// Restore the chain
+		current_directional_light->directional_next_ptr = next_light_ptr;
+		current_directional_light = next_light_ptr;
+	}
+
+	// ==========================================
+	// The point light pass
+	// ==========================================
+	Light *current_light = p_light_list;
+	while (current_light) {
+		if (current_light->mode != RS::CANVAS_LIGHT_MODE_POINT || !current_light->enabled) {
+			current_light = current_light->next_ptr;
+			continue;
+		}
+
+		// Save the chain
+		Light *next_light_ptr = current_light->next_ptr;
+		current_light->next_ptr = nullptr;
+
+		// Get the light colour and modulate
+		float multiplier = limit_settings.light_multiplier;
+		float energy = current_light->energy;
+		float rgb_scale = 1.0f;
+		if (energy > 2.0f) {
+			rgb_scale = 4.0f;
+		} else if (energy > 1.0f) {
+			rgb_scale = 2.0f;
+		}
+
+		Color light_modulate = p_modulate;
+		light_modulate.r *= ((current_light->color.r * energy) / rgb_scale) * multiplier;
+		light_modulate.g *= ((current_light->color.g * energy) / rgb_scale) * multiplier;
+		light_modulate.b *= ((current_light->color.b * energy) / rgb_scale) * multiplier;
+
+		canvas_render_items_begin(light_modulate, current_light, p_canvas_transform);
+
+		current_item = p_item_list;
+		current_z = 0;
+
+		while (current_item) {
+			// Intersection and Mask Test
+			if (current_item->light_mask & current_light->item_mask) {
+				Rect2 light_rect = current_light->rect_cache;
+				Rect2 item_rect = current_item->global_rect_cache;
+
+				if (light_rect.intersects(item_rect)) {
+					Item *next_item = current_item->next;
+					current_item->next = nullptr;
+
+					canvas_render_items_internal(current_item, current_z, light_modulate, current_light, p_canvas_transform);
+
+					current_item->next = next_item;
+				}
+			}
+
+			current_item = current_item->next;
+			current_z++;
+		}
+
+		canvas_render_items_end();
+
+		// Restore the chain
+		current_light->next_ptr = next_light_ptr;
+		current_light = next_light_ptr;
+	}
 
 	canvas_end();
 }
@@ -748,7 +1363,248 @@ void RasterizerCanvasGLES1::canvas_render_items_implementation(Item *p_item_list
 	// because reset_canvas respects transparent RenderTargets (sub-windows).
 	reset_canvas();
 
+	state.using_light = p_light;
+	state.using_shadow = false;
+
+	GLint max_units = GLES1::Config::get_singleton()->max_texture_units;
+
+	if (p_light) {
+		bool support_subtract = GLES1::Config::get_singleton()->support_blend_subtract;
+		bool support_separate = GLES1::Config::get_singleton()->support_blend_func_separate;
+
+		if (support_subtract) {
+			glBlendEquation(GL_FUNC_ADD); // Default
+		}
+
+		switch (p_light->blend_mode) {
+			case RS::CANVAS_LIGHT_BLEND_MODE_ADD:
+				if (support_separate) {
+					glBlendFuncSeparateOES(GL_SRC_ALPHA, GL_ONE, GL_ZERO, GL_ONE);
+				} else {
+					glBlendFunc(GL_SRC_ALPHA, GL_ONE);
+				}
+				break;
+			case RS::CANVAS_LIGHT_BLEND_MODE_SUB:
+				if (support_subtract) {
+					glBlendEquation(GL_FUNC_REVERSE_SUBTRACT);
+				}
+				if (support_separate) {
+					glBlendFuncSeparateOES(GL_SRC_ALPHA, GL_ONE, GL_ZERO, GL_ONE);
+				} else {
+					glBlendFunc(GL_SRC_ALPHA, GL_ONE);
+				}
+				break;
+			case RS::CANVAS_LIGHT_BLEND_MODE_MIX:
+				if (support_separate) {
+					glBlendFuncSeparateOES(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_ZERO, GL_ONE);
+				} else {
+					glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+				}
+				break;
+		}
+		GL_CHECK_ERROR("GLES1::Canvas::canvas_render_items_implementation: light blend setup");
+
+		// Bind light texture
+		if (max_units >= 2) {
+			glActiveTexture(GL_TEXTURE0 + 1);
+			GLES1::Texture *light_tex = GLES1::TextureStorage::get_singleton()->get_texture(p_light->texture);
+
+			if (light_tex) {
+				glEnable(GL_TEXTURE_2D);
+				glBindTexture(GL_TEXTURE_2D, light_tex->tex_id);
+			} else {
+				RID white_tex_rid = GLES1::TextureStorage::get_singleton()->texture_gl_get_default(GLES1::DEFAULT_GL_TEXTURE_WHITE);
+				GLES1::Texture *white_tex = GLES1::TextureStorage::get_singleton()->get_texture(white_tex_rid);
+				if (white_tex) {
+					glEnable(GL_TEXTURE_2D);
+					glBindTexture(GL_TEXTURE_2D, white_tex->tex_id);
+				} else {
+					glDisable(GL_TEXTURE_2D);
+				}
+			}
+
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+
+			glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_COMBINE);
+
+			// Multiply the underlying color by the light texture's RGB
+			glTexEnvi(GL_TEXTURE_ENV, GL_COMBINE_RGB, GL_MODULATE);
+			glTexEnvi(GL_TEXTURE_ENV, GL_SRC0_RGB, GL_PREVIOUS);
+			glTexEnvi(GL_TEXTURE_ENV, GL_OPERAND0_RGB, GL_SRC_COLOR);
+			glTexEnvi(GL_TEXTURE_ENV, GL_SRC1_RGB, GL_TEXTURE);
+			glTexEnvi(GL_TEXTURE_ENV, GL_OPERAND1_RGB, GL_SRC_COLOR);
+
+			// Modulate the alpha to enforce the light's shape/gradient for the hardware blender
+			glTexEnvi(GL_TEXTURE_ENV, GL_COMBINE_ALPHA, GL_MODULATE);
+			glTexEnvi(GL_TEXTURE_ENV, GL_SRC0_ALPHA, GL_PREVIOUS);
+			glTexEnvi(GL_TEXTURE_ENV, GL_OPERAND0_ALPHA, GL_SRC_ALPHA);
+			glTexEnvi(GL_TEXTURE_ENV, GL_SRC1_ALPHA, GL_TEXTURE);
+			glTexEnvi(GL_TEXTURE_ENV, GL_OPERAND1_ALPHA, GL_SRC_ALPHA);
+
+			// Artificially boost the energy directly on the RGB channel
+			float rgb_scale = 1.0f;
+			if (p_light->energy > 2.0f) {
+				rgb_scale = 4.0f;
+			} else if (p_light->energy > 1.0f) {
+				rgb_scale = 2.0f;
+			}
+
+			glTexEnvf(GL_TEXTURE_ENV, GL_RGB_SCALE, rgb_scale);
+			glTexEnvf(GL_TEXTURE_ENV, GL_ALPHA_SCALE, 1.0f);
+
+			if (max_units >= 4) {
+				glActiveTexture(GL_TEXTURE0 + 3);
+				if (light_tex) {
+					glEnable(GL_TEXTURE_2D);
+					glBindTexture(GL_TEXTURE_2D, light_tex->tex_id);
+				} else {
+					RID white_tex_rid = GLES1::TextureStorage::get_singleton()->texture_gl_get_default(GLES1::DEFAULT_GL_TEXTURE_WHITE);
+					GLES1::Texture *white_tex = GLES1::TextureStorage::get_singleton()->get_texture(white_tex_rid);
+					if (white_tex) {
+						glEnable(GL_TEXTURE_2D);
+						glBindTexture(GL_TEXTURE_2D, white_tex->tex_id);
+					} else {
+						glDisable(GL_TEXTURE_2D);
+					}
+				}
+
+				glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+				glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+				glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+				glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+
+				glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_COMBINE);
+				glTexEnvi(GL_TEXTURE_ENV, GL_COMBINE_RGB, GL_MODULATE);
+				glTexEnvi(GL_TEXTURE_ENV, GL_SRC0_RGB, GL_PREVIOUS);
+				glTexEnvi(GL_TEXTURE_ENV, GL_OPERAND0_RGB, GL_SRC_COLOR);
+
+				if (p_light->mode == RS::CANVAS_LIGHT_MODE_DIRECTIONAL) {
+					// Directional Lights lack a spot texture, so we replace it with
+					// the primary color to apply the light's energy and color.
+					glTexEnvi(GL_TEXTURE_ENV, GL_SRC1_RGB, GL_PRIMARY_COLOR);
+				} else {
+					glTexEnvi(GL_TEXTURE_ENV, GL_SRC1_RGB, GL_TEXTURE);
+				}
+				glTexEnvi(GL_TEXTURE_ENV, GL_OPERAND1_RGB, GL_SRC_COLOR);
+
+				glTexEnvi(GL_TEXTURE_ENV, GL_COMBINE_ALPHA, GL_MODULATE);
+				glTexEnvi(GL_TEXTURE_ENV, GL_SRC0_ALPHA, GL_PREVIOUS);
+				glTexEnvi(GL_TEXTURE_ENV, GL_OPERAND0_ALPHA, GL_SRC_ALPHA);
+
+				if (p_light->mode == RS::CANVAS_LIGHT_MODE_DIRECTIONAL) {
+					glTexEnvi(GL_TEXTURE_ENV, GL_SRC1_ALPHA, GL_PRIMARY_COLOR);
+				} else {
+					glTexEnvi(GL_TEXTURE_ENV, GL_SRC1_ALPHA, GL_TEXTURE);
+				}
+				glTexEnvi(GL_TEXTURE_ENV, GL_OPERAND1_ALPHA, GL_SRC_ALPHA);
+
+				glTexEnvf(GL_TEXTURE_ENV, GL_RGB_SCALE, rgb_scale);
+				glTexEnvf(GL_TEXTURE_ENV, GL_ALPHA_SCALE, 1.0f);
+			}
+
+			glActiveTexture(GL_TEXTURE0);
+			GL_CHECK_ERROR("GLES1::Canvas::canvas_render_items_implementation: light texture bind");
+		}
+
+		state.using_shadow = p_light->use_shadow;
+		if (max_units >= 3) {
+			glActiveTexture(GL_TEXTURE0 + 2);
+			glDisable(GL_TEXTURE_2D);
+		}
+		glActiveTexture(GL_TEXTURE0);
+
+		if (state.using_shadow) {
+			CanvasLight *cl = canvas_light_owner.get_or_null(p_light->light_internal);
+			if (cl && (cl->shadow.shadow_volumes.size() > 0 || cl->shadow.directional_shadow_volumes.size() > 0)) {
+				glDisableClientState(GL_COLOR_ARRAY);
+				glDisableClientState(GL_TEXTURE_COORD_ARRAY);
+				glDisableClientState(GL_NORMAL_ARRAY);
+				glDisable(GL_TEXTURE_2D);
+
+				glEnable(GL_DEPTH_TEST);
+				glDepthMask(GL_TRUE);
+				RasterizerGLES1::clear_depth(1.0f);
+				glClear(GL_DEPTH_BUFFER_BIT);
+
+				// Only write into the depth buffer, squash Z closer to near plane
+				glColorMask(GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE);
+				glDepthFunc(GL_ALWAYS);
+				glDepthRange(0.0f, 0.1f);
+
+				glMatrixMode(GL_MODELVIEW);
+				glPushMatrix();
+				glEnableClientState(GL_VERTEX_ARRAY);
+				glBindBuffer(GL_ARRAY_BUFFER, 0); // Ensure client pointers
+
+				if (p_light->mode == RS::CANVAS_LIGHT_MODE_DIRECTIONAL) {
+					GLfloat mat[16] = {};
+					_update_transform_2d_to_mat4(Transform2D(), mat);
+					glLoadMatrixf(mat);
+
+					if (cl->shadow.directional_shadow_volumes.size() > 0) {
+						glVertexPointer(2, GL_FLOAT, 0, cl->shadow.directional_shadow_volumes.ptr());
+						glDrawArrays(GL_TRIANGLES, 0, cl->shadow.directional_shadow_volumes.size());
+						GL_CHECK_ERROR("GLES1::Canvas::canvas_render_items_implementation: draw directional shadow");
+					}
+				} else {
+					Transform2D vol_xform = cl->shadow.light_to_world;
+					GLfloat mat[16] = {};
+					_update_transform_2d_to_mat4(vol_xform, mat);
+					glLoadMatrixf(mat);
+
+					if (cl->shadow.shadow_volumes.size() > 0) {
+						glVertexPointer(2, GL_FLOAT, 0, cl->shadow.shadow_volumes.ptr());
+						glDrawArrays(GL_TRIANGLES, 0, cl->shadow.shadow_volumes.size());
+						GL_CHECK_ERROR("GLES1::Canvas::canvas_render_items_implementation: draw point shadow");
+					}
+				}
+
+				glPopMatrix();
+				glDisableClientState(GL_VERTEX_ARRAY);
+
+				// Setup for the light item geometry pass
+				glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+
+				// Base geometry does not write depth
+				glDepthMask(GL_FALSE);
+
+				// Geometry depth (0.75) must be less than buffer depth (0.05/1.0)
+				glDepthFunc(GL_LESS);
+
+				// Squash geometry Z farther back
+				// TODO(GLES1): Replace glDepthRange with
+				// glDepthRangef for mobile (polyfill)
+				glDepthRange(0.5f, 1.0f);
+			} else {
+				glDisable(GL_DEPTH_TEST);
+			}
+		} else {
+			glDisable(GL_DEPTH_TEST);
+		}
+	} else {
+		// Disable upper texture units during the base geometry pass
+		if (max_units >= 2) {
+			glActiveTexture(GL_TEXTURE0 + 1);
+			glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE);
+			glTexEnvf(GL_TEXTURE_ENV, GL_RGB_SCALE, 1.0f);
+			glTexEnvf(GL_TEXTURE_ENV, GL_ALPHA_SCALE, 1.0f);
+			glDisable(GL_TEXTURE_2D);
+		}
+		if (max_units >= 3) {
+			glActiveTexture(GL_TEXTURE0 + 2);
+			glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE);
+			glTexEnvf(GL_TEXTURE_ENV, GL_RGB_SCALE, 1.0f);
+			glTexEnvf(GL_TEXTURE_ENV, GL_ALPHA_SCALE, 1.0f);
+			glDisable(GL_TEXTURE_2D);
+		}
+	}
+
 	// Bind default white texture to texture unit 0
+	glActiveTexture(GL_TEXTURE0);
+	glEnable(GL_TEXTURE_2D);
 	RID white_tex_rid = GLES1::TextureStorage::get_singleton()->texture_gl_get_default(GLES1::DEFAULT_GL_TEXTURE_WHITE);
 	GLES1::TextureStorage::get_singleton()->texture_bind_and_validate(
 		white_tex_rid,
@@ -814,7 +1670,7 @@ void RasterizerCanvasGLES1::canvas_render_items_implementation(Item *p_item_list
 			}
 
 			// Pass the joined_item and the extracted material into the render step
-			render_joined_item_commands(joined_item, ris.current_clip, reclip, mat_data, false);
+			render_joined_item_commands(joined_item, ris.current_clip, reclip, mat_data, state.using_light != nullptr);
 
 			// Clean up light scissor if we hijacked it for this batch
 			if (light_scissor_enabled) {
@@ -881,6 +1737,11 @@ void RasterizerCanvasGLES1::canvas_render_items_implementation(Item *p_item_list
 		gl_disable_scissor();
 	}
 
+	if (state.using_shadow) {
+		glDisable(GL_DEPTH_TEST);
+		glDepthRange(0.0f, 1.0f);
+	}
+
 	if (time_used) {
 		RenderingServerDefault::redraw_request();
 	}
@@ -896,20 +1757,7 @@ void RasterizerCanvasGLES1::canvas_render_items_end() {
 
 void RasterizerCanvasGLES1::gl_enable_scissor(int p_x, int p_y, int p_width, int p_height) const {
 	glEnable(GL_SCISSOR_TEST);
-
-	float matrix_y_scale = state.uniforms.projection_matrix.basis[1][1];
-
-	if (matrix_y_scale < 0.0f) {
-		// Negative Y scale means top-down rendering (Screen/XR/FBO Fallback).
-		// We derive the viewport height from the projection matrix Y scale
-		// (matrix_y_scale = -2.0 / window_h  =>  window_h = -2.0 / matrix_y_scale)
-		int window_h = Math::round(-2.0f / matrix_y_scale);
-		int flipped_y = window_h - (p_y + p_height);
-		glScissor(p_x, flipped_y, p_width, p_height);
-	} else {
-		glScissor(p_x, p_y, p_width, p_height);
-	}
-
+	glScissor(p_x, p_y, p_width, p_height);
 	GL_CHECK_ERROR("GLES1::Canvas::gl_enable_scissor: glScissor");
 }
 
@@ -924,6 +1772,51 @@ void RasterizerCanvasGLES1::_bind_quad_buffer() const {
 		glEnableClientState(GL_TEXTURE_COORD_ARRAY);
 		glVertexPointer(2, GL_FLOAT, 0, nullptr);
 		glTexCoordPointer(2, GL_FLOAT, 0, nullptr);
+
+		if (state.using_light) {
+			GLint max_units = GLES1::Config::get_singleton()->max_texture_units;
+			if (state.normal_used && max_units >= 4) {
+				glClientActiveTexture(GL_TEXTURE0 + 1);
+				glEnableClientState(GL_TEXTURE_COORD_ARRAY);
+				glTexCoordPointer(2, GL_FLOAT, 0, nullptr);
+
+				glClientActiveTexture(GL_TEXTURE0 + 2);
+				glEnableClientState(GL_TEXTURE_COORD_ARRAY);
+				glTexCoordPointer(2, GL_FLOAT, 0, nullptr);
+
+				glClientActiveTexture(GL_TEXTURE0 + 3);
+				glEnableClientState(GL_TEXTURE_COORD_ARRAY);
+				glTexCoordPointer(2, GL_FLOAT, 0, nullptr);
+			} else {
+				if (max_units >= 3) {
+					glClientActiveTexture(GL_TEXTURE0 + 2);
+					glDisableClientState(GL_TEXTURE_COORD_ARRAY);
+				}
+				if (max_units >= 4) {
+					glClientActiveTexture(GL_TEXTURE0 + 3);
+					glDisableClientState(GL_TEXTURE_COORD_ARRAY);
+				}
+
+				if (max_units >= 2) {
+					glClientActiveTexture(GL_TEXTURE0 + 1);
+					glEnableClientState(GL_TEXTURE_COORD_ARRAY);
+					glTexCoordPointer(2, GL_FLOAT, 0, nullptr);
+				}
+				if (state.using_shadow && max_units >= 3) {
+					glClientActiveTexture(GL_TEXTURE0 + 2);
+					glEnableClientState(GL_TEXTURE_COORD_ARRAY);
+					glTexCoordPointer(2, GL_FLOAT, 0, nullptr);
+				}
+			}
+			glClientActiveTexture(GL_TEXTURE0);
+		} else {
+			GLint max_units = GLES1::Config::get_singleton()->max_texture_units;
+			for (int i = 1; i < max_units; i++) {
+				glClientActiveTexture(GL_TEXTURE0 + i);
+				glDisableClientState(GL_TEXTURE_COORD_ARRAY);
+			}
+			glClientActiveTexture(GL_TEXTURE0);
+		}
 	} else {
 		glBindBuffer(GL_ARRAY_BUFFER, 0);
 		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
@@ -939,6 +1832,51 @@ void RasterizerCanvasGLES1::_bind_quad_buffer() const {
 
 		glVertexPointer(2, GL_FLOAT, 0, qv);
 		glTexCoordPointer(2, GL_FLOAT, 0, qv);
+
+		if (state.using_light) {
+			GLint max_units = GLES1::Config::get_singleton()->max_texture_units;
+			if (state.normal_used && max_units >= 4) {
+				glClientActiveTexture(GL_TEXTURE0 + 1);
+				glEnableClientState(GL_TEXTURE_COORD_ARRAY);
+				glTexCoordPointer(2, GL_FLOAT, 0, qv);
+
+				glClientActiveTexture(GL_TEXTURE0 + 2);
+				glEnableClientState(GL_TEXTURE_COORD_ARRAY);
+				glTexCoordPointer(2, GL_FLOAT, 0, qv);
+
+				glClientActiveTexture(GL_TEXTURE0 + 3);
+				glEnableClientState(GL_TEXTURE_COORD_ARRAY);
+				glTexCoordPointer(2, GL_FLOAT, 0, qv);
+			} else {
+				if (max_units >= 3) {
+					glClientActiveTexture(GL_TEXTURE0 + 2);
+					glDisableClientState(GL_TEXTURE_COORD_ARRAY);
+				}
+				if (max_units >= 4) {
+					glClientActiveTexture(GL_TEXTURE0 + 3);
+					glDisableClientState(GL_TEXTURE_COORD_ARRAY);
+				}
+
+				if (max_units >= 2) {
+					glClientActiveTexture(GL_TEXTURE0 + 1);
+					glEnableClientState(GL_TEXTURE_COORD_ARRAY);
+					glTexCoordPointer(2, GL_FLOAT, 0, qv);
+				}
+				if (state.using_shadow && max_units >= 3) {
+					glClientActiveTexture(GL_TEXTURE0 + 2);
+					glEnableClientState(GL_TEXTURE_COORD_ARRAY);
+					glTexCoordPointer(2, GL_FLOAT, 0, qv);
+				}
+			}
+			glClientActiveTexture(GL_TEXTURE0);
+		} else {
+			GLint max_units = GLES1::Config::get_singleton()->max_texture_units;
+			for (int i = 1; i < max_units; i++) {
+				glClientActiveTexture(GL_TEXTURE0 + i);
+				glDisableClientState(GL_TEXTURE_COORD_ARRAY);
+			}
+			glClientActiveTexture(GL_TEXTURE0);
+		}
 	}
 }
 
@@ -1081,11 +2019,6 @@ void RasterizerCanvasGLES1::_batch_render_generic(const Batch &p_batch, GLES1::C
 	}
 
 	bool rebind = state.canvas_shader->version_bind_shader(state.shader_version, state.mode_variant, state.specialization);
-	_set_canvas_uniforms();
-
-	if (rebind && p_material) {
-		p_material->bind_uniforms();
-	}
 
 	// Determine Texture Filter and Repeat from the Batch FVF flags
 	RS::CanvasItemTextureRepeat repeat = state.default_repeat;
@@ -1103,6 +2036,12 @@ void RasterizerCanvasGLES1::_batch_render_generic(const Batch &p_batch, GLES1::C
 
 	_bind_canvas_texture(tex.RID_texture, filter, repeat);
 	glEnable(GL_TEXTURE_2D);
+
+	_set_canvas_uniforms();
+
+	if (rebind && p_material) {
+		p_material->bind_uniforms();
+	}
 
 	bool use_vbo = bdata.gl_vertex_buffer != 0 && bdata.gl_index_buffer != 0;
 
@@ -1134,6 +2073,66 @@ void RasterizerCanvasGLES1::_batch_render_generic(const Batch &p_batch, GLES1::C
 
 	glEnableClientState(GL_TEXTURE_COORD_ARRAY);
 	glTexCoordPointer(2, GL_FLOAT, sizeof_vert, (const void *)(uintptr_t)(pointer_offset + offsetof(BatchVertex, uv)));
+
+	if (state.using_light) {
+		GLint max_units = GLES1::Config::get_singleton()->max_texture_units;
+		if (state.normal_used && max_units >= 4) {
+			if (state.using_light->mode == RS::CANVAS_LIGHT_MODE_DIRECTIONAL) {
+				glClientActiveTexture(GL_TEXTURE0 + 1);
+				glEnableClientState(GL_TEXTURE_COORD_ARRAY);
+				glTexCoordPointer(2, GL_FLOAT, sizeof_vert, (const void *)(uintptr_t)(pointer_offset + offsetof(BatchVertex, uv)));
+
+				glClientActiveTexture(GL_TEXTURE0 + 2);
+				glEnableClientState(GL_TEXTURE_COORD_ARRAY);
+				glTexCoordPointer(2, GL_FLOAT, sizeof_vert, (const void *)(uintptr_t)(pointer_offset + offsetof(BatchVertex, uv)));
+
+				glClientActiveTexture(GL_TEXTURE0 + 3);
+				glEnableClientState(GL_TEXTURE_COORD_ARRAY);
+				glTexCoordPointer(2, GL_FLOAT, sizeof_vert, (const void *)(uintptr_t)(pointer_offset + offsetof(BatchVertex, uv)));
+			} else {
+				glClientActiveTexture(GL_TEXTURE0 + 1);
+				glEnableClientState(GL_TEXTURE_COORD_ARRAY);
+				glTexCoordPointer(2, GL_FLOAT, sizeof_vert, (const void *)(uintptr_t)(pointer_offset + offsetof(BatchVertex, pos)));
+
+				glClientActiveTexture(GL_TEXTURE0 + 2);
+				glEnableClientState(GL_TEXTURE_COORD_ARRAY);
+				glTexCoordPointer(2, GL_FLOAT, sizeof_vert, (const void *)(uintptr_t)(pointer_offset + offsetof(BatchVertex, uv)));
+
+				glClientActiveTexture(GL_TEXTURE0 + 3);
+				glEnableClientState(GL_TEXTURE_COORD_ARRAY);
+				glTexCoordPointer(2, GL_FLOAT, sizeof_vert, (const void *)(uintptr_t)(pointer_offset + offsetof(BatchVertex, pos)));
+			}
+		} else {
+			if (max_units >= 3) {
+				glClientActiveTexture(GL_TEXTURE0 + 2);
+				glDisableClientState(GL_TEXTURE_COORD_ARRAY);
+			}
+			if (max_units >= 4) {
+				glClientActiveTexture(GL_TEXTURE0 + 3);
+				glDisableClientState(GL_TEXTURE_COORD_ARRAY);
+			}
+
+			if (max_units >= 2) {
+				glClientActiveTexture(GL_TEXTURE0 + 1);
+				glEnableClientState(GL_TEXTURE_COORD_ARRAY);
+				glTexCoordPointer(2, GL_FLOAT, sizeof_vert, (const void *)(uintptr_t)(pointer_offset + offsetof(BatchVertex, pos)));
+			}
+			if (state.using_shadow && max_units >= 3) {
+				glClientActiveTexture(GL_TEXTURE0 + 2);
+				glEnableClientState(GL_TEXTURE_COORD_ARRAY);
+				glTexCoordPointer(2, GL_FLOAT, sizeof_vert, (const void *)(uintptr_t)(pointer_offset + offsetof(BatchVertex, pos)));
+			}
+		}
+		glClientActiveTexture(GL_TEXTURE0);
+		GL_CHECK_ERROR("GLES1::Canvas::batch_render_generic: light texcoord pointer projection");
+	} else {
+		GLint max_units = GLES1::Config::get_singleton()->max_texture_units;
+		for (int i = 1; i < max_units; i++) {
+			glClientActiveTexture(GL_TEXTURE0 + i);
+			glDisableClientState(GL_TEXTURE_COORD_ARRAY);
+		}
+		glClientActiveTexture(GL_TEXTURE0);
+	}
 
 	if (!colored_verts) {
 		glDisableClientState(GL_COLOR_ARRAY);
@@ -1233,8 +2232,10 @@ void RasterizerCanvasGLES1::render_batches(Item::Command *const *p_commands, Ite
 	}
 
 	// Blend modes
-	set_gl_blend_mode(blend_mode, transparent_rt);
-	GL_CHECK_ERROR("GLES1::Canvas::render_batches: set_gl_blend_mode");
+	if (!state.using_light) {
+		set_gl_blend_mode(blend_mode, transparent_rt);
+		GL_CHECK_ERROR("GLES1::Canvas::render_batches: set_gl_blend_mode");
+	}
 
 	for (int batch_num = 0; batch_num < num_batches; batch_num++) {
 		const Batch &batch = bdata.batches[batch_num];
@@ -1243,6 +2244,24 @@ void RasterizerCanvasGLES1::render_batches(Item::Command *const *p_commands, Ite
 		state.specialization = 0;
 		state.mode_variant = CanvasShaderGLES1::ShaderVariant::MODE_QUAD;
 		state.shader_version = data.canvas_shader_default_version;
+
+		if (state.using_light) {
+			state.specialization |= CanvasShaderGLES1::USE_LIGHTING;
+
+#if defined(DEBUG_ENABLED) || defined(TOOLS_ENABLED)
+			if (state.using_shadow) {
+				switch (state.using_light->shadow_filter) {
+					case RS::CANVAS_LIGHT_FILTER_PCF13:
+					case RS::CANVAS_LIGHT_FILTER_PCF5:
+					case RS::CANVAS_LIGHT_FILTER_MAX:
+						WARN_PRINT_ONCE_ED("Shadow filters for lights other than None (Fast) are not supported in the Classic renderer.");
+					break;
+					default:
+						break;
+				}
+			}
+#endif
+		}
 
 		if (p_material && p_material->shader_data) {
 			if (p_material->shader_data->version.is_valid() && p_material->shader_data->valid) {
@@ -1357,6 +2376,46 @@ void RasterizerCanvasGLES1::render_batches(Item::Command *const *p_commands, Ite
 							glMatrixMode(GL_TEXTURE);
 							glPushMatrix();
 
+							if (state.using_light) {
+								GLint max_units = GLES1::Config::get_singleton()->max_texture_units;
+								if (max_units >= 2) {
+									glActiveTexture(GL_TEXTURE0 + 1);
+									glMatrixMode(GL_TEXTURE);
+									glPushMatrix();
+									glTranslatef(dst_rect.position.x, dst_rect.position.y, 0.0f);
+									glScalef(Math::abs(dst_rect.size.x), Math::abs(dst_rect.size.y), 1.0f);
+									if (dst_rect.size.x < 0) {
+										GLfloat transpose[16] = { 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1 };
+										glMultMatrixf(transpose);
+									}
+									glActiveTexture(GL_TEXTURE0);
+								}
+								if (state.normal_used && max_units >= 4) {
+									glActiveTexture(GL_TEXTURE0 + 3);
+									glMatrixMode(GL_TEXTURE);
+									glPushMatrix();
+									glTranslatef(dst_rect.position.x, dst_rect.position.y, 0.0f);
+									glScalef(Math::abs(dst_rect.size.x), Math::abs(dst_rect.size.y), 1.0f);
+									if (dst_rect.size.x < 0) {
+										GLfloat transpose[16] = { 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1 };
+										glMultMatrixf(transpose);
+									}
+									glActiveTexture(GL_TEXTURE0);
+								} else if (state.using_shadow && max_units >= 3) {
+									glActiveTexture(GL_TEXTURE0 + 2);
+									glMatrixMode(GL_TEXTURE);
+									glPushMatrix();
+									glTranslatef(dst_rect.position.x, dst_rect.position.y, 0.0f);
+									glScalef(Math::abs(dst_rect.size.x), Math::abs(dst_rect.size.y), 1.0f);
+									if (dst_rect.size.x < 0) {
+										GLfloat transpose[16] = { 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1 };
+										glMultMatrixf(transpose);
+									}
+									glActiveTexture(GL_TEXTURE0);
+								}
+								glMatrixMode(GL_TEXTURE); // return to GL_TEXTURE0 matrix mode expectation
+							}
+
 							state.canvas_shader->version_set_uniform(CanvasShaderGLES1::DST_RECT, Color(dst_rect.position.x, dst_rect.position.y, dst_rect.size.x, dst_rect.size.y), state.shader_version, state.mode_variant, state.specialization);
 							state.canvas_shader->version_set_uniform(CanvasShaderGLES1::SRC_RECT, Color(src_rect.position.x, src_rect.position.y, src_rect.size.x, src_rect.size.y), state.shader_version, state.mode_variant, state.specialization);
 
@@ -1365,6 +2424,28 @@ void RasterizerCanvasGLES1::render_batches(Item::Command *const *p_commands, Ite
 							GL_CHECK_ERROR("GLES1::Canvas::render_batches: TYPE_RECT glDrawArrays");
 
 							// Cleanup and restore
+							if (state.using_light) {
+								GLint max_units = GLES1::Config::get_singleton()->max_texture_units;
+								if (max_units >= 2) {
+									glActiveTexture(GL_TEXTURE0 + 1);
+									glMatrixMode(GL_TEXTURE);
+									glPopMatrix();
+									glActiveTexture(GL_TEXTURE0);
+								}
+								if (state.normal_used && max_units >= 4) {
+									glActiveTexture(GL_TEXTURE0 + 3);
+									glMatrixMode(GL_TEXTURE);
+									glPopMatrix();
+									glActiveTexture(GL_TEXTURE0);
+								} else if (state.using_shadow && max_units >= 3) {
+									glActiveTexture(GL_TEXTURE0 + 2);
+									glMatrixMode(GL_TEXTURE);
+									glPopMatrix();
+									glActiveTexture(GL_TEXTURE0);
+								}
+								glMatrixMode(GL_TEXTURE);
+							}
+
 							glMatrixMode(GL_TEXTURE);
 							glPopMatrix();
 							glMatrixMode(GL_MODELVIEW);
@@ -1383,11 +2464,6 @@ void RasterizerCanvasGLES1::render_batches(Item::Command *const *p_commands, Ite
 							_set_texture_rect_mode(false);
 
 							bool rebind = state.canvas_shader->version_bind_shader(state.shader_version, state.mode_variant, state.specialization);
-							_set_canvas_uniforms();
-
-							if (rebind && p_material) {
-								p_material->bind_uniforms();
-							}
 
 							glDisableClientState(GL_COLOR_ARRAY);
 							Color combined_color = np->color * state.uniforms.final_modulate;
@@ -1409,6 +2485,11 @@ void RasterizerCanvasGLES1::render_batches(Item::Command *const *p_commands, Ite
 
 							_bind_canvas_texture(np->texture, filter, repeat);
 
+							_set_canvas_uniforms();
+
+							if (rebind && p_material) {
+								p_material->bind_uniforms();
+							}
 							glEnable(GL_TEXTURE_2D);
 
 							if (state.texpixel_size == Size2(0.0, 0.0)) {
@@ -1506,6 +2587,65 @@ void RasterizerCanvasGLES1::render_batches(Item::Command *const *p_commands, Ite
 
 								glVertexPointer(2, GL_FLOAT, 4 * sizeof(float), nullptr);
 								glTexCoordPointer(2, GL_FLOAT, 4 * sizeof(float), (const void *)(sizeof(float) * 2));
+
+								if (state.using_light) {
+									GLint max_units = GLES1::Config::get_singleton()->max_texture_units;
+									if (state.normal_used && max_units >= 4) {
+										if (state.using_light->mode == RS::CANVAS_LIGHT_MODE_DIRECTIONAL) {
+											glClientActiveTexture(GL_TEXTURE0 + 1);
+											glEnableClientState(GL_TEXTURE_COORD_ARRAY);
+											glTexCoordPointer(2, GL_FLOAT, 4 * sizeof(float), (const void *)(sizeof(float) * 2));
+
+											glClientActiveTexture(GL_TEXTURE0 + 2);
+											glEnableClientState(GL_TEXTURE_COORD_ARRAY);
+											glTexCoordPointer(2, GL_FLOAT, 4 * sizeof(float), (const void *)(sizeof(float) * 2));
+
+											glClientActiveTexture(GL_TEXTURE0 + 3);
+											glEnableClientState(GL_TEXTURE_COORD_ARRAY);
+											glTexCoordPointer(2, GL_FLOAT, 4 * sizeof(float), (const void *)(sizeof(float) * 2));
+										} else {
+											glClientActiveTexture(GL_TEXTURE0 + 1);
+											glEnableClientState(GL_TEXTURE_COORD_ARRAY);
+											glTexCoordPointer(2, GL_FLOAT, 4 * sizeof(float), nullptr);
+
+											glClientActiveTexture(GL_TEXTURE0 + 2);
+											glEnableClientState(GL_TEXTURE_COORD_ARRAY);
+											glTexCoordPointer(2, GL_FLOAT, 4 * sizeof(float), (const void *)(sizeof(float) * 2));
+
+											glClientActiveTexture(GL_TEXTURE0 + 3);
+											glEnableClientState(GL_TEXTURE_COORD_ARRAY);
+											glTexCoordPointer(2, GL_FLOAT, 4 * sizeof(float), nullptr);
+										}
+									} else {
+										if (max_units >= 3) {
+											glClientActiveTexture(GL_TEXTURE0 + 2);
+											glDisableClientState(GL_TEXTURE_COORD_ARRAY);
+										}
+										if (max_units >= 4) {
+											glClientActiveTexture(GL_TEXTURE0 + 3);
+											glDisableClientState(GL_TEXTURE_COORD_ARRAY);
+										}
+
+										if (max_units >= 2) {
+											glClientActiveTexture(GL_TEXTURE0 + 1);
+											glEnableClientState(GL_TEXTURE_COORD_ARRAY);
+											glTexCoordPointer(2, GL_FLOAT, 4 * sizeof(float), nullptr);
+										}
+										if (state.using_shadow && max_units >= 3) {
+											glClientActiveTexture(GL_TEXTURE0 + 2);
+											glEnableClientState(GL_TEXTURE_COORD_ARRAY);
+											glTexCoordPointer(2, GL_FLOAT, 4 * sizeof(float), nullptr);
+										}
+									}
+									glClientActiveTexture(GL_TEXTURE0);
+								} else {
+									GLint max_units = GLES1::Config::get_singleton()->max_texture_units;
+									for (int ii = 1; ii < max_units; ii++) {
+										glClientActiveTexture(GL_TEXTURE0 + ii);
+										glDisableClientState(GL_TEXTURE_COORD_ARRAY);
+									}
+									glClientActiveTexture(GL_TEXTURE0);
+								}
 								GL_CHECK_ERROR("GLES1::Canvas::render_batches: TYPE_NINEPATCH client states");
 
 								glDrawElements(GL_TRIANGLES, 18 * 3 - (np->draw_center ? 0 : 6), GL_UNSIGNED_SHORT, nullptr);
@@ -1520,6 +2660,65 @@ void RasterizerCanvasGLES1::render_batches(Item::Command *const *p_commands, Ite
 
 								glVertexPointer(2, GL_FLOAT, 4 * sizeof(float), buffer);
 								glTexCoordPointer(2, GL_FLOAT, 4 * sizeof(float), buffer + 2);
+
+								if (state.using_light) {
+									GLint max_units = GLES1::Config::get_singleton()->max_texture_units;
+									if (state.normal_used && max_units >= 4) {
+										if (state.using_light->mode == RS::CANVAS_LIGHT_MODE_DIRECTIONAL) {
+											glClientActiveTexture(GL_TEXTURE0 + 1);
+											glEnableClientState(GL_TEXTURE_COORD_ARRAY);
+											glTexCoordPointer(2, GL_FLOAT, 4 * sizeof(float), buffer + 2);
+
+											glClientActiveTexture(GL_TEXTURE0 + 2);
+											glEnableClientState(GL_TEXTURE_COORD_ARRAY);
+											glTexCoordPointer(2, GL_FLOAT, 4 * sizeof(float), buffer + 2);
+
+											glClientActiveTexture(GL_TEXTURE0 + 3);
+											glEnableClientState(GL_TEXTURE_COORD_ARRAY);
+											glTexCoordPointer(2, GL_FLOAT, 4 * sizeof(float), buffer + 2);
+										} else {
+											glClientActiveTexture(GL_TEXTURE0 + 1);
+											glEnableClientState(GL_TEXTURE_COORD_ARRAY);
+											glTexCoordPointer(2, GL_FLOAT, 4 * sizeof(float), buffer);
+
+											glClientActiveTexture(GL_TEXTURE0 + 2);
+											glEnableClientState(GL_TEXTURE_COORD_ARRAY);
+											glTexCoordPointer(2, GL_FLOAT, 4 * sizeof(float), buffer + 2);
+
+											glClientActiveTexture(GL_TEXTURE0 + 3);
+											glEnableClientState(GL_TEXTURE_COORD_ARRAY);
+											glTexCoordPointer(2, GL_FLOAT, 4 * sizeof(float), buffer);
+										}
+									} else {
+										if (max_units >= 3) {
+											glClientActiveTexture(GL_TEXTURE0 + 2);
+											glDisableClientState(GL_TEXTURE_COORD_ARRAY);
+										}
+										if (max_units >= 4) {
+											glClientActiveTexture(GL_TEXTURE0 + 3);
+											glDisableClientState(GL_TEXTURE_COORD_ARRAY);
+										}
+
+										if (max_units >= 2) {
+											glClientActiveTexture(GL_TEXTURE0 + 1);
+											glEnableClientState(GL_TEXTURE_COORD_ARRAY);
+											glTexCoordPointer(2, GL_FLOAT, 4 * sizeof(float), buffer);
+										}
+										if (state.using_shadow && max_units >= 3) {
+											glClientActiveTexture(GL_TEXTURE0 + 2);
+											glEnableClientState(GL_TEXTURE_COORD_ARRAY);
+											glTexCoordPointer(2, GL_FLOAT, 4 * sizeof(float), buffer);
+										}
+									}
+									glClientActiveTexture(GL_TEXTURE0);
+								} else {
+									GLint max_units = GLES1::Config::get_singleton()->max_texture_units;
+									for (int ii = 1; ii < max_units; ii++) {
+										glClientActiveTexture(GL_TEXTURE0 + ii);
+										glDisableClientState(GL_TEXTURE_COORD_ARRAY);
+									}
+									glClientActiveTexture(GL_TEXTURE0);
+								}
 								GL_CHECK_ERROR("GLES1::Canvas::render_batches: TYPE_NINEPATCH client states (fallback)");
 
 								glDrawElements(GL_TRIANGLES, 18 * 3 - (np->draw_center ? 0 : 6), GL_UNSIGNED_SHORT, ninepatch_elems);
@@ -1586,12 +2785,6 @@ void RasterizerCanvasGLES1::render_batches(Item::Command *const *p_commands, Ite
 							state.uniforms.extra_matrix = state.uniforms.extra_matrix * mesh_cmd->transform;
 							state.uniforms.final_modulate = state.uniforms.final_modulate * mesh_cmd->modulate;
 
-							_set_canvas_uniforms();
-
-							if (rebind && p_material) {
-								p_material->bind_uniforms();
-							}
-
 							// Setup Texture, Filter, and Repeat
 							RS::CanvasItemTextureRepeat repeat = state.default_repeat;
 							if (batch.item && batch.item->texture_repeat != RS::CANVAS_ITEM_TEXTURE_REPEAT_DEFAULT) {
@@ -1608,6 +2801,13 @@ void RasterizerCanvasGLES1::render_batches(Item::Command *const *p_commands, Ite
 							}
 
 							_bind_canvas_texture(mesh_cmd->texture, filter, repeat);
+
+							_set_canvas_uniforms();
+
+							if (rebind && p_material) {
+								p_material->bind_uniforms();
+							}
+
 							glEnable(GL_TEXTURE_2D);
 
 							if (state.texpixel_size != Size2(0.0, 0.0)) {
@@ -1618,6 +2818,7 @@ void RasterizerCanvasGLES1::render_batches(Item::Command *const *p_commands, Ite
 							GLES1::Mesh *mesh_data = GLES1::MeshStorage::get_singleton()->get_mesh(mesh_cmd->mesh);
 							if (mesh_data) {
 								bool apply_tu1 = (
+									!state.using_light &&
 									GLES1::Config::get_singleton()->max_texture_units >= 2 &&
 									GLES1::Config::get_singleton()->support_texture_env_combine
 								);
@@ -1877,6 +3078,7 @@ void RasterizerCanvasGLES1::render_batches(Item::Command *const *p_commands, Ite
 							}
 
 							bool apply_tu1 = (
+								!state.using_light &&
 								GLES1::Config::get_singleton()->max_texture_units >= 2 &&
 								GLES1::Config::get_singleton()->support_texture_env_combine
 							);
@@ -2243,6 +3445,66 @@ void RasterizerCanvasGLES1::_draw_gui_primitive(int p_points, const Vector2 *p_v
 
 		glEnableClientState(GL_VERTEX_ARRAY);
 		glVertexPointer(2, GL_FLOAT, 0, (const void *)(uintptr_t)offset);
+
+		uint32_t uv_offset = offset + vertex_size + (p_colors ? color_size : 0);
+		if (state.using_light) {
+			GLint max_units = GLES1::Config::get_singleton()->max_texture_units;
+			if (state.normal_used && max_units >= 4) {
+				if (state.using_light->mode == RS::CANVAS_LIGHT_MODE_DIRECTIONAL) {
+					glClientActiveTexture(GL_TEXTURE0 + 1);
+					glEnableClientState(GL_TEXTURE_COORD_ARRAY);
+					glTexCoordPointer(2, GL_FLOAT, 0, p_uvs ? (const void *)(uintptr_t)uv_offset : (const void *)(uintptr_t)offset);
+
+					glClientActiveTexture(GL_TEXTURE0 + 2);
+					glEnableClientState(GL_TEXTURE_COORD_ARRAY);
+					glTexCoordPointer(2, GL_FLOAT, 0, p_uvs ? (const void *)(uintptr_t)uv_offset : (const void *)(uintptr_t)offset);
+
+					glClientActiveTexture(GL_TEXTURE0 + 3);
+					glEnableClientState(GL_TEXTURE_COORD_ARRAY);
+					glTexCoordPointer(2, GL_FLOAT, 0, p_uvs ? (const void *)(uintptr_t)uv_offset : (const void *)(uintptr_t)offset);
+				} else {
+					glClientActiveTexture(GL_TEXTURE0 + 1);
+					glEnableClientState(GL_TEXTURE_COORD_ARRAY);
+					glTexCoordPointer(2, GL_FLOAT, 0, (const void *)(uintptr_t)offset);
+
+					glClientActiveTexture(GL_TEXTURE0 + 2);
+					glEnableClientState(GL_TEXTURE_COORD_ARRAY);
+					glTexCoordPointer(2, GL_FLOAT, 0, p_uvs ? (const void *)(uintptr_t)uv_offset : (const void *)(uintptr_t)offset);
+
+					glClientActiveTexture(GL_TEXTURE0 + 3);
+					glEnableClientState(GL_TEXTURE_COORD_ARRAY);
+					glTexCoordPointer(2, GL_FLOAT, 0, (const void *)(uintptr_t)offset);
+				}
+			} else {
+				if (max_units >= 3) {
+					glClientActiveTexture(GL_TEXTURE0 + 2);
+					glDisableClientState(GL_TEXTURE_COORD_ARRAY);
+				}
+				if (max_units >= 4) {
+					glClientActiveTexture(GL_TEXTURE0 + 3);
+					glDisableClientState(GL_TEXTURE_COORD_ARRAY);
+				}
+
+				if (max_units >= 2) {
+					glClientActiveTexture(GL_TEXTURE0 + 1);
+					glEnableClientState(GL_TEXTURE_COORD_ARRAY);
+					glTexCoordPointer(2, GL_FLOAT, 0, (const void *)(uintptr_t)offset);
+				}
+				if (state.using_shadow && max_units >= 3) {
+					glClientActiveTexture(GL_TEXTURE0 + 2);
+					glEnableClientState(GL_TEXTURE_COORD_ARRAY);
+					glTexCoordPointer(2, GL_FLOAT, 0, (const void *)(uintptr_t)offset);
+				}
+			}
+			glClientActiveTexture(GL_TEXTURE0);
+		} else {
+			GLint max_units = GLES1::Config::get_singleton()->max_texture_units;
+			for (int i = 1; i < max_units; i++) {
+				glClientActiveTexture(GL_TEXTURE0 + i);
+				glDisableClientState(GL_TEXTURE_COORD_ARRAY);
+			}
+			glClientActiveTexture(GL_TEXTURE0);
+		}
 		offset += vertex_size;
 
 		// Colors
@@ -2286,6 +3548,65 @@ void RasterizerCanvasGLES1::_draw_gui_primitive(int p_points, const Vector2 *p_v
 
 		glEnableClientState(GL_VERTEX_ARRAY);
 		glVertexPointer(2, GL_FLOAT, 0, p_vertices);
+
+		if (state.using_light) {
+			GLint max_units = GLES1::Config::get_singleton()->max_texture_units;
+			if (state.normal_used && max_units >= 4) {
+				if (state.using_light->mode == RS::CANVAS_LIGHT_MODE_DIRECTIONAL) {
+					glClientActiveTexture(GL_TEXTURE0 + 1);
+					glEnableClientState(GL_TEXTURE_COORD_ARRAY);
+					glTexCoordPointer(2, GL_FLOAT, 0, p_uvs ? p_uvs : p_vertices);
+
+					glClientActiveTexture(GL_TEXTURE0 + 2);
+					glEnableClientState(GL_TEXTURE_COORD_ARRAY);
+					glTexCoordPointer(2, GL_FLOAT, 0, p_uvs ? p_uvs : p_vertices);
+
+					glClientActiveTexture(GL_TEXTURE0 + 3);
+					glEnableClientState(GL_TEXTURE_COORD_ARRAY);
+					glTexCoordPointer(2, GL_FLOAT, 0, p_uvs ? p_uvs : p_vertices);
+				} else {
+					glClientActiveTexture(GL_TEXTURE0 + 1);
+					glEnableClientState(GL_TEXTURE_COORD_ARRAY);
+					glTexCoordPointer(2, GL_FLOAT, 0, p_vertices);
+
+					glClientActiveTexture(GL_TEXTURE0 + 2);
+					glEnableClientState(GL_TEXTURE_COORD_ARRAY);
+					glTexCoordPointer(2, GL_FLOAT, 0, p_uvs ? p_uvs : p_vertices);
+
+					glClientActiveTexture(GL_TEXTURE0 + 3);
+					glEnableClientState(GL_TEXTURE_COORD_ARRAY);
+					glTexCoordPointer(2, GL_FLOAT, 0, p_vertices);
+				}
+			} else {
+				if (max_units >= 3) {
+					glClientActiveTexture(GL_TEXTURE0 + 2);
+					glDisableClientState(GL_TEXTURE_COORD_ARRAY);
+				}
+				if (max_units >= 4) {
+					glClientActiveTexture(GL_TEXTURE0 + 3);
+					glDisableClientState(GL_TEXTURE_COORD_ARRAY);
+				}
+
+				if (max_units >= 2) {
+					glClientActiveTexture(GL_TEXTURE0 + 1);
+					glEnableClientState(GL_TEXTURE_COORD_ARRAY);
+					glTexCoordPointer(2, GL_FLOAT, 0, p_vertices);
+				}
+				if (state.using_shadow && max_units >= 3) {
+					glClientActiveTexture(GL_TEXTURE0 + 2);
+					glEnableClientState(GL_TEXTURE_COORD_ARRAY);
+					glTexCoordPointer(2, GL_FLOAT, 0, p_vertices);
+				}
+			}
+			glClientActiveTexture(GL_TEXTURE0);
+		} else {
+			GLint max_units = GLES1::Config::get_singleton()->max_texture_units;
+			for (int i = 1; i < max_units; i++) {
+				glClientActiveTexture(GL_TEXTURE0 + i);
+				glDisableClientState(GL_TEXTURE_COORD_ARRAY);
+			}
+			glClientActiveTexture(GL_TEXTURE0);
+		}
 
 		if (p_colors) {
 			glEnableClientState(GL_COLOR_ARRAY);
@@ -2334,15 +3655,17 @@ void RasterizerCanvasGLES1::_legacy_draw_primitive(Item::CommandPrimitive *p_pr,
 	_set_texture_rect_mode(false);
 
 	bool rebind = state.canvas_shader->version_bind_shader(state.shader_version, state.mode_variant, state.specialization);
+
+	ERR_FAIL_COND(p_pr->point_count < 1);
+
+	_bind_canvas_texture(p_pr->texture, state.default_filter, state.default_repeat);
+
 	_set_canvas_uniforms();
 
 	if (rebind && p_material) {
 		p_material->bind_uniforms();
 	}
 
-	ERR_FAIL_COND(p_pr->point_count < 1);
-
-	_bind_canvas_texture(p_pr->texture, state.default_filter, state.default_repeat);
 	state.canvas_shader->version_set_uniform(CanvasShaderGLES1::COLOR_TEXTURE_PIXEL_SIZE, state.texpixel_size, state.shader_version, state.mode_variant, state.specialization);
 
 	if (p_pr->texture.is_valid()) {
@@ -2384,14 +3707,16 @@ void RasterizerCanvasGLES1::_legacy_draw_polygon(Item::CommandPolygon *p_poly, G
 	_set_texture_rect_mode(false);
 
 	bool rebind = state.canvas_shader->version_bind_shader(state.shader_version, state.mode_variant, state.specialization);
+
+	// Bind texture and get pixel size
+	_bind_canvas_texture(p_poly->texture, state.default_filter, state.default_repeat);
+
 	_set_canvas_uniforms();
 
 	if (rebind && p_material) {
 		p_material->bind_uniforms();
 	}
 
-	// Bind texture and get pixel size
-	_bind_canvas_texture(p_poly->texture, state.default_filter, state.default_repeat);
 	state.canvas_shader->version_set_uniform(CanvasShaderGLES1::COLOR_TEXTURE_PIXEL_SIZE, state.texpixel_size, state.shader_version, state.mode_variant, state.specialization);
 	glEnable(GL_TEXTURE_2D);
 
@@ -2424,6 +3749,66 @@ void RasterizerCanvasGLES1::_legacy_draw_polygon(Item::CommandPolygon *p_poly, G
 
 		glEnableClientState(GL_VERTEX_ARRAY);
 		glVertexPointer(2, GL_FLOAT, 0, (const void *)(uintptr_t)offset);
+
+		if (state.using_light) {
+			GLint max_units = GLES1::Config::get_singleton()->max_texture_units;
+			if (state.normal_used && max_units >= 4) {
+				if (state.using_light->mode == RS::CANVAS_LIGHT_MODE_DIRECTIONAL) {
+					glClientActiveTexture(GL_TEXTURE0 + 1);
+					glEnableClientState(GL_TEXTURE_COORD_ARRAY);
+					glTexCoordPointer(2, GL_FLOAT, 0, uvs_size > 0 ? (const void *)(uintptr_t)points_size : (const void *)(uintptr_t)offset);
+
+					glClientActiveTexture(GL_TEXTURE0 + 2);
+					glEnableClientState(GL_TEXTURE_COORD_ARRAY);
+					glTexCoordPointer(2, GL_FLOAT, 0, uvs_size > 0 ? (const void *)(uintptr_t)points_size : (const void *)(uintptr_t)offset);
+
+					glClientActiveTexture(GL_TEXTURE0 + 3);
+					glEnableClientState(GL_TEXTURE_COORD_ARRAY);
+					glTexCoordPointer(2, GL_FLOAT, 0, uvs_size > 0 ? (const void *)(uintptr_t)points_size : (const void *)(uintptr_t)offset);
+				} else {
+					glClientActiveTexture(GL_TEXTURE0 + 1);
+					glEnableClientState(GL_TEXTURE_COORD_ARRAY);
+					glTexCoordPointer(2, GL_FLOAT, 0, (const void *)(uintptr_t)offset);
+
+					glClientActiveTexture(GL_TEXTURE0 + 2);
+					glEnableClientState(GL_TEXTURE_COORD_ARRAY);
+					glTexCoordPointer(2, GL_FLOAT, 0, uvs_size > 0 ? (const void *)(uintptr_t)points_size : (const void *)(uintptr_t)offset);
+
+					glClientActiveTexture(GL_TEXTURE0 + 3);
+					glEnableClientState(GL_TEXTURE_COORD_ARRAY);
+					glTexCoordPointer(2, GL_FLOAT, 0, (const void *)(uintptr_t)offset);
+				}
+			} else {
+				if (max_units >= 3) {
+					glClientActiveTexture(GL_TEXTURE0 + 2);
+					glDisableClientState(GL_TEXTURE_COORD_ARRAY);
+				}
+				if (max_units >= 4) {
+					glClientActiveTexture(GL_TEXTURE0 + 3);
+					glDisableClientState(GL_TEXTURE_COORD_ARRAY);
+				}
+
+				if (max_units >= 2) {
+					glClientActiveTexture(GL_TEXTURE0 + 1);
+					glEnableClientState(GL_TEXTURE_COORD_ARRAY);
+					glTexCoordPointer(2, GL_FLOAT, 0, (const void *)(uintptr_t)offset);
+				}
+				if (state.using_shadow && max_units >= 3) {
+					glClientActiveTexture(GL_TEXTURE0 + 2);
+					glEnableClientState(GL_TEXTURE_COORD_ARRAY);
+					glTexCoordPointer(2, GL_FLOAT, 0, (const void *)(uintptr_t)offset);
+				}
+			}
+			glClientActiveTexture(GL_TEXTURE0);
+		} else {
+			GLint max_units = GLES1::Config::get_singleton()->max_texture_units;
+			for (int i = 1; i < max_units; i++) {
+				glClientActiveTexture(GL_TEXTURE0 + i);
+				glDisableClientState(GL_TEXTURE_COORD_ARRAY);
+			}
+			glClientActiveTexture(GL_TEXTURE0);
+		}
+
 		offset += points_size;
 
 		// UVs
@@ -2484,6 +3869,65 @@ void RasterizerCanvasGLES1::_legacy_draw_polygon(Item::CommandPolygon *p_poly, G
 
 		glEnableClientState(GL_VERTEX_ARRAY);
 		glVertexPointer(2, GL_FLOAT, 0, pd.points.ptr());
+
+		if (state.using_light) {
+			GLint max_units = GLES1::Config::get_singleton()->max_texture_units;
+			if (state.normal_used && max_units >= 4) {
+				if (state.using_light->mode == RS::CANVAS_LIGHT_MODE_DIRECTIONAL) {
+					glClientActiveTexture(GL_TEXTURE0 + 1);
+					glEnableClientState(GL_TEXTURE_COORD_ARRAY);
+					glTexCoordPointer(2, GL_FLOAT, 0, uvs_size > 0 ? pd.uvs.ptr() : pd.points.ptr());
+
+					glClientActiveTexture(GL_TEXTURE0 + 2);
+					glEnableClientState(GL_TEXTURE_COORD_ARRAY);
+					glTexCoordPointer(2, GL_FLOAT, 0, uvs_size > 0 ? pd.uvs.ptr() : pd.points.ptr());
+
+					glClientActiveTexture(GL_TEXTURE0 + 3);
+					glEnableClientState(GL_TEXTURE_COORD_ARRAY);
+					glTexCoordPointer(2, GL_FLOAT, 0, uvs_size > 0 ? pd.uvs.ptr() : pd.points.ptr());
+				} else {
+					glClientActiveTexture(GL_TEXTURE0 + 1);
+					glEnableClientState(GL_TEXTURE_COORD_ARRAY);
+					glTexCoordPointer(2, GL_FLOAT, 0, pd.points.ptr());
+
+					glClientActiveTexture(GL_TEXTURE0 + 2);
+					glEnableClientState(GL_TEXTURE_COORD_ARRAY);
+					glTexCoordPointer(2, GL_FLOAT, 0, uvs_size > 0 ? pd.uvs.ptr() : pd.points.ptr());
+
+					glClientActiveTexture(GL_TEXTURE0 + 3);
+					glEnableClientState(GL_TEXTURE_COORD_ARRAY);
+					glTexCoordPointer(2, GL_FLOAT, 0, pd.points.ptr());
+				}
+			} else {
+				if (max_units >= 3) {
+					glClientActiveTexture(GL_TEXTURE0 + 2);
+					glDisableClientState(GL_TEXTURE_COORD_ARRAY);
+				}
+				if (max_units >= 4) {
+					glClientActiveTexture(GL_TEXTURE0 + 3);
+					glDisableClientState(GL_TEXTURE_COORD_ARRAY);
+				}
+
+				if (max_units >= 2) {
+					glClientActiveTexture(GL_TEXTURE0 + 1);
+					glEnableClientState(GL_TEXTURE_COORD_ARRAY);
+					glTexCoordPointer(2, GL_FLOAT, 0, pd.points.ptr());
+				}
+				if (state.using_shadow && max_units >= 3) {
+					glClientActiveTexture(GL_TEXTURE0 + 2);
+					glEnableClientState(GL_TEXTURE_COORD_ARRAY);
+					glTexCoordPointer(2, GL_FLOAT, 0, pd.points.ptr());
+				}
+			}
+			glClientActiveTexture(GL_TEXTURE0);
+		} else {
+			GLint max_units = GLES1::Config::get_singleton()->max_texture_units;
+			for (int i = 1; i < max_units; i++) {
+				glClientActiveTexture(GL_TEXTURE0 + i);
+				glDisableClientState(GL_TEXTURE_COORD_ARRAY);
+			}
+			glClientActiveTexture(GL_TEXTURE0);
+		}
 
 		if (uvs_size > 0) {
 			glEnableClientState(GL_TEXTURE_COORD_ARRAY);
@@ -2608,7 +4052,10 @@ void RasterizerCanvasGLES1::_set_texture_rect_mode(bool p_texture_rect, bool p_l
 		spec |= CanvasShaderGLES1::USE_ATTRIB_LARGE_VERTEX;
 	}
 
-	// TODO(GLES2): Add Lighting and Shadow specializations
+	if (state.using_light) {
+		spec |= CanvasShaderGLES1::USE_LIGHTING;
+	}
+
 	state.specialization = spec;
 }
 
@@ -2701,6 +4148,11 @@ RasterizerCanvasGLES1::~RasterizerCanvasGLES1() {
 	singleton = nullptr;
 
 	GLES1::TextureStorage::get_singleton()->canvas_texture_free(default_canvas_texture);
+
+	// Shaders
+	if (shadow_render.shader_version.is_valid()) {
+		shadow_render.shader.version_free(shadow_render.shader_version);
+	}
 
 	// Free buffers
 	GLES1::Utilities::get_singleton()->buffer_free_data(data.canvas_quad_vertices);

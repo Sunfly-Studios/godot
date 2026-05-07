@@ -41,8 +41,8 @@ void RasterizerCanvasBatcherCommon<T_API>::batch_initialize() {
 	bdata.settings_max_join_item_commands = 16;
 	bdata.settings_colored_vertex_format_threshold = 0.5f;
 	bdata.settings_batch_buffer_num_verts = 16384;
-	bdata.settings_scissor_lights = true;
-	bdata.settings_scissor_threshold = 0.0f;
+	bdata.settings_scissor_lights = false;
+	bdata.settings_scissor_threshold = -1.0f;
 	bdata.settings_item_reordering_lookahead = 4;
 	bdata.settings_ninepatch_mode = 0;
 
@@ -549,7 +549,12 @@ void RasterizerCanvasBatcherCommon<T_API>::render_joined_item_commands(const BIt
 	// If it's a hardware transform, the GPU handles it via the first item's matrix.
 	if (p_bij.use_hardware_transform()) {
 		get_this()->state.uniforms.modelview_matrix = first_item->final_transform;
-		get_this()->state.uniforms.final_modulate = p_lit ? first_item->final_modulate : bdata.item_refs[p_bij.first_item_ref].final_modulate;
+
+		if (p_lit && !T_API::FORCE_BAKE_MODULATE) {
+			get_this()->state.uniforms.final_modulate = first_item->final_modulate;
+		} else {
+			get_this()->state.uniforms.final_modulate = bdata.item_refs[p_bij.first_item_ref].final_modulate;
+		}
 	} else {
 		get_this()->state.uniforms.modelview_matrix = Transform2D();
 		get_this()->state.uniforms.extra_matrix = Transform2D();
@@ -587,8 +592,8 @@ void RasterizerCanvasBatcherCommon<T_API>::render_joined_item_commands(const BIt
 			continue;
 		}
 
-		if (!p_lit) {
-			// if not lit we use the complex calculated final modulate
+		if (!p_lit || T_API::FORCE_BAKE_MODULATE) {
+			// if not lit we use the calculated final modulate
 			fill_state.final_modulate = ref.final_modulate;
 		} else {
 			// if lit we ignore canvas modulate and just use the item modulate
@@ -1237,12 +1242,19 @@ bool RasterizerCanvasBatcherCommon<T_API>::_prefill_rect(RendererCanvasRender::I
 		col *= r_fill_state.final_modulate;
 	}
 
-	int old_batch_tex_id = r_fill_state.batch_tex_id;
-	r_fill_state.batch_tex_id = _batch_find_or_create_tex(rect->texture, RID(), rect->flags & RendererCanvasRender::CanvasRectFlags::CANVAS_RECT_TILE, old_batch_tex_id);
-
+	RID normal_rid = RID();
 	if constexpr (SEND_LIGHT_ANGLES) {
 		bdata.use_light_angles = true;
+		if (rect->texture.is_valid()) {
+			typename T_API::CanvasTexture *ct = T_API::TextureStorage::get_singleton()->get_canvas_texture(rect->texture);
+			if (ct) {
+				normal_rid = ct->normal_map;
+			}
+		}
 	}
+
+	int old_batch_tex_id = r_fill_state.batch_tex_id;
+	r_fill_state.batch_tex_id = _batch_find_or_create_tex(rect->texture, normal_rid, rect->flags & RendererCanvasRender::CanvasRectFlags::CANVAS_RECT_TILE, old_batch_tex_id);
 
 	if (old_batch_tex_id != r_fill_state.batch_tex_id) {
 		change_batch = true;
@@ -1654,12 +1666,19 @@ bool RasterizerCanvasBatcherCommon<T_API>::_prefill_polygon(RendererCanvasRender
 		modulate = r_fill_state.final_modulate;
 	}
 
-	int old_batch_tex_id = r_fill_state.batch_tex_id;
-	r_fill_state.batch_tex_id = _batch_find_or_create_tex(p_poly->texture, RID(), false, old_batch_tex_id);
-
+	RID normal_rid = RID();
 	if constexpr (SEND_LIGHT_ANGLES) {
 		bdata.use_light_angles = true;
+		if (p_poly->texture.is_valid()) {
+			typename T_API::CanvasTexture *ct = T_API::TextureStorage::get_singleton()->get_canvas_texture(p_poly->texture);
+			if (ct) {
+				normal_rid = ct->normal_map;
+			}
+		}
 	}
+
+	int old_batch_tex_id = r_fill_state.batch_tex_id;
+	r_fill_state.batch_tex_id = _batch_find_or_create_tex(p_poly->texture, normal_rid, false, old_batch_tex_id);
 
 	if (old_batch_tex_id != r_fill_state.batch_tex_id) {
 		change_batch = true;

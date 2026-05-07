@@ -13,6 +13,7 @@ from typing import Optional
 from methods import print_error, to_raw_cstring
 
 GL_1_5_MAPPINGS = {
+    # canvas.glsl specific overrides
     "projection_matrix": (
         "glMatrixMode(GL_PROJECTION);\n"
         "\t\t\t\tProjection p = p_value;\n"
@@ -83,7 +84,74 @@ GL_1_5_MAPPINGS = {
         "glPointSize((float)p_value);\n"
         "\t\t\t\tGL_CHECK_ERROR(\"ShaderGLES1::_apply_gles1_state: point_size\");"
     ),
-    
+
+    # canvas_occlusion.glsl specific overrides
+    "projection": (
+        "glMatrixMode(GL_PROJECTION);\n"
+        "\t\t\t\tProjection p = p_value;\n"
+        "\t\t\t\tGLfloat matrix[16]={};\n"
+        "\t\t\t\tfor (int i = 0; i < 4; i++) {\n"
+        "\t\t\t\t\tfor (int j = 0; j < 4; j++) {\n"
+        "\t\t\t\t\t\tmatrix[i * 4 + j] = p.columns[i][j];\n"
+        "\t\t\t\t\t}\n"
+        "\t\t\t\t}\n"
+        "\t\t\t\tglLoadMatrixf(matrix);\n"
+        "\t\t\t\tglMatrixMode(GL_MODELVIEW);\n"
+        "\t\t\t\tGL_CHECK_ERROR(\"ShaderGLES1::_apply_gles1_state: projection\");"
+    ),
+    "modelview1": (
+        "glMatrixMode(GL_MODELVIEW);\n"
+        "\t\t\t\tGLfloat matrix[16]={};\n"
+        "\t\t\t\tif (p_value.get_type() == Variant::TRANSFORM2D) {\n"
+        "\t\t\t\t\tTransform2D tr = p_value;\n"
+        "\t\t\t\t\tmatrix[0]=tr.columns[0][0]; matrix[1]=tr.columns[0][1]; matrix[2]=0; matrix[3]=0;\n"
+        "\t\t\t\t\tmatrix[4]=tr.columns[1][0]; matrix[5]=tr.columns[1][1]; matrix[6]=0; matrix[7]=0;\n"
+        "\t\t\t\t\tmatrix[8]=0; matrix[9]=0; matrix[10]=1; matrix[11]=0;\n"
+        "\t\t\t\t\tmatrix[12]=tr.columns[2][0]; matrix[13]=tr.columns[2][1]; matrix[14]=0; matrix[15]=1;\n"
+        "\t\t\t\t} else {\n"
+        "\t\t\t\t\tTransform3D tr = p_value;\n"
+        "\t\t\t\t\tmatrix[0]=tr.basis.rows[0][0]; matrix[1]=tr.basis.rows[1][0]; matrix[2]=tr.basis.rows[2][0]; matrix[3]=0;\n"
+        "\t\t\t\t\tmatrix[4]=tr.basis.rows[0][1]; matrix[5]=tr.basis.rows[1][1]; matrix[6]=tr.basis.rows[2][1]; matrix[7]=0;\n"
+        "\t\t\t\t\tmatrix[8]=tr.basis.rows[0][2]; matrix[9]=tr.basis.rows[1][2]; matrix[10]=tr.basis.rows[2][2]; matrix[11]=0;\n"
+        "\t\t\t\t\tmatrix[12]=tr.origin.x; matrix[13]=tr.origin.y; matrix[14]=tr.origin.z; matrix[15]=1;\n"
+        "\t\t\t\t}\n"
+        "\t\t\t\tglLoadMatrixf(matrix);\n"
+        "\t\t\t\tGL_CHECK_ERROR(\"ShaderGLES1::_apply_gles1_state: modelview1\");"
+    ),
+    "modelview2": (
+        "glMatrixMode(GL_MODELVIEW);\n"
+        "\t\t\t\tGLfloat matrix[16]={};\n"
+        "\t\t\t\tif (p_value.get_type() == Variant::TRANSFORM2D) {\n"
+        "\t\t\t\t\tTransform2D tr = p_value;\n"
+        "\t\t\t\t\tmatrix[0]=tr.columns[0][0]; matrix[1]=tr.columns[0][1]; matrix[2]=0; matrix[3]=0;\n"
+        "\t\t\t\t\tmatrix[4]=tr.columns[1][0]; matrix[5]=tr.columns[1][1]; matrix[6]=0; matrix[7]=0;\n"
+        "\t\t\t\t\tmatrix[8]=0; matrix[9]=0; matrix[10]=1; matrix[11]=0;\n"
+        "\t\t\t\t\tmatrix[12]=tr.columns[2][0]; matrix[13]=tr.columns[2][1]; matrix[14]=0; matrix[15]=1;\n"
+        "\t\t\t\t} else {\n"
+        "\t\t\t\t\tTransform3D tr = p_value;\n"
+        "\t\t\t\t\tmatrix[0]=tr.basis.rows[0][0]; matrix[1]=tr.basis.rows[1][0]; matrix[2]=tr.basis.rows[2][0]; matrix[3]=0;\n"
+        "\t\t\t\t\tmatrix[4]=tr.basis.rows[0][1]; matrix[5]=tr.basis.rows[1][1]; matrix[6]=tr.basis.rows[2][1]; matrix[7]=0;\n"
+        "\t\t\t\t\tmatrix[8]=tr.basis.rows[0][2]; matrix[9]=tr.basis.rows[1][2]; matrix[10]=tr.basis.rows[2][2]; matrix[11]=0;\n"
+        "\t\t\t\t\tmatrix[12]=tr.origin.x; matrix[13]=tr.origin.y; matrix[14]=tr.origin.z; matrix[15]=1;\n"
+        "\t\t\t\t}\n"
+        "\t\t\t\tglMultMatrixf(matrix);\n"
+        "\t\t\t\tGL_CHECK_ERROR(\"ShaderGLES1::_apply_gles1_state: modelview2\");"
+    ),
+    "direction": (
+        "\t\t\t\tglMatrixMode(GL_MODELVIEW);\n"
+        "\t\t\t\tVector2 dir = p_value;\n"
+        "\t\t\t\tGLfloat mat[16]={};\n"
+        "\t\t\t\tglGetFloatv(GL_MODELVIEW_MATRIX, mat);\n"
+        "\t\t\t\tmat[2]  = dir.x * mat[0]  + dir.y * mat[1];\n"
+        "\t\t\t\tmat[6]  = dir.x * mat[4]  + dir.y * mat[5];\n"
+        "\t\t\t\tmat[10] = 0.0f;\n"
+        "\t\t\t\tmat[14] = dir.x * mat[12] + dir.y * mat[13];\n"
+        "\t\t\t\tmat[8]  = dir.x;\n"
+        "\t\t\t\tmat[9]  = dir.y;\n"
+        "\t\t\t\tglLoadMatrixf(mat);\n"
+        "\t\t\t\tGL_CHECK_ERROR(\"ShaderGLES1::_apply_gles1_state: direction\");"
+    ),
+
     # copy.glsl specific overrides
     "copy_section": (
         "Vector4 cs = p_value;\n"

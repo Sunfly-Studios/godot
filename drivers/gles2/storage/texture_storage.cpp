@@ -86,6 +86,11 @@ TextureStorage::TextureStorage() {
 	transparent_img->fill(Color(0, 0, 0, 0));
 	default_gl_textures[DEFAULT_GL_TEXTURE_TRANSPARENT] = texture_allocate();
 	texture_2d_initialize(default_gl_textures[DEFAULT_GL_TEXTURE_TRANSPARENT], transparent_img);
+	
+	{
+		sdf_shader.shader.initialize();
+		sdf_shader.shader_version = sdf_shader.shader.version_create();
+	}
 }
 
 TextureStorage::~TextureStorage() {
@@ -99,6 +104,7 @@ TextureStorage::~TextureStorage() {
 	texture_atlas.texture = 0;
 	glDeleteFramebuffers(1, &texture_atlas.framebuffer);
 	texture_atlas.framebuffer = 0;
+	sdf_shader.shader.version_free(sdf_shader.shader_version);
 }
 
 /* Canvas Texture API */
@@ -757,6 +763,10 @@ Ref<Image> TextureStorage::texture_2d_get(RID p_texture) const {
 
 	// Isolate texture binding
 	glActiveTexture(GL_TEXTURE0);
+	GLint prev_tex_binding = 0;
+	glGetIntegerv(GL_TEXTURE_BINDING_2D, &prev_tex_binding);
+	GL_CHECK_ERROR("GLES2::TextureStorage::texture_2d_get: glGetIntegerv GL_TEXTURE_BINDING_2D");
+
 	glBindTexture(GL_TEXTURE_2D, temp_color_texture);
 	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, tex->alloc_width, tex->alloc_height, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
 	GL_CHECK_ERROR("GLES2::TextureStorage::texture_2d_get: glTexImage2D");
@@ -821,6 +831,11 @@ Ref<Image> TextureStorage::texture_2d_get(RID p_texture) const {
 
 	// Cleanup
 	bind_framebuffer(previous_fbo);
+
+	glActiveTexture(GL_TEXTURE0);
+	glBindTexture(GL_TEXTURE_2D, prev_tex_binding);
+	GL_CHECK_ERROR("GLES2::TextureStorage::texture_2d_get: restore texture binding");
+
 	glDeleteTextures(1, &temp_color_texture);
 	glDeleteFramebuffers(1, &temp_framebuffer);
 	GL_CHECK_ERROR("GLES2::TextureStorage::texture_2d_get: cleanup glDelete");
@@ -1462,6 +1477,9 @@ void TextureStorage::_create_render_target_backbuffer(RenderTarget *rt) {
 	ERR_FAIL_COND_MSG(rt->backbuffer_fbo != 0, "Cannot allocate RenderTarget backbuffer: already initialized.");
 	ERR_FAIL_COND(rt->direct_to_screen);
 
+	GLint previous_fbo = 0;
+	glGetIntegerv(GL_FRAMEBUFFER_BINDING, &previous_fbo);
+
 	// Protect active texture.
 	glActiveTexture(GL_TEXTURE0);
 	GLint previous_tex = 0;
@@ -1495,8 +1513,8 @@ void TextureStorage::_create_render_target_backbuffer(RenderTarget *rt) {
 	// Clean previous bind
 	glBindTexture(GL_TEXTURE_2D, previous_tex);
 
-	// Safely return to system FBO
-	bind_framebuffer_system();
+	// Safely return to previous FBO
+	bind_framebuffer(previous_fbo);
 }
 
 void GLES2::TextureStorage::check_backbuffer(RenderTarget *rt, const bool uses_screen_texture, const bool uses_depth_texture) {
@@ -1926,55 +1944,406 @@ GLuint TextureStorage::render_target_get_depth(RID p_render_target) const {
 }
 
 bool TextureStorage::render_target_get_depth_has_stencil(RID p_render_target) const {
-    return false;
+	RenderTarget *rt = render_target_owner.get_or_null(p_render_target);
+	ERR_FAIL_NULL_V(rt, 0);
+
+	return rt->depth_has_stencil;
 }
 
 void TextureStorage::render_target_set_reattach_textures(RID p_render_target, bool p_reattach_textures) const {
+	RenderTarget *rt = render_target_owner.get_or_null(p_render_target);
+	ERR_FAIL_NULL(rt);
 
+	rt->reattach_textures = p_reattach_textures;
 }
 
 bool TextureStorage::render_target_is_reattach_textures(RID p_render_target) const {
-    return false;
+	RenderTarget *rt = render_target_owner.get_or_null(p_render_target);
+	ERR_FAIL_NULL_V(rt, false);
+
+	return rt->reattach_textures;
 }
 
 void TextureStorage::render_target_set_sdf_size_and_scale(RID p_render_target, RS::ViewportSDFOversize p_size, RS::ViewportSDFScale p_scale) {
+	RenderTarget *rt = render_target_owner.get_or_null(p_render_target);
+	ERR_FAIL_NULL(rt);
+	if (rt->sdf_oversize == p_size && rt->sdf_scale == p_scale) {
+		return;
+	}
 
+	rt->sdf_oversize = p_size;
+	rt->sdf_scale = p_scale;
+
+	_render_target_clear_sdf(rt);
 }
 
 Rect2i TextureStorage::_render_target_get_sdf_rect(const RenderTarget *rt) const {
-	return Rect2i();
+	Size2i margin;
+	int scale;
+	switch (rt->sdf_oversize) {
+		case RS::VIEWPORT_SDF_OVERSIZE_100_PERCENT: {
+			scale = 100;
+		} break;
+		case RS::VIEWPORT_SDF_OVERSIZE_120_PERCENT: {
+			scale = 120;
+		} break;
+		case RS::VIEWPORT_SDF_OVERSIZE_150_PERCENT: {
+			scale = 150;
+		} break;
+		case RS::VIEWPORT_SDF_OVERSIZE_200_PERCENT: {
+			scale = 200;
+		} break;
+		default: {
+			ERR_PRINT("Invalid viewport SDF oversize, defaulting to 100%.");
+			scale = 100;
+		} break;
+	}
+
+	margin = (rt->size * scale / 100) - rt->size;
+
+	Rect2i r(Vector2i(), rt->size);
+	r.position -= margin;
+	r.size += margin * 2;
+
+	return r;
 }
 
 Rect2i TextureStorage::render_target_get_sdf_rect(RID p_render_target) const {
-	return Rect2i();
+	const RenderTarget *rt = render_target_owner.get_or_null(p_render_target);
+	ERR_FAIL_NULL_V(rt, Rect2i());
+
+	return _render_target_get_sdf_rect(rt);
 }
 
 void TextureStorage::render_target_mark_sdf_enabled(RID p_render_target, bool p_enabled) {
+	RenderTarget *rt = render_target_owner.get_or_null(p_render_target);
+	ERR_FAIL_NULL(rt);
 
+	rt->sdf_enabled = p_enabled;
 }
 
 bool TextureStorage::render_target_is_sdf_enabled(RID p_render_target) const {
-    return false;
+	const RenderTarget *rt = render_target_owner.get_or_null(p_render_target);
+	ERR_FAIL_NULL_V(rt, false);
+
+	return rt->sdf_enabled;
 }
 
 GLuint TextureStorage::render_target_get_sdf_texture(RID p_render_target) {
-    return 0;
+	RenderTarget *rt = render_target_owner.get_or_null(p_render_target);
+	ERR_FAIL_NULL_V(rt, 0);
+	if (rt->sdf_texture_read == 0) {
+		Texture *texture = texture_owner.get_or_null(default_gl_textures[DEFAULT_GL_TEXTURE_BLACK]);
+		return texture->tex_id;
+	}
+
+	return rt->sdf_texture_read;
 }
 
 void TextureStorage::_render_target_allocate_sdf(RenderTarget *rt) {
+	ERR_FAIL_NULL(rt);
+	ERR_FAIL_COND(rt->sdf_texture_write_fb != 0);
+	Size2i size = _render_target_get_sdf_rect(rt).size;
 
+	GLint previous_fbo = 0;
+	glGetIntegerv(GL_FRAMEBUFFER_BINDING, &previous_fbo);
+
+	GLint prev_active_texture = 0;
+	glGetIntegerv(GL_ACTIVE_TEXTURE, &prev_active_texture);
+	glActiveTexture(GL_TEXTURE0);
+	
+	GLint prev_texture_binding = 0;
+	glGetIntegerv(GL_TEXTURE_BINDING_2D, &prev_texture_binding);
+	GL_CHECK_ERROR("GLES2::TextureStorage::_render_target_allocate_sdf: state retrieval");
+
+	glGenTextures(1, &rt->sdf_texture_write);
+	glBindTexture(GL_TEXTURE_2D, rt->sdf_texture_write);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, size.width, size.height, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
+	GLES2::Utilities::get_singleton()->texture_allocated_data(rt->sdf_texture_write, size.width * size.height * 4, "SDF texture");
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+
+	glGenFramebuffers(1, &rt->sdf_texture_write_fb);
+	bind_framebuffer(rt->sdf_texture_write_fb);
+	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, rt->sdf_texture_write, 0);
+
+	// Validate framebuffer
+	GLenum status = glCheckFramebufferStatus(GL_FRAMEBUFFER);
+	if (status != GL_FRAMEBUFFER_COMPLETE) {
+		ERR_PRINT("GLES2: SDF write framebuffer incomplete: " + itos(status));
+		glDeleteFramebuffers(1, &rt->sdf_texture_write_fb);
+		rt->sdf_texture_write_fb = 0;
+		bind_framebuffer(previous_fbo);
+		return;
+	}
+	GL_CHECK_ERROR("GLES2::TextureStorage::_render_target_allocate_sdf: write fb setup");
+
+	int scale;
+	switch (rt->sdf_scale) {
+		case RS::VIEWPORT_SDF_SCALE_100_PERCENT: {
+			scale = 100;
+		} break;
+		case RS::VIEWPORT_SDF_SCALE_50_PERCENT: {
+			scale = 50;
+		} break;
+		case RS::VIEWPORT_SDF_SCALE_25_PERCENT: {
+			scale = 25;
+		} break;
+		default: {
+			ERR_PRINT("Invalid viewport SDF scale, defaulting to 100%.");
+			scale = 100;
+		} break;
+	}
+
+	rt->process_size = size * scale / 100;
+	rt->process_size = rt->process_size.maxi(1);
+
+	glGenTextures(2, rt->sdf_texture_process);
+	glBindTexture(GL_TEXTURE_2D, rt->sdf_texture_process[0]);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, rt->process_size.width, rt->process_size.height, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+	GLES2::Utilities::get_singleton()->texture_allocated_data(rt->sdf_texture_process[0], rt->process_size.width * rt->process_size.height * 4, "SDF process texture[0]");
+
+	glBindTexture(GL_TEXTURE_2D, rt->sdf_texture_process[1]);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, rt->process_size.width, rt->process_size.height, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+	GLES2::Utilities::get_singleton()->texture_allocated_data(rt->sdf_texture_process[1], rt->process_size.width * rt->process_size.height * 4, "SDF process texture[1]");
+
+	glGenTextures(1, &rt->sdf_texture_read);
+	glBindTexture(GL_TEXTURE_2D, rt->sdf_texture_read);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, rt->process_size.width, rt->process_size.height, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+	GLES2::Utilities::get_singleton()->texture_allocated_data(rt->sdf_texture_read, rt->process_size.width * rt->process_size.height * 4, "SDF texture (read)");
+	GL_CHECK_ERROR("GLES2::TextureStorage::_render_target_allocate_sdf: texture read allocation");
+
+	// Clean up
+	glBindTexture(GL_TEXTURE_2D, prev_texture_binding);
+	glActiveTexture(prev_active_texture);
+	bind_framebuffer(previous_fbo);
+	GL_CHECK_ERROR("GLES2::TextureStorage::_render_target_allocate_sdf: restore states");
 }
 
 void TextureStorage::_render_target_clear_sdf(RenderTarget *rt) {
+	ERR_FAIL_NULL(rt);
+	if (rt->sdf_texture_write_fb != 0) {
+		GLES2::Utilities::get_singleton()->texture_free_data(rt->sdf_texture_read);
+		GLES2::Utilities::get_singleton()->texture_free_data(rt->sdf_texture_write);
+		GLES2::Utilities::get_singleton()->texture_free_data(rt->sdf_texture_process[0]);
+		GLES2::Utilities::get_singleton()->texture_free_data(rt->sdf_texture_process[1]);
 
+		glDeleteFramebuffers(1, &rt->sdf_texture_write_fb);
+		GL_CHECK_ERROR("GLES2::TextureStorage::_render_target_clear_sdf: glDeleteFramebuffers");
+		rt->sdf_texture_read = 0;
+		rt->sdf_texture_write = 0;
+		rt->sdf_texture_process[0] = 0;
+		rt->sdf_texture_process[1] = 0;
+		rt->sdf_texture_write_fb = 0;
+	}
 }
 
 GLuint TextureStorage::render_target_get_sdf_framebuffer(RID p_render_target) {
-    return 0;
+	RenderTarget *rt = render_target_owner.get_or_null(p_render_target);
+	ERR_FAIL_NULL_V(rt, 0);
+
+	if (rt->sdf_texture_write_fb == 0) {
+		_render_target_allocate_sdf(rt);
+	}
+
+	return rt->sdf_texture_write_fb;
 }
 
 void TextureStorage::render_target_sdf_process(RID p_render_target) {
+	GLES2::CopyEffects *copy_effects = GLES2::CopyEffects::get_singleton();
+	ERR_FAIL_NULL(copy_effects);
+	RenderTarget *rt = render_target_owner.get_or_null(p_render_target);
+	ERR_FAIL_NULL(rt);
+	ERR_FAIL_COND(rt->sdf_texture_write_fb == 0);
 
+	// State caching
+	GLint prev_fbo;
+	glGetIntegerv(GL_FRAMEBUFFER_BINDING, &prev_fbo);
+	GLint prev_viewport[4] = {};
+	glGetIntegerv(GL_VIEWPORT, prev_viewport);
+	GLint prev_active_texture;
+	glGetIntegerv(GL_ACTIVE_TEXTURE, &prev_active_texture);
+
+	glActiveTexture(GL_TEXTURE0);
+	GLint prev_texture;
+	glGetIntegerv(GL_TEXTURE_BINDING_2D, &prev_texture);
+
+	GLboolean prev_scissor_enabled = glIsEnabled(GL_SCISSOR_TEST);
+	GLint prev_scissor_box[4] = {};
+	glGetIntegerv(GL_SCISSOR_BOX, prev_scissor_box);
+
+	GLboolean blend_enabled = glIsEnabled(GL_BLEND);
+	GLboolean cull_enabled = glIsEnabled(GL_CULL_FACE);
+	GLboolean depth_test_enabled = glIsEnabled(GL_DEPTH_TEST);
+	GLboolean depth_mask_prev;
+	glGetBooleanv(GL_DEPTH_WRITEMASK, &depth_mask_prev);
+	GLboolean color_mask_prev[4] = {};
+	glGetBooleanv(GL_COLOR_WRITEMASK, color_mask_prev);
+
+	// Clean the state
+	glDisable(GL_BLEND);
+	glDisable(GL_CULL_FACE);
+	glDisable(GL_DEPTH_TEST);
+	glDepthMask(GL_FALSE);
+	glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+	GL_CHECK_ERROR("GLES2::TextureStorage::render_target_sdf_process: setup clean state");
+
+	Rect2i r = _render_target_get_sdf_rect(rt);
+	Size2i size = r.size;
+	int32_t shift = 0;
+	bool shrink = false;
+
+	switch (rt->sdf_scale) {
+		case RS::VIEWPORT_SDF_SCALE_50_PERCENT: {
+			size[0] >>= 1;
+			size[1] >>= 1;
+			shift = 1;
+			shrink = true;
+		} break;
+		case RS::VIEWPORT_SDF_SCALE_25_PERCENT: {
+			size[0] >>= 2;
+			size[1] >>= 2;
+			shift = 2;
+			shrink = true;
+		} break;
+		default: {
+		};
+	}
+
+	GLuint temp_fb = 0;
+	glGenFramebuffers(1, &temp_fb);
+	bind_framebuffer(temp_fb);
+
+	CanvasSdfShaderGLES2::ShaderVariant variant = shrink ? CanvasSdfShaderGLES2::MODE_LOAD_SHRINK : CanvasSdfShaderGLES2::MODE_LOAD;
+	bool success = sdf_shader.shader.version_bind_shader(sdf_shader.shader_version, variant);
+	if (!success) {
+		goto cleanup;
+	}
+
+	sdf_shader.shader.version_set_uniform(CanvasSdfShaderGLES2::BASE_SIZE, Size2(r.size), sdf_shader.shader_version, variant);
+	sdf_shader.shader.version_set_uniform(CanvasSdfShaderGLES2::SIZE, Size2(size), sdf_shader.shader_version, variant);
+	sdf_shader.shader.version_set_uniform(CanvasSdfShaderGLES2::STRIDE, 0, sdf_shader.shader_version, variant);
+	sdf_shader.shader.version_set_uniform(CanvasSdfShaderGLES2::SHIFT, shift, sdf_shader.shader_version, variant);
+
+	glActiveTexture(GL_TEXTURE0);
+	glBindTexture(GL_TEXTURE_2D, rt->sdf_texture_write);
+
+	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, rt->sdf_texture_process[0], 0);
+	GL_CHECK_ERROR("GLES2::TextureStorage::render_target_sdf_process: attach process[0]");
+
+	// Validate completeness
+	{
+		GLenum load_status = glCheckFramebufferStatus(GL_FRAMEBUFFER);
+		if (load_status != GL_FRAMEBUFFER_COMPLETE) {
+			ERR_PRINT("GLES2: SDF framebuffer incomplete after attaching process[0]: " + itos(load_status));
+			goto cleanup;
+		}
+	}
+
+	glViewport(0, 0, size.width, size.height);
+	glEnable(GL_SCISSOR_TEST);
+	glScissor(0, 0, size.width, size.height);
+
+	copy_effects->draw_screen_triangle();
+	GL_CHECK_ERROR("GLES2::TextureStorage::render_target_sdf_process: load phase");
+
+	// Process phase
+	{
+		int stride = nearest_power_of_2_templated(MAX(size.width, size.height) / 2);
+
+		variant = CanvasSdfShaderGLES2::MODE_PROCESS;
+		success = sdf_shader.shader.version_bind_shader(sdf_shader.shader_version, variant);
+		if (!success) {
+			goto cleanup;
+		}
+
+		// Cast Size2i to Size2
+		sdf_shader.shader.version_set_uniform(CanvasSdfShaderGLES2::BASE_SIZE, Size2(r.size), sdf_shader.shader_version, variant);
+		sdf_shader.shader.version_set_uniform(CanvasSdfShaderGLES2::SIZE, Size2(size), sdf_shader.shader_version, variant);
+		sdf_shader.shader.version_set_uniform(CanvasSdfShaderGLES2::SHIFT, shift, sdf_shader.shader_version, variant);
+
+		bool swap = false;
+
+		// Jump flood
+		while (stride > 0) {
+			glBindTexture(GL_TEXTURE_2D, rt->sdf_texture_process[swap ? 1 : 0]);
+			glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, rt->sdf_texture_process[swap ? 0 : 1], 0);
+			GL_CHECK_ERROR("GLES2::TextureStorage::render_target_sdf_process: swap process buffers");
+
+			sdf_shader.shader.version_set_uniform(CanvasSdfShaderGLES2::STRIDE, stride, sdf_shader.shader_version, variant);
+
+			copy_effects->draw_screen_triangle();
+			GL_CHECK_ERROR("GLES2::TextureStorage::render_target_sdf_process: process stride " + itos(stride));
+
+			stride /= 2;
+			swap = !swap;
+		}
+
+		// Store phase
+		variant = shrink ? CanvasSdfShaderGLES2::MODE_STORE_SHRINK : CanvasSdfShaderGLES2::MODE_STORE;
+		success = sdf_shader.shader.version_bind_shader(sdf_shader.shader_version, variant);
+		if (!success) {
+			goto cleanup;
+		}
+
+		// Cast Size2i to Size2
+		sdf_shader.shader.version_set_uniform(CanvasSdfShaderGLES2::BASE_SIZE, Size2(r.size), sdf_shader.shader_version, variant);
+		sdf_shader.shader.version_set_uniform(CanvasSdfShaderGLES2::SIZE, Size2(size), sdf_shader.shader_version, variant);
+		sdf_shader.shader.version_set_uniform(CanvasSdfShaderGLES2::STRIDE, stride, sdf_shader.shader_version, variant);
+		sdf_shader.shader.version_set_uniform(CanvasSdfShaderGLES2::SHIFT, shift, sdf_shader.shader_version, variant);
+
+		glBindTexture(GL_TEXTURE_2D, rt->sdf_texture_process[swap ? 1 : 0]);
+		glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, rt->sdf_texture_read, 0);
+		GL_CHECK_ERROR("GLES2::TextureStorage::render_target_sdf_process: attach read texture");
+
+		copy_effects->draw_screen_triangle();
+		GL_CHECK_ERROR("GLES2::TextureStorage::render_target_sdf_process: store phase");
+	}
+
+cleanup:
+	bind_framebuffer(prev_fbo);
+	glActiveTexture(GL_TEXTURE0);
+	glBindTexture(GL_TEXTURE_2D, prev_texture);
+	glActiveTexture(prev_active_texture);
+	glViewport(prev_viewport[0], prev_viewport[1], prev_viewport[2], prev_viewport[3]);
+
+	if (prev_scissor_enabled) {
+		glEnable(GL_SCISSOR_TEST);
+		glScissor(prev_scissor_box[0], prev_scissor_box[1], prev_scissor_box[2], prev_scissor_box[3]);
+	} else {
+		glDisable(GL_SCISSOR_TEST);
+	}
+
+	if (blend_enabled) {
+		glEnable(GL_BLEND);
+	}
+	if (cull_enabled) {
+		glEnable(GL_CULL_FACE);
+	}
+	if (depth_test_enabled) {
+		glEnable(GL_DEPTH_TEST);
+	}
+	glDepthMask(depth_mask_prev);
+	glColorMask(color_mask_prev[0], color_mask_prev[1], color_mask_prev[2], color_mask_prev[3]);
+
+	if (temp_fb != 0) {
+		glDeleteFramebuffers(1, &temp_fb);
+	}
+	GL_CHECK_ERROR("GLES2::TextureStorage::render_target_sdf_process: restore complete state");
 }
 
 void TextureStorage::render_target_copy_to_back_buffer(RID p_render_target, const Rect2i &p_region, bool p_gen_mipmaps) {
@@ -2042,7 +2411,38 @@ void TextureStorage::render_target_copy_to_back_buffer(RID p_render_target, cons
 }
 
 void TextureStorage::render_target_clear_back_buffer(RID p_render_target, const Rect2i &p_region, const Color &p_color) {
+	RenderTarget *rt = render_target_owner.get_or_null(p_render_target);
+	ERR_FAIL_NULL(rt);
+	ERR_FAIL_COND(rt->direct_to_screen);
 
+	if (rt->backbuffer_fbo == 0) {
+		_create_render_target_backbuffer(rt);
+	}
+
+	// Store previous FBO and clear color to prevent leak
+	GLint prev_fbo;
+	glGetIntegerv(GL_FRAMEBUFFER_BINDING, &prev_fbo);
+	GLfloat prev_clear_color[4];
+	glGetFloatv(GL_COLOR_CLEAR_VALUE, prev_clear_color);
+
+	Rect2i region;
+	if (p_region == Rect2i()) {
+		// Just do a full screen clear;
+		glBindFramebuffer(GL_FRAMEBUFFER, rt->backbuffer_fbo);
+		glClearColor(p_color.r, p_color.g, p_color.b, p_color.a);
+		glClear(GL_COLOR_BUFFER_BIT);
+		GL_CHECK_ERROR("GLES2::TextureStorage::render_target_clear_back_buffer: clear screen");
+	} else {
+		region = Rect2i(Size2i(), rt->size).intersection(p_region);
+		if (region.size == Size2i()) {
+			return; // nothing to do
+		}
+		glBindFramebuffer(GL_FRAMEBUFFER, rt->backbuffer_fbo);
+		GLES2::CopyEffects::get_singleton()->set_color(p_color, region);
+	}
+
+	glBindFramebuffer(GL_FRAMEBUFFER, prev_fbo);
+	glClearColor(prev_clear_color[0], prev_clear_color[1], prev_clear_color[2], prev_clear_color[3]);
 }
 
 void TextureStorage::render_target_gen_back_buffer_mipmaps(RID p_render_target, const Rect2i &p_region) {

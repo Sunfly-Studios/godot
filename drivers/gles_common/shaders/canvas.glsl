@@ -21,6 +21,7 @@ SHADOW_FILTER_PCF9 = false
 SHADOW_FILTER_PCF13 = false
 USE_INSTANCING = false
 USE_INSTANCE_CUSTOM = false
+USE_RGBA_SHADOWS = false
 
 #[vertex]
 
@@ -127,9 +128,7 @@ varying vec4 light_uv_interp;
 varying vec2 transformed_light_uv;
 varying vec4 local_rot;
 
-#ifdef USE_SHADOWS
 varying highp vec2 pos;
-#endif
 
 const bool at_light_pass = true;
 #else
@@ -285,9 +284,7 @@ void main() {
 
 	transformed_light_uv = (mat3(light_matrix_inverse) * vec3(light_uv_interp.zw, 0.0)).xy; //for normal mapping
 
-#ifdef USE_SHADOWS
 	pos = outvec.xy;
-#endif
 
 #ifdef USE_ATTRIB_LIGHT_ANGLE
 	// we add a fixed offset because we are using the sign later,
@@ -348,7 +345,13 @@ void main() {
 uniform sampler2D color_texture; // texunit:0
 /* clang-format on */
 uniform highp vec2 color_texture_pixel_size;
-uniform mediump sampler2D normal_texture; // texunit:-6
+
+// Re-mapped to avoid collision with light_texture (-6) and shadow_texture (-5)
+uniform mediump sampler2D normal_texture; // texunit:-2
+uniform mediump sampler2D specular_texture; // texunit:-1
+
+// rgb = specular color, a = shininess
+uniform vec4 specular_shininess;
 
 varying mediump vec2 uv_interp;
 varying mediump vec4 color_interp;
@@ -386,18 +389,19 @@ uniform highp float shadow_gradient;
 uniform highp float light_height;
 uniform highp float light_outside_alpha;
 uniform highp float shadow_distance_mult;
+uniform highp float is_directional_light;
+uniform highp float shadow_y_ofs;
+uniform highp float shadow_zfar_inv;
 
 uniform lowp sampler2D light_texture; // texunit:-6
 varying vec4 light_uv_interp;
 varying vec2 transformed_light_uv;
 
 varying vec4 local_rot;
-
-#ifdef USE_SHADOWS
-
-uniform highp sampler2D shadow_texture; // texunit:-5
 varying highp vec2 pos;
 
+#ifdef USE_SHADOWS
+uniform highp sampler2D shadow_texture; // texunit:-5
 #endif
 
 const bool at_light_pass = true;
@@ -405,12 +409,50 @@ const bool at_light_pass = true;
 const bool at_light_pass = false;
 #endif
 
-uniform bool use_default_normal;
+uniform highp float use_default_normal;
 
 /* clang-format off */
 
 #ifdef MATERIAL_UNIFORMS_USED
 #MATERIAL_UNIFORMS
+#endif
+
+#ifdef SDF_USED
+uniform sampler2D sdf_texture; // texunit:-7
+uniform highp mat2 screen_to_sdf;
+uniform highp vec4 sdf_to_tex;
+uniform highp float tex_to_sdf;
+uniform highp mat2 sdf_to_screen;
+
+#define SDF_MAX_LENGTH 16384.0
+
+highp float vec4_to_float(highp vec4 p_vec) {
+	return dot(p_vec, vec4(1.0 / (255.0 * 255.0 * 255.0), 1.0 / (255.0 * 255.0), 1.0 / 255.0, 1.0)) * 2.0 - 1.0;
+}
+
+highp vec2 screen_uv_to_sdf(highp vec2 p_uv) {
+	return screen_to_sdf * p_uv;
+}
+
+highp float texture_sdf(highp vec2 p_sdf) {
+	highp vec2 uv = p_sdf * sdf_to_tex.xy + sdf_to_tex.zw;
+	highp float d = vec4_to_float(texture2D(sdf_texture, uv));
+	d *= SDF_MAX_LENGTH;
+	return d * tex_to_sdf;
+}
+
+highp vec2 texture_sdf_normal(highp vec2 p_sdf) {
+	highp vec2 uv = p_sdf * sdf_to_tex.xy + sdf_to_tex.zw;
+
+	const highp float EPSILON = 0.001;
+	return normalize(vec2(
+			vec4_to_float(texture2D(sdf_texture, uv + vec2(EPSILON, 0.0))) - vec4_to_float(texture2D(sdf_texture, uv - vec2(EPSILON, 0.0))),
+			vec4_to_float(texture2D(sdf_texture, uv + vec2(0.0, EPSILON))) - vec4_to_float(texture2D(sdf_texture, uv - vec2(0.0, EPSILON)))));
+}
+
+highp vec2 sdf_to_screen_uv(highp vec2 p_sdf) {
+	return p_sdf * sdf_to_screen;
+}
 #endif
 
 #GLOBALS
@@ -469,9 +511,9 @@ void main() {
 	bool normal_used = false;
 #endif
 
-	if (use_default_normal) {
+	if (use_default_normal > 0.5) {
 		normal.xy = texture2D(normal_texture, uv).xy * 2.0 - 1.0;
-		normal.z = sqrt(1.0 - dot(normal.xy, normal.xy));
+		normal.z = sqrt(max(0.0, 1.0 - dot(normal.xy, normal.xy)));
 		normal_used = true;
 	} else {
 		normal = vec3(0.0, 0.0, 1.0);
@@ -518,7 +560,7 @@ void main() {
 	vec2 light_uv = light_uv_interp.xy;
 	vec4 light = texture2D(light_texture, light_uv);
 
-	if (any(lessThan(light_uv_interp.xy, vec2(0.0, 0.0))) || any(greaterThanEqual(light_uv_interp.xy, vec2(1.0, 1.0)))) {
+	if (is_directional_light < 0.5 && (any(lessThan(light_uv_interp.xy, vec2(0.0, 0.0))) || any(greaterThanEqual(light_uv_interp.xy, vec2(1.0, 1.0))))) {
 		color.a *= light_outside_alpha; //invisible
 
 	} else {
@@ -547,63 +589,76 @@ void main() {
 		light *= real_light_color;
 
 		if (normal_used) {
-			vec3 light_normal = normalize(vec3(light_vec, -real_light_height));
-			light *= max(dot(-light_normal, normal), 0.0);
+			vec3 light_pos_3d = vec3(light_pos, real_light_height);
+			vec3 p = vec3(pos, 0.0);
+			vec3 light_dir;
+			if (is_directional_light > 0.5) {
+				light_dir = normalize(mix(vec3(light_pos_3d.xy, 0.0), vec3(0.0, 0.0, 1.0), real_light_height));
+			} else {
+				light_dir = normalize(light_pos_3d - p);
+			}
+			
+			float cNdotL = max(dot(normal, light_dir), 0.0);
+			light *= cNdotL;
+			
+			if (specular_shininess.a > 0.0) {
+				vec3 view = vec3(0.0, 0.0, 1.0);
+				vec3 half_vec = normalize(view + light_dir);
+				float cNdotV = max(dot(normal, view), 0.0);
+				float cNdotH = max(dot(normal, half_vec), 0.0);
+				float shininess = exp2(15.0 * specular_shininess.a + 1.0) * 0.25;
+				float blinn = pow(cNdotH, shininess);
+				blinn *= (shininess + 8.0) * (1.0 / (8.0 * 3.141592653589793));
+				float s = blinn / max(4.0 * cNdotV * cNdotL, 0.75);
+				light.rgb += specular_shininess.rgb * light.rgb * s;
+			}
 		}
 
 		color *= light;
 
 #ifdef USE_SHADOWS
 
-#ifdef SHADOW_VEC_USED
-		mat3 inverse_light_matrix = mat3(light_matrix);
-		inverse_light_matrix[0] = normalize(inverse_light_matrix[0]);
-		inverse_light_matrix[1] = normalize(inverse_light_matrix[1]);
-		inverse_light_matrix[2] = normalize(inverse_light_matrix[2]);
-		shadow_vec = (inverse_light_matrix * vec3(shadow_vec, 0.0)).xy;
-#else
-		shadow_vec = light_uv_interp.zw;
-#endif
-
-		float angle_to_light = -atan(shadow_vec.x, shadow_vec.y);
-		float PI = 3.14159265358979323846264;
-		/*int i = int(mod(floor((angle_to_light+7.0*PI/6.0)/(4.0*PI/6.0))+1.0, 3.0)); // +1 pq os indices estao em ordem 2,0,1 nos arrays
-		float ang*/
-
+		vec2 shadow_pos = (shadow_matrix * vec4(pos, 0.0, 1.0)).xy;
 		float su, sz;
+		float sh = shadow_y_ofs;
 
-		float abs_angle = abs(angle_to_light);
-		vec2 point;
-		float sh;
-		if (abs_angle < 45.0 * PI / 180.0) {
-			point = shadow_vec;
-			sh = 0.0 + (1.0 / 8.0);
-		} else if (abs_angle > 135.0 * PI / 180.0) {
-			point = -shadow_vec;
-			sh = 0.5 + (1.0 / 8.0);
-		} else if (angle_to_light > 0.0) {
-			point = vec2(shadow_vec.y, -shadow_vec.x);
-			sh = 0.25 + (1.0 / 8.0);
+		if (is_directional_light > 0.5) {
+			su = shadow_pos.x;
+			sz = shadow_pos.y * shadow_zfar_inv;
 		} else {
-			point = vec2(-shadow_vec.y, shadow_vec.x);
-			sh = 0.75 + (1.0 / 8.0);
+			vec2 pos_norm = normalize(shadow_pos);
+			vec2 pos_abs = abs(pos_norm);
+			vec2 pos_box = pos_norm / max(pos_abs.x, pos_abs.y);
+			vec2 pos_rot = pos_norm * mat2(vec2(0.7071067811865476, -0.7071067811865476), vec2(0.7071067811865476, 0.7071067811865476));
+			float tex_ofs;
+			float dist;
+			if (pos_rot.y > 0.0) {
+				if (pos_rot.x > 0.0) {
+					tex_ofs = pos_box.y * 0.125 + 0.125;
+					dist = shadow_pos.x;
+				} else {
+					tex_ofs = pos_box.x * -0.125 + (0.25 + 0.125);
+					dist = shadow_pos.y;
+				}
+			} else {
+				if (pos_rot.x < 0.0) {
+					tex_ofs = pos_box.y * -0.125 + (0.5 + 0.125);
+					dist = -shadow_pos.x;
+				} else {
+					tex_ofs = pos_box.x * 0.125 + (0.75 + 0.125);
+					dist = -shadow_pos.y;
+				}
+			}
+			su = tex_ofs;
+			sz = dist * shadow_zfar_inv;
 		}
-
-		highp vec4 s = shadow_matrix * vec4(point, 0.0, 1.0);
-		s.xyz /= s.w;
-		su = s.x * 0.5 + 0.5;
-		sz = s.z * 0.5 + 0.5;
-		//sz=lightlength(light_vec);
 
 		highp float shadow_attenuation = 0.0;
 
 #ifdef USE_RGBA_SHADOWS
-#define SHADOW_DEPTH(m_tex, m_uv) dot(texture2D((m_tex), (m_uv)), vec4(1.0 / (255.0 * 255.0 * 255.0), 1.0 / (255.0 * 255.0), 1.0 / 255.0, 1.0))
-
+#define SHADOW_DEPTH(m_tex, m_uv) (dot(texture2D((m_tex), (m_uv)), vec4(1.0 / (255.0 * 255.0 * 255.0), 1.0 / (255.0 * 255.0), 1.0 / 255.0, 1.0)) * 2.0 - 1.0)
 #else
-
 #define SHADOW_DEPTH(m_tex, m_uv) (texture2D((m_tex), (m_uv)).r)
-
 #endif
 
 #ifdef SHADOW_USE_GRADIENT

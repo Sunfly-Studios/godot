@@ -47,28 +47,359 @@
 #include "storage/particles_storage.h"
 #include "storage/texture_storage.h"
 
+void RasterizerCanvasGLES2::_update_transform_2d_to_mat4(const Transform2D &p_transform, float *p_mat4) {
+	p_mat4[0] = p_transform.columns[0][0];
+	p_mat4[1] = p_transform.columns[0][1];
+	p_mat4[2] = 0;
+	p_mat4[3] = 0;
+	p_mat4[4] = p_transform.columns[1][0];
+	p_mat4[5] = p_transform.columns[1][1];
+	p_mat4[6] = 0;
+	p_mat4[7] = 0;
+	p_mat4[8] = 0;
+	p_mat4[9] = 0;
+	p_mat4[10] = 1;
+	p_mat4[11] = 0;
+	p_mat4[12] = p_transform.columns[2][0];
+	p_mat4[13] = p_transform.columns[2][1];
+	p_mat4[14] = 0;
+	p_mat4[15] = 1;
+}
+
+void RasterizerCanvasGLES2::_update_transform_2d_to_mat2x4(const Transform2D &p_transform, float *p_mat2x4) {
+	p_mat2x4[0] = p_transform.columns[0][0];
+	p_mat2x4[1] = p_transform.columns[1][0];
+	p_mat2x4[2] = 0;
+	p_mat2x4[3] = p_transform.columns[2][0];
+
+	p_mat2x4[4] = p_transform.columns[0][1];
+	p_mat2x4[5] = p_transform.columns[1][1];
+	p_mat2x4[6] = 0;
+	p_mat2x4[7] = p_transform.columns[2][1];
+}
+
+void RasterizerCanvasGLES2::_update_transform_2d_to_mat2x3(const Transform2D &p_transform, float *p_mat2x3) {
+	p_mat2x3[0] = p_transform.columns[0][0];
+	p_mat2x3[1] = p_transform.columns[0][1];
+	p_mat2x3[2] = p_transform.columns[1][0];
+	p_mat2x3[3] = p_transform.columns[1][1];
+	p_mat2x3[4] = p_transform.columns[2][0];
+	p_mat2x3[5] = p_transform.columns[2][1];
+}
+
+void RasterizerCanvasGLES2::_update_transform_to_mat4(const Transform3D &p_transform, float *p_mat4) {
+	p_mat4[0] = p_transform.basis.rows[0][0];
+	p_mat4[1] = p_transform.basis.rows[1][0];
+	p_mat4[2] = p_transform.basis.rows[2][0];
+	p_mat4[3] = 0;
+	p_mat4[4] = p_transform.basis.rows[0][1];
+	p_mat4[5] = p_transform.basis.rows[1][1];
+	p_mat4[6] = p_transform.basis.rows[2][1];
+	p_mat4[7] = 0;
+	p_mat4[8] = p_transform.basis.rows[0][2];
+	p_mat4[9] = p_transform.basis.rows[1][2];
+	p_mat4[10] = p_transform.basis.rows[2][2];
+	p_mat4[11] = 0;
+	p_mat4[12] = p_transform.origin.x;
+	p_mat4[13] = p_transform.origin.y;
+	p_mat4[14] = p_transform.origin.z;
+	p_mat4[15] = 1;
+}
+
 [[maybe_unused]] _FORCE_INLINE_ static uint32_t _indices_to_primitives(RS::PrimitiveType p_primitive, uint32_t p_indices) {
 	return 0;
 }
 
 RID RasterizerCanvasGLES2::light_create() {
-	return RID();
+	CanvasLight canvas_light;
+	return canvas_light_owner.make_rid(canvas_light);
 }
 
 void RasterizerCanvasGLES2::light_set_texture(RID p_rid, RID p_texture) {
+	CanvasLight *cl = canvas_light_owner.get_or_null(p_rid);
+	ERR_FAIL_NULL(cl);
+	if (cl->texture == p_texture) {
+		return;
+	}
 
+	cl->texture = p_texture;
 }
 
 void RasterizerCanvasGLES2::light_set_use_shadow(RID p_rid, bool p_enable) {
+	CanvasLight *cl = canvas_light_owner.get_or_null(p_rid);
+	ERR_FAIL_NULL(cl);
 
+	cl->shadow.enabled = p_enable;
 }
 
 void RasterizerCanvasGLES2::light_update_shadow(RID p_rid, int p_shadow_index, const Transform2D &p_light_xform, int p_light_mask, float p_near, float p_far, LightOccluderInstance *p_occluders, const Rect2 &p_light_rect) {
+	CanvasLight *cl = canvas_light_owner.get_or_null(p_rid);
+	ERR_FAIL_COND(!cl || !cl->shadow.enabled);
 
+	if (!state.shadow_fb) {
+		glGenFramebuffers(1, &state.shadow_fb);
+		glBindFramebuffer(GL_FRAMEBUFFER, state.shadow_fb);
+
+		glGenTextures(1, &state.shadow_texture);
+		glBindTexture(GL_TEXTURE_2D, state.shadow_texture);
+		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, state.shadow_texture_size, 2048, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+		glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, state.shadow_texture, 0);
+
+		glGenRenderbuffers(1, &state.shadow_depth_buffer);
+		glBindRenderbuffer(GL_RENDERBUFFER, state.shadow_depth_buffer);
+		glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT16, state.shadow_texture_size, 2048);
+		glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, state.shadow_depth_buffer);
+
+		GLenum status = glCheckFramebufferStatus(GL_FRAMEBUFFER);
+		if (status != GL_FRAMEBUFFER_COMPLETE) {
+			ERR_PRINT("GLES2: Canvas shadow framebuffer not complete!");
+		}
+		GL_CHECK_ERROR("GLES2::Canvas::light_update_shadow: init fbo");
+	}
+
+	cl->shadow.z_far = p_far;
+	cl->shadow.y_offset = float(p_shadow_index * 2 + 1) / 2048.0f; // Locked to the 2048 physical height
+
+	GLES2::TextureStorage::get_singleton()->bind_framebuffer(state.shadow_fb);
+
+	glDepthMask(GL_TRUE);
+	glEnable(GL_DEPTH_TEST);
+	glDepthFunc(GL_LESS);
+	glDisable(GL_BLEND);
+
+	glEnable(GL_SCISSOR_TEST);
+	glScissor(0, p_shadow_index * 2, state.shadow_texture_size, 2);
+
+	// Pure white pushes the un-occluded depth distance to 1.0
+	glClearColor(1.0f, 1.0f, 1.0f, 1.0f);
+	RasterizerGLES2::clear_depth(1.0f);
+	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+	glCullFace(GL_BACK);
+	glDisable(GL_CULL_FACE);
+
+	CanvasOcclusionShaderGLES2::ShaderVariant variant = CanvasOcclusionShaderGLES2::MODE_SHADOW_RGBA;
+	bool success = shadow_render.shader.version_bind_shader(shadow_render.shader_version, variant);
+	if (!success) {
+		return;
+	}
+
+	shadow_render.shader.version_set_uniform(CanvasOcclusionShaderGLES2::Z_FAR, p_far, shadow_render.shader_version, variant, 0);
+
+	Projection projection;
+	{
+		real_t fov = 90;
+		real_t nearp = p_near;
+		real_t farp = p_far;
+		real_t aspect = 1.0;
+
+		real_t ymax = nearp * Math::tan(Math::deg_to_rad(fov * 0.5));
+		real_t ymin = -ymax;
+		real_t xmin = ymin * aspect;
+		real_t xmax = ymax * aspect;
+
+		projection.set_frustum(xmin, xmax, ymin, ymax, nearp, farp);
+	}
+
+	const Projection projections[4] = {
+		projection * Projection(Vector4(0, 0, -1, 0), Vector4(1, 0, 0, 0), Vector4(0, -1, 0, 0), Vector4(0, 0, 0, 1)),
+		projection * Projection(Vector4(-1, 0, 0, 0), Vector4(0, 0, -1, 0), Vector4(0, -1, 0, 0), Vector4(0, 0, 0, 1)),
+		projection * Projection(Vector4(0, 0, 1, 0), Vector4(-1, 0, 0, 0), Vector4(0, -1, 0, 0), Vector4(0, 0, 0, 1)),
+		projection * Projection(Vector4(1, 0, 0, 0), Vector4(0, 0, 1, 0), Vector4(0, -1, 0, 0), Vector4(0, 0, 0, 1))
+	};
+	static const Vector2 directions[4] = { Vector2(1, 0), Vector2(0, 1), Vector2(-1, 0), Vector2(0, -1) };
+
+	for (int i = 0; i < 4; i++) {
+		int viewport_width = state.shadow_texture_size / 4;
+		glViewport(viewport_width * i, p_shadow_index * 2, viewport_width, 2);
+
+		shadow_render.shader.version_set_uniform(CanvasOcclusionShaderGLES2::PROJECTION, projections[i], shadow_render.shader_version, variant, 0);
+		shadow_render.shader.version_set_uniform(CanvasOcclusionShaderGLES2::DIRECTION, directions[i], shadow_render.shader_version, variant, 0);
+
+		LightOccluderInstance *instance = p_occluders;
+		while (instance) {
+			if (instance->light_mask & p_light_mask) {
+				OccluderPolygon *occluder = occluder_polygon_owner.get_or_null(instance->occluder);
+				if (occluder && occluder->line_point_count > 0 && occluder->vertex_array != 0) {
+					if (occluder->cull_mode == RS::CANVAS_OCCLUDER_POLYGON_CULL_DISABLED) {
+						glDisable(GL_CULL_FACE);
+					} else {
+						glEnable(GL_CULL_FACE);
+						glCullFace((occluder->cull_mode == RS::CANVAS_OCCLUDER_POLYGON_CULL_CLOCKWISE) ? GL_FRONT : GL_BACK);
+					}
+
+					// Godot 4 Space calculation
+					Transform2D modelview = p_light_xform * instance->xform_cache;
+
+					Color mv1(modelview.columns[0][0], modelview.columns[1][0], 0, modelview.columns[2][0]);
+					Color mv2(modelview.columns[0][1], modelview.columns[1][1], 0, modelview.columns[2][1]);
+					shadow_render.shader.version_set_uniform(CanvasOcclusionShaderGLES2::MODELVIEW1, mv1, shadow_render.shader_version, variant, 0);
+					shadow_render.shader.version_set_uniform(CanvasOcclusionShaderGLES2::MODELVIEW2, mv2, shadow_render.shader_version, variant, 0);
+
+					glBindBuffer(GL_ARRAY_BUFFER, occluder->vertex_buffer);
+					glEnableVertexAttribArray(RS::ARRAY_VERTEX);
+					glVertexAttribPointer(RS::ARRAY_VERTEX, 3, GL_FLOAT, GL_FALSE, 0, nullptr);
+
+					glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, occluder->index_buffer);
+
+					glDrawElements(GL_TRIANGLES, occluder->line_point_count, GL_UNSIGNED_SHORT, nullptr);
+					GL_CHECK_ERROR("GLES2::Canvas::light_update_shadow: glDrawElements");
+				}
+			}
+			instance = instance->next;
+		}
+	}
+
+	glDisableVertexAttribArray(RS::ARRAY_VERTEX);
+	glBindBuffer(GL_ARRAY_BUFFER, 0);
+	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+
+	GLES2::TextureStorage::get_singleton()->bind_framebuffer_system();
+	glDepthMask(GL_FALSE);
+	glDisable(GL_DEPTH_TEST);
+	glDisable(GL_SCISSOR_TEST);
+	glEnable(GL_BLEND);
 }
 
 void RasterizerCanvasGLES2::light_update_directional_shadow(RID p_rid, int p_shadow_index, const Transform2D &p_light_xform, int p_light_mask, float p_cull_distance, const Rect2 &p_clip_rect, LightOccluderInstance *p_occluders) {
+	CanvasLight *cl = canvas_light_owner.get_or_null(p_rid);
+	ERR_FAIL_COND(!cl || !cl->shadow.enabled);
 
+	if (!state.shadow_fb) {
+		glGenFramebuffers(1, &state.shadow_fb);
+		glBindFramebuffer(GL_FRAMEBUFFER, state.shadow_fb);
+
+		glGenTextures(1, &state.shadow_texture);
+		glBindTexture(GL_TEXTURE_2D, state.shadow_texture);
+		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, state.shadow_texture_size, 2048, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+		glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, state.shadow_texture, 0);
+
+		glGenRenderbuffers(1, &state.shadow_depth_buffer);
+		glBindRenderbuffer(GL_RENDERBUFFER, state.shadow_depth_buffer);
+		glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT16, state.shadow_texture_size, 2048);
+		glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, state.shadow_depth_buffer);
+
+		GLenum status = glCheckFramebufferStatus(GL_FRAMEBUFFER);
+		if (status != GL_FRAMEBUFFER_COMPLETE) {
+			ERR_PRINT("GLES2: Canvas shadow framebuffer not complete!");
+		}
+		GL_CHECK_ERROR("GLES2::Canvas::light_update_directional_shadow: init fbo");
+	}
+
+	Vector2 light_dir = p_light_xform.columns[1].normalized();
+	Vector2 center = p_clip_rect.get_center();
+
+	float to_edge_distance = ABS(light_dir.dot(p_clip_rect.get_support(-light_dir)) - light_dir.dot(center));
+	Vector2 from_pos = center - light_dir * (to_edge_distance + p_cull_distance);
+	float distance = to_edge_distance * 2.0f + p_cull_distance;
+	float half_size = p_clip_rect.size.length() * 0.5f;
+
+	cl->shadow.z_far = distance;
+	cl->shadow.y_offset = float(p_shadow_index * 2 + 1) / 2048.0f; // Scale against our fixed 2048 texture height
+
+	Transform2D to_light_xform;
+	to_light_xform.columns[2] = from_pos;
+	to_light_xform.columns[1] = light_dir;
+	to_light_xform.columns[0] = -light_dir.orthogonal();
+	to_light_xform.invert();
+
+	GLES2::TextureStorage::get_singleton()->bind_framebuffer(state.shadow_fb);
+	glViewport(0, p_shadow_index * 2, state.shadow_texture_size, 2);
+
+	glDepthMask(GL_TRUE);
+	glEnable(GL_DEPTH_TEST);
+	glDepthFunc(GL_LESS);
+	glDisable(GL_BLEND);
+
+	glEnable(GL_SCISSOR_TEST);
+	glScissor(0, p_shadow_index * 2, state.shadow_texture_size, 2);
+	glClearColor(1.0f, 1.0f, 1.0f, 1.0f); // 1.0 pushes the clear distance to Z_FAR
+
+	RasterizerGLES2::clear_depth(1.0f);
+	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+	glCullFace(GL_BACK);
+	glDisable(GL_CULL_FACE);
+	RS::CanvasOccluderPolygonCullMode cull_mode = RS::CANVAS_OCCLUDER_POLYGON_CULL_DISABLED;
+
+	CanvasOcclusionShaderGLES2::ShaderVariant variant = CanvasOcclusionShaderGLES2::MODE_SHADOW_RGBA;
+	bool success = shadow_render.shader.version_bind_shader(shadow_render.shader_version, variant);
+	if (!success) {
+		return;
+	}
+
+	Projection projection;
+	projection.set_orthogonal(-half_size, half_size, -0.5f, 0.5f, 0.0f, distance);
+	projection = projection * Projection(Transform3D().looking_at(Vector3(0, 1, 0), Vector3(0, 0, -1)).affine_inverse());
+
+	shadow_render.shader.version_set_uniform(CanvasOcclusionShaderGLES2::PROJECTION, projection, shadow_render.shader_version, variant, 0);
+	shadow_render.shader.version_set_uniform(CanvasOcclusionShaderGLES2::DIRECTION, Vector2(0.0f, 1.0f), shadow_render.shader_version, variant, 0);
+	shadow_render.shader.version_set_uniform(CanvasOcclusionShaderGLES2::Z_FAR, distance, shadow_render.shader_version, variant, 0);
+
+	LightOccluderInstance *instance = p_occluders;
+
+	while (instance) {
+		OccluderPolygon *occluder = occluder_polygon_owner.get_or_null(instance->occluder);
+
+		if (!occluder || occluder->vertex_array == 0 || !(p_light_mask & instance->light_mask)) {
+			instance = instance->next;
+			continue;
+		}
+
+		Transform2D modelview = to_light_xform * instance->xform_cache;
+
+		Color mv1(modelview.columns[0][0], modelview.columns[1][0], 0, modelview.columns[2][0]);
+		Color mv2(modelview.columns[0][1], modelview.columns[1][1], 0, modelview.columns[2][1]);
+		shadow_render.shader.version_set_uniform(CanvasOcclusionShaderGLES2::MODELVIEW1, mv1, shadow_render.shader_version, variant, 0);
+		shadow_render.shader.version_set_uniform(CanvasOcclusionShaderGLES2::MODELVIEW2, mv2, shadow_render.shader_version, variant, 0);
+
+		if (occluder->cull_mode != cull_mode) {
+			if (occluder->cull_mode == RS::CANVAS_OCCLUDER_POLYGON_CULL_DISABLED) {
+				glDisable(GL_CULL_FACE);
+			} else {
+				if (cull_mode == RS::CANVAS_OCCLUDER_POLYGON_CULL_DISABLED) {
+					glEnable(GL_CULL_FACE);
+				}
+				glCullFace(occluder->cull_mode == RS::CANVAS_OCCLUDER_POLYGON_CULL_CLOCKWISE ? GL_FRONT : GL_BACK);
+			}
+			cull_mode = occluder->cull_mode;
+		}
+
+		glBindBuffer(GL_ARRAY_BUFFER, occluder->vertex_buffer);
+		glEnableVertexAttribArray(RS::ARRAY_VERTEX);
+		glVertexAttribPointer(RS::ARRAY_VERTEX, 3, GL_FLOAT, GL_FALSE, 0, nullptr);
+
+		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, occluder->index_buffer);
+		glDrawElements(GL_TRIANGLES, occluder->line_point_count, GL_UNSIGNED_SHORT, nullptr);
+		GL_CHECK_ERROR("GLES2::Canvas::light_update_directional_shadow: glDrawElements");
+
+		instance = instance->next;
+	}
+
+	Transform2D to_shadow;
+	to_shadow.columns[0].x = 1.0f / -(half_size * 2.0f);
+	to_shadow.columns[2].x = 0.5f;
+
+	cl->shadow.directional_xform = to_shadow * to_light_xform;
+
+	glDisableVertexAttribArray(RS::ARRAY_VERTEX);
+	glBindBuffer(GL_ARRAY_BUFFER, 0);
+	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+
+	GLES2::TextureStorage::get_singleton()->bind_framebuffer_system();
+	glDepthMask(GL_FALSE);
+	glDisable(GL_DEPTH_TEST);
+	glDisable(GL_SCISSOR_TEST);
+	glDisable(GL_CULL_FACE);
+	glEnable(GL_BLEND);
 }
 
 void RasterizerCanvasGLES2::render_sdf(RID p_render_target, LightOccluderInstance *p_occluders) {
@@ -76,19 +407,98 @@ void RasterizerCanvasGLES2::render_sdf(RID p_render_target, LightOccluderInstanc
 }
 
 RID RasterizerCanvasGLES2::occluder_polygon_create() {
-	return RID();
+	OccluderPolygon occluder;
+	return occluder_polygon_owner.make_rid(occluder);
 }
 
 void RasterizerCanvasGLES2::occluder_polygon_set_shape(RID p_occluder, const Vector<Vector2> &p_points, bool p_closed) {
+	OccluderPolygon *oc = occluder_polygon_owner.get_or_null(p_occluder);
+	ERR_FAIL_NULL(oc);
 
+	int point_count = p_points.size();
+	if (point_count < 2) {
+		oc->line_point_count = 0;
+		return;
+	}
+
+	int line_count = p_closed ? point_count : point_count - 1;
+
+	Vector<Vector3> geometry;
+	geometry.resize(line_count * 4); // 4 verts forming a quad per line
+	Vector<uint16_t> indices;
+	indices.resize(line_count * 6); // 6 indices (2 triangles) per line
+
+	constexpr float POLY_HEIGHT = 16384.0f; // Godot 4 shadow extrusion constant
+
+	for (int i = 0; i < line_count; i++) {
+		Vector2 a = p_points[i];
+		Vector2 b = p_points[(i + 1) % point_count];
+
+		int v_ofs = i * 4;
+		geometry.write[v_ofs + 0] = Vector3(a.x, a.y, POLY_HEIGHT);
+		geometry.write[v_ofs + 1] = Vector3(b.x, b.y, POLY_HEIGHT);
+		geometry.write[v_ofs + 2] = Vector3(b.x, b.y, -POLY_HEIGHT);
+		geometry.write[v_ofs + 3] = Vector3(a.x, a.y, -POLY_HEIGHT);
+
+		int i_ofs = i * 6;
+		indices.write[i_ofs + 0] = v_ofs + 0;
+		indices.write[i_ofs + 1] = v_ofs + 1;
+		indices.write[i_ofs + 2] = v_ofs + 2;
+		indices.write[i_ofs + 3] = v_ofs + 2;
+		indices.write[i_ofs + 4] = v_ofs + 3;
+		indices.write[i_ofs + 5] = v_ofs + 0;
+	}
+
+	oc->line_point_count = line_count * 6;
+
+	if (oc->vertex_buffer == 0) {
+		glGenBuffers(1, &oc->vertex_buffer);
+	}
+	if (oc->index_buffer == 0) {
+		glGenBuffers(1, &oc->index_buffer);
+	}
+
+	glBindBuffer(GL_ARRAY_BUFFER, oc->vertex_buffer);
+	glBufferData(GL_ARRAY_BUFFER, geometry.size() * sizeof(Vector3), geometry.ptr(), GL_STATIC_DRAW);
+	GL_CHECK_ERROR("GLES2::Canvas::occluder_polygon_set_shape: VBO upload");
+
+	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, oc->index_buffer);
+	glBufferData(GL_ELEMENT_ARRAY_BUFFER, indices.size() * sizeof(uint16_t), indices.ptr(), GL_STATIC_DRAW);
+	GL_CHECK_ERROR("GLES2::Canvas::occluder_polygon_set_shape: IBO upload");
+
+	glBindBuffer(GL_ARRAY_BUFFER, 0);
+	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+
+	oc->vertex_array = 1; // Mark as valid
 }
 
 void RasterizerCanvasGLES2::occluder_polygon_set_cull_mode(RID p_occluder, RS::CanvasOccluderPolygonCullMode p_mode) {
-
+	OccluderPolygon *oc = occluder_polygon_owner.get_or_null(p_occluder);
+	ERR_FAIL_NULL(oc);
+	oc->cull_mode = p_mode;
 }
 
 void RasterizerCanvasGLES2::set_shadow_texture_size(int p_size) {
+	p_size = next_power_of_2(p_size);
+	if (p_size == state.shadow_texture_size) {
+		return;
+	}
 
+	state.shadow_texture_size = p_size;
+
+	if (state.shadow_fb != 0) {
+		glDeleteFramebuffers(1, &state.shadow_fb);
+		state.shadow_fb = 0;
+	}
+	if (state.shadow_texture != 0) {
+		glDeleteTextures(1, &state.shadow_texture);
+		state.shadow_texture = 0;
+	}
+	if (state.shadow_depth_buffer != 0) {
+		glDeleteRenderbuffers(1, &state.shadow_depth_buffer);
+		state.shadow_depth_buffer = 0;
+	}
+	GL_CHECK_ERROR("GLES2::Canvas::set_shadow_texture_size: cleanup old buffers");
 }
 
 bool RasterizerCanvasGLES2::free(RID p_rid) {
@@ -104,7 +514,7 @@ void RasterizerCanvasGLES2::initialize() {
 		GL_CHECK_ERROR("GLES2::Canvas::initialize: glGenBuffers quad");
 		glBindBuffer(GL_ARRAY_BUFFER, data.canvas_quad_vertices);
 
-		const float qv[8] = {
+		const constexpr float qv[8] = {
 			0, 0,
 			0, 1,
 			1, 1,
@@ -157,7 +567,7 @@ void RasterizerCanvasGLES2::initialize() {
 		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, data.ninepatch_elements);
 
 #define _EIDX(y, x) (y * 4 + x)
-		uint8_t elems[3 * 2 * 9] = {
+		constexpr uint8_t elems[3 * 2 * 9] = {
 			// first row
 			_EIDX(0, 0), _EIDX(0, 1), _EIDX(1, 1),
 			_EIDX(1, 1), _EIDX(1, 0), _EIDX(0, 0),
@@ -250,6 +660,9 @@ void RasterizerCanvasGLES2::initialize() {
 		GL_CHECK_ERROR("GLES2::Canvas::initialize: buffer_allocate_data batcher index");
 		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
 	}
+
+	shadow_render.shader.initialize();
+	shadow_render.shader_version = shadow_render.shader.version_create();
 }
 
 void RasterizerCanvasGLES2::update() {
@@ -312,9 +725,9 @@ void RasterizerCanvasGLES2::_bind_canvas_texture(RID p_texture, RS::CanvasItemTe
 	if (!texture || texture->tex_id == 0 || texture->width == 0 || texture->height == 0) {
 		// Something went very wrong if we're here.
 		GLES2::Texture *tex_2d_bg = GLES2::TextureStorage::get_singleton()->get_texture(
-				GLES2::TextureStorage::get_singleton()->texture_gl_get_default(
-						GLES2::DEFAULT_GL_TEXTURE_WHITE
-				)
+			GLES2::TextureStorage::get_singleton()->texture_gl_get_default(
+				GLES2::DEFAULT_GL_TEXTURE_WHITE
+			)
 		);
 		if (tex_2d_bg) {
 			glBindTexture(GL_TEXTURE_2D, tex_2d_bg->tex_id);
@@ -413,7 +826,7 @@ void RasterizerCanvasGLES2::_bind_canvas_texture(RID p_texture, RS::CanvasItemTe
 	GLint max_units = GLES2::Config::get_singleton()->max_texture_image_units;
 
 	// Normal Map
-	glActiveTexture(GL_TEXTURE0 + max_units - 6);
+	glActiveTexture(GL_TEXTURE0 + max_units - 2);
 	GL_CHECK_ERROR("GLES2::Canvas::_bind_canvas_texture: glActiveTexture normal map");
 	GLES2::Texture *normal_map = GLES2::TextureStorage::get_singleton()->get_texture(ct->normal_map);
 	if (!normal_map) {
@@ -426,12 +839,17 @@ void RasterizerCanvasGLES2::_bind_canvas_texture(RID p_texture, RS::CanvasItemTe
 		state.normal_used = false;
 	} else {
 		glBindTexture(GL_TEXTURE_2D, normal_map->tex_id);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+
 		state.normal_used = true;
 		state.current_tex_is_rt = state.current_tex_is_rt || normal_map->render_target;
 	}
 
 	// Specular Map
-	glActiveTexture(GL_TEXTURE0 + max_units - 7);
+	glActiveTexture(GL_TEXTURE0 + max_units - 1);
 	GL_CHECK_ERROR("GLES2::Canvas::_bind_canvas_texture: glActiveTexture specular map");
 	GLES2::Texture *specular_map = GLES2::TextureStorage::get_singleton()->get_texture(ct->specular);
 	if (!specular_map) {
@@ -463,11 +881,88 @@ void RasterizerCanvasGLES2::_set_canvas_uniforms() {
 	}
 
 	// These rely on the generated canvas.glsl.gen.h Uniforms enum and version_set_uniform
+	state.canvas_shader->version_set_uniform(CanvasShaderGLES2::USE_DEFAULT_NORMAL, state.normal_used ? 1.0f : 0.0f, state.shader_version, state.mode_variant, state.specialization);
 	state.canvas_shader->version_set_uniform(CanvasShaderGLES2::PROJECTION_MATRIX, state.uniforms.projection_matrix, state.shader_version, state.mode_variant, state.specialization);
 	state.canvas_shader->version_set_uniform(CanvasShaderGLES2::MODELVIEW_MATRIX, state.uniforms.modelview_matrix, state.shader_version, state.mode_variant, state.specialization);
 	state.canvas_shader->version_set_uniform(CanvasShaderGLES2::EXTRA_MATRIX, state.uniforms.extra_matrix, state.shader_version, state.mode_variant, state.specialization);
 	state.canvas_shader->version_set_uniform(CanvasShaderGLES2::FINAL_MODULATE, state.uniforms.final_modulate, state.shader_version, state.mode_variant, state.specialization);
 	state.canvas_shader->version_set_uniform(CanvasShaderGLES2::TIME, state.time, state.shader_version, state.mode_variant, state.specialization);
+
+	if (state.using_light) {
+		RendererCanvasRender::Light *light = state.using_light;
+		if (!light) {
+			return;
+		}
+
+		Color light_color = light->color * light->energy;
+		state.canvas_shader->version_set_uniform(CanvasShaderGLES2::LIGHT_COLOR, light_color, state.shader_version, state.mode_variant, state.specialization);
+		state.canvas_shader->version_set_uniform(CanvasShaderGLES2::LIGHT_OUTSIDE_ALPHA, 0.0f, state.shader_version, state.mode_variant, state.specialization);
+
+		if (light->mode == RS::CANVAS_LIGHT_MODE_DIRECTIONAL) {
+			// =====================================
+			// Directional light uniforms
+			// =====================================
+			state.canvas_shader->version_set_uniform(CanvasShaderGLES2::IS_DIRECTIONAL_LIGHT, 1.0f, state.shader_version, state.mode_variant, state.specialization);
+
+			Vector2 light_dir = light->xform_cache.columns[1].normalized();
+			state.canvas_shader->version_set_uniform(CanvasShaderGLES2::LIGHT_POS, -light_dir, state.shader_version, state.mode_variant, state.specialization);
+
+			state.canvas_shader->version_set_uniform(CanvasShaderGLES2::LIGHT_HEIGHT, light->height, state.shader_version, state.mode_variant, state.specialization);
+
+			// Dummy matrices
+			state.canvas_shader->version_set_uniform(CanvasShaderGLES2::LIGHT_MATRIX, Transform2D(), state.shader_version, state.mode_variant, state.specialization);
+			state.canvas_shader->version_set_uniform(CanvasShaderGLES2::LIGHT_MATRIX_INVERSE, Transform2D(), state.shader_version, state.mode_variant, state.specialization);
+			state.canvas_shader->version_set_uniform(CanvasShaderGLES2::LIGHT_LOCAL_MATRIX, Transform2D(), state.shader_version, state.mode_variant, state.specialization);
+
+			if (state.using_shadow) {
+				CanvasLight *cl = canvas_light_owner.get_or_null(light->light_internal);
+				if (cl) {
+					state.canvas_shader->version_set_uniform(CanvasShaderGLES2::SHADOW_MATRIX, cl->shadow.directional_xform, state.shader_version, state.mode_variant, state.specialization);
+					state.canvas_shader->version_set_uniform(CanvasShaderGLES2::SHADOW_Y_OFS, cl->shadow.y_offset, state.shader_version, state.mode_variant, state.specialization);
+					state.canvas_shader->version_set_uniform(CanvasShaderGLES2::SHADOW_ZFAR_INV, 1.0f / cl->shadow.z_far, state.shader_version, state.mode_variant, state.specialization);
+				}
+
+				state.canvas_shader->version_set_uniform(CanvasShaderGLES2::LIGHT_SHADOW_COLOR, light->shadow_color, state.shader_version, state.mode_variant, state.specialization);
+
+				float shadow_pixel_size = (1.0f / state.shadow_texture_size) * (1.0f + light->shadow_smooth);
+				state.canvas_shader->version_set_uniform(CanvasShaderGLES2::SHADOWPIXEL_SIZE, shadow_pixel_size, state.shader_version, state.mode_variant, state.specialization);
+				state.canvas_shader->version_set_uniform(CanvasShaderGLES2::SHADOW_GRADIENT, light->shadow_smooth, state.shader_version, state.mode_variant, state.specialization);
+			}
+		} else {
+			// =====================================
+			// Omni / Point light uniforms
+			// =====================================
+			state.canvas_shader->version_set_uniform(CanvasShaderGLES2::IS_DIRECTIONAL_LIGHT, 0.0f, state.shader_version, state.mode_variant, state.specialization);
+
+			state.canvas_shader->version_set_uniform(CanvasShaderGLES2::LIGHT_MATRIX, light->light_shader_xform.affine_inverse(), state.shader_version, state.mode_variant, state.specialization);
+			state.canvas_shader->version_set_uniform(CanvasShaderGLES2::LIGHT_MATRIX_INVERSE, light->light_shader_xform, state.shader_version, state.mode_variant, state.specialization);
+
+			Transform2D light_local = light->xform_cache.affine_inverse();
+			state.canvas_shader->version_set_uniform(CanvasShaderGLES2::LIGHT_LOCAL_MATRIX, light_local, state.shader_version, state.mode_variant, state.specialization);
+
+			Vector2 light_pos = light->xform_cache.get_origin();
+			state.canvas_shader->version_set_uniform(CanvasShaderGLES2::LIGHT_POS, light_pos, state.shader_version, state.mode_variant, state.specialization);
+
+			state.canvas_shader->version_set_uniform(CanvasShaderGLES2::LIGHT_HEIGHT, light->height, state.shader_version, state.mode_variant, state.specialization);
+
+			if (state.using_shadow) {
+				Transform2D shadow_matrix = light->xform_cache.affine_inverse();
+				state.canvas_shader->version_set_uniform(CanvasShaderGLES2::SHADOW_MATRIX, shadow_matrix, state.shader_version, state.mode_variant, state.specialization);
+
+				CanvasLight *cl = canvas_light_owner.get_or_null(light->light_internal);
+				if (cl) {
+					state.canvas_shader->version_set_uniform(CanvasShaderGLES2::SHADOW_Y_OFS, cl->shadow.y_offset, state.shader_version, state.mode_variant, state.specialization);
+					state.canvas_shader->version_set_uniform(CanvasShaderGLES2::SHADOW_ZFAR_INV, 1.0f / cl->shadow.z_far, state.shader_version, state.mode_variant, state.specialization);
+				}
+
+				state.canvas_shader->version_set_uniform(CanvasShaderGLES2::LIGHT_SHADOW_COLOR, light->shadow_color, state.shader_version, state.mode_variant, state.specialization);
+
+				float shadow_pixel_size = (1.0f / state.shadow_texture_size) * (1.0f + light->shadow_smooth);
+				state.canvas_shader->version_set_uniform(CanvasShaderGLES2::SHADOWPIXEL_SIZE, shadow_pixel_size, state.shader_version, state.mode_variant, state.specialization);
+				state.canvas_shader->version_set_uniform(CanvasShaderGLES2::SHADOW_GRADIENT, light->shadow_smooth, state.shader_version, state.mode_variant, state.specialization);
+			}
+		}
+	}
 
 	if (state.render_target != RID()) {
 		GLES2::RenderTarget *rt = GLES2::TextureStorage::get_singleton()->get_render_target(state.render_target);
@@ -479,8 +974,6 @@ void RasterizerCanvasGLES2::_set_canvas_uniforms() {
 		}
 	}
 
-	// TODO(GLES2): Only added Skeletons for now,
-	// lighting will come way later (in Phase 3, probably).
 	if (state.using_skeleton) {
 		state.canvas_shader->version_set_uniform(CanvasShaderGLES2::SKELETON_TRANSFORM, state.skeleton_transform, state.shader_version, state.mode_variant, state.specialization);
 		state.canvas_shader->version_set_uniform(CanvasShaderGLES2::SKELETON_TRANSFORM_INVERSE, state.skeleton_transform_inverse, state.shader_version, state.mode_variant, state.specialization);
@@ -573,13 +1066,15 @@ void RasterizerCanvasGLES2::canvas_begin(RID p_to_render_target, bool p_to_backb
 	GL_CHECK_ERROR("GLES2::Canvas::canvas_begin: bind white tex");
 
 	// Purge all lingering vertex attribute states
-	glVertexAttrib4f(RS::ARRAY_COLOR, 1.0f, 1.0f, 1.0f, 1.0f);
 	for (int i = 0; i < maximum_attributes; i++) {
 		glDisableVertexAttribArray(i);
 	}
 
-	glVertexAttrib4f(RS::ARRAY_COLOR, 1, 1, 1, 1);
-	glDisableVertexAttribArray(RS::ARRAY_COLOR);
+	glVertexAttrib4f(RS::ARRAY_COLOR, 1.0f, 1.0f, 1.0f, 1.0f);
+	glVertexAttrib1f(RS::ARRAY_TANGENT, 0.0f); // Light Angle
+	glVertexAttrib4f(RS::ARRAY_TEX_UV2, 1.0f, 1.0f, 1.0f, 1.0f); // Modulate
+	glVertexAttrib2f(RS::ARRAY_CUSTOM0, 0.0f, 0.0f); // Large Vertex Transform Translate
+	glVertexAttrib4f(RS::ARRAY_CUSTOM1, 1.0f, 0.0f, 0.0f, 1.0f); // Large Vertex Transform Basis
 	GL_CHECK_ERROR("GLES2::Canvas::canvas_begin: reset attribs");
 	
 	// Calculate Projection Matrix
@@ -647,6 +1142,7 @@ void RasterizerCanvasGLES2::canvas_end() {
 
 	state.using_skeleton = false;
 	state.using_ninepatch = false;
+	state.using_light = nullptr;
 }
 
 void RasterizerCanvasGLES2::reset_canvas() {
@@ -656,6 +1152,7 @@ void RasterizerCanvasGLES2::reset_canvas() {
 	glDisable(GL_SCISSOR_TEST);
 	glDisable(GL_DITHER);
 	glEnable(GL_BLEND);
+	glBlendEquation(GL_FUNC_ADD);
 	GL_CHECK_ERROR("GLES2::Canvas::reset_canvas: states");
 
 	bool transparent_rt = false;
@@ -700,9 +1197,14 @@ void RasterizerCanvasGLES2::canvas_render_items(RID p_to_render_target, Item *p_
 	// Bind the FBO, clears it, and set Projection matrix.
 	canvas_begin(p_to_render_target, false);
 
-	// Kick off the batcher loops
-	canvas_render_items_begin(p_modulate, p_light_list, p_canvas_transform);
-	
+	// ==========================================
+	// The base rendering pass
+	// ==========================================
+	// We render the entire scene first without any lighting.
+	// Passing nullptr for the light prevents the base geometry
+	// from being erroneously clipped by light scissoring logic.
+	canvas_render_items_begin(p_modulate, nullptr, p_canvas_transform);
+
 	Item *current_item = p_item_list;
 
 	// Do Z ordering sequentially based on
@@ -715,15 +1217,102 @@ void RasterizerCanvasGLES2::canvas_render_items(RID p_to_render_target, Item *p_
 		// Break the list temporarily to feed it cleanly into the batcher
 		current_item->next = nullptr;
 
-		canvas_render_items_internal(current_item, current_z, p_modulate, p_light_list, p_canvas_transform);
+		canvas_render_items_internal(current_item, current_z, p_modulate, nullptr, p_canvas_transform);
 
 		// Restore the chain for any subsequent passes
 		current_item->next = next_item;
 		current_item = next_item;
 		current_z++;
 	}
-	
+
 	canvas_render_items_end();
+
+	// ==========================================
+	// The directional light pass
+	// ==========================================
+	Light *current_directional_light = p_directional_light_list;
+	while (current_directional_light) {
+		if (current_directional_light->mode != RS::CANVAS_LIGHT_MODE_DIRECTIONAL || !current_directional_light->enabled) {
+			current_directional_light = current_directional_light->directional_next_ptr;
+			continue;
+		}
+
+		// Save the chain
+		Light *next_light_ptr = current_directional_light->directional_next_ptr;
+		current_directional_light->directional_next_ptr = nullptr;
+
+		canvas_render_items_begin(p_modulate, current_directional_light, p_canvas_transform);
+
+		current_item = p_item_list;
+		current_z = 0;
+
+		while (current_item) {
+			// Directional lights affect the whole canvas;
+			// only check the mask
+			if (current_item->light_mask & current_directional_light->item_mask) {
+				Item *next_item = current_item->next;
+				current_item->next = nullptr;
+
+				canvas_render_items_internal(current_item, current_z, p_modulate, current_directional_light, p_canvas_transform);
+
+				current_item->next = next_item;
+			}
+			current_item = current_item->next;
+			current_z++;
+		}
+
+		canvas_render_items_end();
+
+		// Restore the chain
+		current_directional_light->directional_next_ptr = next_light_ptr;
+		current_directional_light = next_light_ptr;
+	}
+
+	// ==========================================
+	// The point light pass
+	// ==========================================
+	Light *current_light = p_light_list;
+	while (current_light) {
+		if (current_light->mode != RS::CANVAS_LIGHT_MODE_POINT || !current_light->enabled) {
+			current_light = current_light->next_ptr;
+			continue;
+		}
+
+		// Save the chain
+		Light *next_light_ptr = current_light->next_ptr;
+		current_light->next_ptr = nullptr;
+
+		canvas_render_items_begin(p_modulate, current_light, p_canvas_transform);
+
+		current_item = p_item_list;
+		current_z = 0;
+
+		while (current_item) {
+			// Intersection and Mask Test
+			if (current_item->light_mask & current_light->item_mask) {
+				Rect2 light_rect = current_light->rect_cache;
+				Rect2 item_rect = current_item->global_rect_cache;
+
+				if (light_rect.intersects(item_rect)) {
+					Item *next_item = current_item->next;
+					current_item->next = nullptr;
+
+					canvas_render_items_internal(current_item, current_z, p_modulate, current_light, p_canvas_transform);
+
+					current_item->next = next_item;
+				}
+			}
+
+			current_item = current_item->next;
+			current_z++;
+		}
+
+		canvas_render_items_end();
+
+		// Restore the chain
+		current_light->next_ptr = next_light_ptr;
+		current_light = next_light_ptr;
+	}
 
 	canvas_end();
 }
@@ -751,6 +1340,61 @@ void RasterizerCanvasGLES2::canvas_render_items_implementation(Item *p_item_list
 	// Call reset_canvas() instead of hardcoding the blend func,
 	// because reset_canvas respects transparent RenderTargets (sub-windows).
 	reset_canvas();
+
+	state.using_light = p_light;
+	state.using_shadow = false;
+
+	if (p_light) {
+		// Enable separate equations
+		glBlendEquationSeparate(GL_FUNC_ADD, GL_FUNC_ADD);
+		switch (p_light->blend_mode) {
+			case RS::CANVAS_LIGHT_BLEND_MODE_ADD:
+				glBlendFuncSeparate(GL_SRC_ALPHA, GL_ONE, GL_ZERO, GL_ONE);
+				break;
+			case RS::CANVAS_LIGHT_BLEND_MODE_SUB:
+				glBlendEquationSeparate(GL_FUNC_REVERSE_SUBTRACT, GL_FUNC_ADD);
+				glBlendFuncSeparate(GL_SRC_ALPHA, GL_ONE, GL_ZERO, GL_ONE);
+				break;
+			case RS::CANVAS_LIGHT_BLEND_MODE_MIX:
+				glBlendFuncSeparate(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_ZERO, GL_ONE);
+				break;
+		}
+		GL_CHECK_ERROR("GLES2::Canvas::canvas_render_items_implementation: light blend setup");
+
+		// Bind light texture
+		glActiveTexture(GL_TEXTURE0 + GLES2::Config::get_singleton()->max_texture_image_units - 6);
+		GLES2::Texture *light_tex = GLES2::TextureStorage::get_singleton()->get_texture(p_light->texture);
+
+		if (light_tex) {
+			glBindTexture(GL_TEXTURE_2D, light_tex->tex_id);
+		} else {
+			// Fallback to default white if texture is invalid
+			RID white_tex_rid = GLES2::TextureStorage::get_singleton()->texture_gl_get_default(GLES2::DEFAULT_GL_TEXTURE_WHITE);
+			GLES2::Texture *tex_white = GLES2::TextureStorage::get_singleton()->get_texture(white_tex_rid);
+			glBindTexture(GL_TEXTURE_2D, tex_white ? tex_white->tex_id : 0);
+		}
+
+		// Clamp the light texture so edges do not bleed
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+		GL_CHECK_ERROR("GLES2::Canvas::canvas_render_items_implementation: light texture bind");
+
+		// Bind the shadow texture
+		state.using_shadow = p_light->use_shadow;
+		if (state.using_shadow && state.shadow_texture != 0) {
+			glActiveTexture(GL_TEXTURE0 + GLES2::Config::get_singleton()->max_texture_image_units - 5);
+			glBindTexture(GL_TEXTURE_2D, state.shadow_texture);
+
+			// Standard nearest filter for the RGBA depth map
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+			GL_CHECK_ERROR("GLES2::Canvas::canvas_render_items_implementation: shadow texture bind");
+		}
+	}
 
 	// Bind default white texture to texture unit 0
 	glActiveTexture(GL_TEXTURE0);
@@ -824,7 +1468,7 @@ void RasterizerCanvasGLES2::canvas_render_items_implementation(Item *p_item_list
 			}
 
 			// Pass the joined_item and the extracted material into the render step
-			render_joined_item_commands(joined_item, ris.current_clip, reclip, mat_data, false);
+			render_joined_item_commands(joined_item, ris.current_clip, reclip, mat_data, state.using_light != nullptr);
 
 			// Clean up light scissor if we hijacked it for this batch
 			if (light_scissor_enabled) {
@@ -1058,13 +1702,6 @@ void RasterizerCanvasGLES2::_batch_render_generic(const Batch &p_batch, GLES2::C
 		state.specialization |= CanvasShaderGLES2::USE_FORCE_REPEAT;
 	}
 
-	bool rebind = state.canvas_shader->version_bind_shader(state.shader_version, state.mode_variant, state.specialization);
-	_set_canvas_uniforms();
-
-	if (rebind && p_material) {
-		p_material->bind_uniforms();
-	}
-
 	// Determine Texture Filter and Repeat from the Batch FVF flags
 	RS::CanvasItemTextureRepeat repeat = state.default_repeat;
 	if (p_batch.item && p_batch.item->texture_repeat != RS::CANVAS_ITEM_TEXTURE_REPEAT_DEFAULT) {
@@ -1080,6 +1717,13 @@ void RasterizerCanvasGLES2::_batch_render_generic(const Batch &p_batch, GLES2::C
 	}
 
 	_bind_canvas_texture(tex.RID_texture, filter, repeat);
+
+	bool rebind = state.canvas_shader->version_bind_shader(state.shader_version, state.mode_variant, state.specialization);
+	_set_canvas_uniforms();
+
+	if (rebind && p_material) {
+		p_material->bind_uniforms();
+	}
 
 	uint64_t pointer_offset = p_batch.first_vert * sizeof_vert;
 
@@ -1108,6 +1752,36 @@ void RasterizerCanvasGLES2::_batch_render_generic(const Batch &p_batch, GLES2::C
 		// BatchVertexColored is our baseline for colored geometry
 		glVertexAttribPointer(RS::ARRAY_COLOR, 4, GL_UNSIGNED_BYTE, GL_TRUE, sizeof_vert, (const void *)(pointer_offset + offsetof(BatchVertexColored, col)));
 	}
+
+	if (use_light_angles) {
+		glEnableVertexAttribArray(RS::ARRAY_TANGENT); // attrib:2 is light_angle
+		glVertexAttribPointer(RS::ARRAY_TANGENT, 1, GL_FLOAT, GL_FALSE, sizeof_vert, (const void *)(pointer_offset + offsetof(BatchVertexLightAngled, light_angle)));
+	} else {
+		glDisableVertexAttribArray(RS::ARRAY_TANGENT);
+		glVertexAttrib1f(RS::ARRAY_TANGENT, 0.0f);
+	}
+
+	if (use_modulate) {
+		glEnableVertexAttribArray(RS::ARRAY_TEX_UV2); // attrib:5 is modulate_attrib
+		glVertexAttribPointer(RS::ARRAY_TEX_UV2, 4, GL_UNSIGNED_BYTE, GL_TRUE, sizeof_vert, (const void *)(pointer_offset + offsetof(BatchVertexModulated, modulate)));
+	} else {
+		glDisableVertexAttribArray(RS::ARRAY_TEX_UV2);
+		glVertexAttrib4f(RS::ARRAY_TEX_UV2, 1.0f, 1.0f, 1.0f, 1.0f);
+	}
+
+	if (use_large_verts) {
+		glEnableVertexAttribArray(RS::ARRAY_CUSTOM0); // attrib:6 is translate_attrib
+		glVertexAttribPointer(RS::ARRAY_CUSTOM0, 2, GL_FLOAT, GL_FALSE, sizeof_vert, (const void *)(pointer_offset + offsetof(BatchVertexLarge, transform)));
+
+		glEnableVertexAttribArray(RS::ARRAY_CUSTOM1); // attrib:7 is basis_attrib
+		glVertexAttribPointer(RS::ARRAY_CUSTOM1, 4, GL_FLOAT, GL_FALSE, sizeof_vert, (const void *)(pointer_offset + offsetof(BatchVertexLarge, transform) + (sizeof(float) * 2)));
+	} else {
+		glDisableVertexAttribArray(RS::ARRAY_CUSTOM0);
+		glVertexAttrib2f(RS::ARRAY_CUSTOM0, 0.0f, 0.0f);
+		glDisableVertexAttribArray(RS::ARRAY_CUSTOM1);
+		glVertexAttrib4f(RS::ARRAY_CUSTOM1, 1.0f, 0.0f, 0.0f, 1.0f);
+	}
+
 	GL_CHECK_ERROR("GLES2::Canvas::batch_render_generic: setup client states");
 
 	// Send Pixel Size to the shader (using the state updated by _bind_canvas_texture)
@@ -1141,6 +1815,10 @@ void RasterizerCanvasGLES2::_batch_render_generic(const Batch &p_batch, GLES2::C
 	glDisableVertexAttribArray(RS::ARRAY_VERTEX);
 	glDisableVertexAttribArray(RS::ARRAY_TEX_UV);
 	glDisableVertexAttribArray(RS::ARRAY_COLOR);
+	glDisableVertexAttribArray(RS::ARRAY_TANGENT);
+	glDisableVertexAttribArray(RS::ARRAY_TEX_UV2);
+	glDisableVertexAttribArray(RS::ARRAY_CUSTOM0);
+	glDisableVertexAttribArray(RS::ARRAY_CUSTOM1);
 	glBindBuffer(GL_ARRAY_BUFFER, 0);
 	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
 	GL_CHECK_ERROR("GLES2::Canvas::batch_render_generic: cleanup");
@@ -1162,13 +1840,14 @@ void RasterizerCanvasGLES2::render_batches(Item::Command *const *p_commands, Ite
 		transparent_rt = true; // Backbuffer
 	}
 
-	GLES2::CanvasShaderData::BlendMode blend_mode = GLES2::CanvasShaderData::BLEND_MODE_MIX;
-	if (p_material && p_material->shader_data) {
-		blend_mode = p_material->shader_data->blend_mode;
-	}
-
 	// Blend modes
-	set_gl_blend_mode(blend_mode, transparent_rt);
+	if (!state.using_light) {
+		GLES2::CanvasShaderData::BlendMode blend_mode = GLES2::CanvasShaderData::BLEND_MODE_MIX;
+		if (p_material && p_material->shader_data) {
+			blend_mode = p_material->shader_data->blend_mode;
+		}
+		set_gl_blend_mode(blend_mode, transparent_rt);
+	}
 
 	for (int batch_num = 0; batch_num < num_batches; batch_num++) {
 		const Batch &batch = bdata.batches[batch_num];
@@ -1177,6 +1856,29 @@ void RasterizerCanvasGLES2::render_batches(Item::Command *const *p_commands, Ite
 		state.specialization = 0;
 		state.mode_variant = CanvasShaderGLES2::ShaderVariant::MODE_QUAD;
 		state.shader_version = data.canvas_shader_default_version;
+
+		if (state.using_light) {
+			state.specialization |= CanvasShaderGLES2::USE_LIGHTING;
+			if (state.using_shadow) {
+				state.specialization |= CanvasShaderGLES2::USE_SHADOWS;
+				state.specialization |= CanvasShaderGLES2::USE_RGBA_SHADOWS;
+
+				switch (state.using_light->shadow_filter) {
+					case RS::CANVAS_LIGHT_FILTER_NONE:
+						state.specialization |= CanvasShaderGLES2::SHADOW_FILTER_NEAREST;
+						break;
+					case RS::CANVAS_LIGHT_FILTER_PCF5:
+						state.specialization |= CanvasShaderGLES2::SHADOW_FILTER_PCF5;
+						break;
+					case RS::CANVAS_LIGHT_FILTER_PCF13:
+						state.specialization |= CanvasShaderGLES2::SHADOW_FILTER_PCF13;
+						break;
+					default:
+						state.specialization |= CanvasShaderGLES2::SHADOW_FILTER_NEAREST;
+						break;
+				}
+			}
+		}
 
 		if (p_material && p_material->shader_data) {
 			if (p_material->shader_data->version.is_valid() && p_material->shader_data->valid) {
@@ -1193,11 +1895,19 @@ void RasterizerCanvasGLES2::render_batches(Item::Command *const *p_commands, Ite
 
 				if (batch.item) {
 					state.uniforms.modelview_matrix = batch.item->final_transform;
-					state.uniforms.final_modulate = batch.item->final_modulate * _render_item_state.item_group_modulate;
+					if (state.using_light) {
+						state.uniforms.final_modulate = batch.item->final_modulate;
+					} else {
+						state.uniforms.final_modulate = batch.item->final_modulate * _render_item_state.item_group_modulate;
+					}
 					state.uniforms.extra_matrix = Transform2D();
 				} else {
 					state.uniforms.modelview_matrix = _render_item_state.item_group_base_transform;
-					state.uniforms.final_modulate = _render_item_state.item_group_modulate;
+					if (state.using_light) {
+						state.uniforms.final_modulate = Color(1.0f, 1.0f, 1.0f, 1.0f);
+					} else {
+						state.uniforms.final_modulate = _render_item_state.item_group_modulate;
+					}
 					state.uniforms.extra_matrix = Transform2D();
 				}
 
@@ -1296,16 +2006,6 @@ void RasterizerCanvasGLES2::render_batches(Item::Command *const *p_commands, Ite
 							Item::CommandNinePatch *np = static_cast<Item::CommandNinePatch *>(command);
 							_set_texture_rect_mode(false);
 
-							bool rebind = state.canvas_shader->version_bind_shader(state.shader_version, state.mode_variant, state.specialization);
-							_set_canvas_uniforms();
-
-							if (rebind && p_material) {
-								p_material->bind_uniforms();
-							}
-
-							glDisableVertexAttribArray(RS::ARRAY_COLOR);
-							glVertexAttrib4fv(RS::ARRAY_COLOR, np->color.components);
-
 							RS::CanvasItemTextureRepeat repeat = state.default_repeat;
 							if (batch.item && batch.item->texture_repeat != RS::CANVAS_ITEM_TEXTURE_REPEAT_DEFAULT) {
 								repeat = batch.item->texture_repeat;
@@ -1321,6 +2021,16 @@ void RasterizerCanvasGLES2::render_batches(Item::Command *const *p_commands, Ite
 							}
 
 							_bind_canvas_texture(np->texture, filter, repeat);
+
+							bool rebind = state.canvas_shader->version_bind_shader(state.shader_version, state.mode_variant, state.specialization);
+							_set_canvas_uniforms();
+
+							if (rebind && p_material) {
+								p_material->bind_uniforms();
+							}
+
+							glDisableVertexAttribArray(RS::ARRAY_COLOR);
+							glVertexAttrib4fv(RS::ARRAY_COLOR, np->color.components);
 
 							if (state.texpixel_size == Size2(0.0, 0.0)) {
 								continue;
@@ -1654,22 +2364,6 @@ void RasterizerCanvasGLES2::render_batches(Item::Command *const *p_commands, Ite
 							Item::CommandMesh *mesh_cmd = static_cast<Item::CommandMesh *>(command);
 							_set_texture_rect_mode(false);
 
-							// Bind Shader and stack the item's material (if any)
-							bool rebind = state.canvas_shader->version_bind_shader(state.shader_version, state.mode_variant, state.specialization);
-
-							// CommandMesh has its own transform and modulate that stack with the item's baseline
-							Transform2D prev_transform_extra = state.uniforms.extra_matrix;
-							Color prev_colour_module = state.uniforms.final_modulate;
-
-							state.uniforms.extra_matrix = state.uniforms.extra_matrix * mesh_cmd->transform;
-							state.uniforms.final_modulate = state.uniforms.final_modulate * mesh_cmd->modulate;
-
-							_set_canvas_uniforms();
-
-							if (rebind && p_material) {
-								p_material->bind_uniforms();
-							}
-
 							// Setup Texture, Filter, and Repeat
 							RS::CanvasItemTextureRepeat repeat = state.default_repeat;
 							if (batch.item && batch.item->texture_repeat != RS::CANVAS_ITEM_TEXTURE_REPEAT_DEFAULT) {
@@ -1686,6 +2380,23 @@ void RasterizerCanvasGLES2::render_batches(Item::Command *const *p_commands, Ite
 							}
 
 							_bind_canvas_texture(mesh_cmd->texture, filter, repeat);
+
+							// Bind Shader and stack the item's material (if any)
+							bool rebind = state.canvas_shader->version_bind_shader(state.shader_version, state.mode_variant, state.specialization);
+
+							// CommandMesh has its own transform and modulate that stack with the item's baseline
+							Transform2D prev_transform_extra = state.uniforms.extra_matrix;
+							Color prev_colour_module = state.uniforms.final_modulate;
+
+							state.uniforms.extra_matrix = state.uniforms.extra_matrix * mesh_cmd->transform;
+							state.uniforms.final_modulate = state.uniforms.final_modulate * mesh_cmd->modulate;
+
+							_set_canvas_uniforms();
+
+							if (rebind && p_material) {
+								p_material->bind_uniforms();
+							}
+
 							if (state.texpixel_size != Size2(0.0, 0.0)) {
 								state.canvas_shader->version_set_uniform(CanvasShaderGLES2::COLOR_TEXTURE_PIXEL_SIZE, state.texpixel_size, state.shader_version, state.mode_variant, state.specialization);
 							}
@@ -1885,7 +2596,11 @@ void RasterizerCanvasGLES2::_draw_gui_primitive(int p_points, const Vector2 *p_v
 }
 
 void RasterizerCanvasGLES2::_legacy_draw_primitive(Item::CommandPrimitive *p_pr, GLES2::CanvasMaterialData *p_material) {
+	ERR_FAIL_COND(p_pr->point_count < 1);
+
 	_set_texture_rect_mode(false);
+
+	_bind_canvas_texture(p_pr->texture, state.default_filter, state.default_repeat);
 
 	bool rebind = state.canvas_shader->version_bind_shader(state.shader_version, state.mode_variant, state.specialization);
 	_set_canvas_uniforms();
@@ -1894,9 +2609,6 @@ void RasterizerCanvasGLES2::_legacy_draw_primitive(Item::CommandPrimitive *p_pr,
 		p_material->bind_uniforms();
 	}
 
-	ERR_FAIL_COND(p_pr->point_count < 1);
-
-	_bind_canvas_texture(p_pr->texture, state.default_filter, state.default_repeat);
 	state.canvas_shader->version_set_uniform(CanvasShaderGLES2::COLOR_TEXTURE_PIXEL_SIZE, state.texpixel_size, state.shader_version, state.mode_variant, state.specialization);
 	_draw_gui_primitive(p_pr->point_count, p_pr->points, p_pr->colors, p_pr->uvs);
 }
@@ -2017,6 +2729,9 @@ void RasterizerCanvasGLES2::_legacy_draw_polygon(Item::CommandPolygon *p_poly, G
 		// GLES2 strictly requires 16-bit indices.
 		if (unlikely(pd.points.size() > 65535)) {
 			ERR_PRINT_ONCE("GLES2: Cannot draw polygon with more than 65535 vertices due to 16-bit index hardware limits.");
+			glDisableVertexAttribArray(RS::ARRAY_VERTEX);
+			glDisableVertexAttribArray(RS::ARRAY_TEX_UV);
+			glDisableVertexAttribArray(RS::ARRAY_COLOR);
 			glBindBuffer(GL_ARRAY_BUFFER, 0);
 			return;
 		}
@@ -2078,8 +2793,29 @@ void RasterizerCanvasGLES2::_set_texture_rect_mode(bool p_texture_rect, bool p_l
 	if (p_large_vertex) {
 		spec |= CanvasShaderGLES2::USE_ATTRIB_LARGE_VERTEX;
 	}
+	if (state.using_light) {
+		spec |= CanvasShaderGLES2::USE_LIGHTING;
+		if (state.using_shadow) {
+			spec |= CanvasShaderGLES2::USE_SHADOWS;
+			spec |= CanvasShaderGLES2::USE_RGBA_SHADOWS;
 
-	// TODO(GLES2): Add Lighting and Shadow specializations
+			switch (state.using_light->shadow_filter) {
+				case RS::CANVAS_LIGHT_FILTER_NONE:
+					spec |= CanvasShaderGLES2::SHADOW_FILTER_NEAREST;
+					break;
+				case RS::CANVAS_LIGHT_FILTER_PCF5:
+					spec |= CanvasShaderGLES2::SHADOW_FILTER_PCF5;
+					break;
+				case RS::CANVAS_LIGHT_FILTER_PCF13:
+					spec |= CanvasShaderGLES2::SHADOW_FILTER_PCF13;
+					break;
+				default:
+					spec |= CanvasShaderGLES2::SHADOW_FILTER_NEAREST;
+					break;
+			}
+		}
+	}
+
 	state.specialization = spec;
 }
 
@@ -2128,6 +2864,9 @@ RasterizerCanvasGLES2::~RasterizerCanvasGLES2() {
 	singleton = nullptr;
 
 	GLES2::TextureStorage::get_singleton()->canvas_texture_free(default_canvas_texture);
+
+	// Shaders
+	shadow_render.shader.version_free(shadow_render.shader_version);
 
 	// Free buffers
 	GLES2::Utilities::get_singleton()->buffer_free_data(data.canvas_quad_vertices);

@@ -3740,6 +3740,14 @@ void RenderingServer::init() {
 	GLOBAL_DEF_RST(PropertyInfo(Variant::INT, "rendering/limits/opengl/max_renderable_lights", PROPERTY_HINT_RANGE, "2,256,1"), 32);
 	GLOBAL_DEF_RST(PropertyInfo(Variant::INT, "rendering/limits/opengl/max_lights_per_object", PROPERTY_HINT_RANGE, "2,1024,1"), 8);
 
+	// GLES1 (gl_classic) specifics
+
+	// This boost the lights by 3x by default
+	// to match the other drivers.
+	// 3.0f just so happened to be the number that
+	// matches the output closest visually.
+	GLOBAL_DEF_RST(PropertyInfo(Variant::FLOAT, "rendering/gl_classic/light_vibrancy_multiplier", PROPERTY_HINT_RANGE, "1.0,8.0,0.1"), 3.0);
+
 	GLOBAL_DEF_RST_BASIC("xr/shaders/enabled", false);
 
 	GLOBAL_DEF("debug/shader_language/warnings/enable", true);

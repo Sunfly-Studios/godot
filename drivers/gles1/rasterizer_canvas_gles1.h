@@ -62,6 +62,12 @@ class RasterizerCanvasGLES1 : public RendererCanvasRender, public RasterizerCanv
 
 	static RasterizerCanvasGLES1 *singleton;
 
+	_FORCE_INLINE_ void _update_transform_2d_to_mat2x4(const Transform2D &p_transform, float *p_mat2x4);
+	_FORCE_INLINE_ void _update_transform_2d_to_mat2x3(const Transform2D &p_transform, float *p_mat2x3);
+
+	_FORCE_INLINE_ void _update_transform_2d_to_mat4(const Transform2D &p_transform, float *p_mat4);
+	_FORCE_INLINE_ void _update_transform_to_mat4(const Transform3D &p_transform, float *p_mat4);
+
 protected:
 	struct Uniforms {
 		Transform3D projection_matrix;
@@ -82,6 +88,8 @@ protected:
 		GLuint ninepatch_vertices;
 		GLuint ninepatch_elements;
 
+		GLuint light_vector_tex;
+
 		RID canvas_shader_default_version;
 	} data;
 
@@ -96,6 +104,50 @@ protected:
 	uint32_t next_polygon_id = 1;
 	HashMap<RendererCanvasRender::PolygonID, PolyData> polygon_cache;
 	RasterizerPooledIndirectList<PolyData> _polydata;
+
+	struct Limits {
+		float light_multiplier = 0.0f;
+	};
+
+	Limits limit_settings;
+
+	/******************/
+	/**** LIGHTING ****/
+	/******************/
+
+	struct CanvasLight {
+		RID texture;
+		GLuint directional_tex_id = 0;
+		Vector2 last_light_dir = Vector2(0.0f, 0.0f);
+		uint8_t directional_pixel[4] = { 127, 127, 127, 255 };
+		uint32_t context_generation = 0;
+
+		struct {
+			bool enabled = false;
+			float z_far;
+			Transform2D light_to_world;
+			Vector<Vector2> shadow_volumes;
+			Vector<Vector2> directional_shadow_volumes;
+		} shadow;
+	};
+
+	RID_Owner<CanvasLight> canvas_light_owner;
+
+	struct OccluderPolygon {
+		RS::CanvasOccluderPolygonCullMode cull_mode = RS::CANVAS_OCCLUDER_POLYGON_CULL_DISABLED;
+		int line_point_count = 0;
+		Vector<Vector2> lines;
+		GLuint vertex_array = 0;
+	};
+
+	RID_Owner<OccluderPolygon> occluder_polygon_owner;
+
+	void _update_shadow_atlas();
+
+	struct {
+		CanvasOcclusionShaderGLES1 shader;
+		RID shader_version;
+	} shadow_render;
 
 	struct State {
 		Uniforms uniforms;
@@ -125,6 +177,11 @@ protected:
 
 		RID render_target;
 		double time = 0.0;
+
+		Color specular_shininess;
+
+		Light *directional_light_list = nullptr;
+		bool using_directional_lights = false;
 
 		bool state_dirty = true;
 		bool transparent_render = false;

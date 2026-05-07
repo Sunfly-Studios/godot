@@ -63,6 +63,12 @@ class RasterizerCanvasGLES2 : public RendererCanvasRender, public RasterizerCanv
 
 	static RasterizerCanvasGLES2 *singleton;
 
+	_FORCE_INLINE_ void _update_transform_2d_to_mat2x4(const Transform2D &p_transform, float *p_mat2x4);
+	_FORCE_INLINE_ void _update_transform_2d_to_mat2x3(const Transform2D &p_transform, float *p_mat2x3);
+
+	_FORCE_INLINE_ void _update_transform_2d_to_mat4(const Transform2D &p_transform, float *p_mat4);
+	_FORCE_INLINE_ void _update_transform_to_mat4(const Transform3D &p_transform, float *p_mat4);
+
 protected:
 	struct Uniforms {
 		Transform3D projection_matrix;
@@ -84,6 +90,8 @@ protected:
 		GLuint ninepatch_elements;
 
 		RID canvas_shader_default_version;
+
+		uint32_t max_lights_per_render = 256;
 	} data;
 
 	struct PolyData {
@@ -97,6 +105,46 @@ protected:
 	uint32_t next_polygon_id = 1;
 	HashMap<RendererCanvasRender::PolygonID, PolyData> polygon_cache;
 	RasterizerPooledIndirectList<PolyData> _polydata;
+
+	/******************/
+	/**** LIGHTING ****/
+	/******************/
+
+	struct CanvasLight {
+		RID texture;
+		struct {
+			bool enabled = false;
+			float z_far;
+			float y_offset;
+			Transform2D directional_xform;
+		} shadow;
+	};
+
+	RID_Owner<CanvasLight> canvas_light_owner;
+
+	struct OccluderPolygon {
+		RS::CanvasOccluderPolygonCullMode cull_mode = RS::CANVAS_OCCLUDER_POLYGON_CULL_DISABLED;
+		int line_point_count = 0;
+		GLuint vertex_buffer = 0;
+		GLuint vertex_array = 0;
+		GLuint index_buffer = 0;
+
+		int sdf_point_count = 0;
+		int sdf_index_count = 0;
+		GLuint sdf_vertex_buffer = 0;
+		GLuint sdf_vertex_array = 0;
+		GLuint sdf_index_buffer = 0;
+		bool sdf_is_lines = false;
+	};
+
+	RID_Owner<OccluderPolygon> occluder_polygon_owner;
+
+	void _update_shadow_atlas();
+
+	struct {
+		CanvasOcclusionShaderGLES2 shader;
+		RID shader_version;
+	} shadow_render;
 
 	struct State {
 		Uniforms uniforms;
@@ -127,6 +175,15 @@ protected:
 		RID render_target;
 		double time = 0.0;
 
+		GLuint shadow_texture = 0;
+		GLuint shadow_depth_buffer = 0;
+		GLuint shadow_fb = 0;
+		Color specular_shininess;
+		int shadow_texture_size = 2048;
+
+		Light *directional_light_list = nullptr;
+		bool using_directional_lights = false;
+
 		RS::CanvasItemTextureFilter default_filter = RS::CANVAS_ITEM_TEXTURE_FILTER_NEAREST;
 		RS::CanvasItemTextureRepeat default_repeat = RS::CANVAS_ITEM_TEXTURE_REPEAT_DISABLED;
 		RS::CanvasItemTextureFilter current_filter = RS::CANVAS_ITEM_TEXTURE_FILTER_MAX;
@@ -148,6 +205,8 @@ protected:
 	void _legacy_draw_primitive(Item::CommandPrimitive *p_pr, GLES2::CanvasMaterialData *p_material);
 	void _legacy_draw_line(Item::CommandPrimitive *p_pr, GLES2::CanvasMaterialData *p_material);
 	void _draw_gui_primitive(int p_points, const Vector2 *p_vertices, const Color *p_colors, const Vector2 *p_uvs, const float *p_light_angles = nullptr);
+
+	void _execute_light_pass(Light *light, bool is_directional, GLES2::Texture *tex_white);
 
 public:
 	static RasterizerCanvasGLES2 *get_singleton();
