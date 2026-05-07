@@ -65,8 +65,9 @@ void exit_callback() {
 	int exit_code = 0;
 	if (os) {
 		exit_code = os->get_exit_code();
-		memdelete(os);
+		delete os; // We used a normal new, so it needs a normal delete
 		os = nullptr;
+		emscripten_cancel_main_loop(); // We are exiting in this iteration.
 	}
 	emscripten_force_exit(exit_code); // Exit runtime.
 }
