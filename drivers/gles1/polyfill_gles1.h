@@ -57,6 +57,7 @@ namespace GLES1 {
 		static PFNGLRENDERBUFFERSTORAGEPROC renderBufferStorage;
 		static PFNGLFRAMEBUFFERRENDERBUFFERPROC frameBufferRenderBuffer;
 		static PFNGLDELETERENDERBUFFERSPROC deleteRenderBuffers;
+		static PFNGLDEPTHRANGEPROC depthRange;
 
 		// Blend extensions
 		static PFNGLBLENDFUNCSEPARATEPROC blendFuncSeparate;
@@ -167,6 +168,27 @@ namespace GLES1 {
 #undef glCheckFramebufferStatusOES
 #define glCheckFramebufferStatusOES(target) \
 	(likely(GLES1::Polyfill::checkFrameBufferStatus) ? GLES1::Polyfill::checkFrameBufferStatus(target) : 0)
+
+#undef glDepthRangef
+#define glDepthRangef(near, far)                    \
+	do {                                            \
+		if (likely(GLES1::Polyfill::depthRange))    \
+			GLES1::Polyfill::depthRange(near, far); \
+	} while (0)
+
+#undef glDepthRange
+#define glDepthRange(near, far)                     \
+	do {                                            \
+		if (likely(GLES1::Polyfill::depthRange))    \
+			GLES1::Polyfill::depthRange(near, far); \
+	} while (0)
+
+#undef glDepthRangex
+#define glDepthRangex(near, far)                    \
+	do {                                            \
+		if (likely(GLES1::Polyfill::depthRange))    \
+			GLES1::Polyfill::depthRange(near, far); \
+	} while (0)
 
 // =========================================
 // VBO Macros (Overrides Core calls too)

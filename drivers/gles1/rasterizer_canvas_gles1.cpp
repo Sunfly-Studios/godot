@@ -1532,7 +1532,7 @@ void RasterizerCanvasGLES1::canvas_render_items_implementation(Item *p_item_list
 				// Only write into the depth buffer, squash Z closer to near plane
 				glColorMask(GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE);
 				glDepthFunc(GL_ALWAYS);
-				glDepthRange(0.0f, 0.1f);
+				glDepthRangef(0.0f, 0.1f);
 
 				glMatrixMode(GL_MODELVIEW);
 				glPushMatrix();
@@ -1575,9 +1575,7 @@ void RasterizerCanvasGLES1::canvas_render_items_implementation(Item *p_item_list
 				glDepthFunc(GL_LESS);
 
 				// Squash geometry Z farther back
-				// TODO(GLES1): Replace glDepthRange with
-				// glDepthRangef for mobile (polyfill)
-				glDepthRange(0.5f, 1.0f);
+				glDepthRangef(0.5f, 1.0f);
 			} else {
 				glDisable(GL_DEPTH_TEST);
 			}
@@ -1739,7 +1737,7 @@ void RasterizerCanvasGLES1::canvas_render_items_implementation(Item *p_item_list
 
 	if (state.using_shadow) {
 		glDisable(GL_DEPTH_TEST);
-		glDepthRange(0.0f, 1.0f);
+		glDepthRangef(0.0f, 1.0f);
 	}
 
 	if (time_used) {

@@ -47,6 +47,7 @@ namespace GLES1 {
 	PFNGLRENDERBUFFERSTORAGEPROC Polyfill::renderBufferStorage = nullptr;
 	PFNGLFRAMEBUFFERRENDERBUFFERPROC Polyfill::frameBufferRenderBuffer = nullptr;
 	PFNGLDELETERENDERBUFFERSPROC Polyfill::deleteRenderBuffers = nullptr;
+	PFNGLDEPTHRANGEPROC Polyfill::depthRange = nullptr;
 
 	// VBOs
 	PFNGLGENBUFFERSPROC Polyfill::genBuffers = nullptr;
@@ -79,6 +80,7 @@ Polyfill::Polyfill() {
 	bindRenderBuffer = (PFNGLBINDRENDERBUFFERPROC)glBindRenderbufferOES;
 	frameBufferRenderBuffer = (PFNGLFRAMEBUFFERRENDERBUFFERPROC)glFramebufferRenderbufferOES;
 	framebufferTexture2D = (PFNGLFRAMEBUFFERTEXTURE2DPROC)glFramebufferTexture2DOES;
+	depthRange = (PFNGLDEPTHRANGEFPROC)glDepthRangef;
 
 	// VBOs (Core in mobile)
 	genBuffers = glGenBuffers;
@@ -193,6 +195,14 @@ Polyfill::Polyfill() {
 		framebufferTexture2D = (PFNGLFRAMEBUFFERTEXTURE2DPROC)glFramebufferTexture2DOES;
 	} else if (glFramebufferTexture2DEXT != nullptr) {
 		framebufferTexture2D = (PFNGLFRAMEBUFFERTEXTURE2DPROC)glFramebufferTexture2DEXT;
+	}
+
+	if (glDepthRange != nullptr) {
+		depthRange = glDepthRange;
+	} else if (glDepthRangef != nullptr) {
+		depthRange = (PFNGLDEPTHRANGEPROC)glDepthRangef;
+	} else if (glDepthRangex != nullptr) {
+		depthRange = (PFNGLDEPTHRANGEPROC)glDepthRangex;
 	}
 
 	// =========================================
