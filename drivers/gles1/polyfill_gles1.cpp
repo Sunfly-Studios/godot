@@ -37,6 +37,7 @@ namespace GLES1 {
 	// FBOs
 	PFNGLBINDFRAMEBUFFERPROC Polyfill::bindFramebuffer = nullptr;
 	PFNGLISFRAMEBUFFERPROC Polyfill::isFramebuffer = nullptr;
+	PFNGLBLENDEQUATIONPROC Polyfill::blendEquation = nullptr;
 	PFNGLBLENDFUNCSEPARATEPROC Polyfill::blendFuncSeparate = nullptr;
 	PFNGLCHECKFRAMEBUFFERSTATUSPROC Polyfill::checkFrameBufferStatus = nullptr;
 	PFNGLDELETEFRAMEBUFFERSPROC Polyfill::deleteFrameBuffers = nullptr;
@@ -47,7 +48,11 @@ namespace GLES1 {
 	PFNGLRENDERBUFFERSTORAGEPROC Polyfill::renderBufferStorage = nullptr;
 	PFNGLFRAMEBUFFERRENDERBUFFERPROC Polyfill::frameBufferRenderBuffer = nullptr;
 	PFNGLDELETERENDERBUFFERSPROC Polyfill::deleteRenderBuffers = nullptr;
+#if defined(ANDROID_ENABLED) || defined(IOS_ENABLED)
+	PFNGLDEPTHRANGEFPROC Polyfill::depthRange = nullptr;
+#else
 	PFNGLDEPTHRANGEPROC Polyfill::depthRange = nullptr;
+#endif
 
 	// VBOs
 	PFNGLGENBUFFERSPROC Polyfill::genBuffers = nullptr;
@@ -81,6 +86,7 @@ Polyfill::Polyfill() {
 	frameBufferRenderBuffer = (PFNGLFRAMEBUFFERRENDERBUFFERPROC)glFramebufferRenderbufferOES;
 	framebufferTexture2D = (PFNGLFRAMEBUFFERTEXTURE2DPROC)glFramebufferTexture2DOES;
 	depthRange = (PFNGLDEPTHRANGEFPROC)glDepthRangef;
+	blendEquation = (PFNGLBLENDEQUATIONPROC)glBlendEquationOES;
 
 	// VBOs (Core in mobile)
 	genBuffers = glGenBuffers;
@@ -179,6 +185,12 @@ Polyfill::Polyfill() {
 		bindRenderBuffer = (PFNGLBINDRENDERBUFFERPROC)glBindRenderbufferOES;
 	} else if (glBindRenderbufferEXT != nullptr) {
 		bindRenderBuffer = (PFNGLBINDRENDERBUFFERPROC)glBindRenderbufferEXT;
+	}
+
+	if (glBlendEquation != nullptr) {
+		blendEquation = glBlendEquation;
+	} else if (glBlendEquationOES != nullptr) {
+		blendEquation = (PFNGLBLENDEQUATIONPROC)glBlendEquationOES;
 	}
 
 	if (glFramebufferRenderbuffer != nullptr) {

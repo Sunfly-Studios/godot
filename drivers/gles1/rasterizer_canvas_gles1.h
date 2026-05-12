@@ -288,7 +288,7 @@ public:
 			} break;
 			case GLES1::CanvasShaderData::BLEND_MODE_MIX: {
 				if (support_subtract) {
-					glBlendEquation(GL_FUNC_ADD);
+					glBlendEquationOES(GL_FUNC_ADD_OES);
 				}
 				if (transparent_rt) {
 					if (support_separate) {
@@ -306,7 +306,7 @@ public:
 			} break;
 			case GLES1::CanvasShaderData::BLEND_MODE_ADD: {
 				if (support_subtract) {
-					glBlendEquation(GL_FUNC_ADD);
+					glBlendEquationOES(GL_FUNC_ADD_OES);
 				}
 				if (transparent_rt) {
 					if (support_separate) {
@@ -324,7 +324,7 @@ public:
 			} break;
 			case GLES1::CanvasShaderData::BLEND_MODE_SUB: {
 				if (support_subtract) {
-					glBlendEquation(GL_FUNC_REVERSE_SUBTRACT);
+					glBlendEquationOES(GL_FUNC_REVERSE_SUBTRACT_OES);
 					if (transparent_rt) {
 						if (support_separate) {
 							glBlendFuncSeparateOES(GL_SRC_ALPHA, GL_ONE, GL_SRC_ALPHA, GL_ONE);
@@ -347,7 +347,7 @@ public:
 			} break;
 			case GLES1::CanvasShaderData::BLEND_MODE_MUL: {
 				if (support_subtract) {
-					glBlendEquation(GL_FUNC_ADD);
+					glBlendEquationOES(GL_FUNC_ADD_OES);
 				}
 				if (transparent_rt) {
 					if (support_separate) {
@@ -365,7 +365,7 @@ public:
 			} break;
 			case GLES1::CanvasShaderData::BLEND_MODE_PMALPHA: {
 				if (support_subtract) {
-					glBlendEquation(GL_FUNC_ADD);
+					glBlendEquationOES(GL_FUNC_ADD_OES);
 				}
 				if (transparent_rt) {
 					if (support_separate) {

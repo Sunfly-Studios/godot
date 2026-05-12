@@ -1373,7 +1373,7 @@ void RasterizerCanvasGLES1::canvas_render_items_implementation(Item *p_item_list
 		bool support_separate = GLES1::Config::get_singleton()->support_blend_func_separate;
 
 		if (support_subtract) {
-			glBlendEquation(GL_FUNC_ADD); // Default
+			glBlendEquationOES(GL_FUNC_ADD); // Default
 		}
 
 		switch (p_light->blend_mode) {
@@ -1386,7 +1386,7 @@ void RasterizerCanvasGLES1::canvas_render_items_implementation(Item *p_item_list
 				break;
 			case RS::CANVAS_LIGHT_BLEND_MODE_SUB:
 				if (support_subtract) {
-					glBlendEquation(GL_FUNC_REVERSE_SUBTRACT);
+					glBlendEquationOES(GL_FUNC_REVERSE_SUBTRACT);
 				}
 				if (support_separate) {
 					glBlendFuncSeparateOES(GL_SRC_ALPHA, GL_ONE, GL_ZERO, GL_ONE);

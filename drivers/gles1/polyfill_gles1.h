@@ -57,9 +57,14 @@ namespace GLES1 {
 		static PFNGLRENDERBUFFERSTORAGEPROC renderBufferStorage;
 		static PFNGLFRAMEBUFFERRENDERBUFFERPROC frameBufferRenderBuffer;
 		static PFNGLDELETERENDERBUFFERSPROC deleteRenderBuffers;
+#if defined(ANDROID_ENABLED) || defined(IOS_ENABLED)
+		static PFNGLDEPTHRANGEFPROC depthRange;
+#else
 		static PFNGLDEPTHRANGEPROC depthRange;
+#endif
 
 		// Blend extensions
+		static PFNGLBLENDEQUATIONPROC blendEquation;
 		static PFNGLBLENDFUNCSEPARATEPROC blendFuncSeparate;
 
 		// Buffer (VBO) extensions
@@ -188,6 +193,13 @@ namespace GLES1 {
 	do {                                            \
 		if (likely(GLES1::Polyfill::depthRange))    \
 			GLES1::Polyfill::depthRange(near, far); \
+	} while (0)
+
+#undef glBlendEquationOES
+#define glBlendEquationOES(mode)                     \
+	do {                                             \
+		if (likely(GLES1::Polyfill::blendEquation))  \
+			GLES1::Polyfill::blendEquation(mode);    \
 	} while (0)
 
 // =========================================
