@@ -2541,10 +2541,16 @@ void DisplayServerWindows::window_set_flag(WindowFlags p_flag, bool p_enabled, W
 		case WINDOW_FLAG_RESIZE_DISABLED: {
 			ERR_FAIL_COND_MSG(p_enabled && wd.parent_hwnd, "Embedded window resize can't be disabled.");
 			wd.resizable = !p_enabled;
+			if (wd.fullscreen) {
+				return;
+			}
 			_update_window_style(p_window);
 		} break;
 		case WINDOW_FLAG_BORDERLESS: {
 			wd.borderless = p_enabled;
+			if (wd.fullscreen) {
+				return;
+			}
 			_update_window_style(p_window);
 			_update_window_mouse_passthrough(p_window);
 			ShowWindow(wd.hWnd, (wd.no_focus || wd.is_popup) ? SW_SHOWNOACTIVATE : SW_SHOW); // Show the window.
@@ -2553,12 +2559,18 @@ void DisplayServerWindows::window_set_flag(WindowFlags p_flag, bool p_enabled, W
 			ERR_FAIL_COND_MSG(wd.transient_parent != INVALID_WINDOW_ID && p_enabled, "Transient windows can't become on top.");
 			ERR_FAIL_COND_MSG(p_enabled && wd.parent_hwnd, "Embedded window can't become on top.");
 			wd.always_on_top = p_enabled;
+			if (wd.fullscreen) {
+				return;
+			}
 			_update_window_style(p_window);
 		} break;
 		case WINDOW_FLAG_SHARP_CORNERS: {
 			wd.sharp_corners = p_enabled;
 			DWORD value = wd.sharp_corners ? DWMWCP_DONOTROUND : DWMWCP_DEFAULT;
 			::DwmSetWindowAttribute(wd.hWnd, DWMWA_WINDOW_CORNER_PREFERENCE, &value, sizeof(value));
+			if (wd.fullscreen) {
+				return;
+			}
 			_update_window_style(p_window);
 		} break;
 		case WINDOW_FLAG_TRANSPARENT: {
@@ -2592,6 +2604,9 @@ void DisplayServerWindows::window_set_flag(WindowFlags p_flag, bool p_enabled, W
 		} break;
 		case WINDOW_FLAG_NO_FOCUS: {
 			wd.no_focus = p_enabled;
+			if (wd.fullscreen) {
+				return;
+			}
 			_update_window_style(p_window);
 		} break;
 		case WINDOW_FLAG_MOUSE_PASSTHROUGH: {
