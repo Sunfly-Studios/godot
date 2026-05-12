@@ -137,6 +137,7 @@ public:
 	bool disable_particles_workaround = false;
 	bool disable_transform_feedback_shader_cache = false;
 	bool polyfill_half2float = true;
+	bool is_gl_less_than_15 = false;
 
 	// Flag for older, buggy Android emulators
 	// (Nexus 5 API 19 and similar).
