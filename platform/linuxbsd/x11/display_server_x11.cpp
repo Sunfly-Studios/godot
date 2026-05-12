@@ -6685,10 +6685,14 @@ DisplayServerX11::DisplayServerX11(const String &p_rendering_driver, WindowMode 
 	}
 
 	{
-		int version_major = 0; // Report 2.2 as supported by engine, but should work with 2.1 or 2.0 library as well.
-		int version_minor = 0;
-		// int rc = XIQueryVersion ? XIQueryVersion(x11_display, &version_major, &version_minor) : 0;
+		int version_major = 2;
+		int version_minor = 2;
 		int rc = -1;
+
+		if (OS::get_singleton()->has_environment("GODOT_LEGACY_X11_STUB")) {
+			version_major = 0;
+			version_minor = 0;
+		}
 		
 		if (XIQueryVersion) {
 			rc = XIQueryVersion(x11_display, &version_major, &version_minor);
