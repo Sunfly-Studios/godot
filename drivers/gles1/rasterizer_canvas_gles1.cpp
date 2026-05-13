@@ -2509,7 +2509,7 @@ void RasterizerCanvasGLES1::render_batches(Item::Command *const *p_commands, Ite
 									glTranslatef(dst_rect.position.x, dst_rect.position.y, 0.0f);
 									glScalef(Math::abs(dst_rect.size.x), Math::abs(dst_rect.size.y), 1.0f);
 									if (dst_rect.size.x < 0) {
-										GLfloat transpose[16] = { 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1 };
+										constexpr GLfloat transpose[16] = { 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1 };
 										glMultMatrixf(transpose);
 									}
 									glActiveTexture(GL_TEXTURE0);
@@ -2521,7 +2521,7 @@ void RasterizerCanvasGLES1::render_batches(Item::Command *const *p_commands, Ite
 									glTranslatef(dst_rect.position.x, dst_rect.position.y, 0.0f);
 									glScalef(Math::abs(dst_rect.size.x), Math::abs(dst_rect.size.y), 1.0f);
 									if (dst_rect.size.x < 0) {
-										GLfloat transpose[16] = { 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1 };
+										constexpr GLfloat transpose[16] = { 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1 };
 										glMultMatrixf(transpose);
 									}
 									glActiveTexture(GL_TEXTURE0);
@@ -2532,7 +2532,7 @@ void RasterizerCanvasGLES1::render_batches(Item::Command *const *p_commands, Ite
 									glTranslatef(dst_rect.position.x, dst_rect.position.y, 0.0f);
 									glScalef(Math::abs(dst_rect.size.x), Math::abs(dst_rect.size.y), 1.0f);
 									if (dst_rect.size.x < 0) {
-										GLfloat transpose[16] = { 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1 };
+										constexpr GLfloat transpose[16] = { 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1 };
 										glMultMatrixf(transpose);
 									}
 									glActiveTexture(GL_TEXTURE0);

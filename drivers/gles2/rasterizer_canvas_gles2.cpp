@@ -106,10 +106,6 @@ void RasterizerCanvasGLES2::_update_transform_to_mat4(const Transform3D &p_trans
 	p_mat4[15] = 1;
 }
 
-[[maybe_unused]] _FORCE_INLINE_ static uint32_t _indices_to_primitives(RS::PrimitiveType p_primitive, uint32_t p_indices) {
-	return 0;
-}
-
 RID RasterizerCanvasGLES2::light_create() {
 	CanvasLight canvas_light;
 	return canvas_light_owner.make_rid(canvas_light);
@@ -192,26 +188,29 @@ void RasterizerCanvasGLES2::light_update_shadow(RID p_rid, int p_shadow_index, c
 
 	Projection projection;
 	{
-		real_t fov = 90;
+		constexpr real_t FOV = 90;
 		real_t nearp = p_near;
 		real_t farp = p_far;
-		real_t aspect = 1.0;
+		constexpr real_t ASPECT = 1.0;
 
-		real_t ymax = nearp * Math::tan(Math::deg_to_rad(fov * 0.5));
+		real_t ymax = nearp * Math::tan(Math::deg_to_rad(FOV * 0.5));
 		real_t ymin = -ymax;
-		real_t xmin = ymin * aspect;
-		real_t xmax = ymax * aspect;
+		real_t xmin = ymin * ASPECT;
+		real_t xmax = ymax * ASPECT;
 
 		projection.set_frustum(xmin, xmax, ymin, ymax, nearp, farp);
 	}
 
-	const Projection projections[4] = {
+	Projection projections[4] = {
 		projection * Projection(Vector4(0, 0, -1, 0), Vector4(1, 0, 0, 0), Vector4(0, -1, 0, 0), Vector4(0, 0, 0, 1)),
 		projection * Projection(Vector4(-1, 0, 0, 0), Vector4(0, 0, -1, 0), Vector4(0, -1, 0, 0), Vector4(0, 0, 0, 1)),
 		projection * Projection(Vector4(0, 0, 1, 0), Vector4(-1, 0, 0, 0), Vector4(0, -1, 0, 0), Vector4(0, 0, 0, 1)),
 		projection * Projection(Vector4(1, 0, 0, 0), Vector4(0, 0, 1, 0), Vector4(0, -1, 0, 0), Vector4(0, 0, 0, 1))
 	};
-	static const Vector2 directions[4] = { Vector2(1, 0), Vector2(0, 1), Vector2(-1, 0), Vector2(0, -1) };
+	static Vector2 directions[4] = {
+		Vector2(1, 0), Vector2(0, 1),
+		Vector2(-1, 0), Vector2(0, -1)
+	};
 
 	for (int i = 0; i < 4; i++) {
 		int viewport_width = state.shadow_texture_size / 4;
@@ -1571,9 +1570,6 @@ void RasterizerCanvasGLES2::_bind_quad_buffer() const {
 
 _FORCE_INLINE_ bool RasterizerCanvasGLES2::_buffer_orphan_and_upload(unsigned int p_buffer_size_bytes, unsigned int p_offset_bytes, unsigned int p_data_size_bytes, const void *p_data, GLenum p_target, GLenum p_usage, bool p_optional_orphan) const {
 	ERR_FAIL_COND_V((p_offset_bytes + p_data_size_bytes) > p_buffer_size_bytes, false);
-
-	// Flush all errors
-	while (glGetError() != GL_NO_ERROR);
 
 	if (!p_optional_orphan) {
 		if (GLES2::Config::get_singleton()->is_android_emulator && p_offset_bytes == 0 && p_buffer_size_bytes == p_data_size_bytes) {
