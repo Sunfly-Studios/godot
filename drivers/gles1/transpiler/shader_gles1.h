@@ -147,7 +147,6 @@ private:
 	static bool shader_cache_save_compressed;
 	static bool shader_cache_save_compressed_zstd;
 	static bool shader_cache_save_debug;
-	bool shader_cache_dir_valid = false;
 
 	GLint max_image_units = 0;
 
@@ -180,7 +179,6 @@ private:
 	int variant_count = 0;
 
 	int base_texture_index = 0;
-	Version::Specialization *current_shader = nullptr;
 
 protected:
 	ShaderGLES1();
