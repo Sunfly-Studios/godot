@@ -108,10 +108,6 @@ void RasterizerCanvasGLES1::_update_transform_to_mat4(const Transform3D &p_trans
 	p_mat4[15] = 1;
 }
 
-[[maybe_unused]] _FORCE_INLINE_ static uint32_t _indices_to_primitives(RS::PrimitiveType p_primitive, uint32_t p_indices) {
-	return 0;
-}
-
 RID RasterizerCanvasGLES1::light_create() {
 	CanvasLight canvas_light;
 	return canvas_light_owner.make_rid(canvas_light);
@@ -365,7 +361,9 @@ void RasterizerCanvasGLES1::initialize() {
 			GL_CHECK_ERROR("GLES1::Canvas::initialize: buffer_allocate_data quad");
 			glBindBuffer(GL_ARRAY_BUFFER, 0);
 		} else {
+#if defined(DEBUG_ENABLED) || defined(TOOLS_ENABLED)
 			WARN_PRINT("GLES1: Failed to generate canvas_quad_vertices VBO. Using client memory fallback.");
+#endif 
 		}
 	}
 
@@ -388,7 +386,9 @@ void RasterizerCanvasGLES1::initialize() {
 			data.polygon_buffer_size = poly_size;
 			glBindBuffer(GL_ARRAY_BUFFER, 0);
 		} else {
+#if defined(DEBUG_ENABLED) || defined(TOOLS_ENABLED)
 			WARN_PRINT("GLES1: Failed to generate polygon_buffer VBO. Using client memory fallback.");
+#endif
 		}
 
 		uint32_t index_size = GLOBAL_DEF("rendering/limits/buffers/canvas_polygon_index_buffer_size_kb", 128);
@@ -514,7 +514,9 @@ void RasterizerCanvasGLES1::initialize() {
 			GL_CHECK_ERROR("GLES1::Canvas::initialize: buffer_allocate_data batcher");
 			glBindBuffer(GL_ARRAY_BUFFER, 0);
 		} else {
+#if defined(DEBUG_ENABLED) || defined(TOOLS_ENABLED)
 			WARN_PRINT("GLES1: Failed to generate Batcher VBOs. Using client memory fallback.");
+#endif
 		}
 
 		bdata.gl_index_buffer = 0;
@@ -953,8 +955,12 @@ void RasterizerCanvasGLES1::canvas_begin(RID p_to_render_target, bool p_to_backb
 	state.mode_variant = CanvasShaderGLES1::ShaderVariant::MODE_QUAD;
 	state.shader_version = data.canvas_shader_default_version;
 
-	GLES1::RenderTarget *render_target = GLES1::TextureStorage::get_singleton()->get_render_target(p_to_render_target);
+	GLES1::TextureStorage *texture_storage = GLES1::TextureStorage::get_singleton();
+	ERR_FAIL_NULL(texture_storage);
+
+	GLES1::RenderTarget *render_target = texture_storage->get_render_target(p_to_render_target);
 	GLES1::Config *config = GLES1::Config::get_singleton();
+	ERR_FAIL_NULL(config);
 
 	if (render_target) {
 		render_target->was_used = true;
@@ -973,22 +979,22 @@ void RasterizerCanvasGLES1::canvas_begin(RID p_to_render_target, bool p_to_backb
 		if (glIsFramebufferOES(render_target->fbo) == GL_FALSE) {
 			print_verbose("GLES1: Dead FBO detected. Forcing recreation.");
 			render_target->fbo = 0; 
-			GLES1::TextureStorage::get_singleton()->render_target_set_size(p_to_render_target, render_target->size.width, render_target->size.height, render_target->view_count);
+			texture_storage->render_target_set_size(p_to_render_target, render_target->size.width, render_target->size.height, render_target->view_count);
 		}
 	}
 
 	// Bind the correct Framebuffer
 	if (p_to_backbuffer) {
-		GLES1::TextureStorage::get_singleton()->bind_framebuffer(render_target ? render_target->backbuffer_fbo : 0);
+		texture_storage->bind_framebuffer(render_target ? render_target->backbuffer_fbo : 0);
 		GL_CHECK_ERROR("GLES1::Canvas::canvas_begin: bind backbuffer fbo");
-		GLES1::TextureStorage::get_singleton()->texture_bind_and_validate(
+		texture_storage->texture_bind_and_validate(
 			default_canvas_texture,
 			screen_tex_unit,
 			RS::CANVAS_ITEM_TEXTURE_FILTER_NEAREST,
 			RS::CANVAS_ITEM_TEXTURE_REPEAT_DISABLED
 		);
 	} else {
-		GLES1::TextureStorage::get_singleton()->bind_framebuffer(render_target ? render_target->fbo : 0);
+		texture_storage->bind_framebuffer(render_target ? render_target->fbo : 0);
 		GL_CHECK_ERROR("GLES1::Canvas::canvas_begin: bind fbo");
 		glActiveTexture(screen_tex_unit);
 		if (render_target) {
@@ -1005,13 +1011,13 @@ void RasterizerCanvasGLES1::canvas_begin(RID p_to_render_target, bool p_to_backb
 
 	// Set blending and clear buffers if needed
 	if (state.transparent_render) {
-		if (GLES1::Config::get_singleton()->support_blend_func_separate) {
+		if (config->support_blend_func_separate) {
 			glBlendFuncSeparateOES(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
 		} else {
 			glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 		}
 	} else {
-		if (GLES1::Config::get_singleton()->support_blend_func_separate) {
+		if (config->support_blend_func_separate) {
 			glBlendFuncSeparateOES(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_ZERO, GL_ONE);
 		} else {
 			glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
@@ -1029,7 +1035,7 @@ void RasterizerCanvasGLES1::canvas_begin(RID p_to_render_target, bool p_to_backb
 	// Set Viewport dimensions
 	Size2 render_target_size;
 	if (render_target) {
-		render_target_size = GLES1::TextureStorage::get_singleton()->render_target_get_size(p_to_render_target);
+		render_target_size = texture_storage->render_target_get_size(p_to_render_target);
 	} else {
 		render_target_size = DisplayServer::get_singleton()->window_get_size();
 	}
@@ -1042,8 +1048,8 @@ void RasterizerCanvasGLES1::canvas_begin(RID p_to_render_target, bool p_to_backb
 	reset_canvas();
 
 	// Bind the default white texture so untextured items draw correctly
-	RID white_tex_rid = GLES1::TextureStorage::get_singleton()->texture_gl_get_default(GLES1::DEFAULT_GL_TEXTURE_WHITE);
-	GLES1::TextureStorage::get_singleton()->texture_bind_and_validate(
+	RID white_tex_rid = texture_storage->texture_gl_get_default(GLES1::DEFAULT_GL_TEXTURE_WHITE);
+	texture_storage->texture_bind_and_validate(
 		white_tex_rid,
 		GL_TEXTURE0,
 		RS::CANVAS_ITEM_TEXTURE_FILTER_NEAREST,
@@ -1071,7 +1077,7 @@ void RasterizerCanvasGLES1::canvas_begin(RID p_to_render_target, bool p_to_backb
 	if (p_to_backbuffer || !render_target || render_target->direct_to_screen) {
 		y_scale = -2.0f;
 	} else if (state.render_target != RID()) {
-		RID override_color = GLES1::TextureStorage::get_singleton()->render_target_get_override_color(state.render_target);
+		RID override_color = texture_storage->render_target_get_override_color(state.render_target);
 		
 		if (override_color.is_valid()) {
 			y_scale = -2.0f;
@@ -1405,11 +1411,17 @@ void RasterizerCanvasGLES1::canvas_render_items_implementation(Item *p_item_list
 	state.using_light = p_light;
 	state.using_shadow = false;
 
-	GLint max_units = GLES1::Config::get_singleton()->max_texture_units;
+	GLES1::Config *config = GLES1::Config::get_singleton();
+	ERR_FAIL_NULL(config);
+
+	GLES1::TextureStorage *texture_storage = GLES1::TextureStorage::get_singleton();
+	ERR_FAIL_NULL(texture_storage);
+
+	GLint max_units = config->max_texture_units;
 
 	if (p_light) {
-		bool support_subtract = GLES1::Config::get_singleton()->support_blend_subtract;
-		bool support_separate = GLES1::Config::get_singleton()->support_blend_func_separate;
+		bool support_subtract = config->support_blend_subtract;
+		bool support_separate = config->support_blend_func_separate;
 
 		if (support_subtract) {
 			glBlendEquationOES(GL_FUNC_ADD_OES); // Default
@@ -1448,19 +1460,19 @@ void RasterizerCanvasGLES1::canvas_render_items_implementation(Item *p_item_list
 			glActiveTexture(GL_TEXTURE0 + 1);
 
 			RID light_tex_rid = p_light->texture;
-			GLES1::CanvasTexture *light_ct = GLES1::TextureStorage::get_singleton()->get_canvas_texture(light_tex_rid);
+			GLES1::CanvasTexture *light_ct = texture_storage->get_canvas_texture(light_tex_rid);
 			if (light_ct) {
 				light_tex_rid = light_ct->diffuse;
 			}
 
-			GLES1::Texture *light_tex = GLES1::TextureStorage::get_singleton()->get_texture(light_tex_rid);
+			GLES1::Texture *light_tex = texture_storage->get_texture(light_tex_rid);
 
 			if (light_tex) {
 				glEnable(GL_TEXTURE_2D);
 				glBindTexture(GL_TEXTURE_2D, light_tex->tex_id);
 			} else {
-				RID white_tex_rid = GLES1::TextureStorage::get_singleton()->texture_gl_get_default(GLES1::DEFAULT_GL_TEXTURE_WHITE);
-				GLES1::Texture *white_tex = GLES1::TextureStorage::get_singleton()->get_texture(white_tex_rid);
+				RID white_tex_rid = texture_storage->texture_gl_get_default(GLES1::DEFAULT_GL_TEXTURE_WHITE);
+				GLES1::Texture *white_tex = texture_storage->get_texture(white_tex_rid);
 				if (white_tex) {
 					glEnable(GL_TEXTURE_2D);
 					glBindTexture(GL_TEXTURE_2D, white_tex->tex_id);
@@ -1507,8 +1519,8 @@ void RasterizerCanvasGLES1::canvas_render_items_implementation(Item *p_item_list
 					glEnable(GL_TEXTURE_2D);
 					glBindTexture(GL_TEXTURE_2D, light_tex->tex_id);
 				} else {
-					RID white_tex_rid = GLES1::TextureStorage::get_singleton()->texture_gl_get_default(GLES1::DEFAULT_GL_TEXTURE_WHITE);
-					GLES1::Texture *white_tex = GLES1::TextureStorage::get_singleton()->get_texture(white_tex_rid);
+					RID white_tex_rid = texture_storage->texture_gl_get_default(GLES1::DEFAULT_GL_TEXTURE_WHITE);
+					GLES1::Texture *white_tex = texture_storage->get_texture(white_tex_rid);
 					if (white_tex) {
 						glEnable(GL_TEXTURE_2D);
 						glBindTexture(GL_TEXTURE_2D, white_tex->tex_id);
@@ -1605,7 +1617,7 @@ void RasterizerCanvasGLES1::canvas_render_items_implementation(Item *p_item_list
 				glBindBuffer(GL_ARRAY_BUFFER, 0); // Ensure client pointers
 				glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
 
-				if (GLES1::Config::get_singleton()->is_android_emulator) {
+				if (config->is_android_emulator) {
 					// Emulator bug: glColorMask is ignored on FBOs.
 					// Force the geometry to be fully transparent.
 					glColor4f(0.0f, 0.0f, 0.0f, 0.0f);
@@ -1703,8 +1715,8 @@ void RasterizerCanvasGLES1::canvas_render_items_implementation(Item *p_item_list
 	// Bind default white texture to texture unit 0
 	glActiveTexture(GL_TEXTURE0);
 	glEnable(GL_TEXTURE_2D);
-	RID white_tex_rid = GLES1::TextureStorage::get_singleton()->texture_gl_get_default(GLES1::DEFAULT_GL_TEXTURE_WHITE);
-	GLES1::TextureStorage::get_singleton()->texture_bind_and_validate(
+	RID white_tex_rid = texture_storage->texture_gl_get_default(GLES1::DEFAULT_GL_TEXTURE_WHITE);
+	texture_storage->texture_bind_and_validate(
 		white_tex_rid,
 		GL_TEXTURE0,
 		RS::CANVAS_ITEM_TEXTURE_FILTER_NEAREST,
@@ -1997,9 +2009,6 @@ void RasterizerCanvasGLES1::_bind_quad_buffer() const {
 
 _FORCE_INLINE_ bool RasterizerCanvasGLES1::_buffer_orphan_and_upload(unsigned int p_buffer_size_bytes, unsigned int p_offset_bytes, unsigned int p_data_size_bytes, const void *p_data, GLenum p_target, GLenum p_usage, bool p_optional_orphan) const {
 	ERR_FAIL_COND_V((p_offset_bytes + p_data_size_bytes) > p_buffer_size_bytes, false);
-
-	// Flush all errors
-	while (glGetError() != GL_NO_ERROR);
 
 	if (!p_optional_orphan) {
 		if (GLES1::Config::get_singleton()->is_android_emulator && p_offset_bytes == 0 && p_buffer_size_bytes == p_data_size_bytes) {
@@ -3950,9 +3959,8 @@ void RasterizerCanvasGLES1::_legacy_draw_polygon(Item::CommandPolygon *p_poly, G
 		} else if (use_vertex_colors) {
 			// Vertex colored polygon
 			Color *precalced_colors = SAFE_ALLOCA_ARRAY(Color, points_count);
-			ERR_FAIL_NULL(precalced_colors);
 
-			if (precalced_colors) {
+			if (likely(precalced_colors)) {
 				int num_colors_specified = MIN((int)pd.colors.size(), (int)points_count);
 				Color vcol = pd.colors[0] * state.uniforms.final_modulate;
 
@@ -4057,9 +4065,8 @@ void RasterizerCanvasGLES1::_legacy_draw_polygon(Item::CommandPolygon *p_poly, G
 			glColor4f(combined_color.r, combined_color.g, combined_color.b, combined_color.a);
 		} else if (use_vertex_colors) {
 			Color *precalced_colors = SAFE_ALLOCA_ARRAY(Color, points_count);
-			ERR_FAIL_NULL(precalced_colors);
 
-			if (precalced_colors) {
+			if (likely(precalced_colors)) {
 				int num_colors_specified = MIN((int)pd.colors.size(), (int)points_count);
 				Color vcol = pd.colors[0] * state.uniforms.final_modulate;
 

@@ -853,7 +853,7 @@ void ParticlesStorage::particles_collision_set_attractor_attenuation(RID p_parti
 }
 
 void ParticlesStorage::particles_collision_set_field_texture(RID p_particles_collision, RID p_texture) {
-	WARN_PRINT_ONCE_ED("The Legacy renderer does not support SDF collisions in 3D particle shaders");
+	WARN_PRINT_ONCE_ED("The Classic renderer does not support SDF collisions in 3D particle shaders");
 }
 
 void ParticlesStorage::particles_collision_height_field_update(RID p_particles_collision) {

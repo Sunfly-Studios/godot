@@ -51,86 +51,19 @@ void ShaderData::set_path_hint(const String &p_hint) {
 }
 
 void ShaderData::set_default_texture_parameter(const StringName &p_name, RID p_texture, int p_index) {
-	if (!p_texture.is_valid()) {
-		if (default_texture_params.has(p_name) && default_texture_params[p_name].has(p_index)) {
-			default_texture_params[p_name].erase(p_index);
 
-			if (default_texture_params[p_name].is_empty()) {
-				default_texture_params.erase(p_name);
-			}
-		}
-	} else {
-		if (!default_texture_params.has(p_name)) {
-			default_texture_params[p_name] = HashMap<int, RID>();
-		}
-		default_texture_params[p_name][p_index] = p_texture;
-	}
 }
 
 Variant ShaderData::get_default_parameter(const StringName &p_parameter) const {
-	if (uniforms.has(p_parameter)) {
-		ShaderLanguage::ShaderNode::Uniform uniform = uniforms[p_parameter];
-		Vector<ShaderLanguage::Scalar> default_value = uniform.default_value;
-		return ShaderLanguage::constant_value_to_variant(default_value, uniform.type, uniform.array_size, uniform.hint);
-	}
 	return Variant();
 }
 
 void ShaderData::get_shader_uniform_list(List<PropertyInfo> *p_param_list) const {
-	SortArray<Pair<StringName, int>, ShaderLanguage::UniformOrderComparator> sorter{};
-	LocalVector<Pair<StringName, int>> filtered_uniforms{};
-
-	for (const KeyValue<StringName, ShaderLanguage::ShaderNode::Uniform> &E : uniforms) {
-		if (E.value.scope != ShaderLanguage::ShaderNode::Uniform::SCOPE_LOCAL) {
-			continue;
-		}
-		if (E.value.texture_order >= 0) {
-			filtered_uniforms.push_back(Pair<StringName, int>(E.key, E.value.texture_order + 100000));
-		} else {
-			filtered_uniforms.push_back(Pair<StringName, int>(E.key, E.value.order));
-		}
-	}
-	int uniform_count = filtered_uniforms.size();
-	sorter.sort(filtered_uniforms.ptr(), uniform_count);
-
-	String last_group;
-	for (int i = 0; i < uniform_count; i++) {
-		const StringName &uniform_name = filtered_uniforms[i].first;
-		const ShaderLanguage::ShaderNode::Uniform &uniform = uniforms[uniform_name];
-
-		String group = uniform.group;
-		if (!uniform.subgroup.is_empty()) {
-			group += "::" + uniform.subgroup;
-		}
-
-		if (group != last_group) {
-			PropertyInfo pi;
-			pi.usage = PROPERTY_USAGE_GROUP;
-			pi.name = group;
-			p_param_list->push_back(pi);
-
-			last_group = group;
-		}
-
-		PropertyInfo pi = ShaderLanguage::uniform_to_property_info(uniform);
-		pi.name = uniform_name;
-		p_param_list->push_back(pi);
-	}
+	
 }
 
 void ShaderData::get_instance_param_list(List<RendererMaterialStorage::InstanceShaderParam> *p_param_list) const {
-	for (const KeyValue<StringName, ShaderLanguage::ShaderNode::Uniform> &E : uniforms) {
-		if (E.value.scope != ShaderLanguage::ShaderNode::Uniform::SCOPE_INSTANCE) {
-			continue;
-		}
-
-		RendererMaterialStorage::InstanceShaderParam p;
-		p.info = ShaderLanguage::uniform_to_property_info(E.value);
-		p.info.name = E.key; //supply name
-		p.index = E.value.instance_index;
-		p.default_value = ShaderLanguage::constant_value_to_variant(E.value.default_value, E.value.type, E.value.array_size, E.value.hint);
-		p_param_list->push_back(p);
-	}
+	
 }
 
 bool ShaderData::is_parameter_texture(const StringName &p_param) const {
@@ -756,181 +689,41 @@ void MaterialStorage::shader_initialize(RID p_rid) {
 }
 
 void MaterialStorage::shader_free(RID p_rid) {
-	GLES1::Shader *shader = shader_owner.get_or_null(p_rid);
-	ERR_FAIL_NULL(shader);
 
-	// make material unreference this safely
-	while (shader->owners.size()) {
-		Material *mat = *shader->owners.begin();
-		material_set_shader(mat->self, RID());
-	}
-
-	// clear data if exists
-	if (shader->data) {
-		memdelete(shader->data);
-	}
-	shader_owner.free(p_rid);
 }
 
 void MaterialStorage::shader_set_code(RID p_shader, const String &p_code) {
 	GLES1::Shader *shader = shader_owner.get_or_null(p_shader);
 	ERR_FAIL_NULL(shader);
 
-#if DEBUG_ENABLED
-	if (!p_code.is_empty()) {
-        WARN_PRINT_ONCE("Cannot load or import custom shaders under the gl_classic driver.");
-    }
-#endif
-
-	shader->code = p_code;
-
-	String mode_string = ShaderLanguage::get_shader_type(p_code);
-
-	RS::ShaderMode new_mode;
-	if (mode_string == "canvas_item") {
-		new_mode = RS::SHADER_CANVAS_ITEM;
-	} else if (mode_string == "particles") {
-		new_mode = RS::SHADER_PARTICLES;
-	} else if (mode_string == "spatial") {
-		new_mode = RS::SHADER_SPATIAL;
-	} else if (mode_string == "sky") {
-		new_mode = RS::SHADER_SKY;
-	} else {
-		new_mode = RS::SHADER_MAX;
-		ERR_PRINT("shader type " + mode_string + " not supported in OpenGL renderer");
-	}
-
-	if (new_mode != shader->mode) {
-		if (shader->data) {
-			memdelete(shader->data);
-			shader->data = nullptr;
-		}
-
-		for (Material *E : shader->owners) {
-			Material *material = E;
-			material->shader_mode = new_mode;
-			if (material->data) {
-				memdelete(material->data);
-				material->data = nullptr;
-			}
-		}
-
-		shader->mode = new_mode;
-
-		if (new_mode < RS::SHADER_MAX && shader_data_request_func[new_mode]) {
-			shader->data = shader_data_request_func[new_mode]();
-		} else {
-			shader->mode = RS::SHADER_MAX; //invalid
-		}
-
-		for (Material *E : shader->owners) {
-			Material *material = E;
-			if (shader->data) {
-				material->data = material_data_request_func[new_mode](shader->data);
-				material->data->self = material->self;
-				material->data->set_next_pass(material->next_pass);
-				material->data->set_render_priority(material->priority);
-			}
-			material->shader_mode = new_mode;
-		}
-
-		if (shader->data) {
-			for (const KeyValue<StringName, HashMap<int, RID>> &E : shader->default_texture_parameter) {
-				for (const KeyValue<int, RID> &E2 : E.value) {
-					shader->data->set_default_texture_parameter(E.key, E2.value, E2.key);
-				}
-			}
-		}
-	}
-
-	if (shader->data) {
-		shader->data->set_code(p_code);
-	}
-
-	for (Material *E : shader->owners) {
-		Material *material = E;
-		material->dependency.changed_notify(Dependency::DEPENDENCY_CHANGED_MATERIAL);
-		_material_queue_update(material, true, true);
-	}
+    WARN_PRINT_ONCE("Cannot load or import custom shaders under the Classic driver.");
 }
 
 void MaterialStorage::shader_set_path_hint(RID p_shader, const String &p_path) {
-	GLES1::Shader *shader = shader_owner.get_or_null(p_shader);
-	ERR_FAIL_NULL(shader);
 
-	shader->path_hint = p_path;
-	if (shader->data) {
-		shader->data->set_path_hint(p_path);
-	}
 }
 
 String MaterialStorage::shader_get_code(RID p_shader) const {
-	const Shader *shader = shader_owner.get_or_null(p_shader);
-	ERR_FAIL_COND_V(!shader, String());
-
-	return shader->code;
+	return String();
 }
 
 void MaterialStorage::get_shader_parameter_list(RID p_shader, List<PropertyInfo> *p_param_list) const {
-	GLES1::Shader *shader = shader_owner.get_or_null(p_shader);
-	ERR_FAIL_NULL(shader);
-	if (shader->data) {
-		return shader->data->get_shader_uniform_list(p_param_list);
-	}
+
 }
 
 void MaterialStorage::shader_set_default_texture_parameter(RID p_shader, const StringName &p_name, RID p_texture, int p_index) {
-	GLES1::Shader *shader = shader_owner.get_or_null(p_shader);
-	ERR_FAIL_NULL(shader);
-
-	if (p_texture.is_valid() && TextureStorage::get_singleton()->owns_texture(p_texture)) {
-		if (!shader->default_texture_parameter.has(p_name)) {
-			shader->default_texture_parameter[p_name] = HashMap<int, RID>();
-		}
-		shader->default_texture_parameter[p_name][p_index] = p_texture;
-	} else {
-		if (shader->default_texture_parameter.has(p_name) && shader->default_texture_parameter[p_name].has(p_index)) {
-			shader->default_texture_parameter[p_name].erase(p_index);
-
-			if (shader->default_texture_parameter[p_name].is_empty()) {
-				shader->default_texture_parameter.erase(p_name);
-			}
-		}
-	}
-	if (shader->data) {
-		shader->data->set_default_texture_parameter(p_name, p_texture, p_index);
-	}
-	for (Material *E : shader->owners) {
-		Material *material = E;
-		_material_queue_update(material, false, true);
-	}
+	
 }
 
 RID MaterialStorage::shader_get_default_texture_parameter(RID p_shader, const StringName &p_name, int p_index) const {
-	const GLES1::Shader *shader = shader_owner.get_or_null(p_shader);
-	ERR_FAIL_NULL_V(shader, RID());
-	if (shader->default_texture_parameter.has(p_name) && shader->default_texture_parameter[p_name].has(p_index)) {
-		return shader->default_texture_parameter[p_name][p_index];
-	}
-
 	return RID();
 }
 
 Variant MaterialStorage::shader_get_parameter_default(RID p_shader, const StringName &p_param) const {
-	Shader *shader = shader_owner.get_or_null(p_shader);
-	ERR_FAIL_NULL_V(shader, Variant());
-	if (shader->data) {
-		return shader->data->get_default_parameter(p_param);
-	}
 	return Variant();
 }
 
 RS::ShaderNativeSourceCode MaterialStorage::shader_get_native_source_code(RID p_shader) const {
-	Shader *shader = shader_owner.get_or_null(p_shader);
-	ERR_FAIL_NULL_V(shader, RS::ShaderNativeSourceCode());
-	if (shader->data) {
-		return shader->data->get_native_source_code();
-	}
 	return RS::ShaderNativeSourceCode();
 }
 
@@ -955,7 +748,7 @@ void MaterialStorage::_update_queued_materials() {
 	while (material_update_list.first()) {
 		Material *mat = material_update_list.first()->self();
 
-		// Push the cached params into the GLES2 Uniform Buffers
+		// Push the cached params into the GLES1 "Uniform Buffers"
 		if (mat->data) {
 			mat->data->update_parameters(mat->params, mat->uniform_dirty, mat->texture_dirty);
 		}
@@ -1001,72 +794,15 @@ void MaterialStorage::material_free(RID p_rid) {
 }
 
 void MaterialStorage::material_set_shader(RID p_material, RID p_shader) {
-	Material *material = material_owner.get_or_null(p_material);
-	ERR_FAIL_NULL(material);
 
-	if (material->shader) {
-		material->shader->owners.erase(material);
-	}
-
-	if (material->data) {
-		memdelete(material->data);
-		material->data = nullptr;
-	}
-
-	if (p_shader.is_null()) {
-		material->shader = nullptr;
-		material->shader_id = 0;
-		material->shader_mode = RS::SHADER_MAX;
-		return;
-	}
-
-	Shader *shader = shader_owner.get_or_null(p_shader);
-	ERR_FAIL_NULL(shader);
-
-	material->shader = shader;
-	material->shader_id = p_shader.get_id();
-	material->shader_mode = shader->mode;
-
-	if (shader->data) {
-		if (shader->mode == RS::SHADER_CANVAS_ITEM) {
-			material->data = GLES1::_create_canvas_material_func(shader->data);
-		} else if (shader->mode == RS::SHADER_PARTICLES) {
-			material->data = GLES1::_create_particles_material_func(shader->data);
-		}
-		// TODO(GLES2): Add Spatial material allocation when 3D is implemented
-	}
-
-	shader->owners.insert(material);
-
-	_material_queue_update(material, true, true);
 }
 
 void MaterialStorage::material_set_param(RID p_material, const StringName &p_param, const Variant &p_value) {
-	Material *material = material_owner.get_or_null(p_material);
-	ERR_FAIL_NULL(material);
 
-	if (p_value.get_type() == Variant::NIL) {
-		material->params.erase(p_param);
-	} else {
-		material->params[p_param] = p_value;
-	}
-
-	// Tell the queue what kind of update this is
-	if (p_value.get_type() == Variant::OBJECT || p_value.get_type() == Variant::RID) {
-		_material_queue_update(material, false, true); // Texture dirty
-	} else {
-		_material_queue_update(material, true, false); // Uniform dirty
-	}
 }
 
 Variant MaterialStorage::material_get_param(RID p_material, const StringName &p_param) const {
-	const GLES1::Material *material = material_owner.get_or_null(p_material);
-	ERR_FAIL_NULL_V(material, Variant());
-	if (material->params.has(p_param)) {
-		return material->params[p_param];
-	} else {
-		return Variant();
-	}
+	return Variant();
 }
 
 void MaterialStorage::material_set_next_pass(RID p_material, RID p_next_material) {
@@ -1120,15 +856,7 @@ RS::CullMode MaterialStorage::material_get_cull_mode(RID p_material) const {
 }
 
 void MaterialStorage::material_get_instance_shader_parameters(RID p_material, List<InstanceShaderParam> *r_parameters) {
-	GLES1::Material *material = material_owner.get_or_null(p_material);
-	ERR_FAIL_NULL(material);
-	if (material->shader && material->shader->data) {
-		material->shader->data->get_instance_param_list(r_parameters);
 
-		if (material->next_pass.is_valid()) {
-			material_get_instance_shader_parameters(material->next_pass, r_parameters);
-		}
-	}
 }
 
 void MaterialStorage::material_update_dependency(RID p_material, DependencyTracker *p_instance) {
@@ -1141,15 +869,7 @@ void MaterialStorage::material_update_dependency(RID p_material, DependencyTrack
 }
 
 _FORCE_INLINE_ LocalVector<ShaderGLES1::TextureUniformData> get_texture_uniform_data(const Vector<ShaderCompiler::GeneratedCode::Texture> &texture_uniforms) {
-	LocalVector<ShaderGLES1::TextureUniformData> texture_uniform_data;
-	for (int i = 0; i < texture_uniforms.size(); i++) {
-		int num_textures = texture_uniforms[i].array_size;
-		if (num_textures == 0) {
-			num_textures = 1;
-		}
-		texture_uniform_data.push_back({ texture_uniforms[i].name, num_textures });
-	}
-	return texture_uniform_data;
+	return LocalVector<ShaderGLES1::TextureUniformData>();
 }
 
 /* Canvas Shader Data */
@@ -1174,66 +894,7 @@ void CanvasShaderData::set_code(const String &p_code) {
 	}
 
 	ShaderCompiler::GeneratedCode gen_code;
-
-	// Actual enum set further down after compilation
-	int blend_modei = BLEND_MODE_MIX;
-
-	ShaderCompiler::IdentifierActions actions;
-	actions.entry_point_stages["vertex"] = ShaderCompiler::STAGE_VERTEX;
-	actions.entry_point_stages["fragment"] = ShaderCompiler::STAGE_FRAGMENT;
-	actions.entry_point_stages["light"] = ShaderCompiler::STAGE_FRAGMENT;
-
-	actions.render_mode_values["blend_add"] = Pair<int *, int>(&blend_modei, BLEND_MODE_ADD);
-	actions.render_mode_values["blend_mix"] = Pair<int *, int>(&blend_modei, BLEND_MODE_MIX);
-	actions.render_mode_values["blend_sub"] = Pair<int *, int>(&blend_modei, BLEND_MODE_SUB);
-	actions.render_mode_values["blend_mul"] = Pair<int *, int>(&blend_modei, BLEND_MODE_MUL);
-	actions.render_mode_values["blend_premul_alpha"] = Pair<int *, int>(&blend_modei, BLEND_MODE_PMALPHA);
-	actions.render_mode_values["blend_disabled"] = Pair<int *, int>(&blend_modei, BLEND_MODE_DISABLED);
-
-	actions.usage_flag_pointers["texture_sdf"] = &uses_sdf;
-	actions.usage_flag_pointers["TIME"] = &uses_time;
-	actions.usage_flag_pointers["CUSTOM0"] = &uses_custom0;
-	actions.usage_flag_pointers["CUSTOM1"] = &uses_custom1;
-
-	actions.uniforms = &uniforms;
-	Error err = MaterialStorage::get_singleton()->shaders.compiler_canvas.compile(RS::SHADER_CANVAS_ITEM, code, &actions, path, gen_code);
-	ERR_FAIL_COND_MSG(err != OK, "Shader compilation failed.");
-
-	if (version.is_null()) {
-		version = MaterialStorage::get_singleton()->shaders.canvas_shader.version_create();
-	}
-
-	blend_mode = BlendMode(blend_modei);
-	uses_screen_texture = gen_code.uses_screen_texture;
-	uses_screen_texture_mipmaps = gen_code.uses_screen_texture_mipmaps;
-
-#if 0
-	print_line("**compiling shader:");
-	print_line("**defines:\n");
-	for (int i = 0; i < gen_code.defines.size(); i++) {
-		print_line(gen_code.defines[i]);
-	}
-
-	HashMap<String, String>::Iterator el = gen_code.code.begin();
-	while (el) {
-		print_line("\n**code " + el->key + ":\n" + el->value);
-		++el;
-	}
-
-	print_line("\n**uniforms:\n" + gen_code.uniforms);
-	print_line("\n**vertex_globals:\n" + gen_code.stage_globals[ShaderCompiler::STAGE_VERTEX]);
-	print_line("\n**fragment_globals:\n" + gen_code.stage_globals[ShaderCompiler::STAGE_FRAGMENT]);
-#endif
-
-	LocalVector<ShaderGLES1::TextureUniformData> texture_uniform_data = get_texture_uniform_data(gen_code.texture_uniforms);
-
-	MaterialStorage::get_singleton()->shaders.canvas_shader.version_set_code(version, gen_code.code, gen_code.uniforms, gen_code.stage_globals[ShaderCompiler::STAGE_VERTEX], gen_code.stage_globals[ShaderCompiler::STAGE_FRAGMENT], gen_code.defines, texture_uniform_data, true);
-	ERR_FAIL_COND(!MaterialStorage::get_singleton()->shaders.canvas_shader.version_is_valid(version));
-
-	vertex_input_mask = RS::ARRAY_FORMAT_VERTEX | RS::ARRAY_FORMAT_COLOR | RS::ARRAY_FORMAT_TEX_UV;
-	vertex_input_mask |= uses_custom0 << RS::ARRAY_CUSTOM0;
-	vertex_input_mask |= uses_custom1 << RS::ARRAY_CUSTOM1;
-
+	
 	ubo_size = gen_code.uniform_total_size;
 	ubo_offsets = gen_code.uniform_offsets;
 	texture_uniforms = gen_code.texture_uniforms;
