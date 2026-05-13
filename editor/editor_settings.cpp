@@ -475,14 +475,7 @@ void EditorSettings::_load_defaults(Ref<ConfigFile> p_extra_config) {
 	_initial_set("interface/editor/separate_distraction_mode", false, true);
 	_initial_set("interface/editor/automatically_open_screenshots", true, true);
 
-	if (OS::get_singleton()->get_current_rendering_method() == "gl_classic") {
-		// Force Single-Window Mode for GLES1. This sidesteps the nightmare
-		// of having to deal with multiple contexts and makes things easier.
-		_initial_set("interface/editor/single_window_mode", true);
-		EDITOR_SETTING_USAGE(Variant::BOOL, PROPERTY_HINT_NONE, "interface/editor/single_window_mode", true, "", PROPERTY_USAGE_DEFAULT | PROPERTY_USAGE_RESTART_IF_CHANGED | PROPERTY_USAGE_EDITOR_BASIC_SETTING)
-	} else {
-		EDITOR_SETTING_USAGE(Variant::BOOL, PROPERTY_HINT_NONE, "interface/editor/single_window_mode", false, "", PROPERTY_USAGE_DEFAULT | PROPERTY_USAGE_RESTART_IF_CHANGED | PROPERTY_USAGE_EDITOR_BASIC_SETTING)
-	}
+	EDITOR_SETTING_USAGE(Variant::BOOL, PROPERTY_HINT_NONE, "interface/editor/single_window_mode", false, "", PROPERTY_USAGE_DEFAULT | PROPERTY_USAGE_RESTART_IF_CHANGED | PROPERTY_USAGE_EDITOR_BASIC_SETTING)
 
 	_initial_set("interface/editor/mouse_extra_buttons_navigate_history", true);
 	_initial_set("interface/editor/save_each_scene_on_quit", true, true); // Regression
