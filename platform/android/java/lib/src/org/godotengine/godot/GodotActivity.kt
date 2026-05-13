@@ -36,6 +36,7 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Bundle
 import android.util.Log
+import androidx.activity.addCallback
 import androidx.annotation.CallSuper
 import androidx.annotation.LayoutRes
 import androidx.fragment.app.FragmentActivity
@@ -82,6 +83,9 @@ abstract class GodotActivity : FragmentActivity(), GodotHost {
 		super.onCreate(savedInstanceState)
 
 		setContentView(getGodotAppLayout())
+
+		// Register `OnBackPressedCallback` for the Godot fragment.
+		onBackPressedDispatcher.addCallback { godotFragment?.onBackPressed() }
 
 		handleStartIntent(intent, true)
 
@@ -217,10 +221,6 @@ abstract class GodotActivity : FragmentActivity(), GodotHost {
 				Log.w(TAG, "Permissions request was interrupted or cancelled by the OS.")
 			}
 		}
-	}
-
-	override fun onBackPressed() {
-		godotFragment?.onBackPressed() ?: super.onBackPressed()
 	}
 
 	override fun getActivity(): Activity? {

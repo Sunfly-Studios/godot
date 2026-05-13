@@ -246,6 +246,7 @@ def configure(env: "SConsEnvironment"):
     env.Append(LINKFLAGS=["-Wl,--build-id"])
     env.Append(LINKFLAGS=["-Wl,-soname,libgodot_android.so"])
     env.Append(LINKFLAGS=["-Wl,-z,max-page-size=16384"])
+    env.Append(LINKFLAGS=["-Wl,-z,common-page-size=16384"])
 
     env.Prepend(CPPPATH=["#platform/android"])
     env.Append(CPPDEFINES=["ANDROID_ENABLED", "UNIX_ENABLED"])

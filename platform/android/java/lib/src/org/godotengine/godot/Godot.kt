@@ -130,6 +130,15 @@ class Godot(private val context: Context) {
 		}
 	}
 
+	/**
+	 * Describes the engine current run status.
+	 */
+	enum class RunStatus {
+		INITIALIZING,
+		STARTED,
+		TERMINATING
+	}
+
 	private val mSensorManager: SensorManager = context.getSystemService(Context.SENSOR_SERVICE) as SensorManager
 	private val mClipboard: ClipboardManager = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
 	private val vibratorService: Vibrator = context.getSystemService(Context.VIBRATOR_SERVICE) as Vibrator
@@ -198,9 +207,11 @@ class Godot(private val context: Context) {
 	private var resumed = false
 
 	/**
-	 * Tracks whether [onGodotSetupCompleted] fired.
+	 * Tracks the engine's run status.
 	 */
-	private val godotMainLoopStarted = AtomicBoolean(false)
+	private val _runStatus = AtomicReference<RunStatus>(RunStatus.INITIALIZING)
+	val runStatus: RunStatus
+		get() = _runStatus.get()
 
 	var io: GodotIO? = null
 
@@ -742,7 +753,7 @@ class Godot(private val context: Context) {
 	}
 
 	private fun registerSensorsIfNeeded() {
-		if (!resumed || !godotMainLoopStarted.get()) {
+		if (!resumed || runStatus != RunStatus.STARTED) {
 			return
 		}
 
@@ -888,7 +899,7 @@ class Godot(private val context: Context) {
 	 */
 	private fun onGodotMainLoopStarted() {
 		Log.v(TAG, "OnGodotMainLoopStarted")
-		godotMainLoopStarted.set(true)
+		_runStatus.set(RunStatus.STARTED)
 
 		accelerometerEnabled.set(java.lang.Boolean.parseBoolean(GodotLib.getGlobal("input_devices/sensors/enable_accelerometer")))
 		gravityEnabled.set(java.lang.Boolean.parseBoolean(GodotLib.getGlobal("input_devices/sensors/enable_gravity")))
@@ -911,6 +922,11 @@ class Godot(private val context: Context) {
 	@Keep
 	private fun onGodotTerminating() {
 		Log.v(TAG, "OnGodotTerminating")
+		_runStatus.set(RunStatus.TERMINATING)
+		
+		for (plugin in pluginRegistry.allPlugins) {
+			plugin.onGodotTerminating()
+		}
 		runOnTerminate.get()?.run()
 	}
 
