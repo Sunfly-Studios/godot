@@ -68,7 +68,14 @@ def get_android_ndk_root(env: "SConsEnvironment"):
 
 # This is kept in sync with the value in 'platform/android/java/app/config.gradle'.
 def get_ndk_version():
-    return "25.2.9519653"
+    # This is a special, unreleased r25c build of the NDK
+    # which has its `libc++_shared.so` 16KB aligned.
+    # To use:
+    # 1. Go to https://ci.android.com/builds/branches/aosp-ndk-r25-release/grid?legacy=1
+    # 2. Download `NDK r25c 16 KB` with its description `Support rc2`.
+    # 3. Extract it to your NDK folder (i.e, C:/Users/<Username>/android-sdk/ndk).
+    # 4. Rename the extracted folder to `25.3.12161346` for it to be picked up here.
+    return "25.3.12161346"
 
 
 # This is kept in sync with the value in 'platform/android/java/app/config.gradle'.
