@@ -348,7 +348,19 @@ Config::Config() {
 		adreno_3xx_compatibility = true;
 	}
 
-	is_android_emulator = rendering_device_name.contains("Android Emulator");
+	is_android_emulator = (
+		rendering_device_name.contains("Android Emulator") ||
+		rendering_device_name.contains("SwiftShader") ||
+		rendering_device_name.contains("Goldfish") ||
+		rendering_device_name.contains("ANGLE")
+	);
+
+	if (is_android_emulator) {
+		// Force a simpler 2-unit pipeline
+		max_texture_units = MIN(max_texture_units, 2);
+		max_texture_image_units = MIN(max_texture_image_units, 2);
+		support_vbo = false;
+	}
 
 	if (OS::get_singleton()->get_current_rendering_driver_name() == "opengl1_angle" || OS::get_singleton()->has_feature("web")) {
 		polyfill_half2float = false;

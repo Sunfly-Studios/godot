@@ -346,8 +346,10 @@ void RasterizerCanvasGLES1::initialize() {
 	// Quad buffer
 	{
 		data.canvas_quad_vertices = 0;
-		glGenBuffers(1, &data.canvas_quad_vertices);
-		GL_CHECK_ERROR("GLES1::Canvas::initialize: glGenBuffers quad");
+		if (!GLES1::Config::get_singleton()->is_android_emulator) {
+			glGenBuffers(1, &data.canvas_quad_vertices);
+			GL_CHECK_ERROR("GLES1::Canvas::initialize: glGenBuffers quad");
+		}
 
 		if (data.canvas_quad_vertices != 0) {
 			glBindBuffer(GL_ARRAY_BUFFER, data.canvas_quad_vertices);
@@ -374,8 +376,10 @@ void RasterizerCanvasGLES1::initialize() {
 		poly_size *= 1024;
 
 		data.polygon_buffer = 0;
-		glGenBuffers(1, &data.polygon_buffer);
-		GL_CHECK_ERROR("GLES1::Canvas::initialize: glGenBuffers poly");
+		if (!GLES1::Config::get_singleton()->is_android_emulator) {
+			glGenBuffers(1, &data.polygon_buffer);
+			GL_CHECK_ERROR("GLES1::Canvas::initialize: glGenBuffers poly");
+		}
 
 		if (data.polygon_buffer != 0) {
 			glBindBuffer(GL_ARRAY_BUFFER, data.polygon_buffer);
@@ -392,8 +396,11 @@ void RasterizerCanvasGLES1::initialize() {
 		index_size *= 1024;
 
 		data.polygon_index_buffer = 0;
-		glGenBuffers(1, &data.polygon_index_buffer);
-		GL_CHECK_ERROR("GLES1::Canvas::initialize: glGenBuffers poly index");
+
+		if (!GLES1::Config::get_singleton()->is_android_emulator) {
+			glGenBuffers(1, &data.polygon_index_buffer);
+			GL_CHECK_ERROR("GLES1::Canvas::initialize: glGenBuffers poly index");
+		}
 
 		if (data.polygon_index_buffer != 0) {
 			glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, data.polygon_index_buffer);
@@ -407,8 +414,11 @@ void RasterizerCanvasGLES1::initialize() {
 	// Ninepatch buffers
 	{
 		data.ninepatch_vertices = 0;
-		glGenBuffers(1, &data.ninepatch_vertices);
-		GL_CHECK_ERROR("GLES1::Canvas::initialize: glGenBuffers ninepatch");
+
+		if (!GLES1::Config::get_singleton()->is_android_emulator) {
+			glGenBuffers(1, &data.ninepatch_vertices);
+			GL_CHECK_ERROR("GLES1::Canvas::initialize: glGenBuffers ninepatch");
+		}
 
 		if (data.ninepatch_vertices != 0) {
 			glBindBuffer(GL_ARRAY_BUFFER, data.ninepatch_vertices);
@@ -418,8 +428,11 @@ void RasterizerCanvasGLES1::initialize() {
 		}
 
 		data.ninepatch_elements = 0;
-		glGenBuffers(1, &data.ninepatch_elements);
-		GL_CHECK_ERROR("GLES1::Canvas::initialize: glGenBuffers ninepatch index");
+
+		if (!GLES1::Config::get_singleton()->is_android_emulator) {
+			glGenBuffers(1, &data.ninepatch_elements);
+			GL_CHECK_ERROR("GLES1::Canvas::initialize: glGenBuffers ninepatch index");
+		}
 
 		if (data.ninepatch_elements != 0) {
 			glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, data.ninepatch_elements);
@@ -489,8 +502,11 @@ void RasterizerCanvasGLES1::initialize() {
 
 	if (bdata.vertex_buffer_size_bytes && bdata.index_buffer_size_units > 0) {
 		bdata.gl_vertex_buffer = 0;
-		glGenBuffers(1, &bdata.gl_vertex_buffer);
-		GL_CHECK_ERROR("GLES1::Canvas::initialize: glGenBuffers batcher");
+
+		if (!GLES1::Config::get_singleton()->is_android_emulator) {
+			glGenBuffers(1, &bdata.gl_vertex_buffer);
+			GL_CHECK_ERROR("GLES1::Canvas::initialize: glGenBuffers batcher");
+		}
 
 		if (bdata.gl_vertex_buffer != 0) {
 			glBindBuffer(GL_ARRAY_BUFFER, bdata.gl_vertex_buffer);
@@ -502,8 +518,11 @@ void RasterizerCanvasGLES1::initialize() {
 		}
 
 		bdata.gl_index_buffer = 0;
-		glGenBuffers(1, &bdata.gl_index_buffer);
-		GL_CHECK_ERROR("GLES1::Canvas::initialize: glGenBuffers batcher index");
+
+		if (!GLES1::Config::get_singleton()->is_android_emulator) {
+			glGenBuffers(1, &bdata.gl_index_buffer);
+			GL_CHECK_ERROR("GLES1::Canvas::initialize: glGenBuffers batcher index");
+		}
 
 		if (bdata.gl_index_buffer != 0) {
 			glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, bdata.gl_index_buffer);
@@ -657,6 +676,11 @@ void RasterizerCanvasGLES1::_bind_canvas_texture(RID p_texture, RS::CanvasItemTe
 		glTexEnvi(GL_TEXTURE_ENV, GL_COMBINE_ALPHA, GL_REPLACE);
 		glTexEnvi(GL_TEXTURE_ENV, GL_SRC0_ALPHA, GL_PREVIOUS);
 
+		// Ensure previous light scaling doesn't leak into the normal calculation
+		glTexEnvf(GL_TEXTURE_ENV, GL_RGB_SCALE, 1.0f);
+		glTexEnvf(GL_TEXTURE_ENV, GL_ALPHA_SCALE, 1.0f);
+		GL_CHECK_ERROR("GLES1::Canvas::_bind_canvas_texture: TU1 normal map combiners");
+
 		// TU2: Diffuse Map + Modulate
 		glActiveTexture(GL_TEXTURE0 + 2);
 		glEnable(GL_TEXTURE_2D);
@@ -687,7 +711,13 @@ void RasterizerCanvasGLES1::_bind_canvas_texture(RID p_texture, RS::CanvasItemTe
 			glEnable(GL_TEXTURE_2D);
 
 			// Restore Light Base Setup
-			GLES1::Texture *light_tex = texture_storage->get_texture(state.using_light->texture);
+			RID light_tex_rid = state.using_light->texture;
+			GLES1::CanvasTexture *light_ct = texture_storage->get_canvas_texture(light_tex_rid);
+			if (light_ct) {
+				light_tex_rid = light_ct->diffuse;
+			}
+
+			GLES1::Texture *light_tex = texture_storage->get_texture(light_tex_rid);
 			if (light_tex) {
 				glBindTexture(GL_TEXTURE_2D, light_tex->tex_id);
 			} else {
@@ -699,6 +729,12 @@ void RasterizerCanvasGLES1::_bind_canvas_texture(RID p_texture, RS::CanvasItemTe
 					glBindTexture(GL_TEXTURE_2D, 0);
 				}
 			}
+
+			// Clamp to edge so unpadded point lights don't bleed across the canvas 
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 
 			glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_COMBINE);
 			glTexEnvi(GL_TEXTURE_ENV, GL_COMBINE_RGB, GL_MODULATE);
@@ -712,16 +748,19 @@ void RasterizerCanvasGLES1::_bind_canvas_texture(RID p_texture, RS::CanvasItemTe
 			}
 			glTexEnvi(GL_TEXTURE_ENV, GL_OPERAND1_RGB, GL_SRC_COLOR);
 
-			glTexEnvi(GL_TEXTURE_ENV, GL_COMBINE_ALPHA, GL_MODULATE);
-			glTexEnvi(GL_TEXTURE_ENV, GL_SRC0_ALPHA, GL_PREVIOUS);
-			glTexEnvi(GL_TEXTURE_ENV, GL_OPERAND0_ALPHA, GL_SRC_ALPHA);
-
+			// Prevent alpha squaring during text and directional passes
 			if (state.using_light->mode == RS::CANVAS_LIGHT_MODE_DIRECTIONAL) {
-				glTexEnvi(GL_TEXTURE_ENV, GL_SRC1_ALPHA, GL_PRIMARY_COLOR);
+				glTexEnvi(GL_TEXTURE_ENV, GL_COMBINE_ALPHA, GL_REPLACE);
+				glTexEnvi(GL_TEXTURE_ENV, GL_SRC0_ALPHA, GL_PREVIOUS);
+				glTexEnvi(GL_TEXTURE_ENV, GL_OPERAND0_ALPHA, GL_SRC_ALPHA);
 			} else {
+				glTexEnvi(GL_TEXTURE_ENV, GL_COMBINE_ALPHA, GL_MODULATE);
+				glTexEnvi(GL_TEXTURE_ENV, GL_SRC0_ALPHA, GL_PREVIOUS);
+				glTexEnvi(GL_TEXTURE_ENV, GL_OPERAND0_ALPHA, GL_SRC_ALPHA);
 				glTexEnvi(GL_TEXTURE_ENV, GL_SRC1_ALPHA, GL_TEXTURE);
+				glTexEnvi(GL_TEXTURE_ENV, GL_OPERAND1_ALPHA, GL_SRC_ALPHA);
 			}
-			glTexEnvi(GL_TEXTURE_ENV, GL_OPERAND1_ALPHA, GL_SRC_ALPHA);
+			GL_CHECK_ERROR("GLES1::Canvas::_bind_canvas_texture: TU1 alpha fallback combiners");
 
 			float rgb_scale = 1.0f;
 			if (state.using_light->energy > 2.0f) {
@@ -1373,7 +1412,7 @@ void RasterizerCanvasGLES1::canvas_render_items_implementation(Item *p_item_list
 		bool support_separate = GLES1::Config::get_singleton()->support_blend_func_separate;
 
 		if (support_subtract) {
-			glBlendEquationOES(GL_FUNC_ADD); // Default
+			glBlendEquationOES(GL_FUNC_ADD_OES); // Default
 		}
 
 		switch (p_light->blend_mode) {
@@ -1386,7 +1425,7 @@ void RasterizerCanvasGLES1::canvas_render_items_implementation(Item *p_item_list
 				break;
 			case RS::CANVAS_LIGHT_BLEND_MODE_SUB:
 				if (support_subtract) {
-					glBlendEquationOES(GL_FUNC_REVERSE_SUBTRACT);
+					glBlendEquationOES(GL_FUNC_REVERSE_SUBTRACT_OES);
 				}
 				if (support_separate) {
 					glBlendFuncSeparateOES(GL_SRC_ALPHA, GL_ONE, GL_ZERO, GL_ONE);
@@ -1407,7 +1446,14 @@ void RasterizerCanvasGLES1::canvas_render_items_implementation(Item *p_item_list
 		// Bind light texture
 		if (max_units >= 2) {
 			glActiveTexture(GL_TEXTURE0 + 1);
-			GLES1::Texture *light_tex = GLES1::TextureStorage::get_singleton()->get_texture(p_light->texture);
+
+			RID light_tex_rid = p_light->texture;
+			GLES1::CanvasTexture *light_ct = GLES1::TextureStorage::get_singleton()->get_canvas_texture(light_tex_rid);
+			if (light_ct) {
+				light_tex_rid = light_ct->diffuse;
+			}
+
+			GLES1::Texture *light_tex = GLES1::TextureStorage::get_singleton()->get_texture(light_tex_rid);
 
 			if (light_tex) {
 				glEnable(GL_TEXTURE_2D);
@@ -1524,6 +1570,22 @@ void RasterizerCanvasGLES1::canvas_render_items_implementation(Item *p_item_list
 				glDisableClientState(GL_NORMAL_ARRAY);
 				glDisable(GL_TEXTURE_2D);
 
+				// Prevent the active light texture combiners
+				// from bleeding into the shadow extrusion pass
+				if (max_units >= 2) {
+					glActiveTexture(GL_TEXTURE0 + 1);
+					glDisable(GL_TEXTURE_2D);
+				}
+				if (max_units >= 3) {
+					glActiveTexture(GL_TEXTURE0 + 2);
+					glDisable(GL_TEXTURE_2D);
+				}
+				if (max_units >= 4) {
+					glActiveTexture(GL_TEXTURE0 + 3);
+					glDisable(GL_TEXTURE_2D);
+				}
+				glActiveTexture(GL_TEXTURE0);
+
 				glEnable(GL_DEPTH_TEST);
 				glDepthMask(GL_TRUE);
 				RasterizerGLES1::clear_depth(1.0f);
@@ -1534,10 +1596,24 @@ void RasterizerCanvasGLES1::canvas_render_items_implementation(Item *p_item_list
 				glDepthFunc(GL_ALWAYS);
 				glDepthRangef(0.0f, 0.1f);
 
+				// Safeguard for devices that ignore glColorMask during depth passes
+				glBlendFunc(GL_ZERO, GL_ONE);
+
 				glMatrixMode(GL_MODELVIEW);
 				glPushMatrix();
 				glEnableClientState(GL_VERTEX_ARRAY);
 				glBindBuffer(GL_ARRAY_BUFFER, 0); // Ensure client pointers
+				glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+
+				if (GLES1::Config::get_singleton()->is_android_emulator) {
+					// Emulator bug: glColorMask is ignored on FBOs.
+					// Force the geometry to be fully transparent.
+					glColor4f(0.0f, 0.0f, 0.0f, 0.0f);
+				}
+
+				// Clear IBOs
+				glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+				GL_CHECK_ERROR("GLES1::Canvas::canvas_render_items_implementation: shadow state setup");
 
 				if (p_light->mode == RS::CANVAS_LIGHT_MODE_DIRECTIONAL) {
 					GLfloat mat[16] = {};
@@ -1567,6 +1643,22 @@ void RasterizerCanvasGLES1::canvas_render_items_implementation(Item *p_item_list
 
 				// Setup for the light item geometry pass
 				glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+
+				// Restore the correct blending state wiped out by the shadow guard
+				if (support_separate) {
+					if (p_light->blend_mode == RS::CANVAS_LIGHT_BLEND_MODE_MIX) {
+						glBlendFuncSeparateOES(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_ZERO, GL_ONE);
+					} else {
+						glBlendFuncSeparateOES(GL_SRC_ALPHA, GL_ONE, GL_ZERO, GL_ONE);
+					}
+				} else {
+					if (p_light->blend_mode == RS::CANVAS_LIGHT_BLEND_MODE_MIX) {
+						glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+					} else {
+						glBlendFunc(GL_SRC_ALPHA, GL_ONE);
+					}
+				}
+				GL_CHECK_ERROR("GLES1::Canvas::canvas_render_items_implementation: restore light blend");
 
 				// Base geometry does not write depth
 				glDepthMask(GL_FALSE);
@@ -1598,6 +1690,14 @@ void RasterizerCanvasGLES1::canvas_render_items_implementation(Item *p_item_list
 			glTexEnvf(GL_TEXTURE_ENV, GL_ALPHA_SCALE, 1.0f);
 			glDisable(GL_TEXTURE_2D);
 		}
+		if (max_units >= 4) {
+			glActiveTexture(GL_TEXTURE0 + 3);
+			glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE);
+			glTexEnvf(GL_TEXTURE_ENV, GL_RGB_SCALE, 1.0f);
+			glTexEnvf(GL_TEXTURE_ENV, GL_ALPHA_SCALE, 1.0f);
+			glDisable(GL_TEXTURE_2D);
+		}
+		GL_CHECK_ERROR("GLES1::Canvas::canvas_render_items_implementation: sterilize upper texture units");
 	}
 
 	// Bind default white texture to texture unit 0
