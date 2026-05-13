@@ -3139,15 +3139,15 @@
 			Lower-end override for [member rendering/reflections/sky_reflections/texture_array_reflections] on mobile devices, due to performance concerns or driver support.
 		</member>
 		<member name="rendering/renderer/rendering_method" type="String" setter="" getter="" default="&quot;forward_plus&quot;">
-			Sets the renderer that will be used by the project. Options are:
-			[b]forward_plus[/b] (Forward+): High-end renderer designed for desktop devices. Has a higher base overhead, but scales well with complex scenes. Not suitable for older devices or mobile.
-			[b]mobile[/b] (Mobile): Modern renderer designed for mobile devices. Has a lower base overhead than Forward+, but does not scale as well to large scenes with many elements.
-			[b]gl_compatibility[/b] (Compatibility): Low-end renderer designed for older devices. Based on the limitations of the OpenGL 3.3 / OpenGL ES 3.0 / WebGL 2 APIs.
-			[b]gl_legacy[/b] (Legacy): Highly compatible renderer intended for legacy and extremely low-end hardware. Based on the limitations of the OpenGL 2.1 / OpenGL ES 2.0 / WebGL 1 APIs.
-			[b]gl_classic[/b] (Classic): Minimum baseline renderer intended for obsolete hardware and retro aesthetics. Relies on a fixed-function pipeline with no programmable shaders, based on the limitations of the OpenGL 1.5 / OpenGL ES 1.1 APIs.
-			This can be overridden using the [code]--rendering-method &lt;method&gt;[/code] command line argument.
-			[b]Note:[/b] The actual rendering method may be automatically changed by the engine as a result of a fallback, or a user-specified command line argument. To get the actual rendering method that is used at runtime, use [method RenderingServer.get_current_rendering_method] instead of reading this project setting's value.
-		</member>
+            Sets the renderer that will be used by the project. Options are:
+            [b]forward_plus[/b] (Forward+): High-end renderer designed for desktop devices. Has a higher base overhead, but scales well with complex scenes. Not suitable for older devices or mobile.
+            [b]mobile[/b] (Mobile): Modern renderer designed for mobile devices. Has a lower base overhead than Forward+, but does not scale as well to large scenes with many elements.
+            [b]gl_compatibility[/b] (Compatibility): Low-end renderer designed for older devices. Based on the limitations of the OpenGL 3.3 / OpenGL ES 3.0 / WebGL 2 APIs.
+            [b]gl_legacy[/b] (Legacy): Highly compatible renderer intended for legacy and extremely low-end hardware. Based on the limitations of the OpenGL 2.1 / OpenGL ES 2.0 / WebGL 1 APIs.
+            [b]gl_classic[/b] (Classic): A renderer intended for the earliest supported hardware on desktop and mobile platforms. Based on the limitations of OpenGL 1.5/1.4 / OpenGL ES 1.1 APIs.
+            This can be overridden using the [code]--rendering-method &lt;method&gt;[/code] command line argument.
+            [b]Note:[/b] The actual rendering method may be automatically changed by the engine as a result of a fallback, or a user-specified command line argument. To get the actual rendering method that is used at runtime, use [method RenderingServer.get_current_rendering_method] instead of reading this project setting's value.
+        </member>
 		<member name="rendering/renderer/rendering_method.mobile" type="String" setter="" getter="" default="&quot;mobile&quot;">
 			Override for [member rendering/renderer/rendering_method] on mobile devices.
 		</member>

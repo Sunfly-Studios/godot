@@ -480,15 +480,15 @@ void ProjectDialog::_renderer_selected() {
         renderer_info->set_text(
 				String::utf8("•  ") + TTR("Supports desktop, mobile + web platforms.") +
 				String::utf8("\n•  ") + TTR("Basic 3D graphics only.") +
-				String::utf8("\n•  ") + TTR("Intended for legacy and very low-end hardware.") +
+				String::utf8("\n•  ") + TTR("Intended for legacy and very low-end devices.") +
 				String::utf8("\n•  ") + TTR("Uses OpenGL 2 backend (OpenGL 2.1/ES 2.0/WebGL 1.0).") +
 				String::utf8("\n•  ") + TTR("Widest compatibility at the cost of rendering features."));
 	} else if (renderer_type == "gl_classic") {
 		renderer_info->set_text(
 				String::utf8("•  ") + TTR("Supports desktop + mobile platforms.") +
 				String::utf8("\n•  ") + TTR("Comprehensive 2D support; minimal 3D graphics.") +
-				String::utf8("\n•  ") + TTR("Intended for obsolete hardware and retro aesthetics.") +
-				String::utf8("\n•  ") + TTR("Uses OpenGL 1 backend (OpenGL 1.5/ES 1.1).") +
+				String::utf8("\n•  ") + TTR("Intended for earliest supported hardware.") +
+				String::utf8("\n•  ") + TTR("Uses OpenGL 1 backend (OpenGL 1.5 & 1.4/ES 1.1).") +
 				String::utf8("\n•  ") + TTR("No custom programmable shaders (fixed-function pipeline)."));
 	} else {
 		WARN_PRINT("Unknown renderer type. Please report this as a bug on GitHub.");
