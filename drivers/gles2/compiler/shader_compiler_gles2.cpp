@@ -273,6 +273,10 @@ String ShaderCompilerGLES2::_dump_node_code(ShaderLanguage::Node *p_node, int p_
 			StringBuilder fragment_global;
 			StringBuilder uniform_string;
 
+			bool emitted_screen_texture = false;
+			bool emitted_depth_texture = false;
+			bool emitted_normal_texture = false;
+
 			for (const KeyValue<StringName, ShaderLanguage::ShaderNode::Uniform> &E : snode->uniforms) {
 				StringBuffer<> uniform_code;
 
@@ -280,13 +284,6 @@ String ShaderCompilerGLES2::_dump_node_code(ShaderLanguage::Node *p_node, int p_
 				if (precision == ShaderLanguage::PRECISION_DEFAULT && E.value.type != ShaderLanguage::TYPE_BOOL) {
 					precision = ShaderLanguage::PRECISION_HIGHP;
 				}
-
-				uniform_code += "uniform ";
-				uniform_code += _prestr(precision);
-				uniform_code += _typestr(E.value.type);
-				uniform_code += " ";
-				uniform_code += _mkid(E.key);
-				uniform_code += ";\n";
 
 				if (ShaderLanguage::is_sampler_type(E.value.type)) {
 					ShaderCompiler::GeneratedCode::Texture tex;
@@ -297,6 +294,9 @@ String ShaderCompilerGLES2::_dump_node_code(ShaderLanguage::Node *p_node, int p_
 					tex.global = E.value.scope == ShaderLanguage::ShaderNode::Uniform::SCOPE_GLOBAL;
 
 					// Flag the screen texture and its mipmaps
+					String uniform_name = _mkid(E.key);
+					String pixel_size_name = uniform_name + "_pixel_size";
+
 					if (tex.hint == ShaderLanguage::ShaderNode::Uniform::HINT_SCREEN_TEXTURE ||
 							tex.hint == ShaderLanguage::ShaderNode::Uniform::HINT_DEPTH_TEXTURE ||
 							tex.hint == ShaderLanguage::ShaderNode::Uniform::HINT_NORMAL_ROUGHNESS_TEXTURE) {
@@ -308,15 +308,55 @@ String ShaderCompilerGLES2::_dump_node_code(ShaderLanguage::Node *p_node, int p_
 								E.value.filter == ShaderLanguage::FILTER_NEAREST_MIPMAP_ANISOTROPIC) {
 							r_gen_code.uses_screen_texture_mipmaps = true;
 						}
+
+						if (tex.hint == ShaderLanguage::ShaderNode::Uniform::HINT_SCREEN_TEXTURE) {
+							uniform_name = "godot_screen_texture";
+						} else if (tex.hint == ShaderLanguage::ShaderNode::Uniform::HINT_DEPTH_TEXTURE) {
+							uniform_name = "godot_depth_texture";
+						} else if (tex.hint == ShaderLanguage::ShaderNode::Uniform::HINT_NORMAL_ROUGHNESS_TEXTURE) {
+							uniform_name = "godot_normal_texture";
+						}
+
+						// Alias the user's variable to the legal internal hardware name
+						vertex_global += String("#define ") + _mkid(E.key) + " " + uniform_name + "\n";
+						fragment_global += String("#define ") + _mkid(E.key) + " " + uniform_name + "\n";
 					}
 
 					// Assign to the index so the 2D batcher knows where it is.
 					r_gen_code.texture_uniforms.write[E.value.texture_order] = tex;
 
-					// Inject the _pixel_size uniform
-					uniform_code += "uniform highp vec2 ";
+					bool emit_declaration = true;
+					if (tex.hint == ShaderLanguage::ShaderNode::Uniform::HINT_SCREEN_TEXTURE) {
+						if (emitted_screen_texture) {
+							emit_declaration = false;
+						}
+						emitted_screen_texture = true;
+					} else if (tex.hint == ShaderLanguage::ShaderNode::Uniform::HINT_DEPTH_TEXTURE) {
+						if (emitted_depth_texture) {
+							emit_declaration = false;
+						}
+						emitted_depth_texture = true;
+					} else if (tex.hint == ShaderLanguage::ShaderNode::Uniform::HINT_NORMAL_ROUGHNESS_TEXTURE) {
+						if (emitted_normal_texture) {
+							emit_declaration = false;
+						}
+						emitted_normal_texture = true;
+					}
+
+					if (emit_declaration) {
+						uniform_code += "uniform " + _prestr(precision) + _typestr(E.value.type) + " " + uniform_name + ";\n";
+					}
+					// Always emit pixel size using the original name
+					// so the material system finds and updates it
+					uniform_code += "uniform highp vec2 " + pixel_size_name + ";\n";
+
+				} else {
+					uniform_code += "uniform ";
+					uniform_code += _prestr(precision);
+					uniform_code += _typestr(E.value.type);
+					uniform_code += " ";
 					uniform_code += _mkid(E.key);
-					uniform_code += "_pixel_size;\n";
+					uniform_code += ";\n";
 				}
 
 				uniform_string += uniform_code.as_string();

@@ -321,15 +321,42 @@ void ShaderGLES2::_get_uniform_locations(Version::Specialization &spec, Version 
 		String native_uniform_name = _mkid(p_version->texture_uniforms[i].name);
 
 		GLint location = glGetUniformLocation(spec.id, native_uniform_name.ascii().get_data());
-		Vector<int32_t> texture_uniform_bindings;
-		// A size of 0 means it's a single texture, not an array.
-		// At least 1 binding is required.
-		int texture_count = MAX(1, p_version->texture_uniforms[i].array_size);
-		for (int j = 0; j < texture_count; j++) {
-			texture_uniform_bindings.append(texture_index + base_texture_index);
-			texture_index++;
+		if (location >= 0) {
+			Vector<int32_t> texture_uniform_bindings;
+			// A size of 0 means it's a single texture, not an array.
+			// At least 1 binding is required.
+			int texture_count = MAX(1, p_version->texture_uniforms[i].array_size);
+			for (int j = 0; j < texture_count; j++) {
+				texture_uniform_bindings.append(texture_index + base_texture_index);
+				texture_index++;
+			}
+			glUniform1iv(location, texture_uniform_bindings.size(), texture_uniform_bindings.ptr());
+		} else {
+			// Location is -1 if aliased via hint.
+			// Must advance texture_index to maintain the
+			// correct slot offset for subsequent material textures.
+			int texture_count = MAX(1, p_version->texture_uniforms[i].array_size);
+			texture_index += texture_count;
 		}
-		glUniform1iv(location, texture_uniform_bindings.size(), texture_uniform_bindings.ptr());
+	}
+
+	// Map internal textures to the backend FBO slots
+	GLint screen_loc = glGetUniformLocation(spec.id, "godot_screen_texture");
+	if (screen_loc >= 0) {
+		glUniform1i(screen_loc, max_image_units - 4);
+		GL_CHECK_ERROR("ShaderGLES2::_get_uniform_locations: godot_screen_texture");
+	}
+
+	GLint depth_loc = glGetUniformLocation(spec.id, "godot_depth_texture");
+	if (depth_loc >= 0) {
+		glUniform1i(depth_loc, max_image_units - 4);
+		GL_CHECK_ERROR("ShaderGLES2::_get_uniform_locations: godot_depth_texture");
+	}
+
+	GLint normal_loc = glGetUniformLocation(spec.id, "godot_normal_texture");
+	if (normal_loc >= 0) {
+		glUniform1i(normal_loc, max_image_units - 6);
+		GL_CHECK_ERROR("ShaderGLES2::_get_uniform_locations: godot_normal_texture");
 	}
 
 	glUseProgram(active_program);

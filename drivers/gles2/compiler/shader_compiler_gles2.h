@@ -67,6 +67,7 @@ public:
 	void initialize(const ShaderCompiler::DefaultIdentifierActions &p_actions);
 
 	ShaderCompilerGLES2();
+	~ShaderCompilerGLES2() = default;
 };
 
 #endif // GLES2_ENABLED
