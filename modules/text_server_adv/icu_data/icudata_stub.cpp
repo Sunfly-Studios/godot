@@ -46,7 +46,7 @@ extern "C" U_EXPORT const ICU_data_header U_ICUDATA_ENTRY_POINT = {
 	0xDA, 0x27,
 	{ sizeof(UDataInfo),
 			0,
-#if U_IS_BIG_ENDIAN
+#if defined(BIG_ENDIAN_ENABLED) || U_IS_BIG_ENDIAN
 			1,
 #else
 			0,

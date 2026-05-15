@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 from misc.utility.scons_hints import *
+from platform_methods import detect_endianness
 
 Import("env")
 Import("env_modules")
@@ -24,7 +25,7 @@ def make_icu_data(target, source, env):
             buf = f.read()
 
         g.write('extern "C" U_EXPORT const size_t U_ICUDATA_SIZE = ' + str(len(buf)) + ";\n")
-        g.write('extern "C" U_EXPORT const unsigned char U_ICUDATA_ENTRY_POINT[] = {\n')
+        g.write('extern "C" U_EXPORT alignas(16) const unsigned char U_ICUDATA_ENTRY_POINT[] = {\n')
         for i in range(len(buf)):
             g.write("\t" + str(buf[i]) + ",\n")
 
@@ -478,9 +479,23 @@ if env["builtin_icu4c"]:
     ]
     thirdparty_sources = [thirdparty_dir + file for file in thirdparty_sources]
 
+    is_big_endian = detect_endianness(env)
+
+    if is_big_endian:
+        # ICU detects this automatically via its own detection,
+        # but some files like the stubs may not correctly.
+        env_icu.Append(CPPDEFINES=[("U_IS_BIG_ENDIAN", 1)])
+        env_text_server_adv.Append(CPPDEFINES=[("U_IS_BIG_ENDIAN", 1)])
+
     if env.editor_build:
+
+        if is_big_endian:
+            icu_data_file = "#thirdparty/icu4c/icudt_godot_b.dat"
+        else:
+            icu_data_file = "#thirdparty/icu4c/icudt_godot.dat"
+
         env_icu.CommandNoCache(
-            "#thirdparty/icu4c/icudata.gen.h", "#thirdparty/icu4c/icudt_godot.dat", env.Run(make_icu_data)
+            "#thirdparty/icu4c/icudata.gen.h", icu_data_file, env.Run(make_icu_data)
         )
         env_text_server_adv.Prepend(CPPPATH=["#thirdparty/icu4c/"])
     else:

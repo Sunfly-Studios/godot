@@ -443,7 +443,11 @@ bool TextServerAdvanced::_load_support_data(const String &p_filename) {
 #else
 	if (!icu_data_loaded) {
 		UErrorCode err = U_ZERO_ERROR;
+#if defined(BIG_ENDIAN_ENABLED) || U_IS_BIG_ENDIAN
+		String filename = (p_filename.is_empty()) ? String("res://icudt_godot_b.dat") : p_filename;
+#else
 		String filename = (p_filename.is_empty()) ? String("res://icudt_godot.dat") : p_filename;
+#endif
 		if (FileAccess::exists(filename)) {
 			Ref<FileAccess> f = FileAccess::open(filename, FileAccess::READ);
 			if (f.is_null()) {
@@ -471,11 +475,19 @@ bool TextServerAdvanced::_load_support_data(const String &p_filename) {
 }
 
 String TextServerAdvanced::_get_support_data_filename() const {
+#if defined(BIG_ENDIAN_ENABLED) || U_IS_BIG_ENDIAN
+	return String("icudt_godot_b.dat");
+#else
 	return String("icudt_godot.dat");
+#endif
 }
 
 String TextServerAdvanced::_get_support_data_info() const {
+#if defined(BIG_ENDIAN_ENABLED) || U_IS_BIG_ENDIAN
+	return String("ICU break iteration data (\"icudt_godot_b.dat\").");
+#else
 	return String("ICU break iteration data (\"icudt_godot.dat\").");
+#endif
 }
 
 bool TextServerAdvanced::_save_support_data(const String &p_filename) const {
@@ -488,7 +500,6 @@ bool TextServerAdvanced::_save_support_data(const String &p_filename) const {
 	if (f.is_null()) {
 		return false;
 	}
-
 	PackedByteArray icu_data_static;
 	icu_data_static.resize(U_ICUDATA_SIZE);
 	memcpy(icu_data_static.ptrw(), U_ICUDATA_ENTRY_POINT, U_ICUDATA_SIZE);
@@ -7184,6 +7195,17 @@ bool TextServerAdvanced::_spoof_check(const String &p_string) const {
 		return false;
 	}
 #endif
+
+#if defined(BIG_ENDIAN_ENABLED) || U_IS_BIG_ENDIAN
+	// ICU (this version's anyway) is broken
+	// and doesn't read cfu files properly.
+	// Ignore it once and hope for the best :)))))
+	static bool spoof_init_failed = false;
+	if (spoof_init_failed) {
+		return false;
+	}
+#endif
+
 	UErrorCode status = U_ZERO_ERROR;
 	Char16String utf16 = p_string.utf16();
 
@@ -7194,6 +7216,14 @@ bool TextServerAdvanced::_spoof_check(const String &p_string) const {
 	}
 	if (sc_spoof == nullptr) {
 		sc_spoof = uspoof_open(&status);
+
+#if defined(BIG_ENDIAN_ENABLED) || U_IS_BIG_ENDIAN
+		if (U_FAILURE(status)) {
+			spoof_init_failed = true;
+			WARN_PRINT_ONCE("Spoof checker failed to initialize.");
+			return false;
+		}
+#endif
 		uspoof_setAllowedChars(sc_spoof, allowed, &status);
 		uspoof_setRestrictionLevel(sc_spoof, USPOOF_MODERATELY_RESTRICTIVE);
 	}
