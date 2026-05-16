@@ -599,6 +599,7 @@ void RasterizerGLES1::_blit_render_target_to_screen(RID p_render_target, Display
 		if (p_first) {
 			if (p_screen_rect.position != Vector2() || p_screen_rect.size != rt->size) {
 				glViewport(0, 0, win_size.width, win_size.height);
+				glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
 				// Respect the FBO's transparency when clearing the OS window
 				if (rt->is_transparent) {
 					glClearColor(0.0, 0.0, 0.0, 0.0);
@@ -629,6 +630,7 @@ void RasterizerGLES1::_blit_render_target_to_screen(RID p_render_target, Display
 		glDisable(GL_CULL_FACE);
 		glDisable(GL_SCISSOR_TEST);
 		glDepthMask(GL_FALSE);
+		glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
 		GL_CHECK_ERROR("GLES1::RasterizerGLES1::_blit_render_target_to_screen: disable states");
 
 		// Bind the RenderTarget's color texture
@@ -829,6 +831,7 @@ void RasterizerGLES1::set_boot_image(const Ref<Image> &p_image, const Color &p_c
 		glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 	}
 	glDepthMask(GL_FALSE);
+	glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
 	glClearColor(p_color.r, p_color.g, p_color.b, 1.0);
 	glClear(GL_COLOR_BUFFER_BIT);
 	GL_CHECK_ERROR("GLES1::RasterizerGLES1::set_boot_image: viewport and clear");

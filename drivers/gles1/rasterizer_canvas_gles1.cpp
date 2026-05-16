@@ -1024,6 +1024,9 @@ void RasterizerCanvasGLES1::canvas_begin(RID p_to_render_target, bool p_to_backb
 		}
 	}
 
+	glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+	GL_CHECK_ERROR("GLES1::Canvas::canvas_begin: glColorMask clear");
+
 	if (render_target && render_target->clear_requested) {
 		const Color &col = render_target->clear_color;
 		glClearColor(col.r, col.g, col.b, render_target->is_transparent ? col.a : 1.0f);
@@ -1162,6 +1165,7 @@ void RasterizerCanvasGLES1::reset_canvas() {
 	glDisable(GL_LIGHTING);
 	glDisable(GL_ALPHA_TEST);
 	glDisable(GL_TEXTURE_2D);
+	glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
 	glTexEnvf(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE);
 	GL_CHECK_ERROR("GLES1::Canvas::reset_canvas: states");
 
@@ -1600,6 +1604,7 @@ void RasterizerCanvasGLES1::canvas_render_items_implementation(Item *p_item_list
 
 				glEnable(GL_DEPTH_TEST);
 				glDepthMask(GL_TRUE);
+				glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
 				RasterizerGLES1::clear_depth(1.0f);
 				glClear(GL_DEPTH_BUFFER_BIT);
 
@@ -1755,8 +1760,8 @@ void RasterizerCanvasGLES1::canvas_render_items_implementation(Item *p_item_list
 				if (ris.current_clip) {
 					int x = ris.current_clip->final_clip_rect.position.x;
 					int y = ris.current_clip->final_clip_rect.position.y;
-					int w = MAX(1, ris.current_clip->final_clip_rect.size.x);
-					int h = MAX(1, ris.current_clip->final_clip_rect.size.y);
+					int w = MAX(0, (int)ris.current_clip->final_clip_rect.size.x);
+					int h = MAX(0, (int)ris.current_clip->final_clip_rect.size.y);
 					gl_enable_scissor(x, y, w, h);
 					GL_CHECK_ERROR("GLES1::Canvas::render_items: glScissor setup");
 				} else {
@@ -1807,8 +1812,8 @@ void RasterizerCanvasGLES1::canvas_render_items_implementation(Item *p_item_list
 				if (ris.current_clip) {
 					int x = ris.current_clip->final_clip_rect.position.x;
 					int y = ris.current_clip->final_clip_rect.position.y;
-					int w = MAX(1, ris.current_clip->final_clip_rect.size.x);
-					int h = MAX(1, ris.current_clip->final_clip_rect.size.y);
+					int w = MAX(0, (int)ris.current_clip->final_clip_rect.size.x);
+					int h = MAX(0, (int)ris.current_clip->final_clip_rect.size.y);
 					gl_enable_scissor(x, y, w, h);
 					GL_CHECK_ERROR("GLES1::Canvas::render_items: glScissor setup");
 				} else {
@@ -2867,8 +2872,8 @@ void RasterizerCanvasGLES1::render_batches(Item::Command *const *p_commands, Ite
 									} else {
 										int x = p_current_clip->final_clip_rect.position.x;
 										int y = p_current_clip->final_clip_rect.position.y;
-										int w = MAX(1, p_current_clip->final_clip_rect.size.x);
-										int h = MAX(1, p_current_clip->final_clip_rect.size.y);
+										int w = MAX(0, (int)p_current_clip->final_clip_rect.size.x);
+										int h = MAX(0, (int)p_current_clip->final_clip_rect.size.y);
 										gl_enable_scissor(x, y, w, h);
 										GL_CHECK_ERROR("GLES1::Canvas::render_batches: Item::Command::TYPE_CLIP_IGNORE: glScissor");
 										r_reclip = false;

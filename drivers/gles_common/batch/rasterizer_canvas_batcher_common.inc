@@ -212,6 +212,12 @@ bool RasterizerCanvasBatcherCommon<T_API>::try_join_item(RendererCanvasRender::I
 	// this upstream
 	r_ris.final_modulate = p_ci->final_modulate * r_ris.item_group_modulate;
 
+	// Clip owner changes break batches
+	if (p_ci->final_clip_owner != r_ris.current_clip) {
+		join = false;
+		r_ris.current_clip = p_ci->final_clip_owner;
+	}
+
 	// Material changes break batches
 	if (p_ci->material != r_ris.canvas_last_material) {
 		join = false;
@@ -361,6 +367,11 @@ bool RasterizerCanvasBatcherCommon<T_API>::_sort_items_match(const BSortItem &p_
 		return false;
 	}
 	if (!b->commands || b->commands->next != nullptr) {
+		return false;
+	}
+
+	// Ensure we do not swap items across different clipping boundaries
+	if (a->final_clip_owner != b->final_clip_owner) {
 		return false;
 	}
 

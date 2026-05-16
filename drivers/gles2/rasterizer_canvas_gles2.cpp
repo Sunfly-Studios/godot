@@ -171,6 +171,7 @@ void RasterizerCanvasGLES2::light_update_shadow(RID p_rid, int p_shadow_index, c
 	glScissor(0, p_shadow_index * 2, state.shadow_texture_size, 2);
 
 	// Pure white pushes the un-occluded depth distance to 1.0
+	glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
 	glClearColor(1.0f, 1.0f, 1.0f, 1.0f);
 	RasterizerGLES2::clear_depth(1.0f);
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
@@ -322,6 +323,7 @@ void RasterizerCanvasGLES2::light_update_directional_shadow(RID p_rid, int p_sha
 	glScissor(0, p_shadow_index * 2, state.shadow_texture_size, 2);
 	glClearColor(1.0f, 1.0f, 1.0f, 1.0f); // 1.0 pushes the clear distance to Z_FAR
 
+	glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
 	RasterizerGLES2::clear_depth(1.0f);
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
@@ -1031,6 +1033,9 @@ void RasterizerCanvasGLES2::canvas_begin(RID p_to_render_target, bool p_to_backb
 	}
 	GL_CHECK_ERROR("GLES2::Canvas::canvas_begin: glBlendFuncSeparate");
 
+	glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+	GL_CHECK_ERROR("GLES2::Canvas::canvas_begin: glColorMask");
+
 	if (render_target && render_target->clear_requested) {
 		const Color &col = render_target->clear_color;
 		glClearColor(col.r, col.g, col.b, render_target->is_transparent ? col.a : 1.0f);
@@ -1152,6 +1157,7 @@ void RasterizerCanvasGLES2::reset_canvas() {
 	glDisable(GL_DITHER);
 	glEnable(GL_BLEND);
 	glBlendEquation(GL_FUNC_ADD);
+	glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
 	GL_CHECK_ERROR("GLES2::Canvas::reset_canvas: states");
 
 	bool transparent_rt = false;
@@ -1434,10 +1440,10 @@ void RasterizerCanvasGLES2::canvas_render_items_implementation(Item *p_item_list
 			if (!light_scissor_enabled && (ris.current_clip != first_item->final_clip_owner || reclip)) {
 				ris.current_clip = first_item->final_clip_owner;
 				if (ris.current_clip) {
-					int x = MAX(1, ris.current_clip->final_clip_rect.position.x);
-					int y = MAX(1, ris.current_clip->final_clip_rect.position.y);
-					int w = MAX(1, ris.current_clip->final_clip_rect.size.x);
-					int h = MAX(1, ris.current_clip->final_clip_rect.size.y);
+					int x = ris.current_clip->final_clip_rect.position.x;
+					int y = ris.current_clip->final_clip_rect.position.y;
+					int w = MAX(0, (int)ris.current_clip->final_clip_rect.size.x);
+					int h = MAX(0, (int)ris.current_clip->final_clip_rect.size.y);
 					gl_enable_scissor(x, y, w, h);
 					GL_CHECK_ERROR("GLES2::Canvas::render_items: glScissor setup");
 				} else {
@@ -1492,10 +1498,10 @@ void RasterizerCanvasGLES2::canvas_render_items_implementation(Item *p_item_list
 			if (!light_scissor_enabled && (ris.current_clip != ci->final_clip_owner || reclip)) {
 				ris.current_clip = ci->final_clip_owner;
 				if (ris.current_clip) {
-					int x = MAX(1, ris.current_clip->final_clip_rect.position.x);
-					int y = MAX(1, ris.current_clip->final_clip_rect.position.y);
-					int w = MAX(1, ris.current_clip->final_clip_rect.size.x);
-					int h = MAX(1, ris.current_clip->final_clip_rect.size.y);
+					int x = ris.current_clip->final_clip_rect.position.x;
+					int y = ris.current_clip->final_clip_rect.position.y;
+					int w = MAX(0, (int)ris.current_clip->final_clip_rect.size.x);
+					int h = MAX(0, (int)ris.current_clip->final_clip_rect.size.y);
 					gl_enable_scissor(x, y, w, h);
 					GL_CHECK_ERROR("GLES2::Canvas::render_items: glScissor setup");
 				} else {
@@ -2326,10 +2332,10 @@ void RasterizerCanvasGLES2::render_batches(Item::Command *const *p_commands, Ite
 										gl_disable_scissor();
 										r_reclip = true;
 									} else {
-										int x = MAX(1, p_current_clip->final_clip_rect.position.x);
-										int y = MAX(1, p_current_clip->final_clip_rect.position.y);
-										int w = MAX(1, p_current_clip->final_clip_rect.size.x);
-										int h = MAX(1, p_current_clip->final_clip_rect.size.y);
+										int x = p_current_clip->final_clip_rect.position.x;
+										int y = p_current_clip->final_clip_rect.position.y;
+										int w = MAX(0, (int)p_current_clip->final_clip_rect.size.x);
+										int h = MAX(0, (int)p_current_clip->final_clip_rect.size.y);
 										gl_enable_scissor(x, y, w, h);
 										GL_CHECK_ERROR("GLES2::Canvas::render_batches: Item::Command::TYPE_CLIP_IGNORE: glScissor");
 										r_reclip = false;
