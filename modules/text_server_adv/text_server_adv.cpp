@@ -443,7 +443,7 @@ bool TextServerAdvanced::_load_support_data(const String &p_filename) {
 #else
 	if (!icu_data_loaded) {
 		UErrorCode err = U_ZERO_ERROR;
-#if defined(BIG_ENDIAN_ENABLED) || U_IS_BIG_ENDIAN
+#if defined(BIG_ENDIAN_ENABLED) || U_IS_BIG_ENDIAN == 1
 		String filename = (p_filename.is_empty()) ? String("res://icudt_godot_b.dat") : p_filename;
 #else
 		String filename = (p_filename.is_empty()) ? String("res://icudt_godot.dat") : p_filename;
@@ -475,7 +475,7 @@ bool TextServerAdvanced::_load_support_data(const String &p_filename) {
 }
 
 String TextServerAdvanced::_get_support_data_filename() const {
-#if defined(BIG_ENDIAN_ENABLED) || U_IS_BIG_ENDIAN
+#if defined(BIG_ENDIAN_ENABLED) || U_IS_BIG_ENDIAN == 1
 	return String("icudt_godot_b.dat");
 #else
 	return String("icudt_godot.dat");
@@ -483,7 +483,7 @@ String TextServerAdvanced::_get_support_data_filename() const {
 }
 
 String TextServerAdvanced::_get_support_data_info() const {
-#if defined(BIG_ENDIAN_ENABLED) || U_IS_BIG_ENDIAN
+#if defined(BIG_ENDIAN_ENABLED) || U_IS_BIG_ENDIAN == 1
 	return String("ICU break iteration data (\"icudt_godot_b.dat\").");
 #else
 	return String("ICU break iteration data (\"icudt_godot.dat\").");
@@ -7196,7 +7196,7 @@ bool TextServerAdvanced::_spoof_check(const String &p_string) const {
 	}
 #endif
 
-#if defined(BIG_ENDIAN_ENABLED) || U_IS_BIG_ENDIAN
+#if defined(BIG_ENDIAN_ENABLED) || U_IS_BIG_ENDIAN == 1
 	// ICU (this version's anyway) is broken
 	// and doesn't read cfu files properly.
 	// Ignore it once and hope for the best :)))))
@@ -7217,7 +7217,7 @@ bool TextServerAdvanced::_spoof_check(const String &p_string) const {
 	if (sc_spoof == nullptr) {
 		sc_spoof = uspoof_open(&status);
 
-#if defined(BIG_ENDIAN_ENABLED) || U_IS_BIG_ENDIAN
+#if defined(BIG_ENDIAN_ENABLED) || U_IS_BIG_ENDIAN == 1
 		if (U_FAILURE(status)) {
 			spoof_init_failed = true;
 			WARN_PRINT_ONCE("Spoof checker failed to initialize.");

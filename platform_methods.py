@@ -162,7 +162,23 @@ def detect_endianness(env):
     import tempfile
     import os
 
-    test_code = """
+    # Determine the compiler executable
+    cc = env.get("CC", "gcc")
+    is_msvc = "cl" in os.path.basename(cc).lower()
+
+    # Windows is almost exclusively little-endian, but we can
+    # check architecture macros to be sure.
+    if is_msvc:
+        test_code = """
+#if defined(_M_IX86) || defined(_M_X64) || defined(_M_ARM) || defined(_M_ARM64)
+LITTLE_ENDIAN_DETECTED
+#else
+UNKNOWN_ENDIAN
+#endif
+        """
+        cpp_cmd = [cc, "/E", "/nologo"]
+    else:
+        test_code = """
 #if __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
 BIG_ENDIAN_DETECTED
 #elif __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
@@ -170,18 +186,20 @@ LITTLE_ENDIAN_DETECTED
 #else
 UNKNOWN_ENDIAN
 #endif
-    """
+        """
+        cpp_cmd = [cc, "-E"]
 
+    test_file = None
     try:
         with tempfile.NamedTemporaryFile(mode="w", suffix=".c", delete=False) as f:
             f.write(test_code)
             test_file = f.name
 
-        # Simply use preprocessor
-        cpp_cmd = [env.get("CC", "gcc"), "-E", test_file]
+        cpp_cmd.append(test_file)
+        
+        # Run preprocessor
         result = subprocess.run(cpp_cmd, capture_output=True, text=True, check=True)
         output = result.stdout
-        os.unlink(test_file)
 
         if "BIG_ENDIAN_DETECTED" in output:
             return True
@@ -194,6 +212,14 @@ UNKNOWN_ENDIAN
     except Exception as e:
         print(f"Warning: Endianness detection failed: {e}")
         return False
+        
+    finally:
+        # Ensure the temporary file is cleaned up
+        if test_file and os.path.exists(test_file):
+            try:
+                os.unlink(test_file)
+            except OSError:
+                pass
 
 
 def detect_mvk(env, osname):
