@@ -1146,29 +1146,30 @@ DisplayServerWeb::DisplayServerWeb(const String &p_rendering_driver, WindowMode 
 	bool webgl_inited = false;
 
 #ifdef GLES3_ENABLED
-	if (godot_js_display_has_webgl(2)) {
-		EmscriptenWebGLContextAttributes attributes;
-		emscripten_webgl_init_context_attributes(&attributes);
-		attributes.alpha = OS::get_singleton()->is_layered_allowed();
-		attributes.antialias = false;
-		attributes.majorVersion = 2;
-		attributes.explicitSwapControl = true;
+	if (p_rendering_driver == "opengl3") {
+		if (godot_js_display_has_webgl(2)) {
+			EmscriptenWebGLContextAttributes attributes;
+			emscripten_webgl_init_context_attributes(&attributes);
+			attributes.alpha = OS::get_singleton()->is_layered_allowed();
+			attributes.antialias = false;
+			attributes.majorVersion = 2;
+			attributes.explicitSwapControl = true;
 
-		webgl_ctx = emscripten_webgl_create_context(canvas_id, &attributes);
-		webgl_inited = webgl_ctx && emscripten_webgl_make_context_current(webgl_ctx) == EMSCRIPTEN_RESULT_SUCCESS;
-	}
-	
-	if (webgl_inited) {
-		if (!emscripten_webgl_enable_extension(webgl_ctx, "OVR_multiview2")) {
-			print_verbose("Failed to enable WebXR extension.");
+			webgl_ctx = emscripten_webgl_create_context(canvas_id, &attributes);
+			webgl_inited = webgl_ctx && emscripten_webgl_make_context_current(webgl_ctx) == EMSCRIPTEN_RESULT_SUCCESS;
 		}
-		RasterizerGLES3::make_current(false);
+
+		if (webgl_inited) {
+			if (!emscripten_webgl_enable_extension(webgl_ctx, "OVR_multiview2")) {
+				print_verbose("Failed to enable WebXR extension.");
+			}
+			RasterizerGLES3::make_current(false);
+		}
 	}
 #endif // GLES3_ENABLED
 	
-	// Fallback to WebGL 1 (GLES2) if WebGL 2 failed or wasn't compiled
 #ifdef GLES2_ENABLED
-	if (!webgl_inited) {
+	if (p_rendering_driver == "opengl2") {
 		if (godot_js_display_has_webgl(1)) {
 			EmscriptenWebGLContextAttributes attributes;
 			emscripten_webgl_init_context_attributes(&attributes);

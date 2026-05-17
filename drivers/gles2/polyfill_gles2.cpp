@@ -39,9 +39,13 @@ PFNGLENDTRANSFORMFEEDBACKPROC Polyfill::endTransformFeedback = nullptr;
 PFNGLBINDBUFFERRANGEPROC Polyfill::bindBufferRange = nullptr;
 PFNGLTRANSFORMFEEDBACKVARYINGSPROC Polyfill::transformFeedbackVaryings = nullptr;
 
+#if !defined(WEB_ENABLED)
+PFNGLUNMAPBUFFERPROC Polyfill::unmapBuffer = nullptr;
+#endif
+
 Polyfill::Polyfill() {
-#if defined(ANDROID_ENABLED) || defined(IOS_ENABLED)
-	// On mobile, these are statically linked in the headers 
+#if defined(ANDROID_ENABLED) || defined(IOS_ENABLED) || defined(WEB_ENABLED)
+	// On mobile, these are statically linked in the headers
 	// and do not require runtime null checks or EXT fallbacks.
 	bindBufferBase = glBindBufferBase;
 	bindBufferRange = glBindBufferRange;
@@ -76,13 +80,21 @@ Polyfill::Polyfill() {
 	} else if (glEndTransformFeedbackEXT != nullptr) {
 		endTransformFeedback = (PFNGLENDTRANSFORMFEEDBACKPROC)glEndTransformFeedbackEXT;
 	}
-	
+
 	// TransformFeedbackVaryings
 	if (glTransformFeedbackVaryings != nullptr) {
 		transformFeedbackVaryings = glTransformFeedbackVaryings;
 	} else if (glTransformFeedbackVaryingsEXT != nullptr) {
 		transformFeedbackVaryings = (PFNGLTRANSFORMFEEDBACKVARYINGSPROC)glTransformFeedbackVaryingsEXT;
 	}
+
+	// UnmapBuffer
+	if (glUnmapBuffer != nullptr) {
+		unmapBuffer = glUnmapBuffer;
+	} else if (glUnmapBufferOES != nullptr) {
+		unmapBuffer = (PFNGLUNMAPBUFFERPROC)glUnmapBufferOES;
+	}
+
 #endif
 }
 } //namespace GLES2

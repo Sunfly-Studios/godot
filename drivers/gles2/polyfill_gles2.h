@@ -52,6 +52,10 @@ namespace GLES2 {
 		static PFNGLBINDBUFFERRANGEPROC bindBufferRange;
 		static PFNGLTRANSFORMFEEDBACKVARYINGSPROC transformFeedbackVaryings;
 
+#if !defined(WEB_ENABLED)
+		static PFNGLUNMAPBUFFERPROC unmapBuffer;
+#endif
+
 		Polyfill();
 		~Polyfill() = default;
 	};
@@ -103,20 +107,32 @@ namespace GLES2 {
 		if (likely(GLES2::Polyfill::endTransformFeedback)) \
 			GLES2::Polyfill::endTransformFeedback();       \
 	} while (0)
-	
+
 #undef glBindBufferRangeEXT
 #define glBindBufferRangeEXT(target, index, buffer, offset, size)                  \
 	do {                                                                           \
 		if (likely(GLES2::Polyfill::bindBufferRange))                              \
 			GLES2::Polyfill::bindBufferRange(target, index, buffer, offset, size); \
 	} while (0)
-	
+
 #undef glTransformFeedbackVaryingsEXT
 #define glTransformFeedbackVaryingsEXT(program, count, varyings, bufferMode)                  \
 	do {                                                                                      \
 		if (likely(GLES2::Polyfill::transformFeedbackVaryings))                               \
 			GLES2::Polyfill::transformFeedbackVaryings(program, count, varyings, bufferMode); \
 	} while (0)
+
+
+#if !defined(WEB_ENABLED)
+
+#undef glUnmapBufferOES
+#define glUnmapBufferOES(target)                  \
+	do {                                          \
+		if (likely(GLES2::Polyfill::unmapBuffer)) \
+			GLES2::Polyfill::unmapBuffer(target); \
+	} while (0)
+
+#endif // !WEB_ENABLED
 
 #endif // POLYFILL_GLES2_IMPL
 

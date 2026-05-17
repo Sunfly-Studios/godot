@@ -224,10 +224,14 @@ Config::Config() {
 	}
 
 #ifdef WEB_ENABLED
-	glGetIntegerv(GL_MAX_SAMPLES, &msaa_max_samples);
-	msaa_supported = (msaa_max_samples > 0);
+	msaa_supported = false;
 #else
 	msaa_supported = extensions.has("GL_EXT_framebuffer_multisample");
+	if (msaa_supported) {
+		glGetIntegerv(GL_MAX_SAMPLES, &msaa_max_samples);
+	} else {
+		msaa_max_samples = 0;
+	}
 #endif
 
 	force_vertex_shading = GLOBAL_GET("rendering/shading/overrides/force_vertex_shading");

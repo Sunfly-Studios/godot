@@ -646,11 +646,9 @@ protected:
 	}
 
 	unsigned int godot4_commands_to_vector(RendererCanvasRender::Item::Command *p_comm, LocalVector<RendererCanvasRender::Item::Command *> &p_list) {
-		int count = 0;
 		int circuit_breaker = 65536;
 		p_list.clear();
 		while (p_comm && circuit_breaker-- > 0) {
-			count++;
 			p_list.push_back(p_comm);
 			p_comm = p_comm->next;
 		}

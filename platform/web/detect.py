@@ -220,7 +220,8 @@ def configure(env: "SConsEnvironment"):
             env["opengl2"] = True
             print_info("Web platform requires GLES2 or higher. Enabling GLES2.")
         elif env["opengl1"]:
-            print_info("Web platform requires GLES2 or higher. GLES1 flag ignored.")
+            print_info("Web platform requires GLES2 or higher. Disabling GLES1.")
+            env["opengl1"] = False
 
         if env["opengl3"]:
             env.AppendUnique(CPPDEFINES=["GLES3_ENABLED"])

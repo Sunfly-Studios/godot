@@ -400,11 +400,15 @@ AABB ParticlesStorage::particles_get_current_aabb(RID p_particles) {
 		return particles->custom_aabb;
 	}
 
+	AABB aabb;
+
+#ifdef WEB_ENABLED
+	aabb = particles->custom_aabb;
+#else
 	glBindBuffer(GL_ARRAY_BUFFER, read_buffer);
 	void *data_ptr = glMapBufferOES(GL_ARRAY_BUFFER, GL_MAP_READ_BIT_OES);
 	GL_CHECK_ERROR("ParticlesStorage::particles_get_current_aabb: glMapBufferOES");
 
-	AABB aabb;
 	if (data_ptr) {
 		Transform3D inv = particles->emission_transform.affine_inverse();
 		bool first = true;
@@ -429,6 +433,7 @@ AABB ParticlesStorage::particles_get_current_aabb(RID p_particles) {
 		glUnmapBufferOES(GL_ARRAY_BUFFER);
 	}
 	glBindBuffer(GL_ARRAY_BUFFER, 0);
+#endif
 
 	float longest_axis_size = 0;
 	for (int i = 0; i < particles->draw_passes.size(); i++) {
@@ -806,6 +811,11 @@ void ParticlesStorage::update_particles() {
 			_particles_allocate_history_buffers(particles);
 			SWAP(particles->last_frame_buffer, particles->sort_buffer);
 
+#ifdef WEB_ENABLED
+			WARN_PRINT_ONCE("Particle history and depth sorting not available on the web for GLES2.");
+			particles->sort_buffer_filled = false;
+			particles->last_frame_buffer_filled = false;
+#else
 			if (GLES2::Config::get_singleton()->support_mapbuffer) {
 				glBindBuffer(GL_ARRAY_BUFFER, particles->back_instance_buffer);
 				// Query standard mapbuffer.
@@ -836,6 +846,7 @@ void ParticlesStorage::update_particles() {
 				particles->sort_buffer_filled = false;
 				particles->last_frame_buffer_filled = false;
 			}
+#endif
 		}
 
 		int fixed_fps = 0;
