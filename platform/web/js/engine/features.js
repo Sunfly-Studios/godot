@@ -84,6 +84,9 @@ const Features = {
 		if (!Features.isWebGLAvailable(2)) {
 			missing.push('WebGL2 - Check web browser configuration and hardware support');
 		}
+		if (!Features.isWebGLAvailable(1)) {
+			missing.push('WebGL1 - Check web browser configuration and hardware support');
+		}
 		if (!Features.isFetchAvailable()) {
 			missing.push('Fetch - Check web browser version');
 		}

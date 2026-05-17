@@ -549,11 +549,9 @@ void RasterizerGLES2::set_boot_image(const Ref<Image> &p_image, const Color &p_c
 
 	glBindFramebuffer(GL_FRAMEBUFFER, GLES2::TextureStorage::system_fbo);
 
-#if defined(ANDROID_ENABLED) || defined(__ANDROID__)
 	if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
 		return;
 	}
-#endif
 
 	glViewport(0, 0, win_size.width, win_size.height);
 	glEnable(GL_BLEND);

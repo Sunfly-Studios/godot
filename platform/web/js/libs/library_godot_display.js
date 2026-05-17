@@ -770,9 +770,22 @@ const GodotDisplay = {
 			ev.preventDefault();
 		}, false);
 		GodotEventListeners.add(canvas, 'webglcontextlost', function (ev) {
-			alert('WebGL context lost, please reload the page'); // eslint-disable-line no-alert
 			ev.preventDefault();
-			GodotOS.request_quit();
+						
+			// Pause the Emscripten main loop so C++ stops rendering
+			if (typeof pauseMainLoop === 'function') {
+				pauseMainLoop();
+			} else if (typeof Browser !== 'undefined' && Browser.mainLoop) {
+				Browser.mainLoop.pause();
+			}
+		}, false);
+		GodotEventListeners.add(canvas, 'webglcontextrestored', function (ev) {
+			// The browser has granted a new context. Resume the main loop.
+			if (typeof resumeMainLoop === 'function') {
+				resumeMainLoop();
+			} else if (typeof Browser !== 'undefined' && Browser.mainLoop) {
+				Browser.mainLoop.resume();
+			}
 		}, false);
 		GodotDisplayScreen.hidpi = !!p_hidpi;
 		switch (GodotConfig.canvas_resize_policy) {
