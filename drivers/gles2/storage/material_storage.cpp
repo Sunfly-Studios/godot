@@ -572,6 +572,268 @@ _FORCE_INLINE_ static void _fill_std140_ubo_value(ShaderLanguage::DataType type,
 	}
 }
 
+_FORCE_INLINE_ static void bind_uniforms_and_textures_generic_gles2(
+	const Vector<uint8_t> &p_ubo_data,
+	const HashMap<StringName, ShaderLanguage::ShaderNode::Uniform> &p_uniforms,
+	const Vector<uint32_t> &p_ubo_offsets,
+	const Vector<RID> &p_texture_cache,
+	const Vector<ShaderCompiler::GeneratedCode::Texture> &p_texture_uniforms
+) {
+	GLint prog = 0;
+	glGetIntegerv(GL_CURRENT_PROGRAM, &prog);
+	if (unlikely(prog == 0)) {
+		glActiveTexture(GL_TEXTURE0);
+		ERR_FAIL_MSG("GLES2: Material failed to bind uniforms because GL_CURRENT_PROGRAM is 0.");
+	}
+
+	// Unpack and upload the "UBO" data via glUniform
+	if (!p_ubo_data.is_empty()) {
+		const uint8_t *data = p_ubo_data.ptr();
+
+		for (const KeyValue<StringName, ShaderLanguage::ShaderNode::Uniform> &E : p_uniforms) {
+			if (E.value.order < 0) {
+				continue; // Skip Textures
+			}
+			if (E.value.scope == ShaderLanguage::ShaderNode::Uniform::SCOPE_INSTANCE) {
+				continue;
+			}
+
+			// Godot 4 shader compiler always prefixes custom uniforms with "m_"
+			String uniform_name = "m_" + String(E.key);
+			GLint loc = glGetUniformLocation(prog, uniform_name.utf8().get_data());
+
+			if (loc < 0) {
+				// Fallback in case it is not prefixed with `m_`
+				uniform_name = String(E.key);
+				loc = glGetUniformLocation(prog, uniform_name.utf8().get_data());
+			}
+
+			if (loc < 0) {
+				continue; // Uniform was optimized out by GLSL
+			}
+
+			uint32_t offset = p_ubo_offsets[E.value.order];
+			const uint8_t *val_ptr = &data[offset];
+			int count = E.value.array_size > 0 ? E.value.array_size : 1;
+
+			if (count > 1) {
+				// Uniform Arrays require unpacking from std140 before submitting to GLES2
+				switch (E.value.type) {
+					case ShaderLanguage::TYPE_BOOL:
+					case ShaderLanguage::TYPE_INT:
+					case ShaderLanguage::TYPE_UINT: {
+						LocalVector<int32_t> tmp;
+						tmp.resize(count);
+						for (int i = 0; i < count; i++) {
+							tmp[i] = unaligned_read<int32_t>(&val_ptr[i * 16]); // std140 arrays align to 16 bytes
+						}
+						glUniform1iv(loc, count, tmp.ptr());
+					} break;
+					case ShaderLanguage::TYPE_FLOAT: {
+						LocalVector<float> tmp;
+						tmp.resize(count);
+						for (int i = 0; i < count; i++) {
+							tmp[i] = unaligned_read<float>(&val_ptr[i * 16]);
+						}
+						glUniform1fv(loc, count, tmp.ptr());
+					} break;
+					case ShaderLanguage::TYPE_VEC2: {
+						LocalVector<float> tmp;
+						tmp.resize(count * 2);
+						for (int i = 0; i < count; i++) {
+							tmp[i * 2 + 0] = unaligned_read<float>(&val_ptr[i * 16 + 0 * sizeof(float)]);
+							tmp[i * 2 + 1] = unaligned_read<float>(&val_ptr[i * 16 + 1 * sizeof(float)]);
+						}
+						glUniform2fv(loc, count, tmp.ptr());
+					} break;
+					case ShaderLanguage::TYPE_VEC3: {
+						LocalVector<float> tmp;
+						tmp.resize(count * 3);
+						for (int i = 0; i < count; i++) {
+							tmp[i * 3 + 0] = unaligned_read<float>(&val_ptr[i * 16 + 0 * sizeof(float)]);
+							tmp[i * 3 + 1] = unaligned_read<float>(&val_ptr[i * 16 + 1 * sizeof(float)]);
+							tmp[i * 3 + 2] = unaligned_read<float>(&val_ptr[i * 16 + 2 * sizeof(float)]);
+						}
+						glUniform3fv(loc, count, tmp.ptr());
+					} break;
+					case ShaderLanguage::TYPE_VEC4: {
+						LocalVector<float> tmp;
+						tmp.resize(count * 4);
+						for (int i = 0; i < count; i++) {
+							tmp[i * 4 + 0] = unaligned_read<float>(&val_ptr[i * 16 + 0 * sizeof(float)]);
+							tmp[i * 4 + 1] = unaligned_read<float>(&val_ptr[i * 16 + 1 * sizeof(float)]);
+							tmp[i * 4 + 2] = unaligned_read<float>(&val_ptr[i * 16 + 2 * sizeof(float)]);
+							tmp[i * 4 + 3] = unaligned_read<float>(&val_ptr[i * 16 + 3 * sizeof(float)]);
+						}
+						glUniform4fv(loc, count, tmp.ptr());
+					} break;
+					case ShaderLanguage::TYPE_MAT2: {
+						LocalVector<float> tmp;
+						tmp.resize(count * 4);
+						for (int i = 0; i < count; i++) {
+							tmp[i * 4 + 0] = unaligned_read<float>(&val_ptr[i * 32 + 0 * sizeof(float)]);
+							tmp[i * 4 + 1] = unaligned_read<float>(&val_ptr[i * 32 + 1 * sizeof(float)]);
+							tmp[i * 4 + 2] = unaligned_read<float>(&val_ptr[i * 32 + 4 * sizeof(float)]);
+							tmp[i * 4 + 3] = unaligned_read<float>(&val_ptr[i * 32 + 5 * sizeof(float)]);
+						}
+						glUniformMatrix2fv(loc, count, GL_FALSE, tmp.ptr());
+					} break;
+					case ShaderLanguage::TYPE_MAT3: {
+						LocalVector<float> tmp;
+						tmp.resize(count * 9);
+						for (int i = 0; i < count; i++) {
+							tmp[i * 9 + 0] = unaligned_read<float>(&val_ptr[i * 48 + 0 * sizeof(float)]);
+							tmp[i * 9 + 1] = unaligned_read<float>(&val_ptr[i * 48 + 1 * sizeof(float)]);
+							tmp[i * 9 + 2] = unaligned_read<float>(&val_ptr[i * 48 + 2 * sizeof(float)]);
+							tmp[i * 9 + 3] = unaligned_read<float>(&val_ptr[i * 48 + 4 * sizeof(float)]);
+							tmp[i * 9 + 4] = unaligned_read<float>(&val_ptr[i * 48 + 5 * sizeof(float)]);
+							tmp[i * 9 + 5] = unaligned_read<float>(&val_ptr[i * 48 + 6 * sizeof(float)]);
+							tmp[i * 9 + 6] = unaligned_read<float>(&val_ptr[i * 48 + 8 * sizeof(float)]);
+							tmp[i * 9 + 7] = unaligned_read<float>(&val_ptr[i * 48 + 9 * sizeof(float)]);
+							tmp[i * 9 + 8] = unaligned_read<float>(&val_ptr[i * 48 + 10 * sizeof(float)]);
+						}
+						glUniformMatrix3fv(loc, count, GL_FALSE, tmp.ptr());
+					} break;
+					case ShaderLanguage::TYPE_MAT4: {
+						LocalVector<float> tmp;
+						tmp.resize(count * 16);
+						for (int i = 0; i < count; i++) {
+							for (int j = 0; j < 16; j++) {
+								tmp[i * 16 + j] = unaligned_read<float>(&val_ptr[i * 64 + j * sizeof(float)]);
+							}
+						}
+						glUniformMatrix4fv(loc, count, GL_FALSE, tmp.ptr());
+					} break;
+					default:
+						break;
+				}
+			} else {
+				// Translate the std140 bytes into raw GLES2 bindings (Single Element)
+				switch (E.value.type) {
+					case ShaderLanguage::TYPE_BOOL:
+					case ShaderLanguage::TYPE_INT:
+					case ShaderLanguage::TYPE_UINT:
+						glUniform1i(loc, *(const int32_t *)val_ptr);
+						break;
+					case ShaderLanguage::TYPE_FLOAT:
+						glUniform1f(loc, *(const float *)val_ptr);
+						break;
+					case ShaderLanguage::TYPE_VEC2:
+						glUniform2f(loc, ((const float *)val_ptr)[0], ((const float *)val_ptr)[1]);
+						break;
+					case ShaderLanguage::TYPE_VEC3:
+						glUniform3f(loc, ((const float *)val_ptr)[0], ((const float *)val_ptr)[1], ((const float *)val_ptr)[2]);
+						break;
+					case ShaderLanguage::TYPE_VEC4:
+						glUniform4f(loc, ((const float *)val_ptr)[0], ((const float *)val_ptr)[1], ((const float *)val_ptr)[2], ((const float *)val_ptr)[3]);
+						break;
+					case ShaderLanguage::TYPE_MAT4:
+						glUniformMatrix4fv(loc, 1, GL_FALSE, (const GLfloat *)val_ptr);
+						break;
+					case ShaderLanguage::TYPE_MAT2: {
+						float m[4] = {};
+						m[0] = ((const float *)val_ptr)[0];
+						m[1] = ((const float *)val_ptr)[1];
+						m[2] = ((const float *)val_ptr)[4];
+						m[3] = ((const float *)val_ptr)[5];
+						glUniformMatrix2fv(loc, 1, GL_FALSE, m);
+					} break;
+					case ShaderLanguage::TYPE_MAT3: {
+						float m[9] = {};
+						m[0] = ((const float *)val_ptr)[0];
+						m[1] = ((const float *)val_ptr)[1];
+						m[2] = ((const float *)val_ptr)[2];
+						m[3] = ((const float *)val_ptr)[4];
+						m[4] = ((const float *)val_ptr)[5];
+						m[5] = ((const float *)val_ptr)[6];
+						m[6] = ((const float *)val_ptr)[8];
+						m[7] = ((const float *)val_ptr)[9];
+						m[8] = ((const float *)val_ptr)[10];
+						glUniformMatrix3fv(loc, 1, GL_FALSE, m);
+					} break;
+					default:
+						break;
+				}
+			}
+		}
+	}
+
+	// Bind Textures to their active GL_TEXTURE units
+	const RID *textures = p_texture_cache.ptr();
+	const ShaderCompiler::GeneratedCode::Texture *texture_uniforms = p_texture_uniforms.ptr();
+	int texture_uniform_index = 0;
+	int texture_uniform_count = 0;
+
+	int max_texture_units = GLES2::Config::get_singleton()->max_texture_image_units;
+	int max_custom_textures = MAX(1, max_texture_units - 8); // Reserve top 8 for engine
+
+	// Start at 1 to preserve GL_TEXTURE0, which is reserved
+	// for state machine operations
+	int current_tex_unit = 1;
+
+	for (int ti = 0; ti < p_texture_cache.size(); ti++) {
+		const ShaderCompiler::GeneratedCode::Texture &texture_uniform = texture_uniforms[texture_uniform_index];
+
+		// Tell the custom shader which texture unit to read from
+		String tex_name = "m_" + String(texture_uniform.name);
+		GLint tex_loc = glGetUniformLocation(prog, tex_name.utf8().get_data());
+
+		if (tex_loc < 0) {
+			// In case it is not prefixed with `m_`
+			tex_name = String(texture_uniform.name);
+			tex_loc = glGetUniformLocation(prog, tex_name.utf8().get_data());
+		}
+
+		if (texture_uniform.hint == ShaderLanguage::ShaderNode::Uniform::HINT_SCREEN_TEXTURE) {
+			// Map directly to the engine's backbuffer texture unit.
+			if (tex_loc >= 0) {
+				glUniform1i(tex_loc + texture_uniform_count, max_texture_units - 4);
+			}
+		} else if (texture_uniform.hint == ShaderLanguage::ShaderNode::Uniform::HINT_DEPTH_TEXTURE) {
+			if (tex_loc >= 0) {
+				glUniform1i(tex_loc + texture_uniform_count, max_texture_units - 5);
+			}
+		} else if (texture_uniform.hint == ShaderLanguage::ShaderNode::Uniform::HINT_NORMAL_ROUGHNESS_TEXTURE) {
+			// TODO(GLES2): Map screen normal hints to the dedicated normal
+			// unit after implementing screen normals later
+			if (tex_loc >= 0) {
+				glUniform1i(tex_loc + texture_uniform_count, max_texture_units - 6);
+			}
+		} else {
+			// Standard custom texture mapping
+			if (unlikely(current_tex_unit >= max_custom_textures)) {
+				ERR_PRINT_ONCE(vformat("GLES2: Custom shader uses too many textures! Hardware limit is %d. Skipping remainder.", max_custom_textures));
+				break;
+			}
+
+			if (tex_loc >= 0) {
+				glUniform1i(tex_loc + texture_uniform_count, current_tex_unit);
+			}
+
+			glActiveTexture(GL_TEXTURE0 + current_tex_unit);
+
+			GLES2::Texture *texture = GLES2::TextureStorage::get_singleton()->get_texture(textures[ti]);
+			if (texture && texture->tex_id != 0) {
+				glBindTexture(texture->target, texture->tex_id);
+			} else {
+				glBindTexture(GL_TEXTURE_2D, 0);
+			}
+
+			current_tex_unit++;
+		}
+
+		texture_uniform_count++;
+		if (texture_uniform_count >= texture_uniform.array_size) {
+			texture_uniform_index++;
+			texture_uniform_count = 0;
+		}
+	}
+
+	// Reset active texture to 0 so we don't accidentally break the geometry drawing
+	// pass that happens immediately after this function returns.
+	glActiveTexture(GL_TEXTURE0);
+}
+
 ///////////////////////////////////////////////////////////////////////////
 // ShaderData
 
@@ -903,13 +1165,13 @@ MaterialStorage::MaterialStorage() {
 
 		actions.renames["MODEL_MATRIX"] = "model_matrix";
 		actions.renames["MODEL_NORMAL_MATRIX"] = "model_normal_matrix";
-		actions.renames["VIEW_MATRIX"] = "scene_data.view_matrix";
-		actions.renames["INV_VIEW_MATRIX"] = "scene_data.inv_view_matrix";
+		actions.renames["VIEW_MATRIX"] = "view_matrix";
+		actions.renames["INV_VIEW_MATRIX"] = "inv_view_matrix";
 		actions.renames["PROJECTION_MATRIX"] = "projection_matrix";
 		actions.renames["INV_PROJECTION_MATRIX"] = "inv_projection_matrix";
 		actions.renames["MODELVIEW_MATRIX"] = "modelview";
 		actions.renames["MODELVIEW_NORMAL_MATRIX"] = "modelview_normal";
-		actions.renames["MAIN_CAM_INV_VIEW_MATRIX"] = "scene_data.main_cam_inv_view_matrix";
+		actions.renames["MAIN_CAM_INV_VIEW_MATRIX"] = "main_cam_inv_view_matrix";
 
 		actions.renames["VERTEX"] = "vertex";
 		actions.renames["NORMAL"] = "normal";
@@ -928,12 +1190,12 @@ MaterialStorage::MaterialStorage() {
 		actions.renames["ALPHA_ANTIALIASING_EDGE"] = "alpha_antialiasing_edge";
 		actions.renames["ALPHA_TEXTURE_COORDINATE"] = "alpha_texture_coordinate";
 
-		actions.renames["TIME"] = "scene_data.time";
-		actions.renames["EXPOSURE"] = "(1.0 / scene_data.emissive_exposure_normalization)";
+		actions.renames["TIME"] = "time";
+		actions.renames["EXPOSURE"] = "(1.0 / emissive_exposure_normalization)";
 		actions.renames["PI"] = _MKSTR(Math_PI);
 		actions.renames["TAU"] = _MKSTR(Math_TAU);
 		actions.renames["E"] = _MKSTR(Math_E);
-		actions.renames["VIEWPORT_SIZE"] = "scene_data.viewport_size";
+		actions.renames["VIEWPORT_SIZE"] = "viewport_size";
 
 		actions.renames["FRAGCOORD"] = "gl_FragCoord";
 		actions.renames["FRONT_FACING"] = "gl_FrontFacing";
@@ -978,10 +1240,10 @@ MaterialStorage::MaterialStorage() {
 		actions.renames["OUTPUT_IS_SRGB"] = "SHADER_IS_SRGB";
 
 		actions.renames["NODE_POSITION_WORLD"] = "model_matrix[3].xyz";
-		actions.renames["CAMERA_POSITION_WORLD"] = "scene_data.inv_view_matrix[3].xyz";
-		actions.renames["CAMERA_DIRECTION_WORLD"] = "scene_data.view_matrix[3].xyz";
-		actions.renames["CAMERA_VISIBLE_LAYERS"] = "scene_data.camera_visible_layers";
-		actions.renames["NODE_POSITION_VIEW"] = "(scene_data.view_matrix * model_matrix)[3].xyz";
+		actions.renames["CAMERA_POSITION_WORLD"] = "inv_view_matrix[3].xyz";
+		actions.renames["CAMERA_DIRECTION_WORLD"] = "view_matrix[3].xyz";
+		actions.renames["CAMERA_VISIBLE_LAYERS"] = "camera_visible_layers";
+		actions.renames["NODE_POSITION_VIEW"] = "(view_matrix * model_matrix)[3].xyz";
 
 		actions.renames["VIEW_INDEX"] = "ViewIndex";
 		actions.renames["VIEW_MONO_LEFT"] = "0";
@@ -1188,29 +1450,6 @@ MaterialStorage::MaterialStorage() {
 
 		shaders.compiler_sky.initialize(actions);
 	}
-
-	String global_defines;
-	global_defines += "#define MAX_GLOBAL_SHADER_UNIFORMS 256\n"; // TODO: this is arbitrary for now
-
-	// Canvas Shader
-	shaders.canvas_shader.initialize(global_defines, 1);
-	shaders.canvas_shader.default_version = shaders.canvas_shader.version_create();
-	shaders.canvas_shader.version_set_code(shaders.canvas_shader.default_version, HashMap<String, String>(), "", "", "", Vector<String>(), LocalVector<ShaderGLES2::TextureUniformData>(), true);
-
-	// Scene Shader
-	shaders.scene_shader.initialize(global_defines);
-	shaders.scene_shader.default_version = shaders.scene_shader.version_create();
-	shaders.scene_shader.version_set_code(shaders.scene_shader.default_version, HashMap<String, String>(), "", "", "", Vector<String>(), LocalVector<ShaderGLES2::TextureUniformData>(), true);
-
-	// Particles Process Shader
-	shaders.particles_process_shader.initialize(global_defines);
-	shaders.particles_process_shader.default_version = shaders.particles_process_shader.version_create();
-	shaders.particles_process_shader.version_set_code(shaders.particles_process_shader.default_version, HashMap<String, String>(), "", "", "", Vector<String>(), LocalVector<ShaderGLES2::TextureUniformData>(), true);
-
-	// Sky Shader
-	shaders.sky_shader.initialize(global_defines);
-	shaders.sky_shader.default_version = shaders.sky_shader.version_create();
-	shaders.sky_shader.version_set_code(shaders.sky_shader.default_version, HashMap<String, String>(), "", "", "", Vector<String>(), LocalVector<ShaderGLES2::TextureUniformData>(), true);
 }
 
 MaterialStorage::~MaterialStorage() {
@@ -1225,20 +1464,6 @@ MaterialStorage::~MaterialStorage() {
 	if (global_shader_uniforms.buffer_dirty_regions != nullptr) {
 		memdelete_arr(global_shader_uniforms.buffer_dirty_regions);
 		global_shader_uniforms.buffer_dirty_regions = nullptr;
-	}
-
-	// Free the un-freed default shaders
-	if (shaders.canvas_shader.default_version.is_valid()) {
-		shaders.canvas_shader.version_free(shaders.canvas_shader.default_version);
-	}
-	if (shaders.scene_shader.default_version.is_valid()) {
-		shaders.scene_shader.version_free(shaders.scene_shader.default_version);
-	}
-	if (shaders.particles_process_shader.default_version.is_valid()) {
-		shaders.particles_process_shader.version_free(shaders.particles_process_shader.default_version);
-	}
-	if (shaders.sky_shader.default_version.is_valid()) {
-		shaders.sky_shader.version_free(shaders.sky_shader.default_version);
 	}
 
 	// Clear the update queue
@@ -1401,7 +1626,7 @@ void MaterialStorage::shader_set_code(RID p_shader, const String &p_code) {
 
 		for (Material *E : shader->owners) {
 			Material *material = E;
-			if (shader->data) {
+			if (shader->data && new_mode < RS::SHADER_MAX && material_data_request_func[new_mode]) {
 				material->data = material_data_request_func[new_mode](shader->data);
 				material->data->self = material->self;
 				material->data->set_next_pass(material->next_pass);
@@ -1604,12 +1829,14 @@ void MaterialStorage::material_set_shader(RID p_material, RID p_shader) {
 	material->shader_mode = shader->mode;
 
 	if (shader->data) {
-		if (shader->mode == RS::SHADER_CANVAS_ITEM) {
-			material->data = GLES2::_create_canvas_material_func(shader->data);
-		} else if (shader->mode == RS::SHADER_PARTICLES) {
-			material->data = GLES2::_create_particles_material_func(shader->data);
+		// Automatically points to the requested function
+		// based on the requested shader mode.
+		if (shader->mode < RS::SHADER_MAX && material_data_request_func[shader->mode]) {
+			material->data = material_data_request_func[shader->mode](shader->data);
+			material->data->self = material->self;
+			material->data->set_next_pass(material->next_pass);
+			material->data->set_render_priority(material->priority);
 		}
-		// TODO(GLES2): Add Spatial material allocation when 3D is implemented
 	}
 
 	shader->owners.insert(material);
@@ -1688,10 +1915,28 @@ bool MaterialStorage::material_is_animated(RID p_material) {
 }
 
 bool MaterialStorage::material_casts_shadows(RID p_material) {
+	GLES2::Material *material = material_owner.get_or_null(p_material);
+	ERR_FAIL_NULL_V(material, true);
+	if (material->shader && material->shader->data) {
+		if (material->shader->data->casts_shadows()) {
+			return true;
+		} else if (material->next_pass.is_valid()) {
+			return material_casts_shadows(material->next_pass);
+		}
+	}
 	return true; //by default everything casts shadows
 }
 
 RS::CullMode MaterialStorage::material_get_cull_mode(RID p_material) const {
+	const GLES2::Material *material = material_owner.get_or_null(p_material);
+	ERR_FAIL_NULL_V(material, RS::CULL_MODE_DISABLED);
+	ERR_FAIL_NULL_V(material->shader, RS::CULL_MODE_DISABLED);
+	if (material->shader->data) {
+		SceneShaderData *data = dynamic_cast<SceneShaderData *>(material->shader->data);
+		if (data) {
+			return static_cast<RS::CullMode>(data->cull_mode);
+		}
+	}
 	return RS::CULL_MODE_DISABLED;
 }
 
@@ -1857,256 +2102,17 @@ void CanvasMaterialData::update_parameters(const HashMap<StringName, Variant> &p
 }
 
 void CanvasMaterialData::bind_uniforms() {
-	GLint prog = 0;
-	glGetIntegerv(GL_CURRENT_PROGRAM, &prog);
-	if (unlikely(prog == 0)) {
-		// Guarantee baseline texture unit before error exit
-		glActiveTexture(GL_TEXTURE0);
-		ERR_FAIL_MSG("GLES2: CanvasMaterialData failed to bind uniforms because GL_CURRENT_PROGRAM is 0.");
+	if (!shader_data || !shader_data->valid) {
+		return;
 	}
 
-	// Unpack the custom UBO data and push via glUniform
-	if (!ubo_data.is_empty()) {
-		const uint8_t *data = ubo_data.ptr();
-
-		for (const KeyValue<StringName, ShaderLanguage::ShaderNode::Uniform> &E : shader_data->uniforms) {
-			if (E.value.order < 0) {
-				continue; // Skip Textures
-			}
-			if (E.value.scope == ShaderLanguage::ShaderNode::Uniform::SCOPE_INSTANCE) {
-				continue;
-			}
-
-			// Godot 4 shader compiler always prefixes custom uniforms with "m_"
-			String uniform_name = "m_" + String(E.key);
-			GLint loc = glGetUniformLocation(prog, uniform_name.utf8().get_data());
-
-			if (loc < 0) {
-				// In case it is not prefixed with `m_`
-				uniform_name = String(E.key);
-				loc = glGetUniformLocation(prog, uniform_name.utf8().get_data());
-			}
-
-			if (loc < 0) {
-				continue; // Uniform was optimized out by GLSL
-			}
-
-			uint32_t offset = shader_data->ubo_offsets[E.value.order];
-			const uint8_t *val_ptr = &data[offset];
-			int count = E.value.array_size > 0 ? E.value.array_size : 1;
-
-			if (count > 1) {
-				// Uniform Arrays require unpacking from std140 before submitting to GLES2
-				switch (E.value.type) {
-					case ShaderLanguage::TYPE_BOOL:
-					case ShaderLanguage::TYPE_INT:
-					case ShaderLanguage::TYPE_UINT: {
-						LocalVector<int32_t> tmp;
-						tmp.resize(count);
-						for (int i = 0; i < count; i++) {
-							tmp[i] = unaligned_read<int32_t>(&val_ptr[i * 16]); // std140 arrays align to 16 bytes
-						}
-						glUniform1iv(loc, count, tmp.ptr());
-					} break;
-					case ShaderLanguage::TYPE_FLOAT: {
-						LocalVector<float> tmp;
-						tmp.resize(count);
-						for (int i = 0; i < count; i++) {
-							tmp[i] = unaligned_read<float>(&val_ptr[i * 16]);
-						}
-						glUniform1fv(loc, count, tmp.ptr());
-					} break;
-					case ShaderLanguage::TYPE_VEC2: {
-						LocalVector<float> tmp;
-						tmp.resize(count * 2);
-						for (int i = 0; i < count; i++) {
-							tmp[i * 2 + 0] = unaligned_read<float>(&val_ptr[i * 16 + 0 * sizeof(float)]);
-							tmp[i * 2 + 1] = unaligned_read<float>(&val_ptr[i * 16 + 1 * sizeof(float)]);
-						}
-						glUniform2fv(loc, count, tmp.ptr());
-					} break;
-					case ShaderLanguage::TYPE_VEC3: {
-						LocalVector<float> tmp;
-						tmp.resize(count * 3);
-						for (int i = 0; i < count; i++) {
-							tmp[i * 3 + 0] = unaligned_read<float>(&val_ptr[i * 16 + 0 * sizeof(float)]);
-							tmp[i * 3 + 1] = unaligned_read<float>(&val_ptr[i * 16 + 1 * sizeof(float)]);
-							tmp[i * 3 + 2] = unaligned_read<float>(&val_ptr[i * 16 + 2 * sizeof(float)]);
-						}
-						glUniform3fv(loc, count, tmp.ptr());
-					} break;
-					case ShaderLanguage::TYPE_VEC4: {
-						LocalVector<float> tmp;
-						tmp.resize(count * 4);
-						for (int i = 0; i < count; i++) {
-							tmp[i * 4 + 0] = unaligned_read<float>(&val_ptr[i * 16 + 0 * sizeof(float)]);
-							tmp[i * 4 + 1] = unaligned_read<float>(&val_ptr[i * 16 + 1 * sizeof(float)]);
-							tmp[i * 4 + 2] = unaligned_read<float>(&val_ptr[i * 16 + 2 * sizeof(float)]);
-							tmp[i * 4 + 3] = unaligned_read<float>(&val_ptr[i * 16 + 3 * sizeof(float)]);
-						}
-						glUniform4fv(loc, count, tmp.ptr());
-					} break;
-					case ShaderLanguage::TYPE_MAT2: {
-						LocalVector<float> tmp;
-						tmp.resize(count * 4);
-						for (int i = 0; i < count; i++) {
-							tmp[i * 4 + 0] = unaligned_read<float>(&val_ptr[i * 32 + 0 * sizeof(float)]);
-							tmp[i * 4 + 1] = unaligned_read<float>(&val_ptr[i * 32 + 1 * sizeof(float)]);
-							tmp[i * 4 + 2] = unaligned_read<float>(&val_ptr[i * 32 + 4 * sizeof(float)]);
-							tmp[i * 4 + 3] = unaligned_read<float>(&val_ptr[i * 32 + 5 * sizeof(float)]);
-						}
-						glUniformMatrix2fv(loc, count, GL_FALSE, tmp.ptr());
-					} break;
-					case ShaderLanguage::TYPE_MAT3: {
-						LocalVector<float> tmp;
-						tmp.resize(count * 9);
-						for (int i = 0; i < count; i++) {
-							tmp[i * 9 + 0] = unaligned_read<float>(&val_ptr[i * 48 + 0 * sizeof(float)]);
-							tmp[i * 9 + 1] = unaligned_read<float>(&val_ptr[i * 48 + 1 * sizeof(float)]);
-							tmp[i * 9 + 2] = unaligned_read<float>(&val_ptr[i * 48 + 2 * sizeof(float)]);
-							tmp[i * 9 + 3] = unaligned_read<float>(&val_ptr[i * 48 + 4 * sizeof(float)]);
-							tmp[i * 9 + 4] = unaligned_read<float>(&val_ptr[i * 48 + 5 * sizeof(float)]);
-							tmp[i * 9 + 5] = unaligned_read<float>(&val_ptr[i * 48 + 6 * sizeof(float)]);
-							tmp[i * 9 + 6] = unaligned_read<float>(&val_ptr[i * 48 + 8 * sizeof(float)]);
-							tmp[i * 9 + 7] = unaligned_read<float>(&val_ptr[i * 48 + 9 * sizeof(float)]);
-							tmp[i * 9 + 8] = unaligned_read<float>(&val_ptr[i * 48 + 10 * sizeof(float)]);
-						}
-						glUniformMatrix3fv(loc, count, GL_FALSE, tmp.ptr());
-					} break;
-					case ShaderLanguage::TYPE_MAT4: {
-						LocalVector<float> tmp;
-						tmp.resize(count * 16);
-						for (int i = 0; i < count; i++) {
-							for (int j = 0; j < 16; j++) {
-								tmp[i * 16 + j] = unaligned_read<float>(&val_ptr[i * 64 + j * sizeof(float)]);
-							}
-						}
-						glUniformMatrix4fv(loc, count, GL_FALSE, tmp.ptr());
-					} break;
-					default:
-						break;
-				}
-			} else {
-				// Translate the std140 bytes into raw GLES2 bindings (Single Element)
-				switch (E.value.type) {
-					case ShaderLanguage::TYPE_BOOL:
-					case ShaderLanguage::TYPE_INT:
-					case ShaderLanguage::TYPE_UINT:
-						glUniform1i(loc, *(const int32_t *)val_ptr);
-						break;
-					case ShaderLanguage::TYPE_FLOAT:
-						glUniform1f(loc, *(const float *)val_ptr);
-						break;
-					case ShaderLanguage::TYPE_VEC2:
-						glUniform2f(loc, ((const float *)val_ptr)[0], ((const float *)val_ptr)[1]);
-						break;
-					case ShaderLanguage::TYPE_VEC3:
-						glUniform3f(loc, ((const float *)val_ptr)[0], ((const float *)val_ptr)[1], ((const float *)val_ptr)[2]);
-						break;
-					case ShaderLanguage::TYPE_VEC4:
-						glUniform4f(loc, ((const float *)val_ptr)[0], ((const float *)val_ptr)[1], ((const float *)val_ptr)[2], ((const float *)val_ptr)[3]);
-						break;
-					case ShaderLanguage::TYPE_MAT4:
-						glUniformMatrix4fv(loc, 1, GL_FALSE, (const GLfloat *)val_ptr);
-						break;
-					case ShaderLanguage::TYPE_MAT2: {
-						float m[4] = {};
-						m[0] = ((const float *)val_ptr)[0];
-						m[1] = ((const float *)val_ptr)[1];
-						m[2] = ((const float *)val_ptr)[4];
-						m[3] = ((const float *)val_ptr)[5];
-						glUniformMatrix2fv(loc, 1, GL_FALSE, m);
-					} break;
-					case ShaderLanguage::TYPE_MAT3: {
-						float m[9] = {};
-						m[0] = ((const float *)val_ptr)[0];
-						m[1] = ((const float *)val_ptr)[1];
-						m[2] = ((const float *)val_ptr)[2];
-						m[3] = ((const float *)val_ptr)[4];
-						m[4] = ((const float *)val_ptr)[5];
-						m[5] = ((const float *)val_ptr)[6];
-						m[6] = ((const float *)val_ptr)[8];
-						m[7] = ((const float *)val_ptr)[9];
-						m[8] = ((const float *)val_ptr)[10];
-						glUniformMatrix3fv(loc, 1, GL_FALSE, m);
-					} break;
-					default:
-						break;
-				}
-			}
-		}
-	}
-
-	// Bind Textures to their active GL_TEXTURE units
-	const RID *textures = texture_cache.ptr();
-	const ShaderCompiler::GeneratedCode::Texture *texture_uniforms = shader_data->texture_uniforms.ptr();
-	int texture_uniform_index = 0;
-	int texture_uniform_count = 0;
-
-	int max_texture_units = GLES2::Config::get_singleton()->max_texture_image_units;
-	int max_custom_textures = MAX(1, max_texture_units - 8); // Reserve top 8 for engine
-
-	// Start at 1 to preserve GL_TEXTURE0,
-	// which is reserved
-	int current_tex_unit = 1;
-
-	for (int ti = 0; ti < texture_cache.size(); ti++) {
-		const ShaderCompiler::GeneratedCode::Texture &texture_uniform = texture_uniforms[texture_uniform_index];
-
-		// Tell the custom shader which texture unit to read from
-		String tex_name = "m_" + String(texture_uniform.name);
-		GLint tex_loc = glGetUniformLocation(prog, tex_name.utf8().get_data());
-
-		if (tex_loc < 0) {
-			// In case it is not prefixed with `m_`
-			tex_name = String(texture_uniform.name);
-			tex_loc = glGetUniformLocation(prog, tex_name.utf8().get_data());
-		}
-
-		if (texture_uniform.hint == ShaderLanguage::ShaderNode::Uniform::HINT_SCREEN_TEXTURE) {
-			// Map directly to the engine's backbuffer texture unit.
-			if (tex_loc >= 0) {
-				glUniform1i(tex_loc + texture_uniform_count, max_texture_units - 4);
-			}
-		} else if (texture_uniform.hint == ShaderLanguage::ShaderNode::Uniform::HINT_NORMAL_ROUGHNESS_TEXTURE) {
-			// TODO(GLES2): Map screen normal hints to the dedicated normal
-			// unit after implementing screen normals later
-			if (tex_loc >= 0) {
-				glUniform1i(tex_loc + texture_uniform_count, max_texture_units - 6);
-			}
-		} else {
-			// Standard custom texture mapping
-			if (unlikely(current_tex_unit >= max_custom_textures)) {
-				ERR_PRINT_ONCE(vformat("GLES2: Custom shader uses too many textures! Hardware limit is %d. Skipping remainder.", max_custom_textures));
-				break;
-			}
-
-			if (tex_loc >= 0) {
-				glUniform1i(tex_loc + texture_uniform_count, current_tex_unit);
-			}
-
-			glActiveTexture(GL_TEXTURE0 + current_tex_unit);
-
-			GLES2::Texture *texture = GLES2::TextureStorage::get_singleton()->get_texture(textures[ti]);
-			if (texture && texture->tex_id != 0) {
-				glBindTexture(texture->target, texture->tex_id);
-			} else {
-				glBindTexture(GL_TEXTURE_2D, 0);
-			}
-
-			current_tex_unit++;
-		}
-
-		texture_uniform_count++;
-		if (texture_uniform_count >= texture_uniform.array_size) {
-			texture_uniform_index++;
-			texture_uniform_count = 0;
-		}
-	}
-
-	// Reset active texture to 0 so we don't accidentally break the geometry drawing
-	// pass that happens immediately after this function returns.
-	glActiveTexture(GL_TEXTURE0);
+	bind_uniforms_and_textures_generic_gles2(
+		ubo_data,
+		shader_data->uniforms,
+		shader_data->ubo_offsets,
+		texture_cache,
+		shader_data->texture_uniforms
+	);
 }
 
 CanvasMaterialData::~CanvasMaterialData() {
@@ -2124,6 +2130,89 @@ GLES2::MaterialData *GLES2::_create_canvas_material_func(ShaderData *p_shader) {
 
 void SkyShaderData::set_code(const String &p_code) {
 	// Initialize and compile the shader.
+
+	code = p_code;
+	valid = false;
+	ubo_size = 0;
+	uniforms.clear();
+
+	uses_time = false;
+	uses_position = false;
+	uses_half_res = false;
+	uses_quarter_res = false;
+	uses_light = false;
+
+	if (code.is_empty()) {
+		return; // Just invalid, but no error.
+	}
+
+	ShaderCompiler::GeneratedCode gen_code;
+
+	ShaderCompiler::IdentifierActions actions;
+	actions.entry_point_stages["sky"] = ShaderCompiler::STAGE_FRAGMENT;
+
+	actions.render_mode_flags["use_half_res_pass"] = &uses_half_res;
+	actions.render_mode_flags["use_quarter_res_pass"] = &uses_quarter_res;
+
+	actions.usage_flag_pointers["TIME"] = &uses_time;
+	actions.usage_flag_pointers["POSITION"] = &uses_position;
+	actions.usage_flag_pointers["LIGHT0_ENABLED"] = &uses_light;
+	actions.usage_flag_pointers["LIGHT0_ENERGY"] = &uses_light;
+	actions.usage_flag_pointers["LIGHT0_DIRECTION"] = &uses_light;
+	actions.usage_flag_pointers["LIGHT0_COLOR"] = &uses_light;
+	actions.usage_flag_pointers["LIGHT0_SIZE"] = &uses_light;
+	actions.usage_flag_pointers["LIGHT1_ENABLED"] = &uses_light;
+	actions.usage_flag_pointers["LIGHT1_ENERGY"] = &uses_light;
+	actions.usage_flag_pointers["LIGHT1_DIRECTION"] = &uses_light;
+	actions.usage_flag_pointers["LIGHT1_COLOR"] = &uses_light;
+	actions.usage_flag_pointers["LIGHT1_SIZE"] = &uses_light;
+	actions.usage_flag_pointers["LIGHT2_ENABLED"] = &uses_light;
+	actions.usage_flag_pointers["LIGHT2_ENERGY"] = &uses_light;
+	actions.usage_flag_pointers["LIGHT2_DIRECTION"] = &uses_light;
+	actions.usage_flag_pointers["LIGHT2_COLOR"] = &uses_light;
+	actions.usage_flag_pointers["LIGHT2_SIZE"] = &uses_light;
+	actions.usage_flag_pointers["LIGHT3_ENABLED"] = &uses_light;
+	actions.usage_flag_pointers["LIGHT3_ENERGY"] = &uses_light;
+	actions.usage_flag_pointers["LIGHT3_DIRECTION"] = &uses_light;
+	actions.usage_flag_pointers["LIGHT3_COLOR"] = &uses_light;
+	actions.usage_flag_pointers["LIGHT3_SIZE"] = &uses_light;
+
+	actions.uniforms = &uniforms;
+
+	Error err = MaterialStorage::get_singleton()->shaders.compiler_sky.compile(RS::SHADER_SKY, code, &actions, path, gen_code);
+	ERR_FAIL_COND_MSG(err != OK, "Shader compilation failed.");
+
+	if (version.is_null()) {
+		version = MaterialStorage::get_singleton()->shaders.sky_shader.version_create();
+	}
+
+#if 0
+	print_line("**compiling shader:");
+	print_line("**defines:\n");
+	for (int i = 0; i < gen_code.defines.size(); i++) {
+		print_line(gen_code.defines[i]);
+	}
+
+	HashMap<String, String>::Iterator el = gen_code.code.begin();
+	while (el) {
+		print_line("\n**code " + el->key + ":\n" + el->value);
+		++el;
+	}
+
+	print_line("\n**uniforms:\n" + gen_code.uniforms);
+	print_line("\n**vertex_globals:\n" + gen_code.stage_globals[ShaderCompiler::STAGE_VERTEX]);
+	print_line("\n**fragment_globals:\n" + gen_code.stage_globals[ShaderCompiler::STAGE_FRAGMENT]);
+#endif
+
+	LocalVector<ShaderGLES2::TextureUniformData> texture_uniform_data = get_texture_uniform_data(gen_code.texture_uniforms);
+
+	MaterialStorage::get_singleton()->shaders.sky_shader.version_set_code(version, gen_code.code, gen_code.uniforms, gen_code.stage_globals[ShaderCompiler::STAGE_VERTEX], gen_code.stage_globals[ShaderCompiler::STAGE_FRAGMENT], gen_code.defines, texture_uniform_data);
+	ERR_FAIL_COND(!MaterialStorage::get_singleton()->shaders.sky_shader.version_is_valid(version));
+
+	ubo_size = gen_code.uniform_total_size;
+	ubo_offsets = gen_code.uniform_offsets;
+	texture_uniforms = gen_code.texture_uniforms;
+
 	valid = true;
 }
 
@@ -2173,7 +2262,17 @@ GLES2::MaterialData *GLES2::_create_sky_material_func(ShaderData *p_shader) {
 }
 
 void SkyMaterialData::bind_uniforms() {
-	// Bind Material Uniforms
+	if (!shader_data || !shader_data->valid) {
+		return;
+	}
+
+	bind_uniforms_and_textures_generic_gles2(
+		ubo_data,
+		shader_data->uniforms,
+		shader_data->ubo_offsets,
+		texture_cache,
+		shader_data->texture_uniforms
+	);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -2181,6 +2280,217 @@ void SkyMaterialData::bind_uniforms() {
 
 void SceneShaderData::set_code(const String &p_code) {
 	// Initialize and compile the shader.
+
+	code = p_code;
+	valid = false;
+	ubo_size = 0;
+	uniforms.clear();
+
+	uses_point_size = false;
+	uses_alpha = false;
+	uses_alpha_clip = false;
+	uses_blend_alpha = false;
+	uses_depth_prepass_alpha = false;
+	uses_discard = false;
+	uses_roughness = false;
+	uses_normal = false;
+	uses_particle_trails = false;
+	wireframe = false;
+
+	unshaded = false;
+	uses_vertex = false;
+	uses_position = false;
+	uses_sss = false;
+	uses_transmittance = false;
+	uses_screen_texture = false;
+	uses_screen_texture_mipmaps = false;
+	uses_depth_texture = false;
+	uses_normal_texture = false;
+	uses_time = false;
+	uses_vertex_time = false;
+	uses_fragment_time = false;
+	writes_modelview_or_projection = false;
+	uses_world_coordinates = false;
+	uses_tangent = false;
+	uses_color = false;
+	uses_uv = false;
+	uses_uv2 = false;
+	uses_custom0 = false;
+	uses_custom1 = false;
+	uses_custom2 = false;
+	uses_custom3 = false;
+	uses_bones = false;
+	uses_weights = false;
+
+	if (code.is_empty()) {
+		return; // Just invalid, but no error.
+	}
+
+	ShaderCompiler::GeneratedCode gen_code;
+
+	// Actual enums set further down after compilation.
+	int blend_modei = BLEND_MODE_MIX;
+	int depth_testi = DEPTH_TEST_ENABLED;
+	int alpha_antialiasing_modei = ALPHA_ANTIALIASING_OFF;
+	int cull_modei = RS::CULL_MODE_BACK;
+	int depth_drawi = DEPTH_DRAW_OPAQUE;
+
+	ShaderCompiler::IdentifierActions actions;
+	actions.entry_point_stages["vertex"] = ShaderCompiler::STAGE_VERTEX;
+	actions.entry_point_stages["fragment"] = ShaderCompiler::STAGE_FRAGMENT;
+	actions.entry_point_stages["light"] = ShaderCompiler::STAGE_FRAGMENT;
+
+	actions.render_mode_values["blend_add"] = Pair<int *, int>(&blend_modei, BLEND_MODE_ADD);
+	actions.render_mode_values["blend_mix"] = Pair<int *, int>(&blend_modei, BLEND_MODE_MIX);
+	actions.render_mode_values["blend_sub"] = Pair<int *, int>(&blend_modei, BLEND_MODE_SUB);
+	actions.render_mode_values["blend_mul"] = Pair<int *, int>(&blend_modei, BLEND_MODE_MUL);
+	actions.render_mode_values["blend_premul_alpha"] = Pair<int *, int>(&blend_modei, BLEND_MODE_PREMULT_ALPHA);
+
+	actions.render_mode_values["alpha_to_coverage"] = Pair<int *, int>(&alpha_antialiasing_modei, ALPHA_ANTIALIASING_ALPHA_TO_COVERAGE);
+	actions.render_mode_values["alpha_to_coverage_and_one"] = Pair<int *, int>(&alpha_antialiasing_modei, ALPHA_ANTIALIASING_ALPHA_TO_COVERAGE_AND_TO_ONE);
+
+	actions.render_mode_values["depth_draw_never"] = Pair<int *, int>(&depth_drawi, DEPTH_DRAW_DISABLED);
+	actions.render_mode_values["depth_draw_opaque"] = Pair<int *, int>(&depth_drawi, DEPTH_DRAW_OPAQUE);
+	actions.render_mode_values["depth_draw_always"] = Pair<int *, int>(&depth_drawi, DEPTH_DRAW_ALWAYS);
+
+	actions.render_mode_values["depth_test_disabled"] = Pair<int *, int>(&depth_testi, DEPTH_TEST_DISABLED);
+
+	actions.render_mode_values["cull_disabled"] = Pair<int *, int>(&cull_modei, RS::CULL_MODE_DISABLED);
+	actions.render_mode_values["cull_front"] = Pair<int *, int>(&cull_modei, RS::CULL_MODE_FRONT);
+	actions.render_mode_values["cull_back"] = Pair<int *, int>(&cull_modei, RS::CULL_MODE_BACK);
+
+	actions.render_mode_flags["unshaded"] = &unshaded;
+	actions.render_mode_flags["wireframe"] = &wireframe;
+	actions.render_mode_flags["particle_trails"] = &uses_particle_trails;
+	actions.render_mode_flags["world_vertex_coords"] = &uses_world_coordinates;
+
+	actions.usage_flag_pointers["ALPHA"] = &uses_alpha;
+	actions.usage_flag_pointers["ALPHA_SCISSOR_THRESHOLD"] = &uses_alpha_clip;
+	// Use alpha clip pipeline for alpha hash/dither.
+	// This prevents sorting issues inherent to alpha blending and allows such materials to cast shadows.
+	actions.usage_flag_pointers["ALPHA_HASH_SCALE"] = &uses_alpha_clip;
+	actions.render_mode_flags["depth_prepass_alpha"] = &uses_depth_prepass_alpha;
+
+	actions.usage_flag_pointers["SSS_STRENGTH"] = &uses_sss;
+	actions.usage_flag_pointers["SSS_TRANSMITTANCE_DEPTH"] = &uses_transmittance;
+
+	actions.usage_flag_pointers["DISCARD"] = &uses_discard;
+	actions.usage_flag_pointers["TIME"] = &uses_time;
+	actions.usage_flag_pointers["ROUGHNESS"] = &uses_roughness;
+	actions.usage_flag_pointers["NORMAL"] = &uses_normal;
+	actions.usage_flag_pointers["NORMAL_MAP"] = &uses_normal;
+
+	actions.usage_flag_pointers["POINT_SIZE"] = &uses_point_size;
+	actions.usage_flag_pointers["POINT_COORD"] = &uses_point_size;
+
+	actions.write_flag_pointers["MODELVIEW_MATRIX"] = &writes_modelview_or_projection;
+	actions.write_flag_pointers["PROJECTION_MATRIX"] = &writes_modelview_or_projection;
+	actions.write_flag_pointers["VERTEX"] = &uses_vertex;
+	actions.write_flag_pointers["POSITION"] = &uses_position;
+
+	actions.usage_flag_pointers["TANGENT"] = &uses_tangent;
+	actions.usage_flag_pointers["BINORMAL"] = &uses_tangent;
+	actions.usage_flag_pointers["ANISOTROPY"] = &uses_tangent;
+	actions.usage_flag_pointers["ANISOTROPY_FLOW"] = &uses_tangent;
+	actions.usage_flag_pointers["COLOR"] = &uses_color;
+	actions.usage_flag_pointers["UV"] = &uses_uv;
+	actions.usage_flag_pointers["UV2"] = &uses_uv2;
+	actions.usage_flag_pointers["CUSTOM0"] = &uses_custom0;
+	actions.usage_flag_pointers["CUSTOM1"] = &uses_custom1;
+	actions.usage_flag_pointers["CUSTOM2"] = &uses_custom2;
+	actions.usage_flag_pointers["CUSTOM3"] = &uses_custom3;
+	actions.usage_flag_pointers["BONE_INDICES"] = &uses_bones;
+	actions.usage_flag_pointers["BONE_WEIGHTS"] = &uses_weights;
+
+	actions.uniforms = &uniforms;
+
+	Error err = MaterialStorage::get_singleton()->shaders.compiler_scene.compile(RS::SHADER_SPATIAL, code, &actions, path, gen_code);
+	ERR_FAIL_COND_MSG(err != OK, "Shader compilation failed.");
+
+	if (version.is_null()) {
+		version = MaterialStorage::get_singleton()->shaders.scene_shader.version_create();
+	}
+
+	blend_mode = BlendMode(blend_modei);
+	alpha_antialiasing_mode = AlphaAntiAliasing(alpha_antialiasing_modei);
+	depth_draw = DepthDraw(depth_drawi);
+	depth_test = DepthTest(depth_testi);
+	cull_mode = RS::CullMode(cull_modei);
+
+	vertex_input_mask = RS::ARRAY_FORMAT_VERTEX | RS::ARRAY_FORMAT_NORMAL; // We can always read vertices and normals.
+	vertex_input_mask |= uses_tangent << RS::ARRAY_TANGENT;
+	vertex_input_mask |= uses_color << RS::ARRAY_COLOR;
+	vertex_input_mask |= uses_uv << RS::ARRAY_TEX_UV;
+	vertex_input_mask |= uses_uv2 << RS::ARRAY_TEX_UV2;
+	vertex_input_mask |= uses_custom0 << RS::ARRAY_CUSTOM0;
+	vertex_input_mask |= uses_custom1 << RS::ARRAY_CUSTOM1;
+	vertex_input_mask |= uses_custom2 << RS::ARRAY_CUSTOM2;
+	vertex_input_mask |= uses_custom3 << RS::ARRAY_CUSTOM3;
+	vertex_input_mask |= uses_bones << RS::ARRAY_BONES;
+	vertex_input_mask |= uses_weights << RS::ARRAY_WEIGHTS;
+
+	uses_screen_texture = gen_code.uses_screen_texture;
+	uses_screen_texture_mipmaps = gen_code.uses_screen_texture_mipmaps;
+	uses_depth_texture = gen_code.uses_depth_texture;
+	uses_normal_texture = gen_code.uses_normal_roughness_texture;
+	uses_vertex_time = gen_code.uses_vertex_time;
+	uses_fragment_time = gen_code.uses_fragment_time;
+
+#ifdef DEBUG_ENABLED
+	if (uses_particle_trails) {
+		WARN_PRINT_ONCE_ED("Particle trails are only available when using the Forward+ or Mobile renderers.");
+	}
+
+	if (uses_sss) {
+		WARN_PRINT_ONCE_ED("Subsurface scattering is only available when using the Forward+ renderer.");
+	}
+
+	if (uses_transmittance) {
+		WARN_PRINT_ONCE_ED("Transmittance is only available when using the Forward+ renderer.");
+	}
+
+	if (uses_normal_texture) {
+		WARN_PRINT_ONCE_ED("Reading from the normal-roughness texture is only available when using the Forward+ or Mobile renderers.");
+	}
+#endif
+
+#if 0
+	print_line("**compiling shader:");
+	print_line("**defines:\n");
+	for (int i = 0; i < gen_code.defines.size(); i++) {
+		print_line(gen_code.defines[i]);
+	}
+
+	HashMap<String, String>::Iterator el = gen_code.code.begin();
+	while (el) {
+		print_line("\n**code " + el->key + ":\n" + el->value);
+		++el;
+	}
+
+	print_line("\n**uniforms:\n" + gen_code.uniforms);
+	print_line("\n**vertex_globals:\n" + gen_code.stage_globals[ShaderCompiler::STAGE_VERTEX]);
+	print_line("\n**fragment_globals:\n" + gen_code.stage_globals[ShaderCompiler::STAGE_FRAGMENT]);
+#endif
+
+	LocalVector<ShaderGLES2::TextureUniformData> texture_uniform_data = get_texture_uniform_data(gen_code.texture_uniforms);
+
+	MaterialStorage::get_singleton()->shaders.scene_shader.version_set_code(version, gen_code.code, gen_code.uniforms, gen_code.stage_globals[ShaderCompiler::STAGE_VERTEX], gen_code.stage_globals[ShaderCompiler::STAGE_FRAGMENT], gen_code.defines, texture_uniform_data);
+	ERR_FAIL_COND(!MaterialStorage::get_singleton()->shaders.scene_shader.version_is_valid(version));
+
+	ubo_size = gen_code.uniform_total_size;
+	ubo_offsets = gen_code.uniform_offsets;
+	texture_uniforms = gen_code.texture_uniforms;
+
+	// If any form of Alpha Antialiasing is enabled, set the blend mode to alpha to coverage.
+	if (alpha_antialiasing_mode != ALPHA_ANTIALIASING_OFF) {
+		blend_mode = BLEND_MODE_ALPHA_TO_COVERAGE;
+	}
+
+	if (blend_mode == BLEND_MODE_ADD || blend_mode == BLEND_MODE_SUB || blend_mode == BLEND_MODE_MUL) {
+		uses_blend_alpha = true; // Force alpha used because of blend.
+	}
+
+	valid = true;
 }
 
 bool SceneShaderData::is_animated() const {
@@ -2280,13 +2590,75 @@ GLES2::MaterialData *GLES2::_create_scene_material_func(ShaderData *p_shader) {
 }
 
 void SceneMaterialData::bind_uniforms() {
-	// Bind Material Uniforms
+	if (!shader_data || !shader_data->valid) {
+		return;
+	}
+
+	bind_uniforms_and_textures_generic_gles2(
+		ubo_data,
+		shader_data->uniforms,
+		shader_data->ubo_offsets,
+		texture_cache,
+		shader_data->texture_uniforms
+	);
 }
 
 /* Particles SHADER */
 
 void ParticlesShaderData::set_code(const String &p_code) {
 	// Initialize and compile the shader.
+
+	code = p_code;
+	valid = false;
+	ubo_size = 0;
+	uniforms.clear();
+
+	uses_collision = false;
+	uses_time = false;
+
+	if (code.is_empty()) {
+		return; // Just invalid, but no error.
+	}
+
+	ShaderCompiler::GeneratedCode gen_code;
+
+	ShaderCompiler::IdentifierActions actions;
+	actions.entry_point_stages["start"] = ShaderCompiler::STAGE_VERTEX;
+	actions.entry_point_stages["process"] = ShaderCompiler::STAGE_VERTEX;
+
+	actions.usage_flag_pointers["COLLIDED"] = &uses_collision;
+
+	userdata_count = 0;
+	for (uint32_t i = 0; i < PARTICLES_MAX_USERDATAS; i++) {
+		userdatas_used[i] = false;
+		actions.usage_flag_pointers["USERDATA" + itos(i + 1)] = &userdatas_used[i];
+	}
+
+	actions.uniforms = &uniforms;
+
+	Error err = MaterialStorage::get_singleton()->shaders.compiler_particles.compile(RS::SHADER_PARTICLES, code, &actions, path, gen_code);
+	ERR_FAIL_COND_MSG(err != OK, "Shader compilation failed.");
+
+	if (version.is_null()) {
+		version = MaterialStorage::get_singleton()->shaders.particles_process_shader.version_create();
+	}
+
+	for (uint32_t i = 0; i < PARTICLES_MAX_USERDATAS; i++) {
+		if (userdatas_used[i]) {
+			userdata_count++;
+		}
+	}
+
+	LocalVector<ShaderGLES2::TextureUniformData> texture_uniform_data = get_texture_uniform_data(gen_code.texture_uniforms);
+
+	MaterialStorage::get_singleton()->shaders.particles_process_shader.version_set_code(version, gen_code.code, gen_code.uniforms, gen_code.stage_globals[ShaderCompiler::STAGE_VERTEX], gen_code.stage_globals[ShaderCompiler::STAGE_FRAGMENT], gen_code.defines, texture_uniform_data);
+	ERR_FAIL_COND(!MaterialStorage::get_singleton()->shaders.particles_process_shader.version_is_valid(version));
+
+	ubo_size = gen_code.uniform_total_size;
+	ubo_offsets = gen_code.uniform_offsets;
+	texture_uniforms = gen_code.texture_uniforms;
+
+	valid = true;
 }
 
 bool ParticlesShaderData::is_animated() const {
@@ -2327,7 +2699,17 @@ GLES2::MaterialData *GLES2::_create_particles_material_func(ShaderData *p_shader
 }
 
 void ParticleProcessMaterialData::bind_uniforms() {
-	// Bind Material Uniforms
+	if (!shader_data || !shader_data->valid) {
+		return;
+	}
+
+	bind_uniforms_and_textures_generic_gles2(
+		ubo_data,
+		shader_data->uniforms,
+		shader_data->ubo_offsets,
+		texture_cache,
+		shader_data->texture_uniforms
+	);
 }
 
 #endif // !GLES2_ENABLED

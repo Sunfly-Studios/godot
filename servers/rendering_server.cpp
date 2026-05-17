@@ -3769,6 +3769,9 @@ void RenderingServer::init() {
 	GLOBAL_DEF_RST(PropertyInfo(Variant::INT, "rendering/limits/opengl/max_renderable_lights", PROPERTY_HINT_RANGE, "2,256,1"), 32);
 	GLOBAL_DEF_RST(PropertyInfo(Variant::INT, "rendering/limits/opengl/max_lights_per_object", PROPERTY_HINT_RANGE, "2,1024,1"), 8);
 
+	// Used by the 3D batcher
+	GLOBAL_DEF_RST(PropertyInfo(Variant::INT, "rendering/limits/opengl/max_dynamic_vertex_limit", PROPERTY_HINT_RANGE, "2,2048,1"), 1024);
+
 	// GLES1 (gl_classic) specifics
 
 	// This boost the lights by 3x by default

@@ -84,6 +84,25 @@ GL_1_5_MAPPINGS = {
         "glPointSize((float)p_value);\n"
         "\t\t\t\tGL_CHECK_ERROR(\"ShaderGLES1::_apply_gles1_state: point_size\");"
     ),
+    "albedo": (
+        "Color c = p_value;\n"
+        "\t\t\t\tGLfloat mat_col[4] = { c.r, c.g, c.b, c.a };\n"
+        "\t\t\t\tglMaterialfv(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE, mat_col);\n"
+        "\t\t\t\tglColor4f(c.r, c.g, c.b, c.a);\n"
+        "\t\t\t\tGL_CHECK_ERROR(\"GLES1::ShaderGLES1::_apply_gles1_state::albedo\");"
+    ),
+    "specular": (
+        "GLfloat s = p_value;\n"
+        "\t\t\t\tGLfloat mat_col[4] = { s, s, s, 1.0f };\n"
+        "\t\t\t\tglMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, mat_col);\n"
+        "\t\t\t\tGL_CHECK_ERROR(\"GLES1::ShaderGLES1::_apply_gles1_state::specular\");"
+    ),
+    "emission": (
+        "Color c = p_value;\n"
+        "\t\t\t\tGLfloat mat_col[4] = { c.r, c.g, c.b, c.a };\n"
+        "\t\t\t\tglMaterialfv(GL_FRONT_AND_BACK, GL_EMISSION, mat_col);\n"
+        "\t\t\t\tGL_CHECK_ERROR(\"GLES1::ShaderGLES1::_apply_gles1_state::emission\");"
+    ),
 
     # canvas_occlusion.glsl specific overrides
     "projection": (
@@ -197,6 +216,74 @@ GL_1_5_MAPPINGS = {
         "\t\t\t\tglScalef(sr.size.x, sr.size.y, 1.0f);\n"
         "\t\t\t\tglMatrixMode(GL_MODELVIEW);\n"
         "\t\t\t\tGL_CHECK_ERROR(\"ShaderGLES1::_apply_gles1_state: src_rect\");"
+    ),
+
+    # scene.glsl specific overrides
+    "view_matrix": (
+        "glMatrixMode(GL_MODELVIEW);\n"
+        "\t\t\t\tGLfloat matrix[16]={};\n"
+        "\t\t\t\tTransform3D tr = p_value;\n"
+        "\t\t\t\tmatrix[0]=tr.basis.rows[0][0]; matrix[1]=tr.basis.rows[1][0]; matrix[2]=tr.basis.rows[2][0]; matrix[3]=0;\n"
+        "\t\t\t\tmatrix[4]=tr.basis.rows[0][1]; matrix[5]=tr.basis.rows[1][1]; matrix[6]=tr.basis.rows[2][1]; matrix[7]=0;\n"
+        "\t\t\t\tmatrix[8]=tr.basis.rows[0][2]; matrix[9]=tr.basis.rows[1][2]; matrix[10]=tr.basis.rows[2][2]; matrix[11]=0;\n"
+        "\t\t\t\tmatrix[12]=tr.origin.x; matrix[13]=tr.origin.y; matrix[14]=tr.origin.z; matrix[15]=1;\n"
+        "\t\t\t\tglLoadMatrixf(matrix);\n"
+        "\t\t\t\tGL_CHECK_ERROR(\"GLES1::ShaderGLES1::_apply_gles1_state::view_matrix\");"
+    ),
+    "world_transform": (
+        "glMatrixMode(GL_MODELVIEW);\n"
+        "\t\t\t\tGLfloat matrix[16]={};\n"
+        "\t\t\t\tTransform3D tr = p_value;\n"
+        "\t\t\t\tmatrix[0]=tr.basis.rows[0][0]; matrix[1]=tr.basis.rows[1][0]; matrix[2]=tr.basis.rows[2][0]; matrix[3]=0;\n"
+        "\t\t\t\tmatrix[4]=tr.basis.rows[0][1]; matrix[5]=tr.basis.rows[1][1]; matrix[6]=tr.basis.rows[2][1]; matrix[7]=0;\n"
+        "\t\t\t\tmatrix[8]=tr.basis.rows[0][2]; matrix[9]=tr.basis.rows[1][2]; matrix[10]=tr.basis.rows[2][2]; matrix[11]=0;\n"
+        "\t\t\t\tmatrix[12]=tr.origin.x; matrix[13]=tr.origin.y; matrix[14]=tr.origin.z; matrix[15]=1;\n"
+        "\t\t\t\tglMultMatrixf(matrix);\n"
+        "\t\t\t\tGL_CHECK_ERROR(\"GLES1::ShaderGLES1::_apply_gles1_state::world_transform\");"
+    ),
+
+    # sky.glsl specific overrides
+    "orientation": (
+        "glMatrixMode(GL_MODELVIEW);\n"
+        "\t\t\t\tGLfloat matrix[16]={};\n"
+        "\t\t\t\tTransform3D tr = p_value;\n"
+        "\t\t\t\tmatrix[0]=tr.basis.rows[0][0]; matrix[1]=tr.basis.rows[1][0]; matrix[2]=tr.basis.rows[2][0]; matrix[3]=0;\n"
+        "\t\t\t\tmatrix[4]=tr.basis.rows[0][1]; matrix[5]=tr.basis.rows[1][1]; matrix[6]=tr.basis.rows[2][1]; matrix[7]=0;\n"
+        "\t\t\t\tmatrix[8]=tr.basis.rows[0][2]; matrix[9]=tr.basis.rows[1][2]; matrix[10]=tr.basis.rows[2][2]; matrix[11]=0;\n"
+        "\t\t\t\tmatrix[12]=tr.origin.x; matrix[13]=tr.origin.y; matrix[14]=tr.origin.z; matrix[15]=1;\n"
+        "\t\t\t\tglLoadMatrixf(matrix);\n"
+        "\t\t\t\tGL_CHECK_ERROR(\"GLES1::ShaderGLES1::_apply_gles1_state::orientation\");"
+    ),
+    "clear_color": (
+        "Color c = p_value;\n"
+        "\t\t\t\tglColor4f(c.r, c.g, c.b, c.a);\n"
+        "\t\t\t\tGL_CHECK_ERROR(\"ShaderGLES1::_apply_gles1_state: clear_color\");"
+    ),
+
+    # scene.glsl and sky.glsl ambient and fog specific overrides
+    "ambient_light_color_energy": (
+        "Color c = p_value;\n"
+        "\t\t\t\tGLfloat ambient[4] = { c.r, c.g, c.b, c.a };\n"
+        "\t\t\t\tglLightModelfv(GL_LIGHT_MODEL_AMBIENT, ambient);\n"
+        "\t\t\t\tGL_CHECK_ERROR(\"GLES1::ShaderGLES1::_apply_gles1_state::glLightModelfv_ambient\");"
+    ),
+    "fog_enabled": (
+        "if ((bool)p_value) {\n"
+        "\t\t\t\t\tglEnable(GL_FOG);\n"
+        "\t\t\t\t} else {\n"
+        "\t\t\t\t\tglDisable(GL_FOG);\n"
+        "\t\t\t\t}\n"
+        "\t\t\t\tGL_CHECK_ERROR(\"GLES1::ShaderGLES1::_apply_gles1_state::glEnable_GL_FOG\");"
+    ),
+    "fog_density": (
+        "glFogf(GL_FOG_DENSITY, (float)p_value);\n"
+        "\t\t\t\tGL_CHECK_ERROR(\"GLES1::ShaderGLES1::_apply_gles1_state::glFogf_density\");"
+    ),
+    "fog_light_color": (
+        "Vector3 color = p_value;\n"
+        "\t\t\t\tGLfloat fog_col[4] = { color.x, color.y, color.z, 1.0f };\n"
+        "\t\t\t\tglFogfv(GL_FOG_COLOR, fog_col);\n"
+        "\t\t\t\tGL_CHECK_ERROR(\"GLES1::ShaderGLES1::_apply_gles1_state::glFogfv_color\");"
     ),
 }
 

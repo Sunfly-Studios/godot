@@ -284,6 +284,10 @@ static void _display_error_with_code(const String &p_error, const String &p_code
 	int line = 1;
 	Vector<String> lines = p_code.split("\n");
 
+	//if (p_error.length() > 0) {
+	//	line = -1; // dummy
+	//}
+
 	for (int j = 0; j < lines.size(); j++) {
 		print_line(itos(line) + ": " + lines[j]);
 		line++;
@@ -380,10 +384,10 @@ void ShaderGLES2::_compile_specialization(Version::Specialization &spec, uint32_
 		spec.vert_id = glCreateShader(GL_VERTEX_SHADER);
 		GL_CHECK_ERROR("ShaderGLES2::_compile_specialization: glCreateShader (Vertex)");
 		String builder_string = builder.as_string();
+
+		// Extension directives must appear before
+		// any other preprocessor tokens.
 		if (builder_string.contains("#extension")) {
-			// This path is for even stricter GPUs
-			// (like MALI-400) that demand that
-			// extension directives must occur before any non-preprocessor tokens.
 			Vector<String> lines = builder_string.split("\n");
 			StringBuilder extensions_string;
 			StringBuilder final_string;
@@ -402,8 +406,20 @@ void ShaderGLES2::_compile_specialization(Version::Specialization &spec, uint32_
 			String ext_str = extensions_string.as_string();
 			if (!ext_str.is_empty()) {
 				String final_str = final_string.as_string();
-				final_str = final_str.replace("#version 100\n", "#version 100\n" + ext_str);
-				final_str = final_str.replace("#version 120\n", "#version 120\n" + ext_str);
+				
+				// Strip any potential carriage returns from the target lines before replacing
+				if (final_str.contains("#version 100\r\n")) {
+					final_str = final_str.replace("#version 100\r\n", "#version 100\n" + ext_str);
+				} else if (final_str.contains("#version 100\n")) {
+					final_str = final_str.replace("#version 100\n", "#version 100\n" + ext_str);
+				}
+				
+				if (final_str.contains("#version 120\r\n")) {
+					final_str = final_str.replace("#version 120\r\n", "#version 120\n" + ext_str);
+				} else if (final_str.contains("#version 120\n")) {
+					final_str = final_str.replace("#version 120\n", "#version 120\n" + ext_str);
+				}
+				
 				builder_string = final_str;
 			}
 		}
@@ -473,8 +489,20 @@ void ShaderGLES2::_compile_specialization(Version::Specialization &spec, uint32_
 			String ext_str = extensions_string.as_string();
 			if (!ext_str.is_empty()) {
 				String final_str = final_string.as_string();
-				final_str = final_str.replace("#version 100\n", "#version 100\n" + ext_str);
-				final_str = final_str.replace("#version 120\n", "#version 120\n" + ext_str);
+				
+				// Strip any potential carriage returns from the target lines before replacing
+				if (final_str.contains("#version 100\r\n")) {
+					final_str = final_str.replace("#version 100\r\n", "#version 100\n" + ext_str);
+				} else if (final_str.contains("#version 100\n")) {
+					final_str = final_str.replace("#version 100\n", "#version 100\n" + ext_str);
+				}
+				
+				if (final_str.contains("#version 120\r\n")) {
+					final_str = final_str.replace("#version 120\r\n", "#version 120\n" + ext_str);
+				} else if (final_str.contains("#version 120\n")) {
+					final_str = final_str.replace("#version 120\n", "#version 120\n" + ext_str);
+				}
+				
 				builder_string = final_str;
 			}
 		}

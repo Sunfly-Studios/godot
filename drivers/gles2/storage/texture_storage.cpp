@@ -839,7 +839,7 @@ Ref<Image> TextureStorage::texture_2d_get(RID p_texture) const {
 	GL_CHECK_ERROR("GLES2::TextureStorage::texture_2d_get: glBindTexture (target)");
 
 	glViewport(0, 0, tex->alloc_width, tex->alloc_height);
-	glClearColor(0.0, 0.0, 0.0, 0.0);
+	glClearColor(GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE);
 	glClear(GL_COLOR_BUFFER_BIT);
 	GL_CHECK_ERROR("GLES2::TextureStorage::texture_2d_get: glClear");
 
@@ -903,15 +903,174 @@ Ref<Image> TextureStorage::texture_2d_get(RID p_texture) const {
 }
 
 Ref<Image> TextureStorage::texture_2d_layer_get(RID p_texture, int p_layer) const {
-	return Ref<Image>();
+	Texture *texture = texture_owner.get_or_null(p_texture);
+	ERR_FAIL_NULL_V(texture, Ref<Image>());
+
+	Vector<uint8_t> data;
+
+	int64_t data_size = Image::get_image_data_size(texture->alloc_width, texture->alloc_height, Image::FORMAT_RGBA8, false);
+
+	data.resize(data_size * 2);
+	uint8_t *w = data.ptrw();
+
+	GLuint temp_framebuffer;
+	glGenFramebuffers(1, &temp_framebuffer);
+
+	GLuint temp_color_texture;
+	glGenTextures(1, &temp_color_texture);
+
+	bind_framebuffer(temp_framebuffer);
+
+	glBindTexture(GL_TEXTURE_2D, temp_color_texture);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, texture->alloc_width, texture->alloc_height, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
+
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, temp_color_texture, 0);
+
+	glDepthMask(GL_FALSE);
+	glDisable(GL_DEPTH_TEST);
+	glDisable(GL_CULL_FACE);
+	glDisable(GL_BLEND);
+	glDepthFunc(GL_LEQUAL);
+	glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+
+	glActiveTexture(GL_TEXTURE0);
+
+	// GLES2 lacks native 2D arrays, bind as standard GL_TEXTURE_2D
+	glBindTexture(GL_TEXTURE_2D, texture->tex_id);
+
+	glViewport(0, 0, texture->alloc_width, texture->alloc_height);
+	glClearColor(GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE);
+	glClear(GL_COLOR_BUFFER_BIT);
+	CopyEffects::get_singleton()->copy_to_rect(Rect2i(0, 0, 1, 1));
+	glReadPixels(0, 0, texture->alloc_width, texture->alloc_height, GL_RGBA, GL_UNSIGNED_BYTE, &w[0]);
+
+	bind_framebuffer_system();
+	glDeleteTextures(1, &temp_color_texture);
+	glDeleteFramebuffers(1, &temp_framebuffer);
+
+	data.resize(data_size);
+
+	ERR_FAIL_COND_V(data.is_empty(), Ref<Image>());
+	Ref<Image> image = Image::create_from_data(texture->width, texture->height, false, Image::FORMAT_RGBA8, data);
+	if (image->is_empty()) {
+		const String &path_str = texture->path.is_empty() ? "with no path" : vformat("with path '%s'", texture->path);
+		ERR_FAIL_V_MSG(Ref<Image>(), vformat("Texture %s has no data.", path_str));
+	}
+
+	if (texture->format != Image::FORMAT_RGBA8 && !Image::is_format_compressed(texture->format)) {
+		image->convert(texture->format);
+	}
+
+	if (texture->mipmaps > 1) {
+		image->generate_mipmaps();
+	}
+
+	return image;
 }
 
 Vector<Ref<Image>> TextureStorage::_texture_3d_read_framebuffer(GLES2::Texture *p_texture) const {
-	ERR_FAIL_V_MSG(Vector<Ref<Image>>(), "Trying to get a 3D framebuffer with the GLES2 driver, which doesn't support 3D Textures!");
+	ERR_FAIL_NULL_V(p_texture, Vector<Ref<Image>>());
+
+	Vector<Ref<Image>> ret;
+	Vector<uint8_t> data;
+
+	int width = p_texture->width;
+	int height = p_texture->height;
+	int depth = p_texture->depth;
+
+	for (int mipmap_level = 0; mipmap_level < p_texture->mipmaps; mipmap_level++) {
+		int64_t data_size = Image::get_image_data_size(width, height, Image::FORMAT_RGBA8, false);
+		glViewport(0, 0, width, height);
+		glClearColor(GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE);
+		glClear(GL_COLOR_BUFFER_BIT);
+
+		for (int layer = 0; layer < depth; layer++) {
+			data.resize(data_size * 2); //add some memory at the end, just in case for buggy drivers
+			uint8_t *w = data.ptrw();
+
+			float layer_f = layer / static_cast<float>(depth);
+			CopyEffects::get_singleton()->copy_to_rect_3d(Rect2i(0, 0, 1, 1), layer_f, Texture::TYPE_3D, mipmap_level);
+			glReadPixels(0, 0, width, height, GL_RGBA, GL_UNSIGNED_BYTE, &w[0]);
+
+			data.resize(data_size);
+			ERR_FAIL_COND_V(data.is_empty(), Vector<Ref<Image>>());
+
+			Ref<Image> img = Image::create_from_data(width, height, false, Image::FORMAT_RGBA8, data);
+			ERR_FAIL_COND_V(img->is_empty(), Vector<Ref<Image>>());
+
+			if (p_texture->format != Image::FORMAT_RGBA8 && !Image::is_format_compressed(p_texture->format)) {
+				img->convert(p_texture->format);
+			}
+
+			ret.push_back(img);
+		}
+
+		width = MAX(1, width >> 1);
+		height = MAX(1, height >> 1);
+		depth = MAX(1, depth >> 1);
+	}
+
+	return ret;
 }
 
 Vector<Ref<Image>> TextureStorage::texture_3d_get(RID p_texture) const {
-	ERR_FAIL_V_MSG(Vector<Ref<Image>>(), "Trying to get a 3D texture with the GLES2 driver, which doesn't support 3D Textures!");
+	if (!Config::get_singleton()->support_3d_textures) {
+		// TODO(GLES2): Fake 3D textures using large 2D texture atlas
+		// then use custom math in the fragment shader to blend between
+		// slices.
+		ERR_FAIL_V_MSG(Vector<Ref<Image>>(), "Trying to get a 3D texture with the GLES2 driver, which doesn't support 3D Textures!");
+	}
+
+	Texture *texture = texture_owner.get_or_null(p_texture);
+	ERR_FAIL_NULL_V(texture, Vector<Ref<Image>>());
+	ERR_FAIL_COND_V(texture->type != Texture::TYPE_3D, Vector<Ref<Image>>());
+
+#ifdef TOOLS_ENABLED
+	if (!texture->image_cache_3d.is_empty() && !texture->is_render_target) {
+		return texture->image_cache_3d;
+	}
+#endif
+
+	GLuint temp_framebuffer;
+	glGenFramebuffers(1, &temp_framebuffer);
+
+	GLuint temp_color_texture;
+	glGenTextures(1, &temp_color_texture);
+
+	bind_framebuffer(temp_framebuffer);
+
+	glBindTexture(GL_TEXTURE_2D, temp_color_texture);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, texture->alloc_width, texture->alloc_height, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
+
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, temp_color_texture, 0);
+
+	glDepthMask(GL_FALSE);
+	glDisable(GL_DEPTH_TEST);
+	glDisable(GL_CULL_FACE);
+	glDisable(GL_BLEND);
+	glDepthFunc(GL_LEQUAL);
+	glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+	glActiveTexture(GL_TEXTURE0);
+
+	glBindTexture(GL_TEXTURE_3D, texture->tex_id);
+
+	Vector<Ref<Image>> ret = _texture_3d_read_framebuffer(texture);
+
+	bind_framebuffer_system();
+	glDeleteTextures(1, &temp_color_texture);
+	glDeleteFramebuffers(1, &temp_framebuffer);
+
+#ifdef TOOLS_ENABLED
+	if (Engine::get_singleton()->is_editor_hint() && !texture->is_render_target) {
+		texture->image_cache_3d = ret;
+	}
+#endif
+
+	return ret;
 }
 
 void TextureStorage::texture_replace(RID p_texture, RID p_by_texture) {
@@ -962,7 +1121,10 @@ void TextureStorage::texture_set_size_override(RID p_texture, int p_width, int p
 	if (!tex) {
 		return;
 	}
+	ERR_FAIL_COND(tex->is_render_target);
 
+	ERR_FAIL_COND(p_width <= 0 || p_width > 16384);
+	ERR_FAIL_COND(p_height <= 0 || p_height > 16384);
 	tex->width = p_width;
 	tex->height = p_height;
 	tex->alloc_width = p_width;
@@ -970,26 +1132,78 @@ void TextureStorage::texture_set_size_override(RID p_texture, int p_width, int p
 }
 
 void TextureStorage::texture_set_path(RID p_texture, const String &p_path) {
+	Texture *texture = texture_owner.get_or_null(p_texture);
+	ERR_FAIL_NULL(texture);
 
+	texture->path = p_path;
 }
 
 String TextureStorage::texture_get_path(RID p_texture) const {
-	return String();
+	Texture *texture = texture_owner.get_or_null(p_texture);
+	ERR_FAIL_NULL_V(texture, "");
+
+	return texture->path;
 }
 
 void TextureStorage::texture_set_detect_3d_callback(RID p_texture, RS::TextureDetectCallback p_callback, void *p_userdata) {
+	Texture *texture = texture_owner.get_or_null(p_texture);
+	ERR_FAIL_NULL(texture);
+
+	texture->detect_3d_callback = p_callback;
+	texture->detect_3d_callback_ud = p_userdata;
 }
 
 void TextureStorage::texture_set_detect_srgb_callback(RID p_texture, RS::TextureDetectCallback p_callback, void *p_userdata) {
 }
 
 void TextureStorage::texture_set_detect_normal_callback(RID p_texture, RS::TextureDetectCallback p_callback, void *p_userdata) {
+	Texture *texture = texture_owner.get_or_null(p_texture);
+	ERR_FAIL_NULL(texture);
+
+	texture->detect_normal_callback = p_callback;
+	texture->detect_normal_callback_ud = p_userdata;
 }
 
 void TextureStorage::texture_set_detect_roughness_callback(RID p_texture, RS::TextureDetectRoughnessCallback p_callback, void *p_userdata) {
+	Texture *texture = texture_owner.get_or_null(p_texture);
+	ERR_FAIL_NULL(texture);
+
+	texture->detect_roughness_callback = p_callback;
+	texture->detect_roughness_callback_ud = p_userdata;
 }
 
 void TextureStorage::texture_debug_usage(List<RS::TextureInfo> *r_info) {
+	List<RID> textures;
+	texture_owner.get_owned_list(&textures);
+
+	for (List<RID>::Element *E = textures.front(); E; E = E->next()) {
+		Texture *t = texture_owner.get_or_null(E->get());
+		if (!t) {
+			continue;
+		}
+		RS::TextureInfo tinfo;
+		tinfo.path = t->path;
+		tinfo.format = t->format;
+		tinfo.width = t->alloc_width;
+		tinfo.height = t->alloc_height;
+		tinfo.bytes = t->total_data_size;
+
+		switch (t->type) {
+			case Texture::TYPE_3D:
+				tinfo.depth = t->depth;
+				break;
+
+			case Texture::TYPE_LAYERED:
+				tinfo.depth = t->layers;
+				break;
+
+			default:
+				tinfo.depth = 0;
+				break;
+		}
+
+		r_info->push_back(tinfo);
+	}
 }
 
 void TextureStorage::texture_set_force_redraw_if_visible(RID p_texture, bool p_enable) {
@@ -1013,7 +1227,10 @@ RID TextureStorage::texture_get_rd_texture(RID p_texture, bool p_srgb) const {
 }
 
 uint64_t TextureStorage::texture_get_native_handle(RID p_texture, bool p_srgb) const {
-	return 0;
+	const Texture *texture = texture_owner.get_or_null(p_texture);
+	ERR_FAIL_NULL_V(texture, 0);
+
+	return texture->tex_id;
 }
 
 void TextureStorage::texture_set_data(RID p_texture, const Ref<Image> &p_image, int p_layer) {
@@ -1024,6 +1241,10 @@ void TextureStorage::_texture_set_data(RID p_texture, const Ref<Image> &p_image,
 	Texture *texture = texture_owner.get_or_null(p_texture);
 
 	ERR_FAIL_NULL(texture);
+	if (texture->target == GL_TEXTURE_3D) {
+		// Target is set to a 3D texture or array texture, exit early to avoid spamming errors
+		return;
+	}
 	ERR_FAIL_COND(!texture->active);
 	ERR_FAIL_COND(texture->is_render_target);
 	ERR_FAIL_COND(p_image.is_null());
@@ -1487,7 +1708,7 @@ void TextureStorage::_update_render_target(RenderTarget *rt) {
 	}
 
 	// Clear out FBO rubbish/garbage
-	glClearColor(0, 0, 0, 0);
+	glClearColor(GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE);
 	glClear(GL_COLOR_BUFFER_BIT);
 	bind_framebuffer(previous_fbo);
 
@@ -1927,15 +2148,23 @@ void TextureStorage::render_target_do_clear_request(RID p_render_target) {
 	if (scissor_enabled) {
 		glDisable(GL_SCISSOR_TEST);
 	}
-	glColorMask(1, 1, 1, 1);
+
+	// Prevent state bleeding into the next pass
+	GLboolean color_mask_prev[4] = {};
+	glGetBooleanv(GL_COLOR_WRITEMASK, color_mask_prev);
+
+	glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
 
 	// Paint the color.
 	glClearColor(rt->clear_color.r, rt->clear_color.g, rt->clear_color.b, rt->clear_color.a);
 	glClear(GL_COLOR_BUFFER_BIT);
+	GL_CHECK_ERROR("GLES2::TextureStorage::render_target_do_clear_request: glClear");
 
+	// Restore prior states
 	if (scissor_enabled) {
 		glEnable(GL_SCISSOR_TEST);
 	}
+	glColorMask(color_mask_prev[0], color_mask_prev[1], color_mask_prev[2], color_mask_prev[3]);
 
 	rt->clear_requested = false;
 

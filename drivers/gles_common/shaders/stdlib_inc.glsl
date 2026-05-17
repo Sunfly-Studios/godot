@@ -1,3 +1,8 @@
+// Math utils.
+#define M_PI 3.14159265359
+
+
+// Func utils.
 #if defined(SELECT_USED)
 
 vec2 select2(vec2 a, vec2 b, bvec2 c) {
@@ -30,9 +35,10 @@ vec4 select4(vec4 a, vec4 b, bvec4 c) {
 	return ret;
 }
 
-#endif
+#endif // SELECT_USED
 
 #if defined(TEXEL2DFETCH_USED)
+
 highp vec4 texel2DFetch(highp sampler2D tex, ivec2 size, ivec2 coord) {
 	float x_coord = float(2 * coord.x + 1) / float(size.x * 2);
 	float y_coord = float(2 * coord.y + 1) / float(size.y * 2);
@@ -40,7 +46,7 @@ highp vec4 texel2DFetch(highp sampler2D tex, ivec2 size, ivec2 coord) {
 	return texture2DLod(tex, vec2(x_coord, y_coord), 0.0);
 }
 
-#endif
+#endif // TEXEL2DFETCH_USED
 
 #if defined(SINH_USED)
 
@@ -60,7 +66,7 @@ highp vec4 sinh(highp vec4 x) {
 	return 0.5 * vec4(exp(x.x) - exp(-x.x), exp(x.y) - exp(-x.y), exp(x.z) - exp(-x.z), exp(x.w) - exp(-x.w));
 }
 
-#endif
+#endif // SINH_USED
 
 #if defined(COSH_USED)
 
@@ -80,7 +86,7 @@ highp vec4 cosh(highp vec4 x) {
 	return 0.5 * vec4(exp(x.x) + exp(-x.x), exp(x.y) + exp(-x.y), exp(x.z) + exp(-x.z), exp(x.w) + exp(-x.w));
 }
 
-#endif
+#endif // COSH_USED
 
 #if defined(TANH_USED)
 
@@ -110,7 +116,7 @@ highp vec4 tanh(highp vec4 x) {
 	return vec4((exp2x - 1.0) / (exp2x + 1.0), (exp2y - 1.0) / (exp2y + 1.0), (exp2z - 1.0) / (exp2z + 1.0), (exp2w - 1.0) / (exp2w + 1.0));
 }
 
-#endif
+#endif // TANH_USED
 
 #if defined(ASINH_USED)
 
@@ -130,7 +136,7 @@ highp vec4 asinh(highp vec4 x) {
 	return vec4(sign(x.x) * log(abs(x.x) + sqrt(1.0 + x.x * x.x)), sign(x.y) * log(abs(x.y) + sqrt(1.0 + x.y * x.y)), sign(x.z) * log(abs(x.z) + sqrt(1.0 + x.z * x.z)), sign(x.w) * log(abs(x.w) + sqrt(1.0 + x.w * x.w)));
 }
 
-#endif
+#endif // ASINH_USED
 
 #if defined(ACOSH_USED)
 
@@ -150,7 +156,7 @@ highp vec4 acosh(highp vec4 x) {
 	return vec4(log(x.x + sqrt(x.x * x.x - 1.0)), log(x.y + sqrt(x.y * x.y - 1.0)), log(x.z + sqrt(x.z * x.z - 1.0)), log(x.w + sqrt(x.w * x.w - 1.0)));
 }
 
-#endif
+#endif // ACOSH_USED
 
 #if defined(ATANH_USED)
 
@@ -170,7 +176,7 @@ highp vec4 atanh(highp vec4 x) {
 	return 0.5 * vec4(log((1.0 + x.x) / (1.0 - x.x)), log((1.0 + x.y) / (1.0 - x.y)), log((1.0 + x.z) / (1.0 - x.z)), log((1.0 + x.w) / (1.0 - x.w)));
 }
 
-#endif
+#endif // ATANH_USED
 
 #if defined(ROUND_USED)
 
@@ -190,7 +196,7 @@ highp vec4 round(highp vec4 x) {
 	return floor(x + vec4(0.5));
 }
 
-#endif
+#endif // ROUND_USED
 
 #if defined(ROUND_EVEN_USED)
 
@@ -220,7 +226,7 @@ highp vec4 roundEven(highp vec4 x) {
 	return vec4(roundEven(x.x), roundEven(x.y), roundEven(x.z), roundEven(x.w));
 }
 
-#endif
+#endif // ROUND_EVEN_USED
 
 #if defined(IS_INF_USED)
 
@@ -240,7 +246,7 @@ bvec4 isinf(highp vec4 x) {
 	return bvec4((2 * x.x == x.x) && (x.x != 0), (2 * x.y == x.y) && (x.y != 0), (2 * x.z == x.z) && (x.z != 0), (2 * x.w == x.w) && (x.w != 0));
 }
 
-#endif
+#endif // IS_INF_USED
 
 #if defined(IS_NAN_USED)
 
@@ -260,7 +266,7 @@ bvec4 isnan(highp vec4 x) {
 	return bvec4(x.x != x.x, x.y != x.y, x.z != x.z, x.w != x.w);
 }
 
-#endif
+#endif // IS_NAN_USED
 
 #if defined(TRUNC_USED)
 
@@ -280,7 +286,7 @@ highp vec4 trunc(highp vec4 x) {
 	return vec4(x.x < 0 ? -floor(-x.x) : floor(x.x), x.y < 0 ? -floor(-x.y) : floor(x.y), x.z < 0 ? -floor(-x.z) : floor(x.z), x.w < 0 ? -floor(-x.w) : floor(x.w));
 }
 
-#endif
+#endif // TRUNC_USED
 
 #if defined(DETERMINANT_USED)
 
@@ -303,7 +309,7 @@ highp float determinant(highp mat4 m) {
 	return m[0].x * c.x + m[0].y * c.y + m[0].z * c.z + m[0].w * c.w;
 }
 
-#endif
+#endif // DETERMINANT_USED
 
 #if defined(INVERSE_USED)
 
@@ -378,7 +384,7 @@ highp mat4 inverse(highp mat4 m) {
 	return inv * d;
 }
 
-#endif
+#endif // INVERSE_USED
 
 #if defined(TRANSPOSE_USED)
 
@@ -395,7 +401,7 @@ highp mat3 custom_transpose(highp mat3 m) {
 			vec3(m[0].z, m[1].z, m[2].z));
 }
 
-#endif
+#endif 
 
 highp mat4 custom_transpose(highp mat4 m) {
 	return mat4(
@@ -423,6 +429,6 @@ highp mat4 outerProduct(highp vec4 c, highp vec4 r) {
 	return mat4(c * r.x, c * r.y, c * r.z, c * r.w);
 }
 
-#endif
+#endif // OUTER_PRODUCT_USED
 
-#endif
+#endif // USE_GLES_OVER_GL

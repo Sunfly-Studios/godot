@@ -249,6 +249,7 @@ private:
 
 	void _mesh_surface_generate_version_for_input_mask(Mesh::Surface::Version &v, Mesh::Surface *s, uint64_t p_input_mask, MeshInstance::Surface *mis = nullptr);
 	void _mesh_surface_clear(Mesh *mesh, int p_surface);
+	void _decompress_surface_data(RS::SurfaceData &r_surface);
 
 	/* Mesh Instance API */
 
@@ -325,6 +326,10 @@ public:
 
 	virtual void mesh_clear(RID p_mesh) override;
 	virtual void mesh_surface_remove(RID p_mesh, int p_surface) override;
+
+	void mesh_surface_bind_arrays_gles1(void *p_surface, uint64_t p_input_mask);
+	void mesh_surface_unbind_arrays_gles1(void *p_surface);
+	Array mesh_surface_get_arrays(RID p_mesh, int p_surface) const;
 
 	// TODO(GLES1): All of these below where literally copy-pasted
 	// from GLES3 driver code. Need to verify if these work

@@ -295,11 +295,16 @@ String ShaderTranspilerGLES1::_dump_node_code(ShaderLanguage::Node *p_node, int 
 					max_texture_uniforms = MAX(max_texture_uniforms, E.value.texture_order + 1);
 				}
 			}
+
 			r_gen_code.texture_uniforms.resize(max_texture_uniforms);
 
 			StringBuilder vertex_global;
 			StringBuilder fragment_global;
 			StringBuilder uniform_string;
+
+			bool emitted_screen_texture = false;
+			bool emitted_depth_texture = false;
+			bool emitted_normal_texture = false;
 
 			for (const KeyValue<StringName, ShaderLanguage::ShaderNode::Uniform> &E : snode->uniforms) {
 				StringBuffer<> uniform_code;
@@ -309,13 +314,6 @@ String ShaderTranspilerGLES1::_dump_node_code(ShaderLanguage::Node *p_node, int 
 					precision = ShaderLanguage::PRECISION_HIGHP;
 				}
 
-				uniform_code += "uniform ";
-				uniform_code += _prestr(precision);
-				uniform_code += _typestr(E.value.type);
-				uniform_code += " ";
-				uniform_code += _mkid(E.key);
-				uniform_code += ";\n";
-
 				if (ShaderLanguage::is_sampler_type(E.value.type)) {
 					ShaderCompiler::GeneratedCode::Texture tex;
 					tex.name = E.key;
@@ -324,8 +322,70 @@ String ShaderTranspilerGLES1::_dump_node_code(ShaderLanguage::Node *p_node, int 
 					tex.array_size = E.value.array_size;
 					tex.global = E.value.scope == ShaderLanguage::ShaderNode::Uniform::SCOPE_GLOBAL;
 
+					// Flag the screen texture and its mipmaps
+					String uniform_name = _mkid(E.key);
+					String pixel_size_name = uniform_name + "_pixel_size";
+
+					if (tex.hint == ShaderLanguage::ShaderNode::Uniform::HINT_SCREEN_TEXTURE ||
+							tex.hint == ShaderLanguage::ShaderNode::Uniform::HINT_DEPTH_TEXTURE ||
+							tex.hint == ShaderLanguage::ShaderNode::Uniform::HINT_NORMAL_ROUGHNESS_TEXTURE) {
+						r_gen_code.uses_screen_texture = true;
+
+						if (E.value.filter == ShaderLanguage::FILTER_LINEAR_MIPMAP ||
+								E.value.filter == ShaderLanguage::FILTER_NEAREST_MIPMAP ||
+								E.value.filter == ShaderLanguage::FILTER_LINEAR_MIPMAP_ANISOTROPIC ||
+								E.value.filter == ShaderLanguage::FILTER_NEAREST_MIPMAP_ANISOTROPIC) {
+							r_gen_code.uses_screen_texture_mipmaps = true;
+						}
+
+						if (tex.hint == ShaderLanguage::ShaderNode::Uniform::HINT_SCREEN_TEXTURE) {
+							uniform_name = "godot_screen_texture";
+						} else if (tex.hint == ShaderLanguage::ShaderNode::Uniform::HINT_DEPTH_TEXTURE) {
+							uniform_name = "godot_depth_texture";
+						} else if (tex.hint == ShaderLanguage::ShaderNode::Uniform::HINT_NORMAL_ROUGHNESS_TEXTURE) {
+							uniform_name = "godot_normal_texture";
+						}
+
+						// Alias the user's variable to the legal internal hardware name
+						vertex_global += String("#define ") + _mkid(E.key) + " " + uniform_name + "\n";
+						fragment_global += String("#define ") + _mkid(E.key) + " " + uniform_name + "\n";
+					}
+
 					// Assign to the index so the 2D batcher knows where it is.
 					r_gen_code.texture_uniforms.write[E.value.texture_order] = tex;
+
+					bool emit_declaration = true;
+					if (tex.hint == ShaderLanguage::ShaderNode::Uniform::HINT_SCREEN_TEXTURE) {
+						if (emitted_screen_texture) {
+							emit_declaration = false;
+						}
+						emitted_screen_texture = true;
+					} else if (tex.hint == ShaderLanguage::ShaderNode::Uniform::HINT_DEPTH_TEXTURE) {
+						if (emitted_depth_texture) {
+							emit_declaration = false;
+						}
+						emitted_depth_texture = true;
+					} else if (tex.hint == ShaderLanguage::ShaderNode::Uniform::HINT_NORMAL_ROUGHNESS_TEXTURE) {
+						if (emitted_normal_texture) {
+							emit_declaration = false;
+						}
+						emitted_normal_texture = true;
+					}
+
+					if (emit_declaration) {
+						uniform_code += "uniform " + _prestr(precision) + _typestr(E.value.type) + " " + uniform_name + ";\n";
+					}
+					// Always emit pixel size using the original name
+					// so the material system finds and updates it
+					uniform_code += "uniform highp vec2 " + pixel_size_name + ";\n";
+
+				} else {
+					uniform_code += "uniform ";
+					uniform_code += _prestr(precision);
+					uniform_code += _typestr(E.value.type);
+					uniform_code += " ";
+					uniform_code += _mkid(E.key);
+					uniform_code += ";\n";
 				}
 
 				uniform_string += uniform_code.as_string();
@@ -462,7 +522,7 @@ String ShaderTranspilerGLES1::_dump_node_code(ShaderLanguage::Node *p_node, int 
 				StringName name = fnode->name;
 
 				// Skip the entry points.
-				if (name == vertex_name || name == fragment_name || name == light_name) {
+				if (p_actions.entry_point_stages.has(name)) {
 					continue;
 				}
 
@@ -494,21 +554,23 @@ String ShaderTranspilerGLES1::_dump_node_code(ShaderLanguage::Node *p_node, int 
 			}
 
 			// Inject the custom functions into the global scope
-			vertex_global += forward_decls.as_string();
-			vertex_global += custom_functions.as_string();
+			if (custom_functions.get_string_length() > 0) {
+				vertex_global += "#ifdef VERTEX_CODE_USED\n";
+				vertex_global += forward_decls.as_string();
+				vertex_global += custom_functions.as_string();
+				vertex_global += "#endif\n";
 
-			fragment_global += forward_decls.as_string();
-			fragment_global += custom_functions.as_string();
+				fragment_global += "#if defined(FRAGMENT_CODE_USED) || defined(LIGHT_CODE_USED)\n";
+				fragment_global += forward_decls.as_string();
+				fragment_global += custom_functions.as_string();
+				fragment_global += "#endif\n";
+			}
 
 			// Hook up the entry points
-			if (snode->functions.has(vertex_name)) {
-				r_gen_code.code["vertex"] = function_code[vertex_name];
-			}
-			if (snode->functions.has(fragment_name)) {
-				r_gen_code.code["fragment"] = function_code[fragment_name];
-			}
-			if (snode->functions.has(light_name)) {
-				r_gen_code.code["light"] = function_code[light_name];
+			for (const KeyValue<StringName, ShaderCompiler::Stage> &E : p_actions.entry_point_stages) {
+				if (snode->functions.has(E.key)) {
+					r_gen_code.code[String(E.key)] = function_code[E.key];
+				}
 			}
 
 			r_gen_code.stage_globals[ShaderCompiler::STAGE_VERTEX] = vertex_global.as_string();
@@ -659,11 +721,12 @@ String ShaderTranspilerGLES1::_dump_node_code(ShaderLanguage::Node *p_node, int 
 			}
 
 			if (var_node->name == time_name) {
-				if (current_func_name == vertex_name) {
-					r_gen_code.uses_vertex_time = true;
-				}
-				if (current_func_name == fragment_name || current_func_name == light_name) {
-					r_gen_code.uses_fragment_time = true;
+				if (p_actions.entry_point_stages.has(current_func_name)) {
+					if (p_actions.entry_point_stages[current_func_name] == ShaderCompiler::STAGE_VERTEX) {
+						r_gen_code.uses_vertex_time = true;
+					} else {
+						r_gen_code.uses_fragment_time = true;
+					}
 				}
 			}
 		} break;
@@ -711,11 +774,12 @@ String ShaderTranspilerGLES1::_dump_node_code(ShaderLanguage::Node *p_node, int 
 			}
 
 			if (arr_node->name == time_name) {
-				if (current_func_name == vertex_name) {
-					r_gen_code.uses_vertex_time = true;
-				}
-				if (current_func_name == fragment_name || current_func_name == light_name) {
-					r_gen_code.uses_fragment_time = true;
+				if (p_actions.entry_point_stages.has(current_func_name)) {
+					if (p_actions.entry_point_stages[current_func_name] == ShaderCompiler::STAGE_VERTEX) {
+						r_gen_code.uses_vertex_time = true;
+					} else {
+						r_gen_code.uses_fragment_time = true;
+					}
 				}
 			}
 
@@ -789,6 +853,27 @@ String ShaderTranspilerGLES1::_dump_node_code(ShaderLanguage::Node *p_node, int 
 					);
 
 					ShaderLanguage::VariableNode *var_node = (ShaderLanguage::VariableNode *)op_node->arguments[0];
+
+					// Handle min/max on intergers.
+					// Rewrite them as ternary, which avoids ambiguous overloads.
+					if ((var_node->name == "max" || var_node->name == "min") && op_node->arguments.size() == 3) {
+						ShaderLanguage::DataType arg1_type = op_node->arguments[1]->get_datatype();
+						ShaderLanguage::DataType arg2_type = op_node->arguments[2]->get_datatype();
+
+						bool arg1_int = (arg1_type == ShaderLanguage::TYPE_INT || arg1_type == ShaderLanguage::TYPE_UINT);
+						bool arg2_int = (arg2_type == ShaderLanguage::TYPE_INT || arg2_type == ShaderLanguage::TYPE_UINT);
+
+						if (arg1_int && arg2_int) {
+							String arg1_str = _dump_node_code(op_node->arguments[1], p_level, r_gen_code, p_actions, p_default_actions, p_assigning);
+							String arg2_str = _dump_node_code(op_node->arguments[2], p_level, r_gen_code, p_actions, p_default_actions, p_assigning);
+							if (var_node->name == "max") {
+								code += "(((" + arg1_str + ") > (" + arg2_str + ")) ? (" + arg1_str + ") : (" + arg2_str + "))";
+							} else { // min
+								code += "(((" + arg1_str + ") < (" + arg2_str + ")) ? (" + arg1_str + ") : (" + arg2_str + "))";
+							}
+							break;
+						}
+					}
 
 					if (op_node->op == ShaderLanguage::OP_CONSTRUCT) {
 						code += var_node->name;

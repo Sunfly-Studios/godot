@@ -760,8 +760,15 @@ void RasterizerCanvasGLES2::initialize() {
 	//
 	GLES2::MaterialStorage *material_storage = GLES2::MaterialStorage::get_singleton();
 	GLES2::TextureStorage *texture_storage = GLES2::TextureStorage::get_singleton();
+
+	String global_defines;
+	global_defines += "#define MAX_GLOBAL_SHADER_UNIFORMS 256\n"; // TODO: this is arbitrary for now
+	global_defines += "#define MAX_LIGHTS " + itos(data.max_lights_per_render) + "\n";
+
+	material_storage->shaders.canvas_shader.initialize(global_defines, 1);
+
 	state.canvas_shader = &material_storage->shaders.canvas_shader;
-	data.canvas_shader_default_version = state.canvas_shader->default_version;
+	data.canvas_shader_default_version = material_storage->shaders.canvas_shader.version_create();
 
 	state.shadow_texture_size = GLOBAL_GET("rendering/2d/shadow_atlas/size");
 	shadow_render.shader.initialize();

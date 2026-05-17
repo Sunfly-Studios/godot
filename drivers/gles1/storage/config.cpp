@@ -254,7 +254,6 @@ Config::Config() {
 	srgb_framebuffer_supported = extensions.has("GL_ARB_framebuffer_sRGB") || extensions.has("GL_EXT_framebuffer_sRGB");
 
 	// 3D
-	support_vao = extensions.has("GL_OES_vertex_array_object") || extensions.has("GL_ARB_vertex_array_object") || extensions.has("GL_APPLE_vertex_array_object");
 	support_vertex_half_float = extensions.has("GL_OES_vertex_half_float") || extensions.has("GL_ARB_half_float_pixel");
 	support_texture_env_add = extensions.has("GL_OES_texture_env_add") || extensions.has("GL_EXT_texture_env_add") || extensions.has("GL_ARB_texture_env_add");
 	support_texture_env_dot3 = extensions.has("GL_OES_texture_env_dot3") || extensions.has("GL_EXT_texture_env_dot3") || extensions.has("GL_ARB_texture_env_dot3");

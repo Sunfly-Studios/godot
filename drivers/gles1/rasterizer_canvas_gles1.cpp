@@ -576,8 +576,13 @@ void RasterizerCanvasGLES1::initialize() {
 	GLES1::MaterialStorage *material_storage = GLES1::MaterialStorage::get_singleton();
 	GLES1::TextureStorage *texture_storage = GLES1::TextureStorage::get_singleton();
 
+	String global_defines;
+	global_defines += "#define MAX_GLOBAL_SHADER_UNIFORMS 256\n"; // TODO: this is arbitrary for now
+
+	material_storage->shaders.canvas_shader.initialize(global_defines, 1);
+
 	state.canvas_shader = &material_storage->shaders.canvas_shader;
-	data.canvas_shader_default_version = state.canvas_shader->default_version;
+	data.canvas_shader_default_version = material_storage->shaders.canvas_shader.version_create();
 
 	{
 		default_canvas_group_shader = material_storage->shader_allocate();
@@ -5190,9 +5195,9 @@ RasterizerCanvasGLES1 *RasterizerCanvasGLES1::get_singleton() {
 RasterizerCanvasGLES1::RasterizerCanvasGLES1() {
 	singleton = this;
 
-	batch_constructor();
-
 	initialize();
+
+	batch_constructor();
 }
 
 RasterizerCanvasGLES1::~RasterizerCanvasGLES1() {

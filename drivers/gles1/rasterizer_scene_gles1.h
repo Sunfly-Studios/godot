@@ -106,6 +106,10 @@ class RasterizerSceneGLES1;
 struct BatcherAPISceneGLES1 {
 	using Scene = RasterizerSceneGLES1;
 	using MaterialData = GLES1::SceneMaterialData;
+	using TextureStorage = GLES1::TextureStorage;
+	using Texture = GLES1::Texture;
+	using CanvasTexture = GLES1::CanvasTexture;
+	using Shader = GLES1::Shader;
 
 	static constexpr bool FORCE_BAKE_MODULATE = true;
 };
@@ -375,6 +379,25 @@ private:
 		INSTANCE_DATA_FLAG_MULTIMESH_HAS_CUSTOM_DATA = 1 << 15,
 	};
 
+	_FORCE_INLINE_ static uint32_t _gl_indices_to_primitives(GLenum p_primitive, uint32_t p_indices) {
+		switch (p_primitive) {
+			case GL_POINTS:
+				return p_indices;
+			case GL_LINES:
+				return p_indices / 2;
+			case GL_LINE_STRIP:
+			case GL_LINE_LOOP:
+				return p_indices > 1 ? p_indices - 1 : 0;
+			case GL_TRIANGLES:
+				return p_indices / 3;
+			case GL_TRIANGLE_STRIP:
+			case GL_TRIANGLE_FAN:
+				return p_indices > 2 ? p_indices - 2 : 0;
+			default:
+				return 0;
+		}
+	}
+
 	static void _geometry_instance_dependency_changed(Dependency::DependencyChangedNotification p_notification, DependencyTracker *p_tracker);
 	static void _geometry_instance_dependency_deleted(const RID &p_dependency, DependencyTracker *p_tracker);
 
@@ -464,10 +487,8 @@ private:
 		static_assert(sizeof(TonemapUBO) % 16 == 0, "Tonemap UBO size must be a multiple of 16 bytes");
 
 		UBO ubo;
-		GLuint ubo_buffer = 0;
 		MultiviewUBO multiview_ubo;
-		GLuint multiview_buffer = 0;
-		GLuint tonemap_buffer = 0;
+		TonemapUBO tonemap_ubo;
 
 		bool used_depth_prepass = false;
 
@@ -494,6 +515,8 @@ private:
 			current_depth_draw_enabled = false;
 			glDisable(GL_DEPTH_TEST);
 			current_depth_test_enabled = false;
+
+			glDisable(GL_FOG);
 		}
 
 		void set_gl_cull_mode(RS::CullMode p_mode) {
@@ -562,17 +585,12 @@ private:
 
 		InstanceSort<GLES1::LightInstance> *omni_light_sort;
 		InstanceSort<GLES1::LightInstance> *spot_light_sort;
-		GLuint omni_light_buffer = 0;
-		GLuint spot_light_buffer = 0;
-		GLuint positional_shadow_buffer = 0;
 		uint32_t omni_light_count = 0;
 		uint32_t spot_light_count = 0;
 		RS::ShadowQuality positional_shadow_quality = RS::ShadowQuality::SHADOW_QUALITY_SOFT_LOW;
 
 		DirectionalLightData *directional_lights = nullptr;
-		GLuint directional_light_buffer = 0;
 		DirectionalShadowData *directional_shadows = nullptr;
-		GLuint directional_shadow_buffer = 0;
 		RS::ShadowQuality directional_shadow_quality = RS::ShadowQuality::SHADOW_QUALITY_SOFT_LOW;
 	} scene_state;
 
@@ -660,6 +678,22 @@ private:
 	template <PassMode p_pass_mode>
 	_FORCE_INLINE_ void _render_list_template(RenderListParameters *p_params, const RenderDataGLES1 *p_render_data, uint32_t p_from_element, uint32_t p_to_element, bool p_alpha_pass = false);
 
+	/* Batch API */
+	void scene_render_items_implementation(GeometryInstanceSurface **p_surfaces, int p_count, const Transform3D &p_camera_transform, bool p_transparent);
+
+	void _batch_get_instance_geometry_capacity(const GeometryInstanceSurface *p_surface, uint32_t &r_vertex_count, uint32_t &r_index_count);
+	float _batch_get_item_depth(const GeometryInstanceSurface *p_surface, const Transform3D &p_camera_transform);
+	uint64_t _batch_get_state_hash(const GeometryInstanceSurface *p_surface);
+	GLES1::SceneMaterialData *_batch_get_material_data(const GeometryInstanceSurface *p_surface);
+
+	void _batch_fill_instance_geometry(const GeometryInstanceSurface *p_surface, RasterizerSceneBatcherCommon<BatcherAPISceneGLES1>::BatchVertex3D *r_bvs, uint16_t *r_inds, uint32_t p_start_vert);
+	void _batch_upload_buffers();
+	void _batch_bind_material(GLES1::SceneMaterialData *p_material_data);
+	void _batch_render_generic();
+
+	void _render_single_item_immediate(const GeometryInstanceSurface *p_surface);
+	void _bind_scene_camera_uniforms(RID p_version, SceneShaderGLES1::ShaderVariant p_variant, uint64_t p_spec_constants);
+
 protected:
 	double time;
 	double time_step = 0;
@@ -708,7 +742,6 @@ protected:
 		DirectionalLightData *directional_lights = nullptr;
 		DirectionalLightData *last_frame_directional_lights = nullptr;
 		uint32_t last_frame_directional_light_count = 0;
-		GLuint directional_light_buffer = 0;
 
 		RID shader_default_version;
 		RID default_material;
@@ -716,7 +749,6 @@ protected:
 		RID fog_material;
 		RID fog_shader;
 		GLuint screen_triangle = 0;
-		GLuint screen_triangle_array = 0;
 		uint32_t max_directional_lights = 4;
 		uint32_t roughness_layers = 8;
 	} sky_globals;
@@ -735,7 +767,6 @@ protected:
 		GLuint raw_radiance = 0;
 
 		RID material;
-		GLuint uniform_buffer;
 
 		int radiance_size = 256;
 		int mipmap_count = 1;
@@ -771,6 +802,8 @@ protected:
 
 public:
 	static RasterizerSceneGLES1 *get_singleton() { return singleton; }
+
+	void initialize();
 
 	RasterizerCanvasGLES1 *canvas = nullptr;
 

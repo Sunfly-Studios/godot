@@ -115,7 +115,6 @@ public:
 	bool support_mapbuffer = false; // GL_OES_mapbuffer
 
 	// 3D
-	bool support_vao = false; // GL_OES_vertex_array_object
 	bool support_vertex_half_float = false; // GL_OES_vertex_half_float
 	bool support_texture_env_add = false; // GL_OES_texture_env_add / GL_EXT_texture_env_add
 	bool support_texture_env_dot3 = false; // GL_OES_texture_env_dot3 / GL_EXT_texture_env_dot3

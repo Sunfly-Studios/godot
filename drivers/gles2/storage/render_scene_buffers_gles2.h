@@ -116,39 +116,32 @@ public:
 
 	GLuint get_render_fbo();
 	GLuint get_msaa3d_fbo() {
-		// _check_render_buffers();
-		// return msaa3d.fbo;
-        return 0;
+		_check_render_buffers();
+		return msaa3d.fbo;
 	}
 	GLuint get_msaa3d_color() {
-		// _check_render_buffers();
-		// return msaa3d.color;
-        return 0;
+		_check_render_buffers();
+		return msaa3d.color;
 	}
 	GLuint get_msaa3d_depth() {
-		// _check_render_buffers();
-		// return msaa3d.depth;
-        return 0;
+		_check_render_buffers();
+		return msaa3d.depth;
 	}
 	bool get_msaa_needs_resolve() {
-		// _check_render_buffers();
-		// return msaa3d.needs_resolve;
-        return false;
+		_check_render_buffers();
+		return msaa3d.needs_resolve;
 	}
 	GLuint get_internal_fbo() {
-		// _check_render_buffers();
-		// return internal3d.fbo;
-        return 0;
+		_check_render_buffers();
+		return internal3d.fbo;
 	}
 	GLuint get_internal_color() {
-		// _check_render_buffers();
-		// return internal3d.color;
-        return 0;
+		_check_render_buffers();
+		return internal3d.color;
 	}
 	GLuint get_internal_depth() {
-		// _check_render_buffers();
-		// return internal3d.depth;
-        return 0;
+		_check_render_buffers();
+		return internal3d.depth;
 	}
 	GLuint get_backbuffer_fbo() const { return backbuffer3d.fbo; }
 	GLuint get_backbuffer() const { return backbuffer3d.color; }

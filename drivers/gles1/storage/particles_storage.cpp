@@ -50,10 +50,52 @@ ParticlesStorage *ParticlesStorage::get_singleton() {
 
 ParticlesStorage::ParticlesStorage() {
 	singleton = this;
+	GLES1::MaterialStorage *material_storage = GLES1::MaterialStorage::get_singleton();
+
+	ERR_FAIL_NULL(material_storage);
+	{
+		String global_defines;
+		global_defines += "#define MAX_GLOBAL_SHADER_UNIFORMS 256\n"; // TODO: this is arbitrary for now
+		material_storage->shaders.particles_process_shader.initialize(global_defines, 1);
+		particles_shader.default_shader_version = material_storage->shaders.particles_process_shader.version_create();
+	}
+	{
+		// default material and shader for particles shader
+		particles_shader.default_shader = material_storage->shader_allocate();
+		material_storage->shader_initialize(particles_shader.default_shader);
+		material_storage->shader_set_code(particles_shader.default_shader, R"(
+// Default particles shader.
+
+shader_type particles;
+
+void process() {
+	COLOR = vec4(1.0);
+}
+)");
+		particles_shader.default_material = material_storage->material_allocate();
+		material_storage->material_initialize(particles_shader.default_material);
+		material_storage->material_set_shader(particles_shader.default_material, particles_shader.default_shader);
+	}
+	{
+		particles_shader.copy_shader.initialize();
+		particles_shader.copy_shader_version = particles_shader.copy_shader.version_create();
+	}
 }
 
 ParticlesStorage::~ParticlesStorage() {
 	singleton = nullptr;
+	GLES1::MaterialStorage *material_storage = GLES1::MaterialStorage::get_singleton();
+
+	if (material_storage) {
+		material_storage->material_free(particles_shader.default_material);
+		material_storage->shader_free(particles_shader.default_shader);
+
+		if (particles_shader.default_shader_version.is_valid()) {
+			material_storage->shaders.particles_process_shader.version_free(particles_shader.default_shader_version);
+		}
+	}
+
+	particles_shader.copy_shader.version_free(particles_shader.copy_shader_version);
 }
 
 /* PARTICLES */

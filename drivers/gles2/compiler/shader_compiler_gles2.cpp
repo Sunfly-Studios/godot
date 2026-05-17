@@ -493,7 +493,7 @@ String ShaderCompilerGLES2::_dump_node_code(ShaderLanguage::Node *p_node, int p_
 				StringName name = fnode->name;
 
 				// Skip the entry points.
-				if (name == vertex_name || name == fragment_name || name == light_name) {
+				if (p_actions.entry_point_stages.has(name)) {
 					continue;
 				}
 
@@ -538,14 +538,10 @@ String ShaderCompilerGLES2::_dump_node_code(ShaderLanguage::Node *p_node, int p_
 			}
 
 			// Hook up the entry points
-			if (snode->functions.has(vertex_name)) {
-				r_gen_code.code["vertex"] = function_code[vertex_name];
-			}
-			if (snode->functions.has(fragment_name)) {
-				r_gen_code.code["fragment"] = function_code[fragment_name];
-			}
-			if (snode->functions.has(light_name)) {
-				r_gen_code.code["light"] = function_code[light_name];
+			for (const KeyValue<StringName, ShaderCompiler::Stage> &E : p_actions.entry_point_stages) {
+				if (snode->functions.has(E.key)) {
+					r_gen_code.code[String(E.key)] = function_code[E.key];
+				}
 			}
 
 			r_gen_code.stage_globals[ShaderCompiler::STAGE_VERTEX] = vertex_global.as_string();
@@ -696,11 +692,12 @@ String ShaderCompilerGLES2::_dump_node_code(ShaderLanguage::Node *p_node, int p_
 			}
 
 			if (var_node->name == time_name) {
-				if (current_func_name == vertex_name) {
-					r_gen_code.uses_vertex_time = true;
-				}
-				if (current_func_name == fragment_name || current_func_name == light_name) {
-					r_gen_code.uses_fragment_time = true;
+				if (p_actions.entry_point_stages.has(current_func_name)) {
+					if (p_actions.entry_point_stages[current_func_name] == ShaderCompiler::STAGE_VERTEX) {
+						r_gen_code.uses_vertex_time = true;
+					} else {
+						r_gen_code.uses_fragment_time = true;
+					}
 				}
 			}
 		} break;
@@ -748,11 +745,12 @@ String ShaderCompilerGLES2::_dump_node_code(ShaderLanguage::Node *p_node, int p_
 			}
 
 			if (arr_node->name == time_name) {
-				if (current_func_name == vertex_name) {
-					r_gen_code.uses_vertex_time = true;
-				}
-				if (current_func_name == fragment_name || current_func_name == light_name) {
-					r_gen_code.uses_fragment_time = true;
+				if (p_actions.entry_point_stages.has(current_func_name)) {
+					if (p_actions.entry_point_stages[current_func_name] == ShaderCompiler::STAGE_VERTEX) {
+						r_gen_code.uses_vertex_time = true;
+					} else {
+						r_gen_code.uses_fragment_time = true;
+					}
 				}
 			}
 

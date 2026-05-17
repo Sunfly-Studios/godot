@@ -106,6 +106,10 @@ class RasterizerSceneGLES2;
 struct BatcherAPISceneGLES2 {
 	using Scene = RasterizerSceneGLES2;
 	using MaterialData = GLES2::SceneMaterialData;
+	using TextureStorage = GLES2::TextureStorage;
+	using Texture = GLES2::Texture;
+	using CanvasTexture = GLES2::CanvasTexture;
+	using Shader = GLES2::Shader;
 
 	static constexpr bool FORCE_BAKE_MODULATE = false;
 };
@@ -375,6 +379,25 @@ private:
 		INSTANCE_DATA_FLAG_MULTIMESH_HAS_CUSTOM_DATA = 1 << 15,
 	};
 
+	_FORCE_INLINE_ static uint32_t _gl_indices_to_primitives(GLenum p_primitive, uint32_t p_indices) {
+		switch (p_primitive) {
+			case GL_POINTS:
+				return p_indices;
+			case GL_LINES:
+				return p_indices / 2;
+			case GL_LINE_STRIP:
+			case GL_LINE_LOOP:
+				return p_indices > 1 ? p_indices - 1 : 0;
+			case GL_TRIANGLES:
+				return p_indices / 3;
+			case GL_TRIANGLE_STRIP:
+			case GL_TRIANGLE_FAN:
+				return p_indices > 2 ? p_indices - 2 : 0;
+			default:
+				return 0;
+		}
+	}
+
 	static void _geometry_instance_dependency_changed(Dependency::DependencyChangedNotification p_notification, DependencyTracker *p_tracker);
 	static void _geometry_instance_dependency_deleted(const RID &p_dependency, DependencyTracker *p_tracker);
 
@@ -467,6 +490,7 @@ private:
 		GLuint ubo_buffer = 0;
 		MultiviewUBO multiview_ubo;
 		GLuint multiview_buffer = 0;
+		TonemapUBO tonemap_ubo;
 		GLuint tonemap_buffer = 0;
 
 		bool used_depth_prepass = false;
@@ -660,6 +684,22 @@ private:
 	template <PassMode p_pass_mode>
 	_FORCE_INLINE_ void _render_list_template(RenderListParameters *p_params, const RenderDataGLES2 *p_render_data, uint32_t p_from_element, uint32_t p_to_element, bool p_alpha_pass = false);
 
+	/* Batch API */
+	void scene_render_items_implementation(GeometryInstanceSurface **p_surfaces, int p_count, const Transform3D &p_camera_transform, bool p_transparent);
+
+	void _batch_get_instance_geometry_capacity(const GeometryInstanceSurface *p_surface, uint32_t &r_vertex_count, uint32_t &r_index_count);
+	float _batch_get_item_depth(const GeometryInstanceSurface *p_surface, const Transform3D &p_camera_transform);
+	uint64_t _batch_get_state_hash(const GeometryInstanceSurface *p_surface);
+	GLES2::SceneMaterialData *_batch_get_material_data(const GeometryInstanceSurface *p_surface);
+
+	void _batch_fill_instance_geometry(const GeometryInstanceSurface *p_surface, RasterizerSceneBatcherCommon<BatcherAPISceneGLES2>::BatchVertex3D *r_bvs, uint16_t *r_inds, uint32_t p_start_vert);
+	void _batch_upload_buffers();
+	void _batch_bind_material(GLES2::SceneMaterialData *p_material_data);
+	void _batch_render_generic();
+
+	void _render_single_item_immediate(const GeometryInstanceSurface *p_surface);
+	void _bind_scene_camera_uniforms(RID p_version, SceneShaderGLES2::ShaderVariant p_variant, uint64_t p_spec_constants);
+
 protected:
 	double time;
 	double time_step = 0;
@@ -772,6 +812,8 @@ protected:
 public:
 	static RasterizerSceneGLES2 *get_singleton() { return singleton; }
 
+	void initialize();
+
 	RasterizerCanvasGLES2 *canvas = nullptr;
 
 	RenderGeometryInstance *geometry_instance_create(RID p_base) override;
@@ -883,13 +925,6 @@ public:
 	void decals_set_filter(RS::DecalFilter p_filter) override;
 	void light_projectors_set_filter(RS::LightProjectorFilter p_filter) override;
 	virtual void lightmaps_set_bicubic_filter(bool p_enable) override;
-
-private:
-	// The Batcher Bridge
-
-	void scene_render_items_implementation(RenderGeometryInstance **p_instances, int p_count, const Transform3D &p_camera_transform, bool p_transparent);
-	void render_batches(RenderGeometryInstance *p_first_instance, RID p_material);
-	void _batch_upload_buffers();
 
 public:
 	RasterizerSceneGLES2();

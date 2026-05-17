@@ -122,33 +122,26 @@ public:
 		BatchVector3 normal;
 		BatchVector2 uv;
 		BatchColor color;
+		float instance_index; // Used by Matrix Palette Uniforms in GLES2
 	};
 
 	// A batch represents a single draw call of aggregated geometry
 	struct Batch3D {
 		BatcherEnums::BatchType type;
-		RID material;
-
 		uint32_t first_vert;
 		uint32_t num_verts;
 		uint32_t num_indices;
-
-		// The base instance, useful if we fallback to hardware transforms
-		const RenderGeometryInstance *instance;
 	};
 
-	// Sorting.
-	// Opaque needs front-to-back or material sort.
-	// Transparent needs back-to-front.
 	struct BSortItem3D {
 		void assign(const BSortItem3D &o) {
-			instance = o.instance;
+			item = o.item;
 			depth = o.depth;
-			material_hash = o.material_hash;
+			state_hash = o.state_hash;
 		}
-		RenderGeometryInstance *instance;
+		void *item;
 		float depth;
-		uint64_t material_hash;
+		uint64_t state_hash;
 	};
 
 	struct BatchData3D {
@@ -159,6 +152,7 @@ public:
 			max_vertices = 0;
 			max_indices = 0;
 			settings_use_batching = true;
+			settings_dynamic_vertex_limit = 1024;
 		}
 
 		void reset_flush() {
@@ -167,6 +161,8 @@ public:
 			indices.reset();
 			total_verts = 0;
 			total_indices = 0;
+			bypassed_opaque_items.clear();
+			bypassed_transparent_items.clear();
 		}
 
 		uint32_t gl_vertex_buffer;
@@ -175,12 +171,16 @@ public:
 		uint32_t max_vertices;
 		uint32_t max_indices;
 
+		uint32_t settings_dynamic_vertex_limit;
+		bool settings_use_batching;
+
 		RasterizerArray<BatchVertex3D> vertices;
 		RasterizerArray<uint16_t> indices;
 		RasterizerArray<Batch3D> batches;
 		RasterizerArray<BSortItem3D> sort_items;
 
-		bool settings_use_batching;
+		LocalVector<void *> bypassed_opaque_items;
+		LocalVector<BSortItem3D> bypassed_transparent_items;
 
 		uint32_t total_verts;
 		uint32_t total_indices;
@@ -188,19 +188,17 @@ public:
 
 	struct RenderItemState3D {
 		void reset() {
-			current_material = RID();
-			rebind_shader = true;
-			joined_item_batch_type_flags = 0;
+			current_state_hash = 0;
+			current_material_data = nullptr;
 		}
-		RID current_material;
-		bool rebind_shader;
-		uint32_t joined_item_batch_type_flags;
+		uint64_t current_state_hash;
+		typename T_API::MaterialData *current_material_data;
 	} _render_item_state;
 
 private:
 	// CRTP Cast to get the driver-specific Scene
-	typename T_API::Scene *get_this() { return static_cast<typename T_API::Scene *>(this); }
-	const typename T_API::Scene *get_this() const { return static_cast<const typename T_API::Scene *>(this); }
+	typename T_API::Scene *get_this();
+	const typename T_API::Scene *get_this() const;
 
 protected:
 	void batch_constructor();
@@ -208,17 +206,44 @@ protected:
 	void batch_scene_begin();
 	void batch_scene_end();
 
-	void batch_scene_render_items(RenderGeometryInstance **p_instances, int p_count, const Transform3D &p_camera_transform, bool p_transparent);
+	template <class T_SURFACE>
+	void batch_scene_render_items(T_SURFACE **p_surfaces, int p_count, const Transform3D &p_camera_transform, bool p_transparent);
 
-	void record_items(RenderGeometryInstance **p_instances, int p_count, const Transform3D &p_camera_transform);
-	bool try_join_item(RenderGeometryInstance *p_instance, RenderItemState3D &r_ris);
-	void join_sorted_items();
+	template <class T_SURFACE>
+	void record_items(T_SURFACE **p_surfaces, int p_count, const Transform3D &p_camera_transform, bool p_transparent);
+
+	struct SortOpaque {
+		_FORCE_INLINE_ bool operator()(const BSortItem3D &A, const BSortItem3D &B) const {
+			if (A.state_hash == B.state_hash) {
+				return A.depth < B.depth;
+			}
+			return A.state_hash < B.state_hash;
+		}
+	};
+
+	struct SortTransparent {
+		_FORCE_INLINE_ bool operator()(const BSortItem3D &A, const BSortItem3D &B) const {
+			return A.depth > B.depth;
+		}
+	};
+
 	void sort_items(bool p_transparent);
 
-	void flush_render_batches(RenderGeometryInstance *p_first_instance, RID p_material);
-	bool prefill_joined_item(RenderGeometryInstance *p_instance);
+	template <class T_SURFACE>
+	void join_and_flush_sorted_items(bool p_transparent);
 
-protected:
+	template <class T_SURFACE>
+	bool try_join_item(T_SURFACE *p_surface, RenderItemState3D &r_ris);
+
+	template <class T_SURFACE>
+	bool prefill_joined_item(T_SURFACE *p_surface);
+
+	template <class T_SURFACE>
+	void flush_render_batches(typename T_API::MaterialData *p_material_data);
+
+	template <class T_SURFACE>
+	void render_bypassed_items(bool p_transparent);
+
 	void _software_transform_vertex(BatchVector3 &r_v, const Transform3D &p_tr) const;
 	void _software_transform_normal(BatchVector3 &r_n, const Transform3D &p_tr) const;
 
@@ -228,7 +253,9 @@ public:
 		if (!batch) {
 			bdata.batches.grow();
 			batch = bdata.batches.request();
-			RAST_DEBUG_ASSERT(batch);
+			if (unlikely(!batch)) {
+				return nullptr;
+			}
 		}
 		if (p_blank) {
 			*batch = Batch3D();

@@ -29,126 +29,235 @@
 /**************************************************************************/
 
 template <typename T_API>
-void RasterizerSceneBatcherCommon<T_API>::batch_constructor() {
-	// Constructor logic
+typename T_API::Scene *RasterizerSceneBatcherCommon<T_API>::get_this() { 
+	return static_cast<typename T_API::Scene *>(this); 
+}
 
+template <typename T_API>
+const typename T_API::Scene *RasterizerSceneBatcherCommon<T_API>::get_this() const { 
+	return static_cast<const typename T_API::Scene *>(this); 
+}
+
+template <typename T_API>
+void RasterizerSceneBatcherCommon<T_API>::batch_constructor() {
 	batch_initialize();
 }
 
 template <typename T_API>
 void RasterizerSceneBatcherCommon<T_API>::batch_initialize() {
 	bdata.settings_use_batching = GLOBAL_GET("rendering/batching/use_batching");
+	bdata.settings_dynamic_vertex_limit = GLOBAL_GET("rendering/limits/opengl/max_dynamic_vertex_limit");
+
 	bdata.max_vertices = 65536; // Standard 16-bit index limit
 	bdata.max_indices = 65536 * 2;
 
 	bdata.vertices.create(bdata.max_vertices);
 	bdata.indices.create(bdata.max_indices);
 	bdata.batches.create(256);
-	bdata.sort_items.create(1024);
+	bdata.sort_items.create(2048);
 }
 
 template <typename T_API>
 void RasterizerSceneBatcherCommon<T_API>::batch_scene_begin() {
-	// Called at the start of the 3D pass
 	bdata.reset_flush();
 	bdata.sort_items.reset();
 }
 
 template <typename T_API>
-void RasterizerSceneBatcherCommon<T_API>::batch_scene_render_items(RenderGeometryInstance **p_instances, int p_count, const Transform3D &p_camera_transform, bool p_transparent) {
-	if (!bdata.settings_use_batching) {
-		// Fallback to unbatched rendering
-		// get_this()->scene_render_items_implementation(p_instances, p_count, ...);
-		return;
-	}
-
-	_render_item_state.reset();
-
-	// TODO(GLES1 & GLES2):
-	// 1. Calculate depths and state hashes
-	record_items(p_instances, p_count, p_camera_transform);
-
-	// 2. Sort depending on blend mode
-	sort_items(p_transparent);
-
-	// 3. Bake geometry into the dynamic buffer
-	join_sorted_items();
-
-	// 4. Flush any remaining batches
-	// flush_render_batches(...);
+void RasterizerSceneBatcherCommon<T_API>::batch_scene_end() {
+	bdata.reset_flush();
+	bdata.sort_items.reset();
 }
 
 template <typename T_API>
-void RasterizerSceneBatcherCommon<T_API>::record_items(RenderGeometryInstance **p_instances, int p_count, const Transform3D &p_camera_transform) {
+template <class T_SURFACE>
+void RasterizerSceneBatcherCommon<T_API>::batch_scene_render_items(T_SURFACE **p_surfaces, int p_count, const Transform3D &p_camera_transform, bool p_transparent) {
+	if (!bdata.settings_use_batching || p_count == 0) {
+		get_this()->scene_render_items_implementation(p_surfaces, p_count, p_camera_transform, p_transparent);
+		return;
+	}
+
+	bdata.reset_flush();
+	_render_item_state.reset();
+
+	// Separate batchable small props from massive unbatchable meshes
+	record_items<T_SURFACE>(p_surfaces, p_count, p_camera_transform, p_transparent);
+
+	// Only sort the items that survived the filter
+	if (bdata.sort_items.size() > 0) {
+		sort_items(p_transparent);
+		
+		// Pack & Render: Build VBOs and fire draw calls
+		join_and_flush_sorted_items<T_SURFACE>(p_transparent);
+	}
+
+	// Draw the massive meshes directly, completely bypassing the batcher overhead
+	render_bypassed_items<T_SURFACE>(p_transparent);
+}
+
+template <typename T_API>
+template <class T_SURFACE>
+void RasterizerSceneBatcherCommon<T_API>::record_items(T_SURFACE **p_surfaces, int p_count, const Transform3D &p_camera_transform, bool p_transparent) {
 	for (int i = 0; i < p_count; i++) {
-		RenderGeometryInstance *instance = p_instances[i];
+		T_SURFACE *surface = p_surfaces[i];
+		
+		uint32_t incoming_verts = 0;
+		uint32_t incoming_indices = 0;
+		
+		// Quickly look up the vertex count.
+		get_this()->_batch_get_instance_geometry_capacity(surface, incoming_verts, incoming_indices);
+
+		// Do not batch if it passes limit
+		if (incoming_verts > bdata.settings_dynamic_vertex_limit) {
+			if (!p_transparent) {
+				// Opaque massive models don't need strict sorting. Just dump them in the bypass list.
+				bdata.bypassed_opaque_items.push_back((void*)surface);
+			} else {
+				// Transparent massive models still need
+				// depth calculation for back-to-front rendering
+				BSortItem3D bypassed_trans;
+				bypassed_trans.item = (void*)surface;
+				bypassed_trans.depth = get_this()->_batch_get_item_depth(surface, p_camera_transform);
+				bypassed_trans.state_hash = 0; // Don't care for bypass transparent
+				bdata.bypassed_transparent_items.push_back(bypassed_trans);
+			}
+			continue;
+		}
+
+		// This is a small prop. Proceed with tracking.
 		BSortItem3D *s = bdata.sort_items.request();
 		if (!s) {
 			bdata.sort_items.grow();
 			s = bdata.sort_items.request();
+			if (unlikely(!s)) {
+				ERR_PRINT_ONCE("GLES Scene Batcher: Failed to allocate BSortItem even after growing array.");
+				break;
+			}
 		}
 
-		s->instance = instance;
-		// Calculate linear depth from camera for sorting
-		// s->depth = p_camera_transform.affine_inverse().xform(instance->transform.origin).z;
-		s->depth = 0.0f; 
-		s->material_hash = 0; // Hash based on RID and shader
+		s->item = (void*)surface;
+		
+		// Calculate linear depth
+		s->depth = get_this()->_batch_get_item_depth(surface, p_camera_transform);
+		
+		// Generate a state hash.
+		// This will depend by driver:
+		// GLES1 is Material + Lights.
+		// GLES2 is Material + Shader ID.
+		s->state_hash = get_this()->_batch_get_state_hash(surface); 
 	}
 }
 
 template <typename T_API>
 void RasterizerSceneBatcherCommon<T_API>::sort_items(bool p_transparent) {
-	// TODO (GLES1 & GLES2): Implement custom radix sort on bdata.sort_items
-	// If opaque: Sort by material_hash (minimize state changes)
-	// If transparent: Sort by depth (back to front)
+	if (p_transparent) {
+		SortArray<BSortItem3D, SortTransparent> sorter;
+		sorter.sort(&bdata.sort_items[0], bdata.sort_items.size());
+	} else {
+		SortArray<BSortItem3D, SortOpaque> sorter;
+		sorter.sort(&bdata.sort_items[0], bdata.sort_items.size());
+	}
 }
 
 template <typename T_API>
-void RasterizerSceneBatcherCommon<T_API>::join_sorted_items() {
-	// Iterate through bdata.sort_items
-	// Extract mesh data via MeshStorage
-	// Call prefill_joined_item() to transform vertices and pack them into bdata.vertices
-	// When material changes or buffer fills, call flush_render_batches()
+template <class T_SURFACE>
+void RasterizerSceneBatcherCommon<T_API>::join_and_flush_sorted_items(bool p_transparent) {
+	for (uint32_t i = 0; i < (uint32_t)bdata.sort_items.size(); i++) {
+		T_SURFACE *surface = static_cast<T_SURFACE *>(bdata.sort_items[i].item);
+
+		// Check for state breaks (Material change, Light environment change)
+		if (!try_join_item<T_SURFACE>(surface, _render_item_state)) {
+			// Flush the pipe before changing state
+			flush_render_batches<T_SURFACE>(_render_item_state.current_material_data);
+			
+			// Update the state tracker
+			_render_item_state.current_state_hash = bdata.sort_items[i].state_hash;
+			_render_item_state.current_material_data = get_this()->_batch_get_material_data(surface);
+		}
+
+		// Attempt to pack the geometry. prefill_joined_item returns TRUE if the buffer is full.
+		if (prefill_joined_item<T_SURFACE>(surface)) {
+			// Buffer full! Flush it.
+			flush_render_batches<T_SURFACE>(_render_item_state.current_material_data);
+			
+			// Retry packing the instance now that the buffer is empty
+			prefill_joined_item<T_SURFACE>(surface);
+		}
+	}
+
+	// Final flush for remaining batched geometry
+	flush_render_batches<T_SURFACE>(_render_item_state.current_material_data);
 }
 
 template <typename T_API>
-bool RasterizerSceneBatcherCommon<T_API>::try_join_item(RenderGeometryInstance *p_instance, RenderItemState3D &r_ris) {
-	// Return false if material breaks or buffer is full
-	return true;
+template <class T_SURFACE>
+bool RasterizerSceneBatcherCommon<T_API>::try_join_item(T_SURFACE *p_surface, RenderItemState3D &r_ris) {
+	uint64_t item_hash = get_this()->_batch_get_state_hash(p_surface);
+	return (item_hash == r_ris.current_state_hash);
 }
 
 template <typename T_API>
-bool RasterizerSceneBatcherCommon<T_API>::prefill_joined_item(RenderGeometryInstance *p_instance) {
-	// 1. Get Mesh/Surface from instance
-	// 2. Extract vertex data
-	// 3. For each vertex: _software_transform_vertex()
-	// 4. Push to bdata.vertices and bdata.indices
-	return false; // Return true if buffer gets full mid-fill
+template <class T_SURFACE>
+bool RasterizerSceneBatcherCommon<T_API>::prefill_joined_item(T_SURFACE *p_surface) {
+	uint32_t incoming_verts = 0;
+	uint32_t incoming_indices = 0;
+	
+	get_this()->_batch_get_instance_geometry_capacity(p_surface, incoming_verts, incoming_indices);
+
+	if (incoming_verts == 0) {
+		return false;
+	}
+
+	if ((bdata.vertices.size() + incoming_verts > bdata.max_vertices) ||
+		(bdata.indices.size() + incoming_indices > bdata.max_indices)) {
+		return true; // Buffer is full, signal caller to flush
+	}
+
+	uint32_t start_vert = bdata.vertices.size();
+	BatchVertex3D *bvs = bdata.vertices.request(incoming_verts);
+	uint16_t *inds = incoming_indices > 0 ? bdata.indices.request(incoming_indices) : nullptr;
+
+	if (bvs) {
+		// The driver handles the packing.
+		// Multi-threading dispatch (GLES1), or matrix palette recording (GLES2).
+		get_this()->_batch_fill_instance_geometry(p_surface, bvs, inds, start_vert);
+	}
+
+	return false;
 }
 
 template <typename T_API>
-void RasterizerSceneBatcherCommon<T_API>::flush_render_batches(RenderGeometryInstance *p_first_instance, RID p_material) {
-	// 1. Upload bdata.vertices and bdata.indices to GPU via glBufferSubData
-	// 2. Bind material/shader
-	// 3. Call get_this()->render_batches(...) to execute draw calls
+template <class T_SURFACE>
+void RasterizerSceneBatcherCommon<T_API>::flush_render_batches(typename T_API::MaterialData *p_material_data) {
+	if (bdata.vertices.size() == 0) {
+		return;
+	}
+
+	// Upload batched VBOs
+	get_this()->_batch_upload_buffers();
+	
+	// Bind shaders or fixed function states
+	get_this()->_batch_bind_material(p_material_data);
+	
+	// Execute the glDrawElements call
+	get_this()->_batch_render_generic();
+
 	bdata.reset_flush();
 }
 
 template <typename T_API>
-void RasterizerSceneBatcherCommon<T_API>::batch_scene_end() {
-	// Cleanup at end of 3D pass
-}
+template <class T_SURFACE>
+void RasterizerSceneBatcherCommon<T_API>::render_bypassed_items(bool p_transparent) {
+	if (!p_transparent) {
+		for (uint32_t i = 0; i < (uint32_t)bdata.bypassed_opaque_items.size(); i++) {
+			get_this()->_render_single_item_immediate(static_cast<T_SURFACE*>(bdata.bypassed_opaque_items[i]));
+		}
+	} else {
+		SortArray<BSortItem3D, SortTransparent> sorter;
+		sorter.sort(bdata.bypassed_transparent_items.ptr(), bdata.bypassed_transparent_items.size());
 
-template <typename T_API>
-void RasterizerSceneBatcherCommon<T_API>::_software_transform_vertex(BatchVector3 &r_v, const Transform3D &p_tr) const {
-	Vector3 vc(r_v.x, r_v.y, r_v.z);
-	vc = p_tr.xform(vc);
-	r_v.set(vc);
-}
-
-template <typename T_API>
-void RasterizerSceneBatcherCommon<T_API>::_software_transform_normal(BatchVector3 &r_n, const Transform3D &p_tr) const {
-	Vector3 nc(r_n.x, r_n.y, r_n.z);
-	nc = p_tr.basis.xform(nc).normalized();
-	r_n.set(nc);
+		for (uint32_t i = 0; i < (uint32_t)bdata.bypassed_transparent_items.size(); i++) {
+			get_this()->_render_single_item_immediate(static_cast<T_SURFACE*>(bdata.bypassed_transparent_items[i].item));
+		}
+	}
 }

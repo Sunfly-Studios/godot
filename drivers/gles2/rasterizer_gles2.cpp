@@ -527,6 +527,13 @@ void RasterizerGLES2::_blit_render_target_to_screen(RID p_render_target, Display
 	glDepthMask(GL_TRUE);
 	glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
 
+	// Restore GL states
+	glEnable(GL_BLEND);
+	glEnable(GL_DEPTH_TEST);
+	glEnable(GL_CULL_FACE);
+	glDisable(GL_SCISSOR_TEST);
+	GL_CHECK_ERROR("GLES2::RasterizerGLES2::_blit_render_target_to_screen: restore states");
+
 	// Clean remaining buffer state leakage
 	glBindBuffer(GL_ARRAY_BUFFER, 0);
 	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
@@ -633,6 +640,7 @@ void RasterizerGLES2::set_boot_image(const Ref<Image> &p_image, const Color &p_c
 	glDisable(GL_BLEND);
 
 	texture_storage->texture_free(texture);
+	GLES2::TextureStorage::get_singleton()->bind_framebuffer_system();
 }
 
 #endif // GLES2_ENABLED
