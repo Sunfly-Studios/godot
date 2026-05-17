@@ -53,7 +53,9 @@ if env["opengl3"] or env["opengl2"] or env["opengl1"]:
         SConscript("gles2/SCsub")
     if env["opengl1"]:
         SConscript("gles1/SCsub")
-    
+
+SConscript("rasterizer_common/SCsub")
+
 if env["metal"]:
     if "metal" not in supported:
         print_error("Target platform '{}' does not support the Metal rendering driver".format(env["platform"]))

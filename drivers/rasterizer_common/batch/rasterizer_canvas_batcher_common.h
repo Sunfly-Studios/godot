@@ -33,9 +33,9 @@
 
 #include "core/os/os.h"
 #include "core/templates/local_vector.h"
-#include "drivers/gles_common/batch/batcher_enum.h"
-#include "drivers/gles_common/batch/rasterizer_array.h"
-#include "drivers/gles_common/batch/rasterizer_asserts.h"
+#include "batcher_enum.h"
+#include "rasterizer_array.h"
+#include "rasterizer_asserts.h"
 #include "core/config/project_settings.h"
 #include "servers/rendering/renderer_compositor.h"
 
@@ -541,7 +541,7 @@ protected:
 
 	void render_joined_item_commands(const BItemJoined &p_bij, RendererCanvasRender::Item *p_current_clip, bool &r_reclip, typename T_API::MaterialData *p_material, bool p_lit);
 
-	private:
+private:
 	void flush_render_batches(RendererCanvasRender::Item *p_first_item, RendererCanvasRender::Item *p_current_clip, bool &r_reclip, typename T_API::MaterialData *p_material, uint32_t p_sequence_batch_type_flags);
 	bool prefill_joined_item(FillState &r_fill_state, RendererCanvasRender::Item::Command **r_first_command, RendererCanvasRender::Item *p_item, RendererCanvasRender::Item *p_current_clip, bool &r_reclip, typename T_API::MaterialData *p_material);
 	void _prefill_default_batch(FillState &r_fill_state, RendererCanvasRender::Item::Command *p_command, const RendererCanvasRender::Item &p_item);

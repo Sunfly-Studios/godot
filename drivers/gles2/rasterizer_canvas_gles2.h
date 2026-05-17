@@ -40,7 +40,7 @@
 #include "storage/texture_storage.h"
 
 #include "drivers/gles_common/error_macros.h"
-#include "drivers/gles_common/batch/rasterizer_canvas_batcher_common.h"
+#include "drivers/rasterizer_common/batch/rasterizer_canvas_batcher_common.h"
 
 #include "drivers/gles2/shaders/canvas.glsl.gen.h"
 #include "drivers/gles2/shaders/canvas_occlusion.glsl.gen.h"

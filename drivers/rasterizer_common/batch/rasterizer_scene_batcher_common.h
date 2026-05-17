@@ -33,9 +33,9 @@
 
 #include "core/os/os.h"
 #include "core/templates/local_vector.h"
-#include "drivers/gles_common/batch/batcher_enum.h"
-#include "drivers/gles_common/batch/rasterizer_array.h"
-#include "drivers/gles_common/batch/rasterizer_asserts.h"
+#include "batcher_enum.h"
+#include "rasterizer_array.h"
+#include "rasterizer_asserts.h"
 #include "core/config/project_settings.h"
 #include "servers/rendering/renderer_scene_render.h"
 #include "core/math/transform_3d.h"

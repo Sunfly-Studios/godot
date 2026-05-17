@@ -37,7 +37,7 @@
 #include "core/templates/paged_allocator.h"
 #include "core/templates/rid_owner.h"
 #include "core/templates/self_list.h"
-#include "drivers/gles_common/batch/rasterizer_scene_batcher_common.h"
+#include "drivers/rasterizer_common/batch/rasterizer_scene_batcher_common.h"
 #include "drivers/gles1/shaders/effects/cubemap_filter.glsl.gen.h"
 #include "drivers/gles1/shaders/sky.glsl.gen.h"
 #include "scene/resources/mesh.h"
