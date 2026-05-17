@@ -99,8 +99,8 @@ bool RasterizerGLES1::screen_flipped_y = false;
 bool RasterizerGLES1::gles_over_gl = true;
 
 void RasterizerGLES1::begin_frame(double frame_step) {
-	// Detect silent EGL context loss
 	if (canvas && canvas->is_context_lost()) {
+		// Detect context loss
 		canvas->force_context_recovery();
 	}
 
@@ -521,7 +521,6 @@ void RasterizerGLES1::_blit_render_target_to_screen(RID p_render_target, Display
 	GLES1::TextureStorage::get_singleton()->bind_framebuffer_system();
 	GL_CHECK_ERROR("GLES1::RasterizerGLES1::_blit_render_target_to_screen: bind_framebuffer_system");
 
-#if defined(ANDROID_ENABLED) || defined(__ANDROID__)
 	// If the OS reclaims the physical surface while the GL thread is mid-frame
 	// FBO 0 becomes incomplete.
 	if (glCheckFramebufferStatusOES(GL_FRAMEBUFFER_OES) != GL_FRAMEBUFFER_COMPLETE_OES) {
@@ -591,7 +590,6 @@ void RasterizerGLES1::_blit_render_target_to_screen(RID p_render_target, Display
 		glClientActiveTexture(prev_client_active_tex);
 		return;
 	}
-#endif
 
 	Size2i win_size = DisplayServer::get_singleton()->window_get_size(p_screen);
 
@@ -616,12 +614,11 @@ void RasterizerGLES1::_blit_render_target_to_screen(RID p_render_target, Display
 		GLsizei vp_w = MAX(0, p_screen_rect.size.width);
 		GLsizei vp_h = MAX(0, p_screen_rect.size.height);
 
-		glViewport(
-			p_screen_rect.position.x,
-			win_size.height - p_screen_rect.position.y - p_screen_rect.size.height,
-			vp_w,
-			vp_h
-		);
+		// Clamp origin
+		GLint vp_x = MAX(0, p_screen_rect.position.x);
+		GLint vp_y = MAX(0, win_size.height - p_screen_rect.position.y - p_screen_rect.size.height);
+
+		glViewport(vp_x, vp_y, vp_w, vp_h);
 		GL_CHECK_ERROR("GLES1::RasterizerGLES1::_blit_render_target_to_screen: glViewport");
 
 		// Disable states that could ruin a direct copy
@@ -903,6 +900,8 @@ void RasterizerGLES1::set_boot_image(const Ref<Image> &p_image, const Color &p_c
 	copy_effects->copy_to_rect(screenrect);
 
 	// Clean up
+	glBindBuffer(GL_ARRAY_BUFFER, 0);
+	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
 	glBindTexture(GL_TEXTURE_2D, 0);
 	glDisable(GL_TEXTURE_2D);
 	glDisable(GL_BLEND);

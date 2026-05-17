@@ -135,6 +135,8 @@ protected:
 		GLuint sdf_vertex_array = 0;
 		GLuint sdf_index_buffer = 0;
 		bool sdf_is_lines = false;
+
+		uint32_t context_generation = 0;
 	};
 
 	RID_Owner<OccluderPolygon> occluder_polygon_owner;
@@ -216,6 +218,9 @@ public:
 	virtual void set_time(double p_time);
 
 	void reset_canvas();
+
+	bool is_context_lost() const;
+	void force_context_recovery();
 
 	// The Core Rendering Loop
 	virtual void canvas_render_items_begin(const Color &p_modulate, Light *p_light, const Transform2D &p_base_transform);

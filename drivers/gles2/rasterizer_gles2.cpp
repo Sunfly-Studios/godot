@@ -95,6 +95,11 @@ bool RasterizerGLES2::screen_flipped_y = false;
 bool RasterizerGLES2::gles_over_gl = true;
 
 void RasterizerGLES2::begin_frame(double frame_step) {
+	if (canvas && canvas->is_context_lost()) {
+		// Detect context loss
+		canvas->force_context_recovery();
+	}
+
 	frame++;
 	delta = frame_step;
 
@@ -425,12 +430,10 @@ void RasterizerGLES2::_blit_render_target_to_screen(RID p_render_target, Display
 	GLES2::TextureStorage::get_singleton()->bind_framebuffer_system();
 	GL_CHECK_ERROR("GLES2::RasterizerGLES2::_blit_render_target_to_screen: bind_framebuffer_system");
 
-#if defined(ANDROID_ENABLED) || defined(__ANDROID__)
-	// Defense against Android OS lifecycle race conditions.
+	// Defense against OS lifecycle and swapchain race conditions.
 	if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
 		return; 
 	}
-#endif
 
 	Size2i win_size = DisplayServer::get_singleton()->window_get_size(p_screen);
 
@@ -458,12 +461,11 @@ void RasterizerGLES2::_blit_render_target_to_screen(RID p_render_target, Display
 	GLsizei vp_w = MAX(0, p_screen_rect.size.width);
 	GLsizei vp_h = MAX(0, p_screen_rect.size.height);
 
-	glViewport(
-		p_screen_rect.position.x,
-		win_size.height - p_screen_rect.position.y - p_screen_rect.size.height,
-		vp_w,
-		vp_h
-	);
+	// Clamp origin
+	GLint vp_x = MAX(0, p_screen_rect.position.x);
+	GLint vp_y = MAX(0, win_size.height - p_screen_rect.position.y - p_screen_rect.size.height);
+	
+	glViewport(vp_x, vp_y, vp_w, vp_h);
 	GL_CHECK_ERROR("GLES2::RasterizerGLES2::_blit_render_target_to_screen: glViewport");
 
 	// Disable states that could ruin a direct copy

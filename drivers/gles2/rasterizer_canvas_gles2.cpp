@@ -225,6 +225,11 @@ void RasterizerCanvasGLES2::light_update_shadow(RID p_rid, int p_shadow_index, c
 			if (instance->light_mask & p_light_mask) {
 				OccluderPolygon *occluder = occluder_polygon_owner.get_or_null(instance->occluder);
 				if (occluder && occluder->line_point_count > 0 && occluder->vertex_array != 0) {
+					if (unlikely(occluder->context_generation != GLES2::Config::get_singleton()->context_generation)) {
+						instance = instance->next;
+						continue; // Zombie VBO, skip drawing
+					}
+
 					if (occluder->cull_mode == RS::CANVAS_OCCLUDER_POLYGON_CULL_DISABLED) {
 						glDisable(GL_CULL_FACE);
 					} else {
@@ -262,6 +267,7 @@ void RasterizerCanvasGLES2::light_update_shadow(RID p_rid, int p_shadow_index, c
 	glDepthMask(GL_FALSE);
 	glDisable(GL_DEPTH_TEST);
 	glDisable(GL_SCISSOR_TEST);
+	glDisable(GL_CULL_FACE);
 	glEnable(GL_BLEND);
 }
 
@@ -355,6 +361,11 @@ void RasterizerCanvasGLES2::light_update_directional_shadow(RID p_rid, int p_sha
 			continue;
 		}
 
+		if (unlikely(occluder->context_generation != GLES2::Config::get_singleton()->context_generation)) {
+			instance = instance->next;
+			continue; // Zombie VBO, skip drawing
+		}
+
 		Transform2D modelview = to_light_xform * instance->xform_cache;
 
 		Color mv1(modelview.columns[0][0], modelview.columns[1][0], 0, modelview.columns[2][0]);
@@ -420,6 +431,13 @@ void RasterizerCanvasGLES2::occluder_polygon_set_shape(RID p_occluder, const Vec
 	if (point_count < 2) {
 		oc->line_point_count = 0;
 		return;
+	}
+
+	uint32_t current_gen = GLES2::Config::get_singleton()->context_generation;
+	if (unlikely(oc->context_generation != current_gen)) {
+		oc->vertex_buffer = 0;
+		oc->index_buffer = 0;
+		oc->context_generation = current_gen;
 	}
 
 	int line_count = p_closed ? point_count : point_count - 1;
@@ -983,6 +1001,10 @@ void RasterizerCanvasGLES2::_set_canvas_uniforms() {
 }
 
 void RasterizerCanvasGLES2::canvas_begin(RID p_to_render_target, bool p_to_backbuffer) {
+	if (unlikely(is_context_lost())) {
+		WARN_PRINT("VBO Context loss at canvas_begin. Rebuilding.");
+		force_context_recovery();
+	}
 	batch_canvas_begin();
 
 	state.render_target = p_to_render_target;
@@ -1153,6 +1175,7 @@ void RasterizerCanvasGLES2::reset_canvas() {
 	glDisable(GL_CULL_FACE);
 	glDisable(GL_DEPTH_TEST);
 	glDepthMask(GL_FALSE);
+	glDepthFunc(GL_LESS);
 	glDisable(GL_SCISSOR_TEST);
 	glDisable(GL_DITHER);
 	glEnable(GL_BLEND);
@@ -2839,6 +2862,52 @@ void RasterizerCanvasGLES2::free_polygon(PolygonID p_polygon) {
 
 void RasterizerCanvasGLES2::set_time(double p_time) {
 	state.time = p_time;
+}
+
+bool RasterizerCanvasGLES2::is_context_lost() const {
+	if (data.canvas_quad_vertices != 0) {
+		// Honest drivers will flag this immediately.
+		if (glIsBuffer(data.canvas_quad_vertices) == GL_FALSE) {
+			return true;
+		}
+
+		// Liar drivers lie about glIsBuffer after silent context loss.
+		// We perform a single deliberate bind and check for GL_INVALID_OPERATION.
+		while (glGetError() != GL_NO_ERROR); // Clear stale errors
+
+		glBindBuffer(GL_ARRAY_BUFFER, data.canvas_quad_vertices);
+		bool is_zombie = (glGetError() == GL_INVALID_OPERATION);
+		glBindBuffer(GL_ARRAY_BUFFER, 0);
+
+		return is_zombie;
+	}
+
+	return false;
+}
+
+void RasterizerCanvasGLES2::force_context_recovery() {
+	// Wipe dead handles to 0 so glGenBuffers doesn't complain,
+	// then re-initialize the core VBOs.
+	data.canvas_quad_vertices = 0;
+	data.polygon_buffer = 0;
+	data.polygon_index_buffer = 0;
+	data.ninepatch_vertices = 0;
+	data.ninepatch_elements = 0;
+
+	// Sterilize the batching buffers
+	bdata.gl_vertex_buffer = 0;
+	bdata.gl_index_buffer = 0;
+
+	// Sterilize global shadow framebuffers
+	state.shadow_texture = 0;
+	state.shadow_depth_buffer = 0;
+	state.shadow_fb = 0;
+
+	initialize();
+	reset_canvas();
+
+	// Broadcast the death of the context globally.
+	GLES2::Config::get_singleton()->context_generation++;
 }
 
 RasterizerCanvasGLES2 *RasterizerCanvasGLES2::singleton = nullptr;

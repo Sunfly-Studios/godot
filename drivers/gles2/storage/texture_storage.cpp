@@ -1302,6 +1302,15 @@ void TextureStorage::_update_render_target(RenderTarget *rt) {
 	}
 
 	// Set up the color formats for the FBO
+#ifdef WEB_ENABLED
+	// WebGL 1.0 / GLES 2.0 requires GL_RGBA / GL_UNSIGNED_BYTE
+	// for color renderable attachments.
+	rt->color_internal_format = GL_RGBA;
+	rt->color_format = GL_RGBA;
+	rt->color_type = GL_UNSIGNED_BYTE;
+	rt->color_format_size = 4;
+	rt->image_format = Image::FORMAT_RGBA8;
+#else
 	if (rt->is_transparent) {
 		rt->color_internal_format = GL_RGBA;
 		rt->color_format = GL_RGBA;
@@ -1315,6 +1324,7 @@ void TextureStorage::_update_render_target(RenderTarget *rt) {
 		rt->color_format_size = 3;
 		rt->image_format = Image::FORMAT_RGB8;
 	}
+#endif
 
 	// Save state
 	GLint previous_fbo = 0;
@@ -1354,7 +1364,11 @@ void TextureStorage::_update_render_target(RenderTarget *rt) {
 			ERR_FAIL_MSG("GLES2: Missing texture for Render Target.");
 		}
 
-		glGenTextures(1, &rt->color);
+		if (texture->tex_id == 0) {
+			glGenTextures(1, &texture->tex_id);
+		}
+		rt->color = texture->tex_id;
+
 		if (unlikely(rt->color == 0)) {
 			glDeleteFramebuffers(1, &rt->fbo);
 			rt->fbo = 0;
@@ -1367,7 +1381,7 @@ void TextureStorage::_update_render_target(RenderTarget *rt) {
 
 		glTexImage2D(texture_target, 0, rt->color_internal_format, rt->size.x, rt->size.y, 0, rt->color_format, rt->color_type, nullptr);
 		GL_CHECK_ERROR("GLES2::TextureStorage::_update_render_target: glTexImage2D color allocation");
-
+		
 		// Force the texture parameters immediately after creating the color texture,
 		// otherwise shenanigans will happen (a.k.a, a very useful black screen).
 		glTexParameteri(texture_target, GL_TEXTURE_MAG_FILTER, GL_NEAREST);

@@ -33,40 +33,40 @@ uniform highp mat4 projection_matrix;
 uniform highp mat4 modelview_matrix;
 uniform highp mat4 extra_matrix;
 
-attribute highp vec2 vertex; // attrib:0
+attribute vec2 vertex; // attrib:0
 
 #ifdef USE_ATTRIB_LIGHT_ANGLE
 // shared with tangent, not used in canvas shader
-attribute highp float light_angle; // attrib:2
+attribute float light_angle; // attrib:2
 #endif
 
 attribute vec4 color_attrib; // attrib:3
 attribute vec2 uv_attrib; // attrib:4
 
 #ifdef USE_ATTRIB_MODULATE
-attribute highp vec4 modulate_attrib; // attrib:5
+attribute vec4 modulate_attrib; // attrib:5
 #endif
 
 #ifdef USE_ATTRIB_LARGE_VERTEX
 // shared with skeleton attributes, not used in batched shader
-attribute highp vec2 translate_attrib; // attrib:6
-attribute highp vec4 basis_attrib; // attrib:7
+attribute vec2 translate_attrib; // attrib:6
+attribute vec4 basis_attrib; // attrib:7
 #endif
 
 #ifdef USE_SKELETON
-attribute highp vec4 bone_indices; // attrib:6
-attribute highp vec4 bone_weights; // attrib:7
+attribute vec4 bone_indices; // attrib:6
+attribute vec4 bone_weights; // attrib:7
 #endif
 
 #ifdef USE_INSTANCING
 
-attribute highp vec4 instance_xform0; //attrib:8
-attribute highp vec4 instance_xform1; //attrib:9
-attribute highp vec4 instance_xform2; //attrib:10
-attribute highp vec4 instance_color; //attrib:11
+attribute vec4 instance_xform0; //attrib:8
+attribute vec4 instance_xform1; //attrib:9
+attribute vec4 instance_xform2; //attrib:10
+attribute vec4 instance_color; //attrib:11
 
 #ifdef USE_INSTANCE_CUSTOM
-attribute highp vec4 instance_custom_data; //attrib:12
+attribute vec4 instance_custom_data; //attrib:12
 #endif
 
 #endif
@@ -85,24 +85,24 @@ uniform highp ivec2 skeleton_texture_size;
 
 #endif
 
-varying vec2 uv_interp;
+varying highp vec2 uv_interp;
 varying mediump vec4 color_interp;
 
 #ifdef USE_ATTRIB_MODULATE
 // modulate doesn't need interpolating but we need to send it to the fragment shader
-varying vec4 modulate_interp;
+varying mediump vec4 modulate_interp;
 #endif
 
 #ifdef MODULATE_USED
-uniform vec4 final_modulate;
+uniform mediump vec4 final_modulate;
 #endif
 
 uniform highp vec2 color_texture_pixel_size;
 
 #ifdef USE_TEXTURE_RECT
 
-uniform vec4 dst_rect;
-uniform vec4 src_rect;
+uniform highp vec4 dst_rect;
+uniform highp vec4 src_rect;
 
 #endif
 
@@ -124,9 +124,9 @@ uniform highp float light_height;
 uniform highp float light_outside_alpha;
 uniform highp float shadow_distance_mult;
 
-varying vec4 light_uv_interp;
-varying vec2 transformed_light_uv;
-varying vec4 local_rot;
+varying highp vec4 light_uv_interp;
+varying highp vec2 transformed_light_uv;
+varying highp vec4 local_rot;
 
 varying highp vec2 pos;
 
@@ -351,9 +351,9 @@ uniform mediump sampler2D normal_texture; // texunit:-2
 uniform mediump sampler2D specular_texture; // texunit:-1
 
 // rgb = specular color, a = shininess
-uniform vec4 specular_shininess;
+uniform mediump vec4 specular_shininess;
 
-varying mediump vec2 uv_interp;
+varying highp vec2 uv_interp;
 varying mediump vec4 color_interp;
 
 #ifdef USE_ATTRIB_MODULATE
@@ -362,7 +362,7 @@ varying mediump vec4 modulate_interp;
 
 uniform highp float time;
 
-uniform vec4 final_modulate;
+uniform mediump vec4 final_modulate;
 
 #ifdef SCREEN_TEXTURE_USED
 
@@ -394,10 +394,10 @@ uniform highp float shadow_y_ofs;
 uniform highp float shadow_zfar_inv;
 
 uniform lowp sampler2D light_texture; // texunit:-6
-varying vec4 light_uv_interp;
-varying vec2 transformed_light_uv;
+varying highp vec4 light_uv_interp;
+varying highp vec2 transformed_light_uv;
 
-varying vec4 local_rot;
+varying highp vec4 local_rot;
 varying highp vec2 pos;
 
 #ifdef USE_SHADOWS
