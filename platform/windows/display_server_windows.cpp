@@ -7348,7 +7348,7 @@ if (IsWow64Process2) {
 
 		if (rendering_driver == "opengl2_angle") {
 			gl_manager_angle = memnew(GLManagerANGLE_Windows(2, 1));
-			tested_drivers.set_flag(DRIVER_ID_COMPAT_ANGLE_D3D11);
+			tested_drivers.set_flag(DRIVER_ID_COMPAT_ANGLE_D3D9);
 
 			if (gl_manager_angle->initialize() != OK) {
 				memdelete(gl_manager_angle);
@@ -7723,6 +7723,9 @@ DisplayServer *DisplayServerWindows::create_func(const String &p_rendering_drive
 			Vector<String> drivers;
 			if (tested_drivers.has_flag(DRIVER_ID_COMPAT_ANGLE_D3D11)) {
 				drivers.push_back("Direct3D 11");
+			}
+			if (tested_drivers.has_flag(DRIVER_ID_COMPAT_ANGLE_D3D9)) {
+				drivers.push_back("Direct3D 9");
 			}
 			OS::get_singleton()->alert(
 					vformat(

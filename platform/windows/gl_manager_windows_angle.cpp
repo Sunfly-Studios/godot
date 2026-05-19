@@ -48,7 +48,14 @@ EGLenum GLManagerANGLE_Windows::_get_platform_extension_enum() const {
 Vector<EGLAttrib> GLManagerANGLE_Windows::_get_platform_display_attributes() const {
 	Vector<EGLAttrib> ret;
 	ret.push_back(EGL_PLATFORM_ANGLE_TYPE_ANGLE);
-	ret.push_back(EGL_PLATFORM_ANGLE_TYPE_D3D11_ANGLE);
+
+	// Only specifically OpenGL 2 can run on D3D9 on ANGLE.
+	// OpenGL 1 requires ES 3.0 features (provided by D3D11)...
+	if (gles_major == 2) {
+		ret.push_back(EGL_PLATFORM_ANGLE_TYPE_D3D9_ANGLE);
+	} else {
+		ret.push_back(EGL_PLATFORM_ANGLE_TYPE_D3D11_ANGLE);
+	}
 	ret.push_back(EGL_NONE);
 
 	return ret;
