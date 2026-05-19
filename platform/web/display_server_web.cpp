@@ -1169,7 +1169,14 @@ DisplayServerWeb::DisplayServerWeb(const String &p_rendering_driver, WindowMode 
 #endif // GLES3_ENABLED
 	
 #ifdef GLES2_ENABLED
-	if (p_rendering_driver == "opengl2") {
+	bool fallback_to_opengl2 = GLOBAL_GET("rendering/rendering_device/fallback_to_opengl2");
+	bool attempting_fallback = !webgl_inited && p_rendering_driver == "opengl3" && fallback_to_opengl2;
+
+	if (p_rendering_driver == "opengl2" || attempting_fallback) {
+		if (attempting_fallback) {
+			print_verbose("WebGL2 failed to initialize. Initializing WebGL1.");
+		}
+
 		if (godot_js_display_has_webgl(1)) {
 			EmscriptenWebGLContextAttributes attributes;
 			emscripten_webgl_init_context_attributes(&attributes);
