@@ -525,11 +525,17 @@ String ShaderCompilerGLES2::_dump_node_code(ShaderLanguage::Node *p_node, int p_
 			}
 
 			// Inject the custom functions into the global scope
-			vertex_global += forward_decls.as_string();
-			vertex_global += custom_functions.as_string();
+			if (custom_functions.get_string_length() > 0) {
+				vertex_global += "#ifdef VERTEX_CODE_USED\n";
+				vertex_global += forward_decls.as_string();
+				vertex_global += custom_functions.as_string();
+				vertex_global += "#endif\n";
 
-			fragment_global += forward_decls.as_string();
-			fragment_global += custom_functions.as_string();
+				fragment_global += "#if defined(FRAGMENT_CODE_USED) || defined(LIGHT_CODE_USED)\n";
+				fragment_global += forward_decls.as_string();
+				fragment_global += custom_functions.as_string();
+				fragment_global += "#endif\n";
+			}
 
 			// Hook up the entry points
 			if (snode->functions.has(vertex_name)) {

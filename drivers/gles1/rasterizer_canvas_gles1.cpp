@@ -870,8 +870,6 @@ void RasterizerCanvasGLES1::_set_canvas_uniforms() {
 			}
 
 			if (light->mode == RS::CANVAS_LIGHT_MODE_DIRECTIONAL) {
-				state.canvas_shader->version_set_uniform(CanvasShaderGLES1::IS_DIRECTIONAL_LIGHT, 1.0f, state.shader_version, state.mode_variant, state.specialization);
-
 				Vector2 light_dir = light->xform_cache.columns[1].normalized();
 				state.canvas_shader->version_set_uniform(CanvasShaderGLES1::LIGHT_POS, -light_dir, state.shader_version, state.mode_variant, state.specialization);
 
@@ -910,8 +908,6 @@ void RasterizerCanvasGLES1::_set_canvas_uniforms() {
 
 				state.canvas_shader->version_set_uniform(CanvasShaderGLES1::LIGHT_HEIGHT, light->height, state.shader_version, state.mode_variant, state.specialization);
 			} else {
-				state.canvas_shader->version_set_uniform(CanvasShaderGLES1::IS_DIRECTIONAL_LIGHT, 0.0f, state.shader_version, state.mode_variant, state.specialization);
-
 				state.canvas_shader->version_set_uniform(CanvasShaderGLES1::LIGHT_MATRIX, light->light_shader_xform.affine_inverse(), state.shader_version, state.mode_variant, state.specialization);
 				state.canvas_shader->version_set_uniform(CanvasShaderGLES1::LIGHT_MATRIX_INVERSE, light->light_shader_xform, state.shader_version, state.mode_variant, state.specialization);
 
@@ -2375,8 +2371,16 @@ void RasterizerCanvasGLES1::render_batches(Item::Command *const *p_commands, Ite
 		state.mode_variant = CanvasShaderGLES1::ShaderVariant::MODE_QUAD;
 		state.shader_version = data.canvas_shader_default_version;
 
+		if (state.using_skeleton) {
+			state.specialization |= CanvasShaderGLES1::USE_SKELETON;
+		}
+
 		if (state.using_light) {
 			state.specialization |= CanvasShaderGLES1::USE_LIGHTING;
+
+			if (state.using_light->mode == RS::CANVAS_LIGHT_MODE_DIRECTIONAL) {
+				state.specialization |= CanvasShaderGLES1::USE_DIRECTIONAL_LIGHT;
+			}
 
 #if defined(DEBUG_ENABLED) || defined(TOOLS_ENABLED)
 			if (state.using_shadow) {
@@ -4179,9 +4183,16 @@ void RasterizerCanvasGLES1::_set_texture_rect_mode(bool p_texture_rect, bool p_l
 	if (p_large_vertex) {
 		spec |= CanvasShaderGLES1::USE_ATTRIB_LARGE_VERTEX;
 	}
+	if (state.using_skeleton) {
+		spec |= CanvasShaderGLES1::USE_SKELETON;
+	}
 
 	if (state.using_light) {
 		spec |= CanvasShaderGLES1::USE_LIGHTING;
+
+		if (state.using_light->mode == RS::CANVAS_LIGHT_MODE_DIRECTIONAL) {
+			state.specialization |= CanvasShaderGLES1::USE_DIRECTIONAL_LIGHT;
+		}
 	}
 
 	state.specialization = spec;

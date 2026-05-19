@@ -46,7 +46,11 @@ void main() {
 	highp float out_depth = 1.0;
 
 #ifdef MODE_SHADOW
-	out_depth = depth / z_far;
+	if (z_far > 0.0001) {
+		out_depth = depth / z_far;
+	} else {
+		out_depth = 0.0;
+	}
 #endif
 
 #ifdef USE_RGBA_SHADOWS

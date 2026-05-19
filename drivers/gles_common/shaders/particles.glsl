@@ -13,9 +13,11 @@ MODE_3D = false
 
 #define SDF_MAX_LENGTH 16384.0
 
+#ifdef GLOBAL_SHADER_UNIFORMS_USED
 uniform highp vec4 global_shader_uniforms[256];
+#endif
 
-#define MAX_ATTRACTORS 32
+#define MAX_ATTRACTORS 8
 
 struct Attractor {
 	mat4 transform;
@@ -26,7 +28,7 @@ struct Attractor {
 	float directionality;
 };
 
-#define MAX_COLLIDERS 32
+#define MAX_COLLIDERS 8
 
 struct Collider {
 	mat4 transform;
@@ -81,7 +83,7 @@ uniform int total_particles;
 uniform bool use_fractional_delta;
 
 float rand_from_seed(float seed) {
-    return fract(sin(dot(vec2(seed, seed * 1.341), vec2(12.9898, 78.233))) * 43758.5453);
+	return fract(sin(dot(vec2(seed, seed * 1.341), vec2(12.9898, 78.233))) * 43758.5453);
 }
 
 vec3 safe_normalize(vec3 direction) {
@@ -200,8 +202,8 @@ void main() {
 	if (particle_active) {
 		active_flag = 1.0;
 	} else {
-        active_flag = 0.0;
-    }
+		active_flag = 0.0;
+	}
 
 	xform = transpose(xform);
 	out_xform_1 = xform[0];
@@ -218,7 +220,7 @@ void main() {
 
 void main() {
 #ifndef USE_TRANSFORM_FEEDBACK
-    gl_FragColor = vec4(0.0);
+	gl_FragColor = vec4(0.0);
 #endif
 }
 /* clang-format on */

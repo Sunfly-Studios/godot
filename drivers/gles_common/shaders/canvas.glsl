@@ -10,9 +10,10 @@ USE_FORCE_REPEAT = false
 USE_ATTRIB_LIGHT_ANGLE = false
 USE_ATTRIB_MODULATE = false
 USE_ATTRIB_LARGE_VERTEX = false
-USE_LIGHTING = true
+USE_LIGHTING = false
 USE_SHADOWS = false
 USE_SKELETON = false
+USE_DIRECTIONAL_LIGHT = false
 SHADOW_FILTER_NEAREST = false
 SHADOW_FILTER_PCF3 = false
 SHADOW_FILTER_PCF5 = false
@@ -22,11 +23,16 @@ SHADOW_FILTER_PCF13 = false
 USE_INSTANCING = false
 USE_INSTANCE_CUSTOM = false
 USE_RGBA_SHADOWS = false
+USE_DEFAULT_NORMAL = false
 
 #[vertex]
 
 uniform highp mat4 projection_matrix;
 /* clang-format on */
+
+#if defined(USE_SKELETON) && !defined(USE_SKELETON_UNIFORM)
+#define TEXEL2DFETCH_USED
+#endif
 
 #include "stdlib_inc.glsl"
 
@@ -389,11 +395,19 @@ uniform highp float shadow_gradient;
 uniform highp float light_height;
 uniform highp float light_outside_alpha;
 uniform highp float shadow_distance_mult;
-uniform highp float is_directional_light;
+
+// Little hack just to be under our ALU/TEX instruction savings
+#ifdef USE_DIRECTIONAL_LIGHT
+#define is_directional_light 1.0
+#else
+#define is_directional_light 0.0
+#endif
+
 uniform highp float shadow_y_ofs;
 uniform highp float shadow_zfar_inv;
 
 uniform lowp sampler2D light_texture; // texunit:-6
+
 varying highp vec4 light_uv_interp;
 varying highp vec2 transformed_light_uv;
 
@@ -408,8 +422,6 @@ const bool at_light_pass = true;
 #else
 const bool at_light_pass = false;
 #endif
-
-uniform highp float use_default_normal;
 
 /* clang-format off */
 
@@ -504,21 +516,18 @@ void main() {
 
 	vec3 normal;
 
-#if defined(NORMAL_USED)
-
+#if defined(USE_DEFAULT_NORMAL)
+	normal.xy = texture2D(normal_texture, uv).xy * 2.0 - 1.0;
+	normal.z = sqrt(max(0.0, 1.0 - dot(normal.xy, normal.xy)));
+	bool normal_used = true;
+#elif defined(NORMAL_USED)
+	normal = vec3(0.0, 0.0, 1.0);
 	bool normal_used = true;
 #else
+	normal = vec3(0.0, 0.0, 1.0);
 	bool normal_used = false;
 #endif
-
-	if (use_default_normal > 0.5) {
-		normal.xy = texture2D(normal_texture, uv).xy * 2.0 - 1.0;
-		normal.z = sqrt(max(0.0, 1.0 - dot(normal.xy, normal.xy)));
-		normal_used = true;
-	} else {
-		normal = vec3(0.0, 0.0, 1.0);
-	}
-
+	
 	{
 		float normal_depth = 1.0;
 
@@ -559,11 +568,14 @@ void main() {
 
 	vec2 light_uv = light_uv_interp.xy;
 	vec4 light = texture2D(light_texture, light_uv);
-
+#ifdef USE_DIRECTIONAL_LIGHT
+	{
+#else
 	if (is_directional_light < 0.5 && (any(lessThan(light_uv_interp.xy, vec2(0.0, 0.0))) || any(greaterThanEqual(light_uv_interp.xy, vec2(1.0, 1.0))))) {
 		color.a *= light_outside_alpha; //invisible
 
 	} else {
+#endif
 		float real_light_height = light_height;
 		vec4 real_light_color = light_color;
 		vec4 real_light_shadow_color = light_shadow_color;
@@ -592,11 +604,11 @@ void main() {
 			vec3 light_pos_3d = vec3(light_pos, real_light_height);
 			vec3 p = vec3(pos, 0.0);
 			vec3 light_dir;
-			if (is_directional_light > 0.5) {
-				light_dir = normalize(mix(vec3(light_pos_3d.xy, 0.0), vec3(0.0, 0.0, 1.0), real_light_height));
-			} else {
-				light_dir = normalize(light_pos_3d - p);
-			}
+#ifdef USE_DIRECTIONAL_LIGHT
+			light_dir = normalize(mix(vec3(light_pos_3d.xy, 0.0), vec3(0.0, 0.0, 1.0), real_light_height));
+#else
+			light_dir = normalize(light_pos_3d - p);
+#endif
 			
 			float cNdotL = max(dot(normal, light_dir), 0.0);
 			light *= cNdotL;
@@ -621,37 +633,39 @@ void main() {
 		vec2 shadow_pos = (shadow_matrix * vec4(pos, 0.0, 1.0)).xy;
 		float su, sz;
 		float sh = shadow_y_ofs;
-
-		if (is_directional_light > 0.5) {
-			su = shadow_pos.x;
-			sz = shadow_pos.y * shadow_zfar_inv;
-		} else {
-			vec2 pos_norm = normalize(shadow_pos);
-			vec2 pos_abs = abs(pos_norm);
-			vec2 pos_box = pos_norm / max(pos_abs.x, pos_abs.y);
-			vec2 pos_rot = pos_norm * mat2(vec2(0.7071067811865476, -0.7071067811865476), vec2(0.7071067811865476, 0.7071067811865476));
-			float tex_ofs;
-			float dist;
-			if (pos_rot.y > 0.0) {
-				if (pos_rot.x > 0.0) {
-					tex_ofs = pos_box.y * 0.125 + 0.125;
-					dist = shadow_pos.x;
-				} else {
-					tex_ofs = pos_box.x * -0.125 + (0.25 + 0.125);
-					dist = shadow_pos.y;
-				}
+#ifdef USE_DIRECTIONAL_LIGHT
+		su = shadow_pos.x;
+		sz = shadow_pos.y * shadow_zfar_inv;
+#else
+		vec2 pos_norm = normalize(shadow_pos);
+		vec2 pos_abs = abs(pos_norm);
+		vec2 pos_box = pos_norm / max(pos_abs.x, pos_abs.y);
+		vec2 pos_rot = pos_norm * mat2(
+			vec2(0.7071067811865476, -0.7071067811865476),
+			vec2(0.7071067811865476, 0.7071067811865476)
+		);
+		float tex_ofs;
+		float dist;
+		if (pos_rot.y > 0.0) {
+			if (pos_rot.x > 0.0) {
+				tex_ofs = pos_box.y * 0.125 + 0.125;
+				dist = shadow_pos.x;
 			} else {
-				if (pos_rot.x < 0.0) {
-					tex_ofs = pos_box.y * -0.125 + (0.5 + 0.125);
-					dist = -shadow_pos.x;
-				} else {
-					tex_ofs = pos_box.x * 0.125 + (0.75 + 0.125);
-					dist = -shadow_pos.y;
-				}
+				tex_ofs = pos_box.x * -0.125 + (0.25 + 0.125);
+				dist = shadow_pos.y;
 			}
-			su = tex_ofs;
-			sz = dist * shadow_zfar_inv;
+		} else {
+			if (pos_rot.x < 0.0) {
+				tex_ofs = pos_box.y * -0.125 + (0.5 + 0.125);
+				dist = -shadow_pos.x;
+			} else {
+				tex_ofs = pos_box.x * 0.125 + (0.75 + 0.125);
+				dist = -shadow_pos.y;
+			}
 		}
+		su = tex_ofs;
+		sz = dist * shadow_zfar_inv;
+#endif
 
 		highp float shadow_attenuation = 0.0;
 

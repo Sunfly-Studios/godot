@@ -6,6 +6,9 @@ mode_default =
 #[specializations]
 
 MODE_3D = false
+TRANSFORM_ALIGN_Z_BILLBOARD = false
+TRANSFORM_ALIGN_Y_TO_VELOCITY = false
+TRANSFORM_ALIGN_Z_BILLBOARD_Y_TO_VELOCITY = false
 
 #[vertex]
 
@@ -54,35 +57,35 @@ void main() {
 		txform = transpose(mat4(xform_1, xform_2, vec4(0.0, 0.0, 1.0, 0.0), vec4(0.0, 0.0, 0.0, 1.0)));
 #endif
 
-		if (align_mode == TRANSFORM_ALIGN_Z_BILLBOARD) {
-			mat3 local = mat3(normalize(cross(align_up, sort_direction)), align_up, sort_direction);
-			local = local * mat3(txform);
-			txform[0].xyz = local[0];
-			txform[1].xyz = local[1];
-			txform[2].xyz = local[2];
-		} else if (align_mode == TRANSFORM_ALIGN_Y_TO_VELOCITY) {
-			vec3 v = velocity_active.xyz;
-			float s = (length(txform[0]) + length(txform[1]) + length(txform[2])) / 3.0;
-			if (length(v) > 0.0) {
-				txform[1].xyz = normalize(v);
-			} else {
-				txform[1].xyz = normalize(txform[1].xyz);
-			}
-			txform[0].xyz = normalize(cross(txform[1].xyz, txform[2].xyz));
-			txform[2].xyz = vec3(0.0, 0.0, 1.0) * s;
-			txform[0].xyz *= s;
-			txform[1].xyz *= s;
-		} else if (align_mode == TRANSFORM_ALIGN_Z_BILLBOARD_Y_TO_VELOCITY) {
-			vec3 sv = velocity_active.xyz - sort_direction * dot(sort_direction, velocity_active.xyz);
-			float s = (length(txform[0]) + length(txform[1]) + length(txform[2])) / 3.0;
-			if (length(sv) == 0.0) {
-				sv = align_up;
-			}
-			sv = normalize(sv);
-			txform[0].xyz = normalize(cross(sv, sort_direction)) * s;
-			txform[1].xyz = sv * s;
-			txform[2].xyz = sort_direction * s;
+#if defined(TRANSFORM_ALIGN_Z_BILLBOARD)
+		mat3 local = mat3(normalize(cross(align_up, sort_direction)), align_up, sort_direction);
+		local = local * mat3(txform);
+		txform[0].xyz = local[0];
+		txform[1].xyz = local[1];
+		txform[2].xyz = local[2];
+#elif defined(TRANSFORM_ALIGN_Y_TO_VELOCITY)
+		vec3 v = velocity_active.xyz;
+		float s = (length(txform[0]) + length(txform[1]) + length(txform[2])) / 3.0;
+		if (length(v) > 0.0) {
+			txform[1].xyz = normalize(v);
+		} else {
+			txform[1].xyz = normalize(txform[1].xyz);
 		}
+		txform[0].xyz = normalize(cross(txform[1].xyz, txform[2].xyz));
+		txform[2].xyz = vec3(0.0, 0.0, 1.0) * s;
+		txform[0].xyz *= s;
+		txform[1].xyz *= s;
+#elif defined(TRANSFORM_ALIGN_Z_BILLBOARD_Y_TO_VELOCITY)
+		vec3 sv = velocity_active.xyz - sort_direction * dot(sort_direction, velocity_active.xyz);
+		float s = (length(txform[0]) + length(txform[1]) + length(txform[2])) / 3.0;
+		if (length(sv) == 0.0) {
+			sv = align_up;
+		}
+		sv = normalize(sv);
+		txform[0].xyz = normalize(cross(sv, sort_direction)) * s;
+		txform[1].xyz = sv * s;
+		txform[2].xyz = sort_direction * s;
+#endif
 
 		txform[3].xyz += velocity_active.xyz * frame_remainder;
 
@@ -108,8 +111,8 @@ void main() {
 
 void main() {
 #ifndef USE_TRANSFORM_FEEDBACK
-    // Ensure fragment shader isn't optimized out
-    gl_FragColor = vec4(0.0);
+	// Ensure fragment shader isn't optimized out
+	gl_FragColor = vec4(0.0);
 #endif
 }
 /* clang-format on */

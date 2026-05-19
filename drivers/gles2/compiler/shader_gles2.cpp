@@ -46,7 +46,7 @@ static String _mkid(const String &p_id) {
 
 void ShaderGLES2::_add_stage(const char *p_code, StageType p_stage_type) {
 	Vector<String> lines = String(p_code).split("\n");
-	String text;
+	StringBuilder text;
 
 	for (int i = 0; i < lines.size(); i++) {
 		const String &l = lines[i];
@@ -65,25 +65,28 @@ void ShaderGLES2::_add_stage(const char *p_code, StageType p_stage_type) {
 			push_chunk = true;
 			chunk.code = l.replace_first("#CODE", String()).replace(":", "").strip_edges().to_upper();
 		} else {
-			text += l + "\n";
+			text.append(l);
+			text.append("\n");
 		}
 
 		if (push_chunk) {
-			if (!text.is_empty()) {
+			String text_str = text.as_string();
+			if (!text_str.is_empty()) {
 				StageTemplate::Chunk text_chunk;
 				text_chunk.type = StageTemplate::Chunk::TYPE_TEXT;
-				text_chunk.text = text.utf8();
+				text_chunk.text = text_str.utf8();
 				stage_templates[p_stage_type].chunks.push_back(text_chunk);
-				text = String();
+				text = StringBuilder();
 			}
 			stage_templates[p_stage_type].chunks.push_back(chunk);
 		}
 	}
 
-	if (!text.is_empty()) {
+	String final_text_str = text.as_string();
+	if (!final_text_str.is_empty()) {
 		StageTemplate::Chunk text_chunk;
 		text_chunk.type = StageTemplate::Chunk::TYPE_TEXT;
-		text_chunk.text = text.utf8();
+		text_chunk.text = final_text_str.utf8();
 		stage_templates[p_stage_type].chunks.push_back(text_chunk);
 	}
 }
@@ -382,22 +385,26 @@ void ShaderGLES2::_compile_specialization(Version::Specialization &spec, uint32_
 			// (like MALI-400) that demand that
 			// extension directives must occur before any non-preprocessor tokens.
 			Vector<String> lines = builder_string.split("\n");
-			String extensions_string;
-			String final_string;
+			StringBuilder extensions_string;
+			StringBuilder final_string;
 
 			for (int j = 0; j < lines.size(); j++) {
 				String line_stripped = lines[j].strip_edges();
 				if (line_stripped.begins_with("#extension")) {
-					extensions_string += lines[j] + "\n";
+					extensions_string.append(lines[j]);
+					extensions_string.append("\n");
 				} else {
-					final_string += lines[j] + "\n";
+					final_string.append(lines[j]);
+					final_string.append("\n");
 				}
 			}
 
-			if (!extensions_string.is_empty()) {
-				final_string = final_string.replace("#version 100\n", "#version 100\n" + extensions_string);
-				final_string = final_string.replace("#version 120\n", "#version 120\n" + extensions_string);
-				builder_string = final_string;
+			String ext_str = extensions_string.as_string();
+			if (!ext_str.is_empty()) {
+				String final_str = final_string.as_string();
+				final_str = final_str.replace("#version 100\n", "#version 100\n" + ext_str);
+				final_str = final_str.replace("#version 120\n", "#version 120\n" + ext_str);
+				builder_string = final_str;
 			}
 		}
 		CharString cs = builder_string.utf8();
@@ -449,22 +456,26 @@ void ShaderGLES2::_compile_specialization(Version::Specialization &spec, uint32_
 		String builder_string = builder.as_string();
 		if (builder_string.contains("#extension")) {
 			Vector<String> lines = builder_string.split("\n");
-			String extensions_string;
-			String final_string;
+			StringBuilder extensions_string;
+			StringBuilder final_string;
 
 			for (int j = 0; j < lines.size(); j++) {
 				String line_stripped = lines[j].strip_edges();
 				if (line_stripped.begins_with("#extension")) {
-					extensions_string += lines[j] + "\n";
+					extensions_string.append(lines[j]);
+					extensions_string.append("\n");
 				} else {
-					final_string += lines[j] + "\n";
+					final_string.append(lines[j]);
+					final_string.append("\n");
 				}
 			}
 
-			if (!extensions_string.is_empty()) {
-				final_string = final_string.replace("#version 100\n", "#version 100\n" + extensions_string);
-				final_string = final_string.replace("#version 120\n", "#version 120\n" + extensions_string);
-				builder_string = final_string;
+			String ext_str = extensions_string.as_string();
+			if (!ext_str.is_empty()) {
+				String final_str = final_string.as_string();
+				final_str = final_str.replace("#version 100\n", "#version 100\n" + ext_str);
+				final_str = final_str.replace("#version 120\n", "#version 120\n" + ext_str);
+				builder_string = final_str;
 			}
 		}
 		CharString cs = builder_string.utf8();

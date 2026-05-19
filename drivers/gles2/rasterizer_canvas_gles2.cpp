@@ -182,6 +182,12 @@ void RasterizerCanvasGLES2::light_update_shadow(RID p_rid, int p_shadow_index, c
 	CanvasOcclusionShaderGLES2::ShaderVariant variant = CanvasOcclusionShaderGLES2::MODE_SHADOW_RGBA;
 	bool success = shadow_render.shader.version_bind_shader(shadow_render.shader_version, variant);
 	if (!success) {
+		GLES2::TextureStorage::get_singleton()->bind_framebuffer_system();
+		glDepthMask(GL_FALSE);
+		glDisable(GL_DEPTH_TEST);
+		glDisable(GL_SCISSOR_TEST);
+		glDisable(GL_CULL_FACE);
+		glEnable(GL_BLEND);
 		return;
 	}
 
@@ -262,6 +268,7 @@ void RasterizerCanvasGLES2::light_update_shadow(RID p_rid, int p_shadow_index, c
 	glDisableVertexAttribArray(RS::ARRAY_VERTEX);
 	glBindBuffer(GL_ARRAY_BUFFER, 0);
 	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+	glCullFace(GL_BACK);
 
 	GLES2::TextureStorage::get_singleton()->bind_framebuffer_system();
 	glDepthMask(GL_FALSE);
@@ -340,6 +347,12 @@ void RasterizerCanvasGLES2::light_update_directional_shadow(RID p_rid, int p_sha
 	CanvasOcclusionShaderGLES2::ShaderVariant variant = CanvasOcclusionShaderGLES2::MODE_SHADOW_RGBA;
 	bool success = shadow_render.shader.version_bind_shader(shadow_render.shader_version, variant);
 	if (!success) {
+		GLES2::TextureStorage::get_singleton()->bind_framebuffer_system();
+		glDepthMask(GL_FALSE);
+		glDisable(GL_DEPTH_TEST);
+		glDisable(GL_SCISSOR_TEST);
+		glDisable(GL_CULL_FACE);
+		glEnable(GL_BLEND);
 		return;
 	}
 
@@ -405,6 +418,7 @@ void RasterizerCanvasGLES2::light_update_directional_shadow(RID p_rid, int p_sha
 	glDisableVertexAttribArray(RS::ARRAY_VERTEX);
 	glBindBuffer(GL_ARRAY_BUFFER, 0);
 	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+	glCullFace(GL_BACK);
 
 	GLES2::TextureStorage::get_singleton()->bind_framebuffer_system();
 	glDepthMask(GL_FALSE);
@@ -900,7 +914,6 @@ void RasterizerCanvasGLES2::_set_canvas_uniforms() {
 	}
 
 	// These rely on the generated canvas.glsl.gen.h Uniforms enum and version_set_uniform
-	state.canvas_shader->version_set_uniform(CanvasShaderGLES2::USE_DEFAULT_NORMAL, state.normal_used ? 1.0f : 0.0f, state.shader_version, state.mode_variant, state.specialization);
 	state.canvas_shader->version_set_uniform(CanvasShaderGLES2::PROJECTION_MATRIX, state.uniforms.projection_matrix, state.shader_version, state.mode_variant, state.specialization);
 	state.canvas_shader->version_set_uniform(CanvasShaderGLES2::MODELVIEW_MATRIX, state.uniforms.modelview_matrix, state.shader_version, state.mode_variant, state.specialization);
 	state.canvas_shader->version_set_uniform(CanvasShaderGLES2::EXTRA_MATRIX, state.uniforms.extra_matrix, state.shader_version, state.mode_variant, state.specialization);
@@ -921,8 +934,6 @@ void RasterizerCanvasGLES2::_set_canvas_uniforms() {
 			// =====================================
 			// Directional light uniforms
 			// =====================================
-			state.canvas_shader->version_set_uniform(CanvasShaderGLES2::IS_DIRECTIONAL_LIGHT, 1.0f, state.shader_version, state.mode_variant, state.specialization);
-
 			Vector2 light_dir = light->xform_cache.columns[1].normalized();
 			state.canvas_shader->version_set_uniform(CanvasShaderGLES2::LIGHT_POS, -light_dir, state.shader_version, state.mode_variant, state.specialization);
 
@@ -951,8 +962,6 @@ void RasterizerCanvasGLES2::_set_canvas_uniforms() {
 			// =====================================
 			// Omni / Point light uniforms
 			// =====================================
-			state.canvas_shader->version_set_uniform(CanvasShaderGLES2::IS_DIRECTIONAL_LIGHT, 0.0f, state.shader_version, state.mode_variant, state.specialization);
-
 			state.canvas_shader->version_set_uniform(CanvasShaderGLES2::LIGHT_MATRIX, light->light_shader_xform.affine_inverse(), state.shader_version, state.mode_variant, state.specialization);
 			state.canvas_shader->version_set_uniform(CanvasShaderGLES2::LIGHT_MATRIX_INVERSE, light->light_shader_xform, state.shader_version, state.mode_variant, state.specialization);
 
@@ -1145,6 +1154,7 @@ void RasterizerCanvasGLES2::canvas_end() {
 	batch_canvas_end();
 
 	glBindBuffer(GL_ARRAY_BUFFER, 0);
+	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
 	GL_CHECK_ERROR("GLES2::Canvas::canvas_end: disable states");
 
 	for (int i = 0; i < maximum_attributes; i++) {
@@ -1719,8 +1729,6 @@ void RasterizerCanvasGLES2::_batch_render_generic(const Batch &p_batch, GLES2::C
 			break;
 	}
 
-	_set_texture_rect_mode(false, use_light_angles, use_modulate, use_large_verts);
-
 	const BatchTex &tex = bdata.batch_textures[p_batch.batch_texture_id];
 
 	if (tex.tile_mode == BatchTex::TILE_FORCE_REPEAT) {
@@ -1742,6 +1750,12 @@ void RasterizerCanvasGLES2::_batch_render_generic(const Batch &p_batch, GLES2::C
 	}
 
 	_bind_canvas_texture(tex.RID_texture, filter, repeat);
+
+	_set_texture_rect_mode(false, use_light_angles, use_modulate, use_large_verts);
+
+	if (tex.tile_mode == BatchTex::TILE_FORCE_REPEAT) {
+		state.specialization |= CanvasShaderGLES2::USE_FORCE_REPEAT;
+	}
 
 	bool rebind = state.canvas_shader->version_bind_shader(state.shader_version, state.mode_variant, state.specialization);
 	_set_canvas_uniforms();
@@ -1844,6 +1858,7 @@ void RasterizerCanvasGLES2::_batch_render_generic(const Batch &p_batch, GLES2::C
 	glDisableVertexAttribArray(RS::ARRAY_TEX_UV2);
 	glDisableVertexAttribArray(RS::ARRAY_CUSTOM0);
 	glDisableVertexAttribArray(RS::ARRAY_CUSTOM1);
+	glVertexAttrib4f(RS::ARRAY_COLOR, 1.0f, 1.0f, 1.0f, 1.0f);
 	glBindBuffer(GL_ARRAY_BUFFER, 0);
 	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
 	GL_CHECK_ERROR("GLES2::Canvas::batch_render_generic: cleanup");
@@ -1882,13 +1897,29 @@ void RasterizerCanvasGLES2::render_batches(Item::Command *const *p_commands, Ite
 		state.mode_variant = CanvasShaderGLES2::ShaderVariant::MODE_QUAD;
 		state.shader_version = data.canvas_shader_default_version;
 
+		if (state.using_skeleton) {
+			state.specialization |= CanvasShaderGLES2::USE_SKELETON;
+		}
+
 		if (state.using_light) {
 			state.specialization |= CanvasShaderGLES2::USE_LIGHTING;
+			if (state.using_light->mode == RS::CANVAS_LIGHT_MODE_DIRECTIONAL) {
+				state.specialization |= CanvasShaderGLES2::USE_DIRECTIONAL_LIGHT;
+			}
 			if (state.using_shadow) {
 				state.specialization |= CanvasShaderGLES2::USE_SHADOWS;
 				state.specialization |= CanvasShaderGLES2::USE_RGBA_SHADOWS;
 
-				switch (state.using_light->shadow_filter) {
+				RS::CanvasLightShadowFilter shadow_filter = state.using_light->shadow_filter;
+
+				// Cap shadow filtering to PCF5 for web or android emulators.
+				if (OS::get_singleton()->has_feature("web") || GLES2::Config::get_singleton()->is_android_emulator) {
+					if (shadow_filter == RS::CANVAS_LIGHT_FILTER_PCF13) {
+						shadow_filter = RS::CANVAS_LIGHT_FILTER_PCF5;
+					}
+				}
+
+				switch (shadow_filter) {
 					case RS::CANVAS_LIGHT_FILTER_NONE:
 						state.specialization |= CanvasShaderGLES2::SHADOW_FILTER_NEAREST;
 						break;
@@ -2024,12 +2055,12 @@ void RasterizerCanvasGLES2::render_batches(Item::Command *const *p_commands, Ite
 							// Cleanup
 							glBindBuffer(GL_ARRAY_BUFFER, 0);
 							glDisableVertexAttribArray(RS::ARRAY_VERTEX);
+							glVertexAttrib4f(RS::ARRAY_COLOR, 1.0f, 1.0f, 1.0f, 1.0f);
 							state.specialization &= ~(CanvasShaderGLES2::USE_FORCE_REPEAT);
 						} break;
 
 						case Item::Command::TYPE_NINEPATCH: {
 							Item::CommandNinePatch *np = static_cast<Item::CommandNinePatch *>(command);
-							_set_texture_rect_mode(false);
 
 							RS::CanvasItemTextureRepeat repeat = state.default_repeat;
 							if (batch.item && batch.item->texture_repeat != RS::CANVAS_ITEM_TEXTURE_REPEAT_DEFAULT) {
@@ -2046,6 +2077,7 @@ void RasterizerCanvasGLES2::render_batches(Item::Command *const *p_commands, Ite
 							}
 
 							_bind_canvas_texture(np->texture, filter, repeat);
+							_set_texture_rect_mode(false);
 
 							bool rebind = state.canvas_shader->version_bind_shader(state.shader_version, state.mode_variant, state.specialization);
 							_set_canvas_uniforms();
@@ -2158,6 +2190,7 @@ void RasterizerCanvasGLES2::render_batches(Item::Command *const *p_commands, Ite
 
 							glDisableVertexAttribArray(RS::ARRAY_VERTEX);
 							glDisableVertexAttribArray(RS::ARRAY_TEX_UV);
+							glVertexAttrib4f(RS::ARRAY_COLOR, 1.0f, 1.0f, 1.0f, 1.0f);
 
 							glBindBuffer(GL_ARRAY_BUFFER, 0);
 							glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
@@ -2175,16 +2208,6 @@ void RasterizerCanvasGLES2::render_batches(Item::Command *const *p_commands, Ite
 								break;
 							}
 
-							_set_texture_rect_mode(false);
-
-							// The enums will now exist and compile!
-							state.specialization |= CanvasShaderGLES2::USE_INSTANCING;
-							if (multi_mesh->uses_custom_data) {
-								state.specialization |= CanvasShaderGLES2::USE_INSTANCE_CUSTOM;
-							}
-
-							bool rebind = state.canvas_shader->version_bind_shader(state.shader_version, state.mode_variant, state.specialization);
-
 							RS::CanvasItemTextureRepeat repeat = state.default_repeat;
 							if (batch.item && batch.item->texture_repeat != RS::CANVAS_ITEM_TEXTURE_REPEAT_DEFAULT) {
 								repeat = batch.item->texture_repeat;
@@ -2200,6 +2223,16 @@ void RasterizerCanvasGLES2::render_batches(Item::Command *const *p_commands, Ite
 							}
 
 							_bind_canvas_texture(mmesh->texture, filter, repeat);
+							_set_texture_rect_mode(false);
+
+							// The enums will now exist and compile!
+							state.specialization |= CanvasShaderGLES2::USE_INSTANCING;
+							if (multi_mesh->uses_custom_data) {
+								state.specialization |= CanvasShaderGLES2::USE_INSTANCE_CUSTOM;
+							}
+
+							bool rebind = state.canvas_shader->version_bind_shader(state.shader_version, state.mode_variant, state.specialization);
+
 							if (state.texpixel_size != Size2(0.0, 0.0)) {
 								state.canvas_shader->version_set_uniform(CanvasShaderGLES2::COLOR_TEXTURE_PIXEL_SIZE, state.texpixel_size, state.shader_version, state.mode_variant, state.specialization);
 							}
@@ -2387,7 +2420,6 @@ void RasterizerCanvasGLES2::render_batches(Item::Command *const *p_commands, Ite
 
 						case Item::Command::TYPE_MESH: {
 							Item::CommandMesh *mesh_cmd = static_cast<Item::CommandMesh *>(command);
-							_set_texture_rect_mode(false);
 
 							// Setup Texture, Filter, and Repeat
 							RS::CanvasItemTextureRepeat repeat = state.default_repeat;
@@ -2405,6 +2437,7 @@ void RasterizerCanvasGLES2::render_batches(Item::Command *const *p_commands, Ite
 							}
 
 							_bind_canvas_texture(mesh_cmd->texture, filter, repeat);
+							_set_texture_rect_mode(false);
 
 							// Bind Shader and stack the item's material (if any)
 							bool rebind = state.canvas_shader->version_bind_shader(state.shader_version, state.mode_variant, state.specialization);
@@ -2497,6 +2530,9 @@ void RasterizerCanvasGLES2::render_batches(Item::Command *const *p_commands, Ite
 									// Clean up attributes
 									for (int k = 0; k < maximum_attributes; k++) {
 										glDisableVertexAttribArray(k);
+										if (k == RS::ARRAY_COLOR) {
+											glVertexAttrib4f(RS::ARRAY_COLOR, 1.0f, 1.0f, 1.0f, 1.0f);
+										}
 									}
 								}
 							}
@@ -2616,6 +2652,7 @@ void RasterizerCanvasGLES2::_draw_gui_primitive(int p_points, const Vector2 *p_v
 	glDisableVertexAttribArray(RS::ARRAY_VERTEX);
 	glDisableVertexAttribArray(RS::ARRAY_TEX_UV);
 	glDisableVertexAttribArray(RS::ARRAY_COLOR);
+	glVertexAttrib4f(RS::ARRAY_COLOR, 1.0f, 1.0f, 1.0f, 1.0f);
 	glBindBuffer(GL_ARRAY_BUFFER, 0);
 	GL_CHECK_ERROR("GLES2::Canvas::draw_gui: glDrawArrays");
 }
@@ -2623,9 +2660,9 @@ void RasterizerCanvasGLES2::_draw_gui_primitive(int p_points, const Vector2 *p_v
 void RasterizerCanvasGLES2::_legacy_draw_primitive(Item::CommandPrimitive *p_pr, GLES2::CanvasMaterialData *p_material) {
 	ERR_FAIL_COND(p_pr->point_count < 1);
 
-	_set_texture_rect_mode(false);
-
 	_bind_canvas_texture(p_pr->texture, state.default_filter, state.default_repeat);
+
+	_set_texture_rect_mode(false);
 
 	bool rebind = state.canvas_shader->version_bind_shader(state.shader_version, state.mode_variant, state.specialization);
 	_set_canvas_uniforms();
@@ -2653,6 +2690,9 @@ void RasterizerCanvasGLES2::_legacy_draw_polygon(Item::CommandPolygon *p_poly, G
 		return;
 	}
 
+	// Bind texture and get pixel size
+	_bind_canvas_texture(p_poly->texture, state.default_filter, state.default_repeat);
+
 	_set_texture_rect_mode(false);
 
 	bool rebind = state.canvas_shader->version_bind_shader(state.shader_version, state.mode_variant, state.specialization);
@@ -2662,8 +2702,6 @@ void RasterizerCanvasGLES2::_legacy_draw_polygon(Item::CommandPolygon *p_poly, G
 		p_material->bind_uniforms();
 	}
 
-	// Bind texture and get pixel size
-	_bind_canvas_texture(p_poly->texture, state.default_filter, state.default_repeat);
 	state.canvas_shader->version_set_uniform(CanvasShaderGLES2::COLOR_TEXTURE_PIXEL_SIZE, state.texpixel_size, state.shader_version, state.mode_variant, state.specialization);
 
 	// Setup vertex attributes
@@ -2800,6 +2838,7 @@ void RasterizerCanvasGLES2::_legacy_draw_polygon(Item::CommandPolygon *p_poly, G
 	glDisableVertexAttribArray(RS::ARRAY_VERTEX);
 	glDisableVertexAttribArray(RS::ARRAY_TEX_UV);
 	glDisableVertexAttribArray(RS::ARRAY_COLOR);
+	glVertexAttrib4f(RS::ARRAY_COLOR, 1.0f, 1.0f, 1.0f, 1.0f);
 	glBindBuffer(GL_ARRAY_BUFFER, 0);
 	GL_CHECK_ERROR("GLES2::Canvas::_legacy_draw_polygon: cleanup");
 }
@@ -2818,13 +2857,31 @@ void RasterizerCanvasGLES2::_set_texture_rect_mode(bool p_texture_rect, bool p_l
 	if (p_large_vertex) {
 		spec |= CanvasShaderGLES2::USE_ATTRIB_LARGE_VERTEX;
 	}
+	if (state.using_skeleton) {
+		spec |= CanvasShaderGLES2::USE_SKELETON;
+	}
+	if (state.normal_used) {
+		spec |= CanvasShaderGLES2::USE_DEFAULT_NORMAL;
+	}
 	if (state.using_light) {
 		spec |= CanvasShaderGLES2::USE_LIGHTING;
+		if (state.using_light->mode == RS::CANVAS_LIGHT_MODE_DIRECTIONAL) {
+			spec |= CanvasShaderGLES2::USE_DIRECTIONAL_LIGHT;
+		}
 		if (state.using_shadow) {
 			spec |= CanvasShaderGLES2::USE_SHADOWS;
 			spec |= CanvasShaderGLES2::USE_RGBA_SHADOWS;
 
-			switch (state.using_light->shadow_filter) {
+			RS::CanvasLightShadowFilter shadow_filter = state.using_light->shadow_filter;
+
+			// Cap shadow filtering to PCF5 for web or android emulators.
+			if (OS::get_singleton()->has_feature("web") || GLES2::Config::get_singleton()->is_android_emulator) {
+				if (shadow_filter == RS::CANVAS_LIGHT_FILTER_PCF13) {
+					shadow_filter = RS::CANVAS_LIGHT_FILTER_PCF5;
+				}
+			}
+
+			switch (shadow_filter) {
 				case RS::CANVAS_LIGHT_FILTER_NONE:
 					spec |= CanvasShaderGLES2::SHADOW_FILTER_NEAREST;
 					break;

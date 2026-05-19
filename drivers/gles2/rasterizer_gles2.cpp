@@ -464,7 +464,7 @@ void RasterizerGLES2::_blit_render_target_to_screen(RID p_render_target, Display
 	// Clamp origin
 	GLint vp_x = MAX(0, p_screen_rect.position.x);
 	GLint vp_y = MAX(0, win_size.height - p_screen_rect.position.y - p_screen_rect.size.height);
-	
+
 	glViewport(vp_x, vp_y, vp_w, vp_h);
 	GL_CHECK_ERROR("GLES2::RasterizerGLES2::_blit_render_target_to_screen: glViewport");
 
@@ -474,7 +474,7 @@ void RasterizerGLES2::_blit_render_target_to_screen(RID p_render_target, Display
 	glDisable(GL_CULL_FACE);
 	glDisable(GL_SCISSOR_TEST);
 	glDepthMask(GL_FALSE);
-	glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+	glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_FALSE);
 	GL_CHECK_ERROR("GLES2::RasterizerGLES2::_blit_render_target_to_screen: disable states");
 
 	// Prevent vertex attribute bleed
@@ -523,8 +523,17 @@ void RasterizerGLES2::_blit_render_target_to_screen(RID p_render_target, Display
 	glBindTexture(GL_TEXTURE_2D, 0);
 	glActiveTexture(GL_TEXTURE0);
 
-	// Restore global depth mask
+	// Restore global depth and color mask
 	glDepthMask(GL_TRUE);
+	glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+
+	// Clean remaining buffer state leakage
+	glBindBuffer(GL_ARRAY_BUFFER, 0);
+	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+
+	for (int i = 0; i < attrib_limit; i++) {
+		glDisableVertexAttribArray(i);
+	}
 }
 
 // is this p_screen useless in a multi window environment?

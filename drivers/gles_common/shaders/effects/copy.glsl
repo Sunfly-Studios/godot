@@ -93,11 +93,13 @@ uniform sampler2D source; // texunit:0
 
 #endif // !(defined(CUBE_TO_OCTAHEDRAL) || defined(CUBE_TO_PANORAMA))
 
+#ifdef CUBE_TO_PANORAMA
 // This expects 0-1 range input, outside that range it behaves poorly.
 vec3 srgb_to_linear(vec3 color) {
 	// Approximation from http://chilliant.blogspot.com/2012/08/srgb-approximations-for-hlsl.html
 	return color * (color * (color * 0.305306011 + 0.682171111) + 0.012522878);
 }
+#endif
 
 void main() {
 #ifdef MODE_SIMPLE_COPY

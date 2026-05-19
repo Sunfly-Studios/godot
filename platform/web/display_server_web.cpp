@@ -1176,7 +1176,11 @@ DisplayServerWeb::DisplayServerWeb(const String &p_rendering_driver, WindowMode 
 			attributes.alpha = OS::get_singleton()->is_layered_allowed();
 			attributes.antialias = false;
 			attributes.majorVersion = 1;
-			attributes.explicitSwapControl = true;
+
+			// Must be false unlike in WebGL2 because Emscripten's
+			// polyfill for explicit swapping is notoriously fragile
+			// and _will_ cause issues on some browsers under WebGL1.
+			attributes.explicitSwapControl = false;
 
 			webgl_ctx = emscripten_webgl_create_context(canvas_id, &attributes);
 			webgl_inited = webgl_ctx && emscripten_webgl_make_context_current(webgl_ctx) == EMSCRIPTEN_RESULT_SUCCESS;

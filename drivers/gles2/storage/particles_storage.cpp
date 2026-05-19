@@ -710,6 +710,14 @@ void ParticlesStorage::_particles_update_instance_buffer(Particles *particles, c
 		specialization |= ParticlesCopyShaderGLES2::MODE_3D;
 	}
 
+	if (particles->transform_align == RS::PARTICLES_TRANSFORM_ALIGN_Z_BILLBOARD) {
+		specialization |= ParticlesCopyShaderGLES2::TRANSFORM_ALIGN_Z_BILLBOARD;
+	} else if (particles->transform_align == RS::PARTICLES_TRANSFORM_ALIGN_Y_TO_VELOCITY) {
+		specialization |= ParticlesCopyShaderGLES2::TRANSFORM_ALIGN_Y_TO_VELOCITY;
+	} else if (particles->transform_align == RS::PARTICLES_TRANSFORM_ALIGN_Z_BILLBOARD_Y_TO_VELOCITY) {
+		specialization |= ParticlesCopyShaderGLES2::TRANSFORM_ALIGN_Z_BILLBOARD_Y_TO_VELOCITY;
+	}
+
 	bool success = particles_shader.copy_shader.version_bind_shader(particles_shader.copy_shader_version, variant, specialization);
 	if (!success) {
 		return;
@@ -723,7 +731,6 @@ void ParticlesStorage::_particles_update_instance_buffer(Particles *particles, c
 	}
 
 	particles_shader.copy_shader.version_set_uniform(ParticlesCopyShaderGLES2::FRAME_REMAINDER, particles->interpolate ? particles->frame_remainder : 0.0, particles_shader.copy_shader_version, variant, specialization);
-	particles_shader.copy_shader.version_set_uniform(ParticlesCopyShaderGLES2::ALIGN_MODE, (int)particles->transform_align, particles_shader.copy_shader_version, variant, specialization);
 	particles_shader.copy_shader.version_set_uniform(ParticlesCopyShaderGLES2::ALIGN_UP, p_up_axis, particles_shader.copy_shader_version, variant, specialization);
 	particles_shader.copy_shader.version_set_uniform(ParticlesCopyShaderGLES2::SORT_DIRECTION, p_axis, particles_shader.copy_shader_version, variant, specialization);
 
