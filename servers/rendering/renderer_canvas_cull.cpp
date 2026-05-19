@@ -434,7 +434,7 @@ void RendererCanvasCull::_cull_canvas_item(Item *p_canvas_item, const Transform2
 			child_items = SAFE_ALLOCA_ARRAY(Item *, child_item_count);
 
 			ci->ysort_xform = Transform2D();
-			ci->ysort_modulate = Color(1, 1, 1, 1) / ci->modulate;
+			ci->ysort_modulate = Color(ci->modulate[0] ? 1 / ci->modulate[0] : 0, ci->modulate[1] ? 1 / ci->modulate[1] : 0, ci->modulate[2] ? 1 / ci->modulate[2] : 0, ci->modulate[3] ? 1 / ci->modulate[3] : 0);
 			ci->ysort_index = 0;
 			ci->ysort_parent_abs_z_index = parent_z;
 			child_items[0] = ci;
