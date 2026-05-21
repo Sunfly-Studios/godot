@@ -151,8 +151,12 @@ class RenderingDeviceDriverVulkan : public RenderingDeviceDriver {
 #endif
 	DeviceFunctions device_functions;
 
+	DriverWorkarounds driver_workarounds;
+
 	void _register_requested_device_extension(const CharString &p_extension_name, bool p_required);
 	Error _initialize_device_extensions();
+	void _check_driver_workarounds(const VkPhysicalDeviceProperties &p_device_properties, const VkPhysicalDeviceDriverPropertiesKHR *p_driver_properties);
+	void _get_device_properties();
 	Error _check_device_features();
 	Error _check_device_capabilities();
 	Error _add_queue_create_info(LocalVector<VkDeviceQueueCreateInfo> &r_queue_create_info);
@@ -700,6 +704,8 @@ public:
 	virtual const Capabilities &get_capabilities() const override final;
 
 	virtual bool is_composite_alpha_supported(CommandQueueID p_queue) const override final;
+
+	virtual DriverWorkarounds get_driver_workarounds() const override final;
 
 private:
 	/*********************/
