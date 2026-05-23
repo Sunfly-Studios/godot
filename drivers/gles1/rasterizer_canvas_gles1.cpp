@@ -172,13 +172,19 @@ void RasterizerCanvasGLES1::light_update_shadow(RID p_rid, int p_shadow_index, c
 					Vector2 p1_ext = p1 + p1.normalized() * p_far;
 					Vector2 p2_ext = p2 + p2.normalized() * p_far;
 
-					cl->shadow.shadow_volumes.push_back(p1);
-					cl->shadow.shadow_volumes.push_back(p2);
-					cl->shadow.shadow_volumes.push_back(p2_ext);
+					cl->shadow.shadow_volumes.push_back(static_cast<float>(p1.x));
+					cl->shadow.shadow_volumes.push_back(static_cast<float>(p1.y));
+					cl->shadow.shadow_volumes.push_back(static_cast<float>(p2.x));
+					cl->shadow.shadow_volumes.push_back(static_cast<float>(p2.y));
+					cl->shadow.shadow_volumes.push_back(static_cast<float>(p2_ext.x));
+					cl->shadow.shadow_volumes.push_back(static_cast<float>(p2_ext.y));
 
-					cl->shadow.shadow_volumes.push_back(p1);
-					cl->shadow.shadow_volumes.push_back(p2_ext);
-					cl->shadow.shadow_volumes.push_back(p1_ext);
+					cl->shadow.shadow_volumes.push_back(static_cast<float>(p1.x));
+					cl->shadow.shadow_volumes.push_back(static_cast<float>(p1.y));
+					cl->shadow.shadow_volumes.push_back(static_cast<float>(p2_ext.x));
+					cl->shadow.shadow_volumes.push_back(static_cast<float>(p2_ext.y));
+					cl->shadow.shadow_volumes.push_back(static_cast<float>(p1_ext.x));
+					cl->shadow.shadow_volumes.push_back(static_cast<float>(p1_ext.y));
 				}
 			}
 		}
@@ -226,13 +232,19 @@ void RasterizerCanvasGLES1::light_update_directional_shadow(RID p_rid, int p_sha
 					Vector2 p1_ext = p1 + light_dir * p_cull_distance;
 					Vector2 p2_ext = p2 + light_dir * p_cull_distance;
 
-					cl->shadow.directional_shadow_volumes.push_back(p1);
-					cl->shadow.directional_shadow_volumes.push_back(p2);
-					cl->shadow.directional_shadow_volumes.push_back(p2_ext);
+					cl->shadow.directional_shadow_volumes.push_back(static_cast<float>(p1.x));
+					cl->shadow.directional_shadow_volumes.push_back(static_cast<float>(p1.y));
+					cl->shadow.directional_shadow_volumes.push_back(static_cast<float>(p2.x));
+					cl->shadow.directional_shadow_volumes.push_back(static_cast<float>(p2.y));
+					cl->shadow.directional_shadow_volumes.push_back(static_cast<float>(p2_ext.x));
+					cl->shadow.directional_shadow_volumes.push_back(static_cast<float>(p2_ext.y));
 
-					cl->shadow.directional_shadow_volumes.push_back(p1);
-					cl->shadow.directional_shadow_volumes.push_back(p2_ext);
-					cl->shadow.directional_shadow_volumes.push_back(p1_ext);
+					cl->shadow.directional_shadow_volumes.push_back(static_cast<float>(p1.x));
+					cl->shadow.directional_shadow_volumes.push_back(static_cast<float>(p1.y));
+					cl->shadow.directional_shadow_volumes.push_back(static_cast<float>(p2_ext.x));
+					cl->shadow.directional_shadow_volumes.push_back(static_cast<float>(p2_ext.y));
+					cl->shadow.directional_shadow_volumes.push_back(static_cast<float>(p1_ext.x));
+					cl->shadow.directional_shadow_volumes.push_back(static_cast<float>(p1_ext.y));
 				}
 			}
 		}
@@ -1636,7 +1648,7 @@ void RasterizerCanvasGLES1::canvas_render_items_implementation(Item *p_item_list
 
 					if (cl->shadow.directional_shadow_volumes.size() > 0) {
 						glVertexPointer(2, GL_FLOAT, 0, cl->shadow.directional_shadow_volumes.ptr());
-						glDrawArrays(GL_TRIANGLES, 0, cl->shadow.directional_shadow_volumes.size());
+						glDrawArrays(GL_TRIANGLES, 0, cl->shadow.directional_shadow_volumes.size() / 2);
 						GL_CHECK_ERROR("GLES1::Canvas::canvas_render_items_implementation: draw directional shadow");
 					}
 				} else {
@@ -1647,7 +1659,7 @@ void RasterizerCanvasGLES1::canvas_render_items_implementation(Item *p_item_list
 
 					if (cl->shadow.shadow_volumes.size() > 0) {
 						glVertexPointer(2, GL_FLOAT, 0, cl->shadow.shadow_volumes.ptr());
-						glDrawArrays(GL_TRIANGLES, 0, cl->shadow.shadow_volumes.size());
+						glDrawArrays(GL_TRIANGLES, 0, cl->shadow.shadow_volumes.size() / 2);
 						GL_CHECK_ERROR("GLES1::Canvas::canvas_render_items_implementation: draw point shadow");
 					}
 				}
@@ -2670,28 +2682,28 @@ void RasterizerCanvasGLES1::render_batches(Item::Command *const *p_commands, Ite
 							// NPOT bleed inset
 							constexpr float EPS = 0.01f;
 							float u[4] = {
-								source.position.x,
-								source.position.x + tex_margin_left + (tex_margin_left > 0 ? EPS : 0),
-								source.position.x + source.size.x - tex_margin_right - (tex_margin_right > 0 ? EPS : 0),
-								source.position.x + source.size.x
+								static_cast<float>(source.position.x),
+								static_cast<float>(source.position.x + tex_margin_left + (tex_margin_left > 0 ? EPS : 0)),
+								static_cast<float>(source.position.x + source.size.x - tex_margin_right - (tex_margin_right > 0 ? EPS : 0)),
+								static_cast<float>(source.position.x + source.size.x)
 							};
 							float v[4] = {
-								source.position.y,
-								source.position.y + tex_margin_top + (tex_margin_top > 0 ? EPS : 0),
-								source.position.y + source.size.y - tex_margin_bottom - (tex_margin_bottom > 0 ? EPS : 0),
-								source.position.y + source.size.y
+								static_cast<float>(source.position.y),
+								static_cast<float>(source.position.y + tex_margin_top + (tex_margin_top > 0 ? EPS : 0)),
+								static_cast<float>(source.position.y + source.size.y - tex_margin_bottom - (tex_margin_bottom > 0 ? EPS : 0)),
+								static_cast<float>(source.position.y + source.size.y)
 							};
 							float x[4] = {
-								np->rect.position.x,
-								np->rect.position.x + draw_margin_left,
-								np->rect.position.x + np->rect.size.x - draw_margin_right,
-								np->rect.position.x + np->rect.size.x
+								static_cast<float>(np->rect.position.x),
+								static_cast<float>(np->rect.position.x + draw_margin_left),
+								static_cast<float>(np->rect.position.x + np->rect.size.x - draw_margin_right),
+								static_cast<float>(np->rect.position.x + np->rect.size.x)
 							};
 							float y[4] = {
-								np->rect.position.y,
-								np->rect.position.y + draw_margin_top,
-								np->rect.position.y + np->rect.size.y - draw_margin_bottom,
-								np->rect.position.y + np->rect.size.y
+								static_cast<float>(np->rect.position.y),
+								static_cast<float>(np->rect.position.y + draw_margin_top),
+								static_cast<float>(np->rect.position.y + np->rect.size.y - draw_margin_bottom),
+								static_cast<float>(np->rect.position.y + np->rect.size.y)
 							};
 
 							float buffer[16 * 2 + 16 * 2] = {};
@@ -2700,8 +2712,8 @@ void RasterizerCanvasGLES1::render_batches(Item::Command *const *p_commands, Ite
 									int idx = (row * 4 + col) * 4;
 									buffer[idx + 0] = x[col];
 									buffer[idx + 1] = y[row];
-									buffer[idx + 2] = u[col] * state.texpixel_size.x;
-									buffer[idx + 3] = v[row] * state.texpixel_size.y;
+									buffer[idx + 2] = u[col] * static_cast<float>(state.texpixel_size.x);
+									buffer[idx + 3] = v[row] * static_cast<float>(state.texpixel_size.y);
 								}
 							}
 
@@ -3555,9 +3567,9 @@ void RasterizerCanvasGLES1::_draw_gui_primitive(int p_points, const Vector2 *p_v
 	}
 	glBindBuffer(GL_ARRAY_BUFFER, data.polygon_buffer);
 
-	uint32_t vertex_size = p_points * sizeof(Vector2);
+	uint32_t vertex_size = p_points * 2 * sizeof(float);
 	uint32_t color_size = p_colors ? p_points * sizeof(Color) : 0;
-	uint32_t uv_size = p_uvs ? p_points * sizeof(Vector2) : 0;
+	uint32_t uv_size = p_uvs ? p_points * 2 * sizeof(float) : 0;
 	uint32_t total_size = vertex_size + color_size + uv_size;
 
 	bool use_vbo = data.polygon_buffer != 0;
@@ -3572,7 +3584,17 @@ void RasterizerCanvasGLES1::_draw_gui_primitive(int p_points, const Vector2 *p_v
 		uint32_t offset = 0;
 
 		// Vertices
+#ifdef REAL_T_IS_DOUBLE
+		Vector<float> vtx_f;
+		vtx_f.resize(p_points * 2);
+		for (int i = 0; i < p_points; i++) {
+			vtx_f.write[i * 2 + 0] = static_cast<float>(p_vertices[i].x);
+			vtx_f.write[i * 2 + 1] = static_cast<float>(p_vertices[i].y);
+		}
+		bool upload_success = _buffer_orphan_and_upload(data.polygon_buffer_size, offset, vertex_size, vtx_f.ptr(), GL_ARRAY_BUFFER, GL_DYNAMIC_DRAW, false);
+#else
 		bool upload_success = _buffer_orphan_and_upload(data.polygon_buffer_size, offset, vertex_size, p_vertices, GL_ARRAY_BUFFER, GL_DYNAMIC_DRAW, false);
+#endif
 		if (!check_orphan_success(upload_success)) {
 			return;
 		}
@@ -3580,22 +3602,22 @@ void RasterizerCanvasGLES1::_draw_gui_primitive(int p_points, const Vector2 *p_v
 		glEnableClientState(GL_VERTEX_ARRAY);
 		glVertexPointer(2, GL_FLOAT, 0, (const void *)(uintptr_t)offset);
 
-		uint32_t uv_offset = offset + vertex_size + (p_colors ? color_size : 0);
+		uint32_t uv_start_offset = offset + vertex_size + color_size;
 		if (state.using_light) {
 			GLint max_units = GLES1::Config::get_singleton()->max_texture_units;
 			if (state.normal_used && max_units >= 4) {
 				if (state.using_light->mode == RS::CANVAS_LIGHT_MODE_DIRECTIONAL) {
 					glClientActiveTexture(GL_TEXTURE0 + 1);
 					glEnableClientState(GL_TEXTURE_COORD_ARRAY);
-					glTexCoordPointer(2, GL_FLOAT, 0, p_uvs ? (const void *)(uintptr_t)uv_offset : (const void *)(uintptr_t)offset);
+					glTexCoordPointer(2, GL_FLOAT, 0, p_uvs ? (const void *)(uintptr_t)uv_start_offset : (const void *)(uintptr_t)offset);
 
 					glClientActiveTexture(GL_TEXTURE0 + 2);
 					glEnableClientState(GL_TEXTURE_COORD_ARRAY);
-					glTexCoordPointer(2, GL_FLOAT, 0, p_uvs ? (const void *)(uintptr_t)uv_offset : (const void *)(uintptr_t)offset);
+					glTexCoordPointer(2, GL_FLOAT, 0, p_uvs ? (const void *)(uintptr_t)uv_start_offset : (const void *)(uintptr_t)offset);
 
 					glClientActiveTexture(GL_TEXTURE0 + 3);
 					glEnableClientState(GL_TEXTURE_COORD_ARRAY);
-					glTexCoordPointer(2, GL_FLOAT, 0, p_uvs ? (const void *)(uintptr_t)uv_offset : (const void *)(uintptr_t)offset);
+					glTexCoordPointer(2, GL_FLOAT, 0, p_uvs ? (const void *)(uintptr_t)uv_start_offset : (const void *)(uintptr_t)offset);
 				} else {
 					glClientActiveTexture(GL_TEXTURE0 + 1);
 					glEnableClientState(GL_TEXTURE_COORD_ARRAY);
@@ -3603,7 +3625,7 @@ void RasterizerCanvasGLES1::_draw_gui_primitive(int p_points, const Vector2 *p_v
 
 					glClientActiveTexture(GL_TEXTURE0 + 2);
 					glEnableClientState(GL_TEXTURE_COORD_ARRAY);
-					glTexCoordPointer(2, GL_FLOAT, 0, p_uvs ? (const void *)(uintptr_t)uv_offset : (const void *)(uintptr_t)offset);
+					glTexCoordPointer(2, GL_FLOAT, 0, p_uvs ? (const void *)(uintptr_t)uv_start_offset : (const void *)(uintptr_t)offset);
 
 					glClientActiveTexture(GL_TEXTURE0 + 3);
 					glEnableClientState(GL_TEXTURE_COORD_ARRAY);
@@ -3658,7 +3680,17 @@ void RasterizerCanvasGLES1::_draw_gui_primitive(int p_points, const Vector2 *p_v
 
 		// UVs
 		if (p_uvs) {
+#ifdef REAL_T_IS_DOUBLE
+			Vector<float> uv_f;
+			uv_f.resize(p_points * 2);
+			for (int i = 0; i < p_points; i++) {
+				uv_f.write[i * 2 + 0] = static_cast<float>(p_uvs[i].x);
+				uv_f.write[i * 2 + 1] = static_cast<float>(p_uvs[i].y);
+			}
+			upload_success = _buffer_orphan_and_upload(data.polygon_buffer_size, offset, uv_size, uv_f.ptr(), GL_ARRAY_BUFFER, GL_DYNAMIC_DRAW, true);
+#else
 			upload_success = _buffer_orphan_and_upload(data.polygon_buffer_size, offset, uv_size, p_uvs, GL_ARRAY_BUFFER, GL_DYNAMIC_DRAW, true);
+#endif
 			if (!check_orphan_success(upload_success)) {
 				return;
 			}
@@ -3680,8 +3712,38 @@ void RasterizerCanvasGLES1::_draw_gui_primitive(int p_points, const Vector2 *p_v
 
 		ERR_FAIL_NULL(p_vertices);
 
+#ifdef REAL_T_IS_DOUBLE
+		// Convert vertices to float array
+		Vector<float> vtx_f;
+		vtx_f.resize(p_points * 2);
+		for (int i = 0; i < p_points; i++) {
+			vtx_f.write[i * 2 + 0] = static_cast<float>(p_vertices[i].x);
+			vtx_f.write[i * 2 + 1] = static_cast<float>(p_vertices[i].y);
+		}
+		const float *vert_ptr = vtx_f.ptr();
+		glVertexPointer(2, GL_FLOAT, 0, vert_ptr);
+#else
+		const Vector2 *vert_ptr = p_vertices;
+#endif
+
 		glEnableClientState(GL_VERTEX_ARRAY);
-		glVertexPointer(2, GL_FLOAT, 0, p_vertices);
+		glVertexPointer(2, GL_FLOAT, 0, vert_ptr);
+
+		// UV temporary
+#ifdef REAL_T_IS_DOUBLE
+		Vector<float> uv_f;
+		const float *uv_ptr = nullptr;
+		if (p_uvs) {
+			uv_f.resize(p_points * 2);
+			for (int i = 0; i < p_points; i++) {
+				uv_f.write[i * 2 + 0] = static_cast<float>(p_uvs[i].x);
+				uv_f.write[i * 2 + 1] = static_cast<float>(p_uvs[i].y);
+			}
+			uv_ptr = uv_f.ptr();
+		}
+#else
+		const Vector2 *uv_ptr = p_uvs;
+#endif
 
 		if (state.using_light) {
 			GLint max_units = GLES1::Config::get_singleton()->max_texture_units;
@@ -3689,27 +3751,27 @@ void RasterizerCanvasGLES1::_draw_gui_primitive(int p_points, const Vector2 *p_v
 				if (state.using_light->mode == RS::CANVAS_LIGHT_MODE_DIRECTIONAL) {
 					glClientActiveTexture(GL_TEXTURE0 + 1);
 					glEnableClientState(GL_TEXTURE_COORD_ARRAY);
-					glTexCoordPointer(2, GL_FLOAT, 0, p_uvs ? p_uvs : p_vertices);
+					glTexCoordPointer(2, GL_FLOAT, 0, uv_ptr ? uv_ptr : vert_ptr);
 
 					glClientActiveTexture(GL_TEXTURE0 + 2);
 					glEnableClientState(GL_TEXTURE_COORD_ARRAY);
-					glTexCoordPointer(2, GL_FLOAT, 0, p_uvs ? p_uvs : p_vertices);
+					glTexCoordPointer(2, GL_FLOAT, 0, uv_ptr ? uv_ptr : vert_ptr);
 
 					glClientActiveTexture(GL_TEXTURE0 + 3);
 					glEnableClientState(GL_TEXTURE_COORD_ARRAY);
-					glTexCoordPointer(2, GL_FLOAT, 0, p_uvs ? p_uvs : p_vertices);
+					glTexCoordPointer(2, GL_FLOAT, 0, uv_ptr ? uv_ptr : vert_ptr);
 				} else {
 					glClientActiveTexture(GL_TEXTURE0 + 1);
 					glEnableClientState(GL_TEXTURE_COORD_ARRAY);
-					glTexCoordPointer(2, GL_FLOAT, 0, p_vertices);
+					glTexCoordPointer(2, GL_FLOAT, 0, vert_ptr);
 
 					glClientActiveTexture(GL_TEXTURE0 + 2);
 					glEnableClientState(GL_TEXTURE_COORD_ARRAY);
-					glTexCoordPointer(2, GL_FLOAT, 0, p_uvs ? p_uvs : p_vertices);
+					glTexCoordPointer(2, GL_FLOAT, 0, uv_ptr ? uv_ptr : vert_ptr);
 
 					glClientActiveTexture(GL_TEXTURE0 + 3);
 					glEnableClientState(GL_TEXTURE_COORD_ARRAY);
-					glTexCoordPointer(2, GL_FLOAT, 0, p_vertices);
+					glTexCoordPointer(2, GL_FLOAT, 0, vert_ptr);
 				}
 			} else {
 				if (max_units >= 3) {
@@ -3724,12 +3786,12 @@ void RasterizerCanvasGLES1::_draw_gui_primitive(int p_points, const Vector2 *p_v
 				if (max_units >= 2) {
 					glClientActiveTexture(GL_TEXTURE0 + 1);
 					glEnableClientState(GL_TEXTURE_COORD_ARRAY);
-					glTexCoordPointer(2, GL_FLOAT, 0, p_vertices);
+					glTexCoordPointer(2, GL_FLOAT, 0, vert_ptr);
 				}
 				if (state.using_shadow && max_units >= 3) {
 					glClientActiveTexture(GL_TEXTURE0 + 2);
 					glEnableClientState(GL_TEXTURE_COORD_ARRAY);
-					glTexCoordPointer(2, GL_FLOAT, 0, p_vertices);
+					glTexCoordPointer(2, GL_FLOAT, 0, vert_ptr);
 				}
 			}
 			glClientActiveTexture(GL_TEXTURE0);
@@ -3753,7 +3815,7 @@ void RasterizerCanvasGLES1::_draw_gui_primitive(int p_points, const Vector2 *p_v
 
 		if (p_uvs) {
 			glEnableClientState(GL_TEXTURE_COORD_ARRAY);
-			glTexCoordPointer(2, GL_FLOAT, 0, p_uvs);
+			glTexCoordPointer(2, GL_FLOAT, 0, uv_ptr);
 			glEnable(GL_TEXTURE_2D);
 		} else {
 			glDisableClientState(GL_TEXTURE_COORD_ARRAY);
@@ -3855,8 +3917,8 @@ void RasterizerCanvasGLES1::_legacy_draw_polygon(Item::CommandPolygon *p_poly, G
 	glEnable(GL_TEXTURE_2D);
 
 	uint32_t points_count = pd.points.size();
-	uint32_t points_size = points_count * sizeof(Vector2);
-	uint32_t uvs_size = pd.uvs.size() * sizeof(Vector2);
+	uint32_t points_size = points_count * 2 * sizeof(float);
+	uint32_t uvs_size = pd.uvs.size() * 2 * sizeof(float);
 
 	// Only allocate VBO space for colors if there is actually one color per vertex
 	bool use_vertex_colors = pd.colors.size() > 1;
@@ -3876,7 +3938,17 @@ void RasterizerCanvasGLES1::_legacy_draw_polygon(Item::CommandPolygon *p_poly, G
 		uint32_t offset = 0;
 
 		// Points
+#ifdef REAL_T_IS_DOUBLE
+		Vector<float> pts_f;
+		pts_f.resize(points_count * 2);
+		for (uint32_t i = 0; i < points_count; i++) {
+			pts_f.write[i * 2 + 0] = static_cast<float>(pd.points[i].x);
+			pts_f.write[i * 2 + 1] = static_cast<float>(pd.points[i].y);
+		}
+		bool upload_success = _buffer_orphan_and_upload(data.polygon_buffer_size, offset, points_size, pts_f.ptr(), GL_ARRAY_BUFFER, GL_DYNAMIC_DRAW, false);
+#else
 		bool upload_success = _buffer_orphan_and_upload(data.polygon_buffer_size, offset, points_size, pd.points.ptr(), GL_ARRAY_BUFFER, GL_DYNAMIC_DRAW, false);
+#endif
 		if (!check_orphan_success(upload_success)) {
 			return;
 		}
@@ -3884,21 +3956,23 @@ void RasterizerCanvasGLES1::_legacy_draw_polygon(Item::CommandPolygon *p_poly, G
 		glEnableClientState(GL_VERTEX_ARRAY);
 		glVertexPointer(2, GL_FLOAT, 0, (const void *)(uintptr_t)offset);
 
+		uint32_t uv_start_offset = offset + points_size + colors_size;
+
 		if (state.using_light) {
 			GLint max_units = GLES1::Config::get_singleton()->max_texture_units;
 			if (state.normal_used && max_units >= 4) {
 				if (state.using_light->mode == RS::CANVAS_LIGHT_MODE_DIRECTIONAL) {
 					glClientActiveTexture(GL_TEXTURE0 + 1);
 					glEnableClientState(GL_TEXTURE_COORD_ARRAY);
-					glTexCoordPointer(2, GL_FLOAT, 0, uvs_size > 0 ? (const void *)(uintptr_t)points_size : (const void *)(uintptr_t)offset);
+					glTexCoordPointer(2, GL_FLOAT, 0, uvs_size > 0 ? (const void *)(uintptr_t)uv_start_offset : (const void *)(uintptr_t)offset);
 
 					glClientActiveTexture(GL_TEXTURE0 + 2);
 					glEnableClientState(GL_TEXTURE_COORD_ARRAY);
-					glTexCoordPointer(2, GL_FLOAT, 0, uvs_size > 0 ? (const void *)(uintptr_t)points_size : (const void *)(uintptr_t)offset);
+					glTexCoordPointer(2, GL_FLOAT, 0, uvs_size > 0 ? (const void *)(uintptr_t)uv_start_offset : (const void *)(uintptr_t)offset);
 
 					glClientActiveTexture(GL_TEXTURE0 + 3);
 					glEnableClientState(GL_TEXTURE_COORD_ARRAY);
-					glTexCoordPointer(2, GL_FLOAT, 0, uvs_size > 0 ? (const void *)(uintptr_t)points_size : (const void *)(uintptr_t)offset);
+					glTexCoordPointer(2, GL_FLOAT, 0, uvs_size > 0 ? (const void *)(uintptr_t)uv_start_offset : (const void *)(uintptr_t)offset);
 				} else {
 					glClientActiveTexture(GL_TEXTURE0 + 1);
 					glEnableClientState(GL_TEXTURE_COORD_ARRAY);
@@ -3906,7 +3980,7 @@ void RasterizerCanvasGLES1::_legacy_draw_polygon(Item::CommandPolygon *p_poly, G
 
 					glClientActiveTexture(GL_TEXTURE0 + 2);
 					glEnableClientState(GL_TEXTURE_COORD_ARRAY);
-					glTexCoordPointer(2, GL_FLOAT, 0, uvs_size > 0 ? (const void *)(uintptr_t)points_size : (const void *)(uintptr_t)offset);
+					glTexCoordPointer(2, GL_FLOAT, 0, uvs_size > 0 ? (const void *)(uintptr_t)uv_start_offset : (const void *)(uintptr_t)offset);
 
 					glClientActiveTexture(GL_TEXTURE0 + 3);
 					glEnableClientState(GL_TEXTURE_COORD_ARRAY);
@@ -3947,7 +4021,17 @@ void RasterizerCanvasGLES1::_legacy_draw_polygon(Item::CommandPolygon *p_poly, G
 
 		// UVs
 		if (uvs_size > 0) {
+#ifdef REAL_T_IS_DOUBLE
+			Vector<float> uv_f;
+			uv_f.resize(pd.uvs.size() * 2);
+			for (int i = 0; i < pd.uvs.size(); i++) {
+				uv_f.write[i * 2 + 0] = static_cast<float>(pd.uvs[i].x);
+				uv_f.write[i * 2 + 1] = static_cast<float>(pd.uvs[i].y);
+			}
+			upload_success = _buffer_orphan_and_upload(data.polygon_buffer_size, offset, uvs_size, uv_f.ptr(), GL_ARRAY_BUFFER, GL_DYNAMIC_DRAW, true);
+#else
 			upload_success = _buffer_orphan_and_upload(data.polygon_buffer_size, offset, uvs_size, pd.uvs.ptr(), GL_ARRAY_BUFFER, GL_DYNAMIC_DRAW, true);
+#endif
 			if (!check_orphan_success(upload_success)) {
 				return;
 			}
@@ -4000,8 +4084,35 @@ void RasterizerCanvasGLES1::_legacy_draw_polygon(Item::CommandPolygon *p_poly, G
 	} else {
 		glBindBuffer(GL_ARRAY_BUFFER, 0);
 
+#ifdef REAL_T_IS_DOUBLE
+		Vector<float> pts_f;
+		pts_f.resize(points_count * 2);
+		for (uint32_t i = 0; i < points_count; i++) {
+			pts_f.write[i * 2 + 0] = static_cast<float>(pd.points[i].x);
+			pts_f.write[i * 2 + 1] = static_cast<float>(pd.points[i].y);
+		}
+		const float *pts_ptr = pts_f.ptr();
+#else
+		const Point2 *pts_ptr = pd.points.ptr();
+#endif
+
 		glEnableClientState(GL_VERTEX_ARRAY);
-		glVertexPointer(2, GL_FLOAT, 0, pd.points.ptr());
+		glVertexPointer(2, GL_FLOAT, 0, pts_ptr);
+
+#ifdef REAL_T_IS_DOUBLE
+		Vector<float> uv_f;
+		const float *uv_ptr = nullptr;
+		if (uvs_size > 0) {
+			uv_f.resize(pd.uvs.size() * 2);
+			for (int i = 0; i < pd.uvs.size(); i++) {
+				uv_f.write[i * 2 + 0] = static_cast<float>(pd.uvs[i].x);
+				uv_f.write[i * 2 + 1] = static_cast<float>(pd.uvs[i].y);
+			}
+			uv_ptr = uv_f.ptr();
+		}
+#else
+		const Point2 *uv_ptr = pd.uvs.ptr();
+#endif
 
 		if (state.using_light) {
 			GLint max_units = GLES1::Config::get_singleton()->max_texture_units;
@@ -4009,27 +4120,27 @@ void RasterizerCanvasGLES1::_legacy_draw_polygon(Item::CommandPolygon *p_poly, G
 				if (state.using_light->mode == RS::CANVAS_LIGHT_MODE_DIRECTIONAL) {
 					glClientActiveTexture(GL_TEXTURE0 + 1);
 					glEnableClientState(GL_TEXTURE_COORD_ARRAY);
-					glTexCoordPointer(2, GL_FLOAT, 0, uvs_size > 0 ? pd.uvs.ptr() : pd.points.ptr());
+					glTexCoordPointer(2, GL_FLOAT, 0, uv_ptr ? uv_ptr : pts_ptr);
 
 					glClientActiveTexture(GL_TEXTURE0 + 2);
 					glEnableClientState(GL_TEXTURE_COORD_ARRAY);
-					glTexCoordPointer(2, GL_FLOAT, 0, uvs_size > 0 ? pd.uvs.ptr() : pd.points.ptr());
+					glTexCoordPointer(2, GL_FLOAT, 0, uv_ptr ? uv_ptr : pts_ptr);
 
 					glClientActiveTexture(GL_TEXTURE0 + 3);
 					glEnableClientState(GL_TEXTURE_COORD_ARRAY);
-					glTexCoordPointer(2, GL_FLOAT, 0, uvs_size > 0 ? pd.uvs.ptr() : pd.points.ptr());
+					glTexCoordPointer(2, GL_FLOAT, 0, uv_ptr ? uv_ptr : pts_ptr);
 				} else {
 					glClientActiveTexture(GL_TEXTURE0 + 1);
 					glEnableClientState(GL_TEXTURE_COORD_ARRAY);
-					glTexCoordPointer(2, GL_FLOAT, 0, pd.points.ptr());
+					glTexCoordPointer(2, GL_FLOAT, 0, pts_ptr);
 
 					glClientActiveTexture(GL_TEXTURE0 + 2);
 					glEnableClientState(GL_TEXTURE_COORD_ARRAY);
-					glTexCoordPointer(2, GL_FLOAT, 0, uvs_size > 0 ? pd.uvs.ptr() : pd.points.ptr());
+					glTexCoordPointer(2, GL_FLOAT, 0, uv_ptr ? uv_ptr : pts_ptr);
 
 					glClientActiveTexture(GL_TEXTURE0 + 3);
 					glEnableClientState(GL_TEXTURE_COORD_ARRAY);
-					glTexCoordPointer(2, GL_FLOAT, 0, pd.points.ptr());
+					glTexCoordPointer(2, GL_FLOAT, 0, pts_ptr);
 				}
 			} else {
 				if (max_units >= 3) {
@@ -4044,12 +4155,12 @@ void RasterizerCanvasGLES1::_legacy_draw_polygon(Item::CommandPolygon *p_poly, G
 				if (max_units >= 2) {
 					glClientActiveTexture(GL_TEXTURE0 + 1);
 					glEnableClientState(GL_TEXTURE_COORD_ARRAY);
-					glTexCoordPointer(2, GL_FLOAT, 0, pd.points.ptr());
+					glTexCoordPointer(2, GL_FLOAT, 0, pts_ptr);
 				}
 				if (state.using_shadow && max_units >= 3) {
 					glClientActiveTexture(GL_TEXTURE0 + 2);
 					glEnableClientState(GL_TEXTURE_COORD_ARRAY);
-					glTexCoordPointer(2, GL_FLOAT, 0, pd.points.ptr());
+					glTexCoordPointer(2, GL_FLOAT, 0, pts_ptr);
 				}
 			}
 			glClientActiveTexture(GL_TEXTURE0);
@@ -4064,7 +4175,7 @@ void RasterizerCanvasGLES1::_legacy_draw_polygon(Item::CommandPolygon *p_poly, G
 
 		if (uvs_size > 0) {
 			glEnableClientState(GL_TEXTURE_COORD_ARRAY);
-			glTexCoordPointer(2, GL_FLOAT, 0, pd.uvs.ptr());
+			glTexCoordPointer(2, GL_FLOAT, 0, uv_ptr);
 		} else {
 			glDisableClientState(GL_TEXTURE_COORD_ARRAY);
 		}

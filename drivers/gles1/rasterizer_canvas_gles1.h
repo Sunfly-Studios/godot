@@ -126,8 +126,8 @@ protected:
 			bool enabled = false;
 			float z_far;
 			Transform2D light_to_world;
-			Vector<Vector2> shadow_volumes;
-			Vector<Vector2> directional_shadow_volumes;
+			Vector<float> shadow_volumes;
+			Vector<float> directional_shadow_volumes;
 		} shadow;
 	};
 

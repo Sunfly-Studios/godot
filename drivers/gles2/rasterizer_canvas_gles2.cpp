@@ -223,7 +223,28 @@ void RasterizerCanvasGLES2::light_update_shadow(RID p_rid, int p_shadow_index, c
 		int viewport_width = state.shadow_texture_size / 4;
 		glViewport(viewport_width * i, p_shadow_index * 2, viewport_width, 2);
 
+#ifdef REAL_T_IS_DOUBLE
+		float proj[16] = {};
+		const Projection &src = projections[i];
+		for (int r = 0; r < 4; r++) {
+			for (int c = 0; c < 4; c++) {
+				proj[r * 4 + c] = static_cast<float>(src.columns[r][c]);
+			}
+		}
+
+		// For double precision, we bypass setting the uniform
+		// via the generated header and just set it directly
+		// via `glUniformMatrix4fv`
+		GLint loc = shadow_render.shader.version_get_uniform(
+			CanvasOcclusionShaderGLES2::PROJECTION,
+			shadow_render.shader_version,
+			variant,
+			0
+		);
+		glUniformMatrix4fv(loc, 1, GL_FALSE, proj);
+#else
 		shadow_render.shader.version_set_uniform(CanvasOcclusionShaderGLES2::PROJECTION, projections[i], shadow_render.shader_version, variant, 0);
+#endif
 		shadow_render.shader.version_set_uniform(CanvasOcclusionShaderGLES2::DIRECTION, directions[i], shadow_render.shader_version, variant, 0);
 
 		LightOccluderInstance *instance = p_occluders;
@@ -360,7 +381,24 @@ void RasterizerCanvasGLES2::light_update_directional_shadow(RID p_rid, int p_sha
 	projection.set_orthogonal(-half_size, half_size, -0.5f, 0.5f, 0.0f, distance);
 	projection = projection * Projection(Transform3D().looking_at(Vector3(0, 1, 0), Vector3(0, 0, -1)).affine_inverse());
 
+#ifdef REAL_T_IS_DOUBLE
+	float proj[16] = {};
+	for (int r = 0; r < 4; r++) {
+		for (int c = 0; c < 4; c++) {
+			proj[r * 4 + c] = static_cast<float>(projection.columns[r][c]);
+		}
+	}
+	GLint loc = shadow_render.shader.version_get_uniform(
+		CanvasOcclusionShaderGLES2::PROJECTION,
+		shadow_render.shader_version,
+		variant,
+		0
+	);
+	glUniformMatrix4fv(loc, 1, GL_FALSE, proj);
+#else
 	shadow_render.shader.version_set_uniform(CanvasOcclusionShaderGLES2::PROJECTION, projection, shadow_render.shader_version, variant, 0);
+#endif
+
 	shadow_render.shader.version_set_uniform(CanvasOcclusionShaderGLES2::DIRECTION, Vector2(0.0f, 1.0f), shadow_render.shader_version, variant, 0);
 	shadow_render.shader.version_set_uniform(CanvasOcclusionShaderGLES2::Z_FAR, distance, shadow_render.shader_version, variant, 0);
 
@@ -492,7 +530,21 @@ void RasterizerCanvasGLES2::occluder_polygon_set_shape(RID p_occluder, const Vec
 	}
 
 	glBindBuffer(GL_ARRAY_BUFFER, oc->vertex_buffer);
+
+#ifdef REAL_T_IS_DOUBLE
+	uint32_t float_count = geometry.size() * 3; // 3 floats per vertex
+	Vector<float> float_vertices;
+	float_vertices.resize(float_count);
+	for (int i = 0; i < geometry.size(); i++) {
+		float_vertices.write[i * 3 + 0] = static_cast<float>(geometry[i].x);
+		float_vertices.write[i * 3 + 1] = static_cast<float>(geometry[i].y);
+		float_vertices.write[i * 3 + 2] = static_cast<float>(geometry[i].z);
+	}
+	glBufferData(GL_ARRAY_BUFFER, float_vertices.size() * sizeof(float), float_vertices.ptr(), GL_STATIC_DRAW);
+#else
 	glBufferData(GL_ARRAY_BUFFER, geometry.size() * sizeof(Vector3), geometry.ptr(), GL_STATIC_DRAW);
+#endif
+
 	GL_CHECK_ERROR("GLES2::Canvas::occluder_polygon_set_shape: VBO upload");
 
 	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, oc->index_buffer);
@@ -535,6 +587,15 @@ void RasterizerCanvasGLES2::set_shadow_texture_size(int p_size) {
 }
 
 bool RasterizerCanvasGLES2::free(RID p_rid) {
+	if (canvas_light_owner.owns(p_rid)) {
+		CanvasLight *cl = canvas_light_owner.get_or_null(p_rid);
+		ERR_FAIL_NULL_V(cl, false);
+		canvas_light_owner.free(p_rid);
+	} else if (occluder_polygon_owner.owns(p_rid)) {
+		occluder_polygon_set_shape(p_rid, Vector<Vector2>(), false);
+		occluder_polygon_owner.free(p_rid);
+	}
+
 	return true;
 }
 
@@ -2133,28 +2194,28 @@ void RasterizerCanvasGLES2::render_batches(Item::Command *const *p_commands, Ite
 							// NPOT bleed inset
 							constexpr float EPS = 0.01f;
 							float u[4] = {
-								source.position.x,
-								source.position.x + tex_margin_left + (tex_margin_left > 0 ? EPS : 0),
-								source.position.x + source.size.x - tex_margin_right - (tex_margin_right > 0 ? EPS : 0),
-								source.position.x + source.size.x
+								static_cast<float>(source.position.x),
+								static_cast<float>(source.position.x + tex_margin_left + (tex_margin_left > 0 ? EPS : 0)),
+								static_cast<float>(source.position.x + source.size.x - tex_margin_right - (tex_margin_right > 0 ? EPS : 0)),
+								static_cast<float>(source.position.x + source.size.x)
 							};
 							float v[4] = {
-								source.position.y,
-								source.position.y + tex_margin_top + (tex_margin_top > 0 ? EPS : 0),
-								source.position.y + source.size.y - tex_margin_bottom - (tex_margin_bottom > 0 ? EPS : 0),
-								source.position.y + source.size.y
+								static_cast<float>(source.position.y),
+								static_cast<float>(source.position.y + tex_margin_top + (tex_margin_top > 0 ? EPS : 0)),
+								static_cast<float>(source.position.y + source.size.y - tex_margin_bottom - (tex_margin_bottom > 0 ? EPS : 0)),
+								static_cast<float>(source.position.y + source.size.y)
 							};
 							float x[4] = {
-								np->rect.position.x,
-								np->rect.position.x + draw_margin_left,
-								np->rect.position.x + np->rect.size.x - draw_margin_right,
-								np->rect.position.x + np->rect.size.x
+								static_cast<float>(np->rect.position.x),
+								static_cast<float>(np->rect.position.x + draw_margin_left),
+								static_cast<float>(np->rect.position.x + np->rect.size.x - draw_margin_right),
+								static_cast<float>(np->rect.position.x + np->rect.size.x)
 							};
 							float y[4] = {
-								np->rect.position.y,
-								np->rect.position.y + draw_margin_top,
-								np->rect.position.y + np->rect.size.y - draw_margin_bottom,
-								np->rect.position.y + np->rect.size.y
+								static_cast<float>(np->rect.position.y),
+								static_cast<float>(np->rect.position.y + draw_margin_top),
+								static_cast<float>(np->rect.position.y + np->rect.size.y - draw_margin_bottom),
+								static_cast<float>(np->rect.position.y + np->rect.size.y)
 							};
 
 							float buffer[16 * 2 + 16 * 2] = {};
@@ -2163,8 +2224,8 @@ void RasterizerCanvasGLES2::render_batches(Item::Command *const *p_commands, Ite
 									int idx = (row * 4 + col) * 4;
 									buffer[idx + 0] = x[col];
 									buffer[idx + 1] = y[row];
-									buffer[idx + 2] = u[col] * state.texpixel_size.x;
-									buffer[idx + 3] = v[row] * state.texpixel_size.y;
+									buffer[idx + 2] = u[col] * static_cast<float>(state.texpixel_size.x);
+									buffer[idx + 3] = v[row] * static_cast<float>(state.texpixel_size.y);
 								}
 							}
 
@@ -2592,9 +2653,9 @@ void RasterizerCanvasGLES2::_draw_gui_primitive(int p_points, const Vector2 *p_v
 	}
 	glBindBuffer(GL_ARRAY_BUFFER, data.polygon_buffer);
 
-	uint32_t vertex_size = p_points * sizeof(Vector2);
+	uint32_t vertex_size = p_points * 2 * sizeof(float);
 	uint32_t color_size = p_colors ? p_points * sizeof(Color) : 0;
-	uint32_t uv_size = p_uvs ? p_points * sizeof(Vector2) : 0;
+	uint32_t uv_size = p_uvs ? p_points * 2 * sizeof(float) : 0;
 	uint32_t total_size = vertex_size + color_size + uv_size;
 
 	// Lower VRAM fragmentation by only growing the buffer.
@@ -2606,7 +2667,17 @@ void RasterizerCanvasGLES2::_draw_gui_primitive(int p_points, const Vector2 *p_v
 	uint32_t offset = 0;
 
 	// Vertices
+#ifdef REAL_T_IS_DOUBLE
+	Vector<float> vertex_f;
+	vertex_f.resize(p_points * 2);
+	for (int i = 0; i < p_points; i++) {
+		vertex_f.write[i * 2 + 0] = static_cast<float>(p_vertices[i].x);
+		vertex_f.write[i * 2 + 1] = static_cast<float>(p_vertices[i].y);
+	}
+	bool upload_success = _buffer_orphan_and_upload(data.polygon_buffer_size, offset, vertex_size, vertex_f.ptr(), GL_ARRAY_BUFFER, GL_DYNAMIC_DRAW, false);
+#else
 	bool upload_success = _buffer_orphan_and_upload(data.polygon_buffer_size, offset, vertex_size, p_vertices, GL_ARRAY_BUFFER, GL_DYNAMIC_DRAW, false);
+#endif
 	if (!check_orphan_success(upload_success)) {
 		return;
 	}
@@ -2632,7 +2703,17 @@ void RasterizerCanvasGLES2::_draw_gui_primitive(int p_points, const Vector2 *p_v
 
 	// UVs
 	if (p_uvs) {
+#ifdef REAL_T_IS_DOUBLE
+		Vector<float> uv_f;
+		uv_f.resize(p_points * 2);
+		for (int i = 0; i < p_points; i++) {
+			uv_f.write[i * 2 + 0] = static_cast<float>(p_uvs[i].x);
+			uv_f.write[i * 2 + 1] = static_cast<float>(p_uvs[i].y);
+		}
+		upload_success = _buffer_orphan_and_upload(data.polygon_buffer_size, offset, uv_size, uv_f.ptr(), GL_ARRAY_BUFFER, GL_DYNAMIC_DRAW, true);
+#else
 		upload_success = _buffer_orphan_and_upload(data.polygon_buffer_size, offset, uv_size, p_uvs, GL_ARRAY_BUFFER, GL_DYNAMIC_DRAW, true);
+#endif
 		if (!check_orphan_success(upload_success)) {
 			return;
 		}
@@ -2646,7 +2727,18 @@ void RasterizerCanvasGLES2::_draw_gui_primitive(int p_points, const Vector2 *p_v
 	GL_CHECK_ERROR("GLES2::Canvas::draw_gui: buffer subdata and pointers");
 
 	// For Gizmos, we often draw Lines, Triangles, or Points depending on p_points
-	GLenum draw_mode = (p_points == 2) ? GL_LINES : ((p_points == 3) ? GL_TRIANGLES : GL_TRIANGLE_FAN);
+	GLenum draw_mode = GL_INVALID_ENUM;
+
+	if (p_points == 1) {
+		draw_mode = GL_POINTS;
+	} else if (p_points == 2) {
+		draw_mode = GL_LINES;
+	} else if (p_points == 3) {
+		draw_mode = GL_TRIANGLES;
+	} else {
+		draw_mode = GL_TRIANGLE_FAN;
+	}
+
 	glDrawArrays(draw_mode, 0, p_points);
 
 	glDisableVertexAttribArray(RS::ARRAY_VERTEX);
@@ -2708,8 +2800,8 @@ void RasterizerCanvasGLES2::_legacy_draw_polygon(Item::CommandPolygon *p_poly, G
 	glBindBuffer(GL_ARRAY_BUFFER, data.polygon_buffer);
 
 	uint32_t points_count = pd.points.size();
-	uint32_t points_size = points_count * sizeof(Vector2);
-	uint32_t uvs_size = pd.uvs.size() * sizeof(Vector2);
+	uint32_t points_size = points_count * 2 * sizeof(float);
+	uint32_t uvs_size = pd.uvs.size() * 2 * sizeof(float);
 
 	// Only allocate VBO space for colors if there is actually one color per vertex
 	bool use_vertex_colors = pd.colors.size() > 1;
@@ -2723,7 +2815,17 @@ void RasterizerCanvasGLES2::_legacy_draw_polygon(Item::CommandPolygon *p_poly, G
 	uint32_t offset = 0;
 
 	// Points
+#ifdef REAL_T_IS_DOUBLE
+	Vector<float> points_f;
+	points_f.resize(points_count * 2);
+	for (uint32_t i = 0; i < points_count; i++) {
+		points_f.write[i * 2 + 0] = static_cast<float>(pd.points[i].x);
+		points_f.write[i * 2 + 1] = static_cast<float>(pd.points[i].y);
+	}
+	bool upload_success = _buffer_orphan_and_upload(data.polygon_buffer_size, offset, points_size, points_f.ptr(), GL_ARRAY_BUFFER, GL_DYNAMIC_DRAW, false);
+#else
 	bool upload_success = _buffer_orphan_and_upload(data.polygon_buffer_size, offset, points_size, pd.points.ptr(), GL_ARRAY_BUFFER, GL_DYNAMIC_DRAW, false);
+#endif
 	if (!check_orphan_success(upload_success)) {
 		return;
 	}
@@ -2734,7 +2836,17 @@ void RasterizerCanvasGLES2::_legacy_draw_polygon(Item::CommandPolygon *p_poly, G
 
 	// UVs
 	if (uvs_size > 0) {
+#ifdef REAL_T_IS_DOUBLE
+		Vector<float> uv_f;
+		uv_f.resize(pd.uvs.size() * 2);
+		for (int i = 0; i < pd.uvs.size(); i++) {
+			uv_f.write[i * 2 + 0] = static_cast<float>(pd.uvs[i].x);
+			uv_f.write[i * 2 + 1] = static_cast<float>(pd.uvs[i].y);
+		}
+		upload_success = _buffer_orphan_and_upload(data.polygon_buffer_size, offset, uvs_size, uv_f.ptr(), GL_ARRAY_BUFFER, GL_DYNAMIC_DRAW, true);
+#else
 		upload_success = _buffer_orphan_and_upload(data.polygon_buffer_size, offset, uvs_size, pd.uvs.ptr(), GL_ARRAY_BUFFER, GL_DYNAMIC_DRAW, true);
+#endif
 		if (!check_orphan_success(upload_success)) {
 			return;
 		}
