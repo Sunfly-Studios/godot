@@ -2782,7 +2782,7 @@
 			This can be overridden using the [code]--rendering-driver &lt;driver&gt;[/code] command line argument.
 			Supported values are:
 			- [code]opengl2[/code], OpenGL 2.1 on desktop platforms, OpenGL ES 2.0 on mobile platforms, WebGL 1.0 on web.
-			- [code]opengl2_angle[/code], OpenGL ES 2.0 using the ANGLE compatibility layer, supported on macOS (over native OpenGL) and Windows (over Direct3D 11).
+			- [code]opengl2_angle[/code], OpenGL ES 2.0 using the ANGLE compatibility layer, supported on macOS (over native OpenGL) and Windows (over Direct3D 9).
 			- [code]opengl2_es[/code], OpenGL ES 2.0 on Linux/BSD.
 			[b]Note:[/b] The availability of these options depends on whether the engine was compiled with support for them (determined by SCons options [code]opengl2[/code] and [code]angle_libs[/code]).
 			[b]Note:[/b] The actual rendering driver may be automatically changed by the engine as a result of a fallback, or a user-specified command line argument. To get the actual rendering driver that is used at runtime, use [method RenderingServer.get_current_rendering_driver_name] instead of reading this project setting's value.
@@ -2818,7 +2818,7 @@
 			Windows override for [member rendering/gl_legacy/driver].
 			Two options are supported:
 			- [code]opengl2[/code] (default), OpenGL 2.1 from native drivers. If [member rendering/gl_legacy/fallback_to_native] is enabled, this is used as a fallback if ANGLE is configured as the preferred driver but not supported.
-			- [code]opengl2_angle[/code], OpenGL ES 2.0 using the ANGLE compatibility layer over native Direct3D 11 drivers. If [member rendering/gl_legacy/fallback_to_angle] is enabled, this is used as a fallback if OpenGL 2.1 is not supported. By default, ANGLE is used as the default driver for some devices listed in [member rendering/gl_legacy/force_angle_on_devices].
+			- [code]opengl2_angle[/code], OpenGL ES 2.0 using the ANGLE compatibility layer over native Direct3D 9 drivers. If [member rendering/gl_legacy/fallback_to_angle] is enabled, this is used as a fallback if OpenGL 2.1 is not supported. By default, ANGLE is used as the default driver for some devices listed in [member rendering/gl_legacy/force_angle_on_devices].
 		</member>
 		<member name="rendering/gl_legacy/fallback_to_angle" type="bool" setter="" getter="" default="true">
 			If [code]true[/code], the legacy renderer will fall back to ANGLE if native OpenGL is not supported or the device is listed in [member rendering/gl_legacy/force_angle_on_devices].
@@ -2848,12 +2848,13 @@
 			Sets the driver to be used by the renderer when using the Classic renderer. Editing this property has no effect in the default configuration, as first-party platforms each have platform-specific overrides. Use those overrides to configure the driver for each platform.
 			This can be overridden using the [code]--rendering-driver &lt;driver&gt;[/code] command line argument.
 			Supported values are:
-			- [code]opengl1[/code], OpenGL 1.5 on desktop platforms, OpenGL ES 1.1 on mobile platforms.
+			- [code]opengl1[/code], OpenGL 1.5/1.4/1.3 on desktop platforms, OpenGL ES 1.1 on mobile platforms.
 			- [code]opengl1_angle[/code], OpenGL ES 1.1 using the ANGLE compatibility layer, supported on macOS (over native OpenGL) and Windows (over Direct3D 11).
 			- [code]opengl1_es[/code], OpenGL ES 1.1 on Linux/BSD.
 			[b]Note:[/b] The availability of these options depends on whether the engine was compiled with support for them (determined by SCons options [code]opengl1[/code] and [code]angle_libs[/code]).
-			[b]Note:[/b] Web platforms do not have a concept of OpenGL 1.5, as WebGL 1.0 is based on OpenGL 2. For that reason, on the Web, this driver is automatically updated to OpenGL2.
+			[b]Note:[/b] Web platforms do not have a concept of OpenGL 1.5/1.4/1.3, as WebGL 1.0 is based on OpenGL 2. For that reason, on the Web, this driver is automatically upgraded to use the [code]opengl2[/code] rendering driver.
 			[b]Note:[/b] The actual rendering driver may be automatically changed by the engine as a result of a fallback, or a user-specified command line argument. To get the actual rendering driver that is used at runtime, use [method RenderingServer.get_current_rendering_driver_name] instead of reading this project setting's value.
+			[b]Note:[/b] The editor requires OpenGL 1.5 to support [code]SubViewport[/code] nodes, which rely on VBOs not available in OpenGL 1.3 or 1.4. Exported projects using this driver can run on versions 1.3 or 1.4, provided they do not utilize [code]SubViewport[/code] nodes.
 		</member>
 		<member name="rendering/gl_classic/driver.android" type="String" setter="" getter="" default="&quot;opengl1&quot;">
 			Android override for [member rendering/gl_classic/driver].
@@ -2868,20 +2869,20 @@
 		<member name="rendering/gl_classic/driver.linuxbsd" type="String" setter="" getter="" default="&quot;opengl1&quot;">
 			LinuxBSD override for [member rendering/gl_classic/driver].
 			Two options are supported:
-			- [code]opengl1[/code] (default), OpenGL 1.5 from native drivers.
-			- [code]opengl1_es[/code], OpenGL ES 1.1 from native drivers. If [member rendering/gl_classic/fallback_to_gles] is enabled, this is used as a fallback if OpenGL 1.5 is not supported.
+			- [code]opengl1[/code] (default), OpenGL 1.5, 1.4, or 1.3 from native drivers.
+			- [code]opengl1_es[/code], OpenGL ES 1.1 from native drivers. If [member rendering/gl_classic/fallback_to_gles] is enabled, this is used as a fallback if OpenGL 1.5/1.4/1.3 is not supported.
 		</member>
 		<member name="rendering/gl_classic/driver.macos" type="String" setter="" getter="" default="&quot;opengl1&quot;">
 			macOS override for [member rendering/gl_classic/driver].
 			Two options are supported:
-			- [code]opengl1[/code] (default), OpenGL 1.5 from native drivers. If [member rendering/gl_classic/fallback_to_native] is enabled, this is used as a fallback if ANGLE is configured as the preferred driver but not supported.
-			- [code]opengl1_angle[/code], OpenGL ES 1.1 using the ANGLE compatibility layer over native OpenGL drivers. If [member rendering/gl_classic/fallback_to_angle] is enabled, this is used as a fallback if OpenGL 1.5 is not supported.
+			- [code]opengl1[/code] (default), OpenGL 1.5, 1.4, or 1.3 from native drivers. If [member rendering/gl_classic/fallback_to_native] is enabled, this is used as a fallback if ANGLE is configured as the preferred driver but not supported.
+			- [code]opengl1_angle[/code], OpenGL ES 1.1 using the ANGLE compatibility layer over native OpenGL drivers. If [member rendering/gl_classic/fallback_to_angle] is enabled, this is used as a fallback if OpenGL 1.5/1.4/1.3 is not supported.
 		</member>
 		<member name="rendering/gl_classic/driver.windows" type="String" setter="" getter="" default="&quot;opengl1&quot;">
 			Windows override for [member rendering/gl_classic/driver].
 			Two options are supported:
-			- [code]opengl1[/code] (default), OpenGL 1.5 from native drivers. If [member rendering/gl_classic/fallback_to_native] is enabled, this is used as a fallback if ANGLE is configured as the preferred driver but not supported.
-			- [code]opengl1_angle[/code], OpenGL ES 1.1 using the ANGLE compatibility layer over native Direct3D 11 drivers. If [member rendering/gl_classic/fallback_to_angle] is enabled, this is used as a fallback if OpenGL 1.5 is not supported. By default, ANGLE is used as the default driver for some devices listed in [member rendering/gl_classic/force_angle_on_devices].
+			- [code]opengl1[/code] (default), OpenGL 1.5, 1.4, or 1.3 from native drivers. If [member rendering/gl_classic/fallback_to_native] is enabled, this is used as a fallback if ANGLE is configured as the preferred driver but not supported.
+			- [code]opengl1_angle[/code], OpenGL ES 1.1 using the ANGLE compatibility layer over native Direct3D 11 drivers. If [member rendering/gl_classic/fallback_to_angle] is enabled, this is used as a fallback if OpenGL 1.5/1.4/1.3 is not supported. By default, ANGLE is used as the default driver for some devices listed in [member rendering/gl_classic/force_angle_on_devices].
 		</member>
 		<member name="rendering/gl_classic/fallback_to_angle" type="bool" setter="" getter="" default="true">
 			If [code]true[/code], the classic renderer will fall back to ANGLE if native OpenGL is not supported or the device is listed in [member rendering/gl_classic/force_angle_on_devices].
@@ -2908,10 +2909,10 @@
 			[b]Note:[/b] This setting only works on Windows, as threaded optimization is disabled by default on other platforms.
 		</member>
 		<member name="rendering/gl_classic/light_vibrancy_multiplier" type="float" setter="" getter="" default="3.0">
-            Multiplier applied to the energy of all lights when using the [code]gl_classic[/code] rendering method.
-            Because the [code]gl_classic[/code] rendering method operates in a linear color space without hardware sRGB support, light attenuation can appear significantly dimmer than intended. By default, this boosts light output by [code]3.0[/code] to visually match the vibrancy of the [code]gl_compatibility[/code] and [code]gl_legacy[/code] rendering methods.
-            Decrease this value if you prefer the darker, raw blending, or increase it to make lights appear brighter and more saturated.
-        </member>
+			Multiplier applied to the energy of all lights when using the [code]gl_classic[/code] rendering method.
+			Because the [code]gl_classic[/code] rendering method operates in a linear color space without hardware sRGB support, light attenuation can appear significantly dimmer than intended. By default, this boosts light output by [code]3.0[/code] to visually match the vibrancy of the [code]gl_compatibility[/code] and [code]gl_legacy[/code] rendering methods.
+			Decrease this value if you prefer the darker, raw blending, or increase it to make lights appear brighter and more saturated.
+		</member>
 		<member name="rendering/global_illumination/gi/use_half_resolution" type="bool" setter="" getter="" default="false">
 			If [code]true[/code], renders [VoxelGI] and SDFGI ([member Environment.sdfgi_enabled]) buffers at halved resolution (e.g. 960×540 when the viewport size is 1920×1080). This improves performance significantly when VoxelGI or SDFGI is enabled, at the cost of artifacts that may be visible on polygon edges. The loss in quality becomes less noticeable as the viewport resolution increases. [LightmapGI] rendering is not affected by this setting.
 			[b]Note:[/b] This property is only read when the project starts. To set half-resolution GI at run-time, call [method RenderingServer.gi_set_use_half_resolution] instead.
@@ -3139,15 +3140,15 @@
 			Lower-end override for [member rendering/reflections/sky_reflections/texture_array_reflections] on mobile devices, due to performance concerns or driver support.
 		</member>
 		<member name="rendering/renderer/rendering_method" type="String" setter="" getter="" default="&quot;forward_plus&quot;">
-            Sets the renderer that will be used by the project. Options are:
-            [b]forward_plus[/b] (Forward+): High-end renderer designed for desktop devices. Has a higher base overhead, but scales well with complex scenes. Not suitable for older devices or mobile.
-            [b]mobile[/b] (Mobile): Modern renderer designed for mobile devices. Has a lower base overhead than Forward+, but does not scale as well to large scenes with many elements.
-            [b]gl_compatibility[/b] (Compatibility): Low-end renderer designed for older devices. Based on the limitations of the OpenGL 3.3 / OpenGL ES 3.0 / WebGL 2 APIs.
-            [b]gl_legacy[/b] (Legacy): Highly compatible renderer intended for legacy and extremely low-end hardware. Based on the limitations of the OpenGL 2.1 / OpenGL ES 2.0 / WebGL 1 APIs.
-            [b]gl_classic[/b] (Classic): A renderer intended for the earliest supported hardware on desktop and mobile platforms. Based on the limitations of OpenGL 1.5/1.4 / OpenGL ES 1.1 APIs.
-            This can be overridden using the [code]--rendering-method &lt;method&gt;[/code] command line argument.
-            [b]Note:[/b] The actual rendering method may be automatically changed by the engine as a result of a fallback, or a user-specified command line argument. To get the actual rendering method that is used at runtime, use [method RenderingServer.get_current_rendering_method] instead of reading this project setting's value.
-        </member>
+			Sets the renderer that will be used by the project. Options are:
+			[b]forward_plus[/b] (Forward+): High-end renderer designed for desktop devices. Has a higher base overhead, but scales well with complex scenes. Not suitable for older devices or mobile.
+			[b]mobile[/b] (Mobile): Modern renderer designed for mobile devices. Has a lower base overhead than Forward+, but does not scale as well to large scenes with many elements.
+			[b]gl_compatibility[/b] (Compatibility): Low-end renderer designed for older devices. Based on the limitations of the OpenGL 3.3 / OpenGL ES 3.0 / WebGL 2 APIs.
+			[b]gl_legacy[/b] (Legacy): Highly compatible renderer intended for legacy and extremely low-end hardware. Based on the limitations of the OpenGL 2.1 / OpenGL ES 2.0 / WebGL 1 APIs.
+			[b]gl_classic[/b] (Classic): A renderer intended for the earliest supported hardware on desktop and mobile platforms. Based on the limitations of OpenGL 1.5/1.4/1.3 / OpenGL ES 1.1 APIs.
+			This can be overridden using the [code]--rendering-method &lt;method&gt;[/code] command line argument.
+			[b]Note:[/b] The actual rendering method may be automatically changed by the engine as a result of a fallback, or a user-specified command line argument. To get the actual rendering method that is used at runtime, use [method RenderingServer.get_current_rendering_method] instead of reading this project setting's value.
+		</member>
 		<member name="rendering/renderer/rendering_method.mobile" type="String" setter="" getter="" default="&quot;mobile&quot;">
 			Override for [member rendering/renderer/rendering_method] on mobile devices.
 		</member>
