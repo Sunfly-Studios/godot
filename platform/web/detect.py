@@ -344,13 +344,19 @@ def configure(env: "SConsEnvironment"):
         else:
             # These are the browsers that provide enough
             # _practical_ support. As in, what can Emscripten
-            # realistically support.
-            # While lower browsers could be targeted, those came
-            # long before WASM became a standard, which was in 2017.
-            # Except for Firefox. I set 55 (2017) but it didn't support
-            # ReadableStreaming until 65 from 2019.
+            # realistically support AND the browsers themselves
+            # having enough "modern" features without having to polyfill
+            # them to death (which I'd rather avoid for extra ""magic"" and good UX).
+            # WASM is the hard-floor and that became a standard only
+            # in 2017 onwards.
+
+            # First version to introduce "body" in Response's prototype.
             env.Append(LINKFLAGS=["-sMIN_FIREFOX_VERSION=65"])
-            env.Append(LINKFLAGS=["-sMIN_CHROME_VERSION=70"])
+
+            # First version to introduce AbortController.
+            env.Append(LINKFLAGS=["-sMIN_CHROME_VERSION=66"])
+
+            # ¯\_(ツ)_/¯
             env.Append(LINKFLAGS=["-sMIN_SAFARI_VERSION=120200"])
     else: # wasm64
         env.Append(CCFLAGS=["-sSUPPORT_LONGJMP='wasm'"])
