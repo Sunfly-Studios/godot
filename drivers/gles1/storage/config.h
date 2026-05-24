@@ -88,6 +88,8 @@ public:
 	int64_t max_renderable_lights = 0;
 	int64_t max_lights_per_object = 0;
 	uint32_t context_generation = 1;
+	uint32_t gl_minor_version = 0;
+
 	float anisotropic_level = 0.0f;
 
 	// Extension Tracking
@@ -137,7 +139,6 @@ public:
 	bool disable_particles_workaround = false;
 	bool disable_transform_feedback_shader_cache = false;
 	bool polyfill_half2float = true;
-	bool is_gl_less_than_15 = false;
 
 	// Flag for older, buggy Android emulators
 	// (Nexus 5 API 19 and similar).

@@ -592,7 +592,10 @@ void TextureStorage::texture_2d_initialize(RID p_texture, const Ref<Image> &p_im
 	texture->mipmaps = image->has_mipmaps() ? image->get_mipmap_count() + 1 : 1;
 	texture->resize_to_po2 = false;
 
-	if (!config->support_npot_repeat_mipmap) {
+	// Always force NPOT textures to be POT for 1.3,
+	// while letting the higher versions handle it
+	// gracefully.
+	if (!config->support_npot_repeat_mipmap || GLES1::Config::get_singleton()->gl_minor_version < 4) {
 		int po2_width = next_power_of_2(texture->width);
 		int po2_height = next_power_of_2(texture->height);
 
@@ -1352,7 +1355,9 @@ GLES1::Texture *TextureStorage::texture_bind_and_validate(RID p_texture, GLenum 
 	}
 
 	if (!texture || texture->tex_id == 0 || !texture->active || texture->width <= 0 || texture->height <= 0) {
+#if defined(DEBUG_ENABLED) || defined(TOOLS_ENABLED)
 		WARN_PRINT_ONCE("Texture missing or unrecoverable. Routing to safe fallback.");
+#endif
 		RID safe_fallback = texture_gl_get_default(DEFAULT_GL_TEXTURE_WHITE);
 		texture = get_texture(safe_fallback);
 

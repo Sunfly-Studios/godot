@@ -77,7 +77,9 @@ CopyEffects::CopyEffects() {
 		glBindBuffer(GL_ARRAY_BUFFER, 0);
 		GL_CHECK_ERROR("GLES1::CopyEffects setup: buffer data screen_triangle");
 	} else {
+#if defined(DEBUG_ENABLED) || defined(TOOLS_ENABLED)
 		WARN_PRINT("GLES1: Failed to generate screen_triangle VBO. Using client memory fallback.");
+#endif
 	}
 
 	// Screen Quad VBO
@@ -90,7 +92,9 @@ CopyEffects::CopyEffects() {
 		glBindBuffer(GL_ARRAY_BUFFER, 0);
 		GL_CHECK_ERROR("GLES1::CopyEffects setup: buffer data screen_quad");
 	} else {
+#if defined(DEBUG_ENABLED) || defined(TOOLS_ENABLED)
 		WARN_PRINT("GLES1: Failed to generate screen_quad VBO. Using client memory fallback.");
+#endif
 	}
 }
 

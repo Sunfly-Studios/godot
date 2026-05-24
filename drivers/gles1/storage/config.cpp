@@ -388,8 +388,8 @@ Config::Config() {
 					WARN_PRINT("GLES1: OpenGL version is lower than 1.5. Disabling VBOs.");
 					support_vbo = false;
 				}
-				is_gl_less_than_15 = true;
 			}
+			gl_minor_version = static_cast<uint32_t>(minor);
 		}
 	}
 }

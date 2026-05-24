@@ -1882,19 +1882,14 @@ void RasterizerCanvasGLES1::canvas_render_items_end() {
 void RasterizerCanvasGLES1::gl_enable_scissor(int p_x, int p_y, int p_width, int p_height) const {
 	glEnable(GL_SCISSOR_TEST);
 
-	if (GLES1::Config::get_singleton()->is_gl_less_than_15) {
-		// Because we don't have the luxuries of VBOs and FBOs
-		// on 1.4 or lower, the axies of everything is flipped.
-		float matrix_y_scale = state.uniforms.projection_matrix.basis[1][1];
-
-		if (matrix_y_scale < 0.0f) {
-			// Negative Y scale means top-down rendering (Screen/XR/FBO Fallback).
-			// We derive the viewport height from the projection matrix Y scale
-			// (matrix_y_scale = -2.0 / window_h  =>  window_h = -2.0 / matrix_y_scale)
-			int window_h = Math::round(-2.0f / matrix_y_scale);
-			int flipped_y = window_h - (p_y + p_height);
-			glScissor(p_x, flipped_y, p_width, p_height);
-		}
+	float matrix_y_scale = state.uniforms.projection_matrix.basis[1][1];
+	if (matrix_y_scale < 0.0f) {
+		// Negative Y scale means top-down rendering (Screen/XR/FBO Fallback).
+		// We derive the viewport height from the projection matrix Y scale
+		// (matrix_y_scale = -2.0 / window_h  =>  window_h = -2.0 / matrix_y_scale)
+		int window_h = Math::round(-2.0f / matrix_y_scale);
+		int flipped_y = window_h - (p_y + p_height);
+		glScissor(p_x, flipped_y, p_width, p_height);
 	} else {
 		glScissor(p_x, p_y, p_width, p_height);
 	}
