@@ -2943,11 +2943,11 @@ VmaAllocatorCreateInfo::pVulkanFunctions. Other members can be null.
 #endif
 
 #ifndef VMA_USE_STL_SHARED_MUTEX
-    #if __cplusplus >= 201703L || _MSVC_LANG >= 201703L // C++17
+    #if __cplusplus >= 201703L || (_MSVC_LANG >= 201703L && WINVER >= 0x601) // C++17
         #define VMA_USE_STL_SHARED_MUTEX 1
     // Visual studio defines __cplusplus properly only when passed additional parameter: /Zc:__cplusplus
     // Otherwise it is always 199711L, despite shared_mutex works since Visual Studio 2015 Update 2.
-    #elif defined(_MSC_FULL_VER) && _MSC_FULL_VER >= 190023918 && __cplusplus == 199711L && _MSVC_LANG >= 201703L
+    #elif defined(_MSC_FULL_VER) && WINVER >= 0x601 && _MSC_FULL_VER >= 190023918 && __cplusplus == 199711L && _MSVC_LANG >= 201703L
         #define VMA_USE_STL_SHARED_MUTEX 1
     #else
         #define VMA_USE_STL_SHARED_MUTEX 0
@@ -3228,7 +3228,7 @@ static void vma_aligned_free(void* VMA_NULLABLE ptr)
             std::shared_mutex m_Mutex;
         };
         #define VMA_RW_MUTEX VmaRWMutex
-    #elif defined(_WIN32) && defined(WINVER) && defined(SRWLOCK_INIT) && WINVER >= 0x0600
+    #elif defined(_WIN32) && defined(WINVER) && defined(SRWLOCK_INIT) && WINVER >= 0x0601
         // Use SRWLOCK from WinAPI.
         // Minimum supported client = Windows Vista, server = Windows Server 2008.
         class VmaRWMutex

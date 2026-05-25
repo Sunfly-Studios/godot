@@ -188,13 +188,14 @@ def get_opts():
     return [
         ("mingw_prefix", "MinGW prefix", mingw),
         ("llvm_win_prefix", "Path to custom LLVM on Windows installation prefix", ""),
-        # Targeted Windows version: 7 (and later), minimum supported version
+        ("winsdk_sysroot", "Path to a custom Windows SDK (UCRT) root directory", ""),
+        ("msvc_stl_root", "Path to a custom MSVC STL root directory", ""),
+        # Targeted Windows version: Vista (and later), minimum supported version
         # XP support dropped after EOL due to missing API for IPv6 and other issues
-        # Vista support dropped after EOL due to GH-10243
         (
             "target_win_version",
-            "Targeted Windows version, >= 0x0601 (Windows 7)",
-            "0x0601",
+            "Targeted Windows version, >= 0x0600 (Windows Vista)",
+            "0x0600",
         ),
         EnumVariable("windows_subsystem", "Windows subsystem", "gui", ("gui", "console")),
         (
@@ -645,6 +646,45 @@ def configure_msvc(env: "SConsEnvironment", vcvars_msvc_config):
         env.Prepend(CPPPATH=[p for p in str(os.getenv("INCLUDE")).split(";")])
         env.Append(LIBPATH=[p for p in str(os.getenv("LIB")).split(";")])
 
+    if env["msvc_stl_root"] or env["winsdk_sysroot"]:
+        msvc_arch_aliases = {
+            "x86_64": {"stl": "amd64", "sdk": "x64"},
+            "x86_32": {"stl": "i386", "sdk": "x86"},
+            "arm32": {"stl": "arm", "sdk": "arm"},
+            "arm64": {"stl": "arm64", "sdk": "arm64"},
+        }
+        arch_mappings = msvc_arch_aliases.get(env["arch"], {"stl": env["arch"], "sdk": env["arch"]})
+        arch_stl = arch_mappings["stl"]
+        arch_sdk = arch_mappings["sdk"]
+
+        # Prevent clang-cl from fetching the host's default STL
+        if env["use_llvm"] and env["msvc_stl_root"]:
+            env.AppendUnique(CXXFLAGS=["-Xclang", "-nostdinc++"])
+        
+        # Prepend ensures these paths are evaluated before
+        # any default host headers/libs
+        if env["msvc_stl_root"]:
+            env.Prepend(CPPPATH=[
+                os.path.join(env["msvc_stl_root"], "inc"),
+                os.path.join(env["msvc_stl_root"], "include"), # Standard fallback
+            ])
+            env.Prepend(LIBPATH=[
+                os.path.join(env["msvc_stl_root"], arch_stl, "lib"),
+                os.path.join(env["msvc_stl_root"], "lib", arch_stl), # Standard fallback
+            ])
+            
+        if env["winsdk_sysroot"]:
+            env.Prepend(CPPPATH=[
+                os.path.join(env["winsdk_sysroot"], "include", "ucrt"),
+                os.path.join(env["winsdk_sysroot"], "include", "shared"),
+                os.path.join(env["winsdk_sysroot"], "include", "um"),
+            ])
+            env.Prepend(LIBPATH=[
+                os.path.join(env["winsdk_sysroot"], "lib", arch_sdk),
+                os.path.join(env["winsdk_sysroot"], "lib", "ucrt", arch_sdk),
+                os.path.join(env["winsdk_sysroot"], "lib", "um", arch_sdk),
+            ])
+
     # Incremental linking fix
     env["BUILDERS"]["ProgramOriginal"] = env["BUILDERS"]["Program"]
     env["BUILDERS"]["Program"] = methods.precious_program
@@ -1006,6 +1046,6 @@ def check_d3d12_installed(env):
 
 
 def validate_win_version(env):
-    if int(env["target_win_version"], 16) < 0x0601:
-        print_error("`target_win_version` should be 0x0601 or higher (Windows 7).")
+    if int(env["target_win_version"], 16) < 0x0600:
+        print_error("`target_win_version` should be 0x0600 or higher (Windows Vista).")
         sys.exit(255)

@@ -1,0 +1,16 @@
+diff --git a/thirdparty/icu4c/common/unicode/uconfig.h b/thirdparty/icu4c/common/unicode/uconfig.h
+index c0488d502b..ae6a919aea 100644
+--- a/thirdparty/icu4c/common/unicode/uconfig.h
++++ b/thirdparty/icu4c/common/unicode/uconfig.h
+@@ -388,7 +388,11 @@
+  * @internal ICU 64
+  */
+ #ifndef UCONFIG_USE_WINDOWS_LCID_MAPPING_API
++#if WINVER >= 0x0601
+ #   define UCONFIG_USE_WINDOWS_LCID_MAPPING_API 1
++#else
++#   define UCONFIG_USE_WINDOWS_LCID_MAPPING_API 0
++#endif // WINVER >= 0x0601
+ #endif
+ 
+ /* i18n library switches ---------------------------------------------------- */

@@ -444,8 +444,12 @@ LRESULT DisplayServerWindows::WndProcFileDialog(HWND hWnd, UINT uMsg, WPARAM wPa
 	MutexLock lock(file_dialog_mutex);
 	if (file_dialog_wnd.has(hWnd)) {
 		if (file_dialog_wnd[hWnd]->close_requested.is_set()) {
-			IPropertyStore *prop_store;
+			IPropertyStore *prop_store = nullptr;
+#if WINVER < 0x0601
+			HRESULT hr = S_FALSE;
+#else
 			HRESULT hr = SHGetPropertyStoreForWindow(hWnd, IID_IPropertyStore, (void **)&prop_store);
+#endif
 			if (hr == S_OK) {
 				PROPVARIANT val;
 				PropVariantInit(&val);
@@ -495,8 +499,13 @@ void DisplayServerWindows::_thread_fd_monitor(void *p_ud) {
 		if (mainwindow_icon) {
 			SendMessage(hwnd_dialog, WM_SETICON, ICON_BIG, (LPARAM)mainwindow_icon);
 		}
-		IPropertyStore *prop_store;
+
+		IPropertyStore *prop_store = nullptr;
+#if WINVER < 0x0601
+		HRESULT hr = S_FALSE;
+#else
 		HRESULT hr = SHGetPropertyStoreForWindow(hwnd_dialog, IID_IPropertyStore, (void **)&prop_store);
+#endif
 		if (hr == S_OK) {
 			PROPVARIANT val;
 			InitPropVariantFromString((PCWSTR)fd->appid.utf16().get_data(), &val);
@@ -505,7 +514,9 @@ void DisplayServerWindows::_thread_fd_monitor(void *p_ud) {
 		}
 	}
 
+#if WINVER >= 0x0601
 	SetCurrentProcessExplicitAppUserModelID((PCWSTR)fd->appid.utf16().get_data());
+#endif
 
 	Vector<Char16String> filter_names;
 	Vector<Char16String> filter_exts;
@@ -705,8 +716,13 @@ void DisplayServerWindows::_thread_fd_monitor(void *p_ud) {
 	{
 		MutexLock lock(ds->file_dialog_mutex);
 		if (hwnd_dialog && ds->file_dialog_wnd.has(hwnd_dialog)) {
-			IPropertyStore *prop_store;
+			IPropertyStore *prop_store = nullptr;
+
+#if WINVER < 0x0601
+			hr = S_FALSE;
+#else
 			hr = SHGetPropertyStoreForWindow(hwnd_dialog, IID_IPropertyStore, (void **)&prop_store);
+#endif
 			if (hr == S_OK) {
 				PROPVARIANT val;
 				PropVariantInit(&val);
@@ -1228,6 +1244,8 @@ typedef struct {
 	Rect2i rect;
 } EnumRectData;
 
+#if WINVER >= 0x0601
+// Win7+ implementation
 typedef struct {
 	Vector<DISPLAYCONFIG_PATH_INFO> paths;
 	Vector<DISPLAYCONFIG_MODE_INFO> modes;
@@ -1235,6 +1253,14 @@ typedef struct {
 	int screen;
 	float rate;
 } EnumRefreshRateData;
+#else
+// Vista compatible
+struct VistaRefreshRateData {
+	int target_screen;
+	int current_screen;
+	float rate;
+};
+#endif // WINVER >= 0x0601
 
 static BOOL CALLBACK _MonitorEnumProcSize(HMONITOR hMonitor, HDC hdcMonitor, LPRECT lprcMonitor, LPARAM dwData) {
 	EnumSizeData *data = (EnumSizeData *)dwData;
@@ -1275,6 +1301,28 @@ static BOOL CALLBACK _MonitorEnumProcUsableSize(HMONITOR hMonitor, HDC hdcMonito
 }
 
 static BOOL CALLBACK _MonitorEnumProcRefreshRate(HMONITOR hMonitor, HDC hdcMonitor, LPRECT lprcMonitor, LPARAM dwData) {
+#if WINVER < 0x0601
+	VistaRefreshRateData *r_data = (VistaRefreshRateData *)dwData;
+	if (r_data->current_screen == r_data->target_screen) {
+		MONITORINFOEXW mi;
+		mi.cbSize = sizeof(MONITORINFOEXW);
+		if (GetMonitorInfoW(hMonitor, (LPMONITORINFO)&mi)) {
+			DEVMODEW dm;
+			ZeroMemory(&dm, sizeof(DEVMODEW));
+			dm.dmSize = sizeof(DEVMODEW);
+			if (EnumDisplaySettingsW(mi.szDevice, ENUM_CURRENT_SETTINGS, &dm)) {
+				if (dm.dmFields & DM_DISPLAYFREQUENCY) {
+					if (dm.dmDisplayFrequency > 1) { // 0 or 1 usually indicates hardware default
+						r_data->rate = static_cast<float>(dm.dmDisplayFrequency);
+					}
+				}
+			}
+		}
+		return FALSE; // Target found, stop enumeration
+	}
+	r_data->current_screen++;
+	return TRUE; // Continue
+#else
 	EnumRefreshRateData *data = (EnumRefreshRateData *)dwData;
 	if (data->count == data->screen) {
 		MONITORINFOEXW minfo;
@@ -1310,6 +1358,7 @@ static BOOL CALLBACK _MonitorEnumProcRefreshRate(HMONITOR hMonitor, HDC hdcMonit
 
 	data->count++;
 	return TRUE;
+#endif
 }
 
 Rect2i DisplayServerWindows::screen_get_usable_rect(int p_screen) const {
@@ -1553,6 +1602,16 @@ Ref<Image> DisplayServerWindows::screen_get_image_rect(const Rect2i &p_rect) con
 float DisplayServerWindows::screen_get_refresh_rate(int p_screen) const {
 	_THREAD_SAFE_METHOD_
 
+#if WINVER < 0x0601
+	p_screen = _get_screen_index(p_screen);
+	VistaRefreshRateData data;
+	data.target_screen = p_screen;
+	data.current_screen = 0;
+	data.rate = SCREEN_REFRESH_RATE_FALLBACK;
+
+	EnumDisplayMonitors(nullptr, nullptr, _MonitorEnumProcRefreshRate, (LPARAM)&data);
+	return data.rate;
+#else
 	p_screen = _get_screen_index(p_screen);
 	EnumRefreshRateData data = { Vector<DISPLAYCONFIG_PATH_INFO>(), Vector<DISPLAYCONFIG_MODE_INFO>(), 0, p_screen, SCREEN_REFRESH_RATE_FALLBACK };
 
@@ -1569,6 +1628,7 @@ float DisplayServerWindows::screen_get_refresh_rate(int p_screen) const {
 
 	EnumDisplayMonitors(nullptr, nullptr, _MonitorEnumProcRefreshRate, (LPARAM)&data);
 	return data.rate;
+#endif
 }
 
 void DisplayServerWindows::screen_set_keep_on(bool p_enable) {
@@ -1576,6 +1636,7 @@ void DisplayServerWindows::screen_set_keep_on(bool p_enable) {
 		return;
 	}
 
+#if WINVER >= 0x0601
 	if (p_enable) {
 		const String reason = "Godot Engine running with display/window/energy_saving/keep_screen_on = true";
 		Char16String reason_utf16 = reason.utf16();
@@ -1602,6 +1663,13 @@ void DisplayServerWindows::screen_set_keep_on(bool p_enable) {
 		CloseHandle(power_request);
 		power_request = nullptr;
 	}
+#else
+	if (p_enable) {
+		SetThreadExecutionState(ES_CONTINUOUS | ES_DISPLAY_REQUIRED | ES_SYSTEM_REQUIRED);
+	} else {
+		SetThreadExecutionState(ES_CONTINUOUS);
+	}
+#endif
 
 	keep_screen_on = p_enable;
 }
@@ -1681,11 +1749,13 @@ DisplayServer::WindowID DisplayServerWindows::create_sub_window(WindowMode p_mod
 	}
 	if (p_flags & WINDOW_FLAG_EXCLUDE_FROM_CAPTURE_BIT) {
 		wd.hide_from_capture = true;
+#if WINVER >= 0x0601
 		if (os_ver.dwBuildNumber >= 19041) {
 			SetWindowDisplayAffinity(wd.hWnd, WDA_EXCLUDEFROMCAPTURE);
 		} else {
 			SetWindowDisplayAffinity(wd.hWnd, WDA_MONITOR);
 		}
+#endif
 	}
 	if (p_flags & WINDOW_FLAG_POPUP_BIT) {
 		wd.is_popup = true;
@@ -2615,6 +2685,7 @@ void DisplayServerWindows::window_set_flag(WindowFlags p_flag, bool p_enabled, W
 		} break;
 		case WINDOW_FLAG_EXCLUDE_FROM_CAPTURE: {
 			wd.hide_from_capture = p_enabled;
+#if WINVER >= 0x0601
 			if (p_enabled) {
 				if (os_ver.dwBuildNumber >= 19041) {
 					SetWindowDisplayAffinity(wd.hWnd, WDA_EXCLUDEFROMCAPTURE);
@@ -2624,6 +2695,7 @@ void DisplayServerWindows::window_set_flag(WindowFlags p_flag, bool p_enabled, W
 			} else {
 				SetWindowDisplayAffinity(wd.hWnd, WDA_NONE);
 			}
+#endif
 		} break;
 		case WINDOW_FLAG_POPUP: {
 			ERR_FAIL_COND_MSG(p_window == MAIN_WINDOW_ID, "Main window can't be popup.");
@@ -4111,7 +4183,10 @@ void DisplayServerWindows::status_indicator_set_callback(IndicatorID p_id, const
 
 Rect2 DisplayServerWindows::status_indicator_get_rect(IndicatorID p_id) const {
 	ERR_FAIL_COND_V(!indicators.has(p_id), Rect2());
-
+	
+#if WINVER < 0x0601
+	return Rect2();
+#else
 	NOTIFYICONIDENTIFIER nid;
 	ZeroMemory(&nid, sizeof(NOTIFYICONIDENTIFIER));
 	nid.cbSize = sizeof(NOTIFYICONIDENTIFIER);
@@ -4123,6 +4198,7 @@ Rect2 DisplayServerWindows::status_indicator_get_rect(IndicatorID p_id) const {
 	if (Shell_NotifyIconGetRect(&nid, &rect) != S_OK) {
 		return Rect2();
 	}
+
 	Rect2 ind_rect = Rect2(Point2(rect.left, rect.top) - _get_screens_origin(), Size2(rect.right - rect.left, rect.bottom - rect.top));
 	for (int i = 0; i < get_screen_count(); i++) {
 		Rect2 screen_rect = Rect2(screen_get_position(i), screen_get_size(i));
@@ -4131,6 +4207,7 @@ Rect2 DisplayServerWindows::status_indicator_get_rect(IndicatorID p_id) const {
 		}
 	}
 	return Rect2();
+#endif
 }
 
 void DisplayServerWindows::delete_status_indicator(IndicatorID p_id) {
@@ -4793,6 +4870,7 @@ LRESULT DisplayServerWindows::WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARA
 				}
 				if (indicators.has(iid)) {
 					if (lParam == WM_RBUTTONDOWN && indicators[iid].menu_rid.is_valid() && native_menu->has_menu(indicators[iid].menu_rid)) {
+#if WINVER >= 0x0601
 						NOTIFYICONIDENTIFIER nid;
 						ZeroMemory(&nid, sizeof(NOTIFYICONIDENTIFIER));
 						nid.cbSize = sizeof(NOTIFYICONIDENTIFIER);
@@ -4804,6 +4882,7 @@ LRESULT DisplayServerWindows::WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARA
 						if (Shell_NotifyIconGetRect(&nid, &rect) == S_OK) {
 							native_menu->popup(indicators[iid].menu_rid, Vector2i((rect.left + rect.right) / 2, (rect.top + rect.bottom) / 2));
 						}
+#endif
 					} else if (indicators[iid].callback.is_valid()) {
 						Variant v_button = mb;
 						Variant v_pos = mouse_get_position();
@@ -5908,6 +5987,7 @@ LRESULT DisplayServerWindows::WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARA
 		case WM_IME_NOTIFY: {
 			return 0;
 		} break;
+#if WINVER >= 0x0601
 		case WM_TOUCH: {
 			BOOL bHandled = FALSE;
 			UINT cInputs = LOWORD(wParam);
@@ -5945,6 +6025,7 @@ LRESULT DisplayServerWindows::WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARA
 				return 0;
 			}
 		} break;
+#endif
 		case WM_DESTROY: {
 			Input::get_singleton()->flush_buffered_events();
 			if (window_mouseover_id == window_id) {
@@ -6364,8 +6445,9 @@ Error DisplayServerWindows::_create_window(WindowID p_window_id, WindowMode p_mo
 			BOOL value = is_dark_mode();
 			::DwmSetWindowAttribute(wd.hWnd, use_legacy_dark_mode_before_20H1 ? DWMWA_USE_IMMERSIVE_DARK_MODE_BEFORE_20H1 : DWMWA_USE_IMMERSIVE_DARK_MODE, &value, sizeof(value));
 		}
-
+#if WINVER >= 0x0601
 		RegisterTouchWindow(wd.hWnd, 0);
+#endif
 		DragAcceptFiles(wd.hWnd, true);
 
 		if ((tablet_get_current_driver() == "wintab") && wintab_available) {
@@ -6411,8 +6493,13 @@ Error DisplayServerWindows::_create_window(WindowID p_window_id, WindowMode p_mo
 		wd.last_pressure_update = 0;
 		wd.last_tilt = Vector2();
 
-		IPropertyStore *prop_store;
+		IPropertyStore *prop_store = nullptr;
+		
+#if WINVER >= 0x0601
 		HRESULT hr = SHGetPropertyStoreForWindow(wd.hWnd, IID_IPropertyStore, (void **)&prop_store);
+#else
+		HRESULT hr = S_FALSE;
+#endif
 		if (hr == S_OK) {
 			PROPVARIANT val;
 			String appname;
@@ -6478,8 +6565,13 @@ Error DisplayServerWindows::_create_window(WindowID p_window_id, WindowMode p_mo
 void DisplayServerWindows::_destroy_window(WindowID p_window_id) {
 	WindowData &wd = windows[p_window_id];
 
-	IPropertyStore *prop_store;
+	IPropertyStore *prop_store = nullptr;
+
+#if WINVER >= 0x0601
 	HRESULT hr = SHGetPropertyStoreForWindow(wd.hWnd, IID_IPropertyStore, (void **)&prop_store);
+#else
+	HRESULT hr = S_FALSE;
+#endif
 	if (hr == S_OK) {
 		PROPVARIANT val;
 		PropVariantInit(&val);
@@ -6986,7 +7078,10 @@ DisplayServerWindows::DisplayServerWindows(const String &p_rendering_driver, Win
 		}
 #endif
 	}
+
+#if WINVER >= 0x0601
 	SetCurrentProcessExplicitAppUserModelID((PCWSTR)appname.utf16().get_data());
+#endif
 
 	mouse_monitor = SetWindowsHookEx(WH_MOUSE, ::MouseProc, nullptr, GetCurrentThreadId());
 

@@ -101,11 +101,7 @@ extern "C" {
 #pragma pack(pop, before_imagehlp)
 #endif
 
-extern "C" {
-__declspec(dllexport) DWORD NvOptimusEnablement = 1;
-__declspec(dllexport) int AmdPowerXpressRequestHighPerformance = 1;
-__declspec(dllexport) void NoHotPatch() {} // Disable Nahimic code injection.
-}
+#include "extern_override.h"
 
 // Workaround mingw-w64 < 4.0 bug
 #ifndef WM_TOUCH
@@ -697,10 +693,16 @@ String OS_Windows::get_version_alias() const {
 					} else {
 						windows_string += "7";
 					}
+				} else if (fow.dwMajorVersion == 6 && fow.dwMinorVersion == 0) {
+					if (fow.wProductType != VER_NT_WORKSTATION) {
+						windows_string = "Server 2008";
+					} else {
+						windows_string += "Vista";
+					}
 				} else {
 					windows_string += "Unknown";
 				}
-				// Windows versions older than 7 cannot run Godot.
+				// Windows versions older than Vista cannot run Godot.
 
 				return vformat("%s (build %d)", windows_string, (int64_t)fow.dwBuildNumber);
 			}
