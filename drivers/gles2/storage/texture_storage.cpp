@@ -191,7 +191,9 @@ Ref<Image> TextureStorage::_get_gl_image_and_format(const Ref<Image> &p_image, I
 			r_gl_type = GL_UNSIGNED_BYTE;
 		} break;
 		case Image::FORMAT_RG8: {
+#if defined(DEBUG_ENABLED)
 			ERR_PRINT_ONCE("RG8 Format is not supported by GLES2, converting to RGB.");
+#endif
 			if (image.is_valid()) {
 				image->convert(Image::FORMAT_RGB8);
 			}
@@ -230,7 +232,9 @@ Ref<Image> TextureStorage::_get_gl_image_and_format(const Ref<Image> &p_image, I
 				r_gl_format = GL_RGB;
 				r_gl_type = GL_FLOAT;
 			} else {
+#if defined(DEBUG_ENABLED)
 				ERR_PRINT_ONCE("Float textures not supported by GLES2, converting RGF to RGB8.");
+#endif
 				if (image.is_valid()) {
 					image->convert(Image::FORMAT_RGB8);
 				}
@@ -242,11 +246,18 @@ Ref<Image> TextureStorage::_get_gl_image_and_format(const Ref<Image> &p_image, I
 		} break;
 		case Image::FORMAT_RGBF: {
 			if (config->float_texture_supported) {
-				r_gl_internal_format = GL_RGB;
-				r_gl_format = GL_RGB;
+				if (image.is_valid()) {
+					// Some drivers don't like RGB + FLOAT combo.
+					image->convert(Image::FORMAT_RGBAF);
+				}
+				r_real_format = Image::FORMAT_RGBAF;
+				r_gl_internal_format = GL_RGBA;
+				r_gl_format = GL_RGBA;
 				r_gl_type = GL_FLOAT;
 			} else {
+#if defined(DEBUG_ENABLED)
 				ERR_PRINT_ONCE("RGB float texture not supported by GLES2, converting to RGB8.");
+#endif
 				if (image.is_valid()) {
 					image->convert(Image::FORMAT_RGB8);
 				}
@@ -258,11 +269,17 @@ Ref<Image> TextureStorage::_get_gl_image_and_format(const Ref<Image> &p_image, I
 		} break;
 		case Image::FORMAT_RGBAF: {
 			if (config->float_texture_supported) {
+				if (image.is_valid()) {
+					image->convert(Image::FORMAT_RGBAF);
+				}
+				r_real_format = Image::FORMAT_RGBAF;
 				r_gl_internal_format = GL_RGBA;
 				r_gl_format = GL_RGBA;
 				r_gl_type = GL_FLOAT;
 			} else {
+#if defined(DEBUG_ENABLED)
 				ERR_PRINT_ONCE("RGBA float texture not supported by GLES2, converting to RGBA8.");
+#endif
 				if (image.is_valid()) {
 					image->convert(Image::FORMAT_RGBA8);
 				}
@@ -407,6 +424,9 @@ Ref<Image> TextureStorage::_get_gl_image_and_format(const Ref<Image> &p_image, I
 			switch (image->get_format()) {
 				case Image::FORMAT_RG8:
 				case Image::FORMAT_RGB8: {
+					if (image.is_valid()) {
+						image->convert(Image::FORMAT_RGB8);
+					}
 					r_gl_format = GL_RGB;
 					r_gl_internal_format = GL_RGB;
 					r_gl_type = GL_UNSIGNED_BYTE;
@@ -421,7 +441,9 @@ Ref<Image> TextureStorage::_get_gl_image_and_format(const Ref<Image> &p_image, I
 					r_compressed = false;
 				} break;
 				default: {
-					image->convert(Image::FORMAT_RGBA8);
+					if (image.is_valid()) {
+						image->convert(Image::FORMAT_RGBA8);
+					}
 					r_gl_format = GL_RGBA;
 					r_gl_internal_format = GL_RGBA;
 					r_gl_type = GL_UNSIGNED_BYTE;

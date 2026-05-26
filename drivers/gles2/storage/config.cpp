@@ -270,8 +270,18 @@ Config::Config() {
 		texture_lod_supported = false;
 	}
 
-	is_android_emulator = rendering_device_name.contains("Android Emulator");
+	if (rendering_device_name.contains("Mali")) {
+		// Mali GPUs in GLES2 mode often report false positives for float support
+		float_texture_supported = false;
+	}
 
+	is_android_emulator = (
+		rendering_device_name.contains("Android Emulator") ||
+		rendering_device_name.contains("SwiftShader") ||
+		rendering_device_name.contains("Goldfish") ||
+		rendering_device_name.contains("ANGLE")
+	);
+	
 	if (OS::get_singleton()->get_current_rendering_driver_name() == "opengl2_angle" || OS::get_singleton()->has_feature("web")) {
 		polyfill_half2float = false;
 	}
