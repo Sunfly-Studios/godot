@@ -48,7 +48,7 @@ private:
 
 	bool use_apk_expansion;
 
-#if defined(GLES3_ENABLED)
+#if defined(GLES3_ENABLED) || defined(GLES2_ENABLED) || defined(GLES1_ENABLED)
 	const char *gl_extensions;
 #endif
 
