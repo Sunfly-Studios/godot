@@ -42,8 +42,8 @@ public class RegularFallbackConfigChooser extends RegularConfigChooser {
 
 	private RegularConfigChooser fallback;
 
-	public RegularFallbackConfigChooser(int r, int g, int b, int a, int depth, int stencil, RegularConfigChooser fallback) {
-		super(r, g, b, a, depth, stencil);
+	public RegularFallbackConfigChooser(int r, int g, int b, int a, int depth, int stencil, int glMajor, RegularConfigChooser fallback) {
+		super(r, g, b, a, depth, stencil, glMajor);
 		this.fallback = fallback;
 	}
 

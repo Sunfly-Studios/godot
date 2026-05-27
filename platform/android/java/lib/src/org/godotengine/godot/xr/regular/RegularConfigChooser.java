@@ -50,30 +50,36 @@ public class RegularConfigChooser implements GLSurfaceView.EGLConfigChooser {
 	 * perform actual matching in chooseConfig() below.
 	 */
 	private static int EGL_OPENGL_ES2_BIT = 4;
-	private static int[] s_configAttribs = {
-		EGL10.EGL_RED_SIZE, 4,
-		EGL10.EGL_GREEN_SIZE, 4,
-		EGL10.EGL_BLUE_SIZE, 4,
-		// EGL10.EGL_DEPTH_SIZE,     16,
-		// EGL10.EGL_STENCIL_SIZE,   EGL10.EGL_DONT_CARE,
-		EGL10.EGL_RENDERABLE_TYPE, EGL_OPENGL_ES2_BIT, //apparently there is no EGL_OPENGL_ES3_BIT
-		EGL10.EGL_NONE
-	};
+	private static int EGL_OPENGL_ES1_BIT = 1;
 
-	public RegularConfigChooser(int r, int g, int b, int a, int depth, int stencil) {
+	private final int[] mConfigAttribs;
+
+	public RegularConfigChooser(int r, int g, int b, int a, int depth, int stencil, int glMajorVersion) {
 		mRedSize = r;
 		mGreenSize = g;
 		mBlueSize = b;
 		mAlphaSize = a;
 		mDepthSize = depth;
 		mStencilSize = stencil;
+
+		int renderableType = (glMajorVersion == 1) ? EGL_OPENGL_ES1_BIT : EGL_OPENGL_ES2_BIT;
+
+		mConfigAttribs = new int[] {
+			EGL10.EGL_RED_SIZE, 4,
+			EGL10.EGL_GREEN_SIZE, 4,
+			EGL10.EGL_BLUE_SIZE, 4,
+			// EGL10.EGL_DEPTH_SIZE,     16,
+			// EGL10.EGL_STENCIL_SIZE,   EGL10.EGL_DONT_CARE,
+			EGL10.EGL_RENDERABLE_TYPE, renderableType,
+			EGL10.EGL_NONE
+		};
 	}
 
 	public EGLConfig chooseConfig(EGL10 egl, EGLDisplay display) {
 		/* Get the number of minimally matching EGL configurations
 		 */
 		int[] num_config = new int[1];
-		egl.eglChooseConfig(display, s_configAttribs, null, 0, num_config);
+		egl.eglChooseConfig(display, mConfigAttribs, null, 0, num_config);
 
 		int numConfigs = num_config[0];
 
@@ -84,7 +90,7 @@ public class RegularConfigChooser implements GLSurfaceView.EGLConfigChooser {
 		/* Allocate then read the array of minimally matching EGL configs
 		 */
 		EGLConfig[] configs = new EGLConfig[numConfigs];
-		egl.eglChooseConfig(display, s_configAttribs, configs, numConfigs, num_config);
+		egl.eglChooseConfig(display, mConfigAttribs, configs, numConfigs, num_config);
 
 		if (GLUtils.DEBUG) {
 			GLUtils.printConfigs(egl, display, configs);

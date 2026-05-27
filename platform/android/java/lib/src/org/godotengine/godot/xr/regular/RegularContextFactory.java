@@ -70,22 +70,29 @@ public class RegularContextFactory implements GLSurfaceView.EGLContextFactory {
 
 		GLUtils.checkEglError(TAG, "Before eglCreateContext", egl);
 		EGLContext context;
-		int[] debug_attrib_list = {
-			EGL_CONTEXT_CLIENT_VERSION,
-			this.mGlMajor,
-			_EGL_CONTEXT_FLAGS_KHR,
-			_EGL_CONTEXT_OPENGL_DEBUG_BIT_KHR,
-			EGL10.EGL_NONE
-		};
-		int[] attrib_list = { EGL_CONTEXT_CLIENT_VERSION, this.mGlMajor, EGL10.EGL_NONE };
-		if (mUseDebugOpengl) {
-			context = egl.eglCreateContext(display, eglConfig, EGL10.EGL_NO_CONTEXT, debug_attrib_list);
-			if (context == null || context == EGL10.EGL_NO_CONTEXT) {
-				Log.w(TAG, "creating 'OpenGL Debug' context failed");
+		
+		if (this.mGlMajor == 1) {
+			int[] attrib_list = { EGL10.EGL_NONE };
+			context = egl.eglCreateContext(display, eglConfig, EGL10.EGL_NO_CONTEXT, attrib_list);
+		} else {
+			int[] debug_attrib_list = {
+				EGL_CONTEXT_CLIENT_VERSION,
+				this.mGlMajor,
+				_EGL_CONTEXT_FLAGS_KHR,
+				_EGL_CONTEXT_OPENGL_DEBUG_BIT_KHR,
+				EGL10.EGL_NONE
+			};
+			int[] attrib_list = { EGL_CONTEXT_CLIENT_VERSION, this.mGlMajor, EGL10.EGL_NONE };
+
+			if (mUseDebugOpengl) {
+				context = egl.eglCreateContext(display, eglConfig, EGL10.EGL_NO_CONTEXT, debug_attrib_list);
+				if (context == null || context == EGL10.EGL_NO_CONTEXT) {
+					Log.w(TAG, "creating 'OpenGL Debug' context failed");
+					context = egl.eglCreateContext(display, eglConfig, EGL10.EGL_NO_CONTEXT, attrib_list);
+				}
+			} else {
 				context = egl.eglCreateContext(display, eglConfig, EGL10.EGL_NO_CONTEXT, attrib_list);
 			}
-		} else {
-			context = egl.eglCreateContext(display, eglConfig, EGL10.EGL_NO_CONTEXT, attrib_list);
 		}
 
 		GLUtils.checkEglError(TAG, "After eglCreateContext", egl);

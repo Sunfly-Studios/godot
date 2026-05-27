@@ -334,8 +334,8 @@ class GodotGLRenderView extends GLSurfaceView implements GodotRenderView {
 				 */
 
 				setEGLConfigChooser(
-						new RegularFallbackConfigChooser(8, 8, 8, 8, 24, 0,
-								new RegularConfigChooser(8, 8, 8, 8, 16, 0)));
+						new RegularFallbackConfigChooser(8, 8, 8, 8, 24, 0, glMajor,
+								new RegularConfigChooser(8, 8, 8, 8, 16, 0, glMajor)));
 				break;
 		}
 	}
