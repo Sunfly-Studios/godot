@@ -2628,7 +2628,9 @@ int RichTextLabel::_find_margin(Item *p_item, const Ref<Font> &p_base_font, int 
 			if (font_size_it && font_size_it->font_size > 0) {
 				font_size = font_size_it->font_size;
 			}
-			margin += tab_size * font->get_char_size(' ', font_size).width;
+			if (tab_size > 0) {
+				margin += MAX(1, tab_size * font->get_char_size(' ', font_size).width);
+			}
 
 		} else if (item->type == ITEM_LIST) {
 			Ref<Font> font = p_base_font;
@@ -2647,7 +2649,9 @@ int RichTextLabel::_find_margin(Item *p_item, const Ref<Font> &p_base_font, int 
 			if (font_size_it && font_size_it->font_size > 0) {
 				font_size = font_size_it->font_size;
 			}
-			margin += tab_size * font->get_char_size(' ', font_size).width;
+			if (tab_size > 0) {
+				margin += MAX(1, tab_size * font->get_char_size(' ', font_size).width);
+			}
 		}
 
 		item = item->parent;
