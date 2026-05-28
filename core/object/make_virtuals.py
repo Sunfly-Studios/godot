@@ -1,10 +1,14 @@
 script_call = """ScriptInstance *_script_instance = ((Object *)(this))->get_script_instance();\\
-		if (_script_instance) {\\
+		if (likely(_script_instance)) {\\
 			Callable::CallError ce;\\
 			$CALLSIARGS\\
 			$CALLSIBEGIN_script_instance->callp(_gdvirtual_##$VARNAME##_sn, $CALLSIARGPASS, ce);\\
-			if (ce.error == Callable::CallError::CALL_OK) {\\
+			bool _call_ok = (ce.error == Callable::CallError::CALL_OK);\\
+			if (likely(_call_ok)) {\\
 				$CALLSIRET\\
+			}\\
+			$CALLSICLEANUP\\
+			if (_call_ok) {\\
 				return true;\\
 			}\\
 		}"""
@@ -17,32 +21,35 @@ script_has_method = """ScriptInstance *_script_instance = ((Object *)(this))->ge
 proto = """#define GDVIRTUAL$VER($ALIAS $RET m_name $ARG)\\
 	mutable void *_gdvirtual_##$VARNAME = nullptr;\\
 	_FORCE_INLINE_ bool _gdvirtual_##$VARNAME##_call($CALLARGS) $CONST {\\
+		using ThisClass = std::remove_pointer_t<decltype(this)>;\\
 		static const StringName _gdvirtual_##$VARNAME##_sn = _scs_create(#m_name, true);\\
 		$SCRIPTCALL\\
-		if (_get_extension()) {\\
-			if (unlikely(!_gdvirtual_##$VARNAME)) {\\
-				MethodInfo mi = _gdvirtual_##$VARNAME##_get_method_info();\\
+		if (ThisClass::_get_extension()) {\\
+			void *cached_virt = _gdvirtual_##$VARNAME;\\
+			if (unlikely(!cached_virt)) {\\
+				MethodInfo mi = ThisClass::_gdvirtual_##$VARNAME##_get_method_info();\\
 				uint32_t hash = mi.get_compatibility_hash();\\
-				_gdvirtual_##$VARNAME = nullptr;\\
-				if (_get_extension()->get_virtual_call_data2 && _get_extension()->call_virtual_with_data) {\\
-					_gdvirtual_##$VARNAME = _get_extension()->get_virtual_call_data2(_get_extension()->class_userdata, &_gdvirtual_##$VARNAME##_sn, hash);\\
-				} else if (_get_extension()->get_virtual2) {\\
-					_gdvirtual_##$VARNAME = (void *)_get_extension()->get_virtual2(_get_extension()->class_userdata, &_gdvirtual_##$VARNAME##_sn, hash);\\
+				if (ThisClass::_get_extension()->get_virtual_call_data2 && ThisClass::_get_extension()->call_virtual_with_data) {\\
+					_gdvirtual_##$VARNAME = ThisClass::_get_extension()->get_virtual_call_data2(ThisClass::_get_extension()->class_userdata, &_gdvirtual_##$VARNAME##_sn, hash);\\
+				} else if (ThisClass::_get_extension()->get_virtual2) {\\
+					_gdvirtual_##$VARNAME = (void *)ThisClass::_get_extension()->get_virtual2(ThisClass::_get_extension()->class_userdata, &_gdvirtual_##$VARNAME##_sn, hash);\\
 				}\\
 				_GDVIRTUAL_GET_DEPRECATED(_gdvirtual_##$VARNAME, _gdvirtual_##$VARNAME##_sn, $COMPAT)\\
 				_GDVIRTUAL_TRACK(_gdvirtual_##$VARNAME);\\
-				if (_gdvirtual_##$VARNAME == nullptr) {\\
+				if (!_gdvirtual_##$VARNAME) {\\
 					_gdvirtual_##$VARNAME = reinterpret_cast<void*>(_INVALID_GDVIRTUAL_FUNC_ADDR);\\
 				}\\
+				cached_virt = _gdvirtual_##$VARNAME;\\
 			}\\
-			if (_gdvirtual_##$VARNAME != reinterpret_cast<void*>(_INVALID_GDVIRTUAL_FUNC_ADDR)) {\\
+			if (likely(cached_virt != reinterpret_cast<void*>(_INVALID_GDVIRTUAL_FUNC_ADDR))) {\\
 				$CALLPTRARGS\\
 				$CALLPTRRETDEF\\
-				if (_get_extension()->call_virtual_with_data) {\\
-					_get_extension()->call_virtual_with_data(_get_extension_instance(), &_gdvirtual_##$VARNAME##_sn, _gdvirtual_##$VARNAME, $CALLPTRARGPASS, $CALLPTRRETPASS);\\
+				if (ThisClass::_get_extension()->call_virtual_with_data) {\\
+					ThisClass::_get_extension()->call_virtual_with_data(ThisClass::_get_extension_instance(), &_gdvirtual_##$VARNAME##_sn, cached_virt, $CALLPTRARGPASS, $CALLPTRRETPASS);\\
 					$CALLPTRRET\\
 				} else {\\
-					((GDExtensionClassCallVirtual)_gdvirtual_##$VARNAME)(_get_extension_instance(), $CALLPTRARGPASS, $CALLPTRRETPASS);\\
+					const GDExtensionClassCallVirtual call_func = reinterpret_cast<GDExtensionClassCallVirtual>(cached_virt);\\
+					call_func(ThisClass::_get_extension_instance(), $CALLPTRARGPASS, $CALLPTRRETPASS);\\
 					$CALLPTRRET\\
 				}\\
 				return true;\\
@@ -53,25 +60,27 @@ proto = """#define GDVIRTUAL$VER($ALIAS $RET m_name $ARG)\\
 		return false;\\
 	}\\
 	_FORCE_INLINE_ bool _gdvirtual_##$VARNAME##_overridden() const {\\
+		using ThisClass = std::remove_pointer_t<decltype(this)>;\\
 		static const StringName _gdvirtual_##$VARNAME##_sn = _scs_create(#m_name, true);\\
 		$SCRIPTHASMETHOD\\
-		if (_get_extension()) {\\
-			if (unlikely(!_gdvirtual_##$VARNAME)) {\\
-				MethodInfo mi = _gdvirtual_##$VARNAME##_get_method_info();\\
+		if (ThisClass::_get_extension()) {\\
+			void *cached_virt = _gdvirtual_##$VARNAME;\\
+			if (unlikely(!cached_virt)) {\\
+				MethodInfo mi = ThisClass::_gdvirtual_##$VARNAME##_get_method_info();\\
 				uint32_t hash = mi.get_compatibility_hash();\\
-				_gdvirtual_##$VARNAME = nullptr;\\
-				if (_get_extension()->get_virtual_call_data2 && _get_extension()->call_virtual_with_data) {\\
-					_gdvirtual_##$VARNAME = _get_extension()->get_virtual_call_data2(_get_extension()->class_userdata, &_gdvirtual_##$VARNAME##_sn, hash);\\
-				} else if (_get_extension()->get_virtual2) {\\
-					_gdvirtual_##$VARNAME = (void *)_get_extension()->get_virtual2(_get_extension()->class_userdata, &_gdvirtual_##$VARNAME##_sn, hash);\\
+				if (ThisClass::_get_extension()->get_virtual_call_data2 && ThisClass::_get_extension()->call_virtual_with_data) {\\
+					_gdvirtual_##$VARNAME = ThisClass::_get_extension()->get_virtual_call_data2(ThisClass::_get_extension()->class_userdata, &_gdvirtual_##$VARNAME##_sn, hash);\\
+				} else if (ThisClass::_get_extension()->get_virtual2) {\\
+					_gdvirtual_##$VARNAME = (void *)ThisClass::_get_extension()->get_virtual2(ThisClass::_get_extension()->class_userdata, &_gdvirtual_##$VARNAME##_sn, hash);\\
 				}\\
 				_GDVIRTUAL_GET_DEPRECATED(_gdvirtual_##$VARNAME, _gdvirtual_##$VARNAME##_sn, $COMPAT)\\
 				_GDVIRTUAL_TRACK(_gdvirtual_##$VARNAME);\\
-				if (_gdvirtual_##$VARNAME == nullptr) {\\
+				if (!_gdvirtual_##$VARNAME) {\\
 					_gdvirtual_##$VARNAME = reinterpret_cast<void*>(_INVALID_GDVIRTUAL_FUNC_ADDR);\\
 				}\\
+				cached_virt = _gdvirtual_##$VARNAME;\\
 			}\\
-			if (_gdvirtual_##$VARNAME != reinterpret_cast<void*>(_INVALID_GDVIRTUAL_FUNC_ADDR)) {\\
+			if (likely(cached_virt != reinterpret_cast<void*>(_INVALID_GDVIRTUAL_FUNC_ADDR))) {\\
 				return true;\\
 			}\\
 		}\\
@@ -104,13 +113,15 @@ def generate_version(argcount, const=False, returns=False, required=False, compa
         sproto += "R"
         s = s.replace("$RET", "m_ret,")
         s = s.replace("$RVOID", "(void)r_ret;")  # If required, may lead to uninitialized errors
-        s = s.replace("$CALLPTRRETDEF", "PtrToArg<m_ret>::EncodeT ret;")
+        # Allocate and zero-initialize the return memory
+        s = s.replace("$CALLPTRRETDEF", "PtrToArg<m_ret>::EncodeT *ret = SAFE_ALLOCA_SINGLE(PtrToArg<m_ret>::EncodeT);\\\n\t\t\t\tunaligned_write(ret, PtrToArg<m_ret>::EncodeT{});")
         method_info += "method_info.return_val = GetTypeInfo<m_ret>::get_class_info();\\\n"
         method_info += "\t\tmethod_info.return_val_metadata = GetTypeInfo<m_ret>::METADATA;"
     else:
         s = s.replace("$RET ", "")
         s = s.replace("\t\t$RVOID\\\n", "")
-        s = s.replace("\t\t\t$CALLPTRRETDEF\\\n", "")
+        s = s.replace("\t\t\t\t$CALLPTRRETDEF\\\n", "")
+        s = s.replace("$CALLPTRRETDEF", "")
 
     if const:
         sproto += "C"
@@ -122,12 +133,14 @@ def generate_version(argcount, const=False, returns=False, required=False, compa
     if required:
         sproto += "_REQUIRED"
         method_flags += " | METHOD_FLAG_VIRTUAL_REQUIRED"
+        # Devirtualise get_class() resolving to bypass vtable
         s = s.replace(
             "$REQCHECK",
-            'ERR_PRINT_ONCE("Required virtual method " + get_class() + "::" + #m_name + " must be overridden before calling.");',
+            'ERR_PRINT_ONCE("Required virtual method " + ThisClass::get_class_static() + "::" + #m_name + " must be overridden before calling.");',
         )
     else:
         s = s.replace("\t\t$REQCHECK\\\n", "")
+        s = s.replace("$REQCHECK", "")
 
     if compat:
         sproto += "_COMPAT"
@@ -143,48 +156,61 @@ def generate_version(argcount, const=False, returns=False, required=False, compa
     s = s.replace("$VER", sproto)
     argtext = ""
     callargtext = ""
+    
     callsiargs = ""
     callsiargptrs = ""
+    callsi_cleanup = ""
+    
+    callptrargs = ""
     callptrargsptr = ""
+
     if argcount > 0:
         argtext += ", "
-        callsiargs = f"Variant vargs[{argcount}] = {{ "
-        callsiargptrs = f"\t\t\tconst Variant *vargptrs[{argcount}] = {{ "
-        callptrargsptr = f"\t\t\tGDExtensionConstTypePtr argptrs[{argcount}] = {{ "
-    callptrargs = ""
+        # Allocate memory on the stack
+        callsiargs = f"\t\t\tVariant *vargs = SAFE_ALLOCA_ARRAY(Variant, {argcount});\\\n"
+        callsiargptrs = f"\t\t\tconst Variant **vargptrs = SAFE_ALLOCA_ARRAY(const Variant *, {argcount});\\\n"
+        callptrargsptr = f"\t\t\tGDExtensionConstTypePtr *argptrs = SAFE_ALLOCA_ARRAY(GDExtensionConstTypePtr, {argcount});\\\n"
+        
     for i in range(argcount):
         if i > 0:
             argtext += ", "
             callargtext += ", "
-            callsiargs += ", "
-            callsiargptrs += ", "
-            callptrargs += "\t\t\t"
-            callptrargsptr += ", "
+            
         argtext += f"m_type{i + 1}"
         callargtext += f"m_type{i + 1} arg{i + 1}"
-        callsiargs += f"arg{i + 1}"
-        callsiargptrs += f"&vargs[{i}]"
-        callptrargs += (
-            f"PtrToArg<m_type{i + 1}>::EncodeT argval{i + 1} = (PtrToArg<m_type{i + 1}>::EncodeT)arg{i + 1};\\\n"
-        )
-        callptrargsptr += f"&argval{i + 1}"
+        
+        # Script arguments
+        callsiargs += f"\t\t\tmemnew_placement(&vargs[{i}], Variant);\\\n"
+        callsiargs += f"\t\t\tvargs[{i}] = arg{i + 1};\\\n"
+        callsiargptrs += f"\t\t\tvargptrs[{i}] = &vargs[{i}];\\\n"
+        callsi_cleanup += f"\t\t\tvargs[{i}].~Variant();\\\n" # Manual destrunction for RefCount leak
+
+        # Extension arguments
+        callptrargs += f"\t\t\tPtrToArg<m_type{i + 1}>::EncodeT *argval{i + 1} = SAFE_ALLOCA_SINGLE(PtrToArg<m_type{i + 1}>::EncodeT);\\\n"
+        callptrargs += f"\t\t\tunaligned_construct<PtrToArg<m_type{i + 1}>::EncodeT>(argval{i + 1}, (PtrToArg<m_type{i + 1}>::EncodeT)arg{i + 1});\\\n"
+        callptrargsptr += f"\t\t\targptrs[{i}] = argval{i + 1};\\\n"
+        
         if method_info:
             method_info += "\\\n\t\t"
         method_info += f"method_info.arguments.push_back(GetTypeInfo<m_type{i + 1}>::get_class_info());\\\n"
         method_info += f"\t\tmethod_info.arguments_metadata.push_back(GetTypeInfo<m_type{i + 1}>::METADATA);"
 
     if argcount:
-        callsiargs += " };\\\n"
-        callsiargptrs += " };"
         s = s.replace("$CALLSIARGS", callsiargs + callsiargptrs)
         s = s.replace("$CALLSIARGPASS", f"(const Variant **)vargptrs, {argcount}")
-        callptrargsptr += " };"
+        s = s.replace("$CALLSICLEANUP", callsi_cleanup)
+        
         s = s.replace("$CALLPTRARGS", callptrargs + callptrargsptr)
-        s = s.replace("$CALLPTRARGPASS", "reinterpret_cast<GDExtensionConstTypePtr *>(argptrs)")
+        s = s.replace("$CALLPTRARGPASS", "argptrs")
     else:
         s = s.replace("\t\t\t$CALLSIARGS\\\n", "")
+        s = s.replace("$CALLSIARGS", "")
         s = s.replace("$CALLSIARGPASS", "nullptr, 0")
+        s = s.replace("\t\t\t$CALLSICLEANUP\\\n", "")
+        s = s.replace("$CALLSICLEANUP", "")
+        
         s = s.replace("\t\t\t$CALLPTRARGS\\\n", "")
+        s = s.replace("$CALLPTRARGS", "")
         s = s.replace("$CALLPTRARGPASS", "nullptr")
 
     if returns:
@@ -193,13 +219,17 @@ def generate_version(argcount, const=False, returns=False, required=False, compa
         callargtext += "m_ret &r_ret"
         s = s.replace("$CALLSIBEGIN", "Variant ret = ")
         s = s.replace("$CALLSIRET", "r_ret = VariantCaster<m_ret>::cast(ret);")
-        s = s.replace("$CALLPTRRETPASS", "&ret")
-        s = s.replace("$CALLPTRRET", "r_ret = (m_ret)ret;")
+        
+        s = s.replace("$CALLPTRRETPASS", "ret")
+        s = s.replace("$CALLPTRRET", "r_ret = (m_ret)unaligned_read<PtrToArg<m_ret>::EncodeT>(ret);")
     else:
         s = s.replace("$CALLSIBEGIN", "")
         s = s.replace("\t\t\t\t$CALLSIRET\\\n", "")
+        s = s.replace("$CALLSIRET", "")
+        
         s = s.replace("$CALLPTRRETPASS", "nullptr")
-        s = s.replace("\t\t\t\t$CALLPTRRET\\\n", "")
+        s = s.replace("\t\t\t\t\t$CALLPTRRET\\\n", "")
+        s = s.replace("$CALLPTRRET", "")
 
     s = s.replace(" $ARG", argtext)
     s = s.replace("$CALLARGS", callargtext)
@@ -207,6 +237,7 @@ def generate_version(argcount, const=False, returns=False, required=False, compa
         s = s.replace("$FILL_METHOD_INFO", method_info)
     else:
         s = s.replace("\t\t$FILL_METHOD_INFO\\\n", method_info)
+        s = s.replace("$FILL_METHOD_INFO", method_info)
 
     return s
 
@@ -225,7 +256,7 @@ inline constexpr uintptr_t _INVALID_GDVIRTUAL_FUNC_ADDR = static_cast<uintptr_t>
 
 #ifdef TOOLS_ENABLED
 #define _GDVIRTUAL_TRACK(m_virtual)\\
-	if (_get_extension()->reloadable) {\\
+	if (ThisClass::_get_extension()->reloadable) {\\
 		VirtualMethodTracker *tracker = memnew(VirtualMethodTracker);\\
 		tracker->method = (void **)&m_virtual;\\
 		tracker->next = virtual_method_list;\\
@@ -237,15 +268,15 @@ inline constexpr uintptr_t _INVALID_GDVIRTUAL_FUNC_ADDR = static_cast<uintptr_t>
 
 #ifndef DISABLE_DEPRECATED
 #define _GDVIRTUAL_GET_DEPRECATED(m_virtual, m_name_sn, m_compat)\\
-	else if (m_compat || ClassDB::get_virtual_method_compatibility_hashes(get_class_static(), m_name_sn).size() == 0) {\\
-		if (_get_extension()->get_virtual_call_data && _get_extension()->call_virtual_with_data) {\\
-			m_virtual = _get_extension()->get_virtual_call_data(_get_extension()->class_userdata, &m_name_sn);\\
-		} else if (_get_extension()->get_virtual) {\\
-			m_virtual = (void *)_get_extension()->get_virtual(_get_extension()->class_userdata, &m_name_sn);\\
+	else if (m_compat || ClassDB::get_virtual_method_compatibility_hashes(ThisClass::get_class_static(), m_name_sn).size() == 0) {\\
+		if (ThisClass::_get_extension()->get_virtual_call_data && ThisClass::_get_extension()->call_virtual_with_data) {\\
+			m_virtual = ThisClass::_get_extension()->get_virtual_call_data(ThisClass::_get_extension()->class_userdata, &m_name_sn);\\
+		} else if (ThisClass::_get_extension()->get_virtual) {\\
+			m_virtual = (void *)ThisClass::_get_extension()->get_virtual(ThisClass::_get_extension()->class_userdata, &m_name_sn);\\
 		}\\
 	}
 #else
-#define _GDVIRTUAL_GET_DEPRECATED(m_name, m_name_sn, m_compat)
+#define _GDVIRTUAL_GET_DEPRECATED(m_virtual, m_name_sn, m_compat)
 #endif
 
 """
