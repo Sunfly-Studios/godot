@@ -467,6 +467,7 @@ bool ShaderRD::_load_from_cache(Version *p_version, int p_group) {
 		uint32_t variant_size = f->get_32();
 		ERR_FAIL_COND_V(variant_size == 0 && variants_enabled[variant_id], false);
 		if (!variants_enabled[variant_id]) {
+			f->seek(f->get_position() + variant_size);
 			continue;
 		}
 		Vector<uint8_t> variant_bytes;
