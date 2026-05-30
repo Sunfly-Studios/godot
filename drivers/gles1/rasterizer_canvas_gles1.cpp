@@ -1902,7 +1902,7 @@ void RasterizerCanvasGLES1::gl_disable_scissor() const {
 }
 
 void RasterizerCanvasGLES1::_bind_quad_buffer() const {
-	if (likely(data.canvas_quad_vertices != 0)) {
+	if (data.canvas_quad_vertices != 0) {
 		glBindBuffer(GL_ARRAY_BUFFER, data.canvas_quad_vertices);
 		glEnableClientState(GL_VERTEX_ARRAY);
 		glEnableClientState(GL_TEXTURE_COORD_ARRAY);
@@ -1953,7 +1953,7 @@ void RasterizerCanvasGLES1::_bind_quad_buffer() const {
 			}
 			glClientActiveTexture(GL_TEXTURE0);
 		}
-	} else {
+	} else { // data.canvas_quad_vertices != 0
 		glBindBuffer(GL_ARRAY_BUFFER, 0);
 		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
 		glEnableClientState(GL_VERTEX_ARRAY);
@@ -2178,7 +2178,7 @@ void RasterizerCanvasGLES1::_batch_render_generic(const Batch &p_batch, GLES1::C
 
 	bool use_vbo = bdata.gl_vertex_buffer != 0 && bdata.gl_index_buffer != 0;
 
-	if (likely(use_vbo)) {
+	if (use_vbo) {
 		// Bind the massive dynamic buffer
 		glBindBuffer(GL_ARRAY_BUFFER, bdata.gl_vertex_buffer);
 		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, bdata.gl_index_buffer);
@@ -2286,7 +2286,7 @@ void RasterizerCanvasGLES1::_batch_render_generic(const Batch &p_batch, GLES1::C
 	switch (p_batch.type) {
 		case BatcherEnums::BT_RECT: {
 			int num_elements = p_batch.num_commands * 6;
-			if (likely(use_vbo)) {
+			if (use_vbo) {
 				glDrawElements(GL_TRIANGLES, num_elements, GL_UNSIGNED_SHORT, nullptr);
 			} else {
 				// Allocate and generate indices locally
@@ -2518,6 +2518,7 @@ void RasterizerCanvasGLES1::render_batches(Item::Command *const *p_commands, Ite
 							glPushMatrix();
 
 							if (state.using_light) {
+								constexpr GLfloat transpose[16] = { 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1 };
 								GLint max_units = GLES1::Config::get_singleton()->max_texture_units;
 								if (max_units >= 2) {
 									glActiveTexture(GL_TEXTURE0 + 1);
@@ -2526,7 +2527,6 @@ void RasterizerCanvasGLES1::render_batches(Item::Command *const *p_commands, Ite
 									glTranslatef(dst_rect.position.x, dst_rect.position.y, 0.0f);
 									glScalef(Math::abs(dst_rect.size.x), Math::abs(dst_rect.size.y), 1.0f);
 									if (dst_rect.size.x < 0) {
-										constexpr GLfloat transpose[16] = { 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1 };
 										glMultMatrixf(transpose);
 									}
 									glActiveTexture(GL_TEXTURE0);
@@ -2538,7 +2538,6 @@ void RasterizerCanvasGLES1::render_batches(Item::Command *const *p_commands, Ite
 									glTranslatef(dst_rect.position.x, dst_rect.position.y, 0.0f);
 									glScalef(Math::abs(dst_rect.size.x), Math::abs(dst_rect.size.y), 1.0f);
 									if (dst_rect.size.x < 0) {
-										constexpr GLfloat transpose[16] = { 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1 };
 										glMultMatrixf(transpose);
 									}
 									glActiveTexture(GL_TEXTURE0);
@@ -2549,7 +2548,6 @@ void RasterizerCanvasGLES1::render_batches(Item::Command *const *p_commands, Ite
 									glTranslatef(dst_rect.position.x, dst_rect.position.y, 0.0f);
 									glScalef(Math::abs(dst_rect.size.x), Math::abs(dst_rect.size.y), 1.0f);
 									if (dst_rect.size.x < 0) {
-										constexpr GLfloat transpose[16] = { 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1 };
 										glMultMatrixf(transpose);
 									}
 									glActiveTexture(GL_TEXTURE0);
@@ -2591,6 +2589,7 @@ void RasterizerCanvasGLES1::render_batches(Item::Command *const *p_commands, Ite
 							glPopMatrix();
 							glMatrixMode(GL_MODELVIEW);
 							glPopMatrix();
+							GL_CHECK_ERROR("GLES1::Canvas::render_batches: TYPE_RECT glPopMatrix");
 
 							glBindBuffer(GL_ARRAY_BUFFER, 0);
 							glDisableClientState(GL_VERTEX_ARRAY);
@@ -2712,7 +2711,7 @@ void RasterizerCanvasGLES1::render_batches(Item::Command *const *p_commands, Ite
 								}
 							}
 
-							if (likely(data.ninepatch_vertices != 0 && data.ninepatch_elements != 0)) {
+							if (data.ninepatch_vertices != 0 && data.ninepatch_elements != 0) {
 								glBindBuffer(GL_ARRAY_BUFFER, data.ninepatch_vertices);
 								constexpr uint32_t buffer_size = sizeof(float) * (16 + 16) * 2;
 								bool upload_success = _buffer_orphan_and_upload(buffer_size, 0, buffer_size, buffer, GL_ARRAY_BUFFER, GL_DYNAMIC_DRAW, false);
@@ -2791,7 +2790,7 @@ void RasterizerCanvasGLES1::render_batches(Item::Command *const *p_commands, Ite
 
 								glDrawElements(GL_TRIANGLES, 18 * 3 - (np->draw_center ? 0 : 6), GL_UNSIGNED_SHORT, nullptr);
 								GL_CHECK_ERROR("GLES1::Canvas::render_batches: TYPE_NINEPATCH glDrawElements");
-							} else {
+							} else { // data.ninepatch_vertices != 0 && data.ninepatch_elements != 0
 								glBindBuffer(GL_ARRAY_BUFFER, 0);
 								glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
 
@@ -3020,7 +3019,7 @@ void RasterizerCanvasGLES1::render_batches(Item::Command *const *p_commands, Ite
 									bool use_index_vbo = s->index_buffer != 0;
 
 									if (s->index_count > 0) {
-										if (likely(use_index_vbo)) {
+										if (use_index_vbo) {
 											glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, s->index_buffer);
 										} else {
 											glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
@@ -3043,7 +3042,7 @@ void RasterizerCanvasGLES1::render_batches(Item::Command *const *p_commands, Ite
 										for (int k = 0; k < maximum_attributes; k++) {
 											if (v->attribs[k].enabled) {
 												if (k == RS::ARRAY_VERTEX) {
-													if (likely(use_vertex_vbo)) {
+													if (use_vertex_vbo) {
 														// Positions live in the vertex buffer
 														glBindBuffer(GL_ARRAY_BUFFER, s->vertex_buffer);
 														glEnableClientState(GL_VERTEX_ARRAY);
@@ -3056,7 +3055,7 @@ void RasterizerCanvasGLES1::render_batches(Item::Command *const *p_commands, Ite
 													}
 												} else if (k == RS::ARRAY_COLOR) {
 													surface_has_colors = true;
-													if (likely(use_attr_vbo)) {
+													if (use_attr_vbo) {
 														// Colors live in the attribute buffer
 														glBindBuffer(GL_ARRAY_BUFFER, s->attribute_buffer);
 														glEnableClientState(GL_COLOR_ARRAY);
@@ -3068,7 +3067,7 @@ void RasterizerCanvasGLES1::render_batches(Item::Command *const *p_commands, Ite
 														glColorPointer(v->attribs[k].size, v->attribs[k].type, v->attribs[k].stride, s->attribute_buffer_fallback.ptr() + v->attribs[k].offset);
 													}
 												} else if (k == RS::ARRAY_TEX_UV) {
-													if (likely(use_attr_vbo)) {
+													if (use_attr_vbo) {
 														// UVs live in the attribute buffer
 														glBindBuffer(GL_ARRAY_BUFFER, s->attribute_buffer);
 														glEnableClientState(GL_TEXTURE_COORD_ARRAY);
@@ -3115,7 +3114,7 @@ void RasterizerCanvasGLES1::render_batches(Item::Command *const *p_commands, Ite
 											ERR_PRINT_ONCE("GLES1: Device does not support 32-bit indices for large 2D meshes. Skipping draw.");
 										} else {
 											GLenum index_type = needs_32_bit ? GL_UNSIGNED_INT : GL_UNSIGNED_SHORT;
-											if (likely(use_index_vbo)) {
+											if (use_index_vbo) {
 												glDrawElements(gl_primitive, s->index_count, index_type, nullptr);
 											} else {
 												ERR_FAIL_COND(s->index_buffer_fallback.is_empty());
@@ -3270,7 +3269,7 @@ void RasterizerCanvasGLES1::render_batches(Item::Command *const *p_commands, Ite
 								bool use_index_vbo = s->index_buffer != 0;
 
 								if (s->index_count > 0) {
-									if (likely(use_index_vbo)) {
+									if (use_index_vbo) {
 										glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, s->index_buffer);
 									} else {
 										glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
@@ -3293,7 +3292,7 @@ void RasterizerCanvasGLES1::render_batches(Item::Command *const *p_commands, Ite
 									for (int k = 0; k < maximum_attributes; k++) {
 										if (v->attribs[k].enabled) {
 											if (k == RS::ARRAY_VERTEX) {
-												if (likely(use_vertex_vbo)) {
+												if (use_vertex_vbo) {
 													glBindBuffer(GL_ARRAY_BUFFER, s->vertex_buffer);
 													glEnableClientState(GL_VERTEX_ARRAY);
 													glVertexPointer(v->attribs[k].size, v->attribs[k].type, v->attribs[k].stride, (const void *)(uintptr_t)v->attribs[k].offset);
@@ -3311,7 +3310,7 @@ void RasterizerCanvasGLES1::render_batches(Item::Command *const *p_commands, Ite
 													glDisableClientState(GL_COLOR_ARRAY);
 												} else {
 													surface_has_colors = true;
-													if (likely(use_attr_vbo)) {
+													if (use_attr_vbo) {
 														glBindBuffer(GL_ARRAY_BUFFER, s->attribute_buffer);
 														glEnableClientState(GL_COLOR_ARRAY);
 														glColorPointer(v->attribs[k].size, v->attribs[k].type, v->attribs[k].stride, (const void *)(uintptr_t)v->attribs[k].offset);
@@ -3323,7 +3322,7 @@ void RasterizerCanvasGLES1::render_batches(Item::Command *const *p_commands, Ite
 													}
 												}
 											} else if (k == RS::ARRAY_TEX_UV) {
-												if (likely(use_attr_vbo)) {
+												if (use_attr_vbo) {
 													glBindBuffer(GL_ARRAY_BUFFER, s->attribute_buffer);
 													glEnableClientState(GL_TEXTURE_COORD_ARRAY);
 													glTexCoordPointer(v->attribs[k].size, v->attribs[k].type, v->attribs[k].stride, (const void *)(uintptr_t)v->attribs[k].offset);
@@ -3465,7 +3464,7 @@ void RasterizerCanvasGLES1::render_batches(Item::Command *const *p_commands, Ite
 										if (unlikely(needs_32_bit && !GLES1::Config::get_singleton()->support_32_bits_indices)) {
 											ERR_PRINT_ONCE("GLES1: Device does not support 32-bit indices for large MultiMeshes.");
 										} else {
-											if (likely(use_index_vbo)) {
+											if (use_index_vbo) {
 												glDrawElements(gl_primitive, s->index_count, index_type, nullptr);
 											} else {
 												ERR_FAIL_COND(s->index_buffer_fallback.is_empty());
@@ -3701,7 +3700,7 @@ void RasterizerCanvasGLES1::_draw_gui_primitive(int p_points, const Vector2 *p_v
 			glDisable(GL_TEXTURE_2D);
 		}
 		GL_CHECK_ERROR("GLES1::Canvas::_draw_gui_primitive: buffer subdata and pointers");
-	} else {
+	} else { // non-VBO
 		glBindBuffer(GL_ARRAY_BUFFER, 0);
 		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
 
@@ -4076,7 +4075,7 @@ void RasterizerCanvasGLES1::_legacy_draw_polygon(Item::CommandPolygon *p_poly, G
 			glColor4f(c.r, c.g, c.b, c.a);
 		}
 		GL_CHECK_ERROR("GLES1::Canvas::_legacy_draw_polygon: color subdata and pointers");
-	} else {
+	} else { // non-VBO
 		glBindBuffer(GL_ARRAY_BUFFER, 0);
 
 #ifdef REAL_T_IS_DOUBLE
