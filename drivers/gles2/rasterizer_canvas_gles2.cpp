@@ -2665,18 +2665,18 @@ void RasterizerCanvasGLES2::_draw_gui_primitive(int p_points, const Vector2 *p_v
 		data.polygon_buffer_size = next_power_of_2(total_size);
 	}
 	uint32_t offset = 0;
+	bool upload_success = false;
 
 	// Vertices
 #ifdef REAL_T_IS_DOUBLE
-	Vector<float> vertex_f;
-	vertex_f.resize(p_points * 2);
+	float *vertex_f = SAFE_ALLOCA_ARRAY(float, p_points * 2);
 	for (int i = 0; i < p_points; i++) {
-		vertex_f.write[i * 2 + 0] = static_cast<float>(p_vertices[i].x);
-		vertex_f.write[i * 2 + 1] = static_cast<float>(p_vertices[i].y);
+		vertex_f[i * 2 + 0] = static_cast<float>(p_vertices[i].x);
+		vertex_f[i * 2 + 1] = static_cast<float>(p_vertices[i].y);
 	}
-	bool upload_success = _buffer_orphan_and_upload(data.polygon_buffer_size, offset, vertex_size, vertex_f.ptr(), GL_ARRAY_BUFFER, GL_DYNAMIC_DRAW, false);
+	upload_success = _buffer_orphan_and_upload(data.polygon_buffer_size, offset, vertex_size, vertex_f, GL_ARRAY_BUFFER, GL_DYNAMIC_DRAW, false);
 #else
-	bool upload_success = _buffer_orphan_and_upload(data.polygon_buffer_size, offset, vertex_size, p_vertices, GL_ARRAY_BUFFER, GL_DYNAMIC_DRAW, false);
+	upload_success = _buffer_orphan_and_upload(data.polygon_buffer_size, offset, vertex_size, p_vertices, GL_ARRAY_BUFFER, GL_DYNAMIC_DRAW, false);
 #endif
 	if (!check_orphan_success(upload_success)) {
 		return;
@@ -2704,13 +2704,12 @@ void RasterizerCanvasGLES2::_draw_gui_primitive(int p_points, const Vector2 *p_v
 	// UVs
 	if (p_uvs) {
 #ifdef REAL_T_IS_DOUBLE
-		Vector<float> uv_f;
-		uv_f.resize(p_points * 2);
+		float *uv_f = SAFE_ALLOCA_ARRAY(float, p_points * 2);
 		for (int i = 0; i < p_points; i++) {
-			uv_f.write[i * 2 + 0] = static_cast<float>(p_uvs[i].x);
-			uv_f.write[i * 2 + 1] = static_cast<float>(p_uvs[i].y);
+			uv_f[i * 2 + 0] = static_cast<float>(p_uvs[i].x);
+			uv_f[i * 2 + 1] = static_cast<float>(p_uvs[i].y);
 		}
-		upload_success = _buffer_orphan_and_upload(data.polygon_buffer_size, offset, uv_size, uv_f.ptr(), GL_ARRAY_BUFFER, GL_DYNAMIC_DRAW, true);
+		upload_success = _buffer_orphan_and_upload(data.polygon_buffer_size, offset, uv_size, uv_f, GL_ARRAY_BUFFER, GL_DYNAMIC_DRAW, true);
 #else
 		upload_success = _buffer_orphan_and_upload(data.polygon_buffer_size, offset, uv_size, p_uvs, GL_ARRAY_BUFFER, GL_DYNAMIC_DRAW, true);
 #endif
@@ -2813,18 +2812,18 @@ void RasterizerCanvasGLES2::_legacy_draw_polygon(Item::CommandPolygon *p_poly, G
 		data.polygon_buffer_size = next_power_of_2(total_size);
 	}
 	uint32_t offset = 0;
+	bool upload_success = false;
 
 	// Points
 #ifdef REAL_T_IS_DOUBLE
-	Vector<float> points_f;
-	points_f.resize(points_count * 2);
+	float *points_f = SAFE_ALLOCA_ARRAY(float, points_count * 2);
 	for (uint32_t i = 0; i < points_count; i++) {
-		points_f.write[i * 2 + 0] = static_cast<float>(pd.points[i].x);
-		points_f.write[i * 2 + 1] = static_cast<float>(pd.points[i].y);
+		points_f[i * 2 + 0] = static_cast<float>(pd.points[i].x);
+		points_f[i * 2 + 1] = static_cast<float>(pd.points[i].y);
 	}
-	bool upload_success = _buffer_orphan_and_upload(data.polygon_buffer_size, offset, points_size, points_f.ptr(), GL_ARRAY_BUFFER, GL_DYNAMIC_DRAW, false);
+	upload_success = _buffer_orphan_and_upload(data.polygon_buffer_size, offset, points_size, points_f, GL_ARRAY_BUFFER, GL_DYNAMIC_DRAW, false);
 #else
-	bool upload_success = _buffer_orphan_and_upload(data.polygon_buffer_size, offset, points_size, pd.points.ptr(), GL_ARRAY_BUFFER, GL_DYNAMIC_DRAW, false);
+	upload_success = _buffer_orphan_and_upload(data.polygon_buffer_size, offset, points_size, pd.points.ptr(), GL_ARRAY_BUFFER, GL_DYNAMIC_DRAW, false);
 #endif
 	if (!check_orphan_success(upload_success)) {
 		return;
@@ -2837,13 +2836,12 @@ void RasterizerCanvasGLES2::_legacy_draw_polygon(Item::CommandPolygon *p_poly, G
 	// UVs
 	if (uvs_size > 0) {
 #ifdef REAL_T_IS_DOUBLE
-		Vector<float> uv_f;
-		uv_f.resize(pd.uvs.size() * 2);
+		float *uv_f = SAFE_ALLOCA_ARRAY(float, pd.uvs.size() * 2);
 		for (int i = 0; i < pd.uvs.size(); i++) {
-			uv_f.write[i * 2 + 0] = static_cast<float>(pd.uvs[i].x);
-			uv_f.write[i * 2 + 1] = static_cast<float>(pd.uvs[i].y);
+			uv_f[i * 2 + 0] = static_cast<float>(pd.uvs[i].x);
+			uv_f[i * 2 + 1] = static_cast<float>(pd.uvs[i].y);
 		}
-		upload_success = _buffer_orphan_and_upload(data.polygon_buffer_size, offset, uvs_size, uv_f.ptr(), GL_ARRAY_BUFFER, GL_DYNAMIC_DRAW, true);
+		upload_success = _buffer_orphan_and_upload(data.polygon_buffer_size, offset, uvs_size, uv_f, GL_ARRAY_BUFFER, GL_DYNAMIC_DRAW, true);
 #else
 		upload_success = _buffer_orphan_and_upload(data.polygon_buffer_size, offset, uvs_size, pd.uvs.ptr(), GL_ARRAY_BUFFER, GL_DYNAMIC_DRAW, true);
 #endif
@@ -2913,11 +2911,10 @@ void RasterizerCanvasGLES2::_legacy_draw_polygon(Item::CommandPolygon *p_poly, G
 
 		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, data.polygon_index_buffer);
 
-		Vector<uint16_t> indices_16;
-		indices_16.resize(index_count);
+		uint16_t *indices_16 = SAFE_ALLOCA_ARRAY(uint16_t, index_count);
 
 		for (int i = 0; i < index_count; i++) {
-			indices_16.write[i] = (uint16_t)pd.indices[i];
+			indices_16[i] = (uint16_t)pd.indices[i];
 		}
 
 		uint32_t index_size = index_count * sizeof(uint16_t);
@@ -2926,7 +2923,7 @@ void RasterizerCanvasGLES2::_legacy_draw_polygon(Item::CommandPolygon *p_poly, G
 			data.polygon_index_buffer_size = next_power_of_2(index_size);
 		}
 
-		upload_success = _buffer_orphan_and_upload(data.polygon_index_buffer_size, 0, index_size, indices_16.ptr(), GL_ELEMENT_ARRAY_BUFFER, GL_DYNAMIC_DRAW, false);
+		upload_success = _buffer_orphan_and_upload(data.polygon_index_buffer_size, 0, index_size, indices_16, GL_ELEMENT_ARRAY_BUFFER, GL_DYNAMIC_DRAW, false);
 		if (!check_orphan_success(upload_success)) {
 			return;
 		}
