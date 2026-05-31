@@ -96,7 +96,7 @@ void AudioStreamPlaybackWAV::do_resample(const Depth *p_src, AudioFrame *p_dst, 
 	int32_t final = 0, final_r = 0, next = 0, next_r = 0;
 	while (p_amount) {
 		p_amount--;
-		int64_t pos = p_offset >> MIX_FRAC_BITS;
+		uint64_t pos = p_offset >> MIX_FRAC_BITS;
 		if (is_stereo && !is_ima_adpcm && !is_qoa) {
 			pos <<= 1;
 		}
@@ -177,7 +177,7 @@ void AudioStreamPlaybackWAV::do_resample(const Depth *p_src, AudioFrame *p_dst, 
 
 		} else {
 			if (is_qoa) {
-				if (pos != p_qoa->cache_pos) { // Prevents triple decoding on lower mix rates.
+				if (pos != (uint64_t)p_qoa->cache_pos) { // Prevents triple decoding on lower mix rates.
 					for (int i = 0; i < 2; i++) {
 						// Sign operations prevent triple decoding on backward loops, maxing prevents pop.
 						uint32_t interp_pos = MIN(pos + (i * sign) + (sign < 0), p_qoa->desc.samples - 1);
