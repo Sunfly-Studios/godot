@@ -1667,6 +1667,32 @@ void RendererSceneCull::instance_geometry_get_shader_parameter_list(RID p_instan
 	instance->instance_uniforms.get_property_list(*p_parameters);
 }
 
+void RendererCanvasCull::canvas_item_add_texture_multirect_region(RID p_item, const Vector<Rect2> &p_rects, RID p_texture, const Vector<Rect2> &p_src_rects, const Color &p_modulate, uint32_t p_canvas_rect_flags) {
+	ERR_FAIL_COND(p_rects.size() != p_src_rects.size());
+
+	Item *canvas_item = canvas_item_owner.get_or_null(p_item);
+	ERR_FAIL_COND(!canvas_item);
+
+	Item::CommandMultiRect *mrect = canvas_item->alloc_command<Item::CommandMultiRect>();
+	ERR_FAIL_COND(!mrect);
+	mrect->modulate = p_modulate;
+	mrect->texture = p_texture;
+	mrect->flags = p_canvas_rect_flags;
+
+	mrect->rects = p_rects;
+	mrect->sources = p_src_rects;
+
+	int num_rects = mrect->rects.size();
+	Rect2 r;
+	if (num_rects) {
+		r = mrect->rects[0];
+		for (int n = 1; n < num_rects; n++) {
+			r = mrect->rects[n].merge(r);
+		}
+	}
+	mrect->full_rect = r;
+}
+
 void RendererSceneCull::_update_instance(Instance *p_instance) const {
 	p_instance->version++;
 

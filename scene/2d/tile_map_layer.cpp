@@ -35,6 +35,7 @@
 #include "scene/gui/control.h"
 #include "scene/resources/2d/navigation_mesh_source_geometry_data_2d.h"
 #include "scene/resources/world_2d.h"
+#include "servers/rendering/renderer_canvas_helper.h"
 #include "servers/navigation_server_2d.h"
 
 Callable TileMapLayer::_navmesh_source_geometry_parsing_callback;
@@ -281,6 +282,7 @@ void TileMapLayer::_rendering_update(bool p_force_cleanup) {
 				Ref<Material> prev_material;
 				int prev_z_index = 0;
 				RID prev_ci;
+				RendererCanvasHelper::tilemap_begin();
 
 				for (SelfList<CellData> *cell_data_quadrant_list_element = rendering_quadrant->cells.first(); cell_data_quadrant_list_element; cell_data_quadrant_list_element = cell_data_quadrant_list_element->next()) {
 					CellData &cell_data = *cell_data_quadrant_list_element->self();
@@ -351,6 +353,7 @@ void TileMapLayer::_rendering_update(bool p_force_cleanup) {
 					// Drawing the tile in the canvas item.
 					draw_tile(ci, local_tile_pos - rendering_quadrant->canvas_items_position, tile_set, cell_data.cell.source_id, cell_data.cell.get_atlas_coords(), cell_data.cell.alternative_tile, -1, get_self_modulate(), tile_data, random_animation_offset);
 				}
+				RendererCanvasHelper::tilemap_end();
 
 				// Reset physics interpolation for any recreated canvas items.
 				if (is_physics_interpolated_and_enabled() && is_visible_in_tree()) {
@@ -2333,10 +2336,18 @@ void TileMapLayer::draw_tile(RID p_canvas_item, const Vector2 &p_position, const
 		// Draw the tile.
 		if (p_frame >= 0) {
 			Rect2i source_rect = atlas_source->get_runtime_tile_texture_region(p_atlas_coords, p_frame);
-			tex->draw_rect_region(p_canvas_item, dest_rect, source_rect, modulate, transpose, p_tile_set->is_uv_clipping());
+			if (RendererCanvasHelper::_active_tilemap) {
+				RendererCanvasHelper::tilemap_add_rect(p_canvas_item, dest_rect, tex->get_rid(), source_rect, modulate, transpose, p_tile_set->is_uv_clipping());
+			} else {
+				tex->draw_rect_region(p_canvas_item, dest_rect, source_rect, modulate, transpose, p_tile_set->is_uv_clipping());
+			}
 		} else if (atlas_source->get_tile_animation_frames_count(p_atlas_coords) == 1) {
 			Rect2i source_rect = atlas_source->get_runtime_tile_texture_region(p_atlas_coords, 0);
-			tex->draw_rect_region(p_canvas_item, dest_rect, source_rect, modulate, transpose, p_tile_set->is_uv_clipping());
+			if (RendererCanvasHelper::_active_tilemap) {
+				RendererCanvasHelper::tilemap_add_rect(p_canvas_item, dest_rect, tex->get_rid(), source_rect, modulate, transpose, p_tile_set->is_uv_clipping());
+			} else {
+				tex->draw_rect_region(p_canvas_item, dest_rect, source_rect, modulate, transpose, p_tile_set->is_uv_clipping());
+			}
 		} else {
 			real_t speed = atlas_source->get_tile_animation_speed(p_atlas_coords);
 			real_t animation_duration = atlas_source->get_tile_animation_total_duration(p_atlas_coords) / speed;

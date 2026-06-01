@@ -384,10 +384,19 @@ bool RasterizerCanvasBatcherCommon<T_API>::_sort_items_match(const BSortItem &p_
 		return false;
 	}
 
-	// Check if textures match (allowing both RECT and POLY sorting)
+	// Check if textures match (allowing RECT, MULTIRECT, and POLY sorting)
 	if (ca->type == RendererCanvasRender::Item::Command::TYPE_RECT) {
 		const RendererCanvasRender::Item::CommandRect *comm_a = static_cast<const RendererCanvasRender::Item::CommandRect *>(ca);
 		const RendererCanvasRender::Item::CommandRect *comm_b = static_cast<const RendererCanvasRender::Item::CommandRect *>(cb);
+		ERR_FAIL_NULL_V(comm_a, false);
+		ERR_FAIL_NULL_V(comm_b, false);
+		if (comm_a->texture != comm_b->texture) {
+			return false;
+		}
+
+	} else if (ca->type == RendererCanvasRender::Item::Command::TYPE_MULTIRECT) {
+		const RendererCanvasRender::Item::CommandMultiRect *comm_a = static_cast<const RendererCanvasRender::Item::CommandMultiRect *>(ca);
+		const RendererCanvasRender::Item::CommandMultiRect *comm_b = static_cast<const RendererCanvasRender::Item::CommandMultiRect *>(cb);
 		ERR_FAIL_NULL_V(comm_a, false);
 		ERR_FAIL_NULL_V(comm_b, false);
 		if (comm_a->texture != comm_b->texture) {
@@ -425,7 +434,11 @@ bool RasterizerCanvasBatcherCommon<T_API>::sort_items_from(int p_start) {
 	}
 	const RendererCanvasRender::Item::Command *command_start = start.item->commands;
 	ERR_FAIL_NULL_V(command_start, false);
-	if (command_start->type != RendererCanvasRender::Item::Command::TYPE_RECT && command_start->type != RendererCanvasRender::Item::Command::TYPE_POLYGON) {
+	if (
+		command_start->type != RendererCanvasRender::Item::Command::TYPE_RECT && 
+		command_start->type != RendererCanvasRender::Item::Command::TYPE_MULTIRECT && 
+		command_start->type != RendererCanvasRender::Item::Command::TYPE_POLYGON
+	) {
 		return false;
 	}
 
@@ -871,7 +884,7 @@ bool RasterizerCanvasBatcherCommon<T_API>::prefill_joined_item(FillState &r_fill
 			} break;
 
 			default: {
-				// Any other command (Lines, Meshes, Multilines) gets routed to the default immediate-mode drawer
+				// Any other command (Lines, Meshes, Multilines, Multirects) gets routed to the default immediate-mode drawer
 				_prefill_default_batch(r_fill_state, command, *p_item);
 			} break;
 		}
@@ -1191,7 +1204,7 @@ bool RasterizerCanvasBatcherCommon<T_API>::_detect_item_batch_break(RenderItemSt
 			} break;
 
 			default: {
-				// Any unhandled command type (like meshes) immediately breaks the batch
+				// Any unhandled command type (like meshes, multirects) immediately breaks the batch
 				return true;
 			} break;
 		}

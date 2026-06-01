@@ -2120,6 +2120,120 @@ void RasterizerCanvasGLES2::render_batches(Item::Command *const *p_commands, Ite
 							state.specialization &= ~(CanvasShaderGLES2::USE_FORCE_REPEAT);
 						} break;
 
+						case Item::Command::TYPE_MULTIRECT: {
+							Item::CommandMultiRect *mr = static_cast<Item::CommandMultiRect *>(command);
+
+							// Clean state
+							// (so that rubbish/garbage doesn't ruin stuff later)
+							glDisableVertexAttribArray(RS::ARRAY_COLOR);
+							glDisableVertexAttribArray(RS::ARRAY_TEX_UV);
+							glVertexAttrib4fv(RS::ARRAY_COLOR, mr->modulate.components);
+
+							// Texture binding
+							RS::CanvasItemTextureRepeat repeat = state.default_repeat;
+							if (batch.item && batch.item->texture_repeat != RS::CANVAS_ITEM_TEXTURE_REPEAT_DEFAULT) {
+								repeat = batch.item->texture_repeat;
+							} else if (p_current_clip && p_current_clip->texture_repeat != RS::CANVAS_ITEM_TEXTURE_REPEAT_DEFAULT) {
+								repeat = p_current_clip->texture_repeat;
+							}
+
+							if (mr->flags & CANVAS_RECT_TILE) {
+								repeat = RS::CANVAS_ITEM_TEXTURE_REPEAT_ENABLED;
+							}
+
+							// Texture filtering
+							RS::CanvasItemTextureFilter filter = state.default_filter;
+							if (batch.item && batch.item->texture_filter != RS::CANVAS_ITEM_TEXTURE_FILTER_DEFAULT) {
+								filter = batch.item->texture_filter;
+							} else if (p_current_clip && p_current_clip->texture_filter != RS::CANVAS_ITEM_TEXTURE_FILTER_DEFAULT) {
+								filter = p_current_clip->texture_filter;
+							}
+
+							_bind_canvas_texture(mr->texture, filter, repeat);
+
+							// Shader setup
+							_set_texture_rect_mode(true);
+
+							bool rebind = state.canvas_shader->version_bind_shader(state.shader_version, state.mode_variant, state.specialization);
+
+							// Must be called every single draw in immediate mode to update the matrices.
+							_set_canvas_uniforms();
+
+							if (rebind && p_material) {
+								p_material->bind_uniforms();
+							}
+
+							// Bind the default quad buffer
+							_bind_quad_buffer();
+
+							// Push constant uniforms
+							state.canvas_shader->version_set_uniform(CanvasShaderGLES2::COLOR_TEXTURE_PIXEL_SIZE, state.texpixel_size, state.shader_version, state.mode_variant, state.specialization);
+
+							bool valid_tex = mr->texture != RID();
+
+							for (int ii = 0; ii < mr->rects.size(); ii++) {
+								Rect2 src_rect;
+								Rect2 dst_rect;
+
+								if (valid_tex) {
+									src_rect = (mr->flags & CANVAS_RECT_REGION) ? Rect2(mr->sources[ii].position * state.texpixel_size, mr->sources[ii].size * state.texpixel_size) : Rect2(0, 0, 1, 1);
+									dst_rect = Rect2(mr->rects[ii].position, mr->rects[ii].size);
+
+									if (dst_rect.size.width < 0) {
+										dst_rect.position.x += dst_rect.size.width;
+										dst_rect.size.width *= -1;
+									}
+									if (dst_rect.size.height < 0) {
+										dst_rect.position.y += dst_rect.size.height;
+										dst_rect.size.height *= -1;
+									}
+
+									if (mr->flags & CANVAS_RECT_FLIP_H) {
+										// Shift origin right, then flip.
+										src_rect.position.x += src_rect.size.x;
+										src_rect.size.x *= -1;
+									}
+
+									if (mr->flags & CANVAS_RECT_FLIP_V) {
+										// Shift origin down, then flip.
+										src_rect.position.y += src_rect.size.y;
+										src_rect.size.y *= -1;
+									}
+
+									if (mr->flags & CANVAS_RECT_TRANSPOSE) {
+										dst_rect.size.x *= -1; // Encoded into DST_RECT.z for the shader to interpret
+									}
+								} else {
+									dst_rect = Rect2(mr->rects[ii].position, mr->rects[ii].size);
+
+									if (dst_rect.size.width < 0) {
+										dst_rect.position.x += dst_rect.size.width;
+										dst_rect.size.width *= -1;
+									}
+									if (dst_rect.size.height < 0) {
+										dst_rect.position.y += dst_rect.size.height;
+										dst_rect.size.height *= -1;
+									}
+
+									src_rect = Rect2(0, 0, 1, 1);
+								}
+
+								// Push uniforms per rect
+								state.canvas_shader->version_set_uniform(CanvasShaderGLES2::DST_RECT, Color(dst_rect.position.x, dst_rect.position.y, dst_rect.size.x, dst_rect.size.y), state.shader_version, state.mode_variant, state.specialization);
+								state.canvas_shader->version_set_uniform(CanvasShaderGLES2::SRC_RECT, Color(src_rect.position.x, src_rect.position.y, src_rect.size.x, src_rect.size.y), state.shader_version, state.mode_variant, state.specialization);
+
+								glDrawArrays(GL_TRIANGLE_FAN, 0, 4);
+							}
+
+							GL_CHECK_ERROR("GLES2::Canvas::render_batches: TYPE_MULTIRECT glDrawArrays");
+
+							// Cleanup
+							glBindBuffer(GL_ARRAY_BUFFER, 0);
+							glDisableVertexAttribArray(RS::ARRAY_VERTEX);
+							glVertexAttrib4f(RS::ARRAY_COLOR, 1.0f, 1.0f, 1.0f, 1.0f);
+							state.specialization &= ~(CanvasShaderGLES2::USE_FORCE_REPEAT);
+						} break;
+
 						case Item::Command::TYPE_NINEPATCH: {
 							Item::CommandNinePatch *np = static_cast<Item::CommandNinePatch *>(command);
 

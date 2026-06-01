@@ -180,6 +180,7 @@ public:
 			enum Type {
 				TYPE_RECT,
 				TYPE_NINEPATCH,
+				TYPE_MULTIRECT,
 				TYPE_POLYGON,
 				TYPE_PRIMITIVE,
 				TYPE_MESH,
@@ -211,6 +212,25 @@ public:
 				outline = 0;
 				px_range = 1;
 				type = TYPE_RECT;
+			}
+		};
+
+		struct CommandMultiRect : public Command {
+			Color modulate;
+			uint16_t flags;
+			RID texture;
+			float outline;
+			float px_range;
+			Rect2 full_rect;
+
+			Vector<Rect2> rects;
+			Vector<Rect2> sources;
+
+			CommandMultiRect() {
+				flags = 0;
+				outline = 0;
+				px_range = 1;
+				type = TYPE_MULTIRECT;
 			}
 		};
 
