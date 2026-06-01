@@ -236,10 +236,9 @@ Config::Config() {
 	// Extensions
 	support_fbo = extensions.has("GL_OES_framebuffer_object") || extensions.has("GL_EXT_framebuffer_object") || extensions.has("GL_ARB_framebuffer_object");
 	support_vbo = extensions.has("GL_ARB_vertex_buffer_object") || extensions.has("GL_OES_mapbuffer");
-	support_npot = extensions.has("GL_OES_texture_npot") || extensions.has("GL_ARB_texture_non_power_of_two") || extensions.has("GL_APPLE_texture_2D_limited_npot");
 	support_blend_func_separate = extensions.has("GL_OES_blend_func_separate") || extensions.has("GL_EXT_blend_func_separate") || extensions.has("GL_ARB_draw_buffers_blend");
 	support_point_sprite = extensions.has("GL_OES_point_sprite") || extensions.has("GL_ARB_point_sprite") || extensions.has("GL_NV_point_sprite");
-	support_matrix_palette = extensions.has("GL_OES_matrix_palette");
+	support_matrix_palette = extensions.has("GL_OES_matrix_palette") || extensions.has("GL_OES_extended_matrix_palette");
 	support_draw_texture = extensions.has("GL_OES_draw_texture");
 	support_cubemap = extensions.has("GL_OES_texture_cube_map") || extensions.has("GL_ARB_texture_cube_map");
 	support_generate_mipmap = extensions.has("GL_OES_generate_mipmap") || extensions.has("GL_SGIS_generate_mipmap");
@@ -250,7 +249,7 @@ Config::Config() {
 	support_blend_equation_separate = extensions.has("GL_OES_blend_equation_separate") || extensions.has("GL_EXT_blend_equation_separate");
 	support_mirrored_repeat = extensions.has("GL_OES_texture_mirrored_repeat") || extensions.has("GL_ARB_texture_mirrored_repeat");
 	support_32_bits_indices = extensions.has("GL_OES_element_index_uint");
-	support_npot_repeat_mipmap = extensions.has("GL_OES_texture_npot") || extensions.has("GL_ARB_texture_non_power_of_two");
+	support_npot_repeat_mipmap = extensions.has("GL_OES_texture_npot") || extensions.has("GL_ARB_texture_non_power_of_two") || extensions.has("GL_APPLE_texture_2D_limited_npot");
 	support_mapbuffer = extensions.has("GL_OES_mapbuffer") || extensions.has("GL_NV_copy_buffer") || extensions.has("GL_ARB_map_buffer_range");
 	srgb_framebuffer_supported = extensions.has("GL_ARB_framebuffer_sRGB") || extensions.has("GL_EXT_framebuffer_sRGB");
 
@@ -294,7 +293,6 @@ Config::Config() {
 
 		// Desktop OpenGL almost universally supports these
 		support_fbo = true;
-		support_npot = true;
 		support_blend_func_separate = true;
 		support_texture_env_combine = true;
 		support_point_sprite = true;

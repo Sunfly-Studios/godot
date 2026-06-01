@@ -66,7 +66,6 @@ public:
 	bool generate_wireframes = false;
 	bool force_vertex_shading = false;
 	bool multi_bounce_occlusion = false;
-	bool support_npot_repeat_mipmap = false;
 	bool srgb_framebuffer_supported = false; // GL_ARB_framebuffer_sRGB
 
 	// Limits
@@ -98,11 +97,11 @@ public:
 	// Extensions
 	bool support_fbo = false; // GL_OES_framebuffer_object
 	bool support_vbo = false; // GL_ARB_vertex_buffer_object
-	bool support_npot = false; // GL_OES_texture_npot
+	bool support_npot_repeat_mipmap = false; // GL_OES_texture_npot
 	bool support_blend_func_separate = false; // GL_OES_blend_func_separate
 	bool support_texture_env_combine = false; // GL_OES_texture_env_crossbar
 	bool support_point_sprite = false; // GL_OES_point_sprite
-	bool support_matrix_palette = false; // GL_OES_matrix_palette
+	bool support_matrix_palette = false; // GL_OES_matrix_palette / GL_OES_extended_matrix_palette
 	bool support_draw_texture = false; // GL_OES_draw_texture
 	bool support_cubemap = false; // GL_OES_texture_cube_map
 	bool support_generate_mipmap = false; // GL_OES_generate_mipmap
