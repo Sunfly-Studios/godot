@@ -19,6 +19,13 @@ namespace embree
 
   /* we consider floating point numbers in that range as valid input numbers */
   static MAYBE_UNUSED float FLT_LARGE = 1.844E18f;
+#ifndef M_PI
+#define M_PI 3.141592653589793f
+#endif
+
+#ifndef M_1_PI
+#define M_1_PI 0.3183098861837907f
+#endif
 
   struct TrueTy {
     __forceinline operator bool( ) const { return true; }
