@@ -807,7 +807,7 @@ struct _VariantCall {
 		uint64_t size = p_instance->size();
 		ERR_FAIL_COND_V(p_offset < 0 || p_offset > int64_t(size) - 1, 0);
 		const uint8_t *r = p_instance->ptr();
-		return *((const int8_t *)&r[p_offset]);
+		return static_cast<int8_t>(r[p_offset]);
 	}
 	static int64_t func_PackedByteArray_decode_u16(PackedByteArray *p_instance, int64_t p_offset) {
 		uint64_t size = p_instance->size();
@@ -959,13 +959,13 @@ struct _VariantCall {
 		uint64_t size = p_instance->size();
 		ERR_FAIL_COND(p_offset < 0 || p_offset > int64_t(size) - 1);
 		uint8_t *w = p_instance->ptrw();
-		*((uint8_t *)&w[p_offset]) = p_value;
+		w[p_offset] = static_cast<uint8_t>(p_value);
 	}
 	static void func_PackedByteArray_encode_s8(PackedByteArray *p_instance, int64_t p_offset, int64_t p_value) {
 		uint64_t size = p_instance->size();
 		ERR_FAIL_COND(p_offset < 0 || p_offset > int64_t(size) - 1);
 		uint8_t *w = p_instance->ptrw();
-		*((int8_t *)&w[p_offset]) = p_value;
+		w[p_offset] = static_cast<uint8_t>(static_cast<int8_t>(p_value));
 	}
 
 	static void func_PackedByteArray_encode_u16(PackedByteArray *p_instance, int64_t p_offset, int64_t p_value) {
