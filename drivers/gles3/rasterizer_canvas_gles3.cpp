@@ -2557,8 +2557,6 @@ RendererCanvasRender::PolygonID RasterizerCanvasGLES3::request_polygon(const Vec
 	{
 		glBindBuffer(GL_ARRAY_BUFFER, pb.vertex_buffer);
 		uint8_t *r = polygon_buffer.ptrw();
-		float *fptr = reinterpret_cast<float *>(r);
-		uint32_t *uptr = (uint32_t *)r;
 		uint32_t base_offset = 0;
 		{
 			// Always uses vertex positions
@@ -2567,8 +2565,9 @@ RendererCanvasRender::PolygonID RasterizerCanvasGLES3::request_polygon(const Vec
 			const Vector2 *points_ptr = p_points.ptr();
 
 			for (uint32_t i = 0; i < vertex_count; i++) {
-				fptr[base_offset + i * stride + 0] = points_ptr[i].x;
-				fptr[base_offset + i * stride + 1] = points_ptr[i].y;
+				uint8_t *dst = &r[(base_offset + i * stride) * sizeof(float)];
+				memcpy(dst, &points_ptr[i].x, sizeof(float));
+				memcpy(dst + sizeof(float), &points_ptr[i].y, sizeof(float));
 			}
 
 			base_offset += 2;
@@ -2582,10 +2581,11 @@ RendererCanvasRender::PolygonID RasterizerCanvasGLES3::request_polygon(const Vec
 			const Color *color_ptr = p_colors.ptr();
 
 			for (uint32_t i = 0; i < vertex_count; i++) {
-				fptr[base_offset + i * stride + 0] = color_ptr[i].r;
-				fptr[base_offset + i * stride + 1] = color_ptr[i].g;
-				fptr[base_offset + i * stride + 2] = color_ptr[i].b;
-				fptr[base_offset + i * stride + 3] = color_ptr[i].a;
+				uint8_t *dst = &r[(base_offset + i * stride) * sizeof(float)];
+				memcpy(dst, &color_ptr[i].r, sizeof(float));
+				memcpy(dst + sizeof(float), &color_ptr[i].g, sizeof(float));
+				memcpy(dst + 2 * sizeof(float), &color_ptr[i].b, sizeof(float));
+				memcpy(dst + 3 * sizeof(float), &color_ptr[i].a, sizeof(float));
 			}
 			base_offset += 4;
 		} else {
@@ -2601,8 +2601,9 @@ RendererCanvasRender::PolygonID RasterizerCanvasGLES3::request_polygon(const Vec
 			const Vector2 *uv_ptr = p_uvs.ptr();
 
 			for (uint32_t i = 0; i < vertex_count; i++) {
-				fptr[base_offset + i * stride + 0] = uv_ptr[i].x;
-				fptr[base_offset + i * stride + 1] = uv_ptr[i].y;
+				uint8_t *dst = &r[(base_offset + i * stride) * sizeof(float)];
+				memcpy(dst, &uv_ptr[i].x, sizeof(float));
+				memcpy(dst + sizeof(float), &uv_ptr[i].y, sizeof(float));
 			}
 
 			base_offset += 2;
@@ -2617,12 +2618,14 @@ RendererCanvasRender::PolygonID RasterizerCanvasGLES3::request_polygon(const Vec
 			const int *bone_ptr = p_bones.ptr();
 
 			for (uint32_t i = 0; i < vertex_count; i++) {
-				uint16_t *bone16w = (uint16_t *)&uptr[base_offset + i * stride];
-
-				bone16w[0] = bone_ptr[i * 4 + 0];
-				bone16w[1] = bone_ptr[i * 4 + 1];
-				bone16w[2] = bone_ptr[i * 4 + 2];
-				bone16w[3] = bone_ptr[i * 4 + 3];
+				uint8_t *dst = &r[(base_offset + i * stride) * sizeof(float)];
+				uint16_t bone16w[4] = {
+					static_cast<uint16_t>(bone_ptr[i * 4 + 0]),
+					static_cast<uint16_t>(bone_ptr[i * 4 + 1]),
+					static_cast<uint16_t>(bone_ptr[i * 4 + 2]),
+					static_cast<uint16_t>(bone_ptr[i * 4 + 3])
+				};
+				memcpy(dst, bone16w, sizeof(bone16w));
 			}
 
 			base_offset += 2;
@@ -2637,12 +2640,14 @@ RendererCanvasRender::PolygonID RasterizerCanvasGLES3::request_polygon(const Vec
 			const float *weight_ptr = p_weights.ptr();
 
 			for (uint32_t i = 0; i < vertex_count; i++) {
-				uint16_t *weight16w = (uint16_t *)&uptr[base_offset + i * stride];
-
-				weight16w[0] = CLAMP(weight_ptr[i * 4 + 0] * 65535, 0, 65535);
-				weight16w[1] = CLAMP(weight_ptr[i * 4 + 1] * 65535, 0, 65535);
-				weight16w[2] = CLAMP(weight_ptr[i * 4 + 2] * 65535, 0, 65535);
-				weight16w[3] = CLAMP(weight_ptr[i * 4 + 3] * 65535, 0, 65535);
+				uint8_t *dst = &r[(base_offset + i * stride) * sizeof(float)];
+				uint16_t weight16w[4] = {
+					static_cast<uint16_t>(CLAMP(weight_ptr[i * 4 + 0] * 65535, 0, 65535)),
+					static_cast<uint16_t>(CLAMP(weight_ptr[i * 4 + 1] * 65535, 0, 65535)),
+					static_cast<uint16_t>(CLAMP(weight_ptr[i * 4 + 2] * 65535, 0, 65535)),
+					static_cast<uint16_t>(CLAMP(weight_ptr[i * 4 + 3] * 65535, 0, 65535))
+				};
+				memcpy(dst, weight16w, sizeof(weight16w));
 			}
 
 			base_offset += 2;
