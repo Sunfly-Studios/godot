@@ -16,6 +16,48 @@ if env["use_volk"]:
 
 if env["platform"] == "android":
     env.AppendUnique(CPPDEFINES=["VK_USE_PLATFORM_ANDROID_KHR"])
+    if env["swappy"]:
+        env.Prepend(CPPPATH=[
+            "#thirdparty/swappy-frame-pacing",
+            "#thirdparty/swappy-frame-pacing/include",
+            "#thirdparty/swappy-frame-pacing/common/os",
+            "#thirdparty/swappy-frame-pacing/common/swappy",
+            "#thirdparty/swappy-frame-pacing/common/system",
+            "#thirdparty/swappy-frame-pacing/vulkan",
+        ])
+        swappy_sources = [
+            # common/os
+            "#thirdparty/swappy-frame-pacing/common/os/ChoreographerFilter.cpp",
+            "#thirdparty/swappy-frame-pacing/common/os/ChoreographerThread.cpp",
+            "#thirdparty/swappy-frame-pacing/common/os/CpuInfo.cpp",
+            "#thirdparty/swappy-frame-pacing/common/os/CPUTracer.cpp",
+            
+            # common/swappy
+            "#thirdparty/swappy-frame-pacing/common/swappy/SwappyCommon.cpp",
+            "#thirdparty/swappy-frame-pacing/common/swappy/SwappyDisplayManager.cpp",
+            "#thirdparty/swappy-frame-pacing/common/swappy/swappy_c.cpp",
+            
+            # common/system
+            "#thirdparty/swappy-frame-pacing/common/system/FrameStatistics.cpp",
+            "#thirdparty/swappy-frame-pacing/common/system/Settings.cpp",
+            "#thirdparty/swappy-frame-pacing/common/system/system_utils.cpp",
+            "#thirdparty/swappy-frame-pacing/common/system/Thread.cpp",
+            
+            # vulkan
+            "#thirdparty/swappy-frame-pacing/vulkan/SwappyVk.cpp",
+            "#thirdparty/swappy-frame-pacing/vulkan/SwappyVkBase.cpp",
+            "#thirdparty/swappy-frame-pacing/vulkan/SwappyVkFallback.cpp",
+            "#thirdparty/swappy-frame-pacing/vulkan/SwappyVkGoogleDisplayTiming.cpp",
+            "#thirdparty/swappy-frame-pacing/vulkan/swappyVk_c.cpp"
+        ]
+
+        env_thirdparty_swappy = env.Clone()
+        env_thirdparty_swappy.disable_warnings()
+        # Instruct Swappy to bypass looking for the embedded binary dex symbols
+        env_thirdparty_swappy.AppendUnique(CPPDEFINES=["ANDROIDGAMESDK_NO_BINARY_DEX_LINKAGE"])
+        
+        env_thirdparty_swappy.add_source_files(thirdparty_obj, swappy_sources)
+            
 elif env["platform"] == "ios":
     env.AppendUnique(CPPDEFINES=["VK_USE_PLATFORM_IOS_MVK", "VK_USE_PLATFORM_METAL_EXT"])
 elif env["platform"] == "linuxbsd":

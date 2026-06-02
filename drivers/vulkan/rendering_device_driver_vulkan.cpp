@@ -42,7 +42,7 @@
 #endif
 
 #if defined(SWAPPY_FRAME_PACING_ENABLED)
-#include "thirdparty/swappy-frame-pacing/swappyVk.h"
+#include "thirdparty/swappy-frame-pacing/include/swappy/swappyVk.h"
 #endif
 
 #define ARRAY_SIZE(a) (sizeof(a) / sizeof(a[0]))

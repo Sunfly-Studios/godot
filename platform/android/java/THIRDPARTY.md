@@ -39,3 +39,9 @@ See the `lib/patches/com.google.android.vending.licensing.patch` file.
 Overwrite all files under:
 
 - `editor/src/main/java/com/android/apksig`
+
+## com.google.androidgamesdk
+
+- Upstream: https://android.googlesource.com/platform/frameworks/opt/gamesdk
+- Version: git (0e0b7135316804e9119010246fba9664323b7070, 2026)
+- License: Apache 2.0

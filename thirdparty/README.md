@@ -985,6 +985,22 @@ Patches:
 - `0002-zero-size-for-sc-sized-arrays.patch` (GH-94985)
 
 
+## swappy-frame-pacing
+
+- Upstream: https://android.googlesource.com/platform/frameworks/opt/gamesdk
+- Version: aosp/gamesdk-main (0e0b7135316804e9119010246fba9664323b7070, 2026)
+- License: Apache 2.0
+
+Files extracted from upstream source:
+
+- `vulkan/` folder
+- `include/` folder
+- `common/` (root) folder
+- `LICENSE`
+
+Some special folders like `os` and `system` have been created, for better
+separation of concerns
+
 ## thorvg
 
 - Upstream: https://github.com/thorvg/thorvg

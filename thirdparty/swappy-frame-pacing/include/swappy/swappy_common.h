@@ -47,8 +47,9 @@
 #define SWAPPY_SYSTEM_PROP_KEY_DISABLE "swappy.disable"
 
 // Internal macros to track Swappy version, do not use directly.
+#define SWAPPY_VERSION_REVISION 7cd950d0022d01f1e7e2b470aba5a7b1abacdfaa
 #define SWAPPY_MAJOR_VERSION 2
-#define SWAPPY_MINOR_VERSION 0
+#define SWAPPY_MINOR_VERSION 3
 #define SWAPPY_BUGFIX_VERSION 0
 #define SWAPPY_PACKED_VERSION                                                  \
     ANDROID_GAMESDK_PACKED_VERSION(SWAPPY_MAJOR_VERSION, SWAPPY_MINOR_VERSION, \
@@ -60,10 +61,9 @@
     PREFIX##_##MAJOR##_##MINOR##_##BUGFIX##_##GITCOMMIT
 #define SWAPPY_VERSION_CONCAT(PREFIX, MAJOR, MINOR, BUGFIX, GITCOMMIT) \
     SWAPPY_VERSION_CONCAT_NX(PREFIX, MAJOR, MINOR, BUGFIX, GITCOMMIT)
-#define SWAPPY_VERSION_SYMBOL                                          \
-    SWAPPY_VERSION_CONCAT(Swappy_version, SWAPPY_MAJOR_VERSION,        \
-                          SWAPPY_MINOR_VERSION, SWAPPY_BUGFIX_VERSION, \
-                          AGDK_GIT_COMMIT)
+#define SWAPPY_VERSION_SYMBOL                                                         \
+    SWAPPY_VERSION_CONCAT(Swappy_version, SWAPPY_MAJOR_VERSION, SWAPPY_MINOR_VERSION, \
+                          SWAPPY_BUGFIX_VERSION, AGDK_GIT_COMMIT)
 
 // Define this to 1 to enable all logging from Swappy, by default it is
 // disabled in a release build and enabled in a debug build.
@@ -91,8 +91,7 @@ typedef struct SwappyThreadFunctions {
      * return 0. If the thread was not started, this function should return a
      * non-zero value.
      */
-    int (*start)(SwappyThreadId* thread_id, void* (*thread_func)(void*),
-                 void* user_data);
+    int (*start)(SwappyThreadId* thread_id, void* (*thread_func)(void*), void* user_data);
 
     /** @brief Thread join callback.
      *
@@ -178,9 +177,8 @@ typedef struct SwappyStats {
     uint64_t latencyFrames[MAX_FRAME_BUCKETS];
 } SwappyStats;
 
-
 #ifdef __cplusplus
-}  // extern "C"
+} // extern "C"
 #endif
 
 /**
@@ -195,8 +193,7 @@ typedef void (*SwappyPreWaitCallback)(void*);
  * @param cpu_time_ns Time for CPU processing of this frame in nanoseconds.
  * @param gpu_time_ns Time for GPU processing of previous frame in nanoseconds.
  */
-typedef void (*SwappyPostWaitCallback)(void*, int64_t cpu_time_ns,
-                                       int64_t gpu_time_ns);
+typedef void (*SwappyPostWaitCallback)(void*, int64_t cpu_time_ns, int64_t gpu_time_ns);
 
 /**
  * Pointer to a function that can be attached to SwappyTracer::preSwapBuffers.
@@ -210,8 +207,7 @@ typedef void (*SwappyPreSwapBuffersCallback)(void*);
  * @param desiredPresentationTimeMillis The target time, in milliseconds, at
  * which the frame would be presented on screen.
  */
-typedef void (*SwappyPostSwapBuffersCallback)(
-    void*, int64_t desiredPresentationTimeMillis);
+typedef void (*SwappyPostSwapBuffersCallback)(void*, int64_t desiredPresentationTimeMillis);
 
 /**
  * Pointer to a function that can be attached to SwappyTracer::startFrame.
