@@ -57,6 +57,7 @@ namespace GLES1 {
 		static PFNGLRENDERBUFFERSTORAGEPROC renderBufferStorage;
 		static PFNGLFRAMEBUFFERRENDERBUFFERPROC frameBufferRenderBuffer;
 		static PFNGLDELETERENDERBUFFERSPROC deleteRenderBuffers;
+		static PFNGLGENERATEMIPMAPPROC generateMipMap;
 #if defined(ANDROID_ENABLED) || defined(IOS_ENABLED)
 		static PFNGLDEPTHRANGEFPROC depthRange;
 #else
@@ -200,6 +201,13 @@ namespace GLES1 {
 	do {                                             \
 		if (likely(GLES1::Polyfill::blendEquation))  \
 			GLES1::Polyfill::blendEquation(mode);    \
+	} while (0)
+
+#undef glGenerateMipmapOES
+#define glGenerateMipmapOES(texture)                    \
+	do {                                                \
+		if (likely(GLES1::Polyfill::generateMipMap))    \
+			GLES1::Polyfill::generateMipMap(texture);   \
 	} while (0)
 
 // =========================================

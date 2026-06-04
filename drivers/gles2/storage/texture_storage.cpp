@@ -781,7 +781,7 @@ Ref<Image> TextureStorage::texture_2d_get(RID p_texture) const {
 	GL_CHECK_ERROR("GLES2::TextureStorage::texture_2d_get: glGenTextures");
 
 	bind_framebuffer(temp_framebuffer);
-	GL_CHECK_ERROR("GLES2::TextureStorage::texture_2d_get: glBindFramebuffer");
+	GL_CHECK_ERROR("GLES2::TextureStorage::texture_2d_get: bind_framebuffer");
 
 	// Isolate texture binding
 	glActiveTexture(GL_TEXTURE0);
@@ -1367,7 +1367,7 @@ void TextureStorage::_update_render_target(RenderTarget *rt) {
 	glGenFramebuffers(1, &rt->fbo);
 	GL_CHECK_ERROR("GLES2::TextureStorage::_update_render_target: glGenFramebuffers");
 	ERR_FAIL_COND_MSG(rt->fbo == 0, "GLES2: Failed to generate Framebuffer Object. Context lost?");
-	glBindFramebuffer(GL_FRAMEBUFFER, rt->fbo);
+	bind_framebuffer(rt->fbo);
 
 	if (rt->overridden.color.is_valid()) {
 		texture = get_texture(rt->overridden.color);
@@ -1500,7 +1500,7 @@ void TextureStorage::_update_render_target(RenderTarget *rt) {
 	// Clear out FBO rubbish/garbage
 	glClearColor(0, 0, 0, 0);
 	glClear(GL_COLOR_BUFFER_BIT);
-	glBindFramebuffer(GL_FRAMEBUFFER, previous_fbo);
+	bind_framebuffer(previous_fbo);
 
 	// Restore state
 	if (scissor_enabled) {
@@ -1931,7 +1931,7 @@ void TextureStorage::render_target_do_clear_request(RID p_render_target) {
 	}
 
 	// Steer the GPU to the correct framebuffer
-	glBindFramebuffer(GL_FRAMEBUFFER, rt->fbo);
+	bind_framebuffer(rt->fbo);
 
 	// Bypass active scissors and masks
 	GLboolean scissor_enabled = glIsEnabled(GL_SCISSOR_TEST);
@@ -1951,7 +1951,7 @@ void TextureStorage::render_target_do_clear_request(RID p_render_target) {
 	rt->clear_requested = false;
 
 	// Reset back to the main window
-	glBindFramebuffer(GL_FRAMEBUFFER, system_fbo);
+	bind_framebuffer_system();
 }
 
 GLuint TextureStorage::render_target_get_fbo(RID p_render_target) const {
@@ -2464,7 +2464,7 @@ void TextureStorage::render_target_clear_back_buffer(RID p_render_target, const 
 	Rect2i region;
 	if (p_region == Rect2i()) {
 		// Just do a full screen clear;
-		glBindFramebuffer(GL_FRAMEBUFFER, rt->backbuffer_fbo);
+		bind_framebuffer(rt->backbuffer_fbo);
 		glClearColor(p_color.r, p_color.g, p_color.b, p_color.a);
 		glClear(GL_COLOR_BUFFER_BIT);
 		GL_CHECK_ERROR("GLES2::TextureStorage::render_target_clear_back_buffer: clear screen");
@@ -2473,11 +2473,11 @@ void TextureStorage::render_target_clear_back_buffer(RID p_render_target, const 
 		if (region.size == Size2i()) {
 			return; // nothing to do
 		}
-		glBindFramebuffer(GL_FRAMEBUFFER, rt->backbuffer_fbo);
+		bind_framebuffer(rt->backbuffer_fbo);
 		GLES2::CopyEffects::get_singleton()->set_color(p_color, region);
 	}
 
-	glBindFramebuffer(GL_FRAMEBUFFER, prev_fbo);
+	bind_framebuffer(prev_fbo);
 	glClearColor(prev_clear_color[0], prev_clear_color[1], prev_clear_color[2], prev_clear_color[3]);
 }
 

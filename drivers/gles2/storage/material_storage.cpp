@@ -1190,10 +1190,10 @@ MaterialStorage::MaterialStorage() {
 	}
 
 	String global_defines;
-	// TODO(GLES2): inject global #defines here
+	global_defines += "#define MAX_GLOBAL_SHADER_UNIFORMS 256\n"; // TODO: this is arbitrary for now
 
 	// Canvas Shader
-	shaders.canvas_shader.initialize(global_defines);
+	shaders.canvas_shader.initialize(global_defines, 1);
 	shaders.canvas_shader.default_version = shaders.canvas_shader.version_create();
 	shaders.canvas_shader.version_set_code(shaders.canvas_shader.default_version, HashMap<String, String>(), "", "", "", Vector<String>(), LocalVector<ShaderGLES2::TextureUniformData>(), true);
 

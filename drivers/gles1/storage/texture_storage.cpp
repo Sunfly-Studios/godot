@@ -2317,11 +2317,63 @@ void TextureStorage::render_target_copy_to_back_buffer(RID p_render_target, cons
 }
 
 void TextureStorage::render_target_clear_back_buffer(RID p_render_target, const Rect2i &p_region, const Color &p_color) {
+	RenderTarget *rt = render_target_owner.get_or_null(p_render_target);
+	ERR_FAIL_NULL(rt);
+	ERR_FAIL_COND(rt->direct_to_screen);
 
+	if (rt->backbuffer_fbo == 0) {
+		_create_render_target_backbuffer(rt);
+	}
+
+	// Store previous FBO and clear color to prevent leak
+	GLint prev_fbo;
+	glGetIntegerv(GL_FRAMEBUFFER_BINDING, &prev_fbo);
+	GLfloat prev_clear_color[4];
+	glGetFloatv(GL_COLOR_CLEAR_VALUE, prev_clear_color);
+
+	Rect2i region;
+	if (p_region == Rect2i()) {
+		// Just do a full screen clear;
+		bind_framebuffer(rt->backbuffer_fbo);
+		glClearColor(p_color.r, p_color.g, p_color.b, p_color.a);
+		glClear(GL_COLOR_BUFFER_BIT);
+		GL_CHECK_ERROR("GLES1::TextureStorage::render_target_clear_back_buffer: clear screen");
+	} else {
+		region = Rect2i(Size2i(), rt->size).intersection(p_region);
+		if (region.size == Size2i()) {
+			return; // nothing to do
+		}
+		bind_framebuffer(rt->backbuffer_fbo);
+		GLES1::CopyEffects::get_singleton()->set_color(p_color, region);
+	}
+
+	bind_framebuffer(prev_fbo);
+	glClearColor(prev_clear_color[0], prev_clear_color[1], prev_clear_color[2], prev_clear_color[3]);
 }
 
 void TextureStorage::render_target_gen_back_buffer_mipmaps(RID p_render_target, const Rect2i &p_region) {
+	RenderTarget *rt = render_target_owner.get_or_null(p_render_target);
+	ERR_FAIL_NULL(rt);
 
+	if (rt->backbuffer == 0) {
+		return;
+	}
+
+	glActiveTexture(GL_TEXTURE0);
+	glBindTexture(GL_TEXTURE_2D, rt->backbuffer);
+
+	bool is_npot = (
+		rt->size.width & (rt->size.width - 1)
+	) != 0 || (rt->size.height & (rt->size.height - 1)) != 0;
+
+	if (is_npot && !GLES1::Config::get_singleton()->support_generate_mipmap) {
+		// Fall back to linear filtering.
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	} else {
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+		glGenerateMipmapOES(GL_TEXTURE_2D);
+		GL_CHECK_ERROR("GLES1::TextureStorage::render_target_gen_back_buffer_mipmaps: glGenerateMipmapOES");
+	}
 }
 
 #endif // GLES1_ENABLED

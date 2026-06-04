@@ -48,6 +48,7 @@ namespace GLES1 {
 	PFNGLRENDERBUFFERSTORAGEPROC Polyfill::renderBufferStorage = nullptr;
 	PFNGLFRAMEBUFFERRENDERBUFFERPROC Polyfill::frameBufferRenderBuffer = nullptr;
 	PFNGLDELETERENDERBUFFERSPROC Polyfill::deleteRenderBuffers = nullptr;
+	PFNGLGENERATEMIPMAPPROC Polyfill::generateMipMap = nullptr;
 #if defined(ANDROID_ENABLED) || defined(IOS_ENABLED)
 	PFNGLDEPTHRANGEFPROC Polyfill::depthRange = nullptr;
 #else
@@ -87,6 +88,7 @@ Polyfill::Polyfill() {
 	framebufferTexture2D = (PFNGLFRAMEBUFFERTEXTURE2DPROC)glFramebufferTexture2DOES;
 	depthRange = (PFNGLDEPTHRANGEFPROC)glDepthRangef;
 	blendEquation = (PFNGLBLENDEQUATIONPROC)glBlendEquationOES;
+	generateMipMap = (PFNGLGENERATEMIPMAPPROC)glGenerateMipmapOES;
 
 	// VBOs (Core in mobile)
 	genBuffers = glGenBuffers;
@@ -215,6 +217,14 @@ Polyfill::Polyfill() {
 		depthRange = (PFNGLDEPTHRANGEPROC)glDepthRangef;
 	} else if (glDepthRangex != nullptr) {
 		depthRange = (PFNGLDEPTHRANGEPROC)glDepthRangex;
+	}
+
+	if (glGenerateMipmap != nullptr) {
+		generateMipMap = glGenerateMipmap;
+	} else if (glGenerateMipmapOES != nullptr) {
+		generateMipMap = (PFNGLGENERATEMIPMAPPROC)glGenerateMipmapOES;
+	} else if (glGenerateMipmapEXT != nullptr) {
+		generateMipMap = (PFNGLGENERATEMIPMAPPROC)glGenerateMipmapEXT;
 	}
 
 	// =========================================

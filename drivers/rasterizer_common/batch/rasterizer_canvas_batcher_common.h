@@ -492,6 +492,7 @@ public:
 		}
 
 		RendererCanvasRender::Item *current_clip;
+		RendererCanvasRender::Item *canvas_group_owner;
 		typename T_API::Shader *shader_cache;
 		bool rebind_shader;
 		bool prev_use_skeleton;

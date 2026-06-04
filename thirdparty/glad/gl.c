@@ -86,6 +86,7 @@ int GLAD_GL_OES_texture_cube_map = 0;
 int GLAD_GL_OES_texture_mirrored_repeat = 0;
 int GLAD_GL_OES_texture_npot = 0;
 int GLAD_GL_OES_vertex_array_object = 0;
+int GLAD_GL_OES_texture_3D = 0;
 int GLAD_GL_OES_vertex_half_float = 0;
 
 
@@ -1006,7 +1007,10 @@ PFNGLBLENDEQUATIONSEPARATEIPROC glad_glBlendEquationSeparatei = NULL;
 PFNGLBLENDEQUATIONIPROC glad_glBlendEquationi = NULL;
 PFNGLBLENDFUNCSEPARATEIPROC glad_glBlendFuncSeparatei = NULL;
 PFNGLBLENDFUNCIPROC glad_glBlendFunci = NULL;
+PFNGLCOMPRESSEDTEXIMAGE3DOESPROC glad_glCompressedTexImage3DOES = NULL;
+PFNGLCOMPRESSEDTEXSUBIMAGE3DOESPROC glad_glCompressedTexSubImage3DOES = NULL;
 PFNGLCOPYIMAGESUBDATAPROC glad_glCopyImageSubData = NULL;
+PFNGLCOPYTEXSUBIMAGE3DOESPROC glad_glCopyTexSubImage3DOES = NULL;
 PFNGLCREATESHADERPROGRAMVPROC glad_glCreateShaderProgramv = NULL;
 PFNGLDEBUGMESSAGECALLBACKPROC glad_glDebugMessageCallback = NULL;
 PFNGLDEBUGMESSAGECONTROLPROC glad_glDebugMessageControl = NULL;
@@ -1017,6 +1021,7 @@ PFNGLDISPATCHCOMPUTEINDIRECTPROC glad_glDispatchComputeIndirect = NULL;
 PFNGLDRAWARRAYSINDIRECTPROC glad_glDrawArraysIndirect = NULL;
 PFNGLDRAWELEMENTSINDIRECTPROC glad_glDrawElementsIndirect = NULL;
 PFNGLFRAMEBUFFERPARAMETERIPROC glad_glFramebufferParameteri = NULL;
+PFNGLFRAMEBUFFERTEXTURE3DOESPROC glad_glFramebufferTexture3DOES = NULL;
 PFNGLGENPROGRAMPIPELINESPROC glad_glGenProgramPipelines = NULL;
 PFNGLGETDEBUGMESSAGELOGPROC glad_glGetDebugMessageLog = NULL;
 PFNGLGETFRAMEBUFFERPARAMETERIVPROC glad_glGetFramebufferParameteriv = NULL;
@@ -1087,10 +1092,12 @@ PFNGLREADNPIXELSPROC glad_glReadnPixels = NULL;
 PFNGLRELEASESHADERCOMPILERPROC glad_glReleaseShaderCompiler = NULL;
 PFNGLSHADERBINARYPROC glad_glShaderBinary = NULL;
 PFNGLTEXBUFFERRANGEPROC glad_glTexBufferRange = NULL;
+PFNGLTEXIMAGE3DOESPROC glad_glTexImage3DOES = NULL;
 PFNGLTEXSTORAGE2DPROC glad_glTexStorage2D = NULL;
 PFNGLTEXSTORAGE2DMULTISAMPLEPROC glad_glTexStorage2DMultisample = NULL;
 PFNGLTEXSTORAGE3DPROC glad_glTexStorage3D = NULL;
 PFNGLTEXSTORAGE3DMULTISAMPLEPROC glad_glTexStorage3DMultisample = NULL;
+PFNGLTEXSUBIMAGE3DOESPROC glad_glTexSubImage3DOES = NULL;
 PFNGLUSEPROGRAMSTAGESPROC glad_glUseProgramStages = NULL;
 PFNGLVALIDATEPROGRAMPIPELINEPROC glad_glValidateProgramPipeline = NULL;
 PFNGLVERTEXATTRIBBINDINGPROC glad_glVertexAttribBinding = NULL;
@@ -2613,6 +2620,15 @@ static void glad_gl_load_GL_OES_vertex_array_object( GLADuserptrloadfunc load, v
     glad_glGenVertexArraysOES = (PFNGLGENVERTEXARRAYSOESPROC) load(userptr, "glGenVertexArraysOES");
     glad_glIsVertexArrayOES = (PFNGLISVERTEXARRAYOESPROC) load(userptr, "glIsVertexArrayOES");
 }
+static void glad_gl_load_GL_OES_texture_3D( GLADuserptrloadfunc load, void* userptr) {
+    if(!GLAD_GL_OES_texture_3D) return;
+    glad_glCompressedTexImage3DOES = (PFNGLCOMPRESSEDTEXIMAGE3DOESPROC) load(userptr, "glCompressedTexImage3DOES");
+    glad_glCompressedTexSubImage3DOES = (PFNGLCOMPRESSEDTEXSUBIMAGE3DOESPROC) load(userptr, "glCompressedTexSubImage3DOES");
+    glad_glCopyTexSubImage3DOES = (PFNGLCOPYTEXSUBIMAGE3DOESPROC) load(userptr, "glCopyTexSubImage3DOES");
+    glad_glFramebufferTexture3DOES = (PFNGLFRAMEBUFFERTEXTURE3DOESPROC) load(userptr, "glFramebufferTexture3DOES");
+    glad_glTexImage3DOES = (PFNGLTEXIMAGE3DOESPROC) load(userptr, "glTexImage3DOES");
+    glad_glTexSubImage3DOES = (PFNGLTEXSUBIMAGE3DOESPROC) load(userptr, "glTexSubImage3DOES");
+}
 
 
 
@@ -2632,40 +2648,30 @@ static int glad_gl_get_extensions( const char **out_exts, char ***out_exts_i) {
         unsigned int index = 0;
         unsigned int num_exts_i = 0;
         char **exts_i = NULL;
-
-        /* Clear GL error state before querying */
-        if (glad_glGetError != NULL) {
-            while (glad_glGetError() != GL_NO_ERROR) {}
-        }
-
         glad_glGetIntegerv(GL_NUM_EXTENSIONS, (int*) &num_exts_i);
+        exts_i = (char **) malloc((num_exts_i + 1) * (sizeof *exts_i));
+        if (exts_i == NULL) {
+            return 0;
+        }
+        for(index = 0; index < num_exts_i; index++) {
+            const char *gl_str_tmp = (const char*) glad_glGetStringi(GL_EXTENSIONS, index);
+            size_t len = strlen(gl_str_tmp) + 1;
 
-        /* If GL_NUM_EXTENSIONS triggered an error (e.g. OpenGL < 3.0), bypass this block */
-        if (glad_glGetError == NULL || glad_glGetError() == GL_NO_ERROR) {
-            exts_i = (char **) malloc((num_exts_i + 1) * (sizeof *exts_i));
-            if (exts_i == NULL) {
+            char *local_str = (char*) malloc(len * sizeof(char));
+            if(local_str == NULL) {
+                exts_i[index] = NULL;
+                glad_gl_free_extensions(exts_i);
                 return 0;
             }
-            for(index = 0; index < num_exts_i; index++) {
-                const char *gl_str_tmp = (const char*) glad_glGetStringi(GL_EXTENSIONS, index);
-                size_t len = strlen(gl_str_tmp) + 1;
 
-                char *local_str = (char*) malloc(len * sizeof(char));
-                if(local_str == NULL) {
-                    exts_i[index] = NULL;
-                    glad_gl_free_extensions(exts_i);
-                    return 0;
-                }
-
-                memcpy(local_str, gl_str_tmp, len * sizeof(char));
-                exts_i[index] = local_str;
-            }
-            exts_i[index] = NULL;
-
-            *out_exts_i = exts_i;
-
-            return 1;
+            memcpy(local_str, gl_str_tmp, len * sizeof(char));
+            exts_i[index] = local_str;
         }
+        exts_i[index] = NULL;
+
+        *out_exts_i = exts_i;
+
+        return 1;
     }
 #else
     GLAD_UNUSED(out_exts_i);
@@ -2943,6 +2949,7 @@ static int glad_gl_find_extensions_gles2(void) {
     GLAD_GL_OES_packed_depth_stencil = glad_gl_has_extension(exts, exts_i, "GL_OES_packed_depth_stencil");
     GLAD_GL_OES_texture_npot = glad_gl_has_extension(exts, exts_i, "GL_OES_texture_npot");
     GLAD_GL_OES_vertex_array_object = glad_gl_has_extension(exts, exts_i, "GL_OES_vertex_array_object");
+    GLAD_GL_OES_texture_3D = glad_gl_has_extension(exts, exts_i, "GL_OES_texture_3D");
     GLAD_GL_OES_vertex_half_float = glad_gl_has_extension(exts, exts_i, "GL_OES_vertex_half_float");
 
     glad_gl_free_extensions(exts_i);
@@ -2998,6 +3005,7 @@ int gladLoadGLES2UserPtr( GLADuserptrloadfunc load, void *userptr) {
     glad_gl_load_GL_OVR_multiview(load, userptr);
     glad_gl_load_GL_OES_mapbuffer(load, userptr);
     glad_gl_load_GL_OES_vertex_array_object(load, userptr);
+    glad_gl_load_GL_OES_texture_3D(load, userptr);
 
 
 

@@ -569,6 +569,70 @@ void RasterizerCanvasGLES1::initialize() {
 			glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
 		}
 	}
+
+	//
+	// Shader states and bindings.
+	//
+	GLES1::MaterialStorage *material_storage = GLES1::MaterialStorage::get_singleton();
+	GLES1::TextureStorage *texture_storage = GLES1::TextureStorage::get_singleton();
+
+	state.canvas_shader = &material_storage->shaders.canvas_shader;
+	data.canvas_shader_default_version = state.canvas_shader->default_version;
+
+	{
+		default_canvas_group_shader = material_storage->shader_allocate();
+		material_storage->shader_initialize(default_canvas_group_shader);
+
+		material_storage->shader_set_code(default_canvas_group_shader, R"(
+// Default CanvasGroup shader.
+
+shader_type canvas_item;
+render_mode unshaded;
+
+uniform sampler2D screen_texture : hint_screen_texture, repeat_disable, filter_nearest;
+
+void fragment() {
+	vec4 c = textureLod(screen_texture, SCREEN_UV, 0.0);
+
+	if (c.a > 0.0001) {
+		c.rgb /= c.a;
+	}
+
+	COLOR *= c;
+}
+)");
+		default_canvas_group_material = material_storage->material_allocate();
+		material_storage->material_initialize(default_canvas_group_material);
+
+		material_storage->material_set_shader(default_canvas_group_material, default_canvas_group_shader);
+	}
+
+	{
+		default_clip_children_shader = material_storage->shader_allocate();
+		material_storage->shader_initialize(default_clip_children_shader);
+
+		material_storage->shader_set_code(default_clip_children_shader, R"(
+// Default clip children shader.
+
+shader_type canvas_item;
+render_mode unshaded;
+
+uniform sampler2D screen_texture : hint_screen_texture, repeat_disable, filter_nearest;
+
+void fragment() {
+	vec4 c = textureLod(screen_texture, SCREEN_UV, 0.0);
+	COLOR.rgb = c.rgb;
+}
+)");
+		default_clip_children_material = material_storage->material_allocate();
+		material_storage->material_initialize(default_clip_children_material);
+
+		material_storage->material_set_shader(default_clip_children_material, default_clip_children_shader);
+	}
+
+	// Allocate the default white texture for untextured polygons/rects
+	default_canvas_texture = texture_storage->canvas_texture_allocate();
+	texture_storage->canvas_texture_initialize(default_canvas_texture);
 }
 
 void RasterizerCanvasGLES1::update() {
@@ -1741,7 +1805,9 @@ void RasterizerCanvasGLES1::canvas_render_items_implementation(Item *p_item_list
 	bool reclip = false;
 	bool time_used = false;
 
-	if (bdata.settings_use_batching) {
+	// p_item_list is nullptr when routing from batch_canvas_render_items_end().
+	// If it's _not_ nullptr, the batcher forced the immediate path (e.g., CanvasGroup) or batching is off.
+	if (p_item_list == nullptr) {
 		// Render using the batched result
 		int num_joined_items = bdata.items_joined.size();
 		for (int j = 0; j < num_joined_items; j++) {
@@ -1805,7 +1871,94 @@ void RasterizerCanvasGLES1::canvas_render_items_implementation(Item *p_item_list
 	} else {
 		// Legacy / Immediate render fallback
 		Item *ci = p_item_list;
+		Item *canvas_group_owner = nullptr;
+		bool backbuffer_cleared = false;
+
 		while (ci) {
+			bool skip_item = false;
+
+			if (ci->canvas_group_owner != nullptr) {
+				if (canvas_group_owner == nullptr) {
+					if (ci->canvas_group_owner->canvas_group->mode != RS::CANVAS_GROUP_MODE_TRANSPARENT) {
+						Rect2i group_rect = ci->canvas_group_owner->global_rect_cache;
+						GLES1::TextureStorage::get_singleton()->render_target_copy_to_back_buffer(state.render_target, group_rect, false);
+
+						if (ci->canvas_group_owner->canvas_group->mode == RS::CANVAS_GROUP_MODE_CLIP_AND_DRAW) {
+							ci->canvas_group_owner->use_canvas_group = false;
+
+							GLES1::CanvasMaterialData *owner_mat_data = nullptr;
+							if (ci->canvas_group_owner->material.is_valid()) {
+								GLES1::Material *material = GLES1::MaterialStorage::get_singleton()->get_material(ci->canvas_group_owner->material);
+								if (material && material->data) {
+									owner_mat_data = static_cast<GLES1::CanvasMaterialData *>(material->data);
+								}
+							}
+
+							bool owner_light_scissor = false;
+							if (p_light && bdata.settings_scissor_lights) {
+								owner_light_scissor = _light_scissor_begin(
+									ci->canvas_group_owner->global_rect_cache,
+									p_light->xform_cache,
+									p_light->rect_cache,
+									0
+								);
+							}
+
+							if (!owner_light_scissor && (ris.current_clip != ci->canvas_group_owner->final_clip_owner || reclip)) {
+								ris.current_clip = ci->canvas_group_owner->final_clip_owner;
+								if (ris.current_clip) {
+									int x = ris.current_clip->final_clip_rect.position.x;
+									int y = ris.current_clip->final_clip_rect.position.y;
+									int w = MAX(0, (int)ris.current_clip->final_clip_rect.size.x);
+									int h = MAX(0, (int)ris.current_clip->final_clip_rect.size.y);
+									gl_enable_scissor(x, y, w, h);
+									GL_CHECK_ERROR("GLES2::Canvas::render_items: glScissor setup");
+								} else {
+									gl_disable_scissor();
+									GL_CHECK_ERROR("GLES2::Canvas::render_items: glScissor disable");
+								}
+								reclip = false;
+							}
+
+							_legacy_canvas_item_render_commands(ci->canvas_group_owner, ris.current_clip, reclip, owner_mat_data);
+
+							if (owner_light_scissor) {
+								reclip = true;
+								gl_disable_scissor();
+							}
+						}
+					} else if (!backbuffer_cleared) {
+						GLES1::TextureStorage::get_singleton()->render_target_clear_back_buffer(state.render_target, Rect2i(), Color(0, 0, 0, 0));
+						backbuffer_cleared = true;
+					}
+
+					canvas_group_owner = ci->canvas_group_owner; //continue until owner found
+				}
+
+				ci->canvas_group_owner = nullptr; //must be cleared
+			}
+
+			if (canvas_group_owner == nullptr && ci->canvas_group != nullptr && ci->canvas_group->mode != RS::CANVAS_GROUP_MODE_CLIP_AND_DRAW) {
+				skip_item = true;
+			}
+
+			if (ci == canvas_group_owner) {
+				if (ci->canvas_group->blur_mipmaps) {
+					GLES1::TextureStorage::get_singleton()->render_target_gen_back_buffer_mipmaps(state.render_target, ci->global_rect_cache);
+				}
+
+				canvas_group_owner = nullptr;
+				backbuffer_cleared = false;
+				ci->use_canvas_group = true;
+			} else {
+				ci->use_canvas_group = false;
+			}
+
+			if (skip_item) {
+				ci = ci->next;
+				continue;
+			}
+
 			bool light_scissor_enabled = false;
 			if (p_light && bdata.settings_scissor_lights) {
 				light_scissor_enabled = _light_scissor_begin(
@@ -1838,9 +1991,15 @@ void RasterizerCanvasGLES1::canvas_render_items_implementation(Item *p_item_list
 				GLES1::Material *material = GLES1::MaterialStorage::get_singleton()->get_material(ci->material);
 				if (material && material->data) {
 					mat_data = static_cast<GLES1::CanvasMaterialData *>(material->data);
+					GLES1::CanvasShaderData *shader_data = mat_data->shader_data;
 
-					if (mat_data->shader_data && mat_data->shader_data->uses_time) {
-						time_used = true;
+					if (shader_data) {
+						if (shader_data->uses_time) {
+							time_used = true;
+						}
+						if (shader_data->uses_screen_texture && canvas_group_owner == nullptr) {
+							GLES1::TextureStorage::get_singleton()->render_target_copy_to_back_buffer(state.render_target, Rect2i(), shader_data->uses_screen_texture_mipmaps);
+						}
 					}
 				}
 			}
@@ -4560,38 +4719,49 @@ RasterizerCanvasGLES1::RasterizerCanvasGLES1() {
 	batch_constructor();
 
 	initialize();
-
-	state.canvas_shader = &GLES1::MaterialStorage::get_singleton()->shaders.canvas_shader;
-	data.canvas_shader_default_version = state.canvas_shader->default_version;
-
-	// Allocate the default white texture for untextured polygons/rects
-	default_canvas_texture = GLES1::TextureStorage::get_singleton()->canvas_texture_allocate();
-	GLES1::TextureStorage::get_singleton()->canvas_texture_initialize(default_canvas_texture);
 }
 
 RasterizerCanvasGLES1::~RasterizerCanvasGLES1() {
 	singleton = nullptr;
 
-	GLES1::TextureStorage::get_singleton()->canvas_texture_free(default_canvas_texture);
+	// Singletons
+	GLES1::MaterialStorage *material_storage = GLES1::MaterialStorage::get_singleton();
+	GLES1::TextureStorage *texture_storage = GLES1::TextureStorage::get_singleton();
+	GLES1::Utilities *utilities = GLES1::Utilities::get_singleton();
+
+	texture_storage->canvas_texture_free(default_canvas_texture);
 
 	// Shaders
 	if (shadow_render.shader_version.is_valid()) {
 		shadow_render.shader.version_free(shadow_render.shader_version);
 	}
 
+	if (default_canvas_group_material.is_valid()) {
+		material_storage->material_free(default_canvas_group_material);
+	}
+	if (default_canvas_group_shader.is_valid()) {
+		material_storage->shader_free(default_canvas_group_shader);
+	}
+	if (default_clip_children_material.is_valid()) {
+		material_storage->material_free(default_clip_children_material);
+	}
+	if (default_clip_children_shader.is_valid()) {
+		material_storage->shader_free(default_clip_children_shader);
+	}
+
 	// Free buffers
-	GLES1::Utilities::get_singleton()->buffer_free_data(data.canvas_quad_vertices);
-	GLES1::Utilities::get_singleton()->buffer_free_data(data.ninepatch_vertices);
-	GLES1::Utilities::get_singleton()->buffer_free_data(data.ninepatch_elements);
-	GLES1::Utilities::get_singleton()->buffer_free_data(data.polygon_buffer);
-	GLES1::Utilities::get_singleton()->buffer_free_data(data.polygon_index_buffer);
+	utilities->buffer_free_data(data.canvas_quad_vertices);
+	utilities->buffer_free_data(data.ninepatch_vertices);
+	utilities->buffer_free_data(data.ninepatch_elements);
+	utilities->buffer_free_data(data.polygon_buffer);
+	utilities->buffer_free_data(data.polygon_index_buffer);
 
 	// Free batcher buffers
 	if (bdata.gl_vertex_buffer != 0) {
-		GLES1::Utilities::get_singleton()->buffer_free_data(bdata.gl_vertex_buffer);
+		utilities->buffer_free_data(bdata.gl_vertex_buffer);
 	}
 	if (bdata.gl_index_buffer != 0) {
-		GLES1::Utilities::get_singleton()->buffer_free_data(bdata.gl_index_buffer);
+		utilities->buffer_free_data(bdata.gl_index_buffer);
 	}
 }
 

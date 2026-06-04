@@ -153,11 +153,24 @@ void RasterizerCanvasBatcherCommon<T_API>::batch_canvas_render_items_begin(const
 
 template <typename T_API>
 void RasterizerCanvasBatcherCommon<T_API>::batch_canvas_render_items(RendererCanvasRender::Item *p_item_list, int p_z, const Color &p_modulate, RendererCanvasRender::Light *p_light, const Transform2D &p_base_transform) {
-	if (bdata.settings_use_batching) {
+	// Detect if any item in this pass requires CanvasGroup logic.
+	// If so, force the immediate path for the entire pass
+	bool force_immediate = false;
+	RendererCanvasRender::Item *check_ci = p_item_list;
+	while (check_ci) {
+		if (check_ci->canvas_group_owner != nullptr || check_ci->canvas_group != nullptr) {
+			force_immediate = true;
+			break;
+		}
+		check_ci = check_ci->next;
+	}
+
+	if (bdata.settings_use_batching && !force_immediate) {
 		// Stage 1: Record items for sorting and joining. Rendering happens in _end().
 		record_items(p_item_list, p_z);
 	} else {
 		// Legacy immediate render fallback
+		// Either by batching disabled, or CanvasGroup nodes
 		get_this()->canvas_render_items_implementation(p_item_list, p_z, p_modulate, p_light, p_base_transform);
 	}
 }
@@ -222,6 +235,12 @@ bool RasterizerCanvasBatcherCommon<T_API>::try_join_item(RendererCanvasRender::I
 	if (p_ci->material != r_ris.canvas_last_material) {
 		join = false;
 		r_ris.canvas_last_material = p_ci->material;
+	}
+
+	// CanvasGroup nodes always break batches
+	if (p_ci->canvas_group_owner != r_ris.canvas_group_owner) {
+		join = false;
+		r_ris.canvas_group_owner = p_ci->canvas_group_owner;
 	}
 
 	if (_detect_item_batch_break(r_ris, p_ci, r_batch_break)) {
@@ -372,6 +391,11 @@ bool RasterizerCanvasBatcherCommon<T_API>::_sort_items_match(const BSortItem &p_
 
 	// Ensure we do not swap items across different clipping boundaries
 	if (a->final_clip_owner != b->final_clip_owner) {
+		return false;
+	}
+
+	// Ensure we don't try to match CanvasGroup nodes
+	if (a->canvas_group_owner != b->canvas_group_owner) {
 		return false;
 	}
 
@@ -1213,6 +1237,10 @@ bool RasterizerCanvasBatcherCommon<T_API>::_detect_item_batch_break(RenderItemSt
 	}
 
 	if (p_ci->copy_back_buffer) {
+		return true;
+	}
+
+	if (p_ci->canvas_group_owner) {
 		return true;
 	}
 

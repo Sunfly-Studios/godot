@@ -548,7 +548,7 @@ public:
 		ShaderCompilerGLES2 compiler_particles;
 		ShaderCompilerGLES2 compiler_sky;
 	} shaders;
-
+	
 	/* GLOBAL SHADER UNIFORM API */
 
 	void _update_global_shader_uniforms();
