@@ -773,8 +773,9 @@ if is_production and is_strict_target:
     # to absorb the overhead of a few thousand extra map nodes.
     env.Append(CPPDEFINES=["GLOBALNIL_DISABLED"])
 
-    # MSVC doesn't have an equivalent (another reason why GCC/LLVM is better :)).
-    if not env.msvc:
+    # MSVC doesn't have this, but `clang-cl` does.
+    # (another reason why GCC/LLVM are better ;>).
+    if not env.msvc or (env.msvc and env["use_llvm"]):
         env.Append(CCFLAGS=["-fstrict-aliasing"])
 
 # Explicitly specify colored output.
