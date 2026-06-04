@@ -478,7 +478,9 @@ def configure_msvc(env: "SConsEnvironment", vcvars_msvc_config):
     if not env["incremental_link"]:
         env.Append(LINKFLAGS=["/INCREMENTAL:NO"])
 
-    if env["arch"] == "x86_32":
+    # This only seems to be an issue specifically with
+    # `clang-cl`. LLVM MinGW handles it just fine.
+    if env["arch"] == "x86_32" and "clang-cl" not in env["CC"] and not env["use_llvm"]:
         env["x86_libtheora_opt_vc"] = True
 
     env.Append(CCFLAGS=["/fp:strict"])

@@ -716,6 +716,8 @@ elif env.msvc:
 if env["arch"] == "x86_32":
     if env["sse_level"] == "2":
         if env.msvc:
+            if env["use_llvm"]:
+                env.Append(CCFLAGS=["-m32"])
             env.Append(CCFLAGS=["/arch:SSE2"])
         else:
             env.Append(CCFLAGS=["-msse2", "-mfpmath=sse", "-mstackrealign"])
@@ -726,7 +728,6 @@ if env["arch"] == "x86_32":
             if env["use_llvm"]:
                 # Force clang-cl to 32-bit mode
                 env.Append(CCFLAGS=["-m32"])
-                env.Append(LINKFLAGS=["-m32"])
             
             # /arch:SSE enables XMM for "float", but falls back to x87 for "double"
             env.Append(CCFLAGS=["/arch:SSE"])
@@ -741,7 +742,6 @@ if env["arch"] == "x86_32":
         if env.msvc:
             if env["use_llvm"]:
                 env.Append(CCFLAGS=["-m32"])
-                env.Append(LINKFLAGS=["-m32"])
             
             # /arch:IA32 disables SSE/SSE2 defaults in modern MSVC
             # It forces standard floating-point operations to use the x87 FPU.
