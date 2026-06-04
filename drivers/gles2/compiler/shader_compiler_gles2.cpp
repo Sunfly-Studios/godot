@@ -827,6 +827,27 @@ String ShaderCompilerGLES2::_dump_node_code(ShaderLanguage::Node *p_node, int p_
 
 					ShaderLanguage::VariableNode *var_node = (ShaderLanguage::VariableNode *)op_node->arguments[0];
 
+					// Handle min/max on intergers.
+					// Rewrite them as ternary, which avoids ambiguous overloads.
+					if ((var_node->name == "max" || var_node->name == "min") && op_node->arguments.size() == 3) {
+						ShaderLanguage::DataType arg1_type = op_node->arguments[1]->get_datatype();
+						ShaderLanguage::DataType arg2_type = op_node->arguments[2]->get_datatype();
+
+						bool arg1_int = (arg1_type == ShaderLanguage::TYPE_INT || arg1_type == ShaderLanguage::TYPE_UINT);
+						bool arg2_int = (arg2_type == ShaderLanguage::TYPE_INT || arg2_type == ShaderLanguage::TYPE_UINT);
+
+						if (arg1_int && arg2_int) {
+							String arg1_str = _dump_node_code(op_node->arguments[1], p_level, r_gen_code, p_actions, p_default_actions, p_assigning);
+							String arg2_str = _dump_node_code(op_node->arguments[2], p_level, r_gen_code, p_actions, p_default_actions, p_assigning);
+							if (var_node->name == "max") {
+								code += "(((" + arg1_str + ") > (" + arg2_str + ")) ? (" + arg1_str + ") : (" + arg2_str + "))";
+							} else { // min
+								code += "(((" + arg1_str + ") < (" + arg2_str + ")) ? (" + arg1_str + ") : (" + arg2_str + "))";
+							}
+							break;
+						}
+					}
+
 					if (op_node->op == ShaderLanguage::OP_CONSTRUCT) {
 						code += var_node->name;
 					} else {
