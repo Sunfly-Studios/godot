@@ -2327,7 +2327,7 @@ void TextureStorage::render_target_clear_back_buffer(RID p_render_target, const 
 
 	// Store previous FBO and clear color to prevent leak
 	GLint prev_fbo;
-	glGetIntegerv(GL_FRAMEBUFFER_BINDING, &prev_fbo);
+	glGetIntegerv(GL_FRAMEBUFFER_BINDING_OES, &prev_fbo);
 	GLfloat prev_clear_color[4];
 	glGetFloatv(GL_COLOR_CLEAR_VALUE, prev_clear_color);
 
