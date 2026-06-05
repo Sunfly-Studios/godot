@@ -42,7 +42,15 @@ struct OH_Drawing_FontDescriptor;
 
 class OS_OpenHarmony : public OS_Unix {
 	Size2i display_size;
+	
+#if defined(GLES3_ENABLED) || defined(GLES2_ENABLED)
+	const char *gl_extensions;
+#endif
+
+#if defined(VULKAN_ENABLED)
 	OHNativeWindow *native_window = nullptr;
+#endif
+
 	MainLoop *main_loop = nullptr;
 	AudioDriverOpenHarmony audio_driver;
 	int32_t window_id = -1;
@@ -84,6 +92,8 @@ public:
 
 	void set_display_size(const Size2i &p_size);
 	Size2i get_display_size() const;
+	
+	void set_opengl_extensions(const char *p_gl_extensions);
 
 	void set_allowed_permissions(const char *p_allowed_permissions);
 

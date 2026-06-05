@@ -221,8 +221,9 @@ String EditorExportPlatformOpenHarmony::get_option_tooltip(int p_index) const {
 }
 
 String EditorExportPlatformOpenHarmony::get_device_architecture(int p_index) const {
-	// Only arm64 is supported for now.
-	return "arm64";
+	ERR_FAIL_INDEX_V(p_index, devices.size(), "");
+	MutexLock lock(device_lock);
+	return devices[p_index].architecture;
 }
 
 List<String> EditorExportPlatformOpenHarmony::get_binary_extensions(const Ref<EditorExportPreset> &p_preset) const {
@@ -257,22 +258,9 @@ Error EditorExportPlatformOpenHarmony::export_project_helper(const Ref<EditorExp
 	template_path = template_path.strip_edges();
 
 	if (template_path.is_empty()) {
-		String template_file_name = "openharmony";
-
-		if (p_debug) {
-			template_file_name += "_debug";
-		} else {
-			template_file_name += "_release";
-		}
-
-		if (is_arm64) {
-			template_file_name += "_arm64-v8a";
-		} else {
-			template_file_name += "_x86_64";
-		}
-		template_file_name += ".zip";
-
+		String template_file_name = _get_template_name(p_debug, is_arm64);
 		String err;
+		
 		template_path = find_export_template(template_file_name, &err);
 		if (template_path.is_empty()) {
 			add_message(EXPORT_MESSAGE_ERROR, TTR("Prepare Templates"), TTR("Export template not found.") + "\n" + err);
@@ -1194,16 +1182,6 @@ bool EditorExportPlatformOpenHarmony::has_valid_project_configuration(const Ref<
 	if (!ResourceImporterTextureSettings::should_import_etc2_astc()) {
 		valid = false;
 		err += TTR("ETC2/ASTC texture compression must be enabled for OpenHarmony export. Enable it in Project Settings (Rendering > Textures > VRAM Compression > Import ETC2 ASTC).") + "\n";
-	}
-
-	// Check if Vulkan renderer is being used (required for OpenHarmony)
-	String rendering_method = GLOBAL_GET("rendering/renderer/rendering_method.mobile");
-	String rendering_driver = GLOBAL_GET("rendering/rendering_device/driver.openharmony");
-
-	bool uses_vulkan = rendering_driver == "vulkan" && (rendering_method == "forward_plus" || rendering_method == "mobile");
-	if (!uses_vulkan) {
-		valid = false;
-		err += TTR("OpenHarmony export requires Vulkan renderer. Set rendering method to 'Forward+' or 'Mobile' and rendering driver to 'Vulkan' in Project Settings.") + "\n";
 	}
 
 	if (!err.is_empty()) {

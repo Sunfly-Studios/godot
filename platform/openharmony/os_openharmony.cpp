@@ -56,6 +56,15 @@ OS_OpenHarmony *OS_OpenHarmony::get_singleton() {
 
 OS_OpenHarmony::OS_OpenHarmony() {
 	Vector<Logger *> loggers;
+
+#if defined(GLES3_ENABLED) || defined(GLES2_ENABLED) || defined(GLES1_ENABLED)
+	gl_extensions = nullptr;
+#endif
+
+#if defined(VULKAN_ENABLED)
+	native_window = nullptr;
+#endif
+
 	Logger_OpenHarmony *logger = memnew(Logger_OpenHarmony);
 	loggers.push_back(logger);
 	_set_logger(memnew(CompositeLogger(loggers)));
@@ -86,6 +95,13 @@ void OS_OpenHarmony::set_display_size(const Size2i &p_size) {
 
 Size2i OS_OpenHarmony::get_display_size() const {
 	return display_size;
+}
+
+void OS_OpenHarmony::set_opengl_extensions(const char *p_gl_extensions) {
+#if defined(GLES3_ENABLED) || defined(GLES2_ENABLED) || defined(GLES1_ENABLED)
+	ERR_FAIL_NULL(p_gl_extensions);
+	gl_extensions = p_gl_extensions;
+#endif
 }
 
 void OS_OpenHarmony::set_allowed_permissions(const char *p_allowed_permissions) {

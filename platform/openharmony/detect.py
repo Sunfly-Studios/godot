@@ -14,7 +14,7 @@ def get_name():
 
 
 def can_build():
-    return True
+    return os.path.exists(get_default_sdk_path())
 
 
 def get_tools(env: "SConsEnvironment"):
@@ -49,8 +49,6 @@ def get_flags():
         "arch": "arm64",
         "target": "template_debug",
         "builtin_pcre2_with_jit": False,
-        "opengl3": False,
-        "opengl2": False,
         "opengl1": False,
     }
 
@@ -145,10 +143,20 @@ def configure(env: "SConsEnvironment"):
         env.Append(CPPDEFINES=["VULKAN_ENABLED", "RD_ENABLED"])
         if not env["use_volk"]:
             env.Append(LIBS=["vulkan"])
-
+    
     if env["opengl3"] or env["opengl2"] or env["opengl1"]:
-        print_error("OpenGL is not supported on OpenHarmony")
-        sys.exit(255)
+        if env["opengl3"]:
+            env.Append(CPPDEFINES=["GLES3_ENABLED"])
+            env.Append(LIBS=["GLES3"])
+
+        if env["opengl2"]:
+            env.Append(CPPDEFINES=["GLES2_ENABLED"])
+            env.Append(LIBS=["GLES2"])
+
+        if env["opengl1"]:
+            print_warning("OpenGL 1 is not supported on OpenHarmony. Disabling OpenGL 1.")
+            env["opengl1"] = False
+        env.Append(LIBS=["EGL"])
 
     env["ARGMAX"] = 8000
     env["LINKCOM"] = "$LINK @${TARGET}.rsp"

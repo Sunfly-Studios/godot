@@ -31,15 +31,38 @@
 #include "display_server_openharmony.h"
 
 #include "os_openharmony.h"
-#include "rendering_context_driver_vulkan_openharmony.h"
-#include "wrapper_openharmony.h"
 
+#if defined(RD_ENABLED)
 #include "servers/rendering/renderer_rd/renderer_compositor_rd.h"
 #include "servers/rendering/rendering_device.h"
+
+#if defined(VULKAN_ENABLED)
+#include "rendering_context_driver_vulkan_openharmony.h"
+#endif
+#endif
+
+#include "wrapper_openharmony.h"
+
+#ifdef GLES3_ENABLED
+#include "drivers/gles3/rasterizer_gles3.h"
+#endif
+
+#ifdef GLES2_ENABLED
+#include "drivers/gles2/rasterizer_gles2.h"
+#endif
+
+#if defined(GLES2_ENABLED) || defined(GLES3_ENABLED)
+#include <EGL/egl.h>
+#endif
 
 #include <database/pasteboard/oh_pasteboard.h>
 #include <database/udmf/udmf.h>
 #include <database/udmf/uds.h>
+
+#if defined(RD_ENABLED)
+static RenderingContextDriver *rendering_context_global = nullptr;
+static bool rendering_context_global_checked = false;
+#endif
 
 void DisplayServerOpenHarmony::_dispatch_input_events(const Ref<InputEvent> &p_event) {
 	get_singleton()->send_input_event(p_event);
@@ -51,19 +74,96 @@ DisplayServerOpenHarmony *DisplayServerOpenHarmony::get_singleton() {
 
 Vector<String> DisplayServerOpenHarmony::get_rendering_drivers_func() {
 	Vector<String> drivers;
+#ifdef GLES3_ENABLED
+	drivers.push_back("opengl3");
+#endif
+#ifdef GLES2_ENABLED
+	drivers.push_back("opengl2");
+#endif
+#ifdef VULKAN_ENABLED
 	drivers.push_back("vulkan");
+#endif
 	return drivers;
 }
 
 DisplayServer *DisplayServerOpenHarmony::create_func(const String &p_rendering_driver, DisplayServer::WindowMode p_mode, DisplayServer::VSyncMode p_vsync_mode, uint32_t p_flags, const Vector2i *p_position, const Vector2i &p_resolution, int p_screen, Context p_context, int64_t p_parent_window, Error &r_error) {
 	DisplayServer *ds = memnew(DisplayServerOpenHarmony(p_rendering_driver, p_mode, p_vsync_mode, p_flags, p_position, p_resolution, p_screen, p_context, p_parent_window, r_error));
 	if (r_error != OK) {
-		OS::get_singleton()->alert(
-				"Your device seems not to support the required Vulkan version.\n\n"
-				"Unable to initialize Vulkan video driver.");
+		if (p_rendering_driver == "vulkan") {
+			OS::get_singleton()->alert(
+					"Your device seems not to support the required Vulkan version.\n\n"
+					"Please try exporting your game using the 'gl_compatibility' renderer, or the 'gl_classic' renderer.",
+					"Unable to initialize Vulkan video driver");
+		} else if (p_rendering_driver == "opengl3") {
+			OS::get_singleton()->alert(
+					"Your device seems not to support the required OpenGL ES 3.0 version.\n\n"
+					"Please try exporting your game using the 'gl_legacy' renderer, or the 'vulkan' renderer.",
+					"Unable to initialize OpenGL 3 video driver");
+		} else {
+			OS::get_singleton()->alert(
+					"Your device seems not to support the required OpenGL ES 2.1 version.\n\n"
+					"Please try exporting your game using the 'gl_compatibility' renderer, or the 'vulkan' renderer.",
+					"Unable to initialize OpenGL 2 video driver");
+		}
 	}
 	return ds;
 }
+
+#ifdef VULKAN_ENABLED
+bool DisplayServerOpenHarmony::check_vulkan_global_context(bool p_vulkan_requirements_met) {
+    if (!rendering_context_global_checked) {
+        Error err = ERR_CANT_CREATE;
+        if (p_vulkan_requirements_met) {
+            rendering_context_global = memnew(RenderingContextDriverVulkanOpenHarmony);
+            err = rendering_context_global->initialize();
+        }
+
+        if (err != OK) {
+            if (rendering_context_global != nullptr) {
+                memdelete(rendering_context_global);
+                rendering_context_global = nullptr;
+            }
+
+            bool fallback_triggered = false;
+
+#if defined(GLES3_ENABLED)
+            bool fallback_to_opengl3 = GLOBAL_GET("rendering/rendering_device/fallback_to_opengl3");
+            if (!fallback_triggered && fallback_to_opengl3) {
+                WARN_PRINT("Your device does not seem to support Vulkan, switching to OpenGL 3.");
+                OS::get_singleton()->set_current_rendering_driver_name("opengl3", OS::RENDERING_SOURCE_FALLBACK);
+                OS::get_singleton()->set_current_rendering_method("gl_compatibility", OS::RENDERING_SOURCE_FALLBACK);
+                fallback_triggered = true;
+            }
+#endif // GLES3_ENABLED
+
+#if defined(GLES2_ENABLED)
+            bool fallback_to_opengl2 = GLOBAL_GET("rendering/rendering_device/fallback_to_opengl2");
+            if (!fallback_triggered && fallback_to_opengl2) {
+                WARN_PRINT("Your device does not seem to support Vulkan or OpenGL 3, switching to OpenGL 2.");
+                OS::get_singleton()->set_current_rendering_driver_name("opengl2", OS::RENDERING_SOURCE_FALLBACK);
+                OS::get_singleton()->set_current_rendering_method("gl_legacy", OS::RENDERING_SOURCE_FALLBACK);
+                fallback_triggered = true;
+            }
+#endif // GLES2_ENABLED
+
+            if (!fallback_triggered) {
+                ERR_PRINT("Failed to initialize Vulkan context.");
+            }
+        }
+
+        rendering_context_global_checked = true;
+    }
+
+    return rendering_context_global != nullptr;
+}
+
+void DisplayServerOpenHarmony::free_vulkan_global_context() {
+	if (rendering_context_global != nullptr) {
+		memdelete(rendering_context_global);
+		rendering_context_global = nullptr;
+	}
+}
+#endif
 
 void DisplayServerOpenHarmony::register_openharmony_driver() {
 	register_create_function("openharmony", create_func, get_rendering_drivers_func);
@@ -75,56 +175,65 @@ DisplayServerOpenHarmony::DisplayServerOpenHarmony(const String &p_rendering_dri
 	rendering_context = nullptr;
 	rendering_device = nullptr;
 
-	if (rendering_driver != "vulkan") {
-		ERR_PRINT(vformat("Failed to create %s context.", rendering_driver));
-		r_error = ERR_UNAVAILABLE;
-		return;
+#ifdef VULKAN_ENABLED
+	if (rendering_driver == "vulkan") {
+		if (rendering_context_global == nullptr) {
+			ERR_PRINT("Can't initialize display server with Vulkan driver because no Vulkan context is available.");
+			r_error = ERR_UNAVAILABLE;
+			return;
+		}
+
+		OHNativeWindow *native_window = OS_OpenHarmony::get_singleton()->get_native_window();
+		if (unlikely(native_window == nullptr)) {
+			ERR_PRINT("OpenHarmony native window is null.");
+			memdelete(rendering_context);
+			rendering_context = nullptr;
+			r_error = ERR_UNAVAILABLE;
+			return;
+		}
+
+		RenderingContextDriverVulkanOpenHarmony::WindowPlatformData vulkan;
+		vulkan.window = native_window;
+	
+		if (rendering_context->window_create(MAIN_WINDOW_ID, &vulkan) != OK) {
+			ERR_PRINT(vformat("Failed to create %s window.", rendering_driver));
+			memdelete(rendering_context);
+			rendering_context = nullptr;
+			r_error = ERR_UNAVAILABLE;
+			return;
+		}
+	
+		Size2i display_size = OS_OpenHarmony::get_singleton()->get_display_size();
+		rendering_context->window_set_size(MAIN_WINDOW_ID, display_size.width, display_size.height);
+		rendering_context->window_set_vsync_mode(MAIN_WINDOW_ID, p_vsync_mode);
+	
+		rendering_device = memnew(RenderingDevice);
+		if (rendering_device->initialize(rendering_context, MAIN_WINDOW_ID) != OK) {
+			memdelete(rendering_device);
+			rendering_device = nullptr;
+			memdelete(rendering_context);
+			rendering_context = nullptr;
+			memdelete(rendering_context_global);
+			rendering_context_global = nullptr;
+			r_error = ERR_UNAVAILABLE;
+			return;
+		}
+		rendering_device->screen_create(MAIN_WINDOW_ID);
+	
+		RendererCompositorRD::make_current();
 	}
+#endif
 
-	rendering_context = memnew(RenderingContextDriverVulkanOpenHarmony);
-
-	if (rendering_context->initialize() != OK) {
-		memdelete(rendering_context);
-		rendering_context = nullptr;
-		ERR_PRINT(vformat("Failed to initialize %s context.", rendering_driver));
-		r_error = ERR_UNAVAILABLE;
-		return;
+#if defined(GLES3_ENABLED)
+	if (rendering_driver == "opengl3") {
+		RasterizerGLES3::make_current(false);
 	}
-	RenderingContextDriverVulkanOpenHarmony::WindowPlatformData vulkan;
-	OHNativeWindow *native_window = OS_OpenHarmony::get_singleton()->get_native_window();
-	if (unlikely(native_window == nullptr)) {
-		ERR_PRINT("OpenHarmony native window is null.");
-		memdelete(rendering_context);
-		rendering_context = nullptr;
-		r_error = ERR_UNAVAILABLE;
-		return;
+#endif
+#if defined(GLES2_ENABLED)
+	if (rendering_driver == "opengl2") {
+		RasterizerGLES2::make_current(false);
 	}
-	vulkan.window = native_window;
-
-	if (rendering_context->window_create(MAIN_WINDOW_ID, &vulkan) != OK) {
-		ERR_PRINT(vformat("Failed to create %s window.", rendering_driver));
-		memdelete(rendering_context);
-		rendering_context = nullptr;
-		r_error = ERR_UNAVAILABLE;
-		return;
-	}
-
-	Size2i display_size = OS_OpenHarmony::get_singleton()->get_display_size();
-	rendering_context->window_set_size(MAIN_WINDOW_ID, display_size.width, display_size.height);
-	rendering_context->window_set_vsync_mode(MAIN_WINDOW_ID, p_vsync_mode);
-
-	rendering_device = memnew(RenderingDevice);
-	if (rendering_device->initialize(rendering_context, MAIN_WINDOW_ID) != OK) {
-		memdelete(rendering_device);
-		rendering_device = nullptr;
-		memdelete(rendering_context);
-		rendering_context = nullptr;
-		r_error = ERR_UNAVAILABLE;
-		return;
-	}
-	rendering_device->screen_create(MAIN_WINDOW_ID);
-
-	RendererCompositorRD::make_current();
+#endif
 
 	Input::get_singleton()->set_event_dispatch_function(_dispatch_input_events);
 
@@ -132,14 +241,17 @@ DisplayServerOpenHarmony::DisplayServerOpenHarmony(const String &p_rendering_dri
 }
 
 DisplayServerOpenHarmony::~DisplayServerOpenHarmony() {
+#if defined(RD_ENABLED)
 	if (rendering_device) {
 		memdelete(rendering_device);
 		rendering_device = nullptr;
 	}
+
 	if (rendering_context) {
 		memdelete(rendering_context);
 		rendering_context = nullptr;
 	}
+#endif
 }
 
 void DisplayServerOpenHarmony::_window_callback(const Callable &p_callable, const Variant &p_arg, bool p_deferred) const {
