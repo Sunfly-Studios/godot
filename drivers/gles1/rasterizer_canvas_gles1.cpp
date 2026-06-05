@@ -3903,6 +3903,8 @@ void RasterizerCanvasGLES1::_draw_gui_primitive(int p_points, const Vector2 *p_v
 	if (p_points <= 0) {
 		return;
 	}
+	ERR_FAIL_NULL(p_vertices);
+	ERR_FAIL_NULL(p_uvs);
 	glBindBuffer(GL_ARRAY_BUFFER, data.polygon_buffer);
 
 	uint32_t vertex_size = p_points * 2 * sizeof(float);
@@ -4047,18 +4049,14 @@ void RasterizerCanvasGLES1::_draw_gui_primitive(int p_points, const Vector2 *p_v
 		glBindBuffer(GL_ARRAY_BUFFER, 0);
 		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
 
-		ERR_FAIL_NULL(p_vertices);
-
 #ifdef REAL_T_IS_DOUBLE
 		// Convert vertices to float array
-		if (p_vertices) {
-			float *vtx_f = SAFE_ALLOCA_ARRAY(float, p_points * 2);
-			for (int i = 0; i < p_points; i++) {
-				vtx_f[i * 2 + 0] = static_cast<float>(p_vertices[i].x);
-				vtx_f[i * 2 + 1] = static_cast<float>(p_vertices[i].y);
-			}
-			glVertexPointer(2, GL_FLOAT, 0, vtx_f);
+		float *vtx_f = SAFE_ALLOCA_ARRAY(float, p_points * 2);
+		for (int i = 0; i < p_points; i++) {
+			vtx_f[i * 2 + 0] = static_cast<float>(p_vertices[i].x);
+			vtx_f[i * 2 + 1] = static_cast<float>(p_vertices[i].y);
 		}
+		glVertexPointer(2, GL_FLOAT, 0, vtx_f);
 #else
 		const Vector2 *vert_ptr = p_vertices;
 #endif
@@ -4068,14 +4066,12 @@ void RasterizerCanvasGLES1::_draw_gui_primitive(int p_points, const Vector2 *p_v
 
 		// UV temporary
 #ifdef REAL_T_IS_DOUBLE
-		if (p_uvs) {
-			float *uv_f = SAFE_ALLOCA_ARRAY(float, p_points * 2);
-			for (int i = 0; i < p_points; i++) {
-				uv_f[i * 2 + 0] = static_cast<float>(p_uvs[i].x);
-				uv_f[i * 2 + 1] = static_cast<float>(p_uvs[i].y);
-			}
-			uv_ptr = uv_f;
+		float *uv_f = SAFE_ALLOCA_ARRAY(float, p_points * 2);
+		for (int i = 0; i < p_points; i++) {
+			uv_f[i * 2 + 0] = static_cast<float>(p_uvs[i].x);
+			uv_f[i * 2 + 1] = static_cast<float>(p_uvs[i].y);
 		}
+		uv_ptr = uv_f;
 #else
 		const Vector2 *uv_ptr = p_uvs;
 #endif
