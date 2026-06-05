@@ -764,6 +764,7 @@ DisplayServerAndroid::DisplayServerAndroid(const String &p_rendering_driver, Dis
 	keep_screen_on = GLOBAL_GET("display/window/energy_saving/keep_screen_on");
 
 	native_menu = memnew(NativeMenu);
+	ERR_FAIL_NULL(native_menu);
 
 #ifdef VULKAN_ENABLED
 	if (rendering_driver == "vulkan") {
@@ -774,13 +775,23 @@ DisplayServerAndroid::DisplayServerAndroid(const String &p_rendering_driver, Dis
 		}
 
 		ANativeWindow *native_window = OS_Android::get_singleton()->get_native_window();
-		ERR_FAIL_NULL(native_window);
+		if (unlikely(native_window == nullptr)) {
+			ERR_PRINT("Android native window is null.");
+			memdelete(rendering_context);
+			rendering_context = nullptr;
+			r_error = ERR_UNAVAILABLE;
+			return;
+		}
 
 		RenderingContextDriverVulkanAndroid::WindowPlatformData wpd;
 		wpd.window = native_window;
 
 		if (rendering_context_global->window_create(MAIN_WINDOW_ID, &wpd) != OK) {
 			ERR_PRINT(vformat("Failed to create %s window.", rendering_driver));
+			memdelete(rendering_context_global);
+			rendering_context_global = nullptr;
+			memdelete(native_menu);
+			native_menu = nullptr;
 			r_error = ERR_UNAVAILABLE;
 			return;
 		}
@@ -791,7 +802,12 @@ DisplayServerAndroid::DisplayServerAndroid(const String &p_rendering_driver, Dis
 
 		rendering_device = memnew(RenderingDevice);
 		if (rendering_device->initialize(rendering_context_global, MAIN_WINDOW_ID) != OK) {
+			memdelete(rendering_device);
 			rendering_device = nullptr;
+			memdelete(rendering_context_global);
+			rendering_context_global = nullptr;
+			memdelete(native_menu);
+			native_menu = nullptr;
 			r_error = ERR_UNAVAILABLE;
 			return;
 		}
@@ -832,6 +848,7 @@ DisplayServerAndroid::~DisplayServerAndroid() {
 #if defined(RD_ENABLED)
 	if (rendering_device) {
 		memdelete(rendering_device);
+		rendering_device = nullptr;
 	}
 
 	free_vulkan_global_context();
