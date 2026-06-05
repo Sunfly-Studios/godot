@@ -661,7 +661,7 @@ def configure_msvc(env: "SConsEnvironment", vcvars_msvc_config):
 
         # Prevent clang-cl from fetching the host's default STL
         if env["use_llvm"] and env["msvc_stl_root"]:
-            env.AppendUnique(CXXFLAGS=["-Xclang", "-nostdinc++"])
+            env.AppendUnique(CXXFLAGS=["/clang:-nostdinc++"])
         
         # Prepend ensures these paths are evaluated before
         # any default host headers/libs

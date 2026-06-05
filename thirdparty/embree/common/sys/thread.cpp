@@ -28,6 +28,15 @@
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 
+// Shim.
+#if defined(__MINGW32__) && (_WIN32_WINNT < 0x0601)
+typedef struct _PROCESSOR_NUMBER {
+  WORD Group;
+  BYTE Number;
+  BYTE Reserved;
+} PROCESSOR_NUMBER, *PPROCESSOR_NUMBER;
+#endif
+
 namespace embree
 {
   /*! set the affinity of a given thread */

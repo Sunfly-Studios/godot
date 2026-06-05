@@ -219,6 +219,7 @@ Patches:
 - `0004-mingw-no-cpuidex.patch` (GH-92488)
 - `0005-mingw-llvm-arm64.patch` (GH-93364)
 - `0006-support-open-harmony.patch` (GH-108553)
+- `0007-fix-win-vista-compilation.patch` (GH-108553)
 
 The `modules/raycast/godot_update_embree.py` script can be used to pull the
 relevant files from the latest Embree release and apply patches automatically.
