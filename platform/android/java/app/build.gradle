@@ -36,6 +36,7 @@ configurations {
 dependencies {
     implementation "androidx.fragment:fragment:$versions.fragmentVersion"
     implementation "androidx.core:core-splashscreen:$versions.splashscreenVersion"
+    implementation "androidx.multidex:multidex:$versions.multidexVersion"
 
     if (rootProject.findProject(":lib")) {
         implementation project(":lib")
@@ -119,6 +120,9 @@ android {
         targetSdkVersion getExportTargetSdkVersion()
 
         missingDimensionStrategy 'products', 'template'
+        
+        // Allow > 65536 dex archives
+        multiDexEnabled true
     }
 
     lintOptions {

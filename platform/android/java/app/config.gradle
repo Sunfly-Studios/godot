@@ -1,5 +1,5 @@
 ext.versions = [
-    androidGradlePlugin: '8.6.1',
+    androidGradlePlugin: '8.9.1',
     compileSdk         : 36,
     // Also update 'platform/android/export/export_plugin.cpp#OPENGL_MIN_SDK_VERSION'
     minSdk             : 19,
@@ -14,7 +14,7 @@ ext.versions = [
     ndkVersion         : '25.3.12161346',
     splashscreenVersion: '1.0.1',
     openxrVendorsVersion: '4.0.0-stable'
-
+    multidexVersion:   : '2.0.1'
 ]
 
 ext.getExportPackageName = { ->

@@ -26,7 +26,8 @@
         android:isGame="true"
         android:hasFragileUserData="false"
         android:requestLegacyExternalStorage="false"
-        tools:ignore="GoogleAppIndexingWarning" >
+        tools:ignore="GoogleAppIndexingWarning"
+        android:name="androidx.multidex.MultiDexApplication" >
         <profileable
             android:shell="true"
             android:enabled="true"
