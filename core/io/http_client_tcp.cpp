@@ -62,7 +62,6 @@ Error HTTPClientTCP::connect_to_host(const String &p_host, int p_port, Ref<TLSOp
 	ERR_FAIL_COND_V(tls_options.is_valid() && tls_options->is_server(), ERR_INVALID_PARAMETER);
 	ERR_FAIL_COND_V_MSG(tls_options.is_valid() && !StreamPeerTLS::is_available(), ERR_UNAVAILABLE, "HTTPS is not available in this build.");
 	ERR_FAIL_COND_V(conn_host.length() < HOST_MIN_LEN, ERR_INVALID_PARAMETER);
-	ERR_FAIL_COND_V(proxy_client.is_null(), ERR_INVALID_DATA);
 
 	if (conn_port < 0) {
 		if (tls_options.is_valid()) {
