@@ -221,9 +221,8 @@ String EditorExportPlatformOpenHarmony::get_option_tooltip(int p_index) const {
 }
 
 String EditorExportPlatformOpenHarmony::get_device_architecture(int p_index) const {
-	ERR_FAIL_INDEX_V(p_index, devices.size(), "");
-	MutexLock lock(device_lock);
-	return devices[p_index].architecture;
+	// TODO(MBCX): Implement this later.
+	return "arm64";
 }
 
 List<String> EditorExportPlatformOpenHarmony::get_binary_extensions(const Ref<EditorExportPreset> &p_preset) const {

@@ -777,8 +777,6 @@ DisplayServerAndroid::DisplayServerAndroid(const String &p_rendering_driver, Dis
 		ANativeWindow *native_window = OS_Android::get_singleton()->get_native_window();
 		if (unlikely(native_window == nullptr)) {
 			ERR_PRINT("Android native window is null.");
-			memdelete(rendering_context);
-			rendering_context = nullptr;
 			r_error = ERR_UNAVAILABLE;
 			return;
 		}

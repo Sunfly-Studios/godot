@@ -13,8 +13,8 @@ ext.versions = [
     // Also update 'platform/android/detect.py#get_ndk_version()' when this is updated.
     ndkVersion         : '25.3.12161346',
     splashscreenVersion: '1.0.1',
-    openxrVendorsVersion: '4.0.0-stable'
-    multidexVersion:   : '2.0.1'
+    openxrVendorsVersion: '4.0.0-stable',
+    multidexVersion    : '2.0.1'
 ]
 
 ext.getExportPackageName = { ->
