@@ -114,7 +114,11 @@ def generate_version(argcount, const=False, returns=False, required=False, compa
         s = s.replace("$RET", "m_ret,")
         s = s.replace("$RVOID", "(void)r_ret;")  # If required, may lead to uninitialized errors
         # Allocate and zero-initialize the return memory
-        s = s.replace("$CALLPTRRETDEF", "PtrToArg<m_ret>::EncodeT *ret = SAFE_ALLOCA_SINGLE(PtrToArg<m_ret>::EncodeT);\\\n\t\t\t\tunaligned_write(ret, PtrToArg<m_ret>::EncodeT{});")
+        s = s.replace("$CALLPTRRETDEF", 
+            "using RetT = PtrToArg<m_ret>::EncodeT;\\\n"
+            "\t\t\t\tRetT *ret = (RetT *)SAFE_ALLOCA_SINGLE(RetT);\\\n"
+            "\t\t\t\t::new ((void *)ret) RetT();")
+        
         method_info += "method_info.return_val = GetTypeInfo<m_ret>::get_class_info();\\\n"
         method_info += "\t\tmethod_info.return_val_metadata = GetTypeInfo<m_ret>::METADATA;"
     else:
@@ -163,6 +167,7 @@ def generate_version(argcount, const=False, returns=False, required=False, compa
     
     callptrargs = ""
     callptrargsptr = ""
+    callptr_cleanup = ""
 
     if argcount > 0:
         argtext += ", "
@@ -186,9 +191,11 @@ def generate_version(argcount, const=False, returns=False, required=False, compa
         callsi_cleanup += f"\t\t\tvargs[{i}].~Variant();\\\n" # Manual destrunction for RefCount leak
 
         # Extension arguments
-        callptrargs += f"\t\t\tPtrToArg<m_type{i + 1}>::EncodeT *argval{i + 1} = SAFE_ALLOCA_SINGLE(PtrToArg<m_type{i + 1}>::EncodeT);\\\n"
-        callptrargs += f"\t\t\tunaligned_construct<PtrToArg<m_type{i + 1}>::EncodeT>(argval{i + 1}, (PtrToArg<m_type{i + 1}>::EncodeT)arg{i + 1});\\\n"
+        callptrargs += f"\t\t\tusing ArgT{i+1} = PtrToArg<m_type{i + 1}>::EncodeT;\\\n"
+        callptrargs += f"\t\t\tArgT{i+1} *argval{i + 1} = (ArgT{i+1} *)SAFE_ALLOCA_SINGLE(ArgT{i+1});\\\n"
+        callptrargs += f"\t\t\t::new ((void *)argval{i + 1}) ArgT{i+1}((ArgT{i+1})arg{i + 1});\\\n"
         callptrargsptr += f"\t\t\targptrs[{i}] = argval{i + 1};\\\n"
+        callptr_cleanup += f"\t\t\t\targval{i + 1}->~ArgT{i+1}();\\\n"
         
         if method_info:
             method_info += "\\\n\t\t"
@@ -221,15 +228,17 @@ def generate_version(argcount, const=False, returns=False, required=False, compa
         s = s.replace("$CALLSIRET", "r_ret = VariantCaster<m_ret>::cast(ret);")
         
         s = s.replace("$CALLPTRRETPASS", "ret")
-        s = s.replace("$CALLPTRRET", "r_ret = (m_ret)unaligned_read<PtrToArg<m_ret>::EncodeT>(ret);")
+        s = s.replace("$CALLPTRRET", 
+            f"r_ret = (m_ret)*ret;\\\n"
+            f"{callptr_cleanup}"
+            f"\t\t\t\tret->~RetT();")
     else:
         s = s.replace("$CALLSIBEGIN", "")
         s = s.replace("\t\t\t\t$CALLSIRET\\\n", "")
         s = s.replace("$CALLSIRET", "")
         
         s = s.replace("$CALLPTRRETPASS", "nullptr")
-        s = s.replace("\t\t\t\t\t$CALLPTRRET\\\n", "")
-        s = s.replace("$CALLPTRRET", "")
+        s = s.replace("$CALLPTRRET", f"{callptr_cleanup}".strip("\\\n"))
 
     s = s.replace(" $ARG", argtext)
     s = s.replace("$CALLARGS", callargtext)

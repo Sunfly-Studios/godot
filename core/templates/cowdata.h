@@ -433,7 +433,7 @@ Error CowData<T>::_realloc(Size p_alloc_size) {
 		SafeNumeric<USize> *_refc_ptr = _get_refcount_ptr(mem_new);
 		T *_data_ptr = _get_data_ptr(mem_new);
 
-		new (_refc_ptr) SafeNumeric<USize>(1);
+		::new (_refc_ptr) SafeNumeric<USize>(1);
 		_ptr = _data_ptr;
 	} else {
 		// Non-trivial types must be formally moved
@@ -446,8 +446,8 @@ Error CowData<T>::_realloc(Size p_alloc_size) {
 		USize *_size_ptr = _get_size_ptr(mem_new);
 		T *_data_ptr = _get_data_ptr(mem_new);
 
-		new (_refc_ptr) SafeNumeric<USize>(1);
-		*(_size_ptr) = active_elements;
+		::new (_refc_ptr) SafeNumeric<USize>(1);
+		::new (_size_ptr) USize(active_elements);
 
 		// Cleanly move only the living objects
 		for (USize i = 0; i < active_elements; i++) {

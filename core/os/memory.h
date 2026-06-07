@@ -73,14 +73,17 @@
 // Unify all safe memory allocation macros
 // here for convenience.
 
-#ifdef _WIN32
+#if defined(__GNUC__) || defined(__clang__)
+// Use the built-in function for these compilers.
+#define SAFE_ALLOCA(m_size, m_align) __builtin_alloca_with_align((m_size), (m_align) * 8)
+#elif defined(_WIN32)
 // Windows wants `_alloca`
 #define SAFE_ALLOCA(m_size, m_align) \
 	((void *)((((uintptr_t)_alloca((m_size) + (m_align))) + ((m_align) - 1)) & ~((uintptr_t)((m_align) - 1))))
 #else
 #define SAFE_ALLOCA(m_size, m_align) \
 	((void *)((((uintptr_t)alloca((m_size) + (m_align))) + ((m_align) - 1)) & ~((uintptr_t)((m_align) - 1))))
-#endif
+#endif // __GNUC__ || __clang__
 
 // Safe Stack Allocation Macro. This macro:
 // - Allocates requested size + alignment padding.
@@ -91,7 +94,7 @@
 // Should futher prevent crashes on strict RISC architectures
 // and improve SIMD safety on x86.
 #define SAFE_ALLOCA_ARRAY(m_type, m_count) \
-	((m_count) > 0) ? (m_type *)SAFE_ALLOCA(sizeof(m_type) * (m_count), SAFE_ALIGN_SIZE(m_type)) : (m_type *)nullptr
+	((m_count) > 0) ? static_cast<m_type *>(SAFE_ALLOCA(sizeof(m_type) * (m_count), SAFE_ALIGN_SIZE(m_type))) : nullptr
 
 // Single-element version.
 #define SAFE_ALLOCA_SINGLE(m_type) SAFE_ALLOCA_ARRAY(m_type, 1)
@@ -213,32 +216,95 @@ _ALWAYS_INLINE_ bool predelete_handler(void *) {
 	return true;
 }
 
+// TODO(MBCX): A lot of Godot's classes actually
+// fail the check in unaligned_construct about
+// non-trivial classes.
+// These require a bit of a more complex
+// engine-wide clean-up that will be done
+// incrementally at a later date.
+#if defined(TOOLS_ENABLED)
+#define HANDLE_UNALIGNED_NON_TRIVIAL(type, ptr) \
+	do { \
+		static bool warned = false; \
+		if (!warned) { \
+			printf("WARNING: Unaligned access of non-trivial type %s at %p. This is UB.\n", typeid(type).name(), ptr); \
+			warned = true; \
+		} \
+	} while(0)
+#else
+#define HANDLE_UNALIGNED_NON_TRIVIAL(type, ptr) ((void)0)
+#endif
+
 template <typename T>
 _FORCE_INLINE_ T unaligned_read(const void *p_ptr) {
-	alignas(alignof(T)) uint8_t buf[sizeof(T)] = {};
-	memcpy(buf, p_ptr, sizeof(T));
-	return *reinterpret_cast<const T *>(buf);
+	if constexpr (std::is_trivially_copyable_v<T>) {
+		T local;
+		memcpy(&local, p_ptr, sizeof(T));
+		return local;
+	} else {
+		uintptr_t addr = reinterpret_cast<uintptr_t>(p_ptr);
+		const bool is_aligned = (addr & (alignof(T) - 1)) == 0;
+		
+		if (is_aligned) {
+			return *std::launder(static_cast<const T *>(p_ptr));
+		}
+		HANDLE_UNALIGNED_NON_TRIVIAL(T, p_ptr);
+
+		// Pull the bytes onto an aligned stack block.
+		// Temporary safeboat until the TODO is dealt with.
+		alignas(alignof(T)) uint8_t buf[sizeof(T)] = {};
+		memcpy(buf, p_ptr, sizeof(T));
+		return *std::launder(reinterpret_cast<const T *>(buf));
+	}
 }
 
 template <typename T>
 _FORCE_INLINE_ void unaligned_write(void *p_ptr, const T &p_val) {
-	alignas(alignof(T)) uint8_t buf[sizeof(T)] = {};
-	// Must copy original memory first in case operator= relies on the
-	// existing state (e.g., decref'ing an existing pointer before overwrite)
-	memcpy(buf, p_ptr, sizeof(T));
+	if constexpr (std::is_trivially_copyable_v<T>) {
+		memcpy(p_ptr, &p_val, sizeof(T));
+	} else {
+		uintptr_t addr = reinterpret_cast<uintptr_t>(p_ptr);
+		const bool is_aligned = (addr & (alignof(T) - 1)) == 0;
 
-	T *dst = reinterpret_cast<T *>(buf);
-	*dst = p_val; // Invoke operator=
+		if (is_aligned) {
+			*std::launder(static_cast<T *>(p_ptr)) = p_val;
+		} else {
+			HANDLE_UNALIGNED_NON_TRIVIAL(T, p_ptr);
 
-	// Copy the resulting state back to the unaligned destination
-	memcpy(p_ptr, buf, sizeof(T));
+			// Construct locally, then blit the bytes over.
+			alignas(alignof(T)) uint8_t buf[sizeof(T)] = {};
+            ::new (buf) T(p_val);
+            memcpy(p_ptr, buf, sizeof(T));
+            reinterpret_cast<T *>(buf)->~T();
+		}
+	}
 }
 
 template <typename ConstructT, typename ArgT>
 _FORCE_INLINE_ void unaligned_construct(void *p_ptr, const ArgT &p_arg) {
-	alignas(alignof(ConstructT)) uint8_t buf[sizeof(ConstructT)] = {};
-	memnew_placement(buf, ConstructT(p_arg));
-	memcpy(p_ptr, buf, sizeof(ConstructT));
+	uintptr_t addr = reinterpret_cast<uintptr_t>(p_ptr);
+	const bool is_aligned = (addr & (alignof(ConstructT) - 1)) == 0;
+
+	if constexpr (std::is_trivially_copyable_v<ConstructT>) {
+		if (is_aligned) {
+			::new (p_ptr) ConstructT(p_arg);
+		} else {
+			// This is just a "UB" safe-boat for now until
+			// the TODO is fixed.
+			alignas(alignof(ConstructT)) uint8_t buf[sizeof(ConstructT)] = {};
+			::new (buf) ConstructT(p_arg);
+			memcpy(p_ptr, buf, sizeof(ConstructT));
+		}
+	} else {
+		if (is_aligned) {
+			::new (p_ptr) ConstructT(p_arg);
+		} else {
+			HANDLE_UNALIGNED_NON_TRIVIAL(ConstructT, p_ptr);
+			alignas(alignof(ConstructT)) uint8_t buf[sizeof(ConstructT)] = {};
+            ::new (buf) ConstructT(p_arg);
+            memcpy(p_ptr, buf, sizeof(ConstructT));
+		}
+	}
 }
 
 template <typename T>

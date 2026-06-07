@@ -777,6 +777,7 @@ if is_production and is_strict_target:
     # (another reason why GCC/LLVM are better ;>).
     if not env.msvc or (env.msvc and env["use_llvm"]):
         env.Append(CCFLAGS=["-fstrict-aliasing"])
+        env.Append(CPPDEFINES=["STRICT_ALIASING_ENABLED"])
 
 # Explicitly specify colored output.
 if methods.using_gcc(env):

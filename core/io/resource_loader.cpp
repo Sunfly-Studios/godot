@@ -868,8 +868,9 @@ Ref<Resource> ResourceLoader::_load_complete_inner(LoadToken &p_load_token, Erro
 			DEV_ASSERT((load_task.task_id == 0) != (load_task.thread_id == 0));
 
 			if ((load_task.task_id != 0 && load_task.task_id == WorkerThreadPool::get_singleton()->get_caller_task_id()) ||
-					(load_task.thread_id != 0 && load_task.thread_id == Thread::get_caller_id())) {
-				// Load is in progress, but it's precisely this thread the one in charge.
+					(load_task.thread_id != 0 && load_task.thread_id == Thread::get_caller_id()) ||
+					(load_task.started_load && load_task.thread_index == WorkerThreadPool::get_singleton()->get_thread_index())) {
+				// Load is in progress, but it's precisely this thread the one in charge (either natively or via adaptation takeover).
 				// That means this is a cyclic load.
 				if (r_error) {
 					*r_error = ERR_BUSY;
@@ -962,7 +963,7 @@ Ref<Resource> ResourceLoader::_load_complete_inner(LoadToken &p_load_token, Erro
 			if (!curr_load_task->connections_propagated) {
 				// A task awaiting another => Let the awaiter accumulate the resource changed connections.
 				DEV_ASSERT(curr_load_task != load_task_ptr);
-				for (const ThreadLoadTask::ResourceChangedConnection &rcc : curr_load_task->resource_changed_connections) {
+				for (const ThreadLoadTask::ResourceChangedConnection &rcc : load_task_ptr->resource_changed_connections) {
 					curr_load_task->resource_changed_connections.push_back(rcc);
 				}
 				curr_load_task->connections_propagated = true;
