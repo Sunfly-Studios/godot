@@ -222,7 +222,7 @@ _ALWAYS_INLINE_ bool predelete_handler(void *) {
 // These require a bit of a more complex
 // engine-wide clean-up that will be done
 // incrementally at a later date.
-#if defined(TOOLS_ENABLED)
+#if defined(TOOLS_ENABLED) && defined(_MSC_VER)
 #define HANDLE_UNALIGNED_NON_TRIVIAL(type, ptr) \
 	do { \
 		static bool warned = false; \
