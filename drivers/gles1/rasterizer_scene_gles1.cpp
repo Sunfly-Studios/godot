@@ -357,6 +357,25 @@ TypedArray<Image> RasterizerSceneGLES1::bake_render_uv2(RID p_base, const TypedA
 }
 
 bool RasterizerSceneGLES1::free(RID p_rid) {
+	if (is_environment(p_rid)) {
+		environment_free(p_rid);
+	} else if (sky_owner.owns(p_rid)) {
+		Sky *sky = sky_owner.get_or_null(p_rid);
+		ERR_FAIL_NULL_V(sky, false);
+		_free_sky_data(sky);
+		sky_owner.free(p_rid);
+	} else if (GLES1::LightStorage::get_singleton()->owns_light_instance(p_rid)) {
+		GLES1::LightStorage::get_singleton()->light_instance_free(p_rid);
+	} else if (RSG::camera_attributes->owns_camera_attributes(p_rid)) {
+		//not much to delete, just free it
+		RSG::camera_attributes->camera_attributes_free(p_rid);
+	} else if (is_compositor(p_rid)) {
+		compositor_free(p_rid);
+	} else if (is_compositor_effect(p_rid)) {
+		compositor_effect_free(p_rid);
+	} else {
+		return false;
+	}
 	return true;
 }
 
