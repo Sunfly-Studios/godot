@@ -175,7 +175,7 @@ private:
 		elements = reinterpret_cast<HashMapElement<TKey, TValue> **>(Memory::alloc_static(sizeof(HashMapElement<TKey, TValue> *) * capacity));
 
 		for (uint32_t i = 0; i < capacity; i++) {
-			hashes[i] = 0;
+			hashes[i] = EMPTY_HASH;
 			elements[i] = nullptr;
 		}
 

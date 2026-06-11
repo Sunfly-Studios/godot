@@ -1376,39 +1376,43 @@ void MaterialStorage::_global_shader_uniform_store_in_buffer(int32_t p_index, RS
 			bv.w = (bvec & 8) ? 1.0 : 0.0;
 		} break;
 		case RS::GLOBAL_VAR_TYPE_INT: {
-			GlobalShaderUniforms::ValueInt &bv = *(GlobalShaderUniforms::ValueInt *)&global_shader_uniforms.buffer_values[p_index];
+			GlobalShaderUniforms::ValueInt bv;
 			int32_t v = p_value;
 			bv.x = v;
 			bv.y = 0;
 			bv.z = 0;
 			bv.w = 0;
+			unaligned_write<GlobalShaderUniforms::ValueInt>(&global_shader_uniforms.buffer_values[p_index], bv);
 		} break;
 		case RS::GLOBAL_VAR_TYPE_IVEC2: {
-			GlobalShaderUniforms::ValueInt &bv = *(GlobalShaderUniforms::ValueInt *)&global_shader_uniforms.buffer_values[p_index];
+			GlobalShaderUniforms::ValueInt bv;
 			Vector2i v = convert_to_vector<Vector2i>(p_value);
 			bv.x = v.x;
 			bv.y = v.y;
 			bv.z = 0;
 			bv.w = 0;
+			unaligned_write<GlobalShaderUniforms::ValueInt>(&global_shader_uniforms.buffer_values[p_index], bv);
 		} break;
 		case RS::GLOBAL_VAR_TYPE_IVEC3: {
-			GlobalShaderUniforms::ValueInt &bv = *(GlobalShaderUniforms::ValueInt *)&global_shader_uniforms.buffer_values[p_index];
+			GlobalShaderUniforms::ValueInt bv;
 			Vector3i v = convert_to_vector<Vector3i>(p_value);
 			bv.x = v.x;
 			bv.y = v.y;
 			bv.z = v.z;
 			bv.w = 0;
+			unaligned_write<GlobalShaderUniforms::ValueInt>(&global_shader_uniforms.buffer_values[p_index], bv);
 		} break;
 		case RS::GLOBAL_VAR_TYPE_IVEC4: {
-			GlobalShaderUniforms::ValueInt &bv = *(GlobalShaderUniforms::ValueInt *)&global_shader_uniforms.buffer_values[p_index];
+			GlobalShaderUniforms::ValueInt bv;
 			Vector4i v = convert_to_vector<Vector4i>(p_value);
 			bv.x = v.x;
 			bv.y = v.y;
 			bv.z = v.z;
 			bv.w = v.w;
+			unaligned_write<GlobalShaderUniforms::ValueInt>(&global_shader_uniforms.buffer_values[p_index], bv);
 		} break;
 		case RS::GLOBAL_VAR_TYPE_RECT2I: {
-			GlobalShaderUniforms::ValueInt &bv = *(GlobalShaderUniforms::ValueInt *)&global_shader_uniforms.buffer_values[p_index];
+			GlobalShaderUniforms::ValueInt bv;
 			Rect2i v = p_value;
 			bv.x = v.position.x;
 			bv.y = v.position.y;
@@ -1416,36 +1420,40 @@ void MaterialStorage::_global_shader_uniform_store_in_buffer(int32_t p_index, RS
 			bv.w = v.size.y;
 		} break;
 		case RS::GLOBAL_VAR_TYPE_UINT: {
-			GlobalShaderUniforms::ValueUInt &bv = *(GlobalShaderUniforms::ValueUInt *)&global_shader_uniforms.buffer_values[p_index];
+			GlobalShaderUniforms::ValueUInt bv;
 			uint32_t v = p_value;
 			bv.x = v;
 			bv.y = 0;
 			bv.z = 0;
 			bv.w = 0;
+			unaligned_write<GlobalShaderUniforms::ValueUInt>(&global_shader_uniforms.buffer_values[p_index], bv);
 		} break;
 		case RS::GLOBAL_VAR_TYPE_UVEC2: {
-			GlobalShaderUniforms::ValueUInt &bv = *(GlobalShaderUniforms::ValueUInt *)&global_shader_uniforms.buffer_values[p_index];
+			GlobalShaderUniforms::ValueUInt bv;
 			Vector2i v = convert_to_vector<Vector2i>(p_value);
 			bv.x = v.x;
 			bv.y = v.y;
 			bv.z = 0;
 			bv.w = 0;
+			unaligned_write<GlobalShaderUniforms::ValueUInt>(&global_shader_uniforms.buffer_values[p_index], bv);
 		} break;
 		case RS::GLOBAL_VAR_TYPE_UVEC3: {
-			GlobalShaderUniforms::ValueUInt &bv = *(GlobalShaderUniforms::ValueUInt *)&global_shader_uniforms.buffer_values[p_index];
+			GlobalShaderUniforms::ValueUInt bv;
 			Vector3i v = convert_to_vector<Vector3i>(p_value);
 			bv.x = v.x;
 			bv.y = v.y;
 			bv.z = v.z;
 			bv.w = 0;
+			unaligned_write<GlobalShaderUniforms::ValueUInt>(&global_shader_uniforms.buffer_values[p_index], bv);
 		} break;
 		case RS::GLOBAL_VAR_TYPE_UVEC4: {
-			GlobalShaderUniforms::ValueUInt &bv = *(GlobalShaderUniforms::ValueUInt *)&global_shader_uniforms.buffer_values[p_index];
+			GlobalShaderUniforms::ValueUInt bv;
 			Vector4i v = convert_to_vector<Vector4i>(p_value);
 			bv.x = v.x;
 			bv.y = v.y;
 			bv.z = v.z;
 			bv.w = v.w;
+			unaligned_write<GlobalShaderUniforms::ValueUInt>(&global_shader_uniforms.buffer_values[p_index], bv);
 		} break;
 		case RS::GLOBAL_VAR_TYPE_FLOAT: {
 			GlobalShaderUniforms::Value &bv = global_shader_uniforms.buffer_values[p_index];

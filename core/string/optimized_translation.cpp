@@ -141,27 +141,24 @@ void OptimizedTranslation::generate(const Ref<Translation> &p_from) {
 	int *htwb = hash_table.ptrw();
 	int *btwb = bucket_table.ptrw();
 
-	uint32_t *htw = (uint32_t *)&htwb[0];
-	uint32_t *btw = (uint32_t *)&btwb[0];
-
 	int btindex = 0;
 
 	for (int i = 0; i < size; i++) {
 		const HashMap<uint32_t, int> &t = table[i];
 		if (t.size() == 0) {
-			htw[i] = 0xFFFFFFFF; //nothing
+			unaligned_write<uint32_t>(&htwb[i], 0xFFFFFFFF); //nothing
 			continue;
 		}
 
-		htw[i] = btindex;
-		btw[btindex++] = t.size();
-		btw[btindex++] = hfunc_table[i];
+		unaligned_write<uint32_t>(&htwb[i], btindex);
+		unaligned_write<uint32_t>(&btwb[btindex++], t.size());
+		unaligned_write<uint32_t>(&btwb[btindex++], hfunc_table[i]);
 
 		for (const KeyValue<uint32_t, int> &E : t) {
-			btw[btindex++] = E.key;
-			btw[btindex++] = compressed[E.value].offset;
-			btw[btindex++] = compressed[E.value].compressed.size();
-			btw[btindex++] = compressed[E.value].orig_len;
+			unaligned_write<uint32_t>(&btwb[btindex++], E.key);
+			unaligned_write<uint32_t>(&btwb[btindex++], compressed[E.value].offset);
+			unaligned_write<uint32_t>(&btwb[btindex++], compressed[E.value].compressed.size());
+			unaligned_write<uint32_t>(&btwb[btindex++], compressed[E.value].orig_len);
 		}
 	}
 
@@ -223,26 +220,37 @@ StringName OptimizedTranslation::get_message(const StringName &p_src_text, const
 	uint32_t h = hash(0, str.get_data());
 
 	const int *htr = hash_table.ptr();
-	const uint32_t *htptr = (const uint32_t *)&htr[0];
 	const int *btr = bucket_table.ptr();
-	const uint32_t *btptr = (const uint32_t *)&btr[0];
 	const uint8_t *sr = strings.ptr();
-	const char *sptr = (const char *)&sr[0];
+	const char *sptr = reinterpret_cast<const char *>(sr);
 
-	uint32_t p = htptr[h % htsize];
+	uint32_t p = unaligned_read<uint32_t>(&htr[h % htsize]);
 
 	if (p == 0xFFFFFFFF) {
 		return StringName(); //nothing
 	}
 
-	const Bucket &bucket = *(const Bucket *)&btptr[p];
+	const void *bucket_base = &btr[p];
 
-	h = hash(bucket.func, str.get_data());
+	int bucket_size = unaligned_read<int>(reinterpret_cast<const char *>(bucket_base) + offsetof(Bucket, size));
+	uint32_t bucket_func = unaligned_read<uint32_t>(reinterpret_cast<const char *>(bucket_base) + offsetof(Bucket, func));
+
+	h = hash(bucket_func, str.get_data());
 
 	int idx = -1;
 
-	for (int i = 0; i < bucket.size; i++) {
-		if (bucket.elem[i].key == h) {
+	// We dynamically discover what type lives in that array,
+	// then we use it as an alias to copy bytes out of raw memory
+	// via our `unaligned_read` function, since it expects
+	// a type T.
+	// This method also allows the Bucket struct to be freely
+	// edited without affecting this as well.
+	using ElemType = typename std::remove_reference<decltype(((Bucket *)nullptr)->elem[0])>::type;
+	for (int i = 0; i < bucket_size; i++) {
+		const char *elem_ptr = reinterpret_cast<const char *>(bucket_base) + offsetof(Bucket, elem) + (i * sizeof(ElemType));
+		ElemType elem = unaligned_read<ElemType>(elem_ptr);
+
+		if (elem.key == h) {
 			idx = i;
 			break;
 		}
@@ -252,15 +260,18 @@ StringName OptimizedTranslation::get_message(const StringName &p_src_text, const
 		return StringName();
 	}
 
-	if (bucket.elem[idx].comp_size == bucket.elem[idx].uncomp_size) {
+	const char *elem_ptr = reinterpret_cast<const char *>(bucket_base) + offsetof(Bucket, elem) + (idx * sizeof(ElemType));
+	ElemType bucket_elem = unaligned_read<ElemType>(elem_ptr);
+
+	if (bucket_elem.comp_size == bucket_elem.uncomp_size) {
 		String rstr;
-		rstr.parse_utf8(&sptr[bucket.elem[idx].str_offset], bucket.elem[idx].uncomp_size);
+		rstr.parse_utf8(&sptr[bucket_elem.str_offset], bucket_elem.uncomp_size);
 
 		return rstr;
 	} else {
 		CharString uncomp;
-		uncomp.resize(bucket.elem[idx].uncomp_size + 1);
-		smaz_decompress(&sptr[bucket.elem[idx].str_offset], bucket.elem[idx].comp_size, uncomp.ptrw(), bucket.elem[idx].uncomp_size);
+		uncomp.resize(bucket_elem.uncomp_size + 1);
+		smaz_decompress(&sptr[bucket_elem.str_offset], bucket_elem.comp_size, uncomp.ptrw(), bucket_elem.uncomp_size);
 		String rstr;
 		rstr.parse_utf8(uncomp.get_data());
 		return rstr;
@@ -271,25 +282,31 @@ Vector<String> OptimizedTranslation::get_translated_message_list() const {
 	Vector<String> msgs;
 
 	const int *htr = hash_table.ptr();
-	const uint32_t *htptr = (const uint32_t *)&htr[0];
 	const int *btr = bucket_table.ptr();
-	const uint32_t *btptr = (const uint32_t *)&btr[0];
 	const uint8_t *sr = strings.ptr();
-	const char *sptr = (const char *)&sr[0];
+	const char *sptr = reinterpret_cast<const char *>(sr);
+
+	using ElemType = typename std::remove_reference<decltype(((Bucket *)nullptr)->elem[0])>::type;
 
 	for (int i = 0; i < hash_table.size(); i++) {
-		uint32_t p = htptr[i];
+		uint32_t p = unaligned_read<uint32_t>(&htr[i]);
+
 		if (p != 0xFFFFFFFF) {
-			const Bucket &bucket = *(const Bucket *)&btptr[p];
-			for (int j = 0; j < bucket.size; j++) {
-				if (bucket.elem[j].comp_size == bucket.elem[j].uncomp_size) {
+			const void *bucket_base = &btr[p];
+			int bucket_size = unaligned_read<int>(reinterpret_cast<const char *>(bucket_base) + offsetof(Bucket, size));
+
+			for (int j = 0; j < bucket_size; j++) {
+				const char *elem_ptr = reinterpret_cast<const char *>(bucket_base) + offsetof(Bucket, elem) + (j * sizeof(ElemType));
+				ElemType elem = unaligned_read<ElemType>(elem_ptr);
+
+				if (elem.comp_size == elem.uncomp_size) {
 					String rstr;
-					rstr.parse_utf8(&sptr[bucket.elem[j].str_offset], bucket.elem[j].uncomp_size);
+					rstr.parse_utf8(&sptr[elem.str_offset], elem.uncomp_size);
 					msgs.push_back(rstr);
 				} else {
 					CharString uncomp;
-					uncomp.resize(bucket.elem[j].uncomp_size + 1);
-					smaz_decompress(&sptr[bucket.elem[j].str_offset], bucket.elem[j].comp_size, uncomp.ptrw(), bucket.elem[j].uncomp_size);
+					uncomp.resize(elem.uncomp_size + 1);
+					smaz_decompress(&sptr[elem.str_offset], elem.comp_size, uncomp.ptrw(), elem.uncomp_size);
 					String rstr;
 					rstr.parse_utf8(uncomp.get_data());
 					msgs.push_back(rstr);

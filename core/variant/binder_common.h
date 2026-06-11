@@ -93,14 +93,11 @@ struct VariantCaster<const T &> {
 	template <>                                                              \
 	struct PtrToArg<m_enum> {                                                \
 		_FORCE_INLINE_ static m_enum convert(const void *p_ptr) {            \
-			int64_t v;                                                       \
-			memcpy(&v, p_ptr, sizeof(int64_t));                              \
-			return m_enum(v);                                                \
+			return m_enum(unaligned_read<int64_t>(p_ptr));                   \
 		}                                                                    \
 		typedef int64_t EncodeT;                                             \
 		_FORCE_INLINE_ static void encode(m_enum p_val, void *p_ptr) {       \
-			int64_t v = (int64_t)p_val;                                      \
-			memcpy(p_ptr, &v, sizeof(int64_t));                              \
+			unaligned_write<int64_t>(p_ptr, (int64_t)p_val);                 \
 		}                                                                    \
 	};                                                                       \
 	template <>                                                              \
@@ -130,14 +127,11 @@ struct VariantCaster<const T &> {
 	template <>                                                                        \
 	struct PtrToArg<BitField<m_enum>> {                                                \
 		_FORCE_INLINE_ static BitField<m_enum> convert(const void *p_ptr) {            \
-			int64_t v;                                                                 \
-			memcpy(&v, p_ptr, sizeof(int64_t));                                        \
-			return BitField<m_enum>(v);                                                \
+			return BitField<m_enum>(unaligned_read<int64_t>(p_ptr));                   \
 		}                                                                              \
 		typedef int64_t EncodeT;                                                       \
 		_FORCE_INLINE_ static void encode(BitField<m_enum> p_val, void *p_ptr) {       \
-			int64_t v = p_val;                                                         \
-			memcpy(p_ptr, &v, sizeof(int64_t));                                        \
+			unaligned_write<int64_t>(p_ptr, (int64_t)p_val);                           \
 		}                                                                              \
 	};                                                                                 \
 	template <>                                                                        \
@@ -231,14 +225,11 @@ struct VariantCaster<char32_t> {
 template <>
 struct PtrToArg<char32_t> {
 	_FORCE_INLINE_ static char32_t convert(const void *p_ptr) {
-		int64_t v;
-		memcpy(&v, p_ptr, sizeof(int64_t));
-		return char32_t(v);
+		return char32_t(unaligned_read<int64_t>(p_ptr));
 	}
 	typedef int64_t EncodeT;
 	_FORCE_INLINE_ static void encode(char32_t p_val, void *p_ptr) {
-		int64_t v = p_val;
-		memcpy(p_ptr, &v, sizeof(int64_t));
+		unaligned_write<int64_t>(p_ptr, int64_t(p_val));
 	}
 };
 

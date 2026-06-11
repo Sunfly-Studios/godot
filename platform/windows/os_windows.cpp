@@ -1435,7 +1435,7 @@ Dictionary OS_Windows::execute_with_pipe(const String &p_path, const List<String
 
 	SIZE_T attr_list_size = 0;
 	InitializeProcThreadAttributeList(nullptr, 1, 0, &attr_list_size);
-	si_ex.lpAttributeList = (LPPROC_THREAD_ATTRIBUTE_LIST)alloca(attr_list_size);
+	si_ex.lpAttributeList = (LPPROC_THREAD_ATTRIBUTE_LIST)SAFE_ALLOCA(attr_list_size, SAFE_ALIGN_SIZE(void *));
 
 	if (!InitializeProcThreadAttributeList(si_ex.lpAttributeList, 1, 0, &attr_list_size)) {
 		CLEAN_PIPES
@@ -1554,7 +1554,7 @@ Error OS_Windows::execute(const String &p_path, const List<String> &p_arguments,
 
 		SIZE_T attr_list_size = 0;
 		InitializeProcThreadAttributeList(nullptr, 1, 0, &attr_list_size);
-		si_ex.lpAttributeList = (LPPROC_THREAD_ATTRIBUTE_LIST)alloca(attr_list_size);
+		si_ex.lpAttributeList = (LPPROC_THREAD_ATTRIBUTE_LIST)SAFE_ALLOCA(attr_list_size, SAFE_ALIGN_SIZE(void *));
 
 		if (!InitializeProcThreadAttributeList(si_ex.lpAttributeList, 1, 0, &attr_list_size)) {
 			CloseHandle(pipe[0]);

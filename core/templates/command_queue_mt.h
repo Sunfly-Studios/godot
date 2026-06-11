@@ -126,7 +126,8 @@ class CommandQueueMT {
 
 		uint64_t size = command_mem.size();
 		command_mem.resize(size + alloc_size + sizeof(uint64_t));
-		*(uint64_t *)&command_mem[size] = alloc_size;
+		unaligned_write<uint64_t>(&command_mem[size], alloc_size);
+
 		void *cmd = &command_mem[size + sizeof(uint64_t)];
 		new (cmd) T(std::forward<Args>(p_args)...);
 		pending.store(true);
@@ -164,25 +165,25 @@ class CommandQueueMT {
 			return;
 		}
 
-		char cmd_backup[MAX_COMMAND_SIZE];
+		alignas(GODOT_MIN_STACK_ALIGN) char cmd_backup[MAX_COMMAND_SIZE];
 
 		while (flush_read_ptr < command_mem.size()) {
-			uint64_t size = *(uint64_t *)&command_mem[flush_read_ptr];
+			uint64_t size = unaligned_read<uint64_t>(&command_mem[flush_read_ptr]);
 			flush_read_ptr += sizeof(uint64_t);
 
-			CommandBase *cmd = reinterpret_cast<CommandBase *>(&command_mem[flush_read_ptr]);
+			CommandBase *cmd = std::launder(reinterpret_cast<CommandBase *>(&command_mem[flush_read_ptr]));
 
 			// Protect against race condition between this thread
 			// during the call to the command and other threads potentially
 			// invalidating the pointer due to reallocs.
-			memcpy(cmd_backup, (char *)cmd, size);
+			memcpy(cmd_backup, reinterpret_cast<const char *>(cmd), size);
 
 			uint32_t allowance_id = WorkerThreadPool::thread_enter_unlock_allowance_zone(lock);
-			((CommandBase *)cmd_backup)->call();
+			std::launder(reinterpret_cast<CommandBase *>(cmd_backup))->call();
 			WorkerThreadPool::thread_exit_unlock_allowance_zone(allowance_id);
 
 			// Handle potential realloc due to the command and unlock allowance.
-			cmd = reinterpret_cast<CommandBase *>(&command_mem[flush_read_ptr]);
+			cmd = std::launder(reinterpret_cast<CommandBase *>(&command_mem[flush_read_ptr]));
 
 			if (unlikely(cmd->sync)) {
 				sync_head++;

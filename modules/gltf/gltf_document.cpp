@@ -2541,9 +2541,7 @@ Vector<Variant> GLTFDocument::_decode_accessor_as_variant(Ref<GLTFState> p_state
 						v = Vector4(attribs[i * component_count], attribs[i * component_count + 1], attribs[i * component_count + 2], attribs[i * component_count + 3]);
 					} break;
 				}
-				// Evil hack that relies on the structure of Variant, but it's the
-				// only way to accomplish this without a ton of code duplication.
-				*(Variant::Type *)&v = p_variant_type;
+				unaligned_write<Variant::Type>(&v, p_variant_type);
 				ret.write[i] = v;
 			} break;
 			case Variant::VECTOR2I:
@@ -2566,9 +2564,7 @@ Vector<Variant> GLTFDocument::_decode_accessor_as_variant(Ref<GLTFState> p_state
 						v = Vector4i((int32_t)attribs[i * component_count], (int32_t)attribs[i * component_count + 1], (int32_t)attribs[i * component_count + 2], (int32_t)attribs[i * component_count + 3]);
 					} break;
 				}
-				// Evil hack that relies on the structure of Variant, but it's the
-				// only way to accomplish this without a ton of code duplication.
-				*(Variant::Type *)&v = p_variant_type;
+				unaligned_write<Variant::Type>(&v, p_variant_type);
 				ret.write[i] = v;
 			} break;
 			// No more generalized hacks, each of the below types needs a lot of repetitive code.

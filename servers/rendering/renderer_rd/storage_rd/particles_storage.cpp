@@ -654,7 +654,7 @@ AABB ParticlesStorage::particles_get_current_aabb(RID p_particles) {
 		const uint8_t *data_ptr = (const uint8_t *)buffer.ptr();
 
 		for (int i = 0; i < total_amount; i++) {
-			const ParticleData &particle_data = *(const ParticleData *)&data_ptr[particle_data_size * i];
+			ParticleData particle_data = unaligned_read<ParticleData>(&data_ptr[particle_data_size * i]);
 			if (particle_data.active) {
 				Vector3 pos = Vector3(particle_data.xform[12], particle_data.xform[13], particle_data.xform[14]);
 				if (!particles->use_local_coords) {

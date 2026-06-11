@@ -1414,8 +1414,11 @@ Array RenderingServer::_get_array_from_surface(uint64_t p_format, Vector<uint8_t
 						Vector2 *w = arr_2d.ptrw();
 
 						for (int j = 0; j < p_vertex_len; j++) {
-							const float *v = reinterpret_cast<const float *>(&r[j * vertex_elem_size + offsets[i]]);
-							w[j] = Vector2(v[0], v[1]);
+							const uint8_t *v_ptr = &r[j * vertex_elem_size + offsets[i]];
+							w[j] = Vector2(
+								unaligned_read<float>(v_ptr + 0 * sizeof(float)),
+								unaligned_read<float>(v_ptr + 1 * sizeof(float))
+							);
 						}
 					}
 
@@ -1431,8 +1434,12 @@ Array RenderingServer::_get_array_from_surface(uint64_t p_format, Vector<uint8_t
 							// We only have vertices to read, so just read them and skip everything else.
 							if (!(p_format & RS::ARRAY_FORMAT_NORMAL)) {
 								for (int j = 0; j < p_vertex_len; j++) {
-									const uint16_t *v = reinterpret_cast<const uint16_t *>(&r[j * vertex_elem_size + offsets[i]]);
-									Vector3 vec = Vector3(float(v[0]) / 65535.0, float(v[1]) / 65535.0, float(v[2]) / 65535.0);
+									const uint8_t *v_ptr = &r[j * vertex_elem_size + offsets[i]];
+									Vector3 vec = Vector3(
+										float(unaligned_read<uint16_t>(v_ptr + 0 * sizeof(uint16_t))) / 65535.0,
+										float(unaligned_read<uint16_t>(v_ptr + 1 * sizeof(uint16_t))) / 65535.0,
+										float(unaligned_read<uint16_t>(v_ptr + 2 * sizeof(uint16_t))) / 65535.0
+									);
 									w[j] = (vec * p_aabb.size) + p_aabb.position;
 								}
 								continue;
@@ -1447,18 +1454,23 @@ Array RenderingServer::_get_array_from_surface(uint64_t p_format, Vector<uint8_t
 							float *tangentsw = tangents.ptrw();
 
 							for (int j = 0; j < p_vertex_len; j++) {
-								const uint32_t n = *(const uint32_t *)&r[j * normal_elem_size + offsets[RS::ARRAY_NORMAL]];
+								const uint32_t n = unaligned_read<uint32_t>(&r[j * normal_elem_size + offsets[RS::ARRAY_NORMAL]]);
 								Vector3 axis = Vector3::octahedron_decode(Vector2((n & 0xFFFF) / 65535.0, ((n >> 16) & 0xFFFF) / 65535.0));
-
-								const uint16_t *v = reinterpret_cast<const uint16_t *>(&r[j * vertex_elem_size + offsets[i]]);
-								Vector3 vec = Vector3(float(v[0]) / 65535.0, float(v[1]) / 65535.0, float(v[2]) / 65535.0);
-								float angle = float(v[3]) / 65535.0;
+							
+								const uint8_t *v_ptr = &r[j * vertex_elem_size + offsets[i]];
+								uint16_t v0 = unaligned_read<uint16_t>(v_ptr + 0 * sizeof(uint16_t));
+								uint16_t v1 = unaligned_read<uint16_t>(v_ptr + 1 * sizeof(uint16_t));
+								uint16_t v2 = unaligned_read<uint16_t>(v_ptr + 2 * sizeof(uint16_t));
+								uint16_t v3 = unaligned_read<uint16_t>(v_ptr + 3 * sizeof(uint16_t));
+							
+								Vector3 vec = Vector3(float(v0) / 65535.0, float(v1) / 65535.0, float(v2) / 65535.0);
+								float angle = float(v3) / 65535.0;
 								w[j] = (vec * p_aabb.size) + p_aabb.position;
-
+							
 								Vector3 normal;
 								Vector4 tan;
 								_get_tbn_from_axis_angle(axis, angle, normal, tan);
-
+							
 								normalsw[j] = normal;
 								tangentsw[j * 4 + 0] = tan.x;
 								tangentsw[j * 4 + 1] = tan.y;
@@ -1470,8 +1482,12 @@ Array RenderingServer::_get_array_from_surface(uint64_t p_format, Vector<uint8_t
 
 						} else {
 							for (int j = 0; j < p_vertex_len; j++) {
-								const float *v = reinterpret_cast<const float *>(&r[j * vertex_elem_size + offsets[i]]);
-								w[j] = Vector3(v[0], v[1], v[2]);
+								const uint8_t *v_ptr = &r[j * vertex_elem_size + offsets[i]];
+								w[j] = Vector3(
+									unaligned_read<float>(v_ptr + 0 * sizeof(float)),
+									unaligned_read<float>(v_ptr + 1 * sizeof(float)),
+									unaligned_read<float>(v_ptr + 2 * sizeof(float))
+								);
 							}
 						}
 					}
@@ -1484,15 +1500,15 @@ Array RenderingServer::_get_array_from_surface(uint64_t p_format, Vector<uint8_t
 				if (!(p_format & RS::ARRAY_FLAG_COMPRESS_ATTRIBUTES)) {
 					Vector<Vector3> arr;
 					arr.resize(p_vertex_len);
-
+			
 					Vector3 *w = arr.ptrw();
-
+			
 					for (int j = 0; j < p_vertex_len; j++) {
-						const uint32_t v = *(const uint32_t *)&r[j * normal_elem_size + offsets[i]];
-
+						const uint32_t v = unaligned_read<uint32_t>(&r[j * normal_elem_size + offsets[i]]);
+			
 						w[j] = Vector3::octahedron_decode(Vector2((v & 0xFFFF) / 65535.0, ((v >> 16) & 0xFFFF) / 65535.0));
 					}
-
+			
 					ret[i] = arr;
 				}
 			} break;
@@ -1501,11 +1517,11 @@ Array RenderingServer::_get_array_from_surface(uint64_t p_format, Vector<uint8_t
 				if (!(p_format & RS::ARRAY_FLAG_COMPRESS_ATTRIBUTES)) {
 					Vector<float> arr;
 					arr.resize(p_vertex_len * 4);
-
+			
 					float *w = arr.ptrw();
-
+			
 					for (int j = 0; j < p_vertex_len; j++) {
-						const uint32_t v = *(const uint32_t *)&r[j * normal_elem_size + offsets[i]];
+						const uint32_t v = unaligned_read<uint32_t>(&r[j * normal_elem_size + offsets[i]]);
 						float tangent_sign;
 						Vector3 res = Vector3::octahedron_tangent_decode(Vector2((v & 0xFFFF) / 65535.0, ((v >> 16) & 0xFFFF) / 65535.0), &tangent_sign);
 						w[j * 4 + 0] = res.x;
@@ -1513,7 +1529,7 @@ Array RenderingServer::_get_array_from_surface(uint64_t p_format, Vector<uint8_t
 						w[j * 4 + 2] = res.z;
 						w[j * 4 + 3] = tangent_sign;
 					}
-
+			
 					ret[i] = arr;
 				}
 			} break;
@@ -1524,7 +1540,7 @@ Array RenderingServer::_get_array_from_surface(uint64_t p_format, Vector<uint8_t
 				Color *w = arr.ptrw();
 
 				for (int32_t j = 0; j < p_vertex_len; j++) {
-					const uint8_t *v = reinterpret_cast<const uint8_t *>(&ar[j * attrib_elem_size + offsets[i]]);
+					const uint8_t *v = &ar[j * attrib_elem_size + offsets[i]];
 
 					w[j] = Color(v[0] / 255.0, v[1] / 255.0, v[2] / 255.0, v[3] / 255.0);
 				}
@@ -1538,8 +1554,11 @@ Array RenderingServer::_get_array_from_surface(uint64_t p_format, Vector<uint8_t
 				Vector2 *w = arr.ptrw();
 				if (p_format & ARRAY_FLAG_COMPRESS_ATTRIBUTES) {
 					for (int j = 0; j < p_vertex_len; j++) {
-						const uint16_t *v = reinterpret_cast<const uint16_t *>(&ar[j * attrib_elem_size + offsets[i]]);
-						Vector2 vec = Vector2(float(v[0]) / 65535.0, float(v[1]) / 65535.0);
+						const uint8_t *v_ptr = &ar[j * attrib_elem_size + offsets[i]];
+						Vector2 vec = Vector2(
+							float(unaligned_read<uint16_t>(v_ptr + 0 * sizeof(uint16_t))) / 65535.0,
+							float(unaligned_read<uint16_t>(v_ptr + 1 * sizeof(uint16_t))) / 65535.0
+						);
 						if (!p_uv_scale.is_zero_approx()) {
 							vec = (vec - Vector2(0.5, 0.5)) * Vector2(p_uv_scale.x, p_uv_scale.y);
 						}
@@ -1548,8 +1567,11 @@ Array RenderingServer::_get_array_from_surface(uint64_t p_format, Vector<uint8_t
 					}
 				} else {
 					for (int j = 0; j < p_vertex_len; j++) {
-						const float *v = reinterpret_cast<const float *>(&ar[j * attrib_elem_size + offsets[i]]);
-						w[j] = Vector2(v[0], v[1]);
+						const uint8_t *v_ptr = &ar[j * attrib_elem_size + offsets[i]];
+						w[j] = Vector2(
+							unaligned_read<float>(v_ptr + 0 * sizeof(float)),
+							unaligned_read<float>(v_ptr + 1 * sizeof(float))
+						);
 					}
 				}
 				ret[i] = arr;
@@ -1563,8 +1585,11 @@ Array RenderingServer::_get_array_from_surface(uint64_t p_format, Vector<uint8_t
 
 				if (p_format & ARRAY_FLAG_COMPRESS_ATTRIBUTES) {
 					for (int j = 0; j < p_vertex_len; j++) {
-						const uint16_t *v = reinterpret_cast<const uint16_t *>(&ar[j * attrib_elem_size + offsets[i]]);
-						Vector2 vec = Vector2(float(v[0]) / 65535.0, float(v[1]) / 65535.0);
+						const uint8_t *v_ptr = &ar[j * attrib_elem_size + offsets[i]];
+						Vector2 vec = Vector2(
+							float(unaligned_read<uint16_t>(v_ptr + 0 * sizeof(uint16_t))) / 65535.0,
+							float(unaligned_read<uint16_t>(v_ptr + 1 * sizeof(uint16_t))) / 65535.0
+						);
 						if (!p_uv_scale.is_zero_approx()) {
 							vec = (vec - Vector2(0.5, 0.5)) * Vector2(p_uv_scale.z, p_uv_scale.w);
 						}
@@ -1572,8 +1597,11 @@ Array RenderingServer::_get_array_from_surface(uint64_t p_format, Vector<uint8_t
 					}
 				} else {
 					for (int j = 0; j < p_vertex_len; j++) {
-						const float *v = reinterpret_cast<const float *>(&ar[j * attrib_elem_size + offsets[i]]);
-						w[j] = Vector2(v[0], v[1]);
+						const uint8_t *v_ptr = &ar[j * attrib_elem_size + offsets[i]];
+						w[j] = Vector2(
+							unaligned_read<float>(v_ptr + 0 * sizeof(float)),
+							unaligned_read<float>(v_ptr + 1 * sizeof(float))
+						);
 					}
 				}
 
@@ -1598,7 +1626,7 @@ Array RenderingServer::_get_array_from_surface(uint64_t p_format, Vector<uint8_t
 						uint8_t *w = arr.ptrw();
 
 						for (int j = 0; j < p_vertex_len; j++) {
-							const uint8_t *v = reinterpret_cast<const uint8_t *>(&ar[j * attrib_elem_size + offsets[i]]);
+							const uint8_t *v = &ar[j * attrib_elem_size + offsets[i]];
 							memcpy(&w[j * s], v, s);
 						}
 
@@ -1617,7 +1645,7 @@ Array RenderingServer::_get_array_from_surface(uint64_t p_format, Vector<uint8_t
 						float *w = arr.ptrw();
 
 						for (int j = 0; j < p_vertex_len; j++) {
-							const float *v = reinterpret_cast<const float *>(&ar[j * attrib_elem_size + offsets[i]]);
+							const uint8_t *v = &ar[j * attrib_elem_size + offsets[i]];
 							memcpy(&w[j * s], v, s * sizeof(float));
 						}
 						ret[i] = arr;
@@ -1637,9 +1665,9 @@ Array RenderingServer::_get_array_from_surface(uint64_t p_format, Vector<uint8_t
 					float *w = arr.ptrw();
 
 					for (int j = 0; j < p_vertex_len; j++) {
-						const uint16_t *v = (const uint16_t *)&sr[j * skin_elem_size + offsets[i]];
+						const uint8_t *v_ptr = &sr[j * skin_elem_size + offsets[i]];
 						for (uint32_t k = 0; k < bone_count; k++) {
-							w[j * bone_count + k] = float(v[k] / 65535.0);
+							w[j * bone_count + k] = float(unaligned_read<uint16_t>(v_ptr + k * sizeof(uint16_t)) / 65535.0);
 						}
 					}
 				}
@@ -1656,9 +1684,9 @@ Array RenderingServer::_get_array_from_surface(uint64_t p_format, Vector<uint8_t
 				int *w = arr.ptrw();
 
 				for (int j = 0; j < p_vertex_len; j++) {
-					const uint16_t *v = (const uint16_t *)&sr[j * skin_elem_size + offsets[i]];
+					const uint8_t *v_ptr = &sr[j * skin_elem_size + offsets[i]];
 					for (uint32_t k = 0; k < bone_count; k++) {
-						w[j * bone_count + k] = v[k];
+						w[j * bone_count + k] = unaligned_read<uint16_t>(v_ptr + k * sizeof(uint16_t));
 					}
 				}
 
@@ -1676,15 +1704,13 @@ Array RenderingServer::_get_array_from_surface(uint64_t p_format, Vector<uint8_t
 					int *w = arr.ptrw();
 
 					for (int j = 0; j < p_index_len; j++) {
-						const uint16_t *v = (const uint16_t *)&ir[j * 2];
-						w[j] = *v;
+						w[j] = unaligned_read<uint16_t>(&ir[j * 2]);
 					}
 				} else {
 					int *w = arr.ptrw();
 
 					for (int j = 0; j < p_index_len; j++) {
-						const int *v = (const int *)&ir[j * 4];
-						w[j] = *v;
+						w[j] = unaligned_read<int32_t>(&ir[j * 4]);
 					}
 				}
 				ret[i] = arr;

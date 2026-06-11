@@ -1271,7 +1271,7 @@ void MaterialStorage::global_shader_parameter_remove(const StringName &p_name) {
 }
 
 Vector<StringName> MaterialStorage::global_shader_parameter_get_list() const {
-    return Vector<StringName>();
+	return Vector<StringName>();
 }
 
 void MaterialStorage::global_shader_parameter_set(const StringName &p_name, const Variant &p_value) {
@@ -1283,15 +1283,15 @@ void MaterialStorage::global_shader_parameter_set_override(const StringName &p_n
 }
 
 Variant MaterialStorage::global_shader_parameter_get(const StringName &p_name) const {
-    return Variant();
+	return Variant();
 }
 
 RS::GlobalShaderParameterType MaterialStorage::global_shader_parameter_get_type_internal(const StringName &p_name) const {
-    return RS::GLOBAL_VAR_TYPE_MAX;
+	return RS::GLOBAL_VAR_TYPE_MAX;
 }
 
 RS::GlobalShaderParameterType MaterialStorage::global_shader_parameter_get_type(const StringName &p_name) const {
-    return RS::GLOBAL_VAR_TYPE_MAX;
+	return RS::GLOBAL_VAR_TYPE_MAX;
 }
 
 void MaterialStorage::global_shader_parameters_load_settings(bool p_load_textures) {
@@ -1904,7 +1904,7 @@ void CanvasMaterialData::bind_uniforms() {
 						LocalVector<int32_t> tmp;
 						tmp.resize(count);
 						for (int i = 0; i < count; i++) {
-							tmp[i] = *(const int32_t *)&val_ptr[i * 16]; // std140 arrays align to 16 bytes
+							tmp[i] = unaligned_read<int32_t>(&val_ptr[i * 16]); // std140 arrays align to 16 bytes
 						}
 						glUniform1iv(loc, count, tmp.ptr());
 					} break;
@@ -1912,7 +1912,7 @@ void CanvasMaterialData::bind_uniforms() {
 						LocalVector<float> tmp;
 						tmp.resize(count);
 						for (int i = 0; i < count; i++) {
-							tmp[i] = *(const float *)&val_ptr[i * 16];
+							tmp[i] = unaligned_read<float>(&val_ptr[i * 16]);
 						}
 						glUniform1fv(loc, count, tmp.ptr());
 					} break;
@@ -1920,8 +1920,8 @@ void CanvasMaterialData::bind_uniforms() {
 						LocalVector<float> tmp;
 						tmp.resize(count * 2);
 						for (int i = 0; i < count; i++) {
-							tmp[i * 2 + 0] = ((const float *)&val_ptr[i * 16])[0];
-							tmp[i * 2 + 1] = ((const float *)&val_ptr[i * 16])[1];
+							tmp[i * 2 + 0] = unaligned_read<float>(&val_ptr[i * 16 + 0 * sizeof(float)]);
+							tmp[i * 2 + 1] = unaligned_read<float>(&val_ptr[i * 16 + 1 * sizeof(float)]);
 						}
 						glUniform2fv(loc, count, tmp.ptr());
 					} break;
@@ -1929,9 +1929,9 @@ void CanvasMaterialData::bind_uniforms() {
 						LocalVector<float> tmp;
 						tmp.resize(count * 3);
 						for (int i = 0; i < count; i++) {
-							tmp[i * 3 + 0] = ((const float *)&val_ptr[i * 16])[0];
-							tmp[i * 3 + 1] = ((const float *)&val_ptr[i * 16])[1];
-							tmp[i * 3 + 2] = ((const float *)&val_ptr[i * 16])[2];
+							tmp[i * 3 + 0] = unaligned_read<float>(&val_ptr[i * 16 + 0 * sizeof(float)]);
+							tmp[i * 3 + 1] = unaligned_read<float>(&val_ptr[i * 16 + 1 * sizeof(float)]);
+							tmp[i * 3 + 2] = unaligned_read<float>(&val_ptr[i * 16 + 2 * sizeof(float)]);
 						}
 						glUniform3fv(loc, count, tmp.ptr());
 					} break;
@@ -1939,10 +1939,10 @@ void CanvasMaterialData::bind_uniforms() {
 						LocalVector<float> tmp;
 						tmp.resize(count * 4);
 						for (int i = 0; i < count; i++) {
-							tmp[i * 4 + 0] = ((const float *)&val_ptr[i * 16])[0];
-							tmp[i * 4 + 1] = ((const float *)&val_ptr[i * 16])[1];
-							tmp[i * 4 + 2] = ((const float *)&val_ptr[i * 16])[2];
-							tmp[i * 4 + 3] = ((const float *)&val_ptr[i * 16])[3];
+							tmp[i * 4 + 0] = unaligned_read<float>(&val_ptr[i * 16 + 0 * sizeof(float)]);
+							tmp[i * 4 + 1] = unaligned_read<float>(&val_ptr[i * 16 + 1 * sizeof(float)]);
+							tmp[i * 4 + 2] = unaligned_read<float>(&val_ptr[i * 16 + 2 * sizeof(float)]);
+							tmp[i * 4 + 3] = unaligned_read<float>(&val_ptr[i * 16 + 3 * sizeof(float)]);
 						}
 						glUniform4fv(loc, count, tmp.ptr());
 					} break;
@@ -1950,10 +1950,10 @@ void CanvasMaterialData::bind_uniforms() {
 						LocalVector<float> tmp;
 						tmp.resize(count * 4);
 						for (int i = 0; i < count; i++) {
-							tmp[i * 4 + 0] = ((const float *)&val_ptr[i * 32])[0];
-							tmp[i * 4 + 1] = ((const float *)&val_ptr[i * 32])[1];
-							tmp[i * 4 + 2] = ((const float *)&val_ptr[i * 32])[4];
-							tmp[i * 4 + 3] = ((const float *)&val_ptr[i * 32])[5];
+							tmp[i * 4 + 0] = unaligned_read<float>(&val_ptr[i * 32 + 0 * sizeof(float)]);
+							tmp[i * 4 + 1] = unaligned_read<float>(&val_ptr[i * 32 + 1 * sizeof(float)]);
+							tmp[i * 4 + 2] = unaligned_read<float>(&val_ptr[i * 32 + 4 * sizeof(float)]);
+							tmp[i * 4 + 3] = unaligned_read<float>(&val_ptr[i * 32 + 5 * sizeof(float)]);
 						}
 						glUniformMatrix2fv(loc, count, GL_FALSE, tmp.ptr());
 					} break;
@@ -1961,15 +1961,15 @@ void CanvasMaterialData::bind_uniforms() {
 						LocalVector<float> tmp;
 						tmp.resize(count * 9);
 						for (int i = 0; i < count; i++) {
-							tmp[i * 9 + 0] = ((const float *)&val_ptr[i * 48])[0];
-							tmp[i * 9 + 1] = ((const float *)&val_ptr[i * 48])[1];
-							tmp[i * 9 + 2] = ((const float *)&val_ptr[i * 48])[2];
-							tmp[i * 9 + 3] = ((const float *)&val_ptr[i * 48])[4];
-							tmp[i * 9 + 4] = ((const float *)&val_ptr[i * 48])[5];
-							tmp[i * 9 + 5] = ((const float *)&val_ptr[i * 48])[6];
-							tmp[i * 9 + 6] = ((const float *)&val_ptr[i * 48])[8];
-							tmp[i * 9 + 7] = ((const float *)&val_ptr[i * 48])[9];
-							tmp[i * 9 + 8] = ((const float *)&val_ptr[i * 48])[10];
+							tmp[i * 9 + 0] = unaligned_read<float>(&val_ptr[i * 48 + 0 * sizeof(float)]);
+							tmp[i * 9 + 1] = unaligned_read<float>(&val_ptr[i * 48 + 1 * sizeof(float)]);
+							tmp[i * 9 + 2] = unaligned_read<float>(&val_ptr[i * 48 + 2 * sizeof(float)]);
+							tmp[i * 9 + 3] = unaligned_read<float>(&val_ptr[i * 48 + 4 * sizeof(float)]);
+							tmp[i * 9 + 4] = unaligned_read<float>(&val_ptr[i * 48 + 5 * sizeof(float)]);
+							tmp[i * 9 + 5] = unaligned_read<float>(&val_ptr[i * 48 + 6 * sizeof(float)]);
+							tmp[i * 9 + 6] = unaligned_read<float>(&val_ptr[i * 48 + 8 * sizeof(float)]);
+							tmp[i * 9 + 7] = unaligned_read<float>(&val_ptr[i * 48 + 9 * sizeof(float)]);
+							tmp[i * 9 + 8] = unaligned_read<float>(&val_ptr[i * 48 + 10 * sizeof(float)]);
 						}
 						glUniformMatrix3fv(loc, count, GL_FALSE, tmp.ptr());
 					} break;
@@ -1978,7 +1978,7 @@ void CanvasMaterialData::bind_uniforms() {
 						tmp.resize(count * 16);
 						for (int i = 0; i < count; i++) {
 							for (int j = 0; j < 16; j++) {
-								tmp[i * 16 + j] = ((const float *)&val_ptr[i * 64])[j];
+								tmp[i * 16 + j] = unaligned_read<float>(&val_ptr[i * 64 + j * sizeof(float)]);
 							}
 						}
 						glUniformMatrix4fv(loc, count, GL_FALSE, tmp.ptr());

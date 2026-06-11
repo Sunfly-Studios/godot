@@ -312,12 +312,12 @@ typename CowData<T>::USize CowData<T>::_copy_on_write() {
 		USize *_size_ptr = _get_size_ptr(mem_new);
 		T *_data_ptr = _get_data_ptr(mem_new);
 
-		new (_refc_ptr) SafeNumeric<USize>(1); //refcount
-		*(_size_ptr) = current_size; //size
+		::new (_refc_ptr) SafeNumeric<USize>(1); //refcount
+		::new (_size_ptr) USize(current_size); //size
 
 		// initialize new elements
 		if constexpr (std::is_trivially_copyable_v<T>) {
-			memcpy((uint8_t *)_data_ptr, _ptr, current_size * sizeof(T));
+			memcpy((void *)_data_ptr, (const void *)_ptr, current_size * sizeof(T));
 		} else {
 			for (USize i = 0; i < current_size; i++) {
 				memnew_placement(&_data_ptr[i], T(_ptr[i]));
@@ -367,8 +367,8 @@ Error CowData<T>::resize(Size p_size) {
 				USize *_size_ptr = _get_size_ptr(mem_new);
 				T *_data_ptr = _get_data_ptr(mem_new);
 
-				new (_refc_ptr) SafeNumeric<USize>(1); //refcount
-				*(_size_ptr) = 0; //size, currently none
+				::new (_refc_ptr) SafeNumeric<USize>(1); //refcount
+				::new (_size_ptr) USize(0); //size, currently none
 
 				_ptr = _data_ptr;
 
@@ -392,7 +392,7 @@ Error CowData<T>::resize(Size p_size) {
 			// Always formally begin the object lifetime
 			// for anything with non-trivial operators
 			for (Size i = *_get_size(); i < p_size; i++) {
-				memnew_placement(&_ptr[i], T);
+				memnew_placement(&_ptr[i], T());
 			}
 		}
 

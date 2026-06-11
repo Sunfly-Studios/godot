@@ -662,7 +662,7 @@ struct SHA256Digest {
 	}
 
 	_FORCE_INLINE_ uint32_t short_sha() const {
-		return __builtin_bswap32(*(uint32_t *)&data[0]);
+		return __builtin_bswap32(unaligned_read<uint32_t>(&data[0]));
 	}
 };
 

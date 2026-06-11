@@ -57,11 +57,11 @@
 
 // Determine the safe minimum stack alignment.
 #if !defined(IS_32_BIT) || defined(HAS_128_BIT_SIMD)
-	// 64-bit platforms.
+	// 16 for 64-bit platforms or
 	// 32-bit platforms with 128-bit SIMD (x86_32 SSE, etc.).
 	#define GODOT_MIN_STACK_ALIGN 16 
 #else
-	// "Vanilla" 32-bit architectures with no SSE-like goodies.
+	// 8 bits for "vanilla" 32-bit architectures with no SSE-like goodies.
 	#define GODOT_MIN_STACK_ALIGN 8 
 #endif
 
@@ -216,24 +216,14 @@ _ALWAYS_INLINE_ bool predelete_handler(void *) {
 	return true;
 }
 
-// TODO(MBCX): A lot of Godot's classes actually
-// fail the check in unaligned_construct about
-// non-trivial classes.
-// These require a bit of a more complex
-// engine-wide clean-up that will be done
-// incrementally at a later date.
-#if defined(TOOLS_ENABLED) && defined(_MSC_VER)
-#define HANDLE_UNALIGNED_NON_TRIVIAL(type, ptr) \
-	do { \
-		static bool warned = false; \
-		if (!warned) { \
-			printf("WARNING: Unaligned access of non-trivial type %s at %p. This is UB.\n", typeid(type).name(), ptr); \
-			warned = true; \
-		} \
-	} while(0)
-#else
-#define HANDLE_UNALIGNED_NON_TRIVIAL(type, ptr) ((void)0)
-#endif
+// The following `unaligned_` functions are the backbone
+// of our architecture. They hold the engine tight
+// against unaligned memory reads, writes, constructs, and
+// provide a drop-in replacement for C-style type-prunning.
+//
+// Because these are used everywhere in the engine, including
+// when loading GDExtensions (for example), it also doubles as
+// an easy way to see every pointer that tries to pass our barriers.
 
 template <typename T>
 _FORCE_INLINE_ T unaligned_read(const void *p_ptr) {
@@ -242,19 +232,26 @@ _FORCE_INLINE_ T unaligned_read(const void *p_ptr) {
 		memcpy(&local, p_ptr, sizeof(T));
 		return local;
 	} else {
-		uintptr_t addr = reinterpret_cast<uintptr_t>(p_ptr);
-		const bool is_aligned = (addr & (alignof(T) - 1)) == 0;
-		
-		if (is_aligned) {
-			return *std::launder(static_cast<const T *>(p_ptr));
+		// TODO(MBCX): I have set it here to also crash on editor builds
+		// but this can get confusing at times. For example, when loading previous
+		// versions of our `godot-cpp` (where this architecture wasn't present)
+		// these functions catch the unaligned types and crash.
+		// Technically this is bad UX/DX because you'd have no idea why it is crashing
+		// at first glance (heck, I didn't at first until I attached the MSVC debugger).
+		// On the other hand, our `godot-cpp` is up-to-date with our architecture,
+		// and when you pull it in from our editor
+		// (which will always pull the latest commit from our fork automatically),
+		// it will always get the up-to-date matching version.
+		//
+		// Technically, this is here to catch any older versions of our own plugins
+		// and ecosystem tools to demand to update. I just have to make sure I remember.
+#if defined(DEV_ENABLED) || defined(TOOLS_ENABLED)
+		const uintptr_t addr = reinterpret_cast<uintptr_t>(p_ptr);
+		if (unlikely((addr & (alignof(T) - 1)) != 0)) {
+			CRASH_NOW_MSG("FATAL: Unaligned read of non-trivial type.");
 		}
-		HANDLE_UNALIGNED_NON_TRIVIAL(T, p_ptr);
-
-		// Pull the bytes onto an aligned stack block.
-		// Temporary safeboat until the TODO is dealt with.
-		alignas(alignof(T)) uint8_t buf[sizeof(T)] = {};
-		memcpy(buf, p_ptr, sizeof(T));
-		return *std::launder(reinterpret_cast<const T *>(buf));
+#endif
+		return *static_cast<const T *>(p_ptr);
 	}
 }
 
@@ -263,47 +260,35 @@ _FORCE_INLINE_ void unaligned_write(void *p_ptr, const T &p_val) {
 	if constexpr (std::is_trivially_copyable_v<T>) {
 		memcpy(p_ptr, &p_val, sizeof(T));
 	} else {
-		uintptr_t addr = reinterpret_cast<uintptr_t>(p_ptr);
-		const bool is_aligned = (addr & (alignof(T) - 1)) == 0;
-
-		if (is_aligned) {
-			*std::launder(static_cast<T *>(p_ptr)) = p_val;
-		} else {
-			HANDLE_UNALIGNED_NON_TRIVIAL(T, p_ptr);
-
-			// Construct locally, then blit the bytes over.
-			alignas(alignof(T)) uint8_t buf[sizeof(T)] = {};
-            ::new (buf) T(p_val);
-            memcpy(p_ptr, buf, sizeof(T));
-            reinterpret_cast<T *>(buf)->~T();
+#if defined(DEV_ENABLED) || defined(TOOLS_ENABLED)
+		const uintptr_t addr = reinterpret_cast<uintptr_t>(p_ptr);
+		if (unlikely((addr & (alignof(T) - 1)) != 0)) {
+			CRASH_NOW_MSG("FATAL: Unaligned write of non-trivial type.");
 		}
+#endif
+		*static_cast<T *>(p_ptr) = p_val;
 	}
 }
 
 template <typename ConstructT, typename ArgT>
 _FORCE_INLINE_ void unaligned_construct(void *p_ptr, const ArgT &p_arg) {
-	uintptr_t addr = reinterpret_cast<uintptr_t>(p_ptr);
+	const uintptr_t addr = reinterpret_cast<uintptr_t>(p_ptr);
 	const bool is_aligned = (addr & (alignof(ConstructT) - 1)) == 0;
 
 	if constexpr (std::is_trivially_copyable_v<ConstructT>) {
 		if (is_aligned) {
 			::new (p_ptr) ConstructT(p_arg);
 		} else {
-			// This is just a "UB" safe-boat for now until
-			// the TODO is fixed.
-			alignas(alignof(ConstructT)) uint8_t buf[sizeof(ConstructT)] = {};
-			::new (buf) ConstructT(p_arg);
-			memcpy(p_ptr, buf, sizeof(ConstructT));
+			ConstructT local(p_arg);
+			memcpy(p_ptr, &local, sizeof(ConstructT));
 		}
 	} else {
-		if (is_aligned) {
-			::new (p_ptr) ConstructT(p_arg);
-		} else {
-			HANDLE_UNALIGNED_NON_TRIVIAL(ConstructT, p_ptr);
-			alignas(alignof(ConstructT)) uint8_t buf[sizeof(ConstructT)] = {};
-            ::new (buf) ConstructT(p_arg);
-            memcpy(p_ptr, buf, sizeof(ConstructT));
+#if defined(DEV_ENABLED) || defined(TOOLS_ENABLED)
+		if (unlikely(!is_aligned)) {
+			CRASH_NOW_MSG("FATAL: Unaligned construction of non-trivial type.");
 		}
+#endif
+		::new (p_ptr) ConstructT(p_arg);
 	}
 }
 

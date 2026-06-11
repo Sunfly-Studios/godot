@@ -414,7 +414,7 @@ AABB ParticlesStorage::particles_get_current_aabb(RID p_particles) {
 		uint32_t particle_data_size = sizeof(ParticleInstanceData3D);
 
 		for (int i = 0; i < total_amount; i++) {
-			const ParticleInstanceData3D &particle_data = *(const ParticleInstanceData3D *)&data_ptr[particle_data_size * i];
+			ParticleInstanceData3D particle_data = unaligned_read<ParticleInstanceData3D>(&data_ptr[particle_data_size * i]);
 			// If scale is 0.0, we assume the particle is inactive.
 			if (particle_data.xform[0] > 0.0) {
 				Vector3 pos = Vector3(particle_data.xform[3], particle_data.xform[7], particle_data.xform[11]);
