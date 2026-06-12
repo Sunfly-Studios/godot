@@ -903,83 +903,83 @@ bool Variant::is_zero() const {
 			return _data._float == 0;
 		}
 		case STRING: {
-			return *reinterpret_cast<const String *>(_data._mem) == String();
+			return unaligned_read<String>(_data._mem) == String();
 		}
 
 		// Math types.
 		case VECTOR2: {
-			return *reinterpret_cast<const Vector2 *>(_data._mem) == Vector2();
+			return unaligned_read<Vector2>(_data._mem) == Vector2();
 		}
 		case VECTOR2I: {
-			return *reinterpret_cast<const Vector2i *>(_data._mem) == Vector2i();
+			return unaligned_read<Vector2i>(_data._mem) == Vector2i();
 		}
 		case RECT2: {
-			return *reinterpret_cast<const Rect2 *>(_data._mem) == Rect2();
+			return unaligned_read<Rect2>(_data._mem) == Rect2();
 		}
 		case RECT2I: {
-			return *reinterpret_cast<const Rect2i *>(_data._mem) == Rect2i();
+			return unaligned_read<Rect2i>(_data._mem) == Rect2i();
 		}
 		case TRANSFORM2D: {
-			return *_data._transform2d == Transform2D();
+			return unaligned_read<Transform2D>(_data._transform2d) == Transform2D();
 		}
 		case VECTOR3: {
-			return *reinterpret_cast<const Vector3 *>(_data._mem) == Vector3();
+			return unaligned_read<Vector3>(_data._mem) == Vector3();
 		}
 		case VECTOR3I: {
-			return *reinterpret_cast<const Vector3i *>(_data._mem) == Vector3i();
+			return unaligned_read<Vector3i>(_data._mem) == Vector3i();
 		}
 		case VECTOR4: {
-			return *reinterpret_cast<const Vector4 *>(_data._mem) == Vector4();
+			return unaligned_read<Vector4>(_data._mem) == Vector4();
 		}
 		case VECTOR4I: {
-			return *reinterpret_cast<const Vector4i *>(_data._mem) == Vector4i();
+			return unaligned_read<Vector4i>(_data._mem) == Vector4i();
 		}
 		case PLANE: {
-			return *reinterpret_cast<const Plane *>(_data._mem) == Plane();
+			return unaligned_read<Plane>(_data._mem) == Plane();
 		}
 		case AABB: {
-			return *_data._aabb == ::AABB();
+			return unaligned_read<::AABB>(_data._aabb) == ::AABB();
 		}
 		case QUATERNION: {
-			return *reinterpret_cast<const Quaternion *>(_data._mem) == Quaternion();
+			return unaligned_read<Quaternion>(_data._mem) == Quaternion();
 		}
 		case BASIS: {
-			return *_data._basis == Basis();
+			return unaligned_read<Basis>(_data._basis) == Basis();
 		}
 		case TRANSFORM3D: {
-			return *_data._transform3d == Transform3D();
+			return unaligned_read<Transform3D>(_data._transform3d) == Transform3D();
 		}
 		case PROJECTION: {
-			return *_data._projection == Projection();
+			return unaligned_read<Quaternion>(_data._projection) == Quaternion();
 		}
 
 		// Miscellaneous types.
 		case COLOR: {
-			return *reinterpret_cast<const Color *>(_data._mem) == Color();
+			return unaligned_read<Color>(_data._mem) == Color();
 		}
 		case RID: {
-			return *reinterpret_cast<const ::RID *>(_data._mem) == ::RID();
+			return unaligned_read<::RID>(_data._mem) == ::RID();
 		}
 		case OBJECT: {
 			return get_validated_object() == nullptr;
 		}
 		case CALLABLE: {
-			return reinterpret_cast<const Callable *>(_data._mem)->is_null();
+			return unaligned_read<Callable>(_data._mem).is_null();
 		}
 		case SIGNAL: {
-			return reinterpret_cast<const Signal *>(_data._mem)->is_null();
+			return unaligned_read<Signal>(_data._mem).is_null();
 		}
 		case STRING_NAME: {
-			return *reinterpret_cast<const StringName *>(_data._mem) == StringName();
+			return unaligned_read<StringName>(_data._mem) == StringName();
 		}
 		case NODE_PATH: {
-			return reinterpret_cast<const NodePath *>(_data._mem)->is_empty();
+			return unaligned_read<NodePath>(_data._mem).is_empty();
 		}
 		case DICTIONARY: {
-			return reinterpret_cast<const Dictionary *>(_data._mem)->is_empty();
+			return unaligned_read<Dictionary>(_data._mem).is_empty();
 		}
 		case ARRAY: {
-			return reinterpret_cast<const Array *>(_data._mem)->is_empty();
+			return unaligned_read<Array>(_data._mem).is_empty();
 		}
 
 		// Arrays.
@@ -1037,35 +1037,34 @@ bool Variant::is_one() const {
 		}
 
 		case VECTOR2: {
-			return *reinterpret_cast<const Vector2 *>(_data._mem) == Vector2(1, 1);
+			return unaligned_read<Vector2>(_data._mem) == Vector2(1, 1);
 		}
 		case VECTOR2I: {
-			return *reinterpret_cast<const Vector2i *>(_data._mem) == Vector2i(1, 1);
+			return unaligned_read<Vector2i>(_data._mem) == Vector2i(1, 1);
 		}
 		case RECT2: {
-			return *reinterpret_cast<const Rect2 *>(_data._mem) == Rect2(1, 1, 1, 1);
+			return unaligned_read<Rect2>(_data._mem) == Rect2(1, 1, 1, 1);
 		}
 		case RECT2I: {
-			return *reinterpret_cast<const Rect2i *>(_data._mem) == Rect2i(1, 1, 1, 1);
+			return unaligned_read<Rect2i>(_data._mem) == Rect2i(1, 1, 1, 1);
 		}
 		case VECTOR3: {
-			return *reinterpret_cast<const Vector3 *>(_data._mem) == Vector3(1, 1, 1);
+			return unaligned_read<Vector3>(_data._mem) == Vector3(1, 1, 1);
 		}
 		case VECTOR3I: {
-			return *reinterpret_cast<const Vector3i *>(_data._mem) == Vector3i(1, 1, 1);
+			return unaligned_read<Vector3i>(_data._mem) == Vector3i(1, 1, 1);
 		}
 		case VECTOR4: {
-			return *reinterpret_cast<const Vector4 *>(_data._mem) == Vector4(1, 1, 1, 1);
+			return unaligned_read<Vector4>(_data._mem) == Vector4(1, 1, 1, 1);
 		}
 		case VECTOR4I: {
-			return *reinterpret_cast<const Vector4i *>(_data._mem) == Vector4i(1, 1, 1, 1);
+			return unaligned_read<Vector4i>(_data._mem) == Vector4i(1, 1, 1, 1);
 		}
 		case PLANE: {
-			return *reinterpret_cast<const Plane *>(_data._mem) == Plane(1, 1, 1, 1);
+			return unaligned_read<Plane>(_data._mem) == Plane(1, 1, 1, 1);
 		}
-
 		case COLOR: {
-			return *reinterpret_cast<const Color *>(_data._mem) == Color(1, 1, 1, 1);
+			return unaligned_read<Color>(_data._mem) == Color(1, 1, 1, 1);
 		}
 
 		default: {
@@ -1163,89 +1162,89 @@ void Variant::reference(const Variant &p_variant) {
 			_data._float = p_variant._data._float;
 		} break;
 		case STRING: {
-			memnew_placement(_data._mem, String(*reinterpret_cast<const String *>(p_variant._data._mem)));
+			unaligned_construct<String>(_data._mem, unaligned_read<String>(p_variant._data._mem));
 		} break;
 
 		// Math types.
 		case VECTOR2: {
-			memnew_placement(_data._mem, Vector2(*reinterpret_cast<const Vector2 *>(p_variant._data._mem)));
+			unaligned_construct<Vector2>(_data._mem, unaligned_read<Vector2>(p_variant._data._mem));
 		} break;
 		case VECTOR2I: {
-			memnew_placement(_data._mem, Vector2i(*reinterpret_cast<const Vector2i *>(p_variant._data._mem)));
+			unaligned_construct<Vector2i>(_data._mem, unaligned_read<Vector2i>(p_variant._data._mem));
 		} break;
 		case RECT2: {
-			memnew_placement(_data._mem, Rect2(*reinterpret_cast<const Rect2 *>(p_variant._data._mem)));
+			unaligned_construct<Rect2>(_data._mem, unaligned_read<Rect2>(p_variant._data._mem));
 		} break;
 		case RECT2I: {
-			memnew_placement(_data._mem, Rect2i(*reinterpret_cast<const Rect2i *>(p_variant._data._mem)));
+			unaligned_construct<Rect2i>(_data._mem, unaligned_read<Rect2i>(p_variant._data._mem));
 		} break;
 		case TRANSFORM2D: {
 			_data._transform2d = (Transform2D *)Pools::_bucket_small.alloc();
-			memnew_placement(_data._transform2d, Transform2D(*p_variant._data._transform2d));
+			unaligned_construct<Transform2D>(_data._transform2d, unaligned_read<Transform2D>(p_variant._data._transform2d));
 		} break;
 		case VECTOR3: {
-			memnew_placement(_data._mem, Vector3(*reinterpret_cast<const Vector3 *>(p_variant._data._mem)));
+			unaligned_construct<Vector3>(_data._mem, unaligned_read<Vector3>(p_variant._data._mem));
 		} break;
 		case VECTOR3I: {
-			memnew_placement(_data._mem, Vector3i(*reinterpret_cast<const Vector3i *>(p_variant._data._mem)));
+			unaligned_construct<Vector3i>(_data._mem, unaligned_read<Vector3i>(p_variant._data._mem));
 		} break;
 		case VECTOR4: {
-			memnew_placement(_data._mem, Vector4(*reinterpret_cast<const Vector4 *>(p_variant._data._mem)));
+			unaligned_construct<Vector4>(_data._mem, unaligned_read<Vector4>(p_variant._data._mem));
 		} break;
 		case VECTOR4I: {
-			memnew_placement(_data._mem, Vector4i(*reinterpret_cast<const Vector4i *>(p_variant._data._mem)));
+			unaligned_construct<Vector4i>(_data._mem, unaligned_read<Vector4i>(p_variant._data._mem));
 		} break;
 		case PLANE: {
-			memnew_placement(_data._mem, Plane(*reinterpret_cast<const Plane *>(p_variant._data._mem)));
+			unaligned_construct<Plane>(_data._mem, unaligned_read<Plane>(p_variant._data._mem));
 		} break;
 		case AABB: {
 			_data._aabb = (::AABB *)Pools::_bucket_small.alloc();
-			memnew_placement(_data._aabb, ::AABB(*p_variant._data._aabb));
+			unaligned_construct<::AABB>(_data._aabb, unaligned_read<::AABB>(p_variant._data._aabb));
 		} break;
 		case QUATERNION: {
-			memnew_placement(_data._mem, Quaternion(*reinterpret_cast<const Quaternion *>(p_variant._data._mem)));
+			unaligned_construct<Quaternion>(_data._mem, unaligned_read<Quaternion>(p_variant._data._mem));
 		} break;
 		case BASIS: {
 			_data._basis = (Basis *)Pools::_bucket_medium.alloc();
-			memnew_placement(_data._basis, Basis(*p_variant._data._basis));
+			unaligned_construct<Basis>(_data._basis, unaligned_read<Basis>(p_variant._data._basis));
 		} break;
 		case TRANSFORM3D: {
 			_data._transform3d = (Transform3D *)Pools::_bucket_medium.alloc();
-			memnew_placement(_data._transform3d, Transform3D(*p_variant._data._transform3d));
+			unaligned_construct<Transform3D>(_data._transform3d, unaligned_read<Transform3D>(p_variant._data._transform3d));
 		} break;
 		case PROJECTION: {
 			_data._projection = (Projection *)Pools::_bucket_large.alloc();
-			memnew_placement(_data._projection, Projection(*p_variant._data._projection));
+			unaligned_construct<Projection>(_data._projection, unaligned_read<Projection>(p_variant._data._projection));
 		} break;
 
 		// Miscellaneous types.
 		case COLOR: {
-			memnew_placement(_data._mem, Color(*reinterpret_cast<const Color *>(p_variant._data._mem)));
+			unaligned_construct<Color>(_data._mem, unaligned_read<Color>(p_variant._data._mem));
 		} break;
 		case RID: {
-			memnew_placement(_data._mem, ::RID(*reinterpret_cast<const ::RID *>(p_variant._data._mem)));
+			unaligned_construct<::RID>(_data._mem, unaligned_read<::RID>(p_variant._data._mem));
 		} break;
 		case OBJECT: {
-			memnew_placement(_data._mem, ObjData);
+			unaligned_construct<ObjData>(_data._mem, ObjData());
 			_get_obj().ref(p_variant._get_obj());
 		} break;
 		case CALLABLE: {
-			memnew_placement(_data._mem, Callable(*reinterpret_cast<const Callable *>(p_variant._data._mem)));
+			unaligned_construct<Callable>(_data._mem, unaligned_read<Callable>(p_variant._data._mem));
 		} break;
 		case SIGNAL: {
-			memnew_placement(_data._mem, Signal(*reinterpret_cast<const Signal *>(p_variant._data._mem)));
+			unaligned_construct<Signal>(_data._mem, unaligned_read<Signal>(p_variant._data._mem));
 		} break;
 		case STRING_NAME: {
-			memnew_placement(_data._mem, StringName(*reinterpret_cast<const StringName *>(p_variant._data._mem)));
+			unaligned_construct<StringName>(_data._mem, unaligned_read<StringName>(p_variant._data._mem));
 		} break;
 		case NODE_PATH: {
-			memnew_placement(_data._mem, NodePath(*reinterpret_cast<const NodePath *>(p_variant._data._mem)));
+			unaligned_construct<NodePath>(_data._mem, unaligned_read<NodePath>(p_variant._data._mem));
 		} break;
 		case DICTIONARY: {
-			memnew_placement(_data._mem, Dictionary(*reinterpret_cast<const Dictionary *>(p_variant._data._mem)));
+			unaligned_construct<Dictionary>(_data._mem, unaligned_read<Dictionary>(p_variant._data._mem));
 		} break;
 		case ARRAY: {
-			memnew_placement(_data._mem, Array(*reinterpret_cast<const Array *>(p_variant._data._mem)));
+			unaligned_construct<Array>(_data._mem, unaligned_read<Array>(p_variant._data._mem));
 		} break;
 
 		// Arrays.
@@ -1329,38 +1328,38 @@ void Variant::zero() {
 			break;
 
 		case VECTOR2:
-			*reinterpret_cast<Vector2 *>(_data._mem) = Vector2();
+			unaligned_write<Vector2>(_data._mem, Vector2());
 			break;
 		case VECTOR2I:
-			*reinterpret_cast<Vector2i *>(_data._mem) = Vector2i();
+			unaligned_write<Vector2i>(_data._mem, Vector2i());
 			break;
 		case RECT2:
-			*reinterpret_cast<Rect2 *>(_data._mem) = Rect2();
+			unaligned_write<Rect2>(_data._mem, Rect2());
 			break;
 		case RECT2I:
-			*reinterpret_cast<Rect2i *>(_data._mem) = Rect2i();
+			unaligned_write<Rect2i>(_data._mem, Rect2i());
 			break;
 		case VECTOR3:
-			*reinterpret_cast<Vector3 *>(_data._mem) = Vector3();
+			unaligned_write<Vector3>(_data._mem, Vector3());
 			break;
 		case VECTOR3I:
-			*reinterpret_cast<Vector3i *>(_data._mem) = Vector3i();
+			unaligned_write<Vector3i>(_data._mem, Vector3i());
 			break;
 		case VECTOR4:
-			*reinterpret_cast<Vector4 *>(_data._mem) = Vector4();
+			unaligned_write<Vector4>(_data._mem, Vector4());
 			break;
 		case VECTOR4I:
-			*reinterpret_cast<Vector4i *>(_data._mem) = Vector4i();
+			unaligned_write<Vector4i>(_data._mem, Vector4i());
 			break;
 		case PLANE:
-			*reinterpret_cast<Plane *>(_data._mem) = Plane();
+			unaligned_write<Plane>(_data._mem, Plane());
 			break;
 		case QUATERNION:
-			*reinterpret_cast<Quaternion *>(_data._mem) = Quaternion();
+			unaligned_write<Quaternion>(_data._mem, Quaternion());
 			break;
 
 		case COLOR:
-			*reinterpret_cast<Color *>(_data._mem) = Color();
+			unaligned_write<Color>(_data._mem, Color());
 			break;
 
 		default:
@@ -1541,9 +1540,9 @@ Variant::operator double() const {
 
 Variant::operator StringName() const {
 	if (type == STRING_NAME) {
-		return *reinterpret_cast<const StringName *>(_data._mem);
+		return unaligned_read<StringName>(_data._mem);
 	} else if (type == STRING) {
-		return *reinterpret_cast<const String *>(_data._mem);
+		return unaligned_read<String>(_data._mem);
 	}
 
 	return StringName();
@@ -1608,7 +1607,7 @@ String Variant::stringify(int recursion_count) const {
 		case FLOAT:
 			return String::num_real(_data._float, true);
 		case STRING:
-			return *reinterpret_cast<const String *>(_data._mem);
+			return unaligned_read<String>(_data._mem);
 		case VECTOR2:
 			return operator Vector2();
 		case VECTOR2I:
@@ -1649,7 +1648,7 @@ String Variant::stringify(int recursion_count) const {
 			ERR_FAIL_COND_V_MSG(recursion_count > MAX_RECURSION, "{ ... }", "Maximum dictionary recursion reached!");
 			recursion_count++;
 
-			const Dictionary &d = *reinterpret_cast<const Dictionary *>(_data._mem);
+			const Dictionary d = unaligned_read<Dictionary>(_data._mem);
 
 			// Add leading and trailing space to Dictionary printing. This distinguishes it
 			// from array printing on fonts that have similar-looking {} and [] characters.
@@ -1726,15 +1725,15 @@ String Variant::stringify(int recursion_count) const {
 			}
 		}
 		case CALLABLE: {
-			const Callable &c = *reinterpret_cast<const Callable *>(_data._mem);
+			const Callable c = unaligned_read<Callable>(_data._mem);
 			return c;
 		}
 		case SIGNAL: {
-			const Signal &s = *reinterpret_cast<const Signal *>(_data._mem);
+			const Signal s = unaligned_read<Signal>(_data._mem);
 			return s;
 		}
 		case RID: {
-			const ::RID &s = *reinterpret_cast<const ::RID *>(_data._mem);
+			const ::RID s = unaligned_read<::RID>(_data._mem);
 			return "RID(" + itos(s.get_id()) + ")";
 		}
 		default: {
@@ -1749,17 +1748,17 @@ String Variant::to_json_string() const {
 
 Variant::operator Vector2() const {
 	if (type == VECTOR2) {
-		return *reinterpret_cast<const Vector2 *>(_data._mem);
+		return unaligned_read<Vector2>(_data._mem);
 	} else if (type == VECTOR2I) {
-		return *reinterpret_cast<const Vector2i *>(_data._mem);
+		return unaligned_read<Vector2i>(_data._mem);
 	} else if (type == VECTOR3) {
-		return Vector2(reinterpret_cast<const Vector3 *>(_data._mem)->x, reinterpret_cast<const Vector3 *>(_data._mem)->y);
+		return Vector2(unaligned_read<Vector3>(_data._mem).x, unaligned_read<Vector3>(_data._mem).y);
 	} else if (type == VECTOR3I) {
-		return Vector2(reinterpret_cast<const Vector3i *>(_data._mem)->x, reinterpret_cast<const Vector3i *>(_data._mem)->y);
+		return Vector2(unaligned_read<Vector3i>(_data._mem).x, unaligned_read<Vector3i>(_data._mem).y);
 	} else if (type == VECTOR4) {
-		return Vector2(reinterpret_cast<const Vector4 *>(_data._mem)->x, reinterpret_cast<const Vector4 *>(_data._mem)->y);
+		return Vector2(unaligned_read<Vector4>(_data._mem).x, unaligned_read<Vector4>(_data._mem).y);
 	} else if (type == VECTOR4I) {
-		return Vector2(reinterpret_cast<const Vector4i *>(_data._mem)->x, reinterpret_cast<const Vector4i *>(_data._mem)->y);
+		return Vector2(unaligned_read<Vector4i>(_data._mem).x, unaligned_read<Vector4i>(_data._mem).y);
 	} else {
 		return Vector2();
 	}
@@ -1767,17 +1766,17 @@ Variant::operator Vector2() const {
 
 Variant::operator Vector2i() const {
 	if (type == VECTOR2I) {
-		return *reinterpret_cast<const Vector2i *>(_data._mem);
+		return unaligned_read<Vector2i>(_data._mem);
 	} else if (type == VECTOR2) {
-		return *reinterpret_cast<const Vector2 *>(_data._mem);
+		return unaligned_read<Vector2>(_data._mem);
 	} else if (type == VECTOR3) {
-		return Vector2(reinterpret_cast<const Vector3 *>(_data._mem)->x, reinterpret_cast<const Vector3 *>(_data._mem)->y);
+		return Vector2(unaligned_read<Vector3>(_data._mem).x, unaligned_read<Vector3>(_data._mem).y);
 	} else if (type == VECTOR3I) {
-		return Vector2(reinterpret_cast<const Vector3i *>(_data._mem)->x, reinterpret_cast<const Vector3i *>(_data._mem)->y);
+		return Vector2(unaligned_read<Vector3i>(_data._mem).x, unaligned_read<Vector3i>(_data._mem).y);
 	} else if (type == VECTOR4) {
-		return Vector2(reinterpret_cast<const Vector4 *>(_data._mem)->x, reinterpret_cast<const Vector4 *>(_data._mem)->y);
+		return Vector2(unaligned_read<Vector4>(_data._mem).x, unaligned_read<Vector4>(_data._mem).y);
 	} else if (type == VECTOR4I) {
-		return Vector2(reinterpret_cast<const Vector4i *>(_data._mem)->x, reinterpret_cast<const Vector4i *>(_data._mem)->y);
+		return Vector2(unaligned_read<Vector4i>(_data._mem).x, unaligned_read<Vector4i>(_data._mem).y);
 	} else {
 		return Vector2i();
 	}
@@ -1785,9 +1784,9 @@ Variant::operator Vector2i() const {
 
 Variant::operator Rect2() const {
 	if (type == RECT2) {
-		return *reinterpret_cast<const Rect2 *>(_data._mem);
+		return unaligned_read<Rect2>(_data._mem);
 	} else if (type == RECT2I) {
-		return *reinterpret_cast<const Rect2i *>(_data._mem);
+		return unaligned_read<Rect2i>(_data._mem);
 	} else {
 		return Rect2();
 	}
@@ -1795,9 +1794,9 @@ Variant::operator Rect2() const {
 
 Variant::operator Rect2i() const {
 	if (type == RECT2I) {
-		return *reinterpret_cast<const Rect2i *>(_data._mem);
+		return unaligned_read<Rect2i>(_data._mem);
 	} else if (type == RECT2) {
-		return *reinterpret_cast<const Rect2 *>(_data._mem);
+		return unaligned_read<Rect2>(_data._mem);
 	} else {
 		return Rect2i();
 	}
@@ -1805,17 +1804,17 @@ Variant::operator Rect2i() const {
 
 Variant::operator Vector3() const {
 	if (type == VECTOR3) {
-		return *reinterpret_cast<const Vector3 *>(_data._mem);
+		return unaligned_read<Vector3>(_data._mem);
 	} else if (type == VECTOR3I) {
-		return *reinterpret_cast<const Vector3i *>(_data._mem);
+		return unaligned_read<Vector3i>(_data._mem);
 	} else if (type == VECTOR2) {
-		return Vector3(reinterpret_cast<const Vector2 *>(_data._mem)->x, reinterpret_cast<const Vector2 *>(_data._mem)->y, 0.0);
+		return Vector3(unaligned_read<Vector2>(_data._mem).x, unaligned_read<Vector2>(_data._mem).y, 0.0);
 	} else if (type == VECTOR2I) {
-		return Vector3(reinterpret_cast<const Vector2i *>(_data._mem)->x, reinterpret_cast<const Vector2i *>(_data._mem)->y, 0.0);
+		return Vector3(unaligned_read<Vector2i>(_data._mem).x, unaligned_read<Vector2i>(_data._mem).y, 0.0);
 	} else if (type == VECTOR4) {
-		return Vector3(reinterpret_cast<const Vector4 *>(_data._mem)->x, reinterpret_cast<const Vector4 *>(_data._mem)->y, reinterpret_cast<const Vector4 *>(_data._mem)->z);
+		return Vector3(unaligned_read<Vector4>(_data._mem).x, unaligned_read<Vector4>(_data._mem).y, unaligned_read<Vector4>(_data._mem).z);
 	} else if (type == VECTOR4I) {
-		return Vector3(reinterpret_cast<const Vector4i *>(_data._mem)->x, reinterpret_cast<const Vector4i *>(_data._mem)->y, reinterpret_cast<const Vector4i *>(_data._mem)->z);
+		return Vector3(unaligned_read<Vector4i>(_data._mem).x, unaligned_read<Vector4i>(_data._mem).y, unaligned_read<Vector4i>(_data._mem).z);
 	} else {
 		return Vector3();
 	}
@@ -1823,17 +1822,17 @@ Variant::operator Vector3() const {
 
 Variant::operator Vector3i() const {
 	if (type == VECTOR3I) {
-		return *reinterpret_cast<const Vector3i *>(_data._mem);
+		return unaligned_read<Vector3i>(_data._mem);
 	} else if (type == VECTOR3) {
-		return *reinterpret_cast<const Vector3 *>(_data._mem);
+		return unaligned_read<Vector3>(_data._mem);
 	} else if (type == VECTOR2) {
-		return Vector3i(reinterpret_cast<const Vector2 *>(_data._mem)->x, reinterpret_cast<const Vector2 *>(_data._mem)->y, 0.0);
+		return Vector3i(unaligned_read<Vector2>(_data._mem).x, unaligned_read<Vector2>(_data._mem).y, 0.0);
 	} else if (type == VECTOR2I) {
-		return Vector3i(reinterpret_cast<const Vector2i *>(_data._mem)->x, reinterpret_cast<const Vector2i *>(_data._mem)->y, 0.0);
+		return Vector3i(unaligned_read<Vector2i>(_data._mem).x, unaligned_read<Vector2i>(_data._mem).y, 0.0);
 	} else if (type == VECTOR4) {
-		return Vector3i(reinterpret_cast<const Vector4 *>(_data._mem)->x, reinterpret_cast<const Vector4 *>(_data._mem)->y, reinterpret_cast<const Vector4 *>(_data._mem)->z);
+		return Vector3i(unaligned_read<Vector4>(_data._mem).x, unaligned_read<Vector4>(_data._mem).y, unaligned_read<Vector4>(_data._mem).z);
 	} else if (type == VECTOR4I) {
-		return Vector3i(reinterpret_cast<const Vector4i *>(_data._mem)->x, reinterpret_cast<const Vector4i *>(_data._mem)->y, reinterpret_cast<const Vector4i *>(_data._mem)->z);
+		return Vector3i(unaligned_read<Vector4i>(_data._mem).x, unaligned_read<Vector4i>(_data._mem).y, unaligned_read<Vector4i>(_data._mem).z);
 	} else {
 		return Vector3i();
 	}
@@ -1841,17 +1840,17 @@ Variant::operator Vector3i() const {
 
 Variant::operator Vector4() const {
 	if (type == VECTOR4) {
-		return *reinterpret_cast<const Vector4 *>(_data._mem);
+		return unaligned_read<Vector4>(_data._mem);
 	} else if (type == VECTOR4I) {
-		return *reinterpret_cast<const Vector4i *>(_data._mem);
+		return unaligned_read<Vector4i>(_data._mem);
 	} else if (type == VECTOR2) {
-		return Vector4(reinterpret_cast<const Vector2 *>(_data._mem)->x, reinterpret_cast<const Vector2 *>(_data._mem)->y, 0.0, 0.0);
+		return Vector4(unaligned_read<Vector2>(_data._mem).x, unaligned_read<Vector2>(_data._mem).y, 0.0, 0.0);
 	} else if (type == VECTOR2I) {
-		return Vector4(reinterpret_cast<const Vector2i *>(_data._mem)->x, reinterpret_cast<const Vector2i *>(_data._mem)->y, 0.0, 0.0);
+		return Vector4(unaligned_read<Vector2i>(_data._mem).x, unaligned_read<Vector2i>(_data._mem).y, 0.0, 0.0);
 	} else if (type == VECTOR3) {
-		return Vector4(reinterpret_cast<const Vector3 *>(_data._mem)->x, reinterpret_cast<const Vector3 *>(_data._mem)->y, reinterpret_cast<const Vector3 *>(_data._mem)->z, 0.0);
+		return Vector4(unaligned_read<Vector3>(_data._mem).x, unaligned_read<Vector3>(_data._mem).y, unaligned_read<Vector3>(_data._mem).z, 0.0);
 	} else if (type == VECTOR3I) {
-		return Vector4(reinterpret_cast<const Vector3i *>(_data._mem)->x, reinterpret_cast<const Vector3i *>(_data._mem)->y, reinterpret_cast<const Vector3i *>(_data._mem)->z, 0.0);
+		return Vector4(unaligned_read<Vector3i>(_data._mem).x, unaligned_read<Vector3i>(_data._mem).y, unaligned_read<Vector3i>(_data._mem).z, 0.0);
 	} else {
 		return Vector4();
 	}
@@ -1859,18 +1858,18 @@ Variant::operator Vector4() const {
 
 Variant::operator Vector4i() const {
 	if (type == VECTOR4I) {
-		return *reinterpret_cast<const Vector4i *>(_data._mem);
+		return unaligned_read<Vector4i>(_data._mem);
 	} else if (type == VECTOR4) {
-		const Vector4 &v4 = *reinterpret_cast<const Vector4 *>(_data._mem);
+		const Vector4 v4 = unaligned_read<Vector4>(_data._mem);
 		return Vector4i(v4.x, v4.y, v4.z, v4.w);
 	} else if (type == VECTOR2) {
-		return Vector4i(reinterpret_cast<const Vector2 *>(_data._mem)->x, reinterpret_cast<const Vector2 *>(_data._mem)->y, 0.0, 0.0);
+		return Vector4i(unaligned_read<Vector2>(_data._mem).x, unaligned_read<Vector2>(_data._mem).y, 0.0, 0.0);
 	} else if (type == VECTOR2I) {
-		return Vector4i(reinterpret_cast<const Vector2i *>(_data._mem)->x, reinterpret_cast<const Vector2i *>(_data._mem)->y, 0.0, 0.0);
+		return Vector4i(unaligned_read<Vector2i>(_data._mem).x, unaligned_read<Vector2i>(_data._mem).y, 0.0, 0.0);
 	} else if (type == VECTOR3) {
-		return Vector4i(reinterpret_cast<const Vector3 *>(_data._mem)->x, reinterpret_cast<const Vector3 *>(_data._mem)->y, reinterpret_cast<const Vector3 *>(_data._mem)->z, 0.0);
+		return Vector4i(unaligned_read<Vector3>(_data._mem).x, unaligned_read<Vector3>(_data._mem).y, unaligned_read<Vector3>(_data._mem).z, 0.0);
 	} else if (type == VECTOR3I) {
-		return Vector4i(reinterpret_cast<const Vector3i *>(_data._mem)->x, reinterpret_cast<const Vector3i *>(_data._mem)->y, reinterpret_cast<const Vector3i *>(_data._mem)->z, 0.0);
+		return Vector4i(unaligned_read<Vector3i>(_data._mem).x, unaligned_read<Vector3i>(_data._mem).y, unaligned_read<Vector3i>(_data._mem).z, 0.0);
 	} else {
 		return Vector4i();
 	}
@@ -1878,7 +1877,7 @@ Variant::operator Vector4i() const {
 
 Variant::operator Plane() const {
 	if (type == PLANE) {
-		return *reinterpret_cast<const Plane *>(_data._mem);
+		return unaligned_read<Plane>(_data._mem);
 	} else {
 		return Plane();
 	}
@@ -1886,7 +1885,7 @@ Variant::operator Plane() const {
 
 Variant::operator ::AABB() const {
 	if (type == AABB) {
-		return *_data._aabb;
+		return unaligned_read<::AABB>(_data._aabb);
 	} else {
 		return ::AABB();
 	}
@@ -1894,11 +1893,11 @@ Variant::operator ::AABB() const {
 
 Variant::operator Basis() const {
 	if (type == BASIS) {
-		return *_data._basis;
+		return unaligned_read<Basis>(_data._basis);
 	} else if (type == QUATERNION) {
-		return *reinterpret_cast<const Quaternion *>(_data._mem);
+		return unaligned_read<Quaternion>(_data._mem);
 	} else if (type == TRANSFORM3D) { // unexposed in Variant::can_convert?
-		return _data._transform3d->basis;
+		return unaligned_read<Transform3D>(_data._transform3d).basis;
 	} else {
 		return Basis();
 	}
@@ -1906,11 +1905,11 @@ Variant::operator Basis() const {
 
 Variant::operator Quaternion() const {
 	if (type == QUATERNION) {
-		return *reinterpret_cast<const Quaternion *>(_data._mem);
+		return unaligned_read<Quaternion>(_data._mem);
 	} else if (type == BASIS) {
-		return *_data._basis;
+		return unaligned_read<Basis>(_data._basis);
 	} else if (type == TRANSFORM3D) {
-		return _data._transform3d->basis;
+		return unaligned_read<Transform3D>(_data._transform3d).basis;
 	} else {
 		return Quaternion();
 	}
@@ -1918,13 +1917,13 @@ Variant::operator Quaternion() const {
 
 Variant::operator Transform3D() const {
 	if (type == TRANSFORM3D) {
-		return *_data._transform3d;
+		return unaligned_read<Transform3D>(_data._transform3d);
 	} else if (type == BASIS) {
-		return Transform3D(*_data._basis, Vector3());
+		return Transform3D(unaligned_read<Basis>(_data._basis), Vector3());
 	} else if (type == QUATERNION) {
-		return Transform3D(Basis(*reinterpret_cast<const Quaternion *>(_data._mem)), Vector3());
+		return Transform3D(Basis(unaligned_read<Quaternion>(_data._mem)), Vector3());
 	} else if (type == TRANSFORM2D) {
-		const Transform2D &t = *_data._transform2d;
+		const Transform2D t = unaligned_read<Transform2D>(_data._transform2d);
 		Transform3D m;
 		m.basis.rows[0][0] = t.columns[0][0];
 		m.basis.rows[1][0] = t.columns[0][1];
@@ -1934,7 +1933,7 @@ Variant::operator Transform3D() const {
 		m.origin[1] = t.columns[2][1];
 		return m;
 	} else if (type == PROJECTION) {
-		return *_data._projection;
+		return unaligned_read<Projection>(_data._projection);
 	} else {
 		return Transform3D();
 	}
@@ -1942,13 +1941,13 @@ Variant::operator Transform3D() const {
 
 Variant::operator Projection() const {
 	if (type == TRANSFORM3D) {
-		return *_data._transform3d;
+		return unaligned_read<Transform3D>(_data._transform3d);
 	} else if (type == BASIS) {
-		return Transform3D(*_data._basis, Vector3());
+		return Transform3D(unaligned_read<Basis>(_data._basis), Vector3());
 	} else if (type == QUATERNION) {
-		return Transform3D(Basis(*reinterpret_cast<const Quaternion *>(_data._mem)), Vector3());
+		return Transform3D(Basis(unaligned_read<Quaternion>(_data._mem)), Vector3());
 	} else if (type == TRANSFORM2D) {
-		const Transform2D &t = *_data._transform2d;
+		const Transform2D t = unaligned_read<Transform2D>(_data._transform2d);
 		Transform3D m;
 		m.basis.rows[0][0] = t.columns[0][0];
 		m.basis.rows[1][0] = t.columns[0][1];
@@ -1958,7 +1957,7 @@ Variant::operator Projection() const {
 		m.origin[1] = t.columns[2][1];
 		return m;
 	} else if (type == PROJECTION) {
-		return *_data._projection;
+		return unaligned_read<Projection>(_data._projection);
 	} else {
 		return Projection();
 	}
@@ -1966,9 +1965,9 @@ Variant::operator Projection() const {
 
 Variant::operator Transform2D() const {
 	if (type == TRANSFORM2D) {
-		return *_data._transform2d;
+		return unaligned_read<Transform2D>(_data._transform2d);
 	} else if (type == TRANSFORM3D) {
-		const Transform3D &t = *_data._transform3d;
+		const Transform3D t = unaligned_read<Transform3D>(_data._transform3d);
 		Transform2D m;
 		m.columns[0][0] = t.basis.rows[0][0];
 		m.columns[0][1] = t.basis.rows[1][0];
@@ -1984,7 +1983,7 @@ Variant::operator Transform2D() const {
 
 Variant::operator Color() const {
 	if (type == COLOR) {
-		return *reinterpret_cast<const Color *>(_data._mem);
+		return unaligned_read<Color>(_data._mem);
 	} else if (type == STRING) {
 		return Color(operator String());
 	} else if (type == INT) {
@@ -1996,7 +1995,7 @@ Variant::operator Color() const {
 
 Variant::operator NodePath() const {
 	if (type == NODE_PATH) {
-		return *reinterpret_cast<const NodePath *>(_data._mem);
+		return unaligned_read<NodePath>(_data._mem);
 	} else if (type == STRING) {
 		return NodePath(operator String());
 	} else {
@@ -2006,7 +2005,7 @@ Variant::operator NodePath() const {
 
 Variant::operator ::RID() const {
 	if (type == RID) {
-		return *reinterpret_cast<const ::RID *>(_data._mem);
+		return unaligned_read<::RID>(_data._mem);
 	} else if (type == OBJECT && _get_obj().obj == nullptr) {
 		return ::RID();
 	} else if (type == OBJECT && _get_obj().obj) {
@@ -2055,7 +2054,7 @@ Object *Variant::get_validated_object() const {
 
 Variant::operator Dictionary() const {
 	if (type == DICTIONARY) {
-		return *reinterpret_cast<const Dictionary *>(_data._mem);
+		return unaligned_read<Dictionary>(_data._mem);
 	} else {
 		return Dictionary();
 	}
@@ -2063,7 +2062,7 @@ Variant::operator Dictionary() const {
 
 Variant::operator Callable() const {
 	if (type == CALLABLE) {
-		return *reinterpret_cast<const Callable *>(_data._mem);
+		return unaligned_read<Callable>(_data._mem);
 	} else {
 		return Callable();
 	}
@@ -2071,7 +2070,7 @@ Variant::operator Callable() const {
 
 Variant::operator Signal() const {
 	if (type == SIGNAL) {
-		return *reinterpret_cast<const Signal *>(_data._mem);
+		return unaligned_read<Signal>(_data._mem);
 	} else {
 		return Signal();
 	}
@@ -2133,7 +2132,7 @@ inline DA _convert_array_from_variant(const Variant &p_variant) {
 
 Variant::operator Array() const {
 	if (type == ARRAY) {
-		return *reinterpret_cast<const Array *>(_data._mem);
+		return unaligned_read<Array>(_data._mem);
 	} else {
 		return _convert_array_from_variant<Array>(*this);
 	}
@@ -2674,85 +2673,85 @@ void Variant::operator=(const Variant &p_variant) {
 			_data._float = p_variant._data._float;
 		} break;
 		case STRING: {
-			*reinterpret_cast<String *>(_data._mem) = *reinterpret_cast<const String *>(p_variant._data._mem);
+			unaligned_write<String>(_data._mem, unaligned_read<String>(p_variant._data._mem));
 		} break;
 
 		// math types
 		case VECTOR2: {
-			*reinterpret_cast<Vector2 *>(_data._mem) = *reinterpret_cast<const Vector2 *>(p_variant._data._mem);
+			unaligned_write<Vector2>(_data._mem, unaligned_read<Vector2>(p_variant._data._mem));
 		} break;
 		case VECTOR2I: {
-			*reinterpret_cast<Vector2i *>(_data._mem) = *reinterpret_cast<const Vector2i *>(p_variant._data._mem);
+			unaligned_write<Vector2i>(_data._mem, unaligned_read<Vector2i>(p_variant._data._mem));
 		} break;
 		case RECT2: {
-			*reinterpret_cast<Rect2 *>(_data._mem) = *reinterpret_cast<const Rect2 *>(p_variant._data._mem);
+			unaligned_write<Rect2>(_data._mem, unaligned_read<Rect2>(p_variant._data._mem));
 		} break;
 		case RECT2I: {
-			*reinterpret_cast<Rect2i *>(_data._mem) = *reinterpret_cast<const Rect2i *>(p_variant._data._mem);
+			unaligned_write<Rect2i>(_data._mem, unaligned_read<Rect2i>(p_variant._data._mem));
 		} break;
 		case TRANSFORM2D: {
-			*_data._transform2d = *(p_variant._data._transform2d);
+			unaligned_write<Transform2D>(_data._transform2d, unaligned_read<Transform2D>(p_variant._data._transform2d));
 		} break;
 		case VECTOR3: {
-			*reinterpret_cast<Vector3 *>(_data._mem) = *reinterpret_cast<const Vector3 *>(p_variant._data._mem);
+			unaligned_write<Vector3>(_data._mem, unaligned_read<Vector3>(p_variant._data._mem));
 		} break;
 		case VECTOR3I: {
-			*reinterpret_cast<Vector3i *>(_data._mem) = *reinterpret_cast<const Vector3i *>(p_variant._data._mem);
+			unaligned_write<Vector3i>(_data._mem, unaligned_read<Vector3i>(p_variant._data._mem));
 		} break;
 		case VECTOR4: {
-			*reinterpret_cast<Vector4 *>(_data._mem) = *reinterpret_cast<const Vector4 *>(p_variant._data._mem);
+			unaligned_write<Vector4>(_data._mem, unaligned_read<Vector4>(p_variant._data._mem));
 		} break;
 		case VECTOR4I: {
-			*reinterpret_cast<Vector4i *>(_data._mem) = *reinterpret_cast<const Vector4i *>(p_variant._data._mem);
+			unaligned_write<Vector4i>(_data._mem, unaligned_read<Vector4i>(p_variant._data._mem));
 		} break;
 		case PLANE: {
-			*reinterpret_cast<Plane *>(_data._mem) = *reinterpret_cast<const Plane *>(p_variant._data._mem);
+			unaligned_write<Plane>(_data._mem, unaligned_read<Plane>(p_variant._data._mem));
 		} break;
 
 		case AABB: {
-			*_data._aabb = *(p_variant._data._aabb);
+			unaligned_write<::AABB>(_data._aabb, unaligned_read<::AABB>(p_variant._data._aabb));
 		} break;
 		case QUATERNION: {
-			*reinterpret_cast<Quaternion *>(_data._mem) = *reinterpret_cast<const Quaternion *>(p_variant._data._mem);
+			unaligned_write<Quaternion>(_data._mem, unaligned_read<Quaternion>(p_variant._data._mem));
 		} break;
 		case BASIS: {
-			*_data._basis = *(p_variant._data._basis);
+			unaligned_write<Basis>(_data._basis, unaligned_read<Basis>(p_variant._data._basis));
 		} break;
 		case TRANSFORM3D: {
-			*_data._transform3d = *(p_variant._data._transform3d);
+			unaligned_write<Transform3D>(_data._transform3d, unaligned_read<Transform3D>(p_variant._data._transform3d));
 		} break;
 		case PROJECTION: {
-			*_data._projection = *(p_variant._data._projection);
+			unaligned_write<Projection>(_data._projection, unaligned_read<Projection>(p_variant._data._projection));
 		} break;
 
 		// misc types
 		case COLOR: {
-			*reinterpret_cast<Color *>(_data._mem) = *reinterpret_cast<const Color *>(p_variant._data._mem);
+			unaligned_write<Color>(_data._mem, unaligned_read<Color>(p_variant._data._mem));
 		} break;
 		case RID: {
-			*reinterpret_cast<::RID *>(_data._mem) = *reinterpret_cast<const ::RID *>(p_variant._data._mem);
+			unaligned_write<::RID>(_data._mem, unaligned_read<::RID>(p_variant._data._mem));
 		} break;
 		case OBJECT: {
 			_get_obj().ref(p_variant._get_obj());
 		} break;
 		case CALLABLE: {
-			*reinterpret_cast<Callable *>(_data._mem) = *reinterpret_cast<const Callable *>(p_variant._data._mem);
+			unaligned_write<Callable>(_data._mem, unaligned_read<Callable>(p_variant._data._mem));
 		} break;
 		case SIGNAL: {
-			*reinterpret_cast<Signal *>(_data._mem) = *reinterpret_cast<const Signal *>(p_variant._data._mem);
+			unaligned_write<Signal>(_data._mem, unaligned_read<Signal>(p_variant._data._mem));
 		} break;
 
 		case STRING_NAME: {
-			*reinterpret_cast<StringName *>(_data._mem) = *reinterpret_cast<const StringName *>(p_variant._data._mem);
+			unaligned_write<StringName>(_data._mem, unaligned_read<StringName>(p_variant._data._mem));
 		} break;
 		case NODE_PATH: {
-			*reinterpret_cast<NodePath *>(_data._mem) = *reinterpret_cast<const NodePath *>(p_variant._data._mem);
+			unaligned_write<NodePath>(_data._mem, unaligned_read<NodePath>(p_variant._data._mem));
 		} break;
 		case DICTIONARY: {
-			*reinterpret_cast<Dictionary *>(_data._mem) = *reinterpret_cast<const Dictionary *>(p_variant._data._mem);
+			unaligned_write<Dictionary>(_data._mem, unaligned_read<Dictionary>(p_variant._data._mem));
 		} break;
 		case ARRAY: {
-			*reinterpret_cast<Array *>(_data._mem) = *reinterpret_cast<const Array *>(p_variant._data._mem);
+			unaligned_write<Array>(_data._mem, unaligned_read<Array>(p_variant._data._mem));
 		} break;
 
 		// arrays
@@ -2819,25 +2818,25 @@ uint32_t Variant::recursive_hash(int recursion_count) const {
 			return hash_murmur3_one_double(_data._float);
 		} break;
 		case STRING: {
-			return reinterpret_cast<const String *>(_data._mem)->hash();
+			return unaligned_read<String>(_data._mem).hash();
 		} break;
 
 		// math types
 		case VECTOR2: {
-			return HashMapHasherDefault::hash(*reinterpret_cast<const Vector2 *>(_data._mem));
+			return HashMapHasherDefault::hash(unaligned_read<Vector2>(_data._mem));
 		} break;
 		case VECTOR2I: {
-			return HashMapHasherDefault::hash(*reinterpret_cast<const Vector2i *>(_data._mem));
+			return HashMapHasherDefault::hash(unaligned_read<Vector2i>(_data._mem));
 		} break;
 		case RECT2: {
-			return HashMapHasherDefault::hash(*reinterpret_cast<const Rect2 *>(_data._mem));
+			return HashMapHasherDefault::hash(unaligned_read<Rect2>(_data._mem));
 		} break;
 		case RECT2I: {
-			return HashMapHasherDefault::hash(*reinterpret_cast<const Rect2i *>(_data._mem));
+			return HashMapHasherDefault::hash(unaligned_read<Rect2i>(_data._mem));
 		} break;
 		case TRANSFORM2D: {
 			uint32_t h = HASH_MURMUR3_SEED;
-			const Transform2D &t = *_data._transform2d;
+			const Transform2D t = unaligned_read<Transform2D>(_data._transform2d);
 			h = hash_murmur3_one_real(t[0].x, h);
 			h = hash_murmur3_one_real(t[0].y, h);
 			h = hash_murmur3_one_real(t[1].x, h);
@@ -2848,20 +2847,20 @@ uint32_t Variant::recursive_hash(int recursion_count) const {
 			return hash_fmix32(h);
 		} break;
 		case VECTOR3: {
-			return HashMapHasherDefault::hash(*reinterpret_cast<const Vector3 *>(_data._mem));
+			return HashMapHasherDefault::hash(unaligned_read<Vector3>(_data._mem));
 		} break;
 		case VECTOR3I: {
-			return HashMapHasherDefault::hash(*reinterpret_cast<const Vector3i *>(_data._mem));
+			return HashMapHasherDefault::hash(unaligned_read<Vector3i>(_data._mem));
 		} break;
 		case VECTOR4: {
-			return HashMapHasherDefault::hash(*reinterpret_cast<const Vector4 *>(_data._mem));
+			return HashMapHasherDefault::hash(unaligned_read<Vector4>(_data._mem));
 		} break;
 		case VECTOR4I: {
-			return HashMapHasherDefault::hash(*reinterpret_cast<const Vector4i *>(_data._mem));
+			return HashMapHasherDefault::hash(unaligned_read<Vector4i>(_data._mem));
 		} break;
 		case PLANE: {
 			uint32_t h = HASH_MURMUR3_SEED;
-			const Plane &p = *reinterpret_cast<const Plane *>(_data._mem);
+			const Plane p = unaligned_read<Plane>(_data._mem);
 			h = hash_murmur3_one_real(p.normal.x, h);
 			h = hash_murmur3_one_real(p.normal.y, h);
 			h = hash_murmur3_one_real(p.normal.z, h);
@@ -2869,11 +2868,11 @@ uint32_t Variant::recursive_hash(int recursion_count) const {
 			return hash_fmix32(h);
 		} break;
 		case AABB: {
-			return HashMapHasherDefault::hash(*_data._aabb);
+			return HashMapHasherDefault::hash(unaligned_read<::AABB>(_data._aabb));
 		} break;
 		case QUATERNION: {
 			uint32_t h = HASH_MURMUR3_SEED;
-			const Quaternion &q = *reinterpret_cast<const Quaternion *>(_data._mem);
+			const Quaternion q = unaligned_read<Quaternion>(_data._mem);
 			h = hash_murmur3_one_real(q.x, h);
 			h = hash_murmur3_one_real(q.y, h);
 			h = hash_murmur3_one_real(q.z, h);
@@ -2882,7 +2881,7 @@ uint32_t Variant::recursive_hash(int recursion_count) const {
 		} break;
 		case BASIS: {
 			uint32_t h = HASH_MURMUR3_SEED;
-			const Basis &b = *_data._basis;
+			const Basis b = unaligned_read<Basis>(_data._basis);
 			h = hash_murmur3_one_real(b[0].x, h);
 			h = hash_murmur3_one_real(b[0].y, h);
 			h = hash_murmur3_one_real(b[0].z, h);
@@ -2896,7 +2895,7 @@ uint32_t Variant::recursive_hash(int recursion_count) const {
 		} break;
 		case TRANSFORM3D: {
 			uint32_t h = HASH_MURMUR3_SEED;
-			const Transform3D &t = *_data._transform3d;
+			const Transform3D t = unaligned_read<Transform3D>(_data._transform3d);
 			h = hash_murmur3_one_real(t.basis[0].x, h);
 			h = hash_murmur3_one_real(t.basis[0].y, h);
 			h = hash_murmur3_one_real(t.basis[0].z, h);
@@ -2913,7 +2912,7 @@ uint32_t Variant::recursive_hash(int recursion_count) const {
 		} break;
 		case PROJECTION: {
 			uint32_t h = HASH_MURMUR3_SEED;
-			const Projection &t = *_data._projection;
+			const Projection t = unaligned_read<Projection>(_data._projection);
 			h = hash_murmur3_one_real(t.columns[0].x, h);
 			h = hash_murmur3_one_real(t.columns[0].y, h);
 			h = hash_murmur3_one_real(t.columns[0].z, h);
@@ -2935,7 +2934,7 @@ uint32_t Variant::recursive_hash(int recursion_count) const {
 		// misc types
 		case COLOR: {
 			uint32_t h = HASH_MURMUR3_SEED;
-			const Color &c = *reinterpret_cast<const Color *>(_data._mem);
+			const Color c = unaligned_read<Color>(_data._mem);
 			h = hash_murmur3_one_float(c.r, h);
 			h = hash_murmur3_one_float(c.g, h);
 			h = hash_murmur3_one_float(c.b, h);
@@ -2943,32 +2942,32 @@ uint32_t Variant::recursive_hash(int recursion_count) const {
 			return hash_fmix32(h);
 		} break;
 		case RID: {
-			return hash_one_uint64(reinterpret_cast<const ::RID *>(_data._mem)->get_id());
+			return hash_one_uint64(unaligned_read<::RID>(_data._mem).get_id());
 		} break;
 		case OBJECT: {
 			return hash_one_uint64(hash_make_uint64_t(_get_obj().obj));
 		} break;
 		case STRING_NAME: {
-			return reinterpret_cast<const StringName *>(_data._mem)->hash();
+			return unaligned_read<StringName>(_data._mem).hash();
 		} break;
 		case NODE_PATH: {
-			return reinterpret_cast<const NodePath *>(_data._mem)->hash();
+			return unaligned_read<NodePath>(_data._mem).hash();
 		} break;
 		case DICTIONARY: {
-			return reinterpret_cast<const Dictionary *>(_data._mem)->recursive_hash(recursion_count);
+			return unaligned_read<Dictionary>(_data._mem).recursive_hash(recursion_count);
 
 		} break;
 		case CALLABLE: {
-			return reinterpret_cast<const Callable *>(_data._mem)->hash();
+			return unaligned_read<Callable>(_data._mem).hash();
 
 		} break;
 		case SIGNAL: {
-			const Signal &s = *reinterpret_cast<const Signal *>(_data._mem);
+			const Signal s = unaligned_read<Signal>(_data._mem);
 			uint32_t hash = s.get_name().hash();
 			return hash_murmur3_one_64(s.get_object_id(), hash);
 		} break;
 		case ARRAY: {
-			const Array &arr = *reinterpret_cast<const Array *>(_data._mem);
+			const Array arr = unaligned_read<Array>(_data._mem);
 			return arr.recursive_hash(recursion_count);
 
 		} break;
@@ -2977,7 +2976,7 @@ uint32_t Variant::recursive_hash(int recursion_count) const {
 			int len = arr.size();
 			if (likely(len)) {
 				const uint8_t *r = arr.ptr();
-				return hash_murmur3_buffer((uint8_t *)&r[0], len);
+				return hash_murmur3_buffer(reinterpret_cast<const uint8_t *>(r), len);
 			} else {
 				return hash_murmur3_one_64(0);
 			}
@@ -2988,7 +2987,7 @@ uint32_t Variant::recursive_hash(int recursion_count) const {
 			int len = arr.size();
 			if (likely(len)) {
 				const int32_t *r = arr.ptr();
-				return hash_murmur3_buffer((uint8_t *)&r[0], len * sizeof(int32_t));
+				return hash_murmur3_buffer(reinterpret_cast<const uint8_t *>(r), len * sizeof(int32_t));
 			} else {
 				return hash_murmur3_one_64(0);
 			}
@@ -2999,7 +2998,7 @@ uint32_t Variant::recursive_hash(int recursion_count) const {
 			int len = arr.size();
 			if (likely(len)) {
 				const int64_t *r = arr.ptr();
-				return hash_murmur3_buffer((uint8_t *)&r[0], len * sizeof(int64_t));
+				return hash_murmur3_buffer(reinterpret_cast<const uint8_t *>(r), len * sizeof(int64_t));
 			} else {
 				return hash_murmur3_one_64(0);
 			}
@@ -3169,18 +3168,18 @@ uint32_t Variant::recursive_hash(int recursion_count) const {
 #define hash_compare_packed_array(p_lhs, p_rhs, p_type, p_compare_func) \
 	const Vector<p_type> &l = PackedArrayRef<p_type>::get_array(p_lhs); \
 	const Vector<p_type> &r = PackedArrayRef<p_type>::get_array(p_rhs); \
-                                                                        \
+																		\
 	if (l.size() != r.size())                                           \
 		return false;                                                   \
-                                                                        \
+																		\
 	const p_type *lr = l.ptr();                                         \
 	const p_type *rr = r.ptr();                                         \
-                                                                        \
+																		\
 	for (int i = 0; i < l.size(); ++i) {                                \
 		if (!p_compare_func((lr[i]), (rr[i])))                          \
 			return false;                                               \
 	}                                                                   \
-                                                                        \
+																		\
 	return true
 
 bool Variant::hash_compare(const Variant &p_variant, int recursion_count, bool semantic_comparison) const {
@@ -3198,45 +3197,45 @@ bool Variant::hash_compare(const Variant &p_variant, int recursion_count, bool s
 		} break;
 
 		case STRING: {
-			return *reinterpret_cast<const String *>(_data._mem) == *reinterpret_cast<const String *>(p_variant._data._mem);
+			return unaligned_read<String>(_data._mem) == unaligned_read<String>(p_variant._data._mem);
 		} break;
 
 		case STRING_NAME: {
-			return *reinterpret_cast<const StringName *>(_data._mem) == *reinterpret_cast<const StringName *>(p_variant._data._mem);
+			return unaligned_read<StringName>(_data._mem) == unaligned_read<StringName>(p_variant._data._mem);
 		} break;
 
 		case VECTOR2: {
-			const Vector2 *l = reinterpret_cast<const Vector2 *>(_data._mem);
-			const Vector2 *r = reinterpret_cast<const Vector2 *>(p_variant._data._mem);
+			const Vector2 l = unaligned_read<Vector2>(_data._mem);
+			const Vector2 r = unaligned_read<Vector2>(p_variant._data._mem);
 
-			return hash_compare_vector2(*l, *r);
+			return hash_compare_vector2(l, r);
 		} break;
 		case VECTOR2I: {
-			const Vector2i *l = reinterpret_cast<const Vector2i *>(_data._mem);
-			const Vector2i *r = reinterpret_cast<const Vector2i *>(p_variant._data._mem);
-			return *l == *r;
+			const Vector2i l = unaligned_read<Vector2i>(_data._mem);
+			const Vector2i r = unaligned_read<Vector2i>(p_variant._data._mem);
+			return l == r;
 		} break;
 
 		case RECT2: {
-			const Rect2 *l = reinterpret_cast<const Rect2 *>(_data._mem);
-			const Rect2 *r = reinterpret_cast<const Rect2 *>(p_variant._data._mem);
+			const Rect2 l = unaligned_read<Rect2>(_data._mem);
+			const Rect2 r = unaligned_read<Rect2>(p_variant._data._mem);
 
-			return hash_compare_vector2(l->position, r->position) &&
-					hash_compare_vector2(l->size, r->size);
+			return hash_compare_vector2(l.position, r.position) &&
+					hash_compare_vector2(l.size, r.size);
 		} break;
 		case RECT2I: {
-			const Rect2i *l = reinterpret_cast<const Rect2i *>(_data._mem);
-			const Rect2i *r = reinterpret_cast<const Rect2i *>(p_variant._data._mem);
+			const Rect2i l = unaligned_read<Rect2i>(_data._mem);
+			const Rect2i r = unaligned_read<Rect2i>(p_variant._data._mem);
 
-			return *l == *r;
+			return l == r;
 		} break;
 
 		case TRANSFORM2D: {
-			Transform2D *l = _data._transform2d;
-			Transform2D *r = p_variant._data._transform2d;
+			const Transform2D l = unaligned_read<Transform2D>(_data._transform2d);
+			const Transform2D r = unaligned_read<Transform2D>(p_variant._data._transform2d);
 
 			for (int i = 0; i < 3; i++) {
-				if (!hash_compare_vector2(l->columns[i], r->columns[i])) {
+				if (!hash_compare_vector2(l.columns[i], r.columns[i])) {
 					return false;
 				}
 			}
@@ -3245,60 +3244,60 @@ bool Variant::hash_compare(const Variant &p_variant, int recursion_count, bool s
 		} break;
 
 		case VECTOR3: {
-			const Vector3 *l = reinterpret_cast<const Vector3 *>(_data._mem);
-			const Vector3 *r = reinterpret_cast<const Vector3 *>(p_variant._data._mem);
+			const Vector3 l = unaligned_read<Vector3>(_data._mem);
+			const Vector3 r = unaligned_read<Vector3>(p_variant._data._mem);
 
-			return hash_compare_vector3(*l, *r);
+			return hash_compare_vector3(l, r);
 		} break;
 		case VECTOR3I: {
-			const Vector3i *l = reinterpret_cast<const Vector3i *>(_data._mem);
-			const Vector3i *r = reinterpret_cast<const Vector3i *>(p_variant._data._mem);
+			const Vector3i l = unaligned_read<Vector3i>(_data._mem);
+			const Vector3i r = unaligned_read<Vector3i>(p_variant._data._mem);
 
-			return *l == *r;
+			return l == r;
 		} break;
 		case VECTOR4: {
-			const Vector4 *l = reinterpret_cast<const Vector4 *>(_data._mem);
-			const Vector4 *r = reinterpret_cast<const Vector4 *>(p_variant._data._mem);
+			const Vector4 l = unaligned_read<Vector4>(_data._mem);
+			const Vector4 r = unaligned_read<Vector4>(p_variant._data._mem);
 
-			return hash_compare_vector4(*l, *r);
+			return hash_compare_vector4(l, r);
 		} break;
 		case VECTOR4I: {
-			const Vector4i *l = reinterpret_cast<const Vector4i *>(_data._mem);
-			const Vector4i *r = reinterpret_cast<const Vector4i *>(p_variant._data._mem);
+			const Vector4i l = unaligned_read<Vector4i>(_data._mem);
+			const Vector4i r = unaligned_read<Vector4i>(p_variant._data._mem);
 
-			return *l == *r;
+			return l == r;
 		} break;
 
 		case PLANE: {
-			const Plane *l = reinterpret_cast<const Plane *>(_data._mem);
-			const Plane *r = reinterpret_cast<const Plane *>(p_variant._data._mem);
+			const Plane l = unaligned_read<Plane>(_data._mem);
+			const Plane r = unaligned_read<Plane>(p_variant._data._mem);
 
-			return hash_compare_vector3(l->normal, r->normal) &&
-					hash_compare_scalar(l->d, r->d);
+			return hash_compare_vector3(l.normal, r.normal) &&
+					hash_compare_scalar(l.d, r.d);
 		} break;
 
 		case AABB: {
-			const ::AABB *l = _data._aabb;
-			const ::AABB *r = p_variant._data._aabb;
+			const ::AABB l = unaligned_read<::AABB>(_data._aabb);
+			const ::AABB r = unaligned_read<::AABB>(p_variant._data._aabb);
 
-			return hash_compare_vector3(l->position, r->position) &&
-					hash_compare_vector3(l->size, r->size);
+			return hash_compare_vector3(l.position, r.position) &&
+					hash_compare_vector3(l.size, r.size);
 
 		} break;
 
 		case QUATERNION: {
-			const Quaternion *l = reinterpret_cast<const Quaternion *>(_data._mem);
-			const Quaternion *r = reinterpret_cast<const Quaternion *>(p_variant._data._mem);
+			const Quaternion l = unaligned_read<Quaternion>(_data._mem);
+			const Quaternion r = unaligned_read<Quaternion>(p_variant._data._mem);
 
-			return hash_compare_quaternion(*l, *r);
+			return hash_compare_quaternion(l, r);
 		} break;
 
 		case BASIS: {
-			const Basis *l = _data._basis;
-			const Basis *r = p_variant._data._basis;
+			const Basis l = unaligned_read<Basis>(_data._basis);
+			const Basis r = unaligned_read<Basis>(p_variant._data._basis);
 
 			for (int i = 0; i < 3; i++) {
-				if (!hash_compare_vector3(l->rows[i], r->rows[i])) {
+				if (!hash_compare_vector3(l.rows[i], r.rows[i])) {
 					return false;
 				}
 			}
@@ -3307,23 +3306,23 @@ bool Variant::hash_compare(const Variant &p_variant, int recursion_count, bool s
 		} break;
 
 		case TRANSFORM3D: {
-			const Transform3D *l = _data._transform3d;
-			const Transform3D *r = p_variant._data._transform3d;
+			const Transform3D l = unaligned_read<Transform3D>(_data._transform3d);
+			const Transform3D r = unaligned_read<Transform3D>(p_variant._data._transform3d);
 
 			for (int i = 0; i < 3; i++) {
-				if (!hash_compare_vector3(l->basis.rows[i], r->basis.rows[i])) {
+				if (!hash_compare_vector3(l.basis.rows[i], r.basis.rows[i])) {
 					return false;
 				}
 			}
 
-			return hash_compare_vector3(l->origin, r->origin);
+			return hash_compare_vector3(l.origin, r.origin);
 		} break;
 		case PROJECTION: {
-			const Projection *l = _data._projection;
-			const Projection *r = p_variant._data._projection;
+			const Projection l = unaligned_read<Projection>(_data._projection);
+			const Projection r = unaligned_read<Projection>(p_variant._data._projection);
 
 			for (int i = 0; i < 4; i++) {
-				if (!hash_compare_vector4(l->columns[i], r->columns[i])) {
+				if (!hash_compare_vector4(l.columns[i], r.columns[i])) {
 					return false;
 				}
 			}
@@ -3332,15 +3331,15 @@ bool Variant::hash_compare(const Variant &p_variant, int recursion_count, bool s
 		} break;
 
 		case COLOR: {
-			const Color *l = reinterpret_cast<const Color *>(_data._mem);
-			const Color *r = reinterpret_cast<const Color *>(p_variant._data._mem);
+			const Color l = unaligned_read<Color>(_data._mem);
+			const Color r = unaligned_read<Color>(p_variant._data._mem);
 
-			return hash_compare_color(*l, *r);
+			return hash_compare_color(l, r);
 		} break;
 
 		case ARRAY: {
-			const Array &l = *(reinterpret_cast<const Array *>(_data._mem));
-			const Array &r = *(reinterpret_cast<const Array *>(p_variant._data._mem));
+			const Array l = unaligned_read<Array>(_data._mem);
+			const Array r = unaligned_read<Array>(p_variant._data._mem);
 
 			if (!l.recursive_equal(r, recursion_count + 1)) {
 				return false;
@@ -3350,8 +3349,8 @@ bool Variant::hash_compare(const Variant &p_variant, int recursion_count, bool s
 		} break;
 
 		case DICTIONARY: {
-			const Dictionary &l = *(reinterpret_cast<const Dictionary *>(_data._mem));
-			const Dictionary &r = *(reinterpret_cast<const Dictionary *>(p_variant._data._mem));
+			const Dictionary l = unaligned_read<Dictionary>(_data._mem);
+			const Dictionary r = unaligned_read<Dictionary>(p_variant._data._mem);
 
 			if (!l.recursive_equal(r, recursion_count + 1)) {
 				return false;
@@ -3404,14 +3403,14 @@ bool Variant::identity_compare(const Variant &p_variant) const {
 		} break;
 
 		case DICTIONARY: {
-			const Dictionary &l = *(reinterpret_cast<const Dictionary *>(_data._mem));
-			const Dictionary &r = *(reinterpret_cast<const Dictionary *>(p_variant._data._mem));
+			const Dictionary l = unaligned_read<Dictionary>(_data._mem);
+			const Dictionary r = unaligned_read<Dictionary>(p_variant._data._mem);
 			return l.id() == r.id();
 		} break;
 
 		case ARRAY: {
-			const Array &l = *(reinterpret_cast<const Array *>(_data._mem));
-			const Array &r = *(reinterpret_cast<const Array *>(p_variant._data._mem));
+			const Array l = unaligned_read<Array>(_data._mem);
+			const Array r = unaligned_read<Array>(p_variant._data._mem);
 			return l.id() == r.id();
 		} break;
 
