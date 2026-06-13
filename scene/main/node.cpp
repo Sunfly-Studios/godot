@@ -2727,8 +2727,22 @@ StringName Node::get_property_store_alias(const StringName &p_property) const {
 }
 
 bool Node::is_part_of_edited_scene() const {
-	return Engine::get_singleton()->is_editor_hint() && is_inside_tree() && get_tree()->get_edited_scene_root() &&
-			get_tree()->get_edited_scene_root()->get_parent()->is_ancestor_of(this);
+	if (!Engine::get_singleton()->is_editor_hint() || !is_inside_tree()) {
+		return false;
+	}
+
+	const Node *edited_scene_root = get_tree()->get_edited_scene_root();
+	if (!edited_scene_root) {
+		return false;
+	}
+
+	const Node *editor_parent = edited_scene_root->get_parent();
+	if (!editor_parent) {
+		// During root switches/teardowns, the root may temporarily lack a parent.
+		return false;
+	}
+
+	return editor_parent->is_ancestor_of(this);
 }
 #endif
 
