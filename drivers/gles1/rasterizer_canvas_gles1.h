@@ -192,6 +192,30 @@ protected:
 		RS::CanvasItemTextureRepeat current_repeat = RS::CANVAS_ITEM_TEXTURE_REPEAT_MAX;
 	} state;
 
+	struct PolygonBuffers {
+		GLuint vertex_buffer = 0;
+		GLuint index_buffer = 0;
+		uint32_t count = 0;
+		bool color_disabled = false;
+		Color color;
+
+		// Cached layout offsets required for GLES1 dynamic binding during drawing
+		uint32_t stride = 0;
+		uint32_t color_offset = 0;
+		uint32_t uv_offset = 0;
+		uint32_t bones_offset = 0;
+		uint32_t weights_offset = 0;
+
+		bool has_colors = false;
+		bool has_uvs = false;
+		bool has_bones = false;
+	};
+
+	struct {
+		HashMap<PolygonID, PolygonBuffers> polygons;
+		PolygonID last_id = 0;
+	} polygon_buffers;
+
 	RID default_canvas_texture;
 	RID default_canvas_group_material;
 	RID default_canvas_group_shader;

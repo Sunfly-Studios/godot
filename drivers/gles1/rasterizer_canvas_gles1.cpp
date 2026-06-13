@@ -4640,7 +4640,129 @@ void RasterizerCanvasGLES1::_set_texture_rect_mode(bool p_texture_rect, bool p_l
 }
 
 RendererCanvasRender::PolygonID RasterizerCanvasGLES1::request_polygon(const Vector<int> &p_indices, const Vector<Point2> &p_points, const Vector<Color> &p_colors, const Vector<Point2> &p_uvs, const Vector<int> &p_bones, const Vector<float> &p_weights) {
-	PolygonID id = next_polygon_id++;
+	// We interleave the vertex data into one big VBO to improve cache coherence
+	uint32_t vertex_count = p_points.size();
+	uint32_t stride = 2; // 2 floats for position
+	if ((uint32_t)p_colors.size() == vertex_count) {
+		stride += 4;
+	}
+	if ((uint32_t)p_uvs.size() == vertex_count) {
+		stride += 2;
+	}
+	if ((uint32_t)p_bones.size() == vertex_count * 4 && (uint32_t)p_weights.size() == vertex_count * 4) {
+		stride += 4; // 2 floats (8 bytes) for bones + 2 floats (8 bytes) for weights
+	}
+
+	PolygonBuffers pb;
+	glGenBuffers(1, &pb.vertex_buffer);
+	GL_CHECK_ERROR("GLES1::Canvas::request_polygon: glGenBuffers(pb.vertex_buffer)");
+	pb.count = vertex_count;
+	pb.index_buffer = 0;
+
+	uint32_t buffer_size = stride * p_points.size();
+
+	Vector<uint8_t> polygon_buffer;
+	polygon_buffer.resize(buffer_size * sizeof(float));
+	{
+		glBindBuffer(GL_ARRAY_BUFFER, pb.vertex_buffer);
+		uint8_t *r = polygon_buffer.ptrw();
+		uint32_t base_offset = 0;
+
+		{
+			// Vertex positions (2 floats)
+			const Vector2 *points_ptr = p_points.ptr();
+			for (uint32_t i = 0; i < vertex_count; i++) {
+				uint8_t *dst = &r[(base_offset + i * stride) * sizeof(float)];
+				unaligned_write<float>(dst, points_ptr[i].x);
+				unaligned_write<float>(dst + sizeof(float), points_ptr[i].y);
+			}
+			base_offset += 2;
+		}
+
+		// Colors (4 floats)
+		if ((uint32_t)p_colors.size() == vertex_count) {
+			const Color *color_ptr = p_colors.ptr();
+
+			for (uint32_t i = 0; i < vertex_count; i++) {
+				uint8_t *dst = &r[(base_offset + i * stride) * sizeof(float)];
+				unaligned_write<float>(dst, color_ptr[i].r);
+				unaligned_write<float>(dst + sizeof(float), color_ptr[i].g);
+				unaligned_write<float>(dst + 2 * sizeof(float), color_ptr[i].b);
+				unaligned_write<float>(dst + 3 * sizeof(float), color_ptr[i].a);
+			}
+			base_offset += 4;
+		} else {
+			pb.color_disabled = true;
+			pb.color = p_colors.size() == 1 ? p_colors[0] : Color(1.0, 1.0, 1.0, 1.0);
+		}
+
+		// UVs (2 floats)
+		if ((uint32_t)p_uvs.size() == vertex_count) {
+			const Vector2 *uv_ptr = p_uvs.ptr();
+			for (uint32_t i = 0; i < vertex_count; i++) {
+				uint8_t *dst = &r[(base_offset + i * stride) * sizeof(float)];
+				unaligned_write<float>(dst, uv_ptr[i].x);
+				unaligned_write<float>(dst + sizeof(float), uv_ptr[i].y);
+			}
+			base_offset += 2;
+		}
+
+		// Bones (4x uint16_t = 8 bytes)
+		if ((uint32_t)p_bones.size() == vertex_count * 4 && (uint32_t)p_weights.size() == vertex_count * 4) {
+			const int *bone_ptr = p_bones.ptr();
+
+			for (uint32_t i = 0; i < vertex_count; i++) {
+				uint8_t *dst = &r[(base_offset + i * stride) * sizeof(float)];
+				unaligned_write<uint16_t>(dst, static_cast<uint16_t>(bone_ptr[i * 4 + 0]));
+				unaligned_write<uint16_t>(dst + sizeof(uint16_t), static_cast<uint16_t>(bone_ptr[i * 4 + 1]));
+				unaligned_write<uint16_t>(dst + 2 * sizeof(uint16_t), static_cast<uint16_t>(bone_ptr[i * 4 + 2]));
+				unaligned_write<uint16_t>(dst + 3 * sizeof(uint16_t), static_cast<uint16_t>(bone_ptr[i * 4 + 3]));
+			}
+			base_offset += 2;
+		}
+
+		// Weights (4x uint16_t = 8 bytes)
+		if ((uint32_t)p_weights.size() == vertex_count * 4) {
+			const float *weight_ptr = p_weights.ptr();
+			for (uint32_t i = 0; i < vertex_count; i++) {
+				uint8_t *dst = &r[(base_offset + i * stride) * sizeof(float)];
+				unaligned_write<uint16_t>(dst, static_cast<uint16_t>(CLAMP(weight_ptr[i * 4 + 0] * 65535, 0, 65535)));
+				unaligned_write<uint16_t>(dst + sizeof(uint16_t), static_cast<uint16_t>(CLAMP(weight_ptr[i * 4 + 1] * 65535, 0, 65535)));
+				unaligned_write<uint16_t>(dst + 2 * sizeof(uint16_t), static_cast<uint16_t>(CLAMP(weight_ptr[i * 4 + 2] * 65535, 0, 65535)));
+				unaligned_write<uint16_t>(dst + 3 * sizeof(uint16_t), static_cast<uint16_t>(CLAMP(weight_ptr[i * 4 + 3] * 65535, 0, 65535)));
+			}
+			base_offset += 2;
+		}
+
+		ERR_FAIL_COND_V(base_offset != stride, 0);
+		GLES1::Utilities::get_singleton()->buffer_allocate_data(GL_ARRAY_BUFFER, pb.vertex_buffer, vertex_count * stride * sizeof(float), polygon_buffer.ptr(), GL_STATIC_DRAW, "Polygon 2D vertex buffer");
+	}
+
+	if (p_indices.size()) {
+		Vector<uint8_t> index_buffer;
+		index_buffer.resize(p_indices.size() * sizeof(int32_t));
+		{
+			uint8_t *w = index_buffer.ptrw();
+			const int32_t *indices_ptr = p_indices.ptr();
+			for (int i = 0; i < p_indices.size(); i++) {
+				unaligned_write<int32_t>(w + i * sizeof(int32_t), indices_ptr[i]);
+			}
+		}
+		glGenBuffers(1, &pb.index_buffer);
+		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, pb.index_buffer);
+		// Multiply size by 2 (sizeof(uint16_t))
+		GLES1::Utilities::get_singleton()->buffer_allocate_data(GL_ELEMENT_ARRAY_BUFFER, pb.index_buffer, p_indices.size() * 2, index_buffer.ptr(), GL_STATIC_DRAW, "Polygon 2D index buffer");
+		pb.count = p_indices.size();
+	}
+
+	glBindBuffer(GL_ARRAY_BUFFER, 0);
+	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+
+	GL_CHECK_ERROR("GLES1::Canvas::request_polygon: glBindBuffer(GL_ELEMENT_ARRAY_BUFFER)");
+
+	PolygonID id = polygon_buffers.last_id++;
+	polygon_buffers.polygons[id] = pb;
+
 	PolyData pd;
 	pd.indices = p_indices;
 	pd.points = p_points;
@@ -4648,10 +4770,22 @@ RendererCanvasRender::PolygonID RasterizerCanvasGLES1::request_polygon(const Vec
 	pd.uvs = p_uvs;
 
 	polygon_cache[id] = pd;
+
 	return id;
 }
 
 void RasterizerCanvasGLES1::free_polygon(PolygonID p_polygon) {
+	PolygonBuffers *pb_ptr = polygon_buffers.polygons.getptr(p_polygon);
+	ERR_FAIL_NULL(pb_ptr);
+
+	PolygonBuffers &pb = *pb_ptr;
+
+	if (pb.index_buffer != 0) {
+		GLES1::Utilities::get_singleton()->buffer_free_data(pb.index_buffer);
+	}
+	GLES1::Utilities::get_singleton()->buffer_free_data(pb.vertex_buffer);
+
+	polygon_buffers.polygons.erase(p_polygon);
 	polygon_cache.erase(p_polygon);
 }
 

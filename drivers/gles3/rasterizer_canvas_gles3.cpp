@@ -2566,8 +2566,8 @@ RendererCanvasRender::PolygonID RasterizerCanvasGLES3::request_polygon(const Vec
 
 			for (uint32_t i = 0; i < vertex_count; i++) {
 				uint8_t *dst = &r[(base_offset + i * stride) * sizeof(float)];
-				memcpy(dst, &points_ptr[i].x, sizeof(float));
-				memcpy(dst + sizeof(float), &points_ptr[i].y, sizeof(float));
+				unaligned_write<float>(dst, points_ptr[i].x);
+				unaligned_write<float>(dst + sizeof(float), points_ptr[i].y);
 			}
 
 			base_offset += 2;
@@ -2582,10 +2582,10 @@ RendererCanvasRender::PolygonID RasterizerCanvasGLES3::request_polygon(const Vec
 
 			for (uint32_t i = 0; i < vertex_count; i++) {
 				uint8_t *dst = &r[(base_offset + i * stride) * sizeof(float)];
-				memcpy(dst, &color_ptr[i].r, sizeof(float));
-				memcpy(dst + sizeof(float), &color_ptr[i].g, sizeof(float));
-				memcpy(dst + 2 * sizeof(float), &color_ptr[i].b, sizeof(float));
-				memcpy(dst + 3 * sizeof(float), &color_ptr[i].a, sizeof(float));
+				unaligned_write<float>(dst, color_ptr[i].r);
+				unaligned_write<float>(dst + sizeof(float), color_ptr[i].g);
+				unaligned_write<float>(dst + 2 * sizeof(float), color_ptr[i].b);
+				unaligned_write<float>(dst + 3 * sizeof(float), color_ptr[i].a);
 			}
 			base_offset += 4;
 		} else {
@@ -2602,8 +2602,8 @@ RendererCanvasRender::PolygonID RasterizerCanvasGLES3::request_polygon(const Vec
 
 			for (uint32_t i = 0; i < vertex_count; i++) {
 				uint8_t *dst = &r[(base_offset + i * stride) * sizeof(float)];
-				memcpy(dst, &uv_ptr[i].x, sizeof(float));
-				memcpy(dst + sizeof(float), &uv_ptr[i].y, sizeof(float));
+				unaligned_write<float>(dst, uv_ptr[i].x);
+				unaligned_write<float>(dst + sizeof(float), uv_ptr[i].y);
 			}
 
 			base_offset += 2;
@@ -2619,13 +2619,10 @@ RendererCanvasRender::PolygonID RasterizerCanvasGLES3::request_polygon(const Vec
 
 			for (uint32_t i = 0; i < vertex_count; i++) {
 				uint8_t *dst = &r[(base_offset + i * stride) * sizeof(float)];
-				uint16_t bone16w[4] = {
-					static_cast<uint16_t>(bone_ptr[i * 4 + 0]),
-					static_cast<uint16_t>(bone_ptr[i * 4 + 1]),
-					static_cast<uint16_t>(bone_ptr[i * 4 + 2]),
-					static_cast<uint16_t>(bone_ptr[i * 4 + 3])
-				};
-				memcpy(dst, bone16w, sizeof(bone16w));
+				unaligned_write<uint16_t>(dst, static_cast<uint16_t>(bone_ptr[i * 4 + 0]));
+				unaligned_write<uint16_t>(dst + sizeof(uint16_t), static_cast<uint16_t>(bone_ptr[i * 4 + 1]));
+				unaligned_write<uint16_t>(dst + 2 * sizeof(uint16_t), static_cast<uint16_t>(bone_ptr[i * 4 + 2]));
+				unaligned_write<uint16_t>(dst + 3 * sizeof(uint16_t), static_cast<uint16_t>(bone_ptr[i * 4 + 3]));
 			}
 
 			base_offset += 2;
@@ -2641,13 +2638,10 @@ RendererCanvasRender::PolygonID RasterizerCanvasGLES3::request_polygon(const Vec
 
 			for (uint32_t i = 0; i < vertex_count; i++) {
 				uint8_t *dst = &r[(base_offset + i * stride) * sizeof(float)];
-				uint16_t weight16w[4] = {
-					static_cast<uint16_t>(CLAMP(weight_ptr[i * 4 + 0] * 65535, 0, 65535)),
-					static_cast<uint16_t>(CLAMP(weight_ptr[i * 4 + 1] * 65535, 0, 65535)),
-					static_cast<uint16_t>(CLAMP(weight_ptr[i * 4 + 2] * 65535, 0, 65535)),
-					static_cast<uint16_t>(CLAMP(weight_ptr[i * 4 + 3] * 65535, 0, 65535))
-				};
-				memcpy(dst, weight16w, sizeof(weight16w));
+				unaligned_write<uint16_t>(dst, static_cast<uint16_t>(CLAMP(weight_ptr[i * 4 + 0] * 65535, 0, 65535)));
+				unaligned_write<uint16_t>(dst + sizeof(uint16_t), static_cast<uint16_t>(CLAMP(weight_ptr[i * 4 + 1] * 65535, 0, 65535)));
+				unaligned_write<uint16_t>(dst + 2 * sizeof(uint16_t), static_cast<uint16_t>(CLAMP(weight_ptr[i * 4 + 2] * 65535, 0, 65535)));
+				unaligned_write<uint16_t>(dst + 3 * sizeof(uint16_t), static_cast<uint16_t>(CLAMP(weight_ptr[i * 4 + 3] * 65535, 0, 65535)));
 			}
 
 			base_offset += 2;
@@ -2665,7 +2659,10 @@ RendererCanvasRender::PolygonID RasterizerCanvasGLES3::request_polygon(const Vec
 		index_buffer.resize(p_indices.size() * sizeof(int32_t));
 		{
 			uint8_t *w = index_buffer.ptrw();
-			memcpy(w, p_indices.ptr(), sizeof(int32_t) * p_indices.size());
+			const int32_t *indices_ptr = p_indices.ptr();
+			for (int i = 0; i < p_indices.size(); i++) {
+				unaligned_write<int32_t>(w + i * sizeof(int32_t), indices_ptr[i]);
+			}
 		}
 		glGenBuffers(1, &pb.index_buffer);
 		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, pb.index_buffer);
