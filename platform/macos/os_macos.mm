@@ -781,7 +781,7 @@ Error OS_MacOS::create_process(const String &p_path, const List<String> &p_argum
 				ERR_PRINT("create_process: Dropped invalid UTF-8 argument.");
 			}
 		}
-#if defined(__x86_64__)
+#if defined(__x86_64__) && (__MAC_OS_X_VERSION_MIN_REQUIRED < 110000)
 		if (@available(macOS 10.15, *)) {
 #endif
 			NSWorkspaceOpenConfiguration *configuration = [[NSWorkspaceOpenConfiguration alloc] init];
@@ -813,7 +813,7 @@ Error OS_MacOS::create_process(const String &p_path, const List<String> &p_argum
 			}
 
 			return err;
-#if defined(__x86_64__)
+#if defined(__x86_64__) && (__MAC_OS_X_VERSION_MIN_REQUIRED < 110000)
 		} else {
 			Error err = ERR_TIMEOUT;
 			NSError *error = nullptr;
