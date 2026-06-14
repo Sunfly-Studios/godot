@@ -244,7 +244,7 @@ String bool_to_string(bool v) {
 }
 
 String _get_gles_tag() {
-	return "    <uses-feature android:glEsVersion=\"0x00030000\" android:required=\"true\" />\n";
+	return "    <uses-feature android:glEsVersion=\"0x00010001\" android:required=\"true\" />\n";
 }
 
 String _get_screen_sizes_tag(const Ref<EditorExportPreset> &p_preset) {
