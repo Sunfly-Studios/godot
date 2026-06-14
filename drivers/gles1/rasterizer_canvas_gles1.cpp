@@ -4886,6 +4886,19 @@ RasterizerCanvasGLES1::~RasterizerCanvasGLES1() {
 	utilities->buffer_free_data(data.polygon_buffer);
 	utilities->buffer_free_data(data.polygon_index_buffer);
 
+	for (const KeyValue<PolygonID, PolygonBuffers> &P : polygon_buffers.polygons) {
+		const PolygonBuffers &pb = P.value;
+		if (pb.index_buffer != 0) {
+			utilities->buffer_free_data(pb.index_buffer);
+		}
+		if (pb.vertex_buffer != 0) {
+			utilities->buffer_free_data(pb.vertex_buffer);
+		}
+	}
+
+	polygon_buffers.polygons.clear();
+	polygon_cache.clear();
+
 	// Free batcher buffers
 	if (bdata.gl_vertex_buffer != 0) {
 		utilities->buffer_free_data(bdata.gl_vertex_buffer);
