@@ -587,7 +587,14 @@ Error ProjectSettings::_setup(const String &p_path, const String &p_main_pack, b
 #if defined(PCK_SIGNING_ENABLED)
 	key = CryptoKey::create();
 	if (key.is_valid()) {
-		String str_key = "-----BEGIN PUBLIC KEY-----\n" + CryptoCore::b64_encode_str((const uint8_t *)&pck_sign_pub_key[0], pck_sign_pub_key_len) + "\n-----END PUBLIC KEY-----";
+		Vector<uint8_t> aligned_key_buf;
+		aligned_key_buf.resize(pck_sign_pub_key_len);
+		uint8_t *w_bytes = aligned_key_buf.ptrw();
+		for (int i = 0; i < pck_sign_pub_key_len; i++) {
+			w_bytes[i] = unaligned_read<uint8_t>(&pck_sign_pub_key[i]);
+		}
+
+		String str_key = "-----BEGIN PUBLIC KEY-----\n" + CryptoCore::b64_encode_str(aligned_key_buf.ptr(), pck_sign_pub_key_len) + "\n-----END PUBLIC KEY-----";
 		ERR_FAIL_COND_V_MSG(key->load_from_string(str_key, true) != OK, ERR_CANT_OPEN, vformat("Cannot open resource pack '%s'.", p_main_pack));
 	} else {
 		ERR_FAIL_V_MSG(ERR_CANT_OPEN, vformat("Cannot open resource pack '%s'.", p_main_pack));

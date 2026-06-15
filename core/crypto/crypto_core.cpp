@@ -221,8 +221,12 @@ String CryptoCore::b64_encode_str(const uint8_t *p_src, int p_src_len) {
 	uint8_t *w64 = b64buff.ptrw();
 	size_t strlen = 0;
 	int ret = b64_encode(&w64[0], b64len, &strlen, p_src, p_src_len);
-	w64[strlen] = 0;
-	return ret ? String() : (const char *)&w64[0];
+	unaligned_write<uint8_t>(&w64[strlen], 0);
+	
+	if (ret) {
+		return String();
+	}
+	return String((const char *)b64buff.ptr());
 }
 
 Error CryptoCore::b64_encode(uint8_t *r_dst, int p_dst_len, size_t *r_len, const uint8_t *p_src, int p_src_len) {

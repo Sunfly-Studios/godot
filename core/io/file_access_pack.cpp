@@ -415,7 +415,9 @@ bool PackedSourcePCK::try_open_pack(const String &p_path, bool p_replace_files, 
 			}
 #endif
 			// Hash the string length as it appears in the file's endianness
-			sha_ctx.update((const unsigned char *)&sl, 4);
+			uint8_t sl_bytes[4];
+			unaligned_write(sl_bytes, sl);
+			sha_ctx.update(sl_bytes, 4);
 
 			CharString cs;
 			cs.resize(sl);
@@ -429,17 +431,23 @@ bool PackedSourcePCK::try_open_pack(const String &p_path, bool p_replace_files, 
 			}
 #endif
 			uint64_t ofs = f->get_64();
-			sha_ctx.update((const unsigned char *)&ofs, 8);
+			uint8_t ofs_bytes[8];
+			unaligned_write(ofs_bytes, ofs);
+			sha_ctx.update(ofs_bytes, 8);
 
 			uint64_t size = f->get_64();
-			sha_ctx.update((const unsigned char *)&size, 8);
+			uint8_t size_bytes[8];
+			unaligned_write(size_bytes, size);
+			sha_ctx.update(size_bytes, 8);
 
 			uint8_t sha256[32];
 			f->get_buffer(sha256, 32);
 			sha_ctx.update((const unsigned char *)sha256, 32);
 
 			uint32_t flags = f->get_32();
-			sha_ctx.update((const unsigned char *)&flags, 4);
+			uint8_t flags_bytes[4];
+			unaligned_write(flags_bytes, flags);
+			sha_ctx.update(flags_bytes, 4);
 #ifdef DEBUG_ENABLED
 			if (i == 0) {
 				print_verbose("First entry offset: " + itos(ofs));

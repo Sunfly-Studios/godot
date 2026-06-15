@@ -205,6 +205,10 @@ Error PCKPacker::flush_and_sign(const Ref<CryptoKey> &p_sign_key, bool p_verbose
 	CryptoCore::SHA256Context sha_ctx;
 	sha_ctx.start();
 
+	// Reusable buffers
+	uint8_t buf_32[4] = {};
+	uint8_t buf_64[8] = {};
+
 	for (int i = 0; i < files.size(); i++) {
 		static uint8_t zero = 0;
 		CharString utf8_string = files[i].path.utf8();
@@ -213,19 +217,26 @@ Error PCKPacker::flush_and_sign(const Ref<CryptoKey> &p_sign_key, bool p_verbose
 
 		uint32_t full_len = string_len + pad;
 		fhead->store_32(full_len);
-		sha_ctx.update((const unsigned char *)&full_len, 4);
+		
+		unaligned_write(buf_32, full_len);
+		sha_ctx.update(buf_32, 4);
+
 		fhead->store_buffer((const uint8_t *)utf8_string.get_data(), string_len);
 		sha_ctx.update((const unsigned char *)utf8_string.get_data(), string_len);
 		for (int j = 0; j < pad; j++) {
 			fhead->store_8(0);
-			sha_ctx.update((const unsigned char *)&zero, 1);
+			sha_ctx.update(&zero, 1);
 		}
 
 		fhead->store_64(files[i].ofs);
-		sha_ctx.update((const unsigned char *)&files[i].ofs, 8);
-		fhead->store_64(files[i].size); // pay attention here, this is where file is
-		sha_ctx.update((const unsigned char *)&files[i].size, 8);
-		fhead->store_buffer(files[i].sha256.ptr(), 32); //also save sha256 for file
+		unaligned_write(buf_64, files[i].ofs);
+		sha_ctx.update(buf_64, 8);
+
+		fhead->store_64(files[i].size);
+		unaligned_write(buf_64, files[i].size);
+		sha_ctx.update(buf_64, 8);
+
+		fhead->store_buffer(files[i].sha256.ptr(), 32);
 		sha_ctx.update((const unsigned char *)files[i].sha256.ptr(), 32);
 
 		uint32_t flags = 0;
@@ -236,7 +247,9 @@ Error PCKPacker::flush_and_sign(const Ref<CryptoKey> &p_sign_key, bool p_verbose
 			flags |= PACK_FILE_REMOVAL;
 		}
 		fhead->store_32(flags);
-		sha_ctx.update((const unsigned char *)&flags, 4);
+		
+		unaligned_write(buf_32, flags);
+		sha_ctx.update(buf_32, 4);
 	}
 	sha_ctx.finish((unsigned char *)directory_hash.ptrw());
 

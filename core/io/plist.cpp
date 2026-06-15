@@ -535,7 +535,10 @@ Ref<PListNode> PList::read_bplist_obj(Ref<FileAccess> p_file, uint64_t p_offset_
 		case 0x30: {
 			node->data_type = PL_NODE_TYPE_DATE;
 			node->data_int = BSWAP64(p_file->get_64());
-			node->data_string = Time::get_singleton()->get_datetime_string_from_unix_time(node->data_real + 978307200.0).utf8();
+			
+			double real_val;
+			memcpy(&real_val, &node->data_real, sizeof(double));
+			node->data_string = Time::get_singleton()->get_datetime_string_from_unix_time(real_val + 978307200.0).utf8();
 		} break;
 		case 0x40: {
 			if (marker_size == 0x0F) {
@@ -545,7 +548,7 @@ Ref<PListNode> PList::read_bplist_obj(Ref<FileAccess> p_file, uint64_t p_offset_
 			node->data_type = PL_NODE_TYPE_DATA;
 			PackedByteArray buf;
 			buf.resize(marker_size + 1);
-			p_file->get_buffer(reinterpret_cast<uint8_t *>(buf.ptrw()), marker_size);
+			p_file->get_buffer(buf.ptrw(), marker_size);
 			node->data_string = CryptoCore::b64_encode_str(buf.ptr(), buf.size()).utf8();
 		} break;
 		case 0x50: {

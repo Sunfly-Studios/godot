@@ -117,17 +117,30 @@ void FileAccessCompressed::_close() {
 	}
 
 	if (writing) {
-		//save block table and all compressed blocks
-
+		// save block table and all compressed blocks
 		CharString mgc = magic.utf8();
-		f->store_buffer((const uint8_t *)mgc.get_data(), mgc.length()); //write header 4
-		f->store_32(cmode); //write compression mode 4
-		f->store_32(block_size); //write block size 4
-		f->store_32(uint32_t(write_max)); //max amount of data written 4
+		f->store_buffer((const uint8_t *)mgc.get_data(), mgc.length()); // write header 4
+
+		uint8_t buf_32[4];
+
+		// write compression mode
+		unaligned_write(buf_32, cmode);
+		f->store_buffer(buf_32, 4);
+
+		// write block size
+		unaligned_write(buf_32, block_size);
+		f->store_buffer(buf_32, 4);
+
+		// write max amount of data written
+		unaligned_write(buf_32, uint32_t(write_max));
+		f->store_buffer(buf_32, 4);
+
 		uint32_t bc = (write_max / block_size) + 1;
 
+		// compressed sizes, will update later
+		const uint8_t zeros[4] = { 0, 0, 0, 0 };
 		for (uint32_t i = 0; i < bc; i++) {
-			f->store_32(0); //compressed sizes, will update later
+			f->store_buffer(zeros, 4);
 		}
 
 		Vector<int> block_sizes;
@@ -143,12 +156,13 @@ void FileAccessCompressed::_close() {
 			block_sizes.push_back(s);
 		}
 
-		f->seek(16); //ok write block sizes
+		f->seek(16); // ok write block sizes
 		for (uint32_t i = 0; i < bc; i++) {
-			f->store_32(uint32_t(block_sizes[i]));
+			unaligned_write(buf_32, uint32_t(block_sizes[i]));
+			f->store_buffer(buf_32, 4);
 		}
 		f->seek_end();
-		f->store_buffer((const uint8_t *)mgc.get_data(), mgc.length()); //magic at the end too
+		f->store_buffer((const uint8_t *)mgc.get_data(), mgc.length()); // magic at the end too
 
 		buffer.clear();
 
