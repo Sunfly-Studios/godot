@@ -49,8 +49,9 @@ public class RegularConfigChooser implements GLSurfaceView.EGLConfigChooser {
 	 * We use a minimum size of 4 bits for red/green/blue, but will
 	 * perform actual matching in chooseConfig() below.
 	 */
-	private static int EGL_OPENGL_ES2_BIT = 4;
-	private static int EGL_OPENGL_ES1_BIT = 1;
+	private static int EGL_OPENGL_ES_BIT = 0x0001;
+	private static int EGL_OPENGL_ES2_BIT = 0x0004;
+	private static int EGL_OPENGL_ES3_BIT = 0x0040;
 
 	private final int[] mConfigAttribs;
 
@@ -62,7 +63,12 @@ public class RegularConfigChooser implements GLSurfaceView.EGLConfigChooser {
 		mDepthSize = depth;
 		mStencilSize = stencil;
 
-		int renderableType = (glMajorVersion == 1) ? EGL_OPENGL_ES1_BIT : EGL_OPENGL_ES2_BIT;
+		int renderableType = EGL_OPENGL_ES_BIT;
+		if (glMajorVersion == 2) {
+			renderableType = EGL_OPENGL_ES2_BIT;
+		} else if (glMajorVersion == 3) {
+			renderableType = EGL_OPENGL_ES3_BIT;
+		}
 
 		mConfigAttribs = new int[] {
 			EGL10.EGL_RED_SIZE, 4,
