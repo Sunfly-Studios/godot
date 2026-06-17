@@ -1502,7 +1502,10 @@ GDScript::UpdatableFuncPtr::UpdatableFuncPtr(GDScriptFunction *p_function) {
 }
 
 GDScript::UpdatableFuncPtr::~UpdatableFuncPtr() {
-	ERR_FAIL_NULL(script);
+	// If the script is null, the GDScript was already destroyed and this lambda was orphaned.
+	if (!script) {
+		return;
+	}
 
 	if (list_element) {
 		MutexLock script_lock(script->func_ptrs_to_update_mutex);
@@ -1625,11 +1628,18 @@ GDScript::~GDScript() {
 	}
 	destructing = true;
 
-	if (is_print_verbose_enabled()) {
+	{
 		MutexLock lock(func_ptrs_to_update_mutex);
-		if (!func_ptrs_to_update.is_empty()) {
+		if (is_print_verbose_enabled() && !func_ptrs_to_update.is_empty()) {
 			print_line(vformat("GDScript: %d orphaned lambdas becoming invalid at destruction of script '%s'.", func_ptrs_to_update.size(), fully_qualified_name));
 		}
+		
+		// Sever the ties to outliving lambdas so they don't lock a destroyed mutex later.
+		for (UpdatableFuncPtr *func_ptr : func_ptrs_to_update) {
+			func_ptr->list_element = nullptr;
+			func_ptr->script = nullptr;
+		}
+		func_ptrs_to_update.clear();
 	}
 
 	clear();
