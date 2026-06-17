@@ -24,6 +24,7 @@ common_win = [
     "wgl_detect_version.cpp",
     "rendering_context_driver_vulkan_windows.cpp",
     "drop_target_windows.cpp",
+    "win_vista_thunks.c",
 ]
 
 if env.msvc:
