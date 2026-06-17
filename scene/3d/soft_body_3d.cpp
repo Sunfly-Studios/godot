@@ -83,10 +83,13 @@ void SoftBodyRenderingServerHandler::commit_changes() {
 }
 
 void SoftBodyRenderingServerHandler::set_vertex(int p_vertex_id, const Vector3 &p_vertex) {
-	float *vertex_buffer = reinterpret_cast<float *>(write_buffer + p_vertex_id * stride + offset_vertices);
-	*vertex_buffer++ = (float)p_vertex.x;
-	*vertex_buffer++ = (float)p_vertex.y;
-	*vertex_buffer++ = (float)p_vertex.z;
+	uint8_t *vertex_ptr = write_buffer + p_vertex_id * stride + offset_vertices;
+	
+	unaligned_write<float>(vertex_ptr, (float)p_vertex.x);
+	vertex_ptr += sizeof(float);
+	unaligned_write<float>(vertex_ptr, (float)p_vertex.y);
+	vertex_ptr += sizeof(float);
+	unaligned_write<float>(vertex_ptr, (float)p_vertex.z);
 }
 
 void SoftBodyRenderingServerHandler::set_normal(int p_vertex_id, const Vector3 &p_normal) {

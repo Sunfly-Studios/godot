@@ -169,8 +169,6 @@ Error ImageLoaderTinyEXR::load_image(Ref<Image> p_image, Ref<FileAccess> f, BitF
 	//print_line("reading format: " + Image::get_format_name(format));
 	{
 		uint8_t *wd = imgdata.ptrw();
-		uint16_t *iw16 = (uint16_t *)wd;
-		float *iw32 = (float *)wd;
 
 		// Assume `out_rgba` have enough memory allocated.
 		for (int tile_index = 0; tile_index < num_tiles; tile_index++) {
@@ -194,8 +192,8 @@ Error ImageLoaderTinyEXR::load_image(Ref<Image> p_image, Ref<FileAccess> f, BitF
 				a_channel_start = reinterpret_cast<const float *>(tile.images[idxA]);
 			}
 
-			uint16_t *first_row_w16 = iw16 + (tile.offset_y * tile_height * exr_image.width + tile.offset_x * tile_width) * output_channels;
-			float *first_row_w32 = iw32 + (tile.offset_y * tile_height * exr_image.width + tile.offset_x * tile_width) * output_channels;
+			uint64_t tile_base_pixel_idx = (uint64_t)(tile.offset_y * tile_height * exr_image.width + tile.offset_x * tile_width) * output_channels;
+			uint8_t *first_row_byte_ptr = wd + tile_base_pixel_idx * channel_size;
 
 			for (int y = 0; y < th; y++) {
 				const float *r_channel = r_channel_start + y * tile_width;
@@ -213,7 +211,7 @@ Error ImageLoaderTinyEXR::load_image(Ref<Image> p_image, Ref<FileAccess> f, BitF
 				}
 
 				if (use_float16) {
-					uint16_t *row_w = first_row_w16 + (y * exr_image.width * output_channels);
+					uint8_t *row_w = first_row_byte_ptr + (y * exr_image.width * output_channels) * sizeof(uint16_t);
 
 					for (int x = 0; x < tw; x++) {
 						Color color;
@@ -232,19 +230,23 @@ Error ImageLoaderTinyEXR::load_image(Ref<Image> p_image, Ref<FileAccess> f, BitF
 							color = color.srgb_to_linear();
 						}
 
-						*row_w++ = Math::make_half_float(color.r);
+						unaligned_write<uint16_t>(row_w, Math::make_half_float(color.r));
+						row_w += sizeof(uint16_t);
 						if (g_channel) {
-							*row_w++ = Math::make_half_float(color.g);
+							unaligned_write<uint16_t>(row_w, Math::make_half_float(color.g));
+							row_w += sizeof(uint16_t);
 						}
 						if (b_channel) {
-							*row_w++ = Math::make_half_float(color.b);
+							unaligned_write<uint16_t>(row_w, Math::make_half_float(color.b));
+							row_w += sizeof(uint16_t);
 						}
 						if (a_channel) {
-							*row_w++ = Math::make_half_float(color.a);
+							unaligned_write<uint16_t>(row_w, Math::make_half_float(color.a));
+							row_w += sizeof(uint16_t);
 						}
 					}
 				} else {
-					float *row_w = first_row_w32 + (y * exr_image.width * output_channels);
+					uint8_t *row_w = first_row_byte_ptr + (y * exr_image.width * output_channels) * sizeof(float);
 
 					for (int x = 0; x < tw; x++) {
 						Color color;
@@ -263,15 +265,19 @@ Error ImageLoaderTinyEXR::load_image(Ref<Image> p_image, Ref<FileAccess> f, BitF
 							color = color.srgb_to_linear();
 						}
 
-						*row_w++ = color.r;
+						unaligned_write<float>(row_w, color.r);
+						row_w += sizeof(float);
 						if (g_channel) {
-							*row_w++ = color.g;
+							unaligned_write<float>(row_w, color.g);
+							row_w += sizeof(float);
 						}
 						if (b_channel) {
-							*row_w++ = color.b;
+							unaligned_write<float>(row_w, color.b);
+							row_w += sizeof(float);
 						}
 						if (a_channel) {
-							*row_w++ = color.a;
+							unaligned_write<float>(row_w, color.a);
+							row_w += sizeof(float);
 						}
 					}
 				}

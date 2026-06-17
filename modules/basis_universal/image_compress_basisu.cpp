@@ -50,30 +50,36 @@ void basis_universal_init() {
 #ifdef TOOLS_ENABLED
 template <typename T>
 inline void _basisu_pad_mipmap(const uint8_t *p_image_mip_data, Vector<uint8_t> &r_mip_data_padded, int p_next_width, int p_next_height, int p_width, int p_height, int64_t p_size) {
-	// Source mip's data interpreted as 32-bit RGBA blocks to help with copying pixel data.
-	const T *mip_src_data = reinterpret_cast<const T *>(p_image_mip_data);
-
 	// Reserve space in the padded buffer.
 	r_mip_data_padded.resize(p_next_width * p_next_height * sizeof(T));
-	T *data_padded_ptr = reinterpret_cast<T *>(r_mip_data_padded.ptrw());
+	uint8_t *padded_ptr = r_mip_data_padded.ptrw();
 
 	// Pad mipmap to the nearest block by smearing.
 	int x = 0, y = 0;
 	for (y = 0; y < p_height; y++) {
 		for (x = 0; x < p_width; x++) {
-			data_padded_ptr[p_next_width * y + x] = mip_src_data[p_width * y + x];
+			uint64_t src_offset = (uint64_t)(p_width * y + x) * sizeof(T);
+			uint64_t dst_offset = (uint64_t)(p_next_width * y + x) * sizeof(T);
+			T val = unaligned_read<T>(p_image_mip_data + src_offset);
+			unaligned_write<T>(padded_ptr + dst_offset, val);
 		}
 
 		// First, smear in x.
 		for (; x < p_next_width; x++) {
-			data_padded_ptr[p_next_width * y + x] = data_padded_ptr[p_next_width * y + x - 1];
+			uint64_t prev_x_offset = (uint64_t)(p_next_width * y + x - 1) * sizeof(T);
+			uint64_t dst_offset = (uint64_t)(p_next_width * y + x) * sizeof(T);
+			T val = unaligned_read<T>(padded_ptr + prev_x_offset);
+			unaligned_write<T>(padded_ptr + dst_offset, val);
 		}
 	}
 
 	// Then, smear in y.
 	for (; y < p_next_height; y++) {
 		for (x = 0; x < p_next_width; x++) {
-			data_padded_ptr[p_next_width * y + x] = data_padded_ptr[p_next_width * y + x - p_next_width];
+			uint64_t prev_y_offset = (uint64_t)(p_next_width * y + x - p_next_width) * sizeof(T);
+			uint64_t dst_offset = (uint64_t)(p_next_width * y + x) * sizeof(T);
+			T val = unaligned_read<T>(padded_ptr + prev_y_offset);
+			unaligned_write<T>(padded_ptr + dst_offset, val);
 		}
 	}
 }
@@ -248,7 +254,7 @@ Vector<uint8_t> basis_universal_packer(const Ref<Image> &p_image, Image::UsedCha
 	uint8_t *basisu_data_ptr = basisu_data.ptrw();
 
 	// Copy the encoded BasisU data into the output buffer.
-	*(uint32_t *)basisu_data_ptr = decompress_format;
+	unaligned_write<uint32_t>(basisu_data_ptr, decompress_format);
 	memcpy(basisu_data_ptr + 4, basisu_encoded.get_ptr(), basisu_encoded.size());
 
 	print_verbose(vformat("BasisU: Encoding a %dx%d image with %d mipmaps took %d ms.", p_image->get_width(), p_image->get_height(), p_image->get_mipmap_count(), OS::get_singleton()->get_ticks_msec() - start_time));

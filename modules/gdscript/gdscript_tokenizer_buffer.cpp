@@ -172,17 +172,18 @@ Error GDScriptTokenizerBuffer::set_code_buffer(const Vector<uint8_t> &p_buffer) 
 		total_len -= 4;
 		ERR_FAIL_COND_V((len * 4u) > (uint32_t)total_len, ERR_INVALID_DATA);
 		b += 4;
-		Vector<uint32_t> cs;
+		
+		Vector<char32_t> cs;
 		cs.resize(len);
 		for (uint32_t j = 0; j < len; j++) {
 			uint8_t tmp[4];
 			for (uint32_t k = 0; k < 4; k++) {
 				tmp[k] = b[j * 4 + k] ^ 0xb6;
 			}
-			cs.write[j] = decode_uint32(tmp);
+			cs.write[j] = unaligned_read<char32_t>(tmp);
 		}
 
-		String s(reinterpret_cast<const char32_t *>(cs.ptr()), len);
+		String s(cs.ptr(), len);
 		b += len * 4;
 		total_len -= len * 4;
 		identifiers.write[i] = s;
