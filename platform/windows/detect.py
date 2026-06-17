@@ -681,11 +681,12 @@ def configure_msvc(env: "SConsEnvironment", vcvars_msvc_config):
                 sdk_inc_ucrt = os.path.normpath(os.path.join(sdk_root, "Include", sdk_version, "ucrt"))
                 sdk_inc_shared = os.path.normpath(os.path.join(sdk_root, "Include", sdk_version, "shared"))
                 sdk_inc_um = os.path.normpath(os.path.join(sdk_root, "Include", sdk_version, "um"))
+                sdk_inc_winrt = os.path.normpath(os.path.join(sdk_root, "Include", sdk_version, "winrt"))
                 
                 sdk_lib_ucrt = os.path.normpath(os.path.join(sdk_root, "Lib", sdk_version, "ucrt", target_arch))
                 sdk_lib_um = os.path.normpath(os.path.join(sdk_root, "Lib", sdk_version, "um", target_arch))
                 
-                sdk_includes = ";".join([sdk_inc_ucrt, sdk_inc_shared, sdk_inc_um])
+                sdk_includes = ";".join([sdk_inc_ucrt, sdk_inc_shared, sdk_inc_um, sdk_inc_winrt])
                 sdk_libs = ";".join([sdk_lib_ucrt, sdk_lib_um])
                 
                 # Append to environment blocks
@@ -703,6 +704,7 @@ def configure_msvc(env: "SConsEnvironment", vcvars_msvc_config):
                     os.path.normpath(os.path.join(sdk_root, "Include", sdk_version, "ucrt")),
                     os.path.normpath(os.path.join(sdk_root, "Include", sdk_version, "shared")),
                     os.path.normpath(os.path.join(sdk_root, "Include", sdk_version, "um")),
+                    os.path.normpath(os.path.join(sdk_root, "Include", sdk_version, "winrt")),
                 ])
                 env.Prepend(LIBPATH=[
                     os.path.normpath(os.path.join(sdk_root, "Lib", sdk_version, "ucrt", target_arch)),
