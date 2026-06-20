@@ -1418,6 +1418,7 @@ void MaterialStorage::_global_shader_uniform_store_in_buffer(int32_t p_index, RS
 			bv.y = v.position.y;
 			bv.z = v.size.x;
 			bv.w = v.size.y;
+			unaligned_write<GlobalShaderUniforms::ValueInt>(&global_shader_uniforms.buffer_values[p_index], bv);
 		} break;
 		case RS::GLOBAL_VAR_TYPE_UINT: {
 			GlobalShaderUniforms::ValueUInt bv;
