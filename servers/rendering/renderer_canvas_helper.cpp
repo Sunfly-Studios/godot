@@ -208,7 +208,7 @@ void MultiRect::end() {
 			bool transpose = state.flags & RendererCanvasRender::CANVAS_RECT_TRANSPOSE;
 			bool clip_uv = state.flags & RendererCanvasRender::CANVAS_RECT_CLIP_UV;
 
-			for (uint32_t n = 0; n < rects.size(); n++) {
+			for (int n = 0; n < rects.size(); n++) {
 				RenderingServer::get_singleton()->canvas_item_add_texture_rect_region(state.item, rects[n], state.texture, sources[n], state.modulate, transpose, clip_uv);
 			}
 		}

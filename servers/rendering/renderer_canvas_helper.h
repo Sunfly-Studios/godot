@@ -90,7 +90,7 @@ private:
 
 	static uint32_t flags_from_rects(Rect2 &r_rect, Rect2 &r_source);
 	bool overlaps(const Rect2 &p_rect) const {
-		for (uint32_t n = 0; n < rects.size(); n++) {
+		for (int n = 0; n < rects.size(); n++) {
 			if (rects[n].intersects(p_rect)) {
 				return true;
 			}
