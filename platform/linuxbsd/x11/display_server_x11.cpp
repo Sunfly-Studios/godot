@@ -6956,9 +6956,144 @@ DisplayServerX11::DisplayServerX11(const String &p_rendering_driver, WindowMode 
 	}
 #endif // RD_ENABLED
 
+	// Init context and rendering device multi-layer fallback
+	bool multilayer_fallback = GLOBAL_GET("rendering/rendering_device/driver_fallback_multilayer");
+	bool fb_gles3 = GLOBAL_GET("rendering/gl_compatibility/fallback_to_gles");
+	bool fb_gles2 = GLOBAL_GET("rendering/gl_legacy/fallback_to_gles");
+	bool fb_gles1 = GLOBAL_GET("rendering/gl_classic/fallback_to_gles");
+
+	Vector<String> driver_attempts;
+
+	if (multilayer_fallback) {
+		if (rendering_driver.begins_with("opengl3")) {
+#ifdef GLES3_ENABLED
+			driver_attempts.push_back("opengl3");
+#endif
+#ifdef GLES2_ENABLED
+			driver_attempts.push_back("opengl2");
+#endif
+#ifdef GLES1_ENABLED
+			driver_attempts.push_back("opengl1");
+#endif
+#ifdef GLES3_ENABLED
+			if (fb_gles3) {
+				driver_attempts.push_back("opengl3_es");
+			}
+#endif
+#ifdef GLES2_ENABLED
+			if (fb_gles2) {
+				driver_attempts.push_back("opengl2_es");
+			}
+#endif
+#ifdef GLES1_ENABLED
+			if (fb_gles1) {
+				driver_attempts.push_back("opengl1_es");
+			}
+#endif
+		} else if (rendering_driver.begins_with("opengl2")) {
+#ifdef GLES2_ENABLED
+			driver_attempts.push_back("opengl2");
+#endif
+#ifdef GLES1_ENABLED
+			driver_attempts.push_back("opengl1");
+#endif
+#ifdef GLES3_ENABLED
+			driver_attempts.push_back("opengl3");
+#endif
+#ifdef GLES2_ENABLED
+			if (fb_gles2) {
+				driver_attempts.push_back("opengl2_es");
+			}
+#endif
+#ifdef GLES1_ENABLED
+			if (fb_gles1) {
+				driver_attempts.push_back("opengl1_es");
+			}
+#endif
+#ifdef GLES3_ENABLED
+			if (fb_gles3) {
+				driver_attempts.push_back("opengl3_es");
+			}
+#endif
+		} else if (rendering_driver.begins_with("opengl1")) {
+#ifdef GLES1_ENABLED
+			driver_attempts.push_back("opengl1");
+#endif
+#ifdef GLES2_ENABLED
+			driver_attempts.push_back("opengl2");
+#endif
+#ifdef GLES3_ENABLED
+			driver_attempts.push_back("opengl3");
+#endif
+#ifdef GLES1_ENABLED
+			if (fb_gles1) {
+				driver_attempts.push_back("opengl1_es");
+			}
+#endif
+#ifdef GLES2_ENABLED
+			if (fb_gles2) {
+				driver_attempts.push_back("opengl2_es");
+			}
+#endif
+#ifdef GLES3_ENABLED
+			if (fb_gles3) {
+				driver_attempts.push_back("opengl3_es");
+			}
+#endif
+		} else {
+			driver_attempts.push_back(rendering_driver);
+		}
+	} else {
+		// Use only the one the game requested
+		driver_attempts.push_back(rendering_driver);
+
+#ifdef GLES3_ENABLED
+		if (rendering_driver == "opengl3") {
+			if (fb_gles3) {
+				driver_attempts.push_back("opengl3_es");
+			}
+		}
+#endif
+		
+#ifdef GLES2_ENABLED
+		if (rendering_driver == "opengl2") {
+			if (fb_gles2) {
+				driver_attempts.push_back("opengl2_es");
+			}
+		}
+#endif
+
+#ifdef GLES1_ENABLED
+		if (rendering_driver == "opengl1") {
+			if (fb_gles1) {
+				driver_attempts.push_back("opengl1_es");
+			}
+		}
+#endif
+	}
+	
+	String requested_driver = rendering_driver;
+
+	for (int attempt_idx = 0; attempt_idx < driver_attempts.size(); attempt_idx++) {
+		rendering_driver = driver_attempts[attempt_idx];
+		bool init_failed = false;
+		bool driver_compiled = false;
+		r_error = OK;
+		
+		// Inform the OS of the fallback state.
+		if (rendering_driver.begins_with("opengl3")) {
+			OS::get_singleton()->set_current_rendering_method("gl_compatibility", OS::RENDERING_SOURCE_FALLBACK);
+		} else if (rendering_driver.begins_with("opengl2")) {
+			OS::get_singleton()->set_current_rendering_method("gl_legacy", OS::RENDERING_SOURCE_FALLBACK);
+		} else if (rendering_driver.begins_with("opengl1")) {
+			OS::get_singleton()->set_current_rendering_method("gl_classic", OS::RENDERING_SOURCE_FALLBACK);
+		}
+		
+		OS::get_singleton()->set_current_rendering_driver_name(rendering_driver, OS::RENDERING_SOURCE_FALLBACK);
+
 #if defined(GLES3_ENABLED)
-	{
 		if (rendering_driver == "opengl3" || rendering_driver == "opengl3_es") {
+			driver_compiled = true;
 			if (getenv("DRI_PRIME") == nullptr) {
 				int use_prime = -1;
 	
@@ -6976,7 +7111,7 @@ DisplayServerX11::DisplayServerX11(const String &p_rendering_driver, WindowMode 
 					print_verbose("Legacy X11 stub active. Skipping GPU detection");
 					use_prime = 0;
 				}
-	
+
 				// Some tools use fake libGL libraries and have them override the real one using
 				// LD_LIBRARY_PATH, so we skip them. *But* Steam also sets LD_LIBRARY_PATH for its
 				// runtime and includes system `/lib` and `/lib64`... so ignore Steam.
@@ -7005,34 +7140,15 @@ DisplayServerX11::DisplayServerX11(const String &p_rendering_driver, WindowMode 
 				}
 			}
 		}
+		
 		if (rendering_driver == "opengl3") {
 			gl_manager = memnew(GLManager_X11(p_resolution, GLManager_X11::GLES_3_0_COMPATIBLE));
 			if (gl_manager->initialize(x11_display) != OK || gl_manager->open_display(x11_display) != OK) {
 				memdelete(gl_manager);
 				gl_manager = nullptr;
-				bool fallback = GLOBAL_GET("rendering/gl_compatibility/fallback_to_gles");
-				if (fallback) {
-					WARN_PRINT("Your video card drivers seem not to support the required OpenGL version, switching to OpenGLES.");
-					rendering_driver = "opengl3_es";
-					OS::get_singleton()->set_current_rendering_driver_name(rendering_driver, OS::RENDERING_SOURCE_FALLBACK);
-				} else {
-					r_error = ERR_UNAVAILABLE;
-	
-					OS::get_singleton()->alert(
-							vformat("Your video card drivers seem not to support the required OpenGL 3.3 version.\n\n"
-									"If possible, consider updating your video card drivers, using the Vulkan driver, the OpenGL 2.1 driver, or the OpenGL 1.5 driver.\n\n"
-									"You can enable the Vulkan driver by starting the engine from the\n"
-									"command line with the command:\n\n    \"%s\" --rendering-driver vulkan\n\n"
-									"You can enable the OpenGL 2.1 driver by starting the engine from the\n"
-									"command line with the command:\n\n    \"%s\" --rendering-driver opengl2\n\n"
-									"You can enable the OpenGL 1.5 driver by starting the engine from the\n"
-									"command line with the command:\n\n    \"%s\" --rendering-driver opengl1\n\n"
-									"If you recently updated your video card drivers, try rebooting.",
-									executable_name, executable_name, executable_name),
-							"Unable to initialize OpenGL 3 video driver");
-	
-					ERR_FAIL_MSG("Could not initialize OpenGL 3.");
-				}
+				r_error = ERR_UNAVAILABLE;
+				ERR_PRINT("Could not initialize OpenGL 3 video driver.");
+				init_failed = true;
 			} else {
 				driver_found = true;
 				RasterizerGLES3::make_current(true);
@@ -7045,31 +7161,18 @@ DisplayServerX11::DisplayServerX11(const String &p_rendering_driver, WindowMode 
 				memdelete(gl_manager_egl);
 				gl_manager_egl = nullptr;
 				r_error = ERR_UNAVAILABLE;
-	
-				OS::get_singleton()->alert(
-						vformat("Your video card drivers seem not to support the required OpenGL ES 3.0 version.\n\n"
-								"If possible, consider updating your video card drivers, using the Vulkan driver, using the OpenGL ES 2 driver, or using the OpenGL ES 1.1 driver.\n\n"
-								"You can enable the Vulkan driver by starting the engine from the\n"
-								"command line with the command:\n\n    \"%s\" --rendering-driver vulkan\n\n"
-								"You can enable the OpenGL ES 2.1 driver by starting the engine from the\n"
-								"command line with the command:\n\n    \"%s\" --rendering-driver opengl2_es\n\n"
-								"You can enable the OpenGL ES 1.1 driver by starting the engine from the\n"
-								"command line with the command:\n\n    \"%s\" --rendering-driver opengl1_es\n\n"
-								"If you recently updated your video card drivers, try rebooting.",
-								executable_name, executable_name, executable_name),
-						"Unable to initialize OpenGL ES 3.0 video driver");
-	
-				ERR_FAIL_MSG("Could not initialize OpenGL ES 3.0.");
+				ERR_PRINT("Could not initialize OpenGL ES 3.0 video driver.");
+				init_failed = true;
+			} else {
+				driver_found = true;
+				RasterizerGLES3::make_current(false);
 			}
-			driver_found = true;
-			RasterizerGLES3::make_current(false);
 		}
-	}
 #endif // GLES3_ENABLED
 
 #if defined(GLES2_ENABLED)
-	{
 		if (rendering_driver == "opengl2" || rendering_driver == "opengl2_es") {
+			driver_compiled = true;
 			if (getenv("DRI_PRIME") == nullptr) {
 				int use_prime = -1;
 	
@@ -7087,7 +7190,7 @@ DisplayServerX11::DisplayServerX11(const String &p_rendering_driver, WindowMode 
 					print_verbose("Legacy X11 stub active. Skipping GPU detection");
 					use_prime = 0;
 				}
-	
+				
 				// Some tools use fake libGL libraries and have them override the real one using
 				// LD_LIBRARY_PATH, so we skip them. *But* Steam also sets LD_LIBRARY_PATH for its
 				// runtime and includes system `/lib` and `/lib64`... so ignore Steam.
@@ -7116,34 +7219,15 @@ DisplayServerX11::DisplayServerX11(const String &p_rendering_driver, WindowMode 
 				}
 			}
 		}
+		
 		if (rendering_driver == "opengl2") {
 			gl_manager = memnew(GLManager_X11(p_resolution, GLManager_X11::GLES_2_1_COMPATIBLE));
 			if (gl_manager->initialize(x11_display) != OK || gl_manager->open_display(x11_display) != OK) {
 				memdelete(gl_manager);
 				gl_manager = nullptr;
-				bool fallback = GLOBAL_GET("rendering/gl_legacy/fallback_to_gles");
-				if (fallback) {
-					WARN_PRINT("Your video card drivers seem not to support the required OpenGL version, switching to OpenGLES.");
-					rendering_driver = "opengl2_es";
-					OS::get_singleton()->set_current_rendering_driver_name(rendering_driver, OS::RENDERING_SOURCE_FALLBACK);
-				} else {
-					r_error = ERR_UNAVAILABLE;
-	
-					OS::get_singleton()->alert(
-							vformat("Your video card drivers seem not to support the required OpenGL 2.1 version.\n\n"
-									"If possible, consider updating your video card drivers, using the Vulkan driver, the OpenGL 3.3 driver, or the OpenGL 1.5 driver.\n\n"
-									"You can enable the Vulkan driver by starting the engine from the\n"
-									"command line with the command:\n\n    \"%s\" --rendering-driver vulkan\n\n"
-									"You can enable the OpenGL 3.3 driver by starting the engine from the\n"
-									"command line with the command:\n\n    \"%s\" --rendering-driver opengl3\n\n"
-									"You can enable the OpenGL 1.5 driver by starting the engine from the\n"
-									"command line with the command:\n\n    \"%s\" --rendering-driver opengl1\n\n"
-									"If you recently updated your video card drivers, try rebooting.",
-									executable_name, executable_name, executable_name),
-							"Unable to initialize OpenGL 2 video driver");
-	
-					ERR_FAIL_MSG("Could not initialize OpenGL 2.");
-				}
+				r_error = ERR_UNAVAILABLE;
+				ERR_PRINT("Could not initialize OpenGL 2 video driver.");
+				init_failed = true;
 			} else {
 				driver_found = true;
 				RasterizerGLES2::make_current(true);
@@ -7156,31 +7240,18 @@ DisplayServerX11::DisplayServerX11(const String &p_rendering_driver, WindowMode 
 				memdelete(gl_manager_egl);
 				gl_manager_egl = nullptr;
 				r_error = ERR_UNAVAILABLE;
-	
-				OS::get_singleton()->alert(
-						vformat("Your video card drivers seem not to support the required OpenGL ES 2.1 version.\n\n"
-								"If possible, consider updating your video card drivers, using the Vulkan driver, using the OpenGL ES 3.0 driver, or using the OpenGL ES 1.1 driver.\n\n"
-								"You can enable the Vulkan driver by starting the engine from the\n"
-								"command line with the command:\n\n    \"%s\" --rendering-driver vulkan\n\n"
-								"You can enable the OpenGL ES 3.0 driver by starting the engine from the\n"
-								"command line with the command:\n\n    \"%s\" --rendering-driver opengl3_es\n\n"
-								"You can enable the OpenGL ES 1.1 driver by starting the engine from the\n"
-								"command line with the command:\n\n    \"%s\" --rendering-driver opengl1_es\n\n"
-								"If you recently updated your video card drivers, try rebooting.",
-								executable_name, executable_name, executable_name),
-						"Unable to initialize OpenGL ES 2.1 video driver");
-
-				ERR_FAIL_MSG("Could not initialize OpenGL ES 2.1.");
+				ERR_PRINT("Could not initialize OpenGL ES 2.1 video driver.");
+				init_failed = true;
+			} else {
+				driver_found = true;
+				RasterizerGLES2::make_current(false);
 			}
-			driver_found = true;
-			RasterizerGLES2::make_current(false);
 		}
-	}
 #endif // GLES2_ENABLED
 
 #if defined(GLES1_ENABLED)
-	{
 		if (rendering_driver == "opengl1" || rendering_driver == "opengl1_es") {
+			driver_compiled = true;
 			if (getenv("DRI_PRIME") == nullptr) {
 				int use_prime = -1;
 	
@@ -7232,29 +7303,9 @@ DisplayServerX11::DisplayServerX11(const String &p_rendering_driver, WindowMode 
 			if (gl_manager->initialize(x11_display) != OK || gl_manager->open_display(x11_display) != OK) {
 				memdelete(gl_manager);
 				gl_manager = nullptr;
-				bool fallback = GLOBAL_GET("rendering/gl_classic/fallback_to_gles");
-				if (fallback) {
-					WARN_PRINT("Your video card drivers seem not to support the required OpenGL version, switching to OpenGLES.");
-					rendering_driver = "opengl1_es";
-					OS::get_singleton()->set_current_rendering_driver_name(rendering_driver, OS::RENDERING_SOURCE_FALLBACK);
-				} else {
-					r_error = ERR_UNAVAILABLE;
-	
-					OS::get_singleton()->alert(
-							vformat("Your video card drivers seem not to support the required OpenGL 1.1 version.\n\n"
-									"If possible, consider updating your video card drivers, using the Vulkan driver, the OpenGL 3.3 driver, or the OpenGL 2.1 driver.\n\n"
-									"You can enable the Vulkan driver by starting the engine from the\n"
-									"command line with the command:\n\n    \"%s\" --rendering-driver vulkan\n\n"
-									"You can enable the OpenGL 3.3 driver by starting the engine from the\n"
-									"command line with the command:\n\n    \"%s\" --rendering-driver opengl3\n\n"
-									"You can enable the OpenGL 2.1 driver by starting the engine from the\n"
-									"command line with the command:\n\n    \"%s\" --rendering-driver opengl2\n\n"
-									"If you recently updated your video card drivers, try rebooting.",
-									executable_name, executable_name, executable_name),
-							"Unable to initialize OpenGL 1 video driver");
-	
-					ERR_FAIL_MSG("Could not initialize OpenGL 1.");
-				}
+				r_error = ERR_UNAVAILABLE;
+				ERR_PRINT("Could not initialize OpenGL 1 video driver.");
+				init_failed = true;
 			} else {
 				driver_found = true;
 				RasterizerGLES1::make_current(true);
@@ -7267,30 +7318,70 @@ DisplayServerX11::DisplayServerX11(const String &p_rendering_driver, WindowMode 
 				memdelete(gl_manager_egl);
 				gl_manager_egl = nullptr;
 				r_error = ERR_UNAVAILABLE;
-	
-				OS::get_singleton()->alert(
-						vformat("Your video card drivers seem not to support the required OpenGL ES 1.1 version.\n\n"
-							"If possible, consider updating your video card drivers, using the Vulkan driver, using the OpenGL ES 3.0 driver, or using the OpenGL ES 2.1 driver.\n\n"
-							"You can enable the Vulkan driver by starting the engine from the\n"
-							"command line with the command:\n\n    \"%s\" --rendering-driver vulkan\n\n"
-							"You can enable the OpenGL ES 3.0 driver by starting the engine from the\n"
-							"command line with the command:\n\n    \"%s\" --rendering-driver opengl3_es\n\n"
-							"You can enable the OpenGL ES 2.1 driver by starting the engine from the\n"
-							"command line with the command:\n\n    \"%s\" --rendering-driver opengl2_es\n\n"
-							"If you recently updated your video card drivers, try rebooting.",
-							executable_name, executable_name, executable_name),
-						"Unable to initialize OpenGL ES 1.1 video driver");
-	
-				ERR_FAIL_MSG("Could not initialize OpenGL ES 1.1.");
+				ERR_PRINT("Could not initialize OpenGL ES 1.1 video driver.");
+				init_failed = true;
+			} else {
+				driver_found = true;
+				RasterizerGLES1::make_current(false);
 			}
-			driver_found = true;
-			RasterizerGLES1::make_current(false);
 		}
-	}
 #endif // GLES1_ENABLED
 
-	if (!driver_found) {
+		if (!driver_compiled) {
+			init_failed = true;
+			r_error = ERR_UNAVAILABLE;
+		}
+
+		if (!init_failed) {
+			if (driver_attempts[attempt_idx] != requested_driver) {
+				// Set the fallback to the driver that won the battle.
+				OS::get_singleton()->set_current_rendering_driver_name(driver_attempts[attempt_idx], OS::RENDERING_SOURCE_FALLBACK);
+
+				String req_name;
+				String req_rendering_method;
+				String fallback_name;
+				String fallback_rendering_method;
+
+				if (requested_driver.begins_with("opengl3")) {
+					req_name = "GLES3";
+					req_rendering_method = "Compatibility";
+				} else if (requested_driver.begins_with("opengl2")) {
+					req_name = "GLES2";
+					req_rendering_method = "Legacy";
+				} else {
+					req_name = "GLES1";
+					req_rendering_method = "Classic";
+				}
+
+				if (driver_attempts[attempt_idx].begins_with("opengl3")) {
+					fallback_name = "GLES3";
+					fallback_rendering_method = "Compatibility";
+				} else if (driver_attempts[attempt_idx].begins_with("opengl2")) {
+					fallback_name = "GLES2";
+					fallback_rendering_method = "Legacy";
+				} else {
+					fallback_name = "GLES1";
+					fallback_rendering_method = "Classic";
+				}
+				
+				WARN_PRINT(vformat("The %s renderer (%s) could not be initialized. Using the %s renderer (%s), visuals may be affected.", 
+					req_rendering_method, req_name, fallback_rendering_method, fallback_name));
+			}
+			break;
+		}
+	} // for attempt_idx < driver_attempts.size()
+
+	if (unlikely(!driver_found)) {
 		r_error = ERR_UNAVAILABLE;
+
+		OS::get_singleton()->alert(
+			vformat("Your video card drivers seem to not support the required %s version.\n\n"
+					"if possible, consider updating your video card drivers.\n\n"
+					"If you have recently updated your video card drivers, try rebooting.",
+					String(" or ").join(driver_attempts)
+			),
+			"Unable to initialize video driver");
+
 		ERR_FAIL_MSG("Video driver not found.");
 	}
 

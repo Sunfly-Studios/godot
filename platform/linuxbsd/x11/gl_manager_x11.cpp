@@ -208,7 +208,9 @@ Error GLManager_X11::_create_context(GLDisplay &gl_display) {
 			XFree(fbc);
 		}
 	}
-
+    
+    // Clear the error flag from any previous failed attempts.
+    ctxErrorOccurred = false;
 	int (*oldHandler)(Display *, XErrorEvent *) = XSetErrorHandler(&ctxErrorHandler);
 
 	// Only allow ARB context creation for OpenGL 3.3 (which is a guarantee)
@@ -252,7 +254,10 @@ Error GLManager_X11::_create_context(GLDisplay &gl_display) {
 				ERR_FAIL_V_MSG(ERR_UNCONFIGURED, "Failed to create new GLX context.");
 			}
 		}
-	}
+    }
+    
+    XSync(x11_display, False);
+    XSetErrorHandler(oldHandler);
 
 	if (unlikely(ctxErrorOccurred || !gl_display.context->glx_context)) {
 		if (vi) {
@@ -261,12 +266,6 @@ Error GLManager_X11::_create_context(GLDisplay &gl_display) {
 		}
 		ERR_FAIL_V(ERR_UNCONFIGURED);
 	}
-
-	XSync(x11_display, False);
-	XSetErrorHandler(oldHandler);
-
-	XSync(x11_display, False);
-	XSetErrorHandler(oldHandler);
 
 	// make our own copy of the vi data
 	// for later creating windows using this display

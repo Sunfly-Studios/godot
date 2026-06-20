@@ -120,8 +120,8 @@ int EGLManager::_get_gldisplay_id(void *p_display) {
 		new_gldisplay.egl_display = eglGetPlatformDisplayEXT(_get_platform_extension_enum(), new_gldisplay.display, (attribs.size() > 0) ? attribs.ptr() : nullptr);
 #endif // EGL_EXT_platform_base
 	} else {
-		NativeDisplayType *native_display_type = (NativeDisplayType *)new_gldisplay.display;
-		new_gldisplay.egl_display = eglGetDisplay(*native_display_type);
+		NativeDisplayType native_display_type = (NativeDisplayType)new_gldisplay.display;
+		new_gldisplay.egl_display = eglGetDisplay(native_display_type);
 	}
 
 	ERR_FAIL_COND_V(eglGetError() != EGL_SUCCESS, -1);
@@ -508,8 +508,8 @@ Error EGLManager::initialize(void *p_native_display) {
 #endif // EGL_EXT_platform_base
 	} else {
 		WARN_PRINT("EGL: EGL_EXT_platform_base not found during init, using default platform.");
-		EGLNativeDisplayType *native_display_type = (EGLNativeDisplayType *)p_native_display;
-		tmp_display = eglGetDisplay(*native_display_type);
+		EGLNativeDisplayType native_display_type = (EGLNativeDisplayType)p_native_display;
+		tmp_display = eglGetDisplay(native_display_type);
 	}
 
 	if (tmp_display == EGL_NO_DISPLAY) {

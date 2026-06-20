@@ -2156,6 +2156,9 @@ Error Main::setup(const char *execpath, int argc, char *argv[], bool p_second_ph
 		GLOBAL_DEF_RST("rendering/rendering_device/fallback_to_opengl2", true);
 		GLOBAL_DEF_RST("rendering/rendering_device/fallback_to_opengl1", true);
 		GLOBAL_DEF_RST("rendering/rendering_device/excluded_device_list", "");
+		
+		// Enable cascade-driver initialisations for OpenGL.
+		GLOBAL_DEF_RST("rendering/rendering_device/driver_fallback_multilayer", true);
 	}
 
 	{
