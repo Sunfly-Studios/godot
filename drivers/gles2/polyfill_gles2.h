@@ -84,6 +84,10 @@ namespace GLES2 {
 #define GL_INTERLEAVED_ATTRIBS_EXT 0x8C8C
 #endif
 
+#ifndef GL_RASTERIZER_DISCARD_EXT
+#define GL_RASTERIZER_DISCARD_EXT 0x8C89
+#endif
+
 // =========================================
 // Functions
 // =========================================

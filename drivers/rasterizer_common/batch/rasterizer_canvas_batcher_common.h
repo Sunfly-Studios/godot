@@ -477,6 +477,7 @@ public:
 		void reset() {
 			current_clip = nullptr;
 			shader_cache = nullptr;
+			canvas_group_owner = nullptr;
 			rebind_shader = true;
 			prev_use_skeleton = false;
 			prev_distance_field = false;
@@ -584,6 +585,8 @@ protected:
 
 		return TM_ALL;
 	}
+
+	bool _software_skin_poly(RendererCanvasRender::Item::CommandPolygon *p_poly, RendererCanvasRender::Item *p_item, BatchVertex *bvs, BatchColor *vertex_colors, const FillState &p_fill_state, const BatchColor *p_precalced_colors);
 
 	typename T_API::Texture *_get_canvas_texture(const RID &p_texture) const {
 		if (p_texture.is_valid()) {

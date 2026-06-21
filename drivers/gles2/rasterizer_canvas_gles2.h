@@ -37,6 +37,7 @@
 #include "servers/rendering/renderer_canvas_render.h"
 #include "servers/rendering/renderer_compositor.h"
 #include "storage/material_storage.h"
+#include "storage/mesh_storage.h"
 #include "storage/texture_storage.h"
 
 #include "drivers/gles_common/error_macros.h"
@@ -54,6 +55,7 @@ struct BatcherAPIGLES2 {
 	using Texture = GLES2::Texture;
 	using CanvasTexture = GLES2::CanvasTexture;
 	using Shader = GLES2::Shader;
+	using MeshStorage = GLES2::MeshStorage;
 
 	static constexpr bool FORCE_BAKE_MODULATE = false;
 };

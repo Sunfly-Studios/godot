@@ -119,7 +119,21 @@ Vector<uint8_t> Utilities::buffer_get_data(GLenum p_target, GLuint p_buffer, uin
 		return ret;
 	}
 
-	ERR_PRINT_ONCE("GLES1: buffer_get_data is not supported on GLES1 hardware.");
+	Utilities *utils = Utilities::get_singleton();
+	ERR_FAIL_NULL_V(utils, ret);
+
+	if (utils->buffer_allocs_cache.has(p_buffer)) {
+		const ResourceAllocation &alloc = utils->buffer_allocs_cache[p_buffer];
+		ERR_FAIL_COND_V_MSG(p_buffer_size > alloc.size, ret, "Requested buffer size exceeds shadowed allocation size.");
+
+		// Read back from the CPU shadow
+		ret.resize(p_buffer_size);
+		const uint8_t *r = alloc.shadow_data.ptr();
+		uint8_t *w = ret.ptrw();
+		memcpy(w, r, p_buffer_size);
+	} else {
+		ERR_PRINT("GLES1::Utilities::buffer_get_data: called on an untracked buffer ID.");
+	}
 
 	return ret;
 }

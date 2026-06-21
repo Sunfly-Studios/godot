@@ -38,6 +38,7 @@
 #include "servers/rendering/renderer_compositor.h"
 #include "storage/material_storage.h"
 #include "storage/texture_storage.h"
+#include "storage/mesh_storage.h"
 #include "drivers/rasterizer_common/batch/rasterizer_canvas_batcher_common.h"
 
 #include "drivers/gles1/shaders/canvas.glsl.gen.h"
@@ -53,6 +54,7 @@ struct BatcherAPIGLES1 {
 	using Texture = GLES1::Texture;
 	using CanvasTexture = GLES1::CanvasTexture;
 	using Shader = GLES1::Shader;
+	using MeshStorage = GLES1::MeshStorage;
 
 	static constexpr bool FORCE_BAKE_MODULATE = true;
 };

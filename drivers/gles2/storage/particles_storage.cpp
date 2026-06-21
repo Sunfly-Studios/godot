@@ -407,7 +407,7 @@ AABB ParticlesStorage::particles_get_current_aabb(RID p_particles) {
 #else
 	glBindBuffer(GL_ARRAY_BUFFER, read_buffer);
 	void *data_ptr = glMapBufferOES(GL_ARRAY_BUFFER, GL_MAP_READ_BIT_OES);
-	GL_CHECK_ERROR("ParticlesStorage::particles_get_current_aabb: glMapBufferOES");
+	GL_CHECK_ERROR("GLES2::ParticlesStorage::particles_get_current_aabb: glMapBufferOES");
 
 	if (data_ptr) {
 		Transform3D inv = particles->emission_transform.affine_inverse();
@@ -506,7 +506,7 @@ void ParticlesStorage::particles_set_canvas_sdf_collision(RID p_particles, bool 
 }
 
 // Does one step of processing particles by reading from back_process_buffer and writing to front_process_buffer.
-void ParticlesStorage::_particles_process(Particles *p_particles, double p_delta) {
+void GLES2::ParticlesStorage::_particles_process(Particles *p_particles, double p_delta) {
 	ERR_FAIL_NULL(p_particles);
 	GLES2::TextureStorage *texture_storage = GLES2::TextureStorage::get_singleton();
 	GLES2::MaterialStorage *material_storage = GLES2::MaterialStorage::get_singleton();
@@ -573,14 +573,14 @@ void ParticlesStorage::_particles_process(Particles *p_particles, double p_delta
 	material_storage->shaders.particles_process_shader.version_set_uniform(ParticlesShaderGLES2::CLEAR, p_particles->clear, version, variant, specialization);
 	material_storage->shaders.particles_process_shader.version_set_uniform(ParticlesShaderGLES2::TOTAL_PARTICLES, (int)p_particles->amount, version, variant, specialization);
 	material_storage->shaders.particles_process_shader.version_set_uniform(ParticlesShaderGLES2::USE_FRACTIONAL_DELTA, p_particles->fractional_delta, version, variant, specialization);
-	GL_CHECK_ERROR("ParticlesStorage::_particles_process: Set uniforms");
+	GL_CHECK_ERROR("GLES2::ParticlesStorage::_particles_process: Set uniforms");
 
 	p_particles->clear = false;
 	p_particles->has_collision_cache = m->shader_data->uses_collision;
 
 	// Transform feedback binding
 	glBindBufferBaseEXT(GL_TRANSFORM_FEEDBACK_BUFFER_EXT, 0, p_particles->front_process_buffer);
-	GL_CHECK_ERROR("ParticlesStorage::_particles_process: glBindBufferBaseEXT");
+	GL_CHECK_ERROR("GLES2::ParticlesStorage::_particles_process: glBindBufferBaseEXT");
 
 	glBindBuffer(GL_ARRAY_BUFFER, p_particles->back_process_buffer);
 
@@ -590,12 +590,12 @@ void ParticlesStorage::_particles_process(Particles *p_particles, double p_delta
 		glEnableVertexAttribArray(j);
 		glVertexAttribPointer(j, 4, GL_FLOAT, GL_FALSE, stride, CAST_INT_TO_UCHAR_PTR(sizeof(float) * 4 * j));
 	}
-	GL_CHECK_ERROR("ParticlesStorage::_particles_process: glVertexAttribPointers");
+	GL_CHECK_ERROR("GLES2::ParticlesStorage::_particles_process: glVertexAttribPointers");
 
 	glBeginTransformFeedbackEXT(GL_POINTS);
 	glDrawArrays(GL_POINTS, 0, p_particles->amount);
 	glEndTransformFeedbackEXT();
-	GL_CHECK_ERROR("ParticlesStorage::_particles_process: glDrawArrays TFB");
+	GL_CHECK_ERROR("GLES2::ParticlesStorage::_particles_process: glDrawArrays TFB");
 
 	// Cleanup state
 	for (uint32_t j = 0; j < p_particles->num_attrib_arrays_cache; j++) {
@@ -657,9 +657,9 @@ void ParticlesStorage::_particles_update_buffers(Particles *particles) {
 
 		// Generate buffers
 		glGenBuffers(1, &particles->front_process_buffer);
-		GL_CHECK_ERROR("ParticlesStorage::_particles_update_buffers: glGenBuffers front_process");
+		GL_CHECK_ERROR("GLES2::ParticlesStorage::_particles_update_buffers: glGenBuffers front_process");
 		glGenBuffers(1, &particles->front_instance_buffer);
-		GL_CHECK_ERROR("ParticlesStorage::_particles_update_buffers: glGenBuffers front_instance");
+		GL_CHECK_ERROR("GLES2::ParticlesStorage::_particles_update_buffers: glGenBuffers front_instance");
 
 		glBindBuffer(GL_ARRAY_BUFFER, particles->front_process_buffer);
 		GLES2::Utilities::get_singleton()->buffer_allocate_data(GL_ARRAY_BUFFER, particles->front_process_buffer, particles->process_buffer_stride_cache * total_amount, data.ptr(), GL_DYNAMIC_DRAW, "Particles front process buffer");
@@ -668,9 +668,9 @@ void ParticlesStorage::_particles_update_buffers(Particles *particles) {
 		GLES2::Utilities::get_singleton()->buffer_allocate_data(GL_ARRAY_BUFFER, particles->front_instance_buffer, particles->instance_buffer_size_cache, instance_data.ptr(), GL_DYNAMIC_DRAW, "Particles front instance buffer");
 
 		glGenBuffers(1, &particles->back_process_buffer);
-		GL_CHECK_ERROR("ParticlesStorage::_particles_update_buffers: glGenBuffers back_process");
+		GL_CHECK_ERROR("GLES2::ParticlesStorage::_particles_update_buffers: glGenBuffers back_process");
 		glGenBuffers(1, &particles->back_instance_buffer);
-		GL_CHECK_ERROR("ParticlesStorage::_particles_update_buffers: glGenBuffers back_instance");
+		GL_CHECK_ERROR("GLES2::ParticlesStorage::_particles_update_buffers: glGenBuffers back_instance");
 
 		glBindBuffer(GL_ARRAY_BUFFER, particles->back_process_buffer);
 		GLES2::Utilities::get_singleton()->buffer_allocate_data(GL_ARRAY_BUFFER, particles->back_process_buffer, particles->process_buffer_stride_cache * total_amount, data.ptr(), GL_DYNAMIC_DRAW, "Particles back process buffer");
@@ -686,12 +686,12 @@ void ParticlesStorage::_particles_allocate_history_buffers(Particles *particles)
 	ERR_FAIL_NULL(particles);
 	if (particles->sort_buffer == 0) {
 		glGenBuffers(1, &particles->last_frame_buffer);
-		GL_CHECK_ERROR("ParticlesStorage::_particles_allocate_history_buffers: glGenBuffers last_frame");
+		GL_CHECK_ERROR("GLES2::ParticlesStorage::_particles_allocate_history_buffers: glGenBuffers last_frame");
 		glBindBuffer(GL_ARRAY_BUFFER, particles->last_frame_buffer);
 		GLES2::Utilities::get_singleton()->buffer_allocate_data(GL_ARRAY_BUFFER, particles->last_frame_buffer, particles->instance_buffer_size_cache, nullptr, GL_DYNAMIC_DRAW, "Particles last frame buffer");
 
 		glGenBuffers(1, &particles->sort_buffer);
-		GL_CHECK_ERROR("ParticlesStorage::_particles_allocate_history_buffers: glGenBuffers sort_buffer");
+		GL_CHECK_ERROR("GLES2::ParticlesStorage::_particles_allocate_history_buffers: glGenBuffers sort_buffer");
 		glBindBuffer(GL_ARRAY_BUFFER, particles->sort_buffer);
 		GLES2::Utilities::get_singleton()->buffer_allocate_data(GL_ARRAY_BUFFER, particles->sort_buffer, particles->instance_buffer_size_cache, nullptr, GL_DYNAMIC_DRAW, "Particles sort buffer");
 
@@ -737,7 +737,7 @@ void ParticlesStorage::_particles_update_instance_buffer(Particles *particles, c
 	glBindBuffer(GL_ARRAY_BUFFER, particles->back_process_buffer);
 
 	glBindBufferBaseEXT(GL_TRANSFORM_FEEDBACK_BUFFER_EXT, 0, particles->front_instance_buffer);
-	GL_CHECK_ERROR("ParticlesStorage::_particles_update_instance_buffer: glBindBufferBase");
+	GL_CHECK_ERROR("GLES2::ParticlesStorage::_particles_update_instance_buffer: glBindBufferBase");
 
 	if (particles->draw_order == RS::PARTICLES_DRAW_ORDER_LIFETIME) {
 		WARN_PRINT_ONCE("PARTICLES_DRAW_ORDER_LIFETIME is not fully supported in GLES2 due to missing glBindBufferRange. Falling back to default sorting order.");
@@ -748,13 +748,13 @@ void ParticlesStorage::_particles_update_instance_buffer(Particles *particles, c
 		glEnableVertexAttribArray(j);
 		glVertexAttribPointer(j, 4, GL_FLOAT, GL_FALSE, stride, CAST_INT_TO_UCHAR_PTR(sizeof(float) * 4 * j));
 	}
-	GL_CHECK_ERROR("ParticlesStorage::_particles_update_instance_buffer: glVertexAttribPointer");
+	GL_CHECK_ERROR("GLES2::ParticlesStorage::_particles_update_instance_buffer: glVertexAttribPointer");
 
 	glBeginTransformFeedbackEXT(GL_POINTS);
 	glDrawArrays(GL_POINTS, 0, particles->amount);
 	glEndTransformFeedbackEXT();
 	glBindBufferBaseEXT(GL_TRANSFORM_FEEDBACK_BUFFER_EXT, 0, 0);
-	GL_CHECK_ERROR("ParticlesStorage::_particles_update_instance_buffer: glDrawArrays");
+	GL_CHECK_ERROR("GLES2::ParticlesStorage::_particles_update_instance_buffer: glDrawArrays");
 
 	for (uint32_t j = 0; j < particles->num_attrib_arrays_cache; j++) {
 		glDisableVertexAttribArray(j);
@@ -827,11 +827,11 @@ void ParticlesStorage::update_particles() {
 				glBindBuffer(GL_ARRAY_BUFFER, particles->back_instance_buffer);
 				// Query standard mapbuffer.
 				void *read_ptr = glMapBufferOES(GL_ARRAY_BUFFER, GL_MAP_READ_BIT_OES);
-				GL_CHECK_ERROR("ParticlesStorage::update_particles: glMapBufferOES read");
+				GL_CHECK_ERROR("GLES2::ParticlesStorage::update_particles: glMapBufferOES read");
 
 				glBindBuffer(GL_ARRAY_BUFFER, particles->last_frame_buffer);
 				void *write_ptr = glMapBufferOES(GL_ARRAY_BUFFER, GL_MAP_WRITE_BIT_OES);
-				GL_CHECK_ERROR("ParticlesStorage::update_particles: glMapBufferOES write");
+				GL_CHECK_ERROR("GLES2::ParticlesStorage::update_particles: glMapBufferOES write");
 
 				if (read_ptr && write_ptr) {
 					memcpy(write_ptr, read_ptr, particles->instance_buffer_size_cache);
@@ -948,7 +948,7 @@ void ParticlesStorage::particles_collision_free(RID p_rid) {
 		GLES2::Utilities::get_singleton()->texture_free_data(particles_collision->heightfield_texture);
 		particles_collision->heightfield_texture = 0;
 		glDeleteFramebuffers(1, &particles_collision->heightfield_fb);
-		GL_CHECK_ERROR("ParticlesStorage::particles_collision_free: glDeleteFramebuffers");
+		GL_CHECK_ERROR("GLES2::ParticlesStorage::particles_collision_free: glDeleteFramebuffers");
 		particles_collision->heightfield_fb = 0;
 	}
 	particles_collision->dependency.deleted_notify(p_rid);
@@ -977,20 +977,20 @@ GLuint ParticlesStorage::particles_collision_get_heightfield_framebuffer(RID p_p
 		glGenTextures(1, &particles_collision->heightfield_texture);
 		glActiveTexture(GL_TEXTURE0);
 		glBindTexture(GL_TEXTURE_2D, particles_collision->heightfield_texture);
-		GL_CHECK_ERROR("ParticlesStorage::particles_collision_get_heightfield_framebuffer: glBindTexture");
+		GL_CHECK_ERROR("GLES2::ParticlesStorage::particles_collision_get_heightfield_framebuffer: glBindTexture");
 		glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT, size.x, size.y, 0, GL_DEPTH_COMPONENT, GL_UNSIGNED_INT, nullptr);
-		GL_CHECK_ERROR("ParticlesStorage::particles_collision_get_heightfield_framebuffer: glTexImage2D");
+		GL_CHECK_ERROR("GLES2::ParticlesStorage::particles_collision_get_heightfield_framebuffer: glTexImage2D");
 
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-		GL_CHECK_ERROR("ParticlesStorage::particles_collision_get_heightfield_framebuffer: glTexParameteri");
+		GL_CHECK_ERROR("GLES2::ParticlesStorage::particles_collision_get_heightfield_framebuffer: glTexParameteri");
 
 		glGenFramebuffers(1, &particles_collision->heightfield_fb);
 		texture_storage->bind_framebuffer(particles_collision->heightfield_fb);
 		glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, particles_collision->heightfield_texture, 0);
-		GL_CHECK_ERROR("ParticlesStorage::particles_collision_get_heightfield_framebuffer: glFramebufferTexture2D");
+		GL_CHECK_ERROR("GLES2::ParticlesStorage::particles_collision_get_heightfield_framebuffer: glFramebufferTexture2D");
 
 #ifdef DEBUG_ENABLED
 		GLenum status = glCheckFramebufferStatus(GL_FRAMEBUFFER);

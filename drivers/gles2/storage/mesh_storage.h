@@ -449,12 +449,51 @@ public:
 
 		ERR_FAIL_NULL(s->versions);
 
+		memset(&s->versions[version], 0, sizeof(Mesh::Surface::Version));
+
 		_mesh_surface_generate_version_for_input_mask(s->versions[version], s, p_input_mask);
+
+		glGenVertexArrays(1, &s->versions[version].vertex_array);
+		glBindVertexArray(s->versions[version].vertex_array);
+
+		for (int i = 0; i < RS::ARRAY_INDEX; i++) {
+			if (!s->versions[version].attribs[i].enabled) {
+				glDisableVertexAttribArray(i);
+				continue;
+			}
+
+			// Bind appropriate data buffer for the current attribute
+			if (i <= RS::ARRAY_TANGENT) {
+				glBindBuffer(GL_ARRAY_BUFFER, s->vertex_buffer);
+			} else if (i >= RS::ARRAY_BONES && i <= RS::ARRAY_WEIGHTS) {
+				glBindBuffer(GL_ARRAY_BUFFER, s->skin_buffer);
+			} else {
+				// Usually ARRAY_COLOR, ARRAY_TEX_UV(2), and Custom arrays live in the attribute buffer
+				glBindBuffer(GL_ARRAY_BUFFER, s->attribute_buffer);
+			}
+
+			glEnableVertexAttribArray(i);
+			glVertexAttribPointer(
+				i,
+				s->versions[version].attribs[i].size,
+				s->versions[version].attribs[i].type,
+				s->versions[version].attribs[i].normalized,
+				s->versions[version].attribs[i].stride,
+				(const void *)(uintptr_t)(s->versions[version].attribs[i].offset)
+			);
+		}
+
+		if (s->index_buffer) {
+			glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, s->index_buffer);
+		}
+
+		glBindVertexArray(RS::ARRAY_VERTEX);
+		glBindBuffer(GL_ARRAY_BUFFER, 0);
 
 		r_vertex_array_gl = s->versions[version].vertex_array;
 
 		s->version_lock.unlock();
-    }
+	}
 
 	/* MESH INSTANCE API */
 

@@ -1313,12 +1313,15 @@ void RasterizerCanvasGLES1::canvas_render_items(RID p_to_render_target, Item *p_
 	state.default_filter = p_default_filter;
 	state.default_repeat = p_default_repeat;
 
-	// Bind the FBO, clears it, and set Projection matrix.
-	canvas_begin(p_to_render_target, false);
-
 	// ==========================================
 	// The base rendering pass
 	// ==========================================
+	// Bind the FBO, clears it, and set Projection matrix.
+	canvas_begin(p_to_render_target, false);
+
+	// We render the entire scene first without any lighting.
+	// Passing nullptr for the light prevents the base geometry
+	// from being erroneously clipped by light scissoring logic.
 	canvas_render_items_begin(p_modulate, nullptr, p_canvas_transform);
 
 	Item *current_item = p_item_list;
@@ -1488,11 +1491,9 @@ void RasterizerCanvasGLES1::canvas_render_items_implementation(Item *p_item_list
 	state.using_light = p_light;
 	state.using_shadow = false;
 
-	GLES1::Config *config = GLES1::Config::get_singleton();
-	ERR_FAIL_NULL(config);
-
 	GLES1::TextureStorage *texture_storage = GLES1::TextureStorage::get_singleton();
-	ERR_FAIL_NULL(texture_storage);
+	GLES1::MeshStorage *mesh_storage = GLES1::MeshStorage::get_singleton();
+	GLES1::Config *config = GLES1::Config::get_singleton();
 
 	GLint max_units = config->max_texture_units;
 
@@ -1872,16 +1873,36 @@ void RasterizerCanvasGLES1::canvas_render_items_implementation(Item *p_item_list
 		// Legacy / Immediate render fallback
 		Item *ci = p_item_list;
 		Item *canvas_group_owner = nullptr;
-		bool backbuffer_cleared = false;
 
 		while (ci) {
 			bool skip_item = false;
+			bool backbuffer_cleared = false;
+
+			if (ci->skeleton.is_valid()) {
+				const Item::Command *c = ci->commands;
+
+				while (c) {
+					if (c->type == Item::Command::TYPE_MESH) {
+						const Item::CommandMesh *cm = static_cast<const Item::CommandMesh *>(c);
+						Transform2D canvas_transform_inverse = p_base_transform.affine_inverse();
+
+						if (cm->mesh_instance.is_valid()) {
+							mesh_storage->mesh_instance_check_for_update(cm->mesh_instance);
+							mesh_storage->mesh_instance_set_canvas_item_transform(
+								cm->mesh_instance,
+								canvas_transform_inverse * ci->final_transform
+							);
+						}
+					}
+					c = c->next;
+				}
+			}
 
 			if (ci->canvas_group_owner != nullptr) {
 				if (canvas_group_owner == nullptr) {
 					if (ci->canvas_group_owner->canvas_group->mode != RS::CANVAS_GROUP_MODE_TRANSPARENT) {
 						Rect2i group_rect = ci->canvas_group_owner->global_rect_cache;
-						GLES1::TextureStorage::get_singleton()->render_target_copy_to_back_buffer(state.render_target, group_rect, false);
+						texture_storage->render_target_copy_to_back_buffer(state.render_target, group_rect, false);
 
 						if (ci->canvas_group_owner->canvas_group->mode == RS::CANVAS_GROUP_MODE_CLIP_AND_DRAW) {
 							ci->canvas_group_owner->use_canvas_group = false;
@@ -1928,7 +1949,7 @@ void RasterizerCanvasGLES1::canvas_render_items_implementation(Item *p_item_list
 							}
 						}
 					} else if (!backbuffer_cleared) {
-						GLES1::TextureStorage::get_singleton()->render_target_clear_back_buffer(state.render_target, Rect2i(), Color(0, 0, 0, 0));
+						texture_storage->render_target_clear_back_buffer(state.render_target, Rect2i(), Color(0, 0, 0, 0));
 						backbuffer_cleared = true;
 					}
 
@@ -1944,7 +1965,7 @@ void RasterizerCanvasGLES1::canvas_render_items_implementation(Item *p_item_list
 
 			if (ci == canvas_group_owner) {
 				if (ci->canvas_group->blur_mipmaps) {
-					GLES1::TextureStorage::get_singleton()->render_target_gen_back_buffer_mipmaps(state.render_target, ci->global_rect_cache);
+					texture_storage->render_target_gen_back_buffer_mipmaps(state.render_target, ci->global_rect_cache);
 				}
 
 				canvas_group_owner = nullptr;
@@ -1952,6 +1973,26 @@ void RasterizerCanvasGLES1::canvas_render_items_implementation(Item *p_item_list
 				ci->use_canvas_group = true;
 			} else {
 				ci->use_canvas_group = false;
+			}
+
+			if (
+				ci->skeleton.is_valid() &&
+				GLES1::MeshStorage::get_singleton()->owns_skeleton(ci->skeleton)
+			) {
+				GLES1::Skeleton *skeleton = GLES1::MeshStorage::get_singleton()->get_skeleton(ci->skeleton);
+				if (skeleton && skeleton->use_2d) {
+					mesh_storage->update_mesh_instances();
+				}
+
+				state.using_skeleton = false;
+				if (state.specialization & CanvasShaderGLES1::USE_SKELETON) {
+					state.specialization &= ~CanvasShaderGLES1::USE_SKELETON;
+				}
+			} else {
+				state.using_skeleton = false;
+				if (state.specialization & CanvasShaderGLES1::USE_SKELETON) {
+					state.specialization &= ~CanvasShaderGLES1::USE_SKELETON;
+				}
 			}
 
 			if (skip_item) {
@@ -1998,7 +2039,7 @@ void RasterizerCanvasGLES1::canvas_render_items_implementation(Item *p_item_list
 							time_used = true;
 						}
 						if (shader_data->uses_screen_texture && canvas_group_owner == nullptr) {
-							GLES1::TextureStorage::get_singleton()->render_target_copy_to_back_buffer(state.render_target, Rect2i(), shader_data->uses_screen_texture_mipmaps);
+							texture_storage->render_target_copy_to_back_buffer(state.render_target, Rect2i(), shader_data->uses_screen_texture_mipmaps);
 						}
 					}
 				}
@@ -2574,6 +2615,25 @@ void RasterizerCanvasGLES1::render_batches(Item::Command *const *p_commands, Ite
 			case BatcherEnums::BT_DEFAULT: {
 				Transform2D prev_matrix = state.uniforms.modelview_matrix;
 				Color prev_modulate = state.uniforms.final_modulate;
+
+				bool prev_using_skeleton = state.using_skeleton;
+				GLES1::Skeleton *skeleton = nullptr;
+
+				if (
+					batch.item &&
+					batch.item->skeleton.is_valid() &&
+					GLES1::MeshStorage::get_singleton()->owns_skeleton(batch.item->skeleton)
+				) {
+					skeleton = GLES1::MeshStorage::get_singleton()->get_skeleton(batch.item->skeleton);
+					if (skeleton && skeleton->use_2d) {
+						// CPU skinning is used
+					} else {
+						skeleton = nullptr;
+					}
+				}
+
+				state.using_skeleton = false;
+				state.specialization &= ~CanvasShaderGLES1::USE_SKELETON;
 
 				if (batch.item) {
 					state.uniforms.modelview_matrix = batch.item->final_transform;
@@ -3386,16 +3446,36 @@ void RasterizerCanvasGLES1::render_batches(Item::Command *const *p_commands, Ite
 										for (int k = 0; k < maximum_attributes; k++) {
 											if (v->attribs[k].enabled) {
 												if (k == RS::ARRAY_VERTEX) {
-													if (use_vertex_vbo) {
-														// Positions live in the vertex buffer
-														glBindBuffer(GL_ARRAY_BUFFER, s->vertex_buffer);
-														glEnableClientState(GL_VERTEX_ARRAY);
-														glVertexPointer(v->attribs[k].size, v->attribs[k].type, v->attribs[k].stride, (const void *)(uintptr_t)v->attribs[k].offset);
-													} else {
-														glBindBuffer(GL_ARRAY_BUFFER, 0);
-														glEnableClientState(GL_VERTEX_ARRAY);
-														ERR_FAIL_COND(s->vertex_buffer_fallback.is_empty());
-														glVertexPointer(v->attribs[k].size, v->attribs[k].type, v->attribs[k].stride, s->vertex_buffer_fallback.ptr() + v->attribs[k].offset);
+													bool instance_bound = false;
+													if (mesh_cmd->mesh_instance.is_valid()) {
+														GLES1::MeshInstance *mi = GLES1::MeshStorage::get_singleton()->get_mesh_instance(mesh_cmd->mesh_instance);
+														if (mi && mi->surfaces.size() > j) {
+															if (mi->surfaces[j].vertex_buffer != 0) {
+																glBindBuffer(GL_ARRAY_BUFFER, mi->surfaces[j].vertex_buffer);
+																glEnableClientState(GL_VERTEX_ARRAY);
+																glVertexPointer(mi->surfaces[j].vertex_size_cache, GL_FLOAT, mi->surfaces[j].vertex_stride_cache, nullptr);
+																instance_bound = true;
+															} else if (!mi->surfaces[j].vertex_buffer_fallback.is_empty()) {
+																glBindBuffer(GL_ARRAY_BUFFER, 0);
+																glEnableClientState(GL_VERTEX_ARRAY);
+																glVertexPointer(mi->surfaces[j].vertex_size_cache, GL_FLOAT, mi->surfaces[j].vertex_stride_cache, mi->surfaces[j].vertex_buffer_fallback.ptr());
+																instance_bound = true;
+															}
+														}
+													}
+
+													if (!instance_bound) {
+														if (use_vertex_vbo) {
+															// Positions live in the vertex buffer
+															glBindBuffer(GL_ARRAY_BUFFER, s->vertex_buffer);
+															glEnableClientState(GL_VERTEX_ARRAY);
+															glVertexPointer(v->attribs[k].size, v->attribs[k].type, v->attribs[k].stride, (const void *)(uintptr_t)v->attribs[k].offset);
+														} else {
+															glBindBuffer(GL_ARRAY_BUFFER, 0);
+															glEnableClientState(GL_VERTEX_ARRAY);
+															ERR_FAIL_COND(s->vertex_buffer_fallback.is_empty());
+															glVertexPointer(v->attribs[k].size, v->attribs[k].type, v->attribs[k].stride, s->vertex_buffer_fallback.ptr() + v->attribs[k].offset);
+														}
 													}
 												} else if (k == RS::ARRAY_COLOR) {
 													surface_has_colors = true;
@@ -3886,6 +3966,10 @@ void RasterizerCanvasGLES1::render_batches(Item::Command *const *p_commands, Ite
 				state.uniforms.modelview_matrix = prev_matrix;
 				state.uniforms.extra_matrix = base_extra;
 				state.uniforms.final_modulate = prev_modulate;
+				state.using_skeleton = prev_using_skeleton;
+				if (!prev_using_skeleton) {
+					state.specialization &= ~CanvasShaderGLES1::USE_SKELETON;
+				}
 			} break;
 
 			case BatcherEnums::BT_RECT:
@@ -4254,6 +4338,8 @@ void RasterizerCanvasGLES1::_legacy_draw_polygon(Item::CommandPolygon *p_poly, G
 	// Only allocate VBO space for colors if there is actually one color per vertex
 	bool use_vertex_colors = pd.colors.size() > 1;
 	uint32_t colors_size = use_vertex_colors ? (points_count * sizeof(Color)) : 0;
+	uint32_t bones_size = pd.bones.size() * sizeof(float);
+	uint32_t weights_size = pd.weights.size() * sizeof(float);
 
 	bool use_vbo = data.polygon_buffer != 0 && data.polygon_index_buffer != 0;
 
@@ -4262,7 +4348,7 @@ void RasterizerCanvasGLES1::_legacy_draw_polygon(Item::CommandPolygon *p_poly, G
 		glBindBuffer(GL_ARRAY_BUFFER, data.polygon_buffer);
 
 		// Orphan the buffer and upload new data
-		uint32_t total_size = points_size + uvs_size + colors_size;
+		uint32_t total_size = points_size + uvs_size + colors_size + bones_size + weights_size;
 		if (total_size > data.polygon_buffer_size) {
 			data.polygon_buffer_size = next_power_of_2(total_size);
 		}
@@ -4768,6 +4854,8 @@ RendererCanvasRender::PolygonID RasterizerCanvasGLES1::request_polygon(const Vec
 	pd.points = p_points;
 	pd.colors = p_colors;
 	pd.uvs = p_uvs;
+	pd.bones = p_bones;
+	pd.weights = p_weights;
 
 	polygon_cache[id] = pd;
 

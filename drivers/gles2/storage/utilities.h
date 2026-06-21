@@ -64,6 +64,7 @@ private:
 		String name;
 #endif
 		uint32_t size = 0;
+		Vector<uint8_t> shadow_data;
 	};
 	HashMap<GLuint, ResourceAllocation> buffer_allocs_cache;
 	HashMap<GLuint, ResourceAllocation> render_buffer_allocs_cache;
@@ -84,6 +85,10 @@ public:
 
 	// Allocate memory with glBufferData. Does not handle resizing.
 	_FORCE_INLINE_ void buffer_allocate_data(GLenum p_target, GLuint p_id, uint32_t p_size, const void *p_data, GLenum p_usage, String p_name = "") {
+		if (p_id == 0) {
+			return;
+		}
+
 		glBufferData(p_target, p_size, p_data, p_usage);
 		GL_CHECK_ERROR("GLES2::Utilities::buffer_allocate_data");
 		buffer_mem_cache += p_size;
@@ -97,6 +102,13 @@ public:
 #ifdef DEV_ENABLED
 		resource_allocation.name = p_name + ": " + itos((uint64_t)p_id);
 #endif
+
+		// CPU Shadowing
+		resource_allocation.shadow_data.resize(p_size);
+		if (p_data != nullptr && p_size > 0) {
+			memcpy(resource_allocation.shadow_data.ptrw(), p_data, p_size);
+		}
+
 		buffer_allocs_cache[p_id] = resource_allocation;
 	}
 
@@ -105,6 +117,10 @@ public:
 	}
 
 	_FORCE_INLINE_ void buffer_resize_data(GLenum p_target, GLuint p_id, uint32_t p_size, const void *p_data, GLenum p_usage, String p_name = "") {
+		if (p_id == 0) {
+			return;
+		}
+
 		glBufferData(p_target, p_size, p_data, p_usage);
 		GL_CHECK_ERROR("GLES2::Utilities::buffer_resize_data");
 		if (!buffer_allocs_cache.has(p_id)) {
@@ -113,21 +129,49 @@ public:
 #ifdef DEV_ENABLED
 			resource_allocation.name = p_name + ": " + itos((uint64_t)p_id);
 #endif
+			// CPU Shadowing
+			resource_allocation.shadow_data.resize(p_size);
+			if (p_data != nullptr && p_size > 0) {
+				memcpy(resource_allocation.shadow_data.ptrw(), p_data, p_size);
+			}
+
 			buffer_allocs_cache[p_id] = resource_allocation;
 			buffer_mem_cache += p_size;
 		} else {
 			buffer_mem_cache -= buffer_allocs_cache[p_id].size;
 			buffer_mem_cache += p_size;
 			buffer_allocs_cache[p_id].size = p_size;
+
+			// CPU Shadowing
+			buffer_allocs_cache[p_id].shadow_data.resize(p_size);
+			if (p_data != nullptr && p_size > 0) {
+				memcpy(buffer_allocs_cache[p_id].shadow_data.ptrw(), p_data, p_size);
+			}
 		}
 	}
 
 	_FORCE_INLINE_ void buffer_free_data(GLuint p_id) {
+		if (p_id == 0) {
+			return;
+		}
 		ERR_FAIL_COND(!buffer_allocs_cache.has(p_id));
 		glDeleteBuffers(1, &p_id);
 		GL_CHECK_ERROR("GLES2::Utilities::buffer_free_data");
 		buffer_mem_cache -= buffer_allocs_cache[p_id].size;
 		buffer_allocs_cache.erase(p_id);
+	}
+
+	_FORCE_INLINE_ void buffer_update_data(GLenum p_target, GLuint p_id, uint32_t p_offset, uint32_t p_size, const void *p_data) {
+		glBufferSubData(p_target, p_offset, p_size, p_data);
+		GL_CHECK_ERROR("GLES2::Utilities::buffer_update_data");
+
+		ERR_FAIL_COND(!buffer_allocs_cache.has(p_id));
+		ResourceAllocation &alloc = buffer_allocs_cache[p_id];
+		ERR_FAIL_COND(p_offset + p_size > alloc.size);
+
+		if (p_data != nullptr && p_size > 0) {
+			memcpy(alloc.shadow_data.ptrw() + p_offset, p_data, p_size);
+		}
 	}
 
 	_FORCE_INLINE_ void render_buffer_allocated_data(GLuint p_id, uint32_t p_size, String p_name = "") {

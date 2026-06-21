@@ -158,7 +158,12 @@ void RasterizerCanvasBatcherCommon<T_API>::batch_canvas_render_items(RendererCan
 	bool force_immediate = false;
 	RendererCanvasRender::Item *check_ci = p_item_list;
 	while (check_ci) {
-		if (check_ci->canvas_group_owner != nullptr || check_ci->canvas_group != nullptr) {
+		bool start_immediate = (
+			check_ci->canvas_group_owner != nullptr ||
+			check_ci->canvas_group != nullptr ||
+			(check_ci->skeleton.is_valid() && T_API::MeshStorage::get_singleton()->owns_skeleton(check_ci->skeleton))
+		);
+		if (start_immediate) {
 			force_immediate = true;
 			break;
 		}
@@ -170,7 +175,8 @@ void RasterizerCanvasBatcherCommon<T_API>::batch_canvas_render_items(RendererCan
 		record_items(p_item_list, p_z);
 	} else {
 		// Legacy immediate render fallback
-		// Either by batching disabled, or CanvasGroup nodes
+		// Either by batching disabled, or other
+		// nodes that force immediate rendering.
 		get_this()->canvas_render_items_implementation(p_item_list, p_z, p_modulate, p_light, p_base_transform);
 	}
 }
@@ -241,6 +247,11 @@ bool RasterizerCanvasBatcherCommon<T_API>::try_join_item(RendererCanvasRender::I
 	if (p_ci->canvas_group_owner != r_ris.canvas_group_owner) {
 		join = false;
 		r_ris.canvas_group_owner = p_ci->canvas_group_owner;
+	}
+
+	// Skeletons always break batches
+	if (p_ci->skeleton.is_valid()) {
+		join = false;
 	}
 
 	if (_detect_item_batch_break(r_ris, p_ci, r_batch_break)) {
@@ -396,6 +407,11 @@ bool RasterizerCanvasBatcherCommon<T_API>::_sort_items_match(const BSortItem &p_
 
 	// Ensure we don't try to match CanvasGroup nodes
 	if (a->canvas_group_owner != b->canvas_group_owner) {
+		return false;
+	}
+
+	// Ensure Skeletons are never matched (cannot be done)
+	if (a->skeleton != b->skeleton) {
 		return false;
 	}
 
@@ -1203,7 +1219,7 @@ bool RasterizerCanvasBatcherCommon<T_API>::_detect_item_batch_break(RenderItemSt
 			} break;
 
 			case RendererCanvasRender::Item::Command::TYPE_POLYGON: {
-				if (!bdata.settings_use_software_skinning) {
+				if (p_ci->skeleton.is_valid() && !bdata.settings_use_software_skinning) {
 					return true;
 				}
 
@@ -1822,34 +1838,49 @@ bool RasterizerCanvasBatcherCommon<T_API>::_prefill_polygon(RendererCanvasRender
 	const int *indices_ptr = poly_data->indices.ptr();
 	const Vector2 *points_ptr = poly_data->points.ptr();
 	const Vector2 *uvs_ptr = poly_data->uvs.size() > 0 ? poly_data->uvs.ptr() : nullptr;
+	
+	if (!_software_skin_poly(p_poly, p_item, bvs, vertex_colors, r_fill_state, precalced_colors)) {
+		for (int n = 0; n < num_verts_to_draw; n++) {
+			int ind = num_inds > 0 ? indices_ptr[n] : n;
 
-	for (int n = 0; n < num_verts_to_draw; n++) {
-		int ind = num_inds > 0 ? indices_ptr[n] : n;
+			if (ind < 0 || ind >= num_points) {
+				ERR_PRINT("GLES Batcher: Polygon index out of bounds!");
+				ind = 0;
+			}
 
-		if (ind < 0 || ind >= num_points) {
-			ERR_PRINT("GLES Batcher: Polygon index out of bounds!");
-			ind = 0; 
+			Vector2 pos = points_ptr[ind];
+			if (r_fill_state.transform_mode != TM_NONE) {
+				_software_transform_vertex(pos, r_fill_state.transform_combined);
+			}
+			bvs[n].pos.set(pos.x, pos.y);
+
+			if (uvs_ptr && (uint32_t)ind < poly_data->uvs.size()) {
+				bvs[n].uv.set(uvs_ptr[ind].x, uvs_ptr[ind].y);
+			} else {
+				bvs[n].uv.set(0.0f, 0.0f);
+			}
+
+			vertex_colors[n] = precalced_colors[ind];
+
+			if (use_modulate) {
+				vertex_modulates[n] = vertex_modulates[0];
+			}
+			if (use_large_verts) {
+				pBT[n] = pBT[0];
+			}
 		}
-
-		Vector2 pos = points_ptr[ind];
-		if (r_fill_state.transform_mode != TM_NONE) {
-			_software_transform_vertex(pos, r_fill_state.transform_combined);
-		}
-		bvs[n].pos.set(pos.x, pos.y);
-
-		if (uvs_ptr && (uint32_t)ind < poly_data->uvs.size()) {
-			bvs[n].uv.set(uvs_ptr[ind].x, uvs_ptr[ind].y);
-		} else {
-			bvs[n].uv.set(0.0f, 0.0f);
-		}
-
-		vertex_colors[n] = precalced_colors[ind];
-
+	} else {
+		// Software skinning successfully handled positions, uvs, and colors.
+		// Simply apply the remaining traits necessary for larger FVFs.
 		if (use_modulate) {
-			vertex_modulates[n] = vertex_modulates[0];
+			for (int n = 0; n < num_verts_to_draw; n++) {
+				vertex_modulates[n] = vertex_modulates[0];
+			}
 		}
 		if (use_large_verts) {
-			pBT[n] = pBT[0];
+			for (int n = 0; n < num_verts_to_draw; n++) {
+				pBT[n] = pBT[0];
+			}
 		}
 	}
 
@@ -1869,6 +1900,112 @@ void RasterizerCanvasBatcherCommon<T_API>::_software_transform_vertex(BatchVecto
 template <typename T_API>
 void RasterizerCanvasBatcherCommon<T_API>::_software_transform_vertex(Vector2 &r_v, const Transform2D &p_tr) const {
 	r_v = p_tr.xform(r_v);
+}
+
+template <typename T_API>
+bool RasterizerCanvasBatcherCommon<T_API>::_software_skin_poly(RendererCanvasRender::Item::CommandPolygon *p_poly, RendererCanvasRender::Item *p_item, BatchVertex *bvs, BatchColor *vertex_colors, const FillState &p_fill_state, const BatchColor *p_precalced_colors) {
+	if (p_item->skeleton.is_null()) {
+		return false;
+	}
+
+	const typename T_API::Canvas::PolyData *poly_data = get_this()->polygon_cache.getptr(p_poly->polygon.polygon_id);
+	if (unlikely(!poly_data)) {
+		return false;
+	}
+
+	int num_inds = poly_data->indices.size();
+	int num_verts = poly_data->points.size();
+
+	RID skeleton = p_item->skeleton;
+	int bone_count = T_API::MeshStorage::get_singleton()->skeleton_get_bone_count(skeleton);
+	
+	// we want a temporary buffer of positions to transform
+	Vector2 *pTemps = SAFE_ALLOCA_ARRAY(Vector2, num_verts);
+	if (unlikely(!pTemps)) {
+		return false;
+	}
+	memset((void *)pTemps, 0, num_verts * sizeof(Vector2));
+
+	// these are used in the shader but don't appear to be needed for software transform
+	//	const Transform2D &skel_trans = get_this()->state.skeleton_transform;
+	//	const Transform2D &skel_trans_inv = get_this()->state.skeleton_transform_inverse;
+
+	// get the bone transforms.
+	// this is not ideal because we don't know in advance which bones are needed
+	// for any particular poly, but depends how cheap the skeleton_bone_get_transform_2d call is
+	Transform2D *bone_transforms = SAFE_ALLOCA_ARRAY(Transform2D, bone_count);
+	if (unlikely(!bone_transforms)) {
+		return false;
+	}
+	for (int b = 0; b < bone_count; b++) {
+		bone_transforms[b] = T_API::MeshStorage::get_singleton()->skeleton_bone_get_transform_2d(skeleton, b);
+	}
+
+	if (
+		num_verts &&
+		(poly_data->bones.size() == (uint32_t)(num_verts * 4)) && (poly_data->weights.size() == poly_data->bones.size())
+	) {
+		for (int n = 0; n < num_verts; n++) {
+			const Vector2 &src_pos = poly_data->points[n];
+			Vector2 &dst_pos = pTemps[n];
+
+			float total_weight = 0.0f;
+
+			for (int k = 0; k < 4; k++) {
+				int bone_id = poly_data->bones[n * 4 + k];
+				float weight = poly_data->weights[n * 4 + k];
+				
+				if (weight == 0.0f) {
+					continue;
+				}
+
+				total_weight += weight;
+
+				if (bone_id < bone_count) {
+					const Transform2D &bone_tr = bone_transforms[bone_id];
+					Vector2 pos = bone_tr.xform(src_pos);
+					dst_pos += pos * weight;
+				}
+			}
+
+			if (total_weight < 0.01f) {
+				dst_pos = src_pos;
+			} else {
+				dst_pos /= total_weight;
+			}
+		}
+
+		if (p_fill_state.transform_mode != TM_NONE) {
+			for (int n = 0; n < num_verts; n++) {
+				Vector2 &dst_pos = pTemps[n];
+				_software_transform_vertex(dst_pos, p_fill_state.transform_combined);
+			}
+		}
+	} // if bone format matches
+	int num_verts_to_draw = num_inds > 0 ? num_inds : num_verts;
+	const int *indices_ptr = poly_data->indices.ptr();
+	const Vector2 *uvs_ptr = poly_data->uvs.size() > 0 ? poly_data->uvs.ptr() : nullptr;
+
+	for (int n = 0; n < num_verts_to_draw; n++) {
+		int ind = num_inds > 0 ? indices_ptr[n] : n;
+
+		if (ind < 0 || ind >= num_verts) {
+			ind = 0;
+		}
+
+		const Vector2 &pos = pTemps[ind];
+		bvs[n].pos.set(pos.x, pos.y);
+
+		if (uvs_ptr && (uint32_t)ind < poly_data->uvs.size()) {
+			bvs[n].uv.set(uvs_ptr[ind].x, uvs_ptr[ind].y);
+		} else {
+			bvs[n].uv.set(0.0f, 0.0f);
+		}
+
+		vertex_colors[n] = p_precalced_colors[ind];
+	}
+
+	return true;
 }
 
 template <typename T_API>

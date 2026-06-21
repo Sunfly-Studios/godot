@@ -161,6 +161,10 @@ struct MeshInstance {
 		GLuint vertex_buffers[2] = { 0, 0 };
 		GLuint vertex_arrays[2] = { 0, 0 };
 		GLuint vertex_buffer = 0;
+
+		Vector<uint8_t> vertex_buffer_fallback;
+		Vector<uint8_t> vertex_buffers_fallback[2];
+
 		int vertex_stride_cache = 0;
 		int vertex_size_cache = 0;
 		int vertex_normal_offset_cache = 0;
@@ -225,8 +229,6 @@ struct Skeleton {
 	Skeleton *dirty_list = nullptr;
 	Transform2D base_transform_2d;
 
-	GLuint transforms_texture = 0;
-
 	uint64_t version = 1;
 
 	Dependency dependency;
@@ -256,7 +258,6 @@ private:
 	void _mesh_instance_clear(MeshInstance *mi);
 	void _mesh_instance_add_surface(MeshInstance *mi, Mesh *mesh, uint32_t p_surface);
 	void _mesh_instance_remove_surface(MeshInstance *mi, int p_surface);
-	void _blend_shape_bind_mesh_instance_buffer(MeshInstance *p_mi, uint32_t p_surface);
 	SelfList<MeshInstance>::List dirty_mesh_instance_weights;
 	SelfList<MeshInstance>::List dirty_mesh_instance_arrays;
 

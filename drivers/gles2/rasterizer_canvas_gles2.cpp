@@ -1357,12 +1357,12 @@ void RasterizerCanvasGLES2::canvas_render_items(RID p_to_render_target, Item *p_
 	state.default_filter = p_default_filter;
 	state.default_repeat = p_default_repeat;
 
-	// Bind the FBO, clears it, and set Projection matrix.
-	canvas_begin(p_to_render_target, false);
-
 	// ==========================================
 	// The base rendering pass
 	// ==========================================
+	// Bind the FBO, clears it, and set Projection matrix.
+	canvas_begin(p_to_render_target, false);
+
 	// We render the entire scene first without any lighting.
 	// Passing nullptr for the light prevents the base geometry
 	// from being erroneously clipped by light scissoring logic.
@@ -1507,6 +1507,10 @@ void RasterizerCanvasGLES2::canvas_render_items_implementation(Item *p_item_list
 	state.using_light = p_light;
 	state.using_shadow = false;
 
+	GLES2::TextureStorage *texture_storage = GLES2::TextureStorage::get_singleton();
+	GLES2::MeshStorage *mesh_storage = GLES2::MeshStorage::get_singleton();
+	GLES2::Config *config = GLES2::Config::get_singleton();
+
 	if (p_light) {
 		// Enable separate equations
 		glBlendEquationSeparate(GL_FUNC_ADD, GL_FUNC_ADD);
@@ -1525,15 +1529,15 @@ void RasterizerCanvasGLES2::canvas_render_items_implementation(Item *p_item_list
 		GL_CHECK_ERROR("GLES2::Canvas::canvas_render_items_implementation: light blend setup");
 
 		// Bind light texture
-		glActiveTexture(GL_TEXTURE0 + GLES2::Config::get_singleton()->max_texture_image_units - 6);
-		GLES2::Texture *light_tex = GLES2::TextureStorage::get_singleton()->get_texture(p_light->texture);
+		glActiveTexture(GL_TEXTURE0 + config->max_texture_image_units - 6);
+		GLES2::Texture *light_tex = texture_storage->get_texture(p_light->texture);
 
 		if (light_tex) {
 			glBindTexture(GL_TEXTURE_2D, light_tex->tex_id);
 		} else {
 			// Fallback to default white if texture is invalid
-			RID white_tex_rid = GLES2::TextureStorage::get_singleton()->texture_gl_get_default(GLES2::DEFAULT_GL_TEXTURE_WHITE);
-			GLES2::Texture *tex_white = GLES2::TextureStorage::get_singleton()->get_texture(white_tex_rid);
+			RID white_tex_rid = texture_storage->texture_gl_get_default(GLES2::DEFAULT_GL_TEXTURE_WHITE);
+			GLES2::Texture *tex_white = texture_storage->get_texture(white_tex_rid);
 			glBindTexture(GL_TEXTURE_2D, tex_white ? tex_white->tex_id : 0);
 		}
 
@@ -1547,7 +1551,7 @@ void RasterizerCanvasGLES2::canvas_render_items_implementation(Item *p_item_list
 		// Bind the shadow texture
 		state.using_shadow = p_light->use_shadow;
 		if (state.using_shadow && state.shadow_texture != 0) {
-			glActiveTexture(GL_TEXTURE0 + GLES2::Config::get_singleton()->max_texture_image_units - 5);
+			glActiveTexture(GL_TEXTURE0 + config->max_texture_image_units - 5);
 			glBindTexture(GL_TEXTURE_2D, state.shadow_texture);
 
 			// Standard nearest filter for the RGBA depth map
@@ -1561,8 +1565,9 @@ void RasterizerCanvasGLES2::canvas_render_items_implementation(Item *p_item_list
 
 	// Bind default white texture to texture unit 0
 	glActiveTexture(GL_TEXTURE0);
-	RID white_tex_rid = GLES2::TextureStorage::get_singleton()->texture_gl_get_default(GLES2::DEFAULT_GL_TEXTURE_WHITE);
-	GLES2::Texture *tex_white = GLES2::TextureStorage::get_singleton()->get_texture(white_tex_rid);
+
+	RID white_tex_rid = texture_storage->texture_gl_get_default(GLES2::DEFAULT_GL_TEXTURE_WHITE);
+	GLES2::Texture *tex_white = texture_storage->get_texture(white_tex_rid);
 
 	if (tex_white) {
 		glBindTexture(GL_TEXTURE_2D, tex_white->tex_id);
@@ -1626,7 +1631,7 @@ void RasterizerCanvasGLES2::canvas_render_items_implementation(Item *p_item_list
 							time_used = true;
 						}
 						if (shader_data->uses_screen_texture) {
-							GLES2::TextureStorage::get_singleton()->render_target_copy_to_back_buffer(state.render_target, Rect2i(), shader_data->uses_screen_texture_mipmaps);
+							texture_storage->render_target_copy_to_back_buffer(state.render_target, Rect2i(), shader_data->uses_screen_texture_mipmaps);
 						}
 					}
 				}
@@ -1645,10 +1650,30 @@ void RasterizerCanvasGLES2::canvas_render_items_implementation(Item *p_item_list
 		// Legacy / Immediate render fallback
 		Item *ci = p_item_list;
 		Item *canvas_group_owner = nullptr;
-		bool backbuffer_cleared = false;
 
 		while (ci) {
 			bool skip_item = false;
+			bool backbuffer_cleared = false;
+
+			if (ci->skeleton.is_valid()) {
+				const Item::Command *c = ci->commands;
+
+				while (c) {
+					if (c->type == Item::Command::TYPE_MESH) {
+						const Item::CommandMesh *cm = static_cast<const Item::CommandMesh *>(c);
+						Transform2D canvas_transform_inverse = p_base_transform.affine_inverse();
+	
+						if (cm->mesh_instance.is_valid()) {
+							mesh_storage->mesh_instance_check_for_update(cm->mesh_instance);
+							mesh_storage->mesh_instance_set_canvas_item_transform(
+								cm->mesh_instance,
+								canvas_transform_inverse * ci->final_transform
+							);
+						}
+					}
+					c = c->next;
+				}
+			}
 
 			if (ci->canvas_group_owner != nullptr) {
 				if (canvas_group_owner == nullptr) {
@@ -1725,6 +1750,26 @@ void RasterizerCanvasGLES2::canvas_render_items_implementation(Item *p_item_list
 				ci->use_canvas_group = true;
 			} else {
 				ci->use_canvas_group = false;
+			}
+
+			if (
+				ci->skeleton.is_valid() &&
+				GLES2::MeshStorage::get_singleton()->owns_skeleton(ci->skeleton)
+			) {
+				GLES2::Skeleton *skeleton = GLES2::MeshStorage::get_singleton()->get_skeleton(ci->skeleton);
+				if (skeleton && skeleton->use_2d) {
+					mesh_storage->update_mesh_instances();
+				}
+
+				state.using_skeleton = false;
+				if (state.specialization & CanvasShaderGLES2::USE_SKELETON) {
+					state.specialization &= ~CanvasShaderGLES2::USE_SKELETON;
+				}
+			} else {
+				state.using_skeleton = false;
+				if (state.specialization & CanvasShaderGLES2::USE_SKELETON) {
+					state.specialization &= ~CanvasShaderGLES2::USE_SKELETON;
+				}
 			}
 
 			if (skip_item) {
@@ -2023,16 +2068,16 @@ void RasterizerCanvasGLES2::_batch_render_generic(const Batch &p_batch, GLES2::C
 	}
 
 	if (use_large_verts) {
-		glEnableVertexAttribArray(RS::ARRAY_CUSTOM0); // attrib:6 is translate_attrib
-		glVertexAttribPointer(RS::ARRAY_CUSTOM0, 2, GL_FLOAT, GL_FALSE, sizeof_vert, (const void *)(pointer_offset + offsetof(BatchVertexLarge, transform)));
+		glEnableVertexAttribArray(RS::ARRAY_BONES); // attrib:6 is translate_attrib
+		glVertexAttribPointer(RS::ARRAY_BONES, 2, GL_FLOAT, GL_FALSE, sizeof_vert, (const void *)(pointer_offset + offsetof(BatchVertexLarge, transform)));
 
-		glEnableVertexAttribArray(RS::ARRAY_CUSTOM1); // attrib:7 is basis_attrib
-		glVertexAttribPointer(RS::ARRAY_CUSTOM1, 4, GL_FLOAT, GL_FALSE, sizeof_vert, (const void *)(pointer_offset + offsetof(BatchVertexLarge, transform) + (sizeof(float) * 2)));
+		glEnableVertexAttribArray(RS::ARRAY_WEIGHTS); // attrib:7 is basis_attrib
+		glVertexAttribPointer(RS::ARRAY_WEIGHTS, 4, GL_FLOAT, GL_FALSE, sizeof_vert, (const void *)(pointer_offset + offsetof(BatchVertexLarge, transform) + (sizeof(float) * 2)));
 	} else {
-		glDisableVertexAttribArray(RS::ARRAY_CUSTOM0);
-		glVertexAttrib2f(RS::ARRAY_CUSTOM0, 0.0f, 0.0f);
-		glDisableVertexAttribArray(RS::ARRAY_CUSTOM1);
-		glVertexAttrib4f(RS::ARRAY_CUSTOM1, 1.0f, 0.0f, 0.0f, 1.0f);
+		glDisableVertexAttribArray(RS::ARRAY_BONES);
+		glVertexAttrib2f(RS::ARRAY_BONES, 0.0f, 0.0f);
+		glDisableVertexAttribArray(RS::ARRAY_WEIGHTS);
+		glVertexAttrib4f(RS::ARRAY_WEIGHTS, 1.0f, 0.0f, 0.0f, 1.0f);
 	}
 
 	GL_CHECK_ERROR("GLES2::Canvas::batch_render_generic: setup client states");
@@ -2070,8 +2115,8 @@ void RasterizerCanvasGLES2::_batch_render_generic(const Batch &p_batch, GLES2::C
 	glDisableVertexAttribArray(RS::ARRAY_COLOR);
 	glDisableVertexAttribArray(RS::ARRAY_TANGENT);
 	glDisableVertexAttribArray(RS::ARRAY_TEX_UV2);
-	glDisableVertexAttribArray(RS::ARRAY_CUSTOM0);
-	glDisableVertexAttribArray(RS::ARRAY_CUSTOM1);
+	glDisableVertexAttribArray(RS::ARRAY_BONES);
+	glDisableVertexAttribArray(RS::ARRAY_WEIGHTS);
 	glVertexAttrib4f(RS::ARRAY_COLOR, 1.0f, 1.0f, 1.0f, 1.0f);
 	glBindBuffer(GL_ARRAY_BUFFER, 0);
 	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
@@ -2162,6 +2207,25 @@ void RasterizerCanvasGLES2::render_batches(Item::Command *const *p_commands, Ite
 			case BatcherEnums::BT_DEFAULT: {
 				Transform2D prev_matrix = state.uniforms.modelview_matrix;
 				Color prev_modulate = state.uniforms.final_modulate;
+
+				bool prev_using_skeleton = state.using_skeleton;
+				GLES2::Skeleton *skeleton = nullptr;
+
+				if (
+					batch.item &&
+					batch.item->skeleton.is_valid() &&
+					GLES2::MeshStorage::get_singleton()->owns_skeleton(batch.item->skeleton)
+				) {
+					skeleton = GLES2::MeshStorage::get_singleton()->get_skeleton(batch.item->skeleton);
+					if (skeleton && skeleton->use_2d) {
+						// CPU skinning is used
+					} else {
+						skeleton = nullptr;
+					}
+				}
+
+				state.using_skeleton = false;
+				state.specialization &= ~CanvasShaderGLES2::USE_SKELETON;
 
 				if (batch.item) {
 					state.uniforms.modelview_matrix = batch.item->final_transform;
@@ -2815,23 +2879,51 @@ void RasterizerCanvasGLES2::render_batches(Item::Command *const *p_commands, Ite
 
 										for (int k = 0; k < maximum_attributes; k++) {
 											if (v->attribs[k].enabled) {
-												if (k == RS::ARRAY_VERTEX) {
-													glBindBuffer(GL_ARRAY_BUFFER, s->vertex_buffer);
+												if (k <= RS::ARRAY_TANGENT) {
+													bool instance_bound = false;
+													if (mesh_cmd->mesh_instance.is_valid()) {
+														GLES2::MeshInstance *mi = GLES2::MeshStorage::get_singleton()->get_mesh_instance(mesh_cmd->mesh_instance);
+														if (mi && mi->surfaces.size() > j && mi->surfaces[j].vertex_buffer != 0) {
+															glBindBuffer(GL_ARRAY_BUFFER, mi->surfaces[j].vertex_buffer);
+
+															if (k == RS::ARRAY_VERTEX) {
+																glEnableVertexAttribArray(k);
+																glVertexAttribPointer(k, mi->surfaces[j].vertex_size_cache, GL_FLOAT, GL_FALSE, mi->surfaces[j].vertex_stride_cache, nullptr);
+															} else if (k == RS::ARRAY_NORMAL) {
+																glEnableVertexAttribArray(k);
+																glVertexAttribPointer(k, 4, GL_FLOAT, GL_FALSE, mi->surfaces[j].vertex_stride_cache, (const void *)(uintptr_t)mi->surfaces[j].vertex_normal_offset_cache);
+															} else if (k == RS::ARRAY_TANGENT) {
+																glEnableVertexAttribArray(k);
+																glVertexAttribPointer(k, 4, GL_FLOAT, GL_FALSE, mi->surfaces[j].vertex_stride_cache, (const void *)(uintptr_t)mi->surfaces[j].vertex_tangent_offset_cache);
+															}
+															instance_bound = true;
+														}
+													}
+
+													if (!instance_bound) {
+														glBindBuffer(GL_ARRAY_BUFFER, s->vertex_buffer);
+														GLboolean normalize = v->attribs[k].normalized;
+														glEnableVertexAttribArray(k);
+														glVertexAttribPointer(k, v->attribs[k].size, v->attribs[k].type, normalize, v->attribs[k].stride, (const void *)(uintptr_t)v->attribs[k].offset);
+													}
+												} else if (k >= RS::ARRAY_CUSTOM0 && k <= RS::ARRAY_CUSTOM1) {
+													glBindBuffer(GL_ARRAY_BUFFER, s->skin_buffer);
+													GLboolean normalize = v->attribs[k].normalized;
+													glEnableVertexAttribArray(k);
+													glVertexAttribPointer(k, v->attribs[k].size, v->attribs[k].type, normalize, v->attribs[k].stride, (const void *)(uintptr_t)v->attribs[k].offset);
 												} else {
 													glBindBuffer(GL_ARRAY_BUFFER, s->attribute_buffer);
+													GLboolean normalize = v->attribs[k].normalized;
+													if (k == RS::ARRAY_COLOR && v->attribs[k].type == GL_UNSIGNED_BYTE) {
+														normalize = GL_TRUE;
+													}
+													glEnableVertexAttribArray(k);
+													glVertexAttribPointer(k, v->attribs[k].size, v->attribs[k].type, normalize, v->attribs[k].stride, (const void *)(uintptr_t)v->attribs[k].offset);
 												}
-
-												GLboolean normalize = v->attribs[k].normalized;
-												if (k == RS::ARRAY_COLOR && v->attribs[k].type == GL_UNSIGNED_BYTE) {
-													normalize = GL_TRUE;
-												}
-
-												glEnableVertexAttribArray(k);
-												glVertexAttribPointer(k, v->attribs[k].size, v->attribs[k].type, normalize, v->attribs[k].stride, (const void *)(uintptr_t)v->attribs[k].offset);
 											} else {
 												glDisableVertexAttribArray(k);
 												if (k == RS::ARRAY_COLOR) {
-													glVertexAttrib4f(k, 1.0f, 1.0f, 1.0f, 1.0f);
+													glVertexAttrib4f(RS::ARRAY_COLOR, 1.0f, 1.0f, 1.0f, 1.0f);
 												}
 											}
 										}
@@ -2901,6 +2993,11 @@ void RasterizerCanvasGLES2::render_batches(Item::Command *const *p_commands, Ite
 				state.uniforms.modelview_matrix = prev_matrix;
 				state.uniforms.extra_matrix = base_extra;
 				state.uniforms.final_modulate = prev_modulate;
+
+				state.using_skeleton = prev_using_skeleton;
+				if (!prev_using_skeleton) {
+					state.specialization &= ~CanvasShaderGLES2::USE_SKELETON;
+				}
 			} break;
 
 			case BatcherEnums::BT_RECT:
@@ -3073,8 +3170,11 @@ void RasterizerCanvasGLES2::_legacy_draw_polygon(Item::CommandPolygon *p_poly, G
 	bool use_vertex_colors = pd.colors.size() > 1;
 	uint32_t colors_size = use_vertex_colors ? (points_count * sizeof(Color)) : 0;
 
+	uint32_t bones_size = pd.bones.size() * sizeof(float);
+	uint32_t weights_size = pd.weights.size() * sizeof(float);
+
 	// Orphan the buffer and upload new data
-	uint32_t total_size = points_size + uvs_size + colors_size;
+	uint32_t total_size = points_size + uvs_size + colors_size + bones_size + weights_size;
 	if (total_size > data.polygon_buffer_size) {
 		data.polygon_buffer_size = next_power_of_2(total_size);
 	}
@@ -3406,6 +3506,8 @@ RendererCanvasRender::PolygonID RasterizerCanvasGLES2::request_polygon(const Vec
 	pd.points = p_points;
 	pd.colors = p_colors;
 	pd.uvs = p_uvs;
+	pd.bones = p_bones;
+	pd.weights = p_weights;
 
 	polygon_cache[id] = pd;
 
