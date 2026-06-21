@@ -655,7 +655,7 @@ void TextureStorage::texture_proxy_initialize(RID p_texture, RID p_base) {
 }
 
 RID TextureStorage::texture_create_from_native_handle(RS::TextureType p_type, Image::Format p_format, uint64_t p_native_handle, int p_width, int p_height, int p_depth, int p_layers, RS::TextureLayeredType p_layered_type) {
-    return RID();
+	return RID();
 }
 
 void TextureStorage::texture_2d_update(RID p_texture, const Ref<Image> &p_image, int p_layer) {
@@ -903,7 +903,7 @@ Ref<Image> TextureStorage::texture_2d_get(RID p_texture) const {
 }
 
 Ref<Image> TextureStorage::texture_2d_layer_get(RID p_texture, int p_layer) const {
-    return Ref<Image>();
+	return Ref<Image>();
 }
 
 Vector<Ref<Image>> TextureStorage::_texture_3d_read_framebuffer(GLES2::Texture *p_texture) const {
@@ -974,7 +974,7 @@ void TextureStorage::texture_set_path(RID p_texture, const String &p_path) {
 }
 
 String TextureStorage::texture_get_path(RID p_texture) const {
-    return String();
+	return String();
 }
 
 void TextureStorage::texture_set_detect_3d_callback(RID p_texture, RS::TextureDetectCallback p_callback, void *p_userdata) {
@@ -1013,7 +1013,7 @@ RID TextureStorage::texture_get_rd_texture(RID p_texture, bool p_srgb) const {
 }
 
 uint64_t TextureStorage::texture_get_native_handle(RID p_texture, bool p_srgb) const {
-    return 0;
+	return 0;
 }
 
 void TextureStorage::texture_set_data(RID p_texture, const Ref<Image> &p_image, int p_layer) {
@@ -1070,46 +1070,35 @@ void TextureStorage::_texture_set_data(RID p_texture, const Ref<Image> &p_image,
 
 		if (img_format == Image::FORMAT_DXT1) {
 			for (int i = 0; i < total_size; i += 8) {
-				uint16_t *c0 = (uint16_t *)&write_ptr[i];
-				uint16_t *c1 = (uint16_t *)&write_ptr[i + 2];
-				uint32_t *idx = (uint32_t *)&write_ptr[i + 4];
-				*c0 = BSWAP16(*c0);
-				*c1 = BSWAP16(*c1);
-				*idx = BSWAP32(*idx);
+				unaligned_write<uint16_t>(&write_ptr[i], BSWAP16(unaligned_read<uint16_t>(&write_ptr[i])));
+				unaligned_write<uint16_t>(&write_ptr[i + 2], BSWAP16(unaligned_read<uint16_t>(&write_ptr[i + 2])));
+				unaligned_write<uint32_t>(&write_ptr[i + 4], BSWAP32(unaligned_read<uint32_t>(&write_ptr[i + 4])));
 			}
 		} else if (img_format == Image::FORMAT_DXT3) {
 			for (int i = 0; i < total_size; i += 16) {
 				// DXT3 Alpha is 4x 16-bit words
-				uint16_t *a = (uint16_t *)&write_ptr[i];
 				for (int j = 0; j < 4; j++) {
-					a[j] = BSWAP16(a[j]);
+					unaligned_write<uint16_t>(&write_ptr[i + j * 2], BSWAP16(unaligned_read<uint16_t>(&write_ptr[i + j * 2])));
 				}
 
 				// DXT3 Color block
-				uint16_t *c0 = (uint16_t *)&write_ptr[i + 8];
-				uint16_t *c1 = (uint16_t *)&write_ptr[i + 10];
-				uint32_t *idx = (uint32_t *)&write_ptr[i + 12];
-				*c0 = BSWAP16(*c0);
-				*c1 = BSWAP16(*c1);
-				*idx = BSWAP32(*idx);
+				unaligned_write<uint16_t>(&write_ptr[i + 8], BSWAP16(unaligned_read<uint16_t>(&write_ptr[i + 8])));
+				unaligned_write<uint16_t>(&write_ptr[i + 10], BSWAP16(unaligned_read<uint16_t>(&write_ptr[i + 10])));
+				unaligned_write<uint32_t>(&write_ptr[i + 12], BSWAP32(unaligned_read<uint32_t>(&write_ptr[i + 12])));
 			}
 		} else if (img_format == Image::FORMAT_DXT5) {
 			for (int i = 0; i < total_size; i += 16) {
 				// The Alpha block (bytes 0-7) consists of 2 single-byte alphas and a 48-bit index.
 				// Big Endian GPUs universally expect these 8 bytes
 				// to be swapped as four 16-bit words.
-				uint16_t *a = (uint16_t *)&write_ptr[i];
 				for (int j = 0; j < 4; j++) {
-					a[j] = BSWAP16(a[j]);
+					unaligned_write<uint16_t>(&write_ptr[i + j * 2], BSWAP16(unaligned_read<uint16_t>(&write_ptr[i + j * 2])));
 				}
 
 				// The color block (bytes 8-15) is identical to DXT1
-				uint16_t *c0 = (uint16_t *)&write_ptr[i + 8];
-				uint16_t *c1 = (uint16_t *)&write_ptr[i + 10];
-				uint32_t *idx = (uint32_t *)&write_ptr[i + 12];
-				*c0 = BSWAP16(*c0);
-				*c1 = BSWAP16(*c1);
-				*idx = BSWAP32(*idx);
+				unaligned_write<uint16_t>(&write_ptr[i + 8], BSWAP16(unaligned_read<uint16_t>(&write_ptr[i + 8])));
+				unaligned_write<uint16_t>(&write_ptr[i + 10], BSWAP16(unaligned_read<uint16_t>(&write_ptr[i + 10])));
+				unaligned_write<uint32_t>(&write_ptr[i + 12], BSWAP32(unaligned_read<uint32_t>(&write_ptr[i + 12])));
 			}
 		}
 		// Re-assign read_ptr in case calling ptrw()
@@ -1784,7 +1773,7 @@ void TextureStorage::render_target_set_render_region(RID p_render_target, const 
 }
 
 Rect2i TextureStorage::render_target_get_render_region(RID p_render_target) const {
-    return Rect2i();
+	return Rect2i();
 }
 
 RID TextureStorage::render_target_get_texture(RID p_render_target) {
@@ -1865,7 +1854,7 @@ void TextureStorage::render_target_set_use_hdr(RID p_render_target, bool p_use_h
 }
 
 bool TextureStorage::render_target_is_using_hdr(RID p_render_target) const {
-    return false;
+	return false;
 }
 
 GLuint TextureStorage::render_target_get_color_internal_format(RID p_render_target) const {

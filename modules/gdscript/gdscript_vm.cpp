@@ -765,19 +765,14 @@ Variant GDScriptFunction::call(GDScriptInstance *p_instance, const Variant **p_a
 						if (_code_ptr[ip + 5] == 0) {
 							_code_ptr[ip + 5] = actual_signature;
 							_code_ptr[ip + 6] = static_cast<int>(ret_type);
-
-							// Use memcpy to write unaligned 64-bit function pointer
-							memcpy(&_code_ptr[ip + 7], &op_func, sizeof(Variant::ValidatedOperatorEvaluator));
+							unaligned_write<Variant::ValidatedOperatorEvaluator>(&_code_ptr[ip + 7], op_func);
 						}
 					}
 					initializer_mutex.unlock();
 				} else if (likely(op_signature == actual_signature)) {
 					// If the signature matches, we can use the optimized path.
 					Variant::Type ret_type = static_cast<Variant::Type>(_code_ptr[ip + 6]);
-
-					// Use memcpy to read unaligned 64-bit function pointer
-					Variant::ValidatedOperatorEvaluator op_func;
-					memcpy(&op_func, &_code_ptr[ip + 7], sizeof(Variant::ValidatedOperatorEvaluator));
+					Variant::ValidatedOperatorEvaluator op_func = unaligned_read<Variant::ValidatedOperatorEvaluator>(&_code_ptr[ip + 7]);
 
 					// Make sure the return value has the correct type.
 					VariantInternal::initialize(dst, ret_type);

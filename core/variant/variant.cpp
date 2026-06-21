@@ -3470,9 +3470,9 @@ bool Variant::is_shared() const {
 bool Variant::is_read_only() const {
 	switch (type) {
 		case ARRAY:
-			return reinterpret_cast<const Array *>(_data._mem)->is_read_only();
+			return unaligned_read<const Array *>(_data._mem)->is_read_only();
 		case DICTIONARY:
-			return reinterpret_cast<const Dictionary *>(_data._mem)->is_read_only();
+			return unaligned_read<const Dictionary *>(_data._mem)->is_read_only();
 		default:
 			return false;
 	}

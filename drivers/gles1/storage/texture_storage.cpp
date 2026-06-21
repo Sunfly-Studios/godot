@@ -1171,46 +1171,35 @@ void TextureStorage::_texture_set_data(RID p_texture, const Ref<Image> &p_image,
 
 		if (img_format == Image::FORMAT_DXT1) {
 			for (int i = 0; i < total_size; i += 8) {
-				uint16_t *c0 = (uint16_t *)&write_ptr[i];
-				uint16_t *c1 = (uint16_t *)&write_ptr[i + 2];
-				uint32_t *idx = (uint32_t *)&write_ptr[i + 4];
-				*c0 = BSWAP16(*c0);
-				*c1 = BSWAP16(*c1);
-				*idx = BSWAP32(*idx);
+				unaligned_write<uint16_t>(&write_ptr[i], BSWAP16(unaligned_read<uint16_t>(&write_ptr[i])));
+				unaligned_write<uint16_t>(&write_ptr[i + 2], BSWAP16(unaligned_read<uint16_t>(&write_ptr[i + 2])));
+				unaligned_write<uint32_t>(&write_ptr[i + 4], BSWAP32(unaligned_read<uint32_t>(&write_ptr[i + 4])));
 			}
 		} else if (img_format == Image::FORMAT_DXT3) {
 			for (int i = 0; i < total_size; i += 16) {
 				// DXT3 Alpha is 4x 16-bit words
-				uint16_t *a = (uint16_t *)&write_ptr[i];
 				for (int j = 0; j < 4; j++) {
-					a[j] = BSWAP16(a[j]);
+					unaligned_write<uint16_t>(&write_ptr[i + j * 2], BSWAP16(unaligned_read<uint16_t>(&write_ptr[i + j * 2])));
 				}
 
 				// DXT3 Color block
-				uint16_t *c0 = (uint16_t *)&write_ptr[i + 8];
-				uint16_t *c1 = (uint16_t *)&write_ptr[i + 10];
-				uint32_t *idx = (uint32_t *)&write_ptr[i + 12];
-				*c0 = BSWAP16(*c0);
-				*c1 = BSWAP16(*c1);
-				*idx = BSWAP32(*idx);
+				unaligned_write<uint16_t>(&write_ptr[i + 8], BSWAP16(unaligned_read<uint16_t>(&write_ptr[i + 8])));
+				unaligned_write<uint16_t>(&write_ptr[i + 10], BSWAP16(unaligned_read<uint16_t>(&write_ptr[i + 10])));
+				unaligned_write<uint32_t>(&write_ptr[i + 12], BSWAP32(unaligned_read<uint32_t>(&write_ptr[i + 12])));
 			}
 		} else if (img_format == Image::FORMAT_DXT5) {
 			for (int i = 0; i < total_size; i += 16) {
 				// The Alpha block (bytes 0-7) consists of 2 single-byte alphas and a 48-bit index.
 				// Big Endian GPUs universally expect these 8 bytes
 				// to be swapped as four 16-bit words.
-				uint16_t *a = (uint16_t *)&write_ptr[i];
 				for (int j = 0; j < 4; j++) {
-					a[j] = BSWAP16(a[j]);
+					unaligned_write<uint16_t>(&write_ptr[i + j * 2], BSWAP16(unaligned_read<uint16_t>(&write_ptr[i + j * 2])));
 				}
 
 				// The color block (bytes 8-15) is identical to DXT1
-				uint16_t *c0 = (uint16_t *)&write_ptr[i + 8];
-				uint16_t *c1 = (uint16_t *)&write_ptr[i + 10];
-				uint32_t *idx = (uint32_t *)&write_ptr[i + 12];
-				*c0 = BSWAP16(*c0);
-				*c1 = BSWAP16(*c1);
-				*idx = BSWAP32(*idx);
+				unaligned_write<uint16_t>(&write_ptr[i + 8], BSWAP16(unaligned_read<uint16_t>(&write_ptr[i + 8])));
+				unaligned_write<uint16_t>(&write_ptr[i + 10], BSWAP16(unaligned_read<uint16_t>(&write_ptr[i + 10])));
+				unaligned_write<uint32_t>(&write_ptr[i + 12], BSWAP32(unaligned_read<uint32_t>(&write_ptr[i + 12])));
 			}
 		}
 		// Re-assign read_ptr in case calling ptrw()
