@@ -4120,7 +4120,7 @@ DisplayServerMacOS::DisplayServerMacOS(const String &p_rendering_driver, WindowM
 	}
 #endif
 
-// Init context and rendering device multi-layer fallback
+	// Init context and rendering device multi-layer fallback
 	bool multilayer_fallback = GLOBAL_GET("rendering/rendering_device/driver_fallback_multilayer");
 	bool fb_angle3 = GLOBAL_GET("rendering/gl_compatibility/fallback_to_angle");
 	bool fb_angle2 = GLOBAL_GET("rendering/gl_legacy/fallback_to_angle");
@@ -4130,16 +4130,20 @@ DisplayServerMacOS::DisplayServerMacOS(const String &p_rendering_driver, WindowM
 
 	if (multilayer_fallback) {
 		if (rendering_driver.begins_with("opengl3")) {
+#ifdef GLES3_ENABLED
 			driver_attempts.push_back("opengl3");
+#endif
 #ifdef GLES2_ENABLED
 			driver_attempts.push_back("opengl2");
 #endif
 #ifdef GLES1_ENABLED
 			driver_attempts.push_back("opengl1");
 #endif
+#ifdef GLES3_ENABLED
 			if (fb_angle3) {
 				driver_attempts.push_back("opengl3_angle");
 			}
+#endif
 #ifdef GLES2_ENABLED
 			if (fb_angle2) {
 				driver_attempts.push_back("opengl2_angle");
@@ -4157,7 +4161,9 @@ DisplayServerMacOS::DisplayServerMacOS(const String &p_rendering_driver, WindowM
 #ifdef GLES1_ENABLED
 			driver_attempts.push_back("opengl1");
 #endif
+#ifdef GLES3_ENABLED
 			driver_attempts.push_back("opengl3");
+#endif
 #ifdef GLES2_ENABLED
 			if (fb_angle2) {
 				driver_attempts.push_back("opengl2_angle");
@@ -4168,9 +4174,11 @@ DisplayServerMacOS::DisplayServerMacOS(const String &p_rendering_driver, WindowM
 				driver_attempts.push_back("opengl1_angle");
 			}
 #endif
+#ifdef GLES3_ENABLED
 			if (fb_angle3) {
 				driver_attempts.push_back("opengl3_angle");
 			}
+#endif
 		} else if (rendering_driver.begins_with("opengl1")) {
 #ifdef GLES1_ENABLED
 			driver_attempts.push_back("opengl1");
@@ -4178,7 +4186,9 @@ DisplayServerMacOS::DisplayServerMacOS(const String &p_rendering_driver, WindowM
 #ifdef GLES2_ENABLED
 			driver_attempts.push_back("opengl2");
 #endif
+#ifdef GLES3_ENABLED
 			driver_attempts.push_back("opengl3");
+#endif
 #ifdef GLES1_ENABLED
 			if (fb_angle1) {
 				driver_attempts.push_back("opengl1_angle");
@@ -4189,28 +4199,41 @@ DisplayServerMacOS::DisplayServerMacOS(const String &p_rendering_driver, WindowM
 				driver_attempts.push_back("opengl2_angle");
 			}
 #endif
+#ifdef GLES3_ENABLED
 			if (fb_angle3) {
 				driver_attempts.push_back("opengl3_angle");
 			}
+#endif
 		} else {
 			driver_attempts.push_back(rendering_driver);
 		}
 	} else {
 		// Use only the one the game requested, plus its direct ANGLE fallback
 		driver_attempts.push_back(rendering_driver);
+		
+#ifdef GLES3_ENABLED
 		if (rendering_driver == "opengl3") {
 			if (fb_angle3) {
 				driver_attempts.push_back("opengl3_angle");
 			}
-		} else if (rendering_driver == "opengl2") {
+		}
+#endif
+
+#ifdef GLES2_ENABLED
+		if (rendering_driver == "opengl2") {
 			if (fb_angle2) {
 				driver_attempts.push_back("opengl2_angle");
 			}
-		} else if (rendering_driver == "opengl1") {
+		}
+#endif
+
+#ifdef GLES1_ENABLED
+		if (rendering_driver == "opengl1") {
 			if (fb_angle1) {
 				driver_attempts.push_back("opengl1_angle");
 			}
 		}
+#endif
 	}
 	
 	String requested_driver = rendering_driver;
@@ -4347,36 +4370,47 @@ DisplayServerMacOS::DisplayServerMacOS(const String &p_rendering_driver, WindowM
 			if (driver_attempts[attempt_idx] != requested_driver) {
 				// Set the fallback to the driver that won the battle.
 				OS::get_singleton()->set_current_rendering_driver_name(driver_attempts[attempt_idx], OS::RENDERING_SOURCE_FALLBACK);
-				
-				String req_name;
-				String req_rendering_method;
-				String fallback_name;
-				String fallback_rendering_method;
+
+				String req_api;
+				String req_method;
+				String req_type;
 
 				if (requested_driver.begins_with("opengl3")) {
-					req_name = "GLES3";
-					req_rendering_method = "Compatibility";
+					req_api = "GLES3";
+					req_method = "Compatibility";
 				} else if (requested_driver.begins_with("opengl2")) {
-					req_name = "GLES2";
-					req_rendering_method = "Legacy";
+					req_api = "GLES2";
+					req_method = "Legacy";
 				} else {
-					req_name = "GLES1";
-					req_rendering_method = "Classic";
+					req_api = "GLES1";
+					req_method = "Classic";
 				}
 
-				if (driver_attempts[attempt_idx].begins_with("opengl3")) {
-					fallback_name = "GLES3";
-					fallback_rendering_method = "Compatibility";
-				} else if (driver_attempts[attempt_idx].begins_with("opengl2")) {
-					fallback_name = "GLES2";
-					fallback_rendering_method = "Legacy";
+				if (requested_driver.ends_with("_angle")) {
+					req_type = "ANGLE";
 				} else {
-					fallback_name = "GLES1";
-					fallback_rendering_method = "Classic";
+					req_type = "Native";
 				}
-				
-				WARN_PRINT(vformat("The %s renderer (%s) could not be initialized. Using the %s renderer (%s), visuals may be affected.", 
-					req_rendering_method, req_name, fallback_rendering_method, fallback_name));
+
+				String fallback_method;
+				String fallback_type;
+
+				if (driver_attempts[attempt_idx].begins_with("opengl3")) {
+					fallback_method = "Compatibility";
+				} else if (driver_attempts[attempt_idx].begins_with("opengl2")) {
+					fallback_method = "Legacy";
+				} else {
+					fallback_method = "Classic";
+				}
+
+				if (driver_attempts[attempt_idx].ends_with("_angle")) {
+					fallback_type = "ANGLE";
+				} else {
+					fallback_type = "native";
+				}
+
+				WARN_PRINT(vformat("The %s driver for the %s renderer (%s) could not be initialized. Using the %s driver for the %s renderer, visuals may be affected.",
+						req_type, req_method, req_api, fallback_type, fallback_method));
 			}
 			break;
 		}

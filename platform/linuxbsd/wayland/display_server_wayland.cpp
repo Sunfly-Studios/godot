@@ -1952,35 +1952,46 @@ DisplayServerWayland::DisplayServerWayland(const String &p_rendering_driver, Win
 				// Set the fallback to the driver that won the battle.
 				OS::get_singleton()->set_current_rendering_driver_name(driver_attempts[attempt_idx], OS::RENDERING_SOURCE_FALLBACK);
 
-				String req_name;
-				String req_rendering_method;
-				String fallback_name;
-				String fallback_rendering_method;
+				String req_api;
+				String req_method;
+				String req_type;
 
 				if (requested_driver.begins_with("opengl3")) {
-					req_name = "GLES3";
-					req_rendering_method = "Compatibility";
+					req_api = "GLES3";
+					req_method = "Compatibility";
 				} else if (requested_driver.begins_with("opengl2")) {
-					req_name = "GLES2";
-					req_rendering_method = "Legacy";
+					req_api = "GLES2";
+					req_method = "Legacy";
 				} else {
-					req_name = "GLES1";
-					req_rendering_method = "Classic";
+					req_api = "GLES1";
+					req_method = "Classic";
 				}
 
-				if (driver_attempts[attempt_idx].begins_with("opengl3")) {
-					fallback_name = "GLES3";
-					fallback_rendering_method = "Compatibility";
-				} else if (driver_attempts[attempt_idx].begins_with("opengl2")) {
-					fallback_name = "GLES2";
-					fallback_rendering_method = "Legacy";
+				if (requested_driver.ends_with("_es")) {
+					req_type = "ES";
 				} else {
-					fallback_name = "GLES1";
-					fallback_rendering_method = "Classic";
+					req_type = "Native";
 				}
-				
-				WARN_PRINT(vformat("The %s renderer (%s) could not be initialized. Using the %s renderer (%s), visuals may be affected.", 
-					req_rendering_method, req_name, fallback_rendering_method, fallback_name));
+
+				String fallback_method;
+				String fallback_type;
+
+				if (driver_attempts[attempt_idx].begins_with("opengl3")) {
+					fallback_method = "Compatibility";
+				} else if (driver_attempts[attempt_idx].begins_with("opengl2")) {
+					fallback_method = "Legacy";
+				} else {
+					fallback_method = "Classic";
+				}
+
+				if (driver_attempts[attempt_idx].ends_with("_es")) {
+					fallback_type = "ES";
+				} else {
+					fallback_type = "native";
+				}
+
+				WARN_PRINT(vformat("The %s driver for the %s renderer (%s) could not be initialized. Using the %s driver for the %s renderer, visuals may be affected.",
+						req_type, req_method, req_api, fallback_type, fallback_method));
 			}
 			break;
 		}
