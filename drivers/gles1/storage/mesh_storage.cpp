@@ -50,11 +50,11 @@ MeshStorage::MeshStorage() {
 		skeleton_shader.shader.initialize();
 		skeleton_shader.shader_version = skeleton_shader.shader.version_create();
 	}
-	skeleton_shader.shader.version_free(skeleton_shader.shader_version);
 }
 
 MeshStorage::~MeshStorage() {
 	singleton = nullptr;
+	skeleton_shader.shader.version_free(skeleton_shader.shader_version);
 }
 
 /* MESH API */
