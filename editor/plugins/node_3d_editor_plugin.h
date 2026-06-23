@@ -456,6 +456,9 @@ private:
 	void set_freelook_active(bool active_now);
 	void scale_freelook_speed(real_t scale);
 
+	HashMap<ObjectID, Vector3> _drag_start_positions;
+	void _save_drag_start_positions();
+
 	real_t zoom_indicator_delay;
 	int zoom_failed_attempts_count = 0;
 
