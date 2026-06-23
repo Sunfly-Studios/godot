@@ -1250,7 +1250,6 @@ public class GLSurfaceView extends SurfaceView implements SurfaceHolder.Callback
 				mEglContext = null;
 			}
 			if (mEglDisplay != null) {
-				mEgl.eglTerminate(mEglDisplay);
 				mEglDisplay = null;
 			}
 		}
