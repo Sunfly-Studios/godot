@@ -7261,474 +7261,475 @@ DisplayServerWindows::DisplayServerWindows(const String &p_rendering_driver, Win
 		return;
 	}
 #endif
-	
-	// Init context and rendering device multi-layer fallback
-	bool multilayer_fallback = GLOBAL_GET("rendering/rendering_device/driver_fallback_multilayer");
-	bool fb_angle3 = GLOBAL_GET("rendering/gl_compatibility/fallback_to_angle");
-	bool fb_angle2 = GLOBAL_GET("rendering/gl_legacy/fallback_to_angle");
-	bool fb_angle1 = GLOBAL_GET("rendering/gl_classic/fallback_to_angle");
 
-	Vector<String> driver_attempts;
+	if (rendering_driver.begins_with("opengl")) {
+		// Init context and rendering device multi-layer fallback
+		bool multilayer_fallback = GLOBAL_GET("rendering/rendering_device/driver_fallback_multilayer");
+		bool fb_angle3 = GLOBAL_GET("rendering/gl_compatibility/fallback_to_angle");
+		bool fb_angle2 = GLOBAL_GET("rendering/gl_legacy/fallback_to_angle");
+		bool fb_angle1 = GLOBAL_GET("rendering/gl_classic/fallback_to_angle");
 
-	if (multilayer_fallback) {
-		if (rendering_driver.begins_with("opengl3")) {
+		Vector<String> driver_attempts;
+
+		if (multilayer_fallback) {
+			if (rendering_driver.begins_with("opengl3")) {
 #ifdef GLES3_ENABLED
-			driver_attempts.push_back("opengl3");
+				driver_attempts.push_back("opengl3");
 #endif
 #ifdef GLES2_ENABLED
-			driver_attempts.push_back("opengl2");
+				driver_attempts.push_back("opengl2");
 #endif
 #ifdef GLES1_ENABLED
-			driver_attempts.push_back("opengl1");
+				driver_attempts.push_back("opengl1");
 #endif
 #ifdef GLES3_ENABLED
-			if (fb_angle3) {
-				driver_attempts.push_back("opengl3_angle");
-			}
-#endif
-#ifdef GLES2_ENABLED
-			if (fb_angle2) {
-				driver_attempts.push_back("opengl2_angle");
-			}
-#endif
-#ifdef GLES1_ENABLED
-			if (fb_angle1) {
-				driver_attempts.push_back("opengl1_angle");
-			}
-#endif
-		} else if (rendering_driver.begins_with("opengl2")) {
-#ifdef GLES2_ENABLED
-			driver_attempts.push_back("opengl2");
-#endif
-#ifdef GLES1_ENABLED
-			driver_attempts.push_back("opengl1");
-#endif
-#ifdef GLES3_ENABLED
-			driver_attempts.push_back("opengl3");
-#endif
-#ifdef GLES2_ENABLED
-			if (fb_angle2) {
-				driver_attempts.push_back("opengl2_angle");
-			}
-#endif
-#ifdef GLES1_ENABLED
-			if (fb_angle1) {
-				driver_attempts.push_back("opengl1_angle");
-			}
-#endif
-#ifdef GLES3_ENABLED
-			if (fb_angle3) {
-				driver_attempts.push_back("opengl3_angle");
-			}
-#endif
-		} else if (rendering_driver.begins_with("opengl1")) {
-#ifdef GLES1_ENABLED
-			driver_attempts.push_back("opengl1");
-#endif
-#ifdef GLES2_ENABLED
-			driver_attempts.push_back("opengl2");
-#endif
-#ifdef GLES3_ENABLED
-			driver_attempts.push_back("opengl3");
-#endif
-#ifdef GLES1_ENABLED
-			if (fb_angle1) {
-				driver_attempts.push_back("opengl1_angle");
-			}
-#endif
-#ifdef GLES2_ENABLED
-			if (fb_angle2) {
-				driver_attempts.push_back("opengl2_angle");
-			}
-#endif
-#ifdef GLES3_ENABLED
-			if (fb_angle3) {
-				driver_attempts.push_back("opengl3_angle");
-			}
-#endif
-		} else {
-			driver_attempts.push_back(rendering_driver);
-		}
-	} else {
-		// Use only the one the game requested, plus its direct ANGLE fallback
-		driver_attempts.push_back(rendering_driver);
-
-#ifdef GLES3_ENABLED
-		if (rendering_driver == "opengl3") {
-			if (fb_angle3) {
-				driver_attempts.push_back("opengl3_angle");
-			}
-		}
-#endif
-
-#ifdef GLES2_ENABLED
-		if (rendering_driver == "opengl2") {
-			if (fb_angle2) {
-				driver_attempts.push_back("opengl2_angle");
-			}
-		}
-#endif
-
-#ifdef GLES1_ENABLED
-		if (rendering_driver == "opengl1") {
-			if (fb_angle1) {
-				driver_attempts.push_back("opengl1_angle");
-			}
-		}
-#endif
-	}
-	
-	String requested_driver = rendering_driver;
-	bool context_initialized = false;
-
-	for (int attempt_idx = 0; attempt_idx < driver_attempts.size(); attempt_idx++) {
-		rendering_driver = driver_attempts[attempt_idx];
-		bool init_failed = false;
-		bool driver_compiled = false;
-		r_error = OK;
-
-		// Inform the OS of the fallback state.
-		if (rendering_driver.begins_with("opengl3")) {
-			OS::get_singleton()->set_current_rendering_method("gl_compatibility", OS::RENDERING_SOURCE_FALLBACK);
-		} else if (rendering_driver.begins_with("opengl2")) {
-			OS::get_singleton()->set_current_rendering_method("gl_legacy", OS::RENDERING_SOURCE_FALLBACK);
-		} else if (rendering_driver.begins_with("opengl1")) {
-			OS::get_singleton()->set_current_rendering_method("gl_classic", OS::RENDERING_SOURCE_FALLBACK);
-		}
-		OS::get_singleton()->set_current_rendering_driver_name(rendering_driver, OS::RENDERING_SOURCE_FALLBACK);
-
-#if defined(GLES3_ENABLED)
-		if (rendering_driver == "opengl3" || rendering_driver == "opengl3_angle") {
-			driver_compiled = true;
-
-			if (rendering_driver == "opengl3") {
-				// There's no native OpenGL drivers on Windows for ARM, always enable fallback.
-				bool is_bad_driver = false;
-				bool show_warning = true;
-
-#if defined(__arm__) || defined(__aarch64__) || defined(_M_ARM) || defined(_M_ARM64)
-				is_bad_driver = true;
-				show_warning = false;
-#else
-				typedef BOOL(WINAPI* IsWow64Process2Ptr)(HANDLE, USHORT*, USHORT*);
-
-				IsWow64Process2Ptr IsWow64Process2 = (IsWow64Process2Ptr)GetProcAddress(GetModuleHandle(TEXT("kernel32")), "IsWow64Process2");
-				if (IsWow64Process2) {
-					USHORT process_arch = 0;
-					USHORT machine_arch = 0;
-					if (!IsWow64Process2(GetCurrentProcess(), &process_arch, &machine_arch)) {
-						machine_arch = 0;
-					}
-					if (machine_arch == 0xAA64) {
-						is_bad_driver = true;
-						show_warning = false;
-					}
+				if (fb_angle3) {
+					driver_attempts.push_back("opengl3_angle");
 				}
 #endif
-				if (!is_bad_driver && fb_angle3) {
-					Dictionary gl_info = detect_wgl(3, 3);
-					constexpr int gl_version = make_gl_version(3, 3);
+#ifdef GLES2_ENABLED
+				if (fb_angle2) {
+					driver_attempts.push_back("opengl2_angle");
+				}
+#endif
+#ifdef GLES1_ENABLED
+				if (fb_angle1) {
+					driver_attempts.push_back("opengl1_angle");
+				}
+#endif
+			} else if (rendering_driver.begins_with("opengl2")) {
+#ifdef GLES2_ENABLED
+				driver_attempts.push_back("opengl2");
+#endif
+#ifdef GLES1_ENABLED
+				driver_attempts.push_back("opengl1");
+#endif
+#ifdef GLES3_ENABLED
+				driver_attempts.push_back("opengl3");
+#endif
+#ifdef GLES2_ENABLED
+				if (fb_angle2) {
+					driver_attempts.push_back("opengl2_angle");
+				}
+#endif
+#ifdef GLES1_ENABLED
+				if (fb_angle1) {
+					driver_attempts.push_back("opengl1_angle");
+				}
+#endif
+#ifdef GLES3_ENABLED
+				if (fb_angle3) {
+					driver_attempts.push_back("opengl3_angle");
+				}
+#endif
+			} else if (rendering_driver.begins_with("opengl1")) {
+#ifdef GLES1_ENABLED
+				driver_attempts.push_back("opengl1");
+#endif
+#ifdef GLES2_ENABLED
+				driver_attempts.push_back("opengl2");
+#endif
+#ifdef GLES3_ENABLED
+				driver_attempts.push_back("opengl3");
+#endif
+#ifdef GLES1_ENABLED
+				if (fb_angle1) {
+					driver_attempts.push_back("opengl1_angle");
+				}
+#endif
+#ifdef GLES2_ENABLED
+				if (fb_angle2) {
+					driver_attempts.push_back("opengl2_angle");
+				}
+#endif
+#ifdef GLES3_ENABLED
+				if (fb_angle3) {
+					driver_attempts.push_back("opengl3_angle");
+				}
+#endif
+			} else {
+				driver_attempts.push_back(rendering_driver);
+			}
+		} else {
+			// Use only the one the game requested, plus its direct ANGLE fallback
+			driver_attempts.push_back(rendering_driver);
 
-					Vector2i device_id = _get_device_ids(gl_info["name"]);
-					Array device_list = GLOBAL_GET("rendering/gl_compatibility/force_angle_on_devices");
-					for (int i = 0; i < device_list.size(); i++) {
-						const Dictionary& device = device_list[i];
-						if (device.has("vendor") && device.has("name")) {
-							const String& vendor = device["vendor"];
-							const String& name = device["name"];
-							if (device_id != Vector2i() && vendor.begins_with("0x") && name.begins_with("0x") && device_id.x == vendor.lstrip("0x").hex_to_int() && device_id.y == name.lstrip("0x").hex_to_int()) {
-								is_bad_driver = true;
-								break;
+#ifdef GLES3_ENABLED
+			if (rendering_driver == "opengl3") {
+				if (fb_angle3) {
+					driver_attempts.push_back("opengl3_angle");
+				}
+			}
+#endif
+
+#ifdef GLES2_ENABLED
+			if (rendering_driver == "opengl2") {
+				if (fb_angle2) {
+					driver_attempts.push_back("opengl2_angle");
+				}
+			}
+#endif
+
+#ifdef GLES1_ENABLED
+			if (rendering_driver == "opengl1") {
+				if (fb_angle1) {
+					driver_attempts.push_back("opengl1_angle");
+				}
+			}
+#endif
+		}
+
+		String requested_driver = rendering_driver;
+		bool opengl_initialized = false;
+
+		for (int attempt_idx = 0; attempt_idx < driver_attempts.size(); attempt_idx++) {
+			rendering_driver = driver_attempts[attempt_idx];
+			bool init_failed = false;
+			bool driver_compiled = false;
+			r_error = OK;
+
+			// Inform the OS of the fallback state.
+			if (rendering_driver.begins_with("opengl3")) {
+				OS::get_singleton()->set_current_rendering_method("gl_compatibility", OS::RENDERING_SOURCE_FALLBACK);
+			} else if (rendering_driver.begins_with("opengl2")) {
+				OS::get_singleton()->set_current_rendering_method("gl_legacy", OS::RENDERING_SOURCE_FALLBACK);
+			} else if (rendering_driver.begins_with("opengl1")) {
+				OS::get_singleton()->set_current_rendering_method("gl_classic", OS::RENDERING_SOURCE_FALLBACK);
+			}
+			OS::get_singleton()->set_current_rendering_driver_name(rendering_driver, OS::RENDERING_SOURCE_FALLBACK);
+
+#if defined(GLES3_ENABLED)
+			if (rendering_driver == "opengl3" || rendering_driver == "opengl3_angle") {
+				driver_compiled = true;
+
+				if (rendering_driver == "opengl3") {
+					// There's no native OpenGL drivers on Windows for ARM, always enable fallback.
+					bool is_bad_driver = false;
+					bool show_warning = true;
+
+#if defined(__arm__) || defined(__aarch64__) || defined(_M_ARM) || defined(_M_ARM64)
+					is_bad_driver = true;
+					show_warning = false;
+#else
+					typedef BOOL(WINAPI * IsWow64Process2Ptr)(HANDLE, USHORT *, USHORT *);
+
+					IsWow64Process2Ptr IsWow64Process2 = (IsWow64Process2Ptr)GetProcAddress(GetModuleHandle(TEXT("kernel32")), "IsWow64Process2");
+					if (IsWow64Process2) {
+						USHORT process_arch = 0;
+						USHORT machine_arch = 0;
+						if (!IsWow64Process2(GetCurrentProcess(), &process_arch, &machine_arch)) {
+							machine_arch = 0;
+						}
+						if (machine_arch == 0xAA64) {
+							is_bad_driver = true;
+							show_warning = false;
+						}
+					}
+#endif
+					if (!is_bad_driver && fb_angle3) {
+						Dictionary gl_info = detect_wgl(3, 3);
+						constexpr int gl_version = make_gl_version(3, 3);
+
+						Vector2i device_id = _get_device_ids(gl_info["name"]);
+						Array device_list = GLOBAL_GET("rendering/gl_compatibility/force_angle_on_devices");
+						for (int i = 0; i < device_list.size(); i++) {
+							const Dictionary &device = device_list[i];
+							if (device.has("vendor") && device.has("name")) {
+								const String &vendor = device["vendor"];
+								const String &name = device["name"];
+								if (device_id != Vector2i() && vendor.begins_with("0x") && name.begins_with("0x") && device_id.x == vendor.lstrip("0x").hex_to_int() && device_id.y == name.lstrip("0x").hex_to_int()) {
+									is_bad_driver = true;
+									break;
+								} else if (gl_info["vendor"].operator String().to_upper().contains(vendor.to_upper()) && (name == "*" || gl_info["name"].operator String().to_upper().contains(name.to_upper()))) {
+									is_bad_driver = true;
+									break;
+								}
 							}
-							else if (gl_info["vendor"].operator String().to_upper().contains(vendor.to_upper()) && (name == "*" || gl_info["name"].operator String().to_upper().contains(name.to_upper()))) {
-								is_bad_driver = true;
-								break;
-							}
+						}
+
+						if (gl_info["version"].operator int() < gl_version) {
+							is_bad_driver = true;
 						}
 					}
 
-					if (gl_info["version"].operator int() < gl_version) {
-						is_bad_driver = true;
+					if (is_bad_driver) {
+						tested_drivers.set_flag(DRIVER_ID_COMPAT_OPENGL3);
+						if (show_warning) {
+							WARN_PRINT("Your video card drivers seem not to support the required OpenGL 3.3 version or are known to have low quality support, skipping native OpenGL 3.");
+						}
+						init_failed = true;
+						r_error = ERR_UNAVAILABLE;
+					} else {
+						gl_manager_native = memnew(GLManagerNative_Windows(3, 3));
+						tested_drivers.set_flag(DRIVER_ID_COMPAT_OPENGL3);
+
+						if (gl_manager_native->initialize() != OK) {
+							memdelete(gl_manager_native);
+							gl_manager_native = nullptr;
+							r_error = ERR_UNAVAILABLE;
+							ERR_PRINT("Could not initialize native OpenGL 3.");
+							init_failed = true;
+						}
 					}
 				}
 
-				if (is_bad_driver) {
-					tested_drivers.set_flag(DRIVER_ID_COMPAT_OPENGL3);
-					if (show_warning) {
-						WARN_PRINT("Your video card drivers seem not to support the required OpenGL 3.3 version or are known to have low quality support, skipping native OpenGL 3.");
-					}
-					init_failed = true;
-					r_error = ERR_UNAVAILABLE;
-				} else {
-					gl_manager_native = memnew(GLManagerNative_Windows(3, 3));
-					tested_drivers.set_flag(DRIVER_ID_COMPAT_OPENGL3);
+				if (rendering_driver == "opengl3_angle") {
+					gl_manager_angle = memnew(GLManagerANGLE_Windows(3, 3));
+					tested_drivers.set_flag(DRIVER_ID_COMPAT_ANGLE_D3D11);
 
-					if (gl_manager_native->initialize() != OK) {
-						memdelete(gl_manager_native);
-						gl_manager_native = nullptr;
+					if (gl_manager_angle->initialize() != OK || gl_manager_angle->open_display(nullptr) != OK) {
+						memdelete(gl_manager_angle);
+						gl_manager_angle = nullptr;
 						r_error = ERR_UNAVAILABLE;
-						ERR_PRINT("Could not initialize native OpenGL 3.");
+						ERR_PRINT("Could not initialize ANGLE OpenGL 3.");
 						init_failed = true;
 					}
 				}
 			}
-
-			if (rendering_driver == "opengl3_angle") {
-				gl_manager_angle = memnew(GLManagerANGLE_Windows(3, 3));
-				tested_drivers.set_flag(DRIVER_ID_COMPAT_ANGLE_D3D11);
-
-				if (gl_manager_angle->initialize() != OK || gl_manager_angle->open_display(nullptr) != OK) {
-					memdelete(gl_manager_angle);
-					gl_manager_angle = nullptr;
-					r_error = ERR_UNAVAILABLE;
-					ERR_PRINT("Could not initialize ANGLE OpenGL 3.");
-					init_failed = true;
-				}
-			}
-		}
 #endif // GLES3_ENABLED
 
 #if defined(GLES2_ENABLED)
-		if (rendering_driver == "opengl2" || rendering_driver == "opengl2_angle") {
-			driver_compiled = true;
+			if (rendering_driver == "opengl2" || rendering_driver == "opengl2_angle") {
+				driver_compiled = true;
 
-			if (rendering_driver == "opengl2") {
-				// There's no native OpenGL drivers on Windows for ARM, always enable fallback.
-				bool is_bad_driver = false;
-				bool show_warning = true;
+				if (rendering_driver == "opengl2") {
+					// There's no native OpenGL drivers on Windows for ARM, always enable fallback.
+					bool is_bad_driver = false;
+					bool show_warning = true;
 
 #if defined(__arm__) || defined(__aarch64__) || defined(_M_ARM) || defined(_M_ARM64)
-				is_bad_driver = true;
-				show_warning = false;
+					is_bad_driver = true;
+					show_warning = false;
 #else
-				typedef BOOL(WINAPI * IsWow64Process2Ptr)(HANDLE, USHORT *, USHORT *);
+					typedef BOOL(WINAPI * IsWow64Process2Ptr)(HANDLE, USHORT *, USHORT *);
 
-				IsWow64Process2Ptr IsWow64Process2 = (IsWow64Process2Ptr)GetProcAddress(GetModuleHandle(TEXT("kernel32")), "IsWow64Process2");
-				if (IsWow64Process2) {
-					USHORT process_arch = 0;
-					USHORT machine_arch = 0;
-					if (!IsWow64Process2(GetCurrentProcess(), &process_arch, &machine_arch)) {
-						machine_arch = 0;
+					IsWow64Process2Ptr IsWow64Process2 = (IsWow64Process2Ptr)GetProcAddress(GetModuleHandle(TEXT("kernel32")), "IsWow64Process2");
+					if (IsWow64Process2) {
+						USHORT process_arch = 0;
+						USHORT machine_arch = 0;
+						if (!IsWow64Process2(GetCurrentProcess(), &process_arch, &machine_arch)) {
+							machine_arch = 0;
+						}
+						if (machine_arch == 0xAA64) {
+							is_bad_driver = true;
+							show_warning = false;
+						}
 					}
-					if (machine_arch == 0xAA64) {
-						is_bad_driver = true;
-						show_warning = false;
-					}
-				}
 #endif
-				if (!is_bad_driver && fb_angle2) {
-					Dictionary gl_info = detect_wgl(2, 1);
-					constexpr int gl_version = make_gl_version(2, 1);
+					if (!is_bad_driver && fb_angle2) {
+						Dictionary gl_info = detect_wgl(2, 1);
+						constexpr int gl_version = make_gl_version(2, 1);
 
-					Vector2i device_id = _get_device_ids(gl_info["name"]);
-					Array device_list = GLOBAL_GET("rendering/gl_legacy/force_angle_on_devices");
-					for (int i = 0; i < device_list.size(); i++) {
-						const Dictionary &device = device_list[i];
-						if (device.has("vendor") && device.has("name")) {
-							const String &vendor = device["vendor"];
-							const String &name = device["name"];
-							if (device_id != Vector2i() && vendor.begins_with("0x") && name.begins_with("0x") && device_id.x == vendor.lstrip("0x").hex_to_int() && device_id.y == name.lstrip("0x").hex_to_int()) {
-								is_bad_driver = true;
-								break;
-							} else if (gl_info["vendor"].operator String().to_upper().contains(vendor.to_upper()) && (name == "*" || gl_info["name"].operator String().to_upper().contains(name.to_upper()))) {
-								is_bad_driver = true;
-								break;
+						Vector2i device_id = _get_device_ids(gl_info["name"]);
+						Array device_list = GLOBAL_GET("rendering/gl_legacy/force_angle_on_devices");
+						for (int i = 0; i < device_list.size(); i++) {
+							const Dictionary &device = device_list[i];
+							if (device.has("vendor") && device.has("name")) {
+								const String &vendor = device["vendor"];
+								const String &name = device["name"];
+								if (device_id != Vector2i() && vendor.begins_with("0x") && name.begins_with("0x") && device_id.x == vendor.lstrip("0x").hex_to_int() && device_id.y == name.lstrip("0x").hex_to_int()) {
+									is_bad_driver = true;
+									break;
+								} else if (gl_info["vendor"].operator String().to_upper().contains(vendor.to_upper()) && (name == "*" || gl_info["name"].operator String().to_upper().contains(name.to_upper()))) {
+									is_bad_driver = true;
+									break;
+								}
 							}
+						}
+
+						if (gl_info["version"].operator int() < gl_version) {
+							is_bad_driver = true;
 						}
 					}
 
-					if (gl_info["version"].operator int() < gl_version) {
-						is_bad_driver = true;
+					if (is_bad_driver) {
+						tested_drivers.set_flag(DRIVER_ID_COMPAT_OPENGL2);
+						if (show_warning) {
+							WARN_PRINT("Your video card drivers seem not to support the required OpenGL 2.1 version or are known to have low quality support, skipping native OpenGL 2.");
+						}
+						init_failed = true;
+						r_error = ERR_UNAVAILABLE;
+					} else {
+						gl_manager_native = memnew(GLManagerNative_Windows(2, 1));
+						tested_drivers.set_flag(DRIVER_ID_COMPAT_OPENGL2);
+
+						if (gl_manager_native->initialize() != OK) {
+							memdelete(gl_manager_native);
+							gl_manager_native = nullptr;
+							r_error = ERR_UNAVAILABLE;
+							ERR_PRINT("Could not initialize native OpenGL 2.");
+							init_failed = true;
+						}
 					}
 				}
 
-				if (is_bad_driver) {
-					tested_drivers.set_flag(DRIVER_ID_COMPAT_OPENGL2);
-					if (show_warning) {
-						WARN_PRINT("Your video card drivers seem not to support the required OpenGL 2.1 version or are known to have low quality support, skipping native OpenGL 2.");
-					}
-					init_failed = true;
-					r_error = ERR_UNAVAILABLE;
-				} else {
-					gl_manager_native = memnew(GLManagerNative_Windows(2, 1));
-					tested_drivers.set_flag(DRIVER_ID_COMPAT_OPENGL2);
+				if (rendering_driver == "opengl2_angle") {
+					gl_manager_angle = memnew(GLManagerANGLE_Windows(2, 1));
+					tested_drivers.set_flag(DRIVER_ID_COMPAT_ANGLE_D3D9);
 
-					if (gl_manager_native->initialize() != OK) {
-						memdelete(gl_manager_native);
-						gl_manager_native = nullptr;
+					if (gl_manager_angle->initialize() != OK || gl_manager_angle->open_display(nullptr) != OK) {
+						memdelete(gl_manager_angle);
+						gl_manager_angle = nullptr;
 						r_error = ERR_UNAVAILABLE;
-						ERR_PRINT("Could not initialize native OpenGL 2.");
+						ERR_PRINT("Could not initialize ANGLE OpenGL 2.");
 						init_failed = true;
 					}
 				}
 			}
-
-			if (rendering_driver == "opengl2_angle") {
-				gl_manager_angle = memnew(GLManagerANGLE_Windows(2, 1));
-				tested_drivers.set_flag(DRIVER_ID_COMPAT_ANGLE_D3D9);
-
-				if (gl_manager_angle->initialize() != OK || gl_manager_angle->open_display(nullptr) != OK) {
-					memdelete(gl_manager_angle);
-					gl_manager_angle = nullptr;
-					r_error = ERR_UNAVAILABLE;
-					ERR_PRINT("Could not initialize ANGLE OpenGL 2.");
-					init_failed = true;
-				}
-			}
-		}
 #endif // GLES2_ENABLED
 
 #if defined(GLES1_ENABLED)
-		if (rendering_driver == "opengl1" || rendering_driver == "opengl1_angle") {
-			driver_compiled = true;
+			if (rendering_driver == "opengl1" || rendering_driver == "opengl1_angle") {
+				driver_compiled = true;
 
-			if (rendering_driver == "opengl1") {
-				// There's no native OpenGL drivers on Windows for ARM, always enable fallback.
-				bool is_bad_driver = false;
-				bool show_warning = true;
+				if (rendering_driver == "opengl1") {
+					// There's no native OpenGL drivers on Windows for ARM, always enable fallback.
+					bool is_bad_driver = false;
+					bool show_warning = true;
 
 #if defined(__arm__) || defined(__aarch64__) || defined(_M_ARM) || defined(_M_ARM64)
-				is_bad_driver = true;
-				show_warning = false;
+					is_bad_driver = true;
+					show_warning = false;
 #else
-				typedef BOOL(WINAPI * IsWow64Process2Ptr)(HANDLE, USHORT *, USHORT *);
+					typedef BOOL(WINAPI * IsWow64Process2Ptr)(HANDLE, USHORT *, USHORT *);
 
-				IsWow64Process2Ptr IsWow64Process2 = (IsWow64Process2Ptr)GetProcAddress(GetModuleHandle(TEXT("kernel32")), "IsWow64Process2");
-				if (IsWow64Process2) {
-					USHORT process_arch = 0;
-					USHORT machine_arch = 0;
-					if (!IsWow64Process2(GetCurrentProcess(), &process_arch, &machine_arch)) {
-						machine_arch = 0;
+					IsWow64Process2Ptr IsWow64Process2 = (IsWow64Process2Ptr)GetProcAddress(GetModuleHandle(TEXT("kernel32")), "IsWow64Process2");
+					if (IsWow64Process2) {
+						USHORT process_arch = 0;
+						USHORT machine_arch = 0;
+						if (!IsWow64Process2(GetCurrentProcess(), &process_arch, &machine_arch)) {
+							machine_arch = 0;
+						}
+						if (machine_arch == 0xAA64) {
+							is_bad_driver = true;
+							show_warning = false;
+						}
 					}
-					if (machine_arch == 0xAA64) {
-						is_bad_driver = true;
-						show_warning = false;
-					}
-				}
 #endif
-				if (!is_bad_driver && fb_angle1) {
-					Dictionary gl_info = detect_wgl(1, 5);
-					constexpr int gl_version = make_gl_version(1, 5);
+					if (!is_bad_driver && fb_angle1) {
+						Dictionary gl_info = detect_wgl(1, 5);
+						constexpr int gl_version = make_gl_version(1, 5);
 
-					Vector2i device_id = _get_device_ids(gl_info["name"]);
-					Array device_list = GLOBAL_GET("rendering/gl_classic/force_angle_on_devices");
-					for (int i = 0; i < device_list.size(); i++) {
-						const Dictionary &device = device_list[i];
-						if (device.has("vendor") && device.has("name")) {
-							const String &vendor = device["vendor"];
-							const String &name = device["name"];
-							if (device_id != Vector2i() && vendor.begins_with("0x") && name.begins_with("0x") && device_id.x == vendor.lstrip("0x").hex_to_int() && device_id.y == name.lstrip("0x").hex_to_int()) {
-								is_bad_driver = true;
-								break;
-							} else if (gl_info["vendor"].operator String().to_upper().contains(vendor.to_upper()) && (name == "*" || gl_info["name"].operator String().to_upper().contains(name.to_upper()))) {
-								is_bad_driver = true;
-								break;
+						Vector2i device_id = _get_device_ids(gl_info["name"]);
+						Array device_list = GLOBAL_GET("rendering/gl_classic/force_angle_on_devices");
+						for (int i = 0; i < device_list.size(); i++) {
+							const Dictionary &device = device_list[i];
+							if (device.has("vendor") && device.has("name")) {
+								const String &vendor = device["vendor"];
+								const String &name = device["name"];
+								if (device_id != Vector2i() && vendor.begins_with("0x") && name.begins_with("0x") && device_id.x == vendor.lstrip("0x").hex_to_int() && device_id.y == name.lstrip("0x").hex_to_int()) {
+									is_bad_driver = true;
+									break;
+								} else if (gl_info["vendor"].operator String().to_upper().contains(vendor.to_upper()) && (name == "*" || gl_info["name"].operator String().to_upper().contains(name.to_upper()))) {
+									is_bad_driver = true;
+									break;
+								}
 							}
+						}
+
+						if (gl_info["version"].operator int() < gl_version) {
+							is_bad_driver = true;
 						}
 					}
 
-					if (gl_info["version"].operator int() < gl_version) {
-						is_bad_driver = true;
+					if (is_bad_driver) {
+						tested_drivers.set_flag(DRIVER_ID_COMPAT_OPENGL1);
+						if (show_warning) {
+							WARN_PRINT("Your video card drivers seem not to support the required OpenGL 1.5 version or are known to have low quality support, skipping native OpenGL 1.");
+						}
+						init_failed = true;
+						r_error = ERR_UNAVAILABLE;
+					} else {
+						gl_manager_native = memnew(GLManagerNative_Windows(1, 5));
+						tested_drivers.set_flag(DRIVER_ID_COMPAT_OPENGL1);
+
+						if (gl_manager_native->initialize() != OK) {
+							memdelete(gl_manager_native);
+							gl_manager_native = nullptr;
+							r_error = ERR_UNAVAILABLE;
+							ERR_PRINT("Could not initialize native OpenGL 1.");
+							init_failed = true;
+						}
 					}
 				}
 
-				if (is_bad_driver) {
-					tested_drivers.set_flag(DRIVER_ID_COMPAT_OPENGL1);
-					if (show_warning) {
-						WARN_PRINT("Your video card drivers seem not to support the required OpenGL 1.5 version or are known to have low quality support, skipping native OpenGL 1.");
-					}
-					init_failed = true;
-					r_error = ERR_UNAVAILABLE;
-				} else {
-					gl_manager_native = memnew(GLManagerNative_Windows(1, 5));
-					tested_drivers.set_flag(DRIVER_ID_COMPAT_OPENGL1);
+				if (rendering_driver == "opengl1_angle") {
+					gl_manager_angle = memnew(GLManagerANGLE_Windows(1, 5));
+					tested_drivers.set_flag(DRIVER_ID_COMPAT_ANGLE_D3D11);
 
-					if (gl_manager_native->initialize() != OK) {
-						memdelete(gl_manager_native);
-						gl_manager_native = nullptr;
+					if (gl_manager_angle->initialize() != OK || gl_manager_angle->open_display(nullptr) != OK) {
+						memdelete(gl_manager_angle);
+						gl_manager_angle = nullptr;
 						r_error = ERR_UNAVAILABLE;
-						ERR_PRINT("Could not initialize native OpenGL 1.");
+						ERR_PRINT("Could not initialize ANGLE OpenGL 1.");
 						init_failed = true;
 					}
 				}
 			}
-
-			if (rendering_driver == "opengl1_angle") {
-				gl_manager_angle = memnew(GLManagerANGLE_Windows(1, 5));
-				tested_drivers.set_flag(DRIVER_ID_COMPAT_ANGLE_D3D11);
-
-				if (gl_manager_angle->initialize() != OK || gl_manager_angle->open_display(nullptr) != OK) {
-					memdelete(gl_manager_angle);
-					gl_manager_angle = nullptr;
-					r_error = ERR_UNAVAILABLE;
-					ERR_PRINT("Could not initialize ANGLE OpenGL 1.");
-					init_failed = true;
-				}
-			}
-		}
 #endif // GLES1_ENABLED
 
-		if (!driver_compiled) {
-			init_failed = true;
-			r_error = ERR_UNAVAILABLE;
-		}
-
-		if (!init_failed) {
-			context_initialized = true;
-			if (driver_attempts[attempt_idx] != requested_driver) {
-				// Set the fallback to the driver that won the battle.
-				OS::get_singleton()->set_current_rendering_driver_name(driver_attempts[attempt_idx], OS::RENDERING_SOURCE_FALLBACK);
-
-				String req_api;
-				String req_method;
-				String req_type;
-
-				if (requested_driver.begins_with("opengl3")) {
-					req_api = "GLES3";
-					req_method = "Compatibility";
-				} else if (requested_driver.begins_with("opengl2")) {
-					req_api = "GLES2";
-					req_method = "Legacy";
-				} else {
-					req_api = "GLES1";
-					req_method = "Classic";
-				}
-
-				if (requested_driver.ends_with("_angle")) {
-					req_type = "ANGLE";
-				} else {
-					req_type = "Native";
-				}
-
-				String fallback_method;
-				String fallback_type;
-
-				if (driver_attempts[attempt_idx].begins_with("opengl3")) {
-					fallback_method = "Compatibility";
-				} else if (driver_attempts[attempt_idx].begins_with("opengl2")) {
-					fallback_method = "Legacy";
-				} else {
-					fallback_method = "Classic";
-				}
-
-				if (driver_attempts[attempt_idx].ends_with("_angle")) {
-					fallback_type = "ANGLE";
-				} else {
-					fallback_type = "native";
-				}
-
-				WARN_PRINT(vformat("The %s driver for the %s renderer (%s) could not be initialized. Using the %s driver for the %s renderer, visuals may be affected.",
-						req_type, req_method, req_api, fallback_type, fallback_method));
+			if (!driver_compiled) {
+				init_failed = true;
+				r_error = ERR_UNAVAILABLE;
 			}
-			break;
-		}
-	} // for attempt_idx < driver_attempts.size()
 
-	// Should only happen when running on the Microsoft Basic Display Driver,
-	// which is not a "real" driver anyway.
-	if (unlikely(!context_initialized)) {
-		ERR_FAIL_MSG("Could not initialize any OpenGL drivers.");
-	}
+			if (!init_failed) {
+				opengl_initialized = true;
+				if (driver_attempts[attempt_idx] != requested_driver) {
+					// Set the fallback to the driver that won the battle.
+					OS::get_singleton()->set_current_rendering_driver_name(driver_attempts[attempt_idx], OS::RENDERING_SOURCE_FALLBACK);
+
+					String req_api;
+					String req_method;
+					String req_type;
+
+					if (requested_driver.begins_with("opengl3")) {
+						req_api = "GLES3";
+						req_method = "Compatibility";
+					} else if (requested_driver.begins_with("opengl2")) {
+						req_api = "GLES2";
+						req_method = "Legacy";
+					} else {
+						req_api = "GLES1";
+						req_method = "Classic";
+					}
+
+					if (requested_driver.ends_with("_angle")) {
+						req_type = "ANGLE";
+					} else {
+						req_type = "Native";
+					}
+
+					String fallback_method;
+					String fallback_type;
+
+					if (driver_attempts[attempt_idx].begins_with("opengl3")) {
+						fallback_method = "Compatibility";
+					} else if (driver_attempts[attempt_idx].begins_with("opengl2")) {
+						fallback_method = "Legacy";
+					} else {
+						fallback_method = "Classic";
+					}
+
+					if (driver_attempts[attempt_idx].ends_with("_angle")) {
+						fallback_type = "ANGLE";
+					} else {
+						fallback_type = "native";
+					}
+
+					WARN_PRINT(vformat("The %s driver for the %s renderer (%s) could not be initialized. Using the %s driver for the %s renderer, visuals may be affected.",
+							req_type, req_method, req_api, fallback_type, fallback_method));
+				}
+				break;
+			}
+		} // for attempt_idx < driver_attempts.size()
+
+		// Should only happen when running on the Microsoft Basic Display Driver,
+		// which is not a "real" driver anyway.
+		if (!rendering_driver_failed && !opengl_initialized) {
+			ERR_FAIL_MSG("Could not initialize any OpenGL drivers.");
+		}
+	} // rendering_device.begins_with("opengl")
 
 	bool should_create_main_window = true;
 	bool no_redirection_bitmap = false;

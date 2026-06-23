@@ -4120,306 +4120,308 @@ DisplayServerMacOS::DisplayServerMacOS(const String &p_rendering_driver, WindowM
 	}
 #endif
 
-	// Init context and rendering device multi-layer fallback
-	bool multilayer_fallback = GLOBAL_GET("rendering/rendering_device/driver_fallback_multilayer");
-	bool fb_angle3 = GLOBAL_GET("rendering/gl_compatibility/fallback_to_angle");
-	bool fb_angle2 = GLOBAL_GET("rendering/gl_legacy/fallback_to_angle");
-	bool fb_angle1 = GLOBAL_GET("rendering/gl_classic/fallback_to_angle");
+	if (rendering_driver.begins_with("opengl")) {
+		// Init context and rendering device multi-layer fallback
+		bool multilayer_fallback = GLOBAL_GET("rendering/rendering_device/driver_fallback_multilayer");
+		bool fb_angle3 = GLOBAL_GET("rendering/gl_compatibility/fallback_to_angle");
+		bool fb_angle2 = GLOBAL_GET("rendering/gl_legacy/fallback_to_angle");
+		bool fb_angle1 = GLOBAL_GET("rendering/gl_classic/fallback_to_angle");
 
-	Vector<String> driver_attempts;
+		Vector<String> driver_attempts;
 
-	if (multilayer_fallback) {
-		if (rendering_driver.begins_with("opengl3")) {
-#ifdef GLES3_ENABLED
-			driver_attempts.push_back("opengl3");
-#endif
-#ifdef GLES2_ENABLED
-			driver_attempts.push_back("opengl2");
-#endif
-#ifdef GLES1_ENABLED
-			driver_attempts.push_back("opengl1");
-#endif
-#ifdef GLES3_ENABLED
-			if (fb_angle3) {
-				driver_attempts.push_back("opengl3_angle");
+		if (multilayer_fallback) {
+			if (rendering_driver.begins_with("opengl3")) {
+	#ifdef GLES3_ENABLED
+				driver_attempts.push_back("opengl3");
+	#endif
+	#ifdef GLES2_ENABLED
+				driver_attempts.push_back("opengl2");
+	#endif
+	#ifdef GLES1_ENABLED
+				driver_attempts.push_back("opengl1");
+	#endif
+	#ifdef GLES3_ENABLED
+				if (fb_angle3) {
+					driver_attempts.push_back("opengl3_angle");
+				}
+	#endif
+	#ifdef GLES2_ENABLED
+				if (fb_angle2) {
+					driver_attempts.push_back("opengl2_angle");
+				}
+	#endif
+	#ifdef GLES1_ENABLED
+				if (fb_angle1) {
+					driver_attempts.push_back("opengl1_angle");
+				}
+	#endif
+			} else if (rendering_driver.begins_with("opengl2")) {
+	#ifdef GLES2_ENABLED
+				driver_attempts.push_back("opengl2");
+	#endif
+	#ifdef GLES1_ENABLED
+				driver_attempts.push_back("opengl1");
+	#endif
+	#ifdef GLES3_ENABLED
+				driver_attempts.push_back("opengl3");
+	#endif
+	#ifdef GLES2_ENABLED
+				if (fb_angle2) {
+					driver_attempts.push_back("opengl2_angle");
+				}
+	#endif
+	#ifdef GLES1_ENABLED
+				if (fb_angle1) {
+					driver_attempts.push_back("opengl1_angle");
+				}
+	#endif
+	#ifdef GLES3_ENABLED
+				if (fb_angle3) {
+					driver_attempts.push_back("opengl3_angle");
+				}
+	#endif
+			} else if (rendering_driver.begins_with("opengl1")) {
+	#ifdef GLES1_ENABLED
+				driver_attempts.push_back("opengl1");
+	#endif
+	#ifdef GLES2_ENABLED
+				driver_attempts.push_back("opengl2");
+	#endif
+	#ifdef GLES3_ENABLED
+				driver_attempts.push_back("opengl3");
+	#endif
+	#ifdef GLES1_ENABLED
+				if (fb_angle1) {
+					driver_attempts.push_back("opengl1_angle");
+				}
+	#endif
+	#ifdef GLES2_ENABLED
+				if (fb_angle2) {
+					driver_attempts.push_back("opengl2_angle");
+				}
+	#endif
+	#ifdef GLES3_ENABLED
+				if (fb_angle3) {
+					driver_attempts.push_back("opengl3_angle");
+				}
+	#endif
+			} else {
+				driver_attempts.push_back(rendering_driver);
 			}
-#endif
-#ifdef GLES2_ENABLED
-			if (fb_angle2) {
-				driver_attempts.push_back("opengl2_angle");
-			}
-#endif
-#ifdef GLES1_ENABLED
-			if (fb_angle1) {
-				driver_attempts.push_back("opengl1_angle");
-			}
-#endif
-		} else if (rendering_driver.begins_with("opengl2")) {
-#ifdef GLES2_ENABLED
-			driver_attempts.push_back("opengl2");
-#endif
-#ifdef GLES1_ENABLED
-			driver_attempts.push_back("opengl1");
-#endif
-#ifdef GLES3_ENABLED
-			driver_attempts.push_back("opengl3");
-#endif
-#ifdef GLES2_ENABLED
-			if (fb_angle2) {
-				driver_attempts.push_back("opengl2_angle");
-			}
-#endif
-#ifdef GLES1_ENABLED
-			if (fb_angle1) {
-				driver_attempts.push_back("opengl1_angle");
-			}
-#endif
-#ifdef GLES3_ENABLED
-			if (fb_angle3) {
-				driver_attempts.push_back("opengl3_angle");
-			}
-#endif
-		} else if (rendering_driver.begins_with("opengl1")) {
-#ifdef GLES1_ENABLED
-			driver_attempts.push_back("opengl1");
-#endif
-#ifdef GLES2_ENABLED
-			driver_attempts.push_back("opengl2");
-#endif
-#ifdef GLES3_ENABLED
-			driver_attempts.push_back("opengl3");
-#endif
-#ifdef GLES1_ENABLED
-			if (fb_angle1) {
-				driver_attempts.push_back("opengl1_angle");
-			}
-#endif
-#ifdef GLES2_ENABLED
-			if (fb_angle2) {
-				driver_attempts.push_back("opengl2_angle");
-			}
-#endif
-#ifdef GLES3_ENABLED
-			if (fb_angle3) {
-				driver_attempts.push_back("opengl3_angle");
-			}
-#endif
 		} else {
+			// Use only the one the game requested, plus its direct ANGLE fallback
 			driver_attempts.push_back(rendering_driver);
-		}
-	} else {
-		// Use only the one the game requested, plus its direct ANGLE fallback
-		driver_attempts.push_back(rendering_driver);
-		
-#ifdef GLES3_ENABLED
-		if (rendering_driver == "opengl3") {
-			if (fb_angle3) {
-				driver_attempts.push_back("opengl3_angle");
-			}
-		}
-#endif
-
-#ifdef GLES2_ENABLED
-		if (rendering_driver == "opengl2") {
-			if (fb_angle2) {
-				driver_attempts.push_back("opengl2_angle");
-			}
-		}
-#endif
-
-#ifdef GLES1_ENABLED
-		if (rendering_driver == "opengl1") {
-			if (fb_angle1) {
-				driver_attempts.push_back("opengl1_angle");
-			}
-		}
-#endif
-	}
-	
-	String requested_driver = rendering_driver;
-	bool context_initialized = false;
-
-	for (int attempt_idx = 0; attempt_idx < driver_attempts.size(); attempt_idx++) {
-		rendering_driver = driver_attempts[attempt_idx];
-		bool init_failed = false;
-		bool driver_compiled = false;
-		r_error = OK;
-
-		// Inform the OS of the fallback state.
-		if (rendering_driver.begins_with("opengl3")) {
-			OS::get_singleton()->set_current_rendering_method("gl_compatibility", OS::RENDERING_SOURCE_FALLBACK);
-		} else if (rendering_driver.begins_with("opengl2")) {
-			OS::get_singleton()->set_current_rendering_method("gl_legacy", OS::RENDERING_SOURCE_FALLBACK);
-		} else if (rendering_driver.begins_with("opengl1")) {
-			OS::get_singleton()->set_current_rendering_method("gl_classic", OS::RENDERING_SOURCE_FALLBACK);
-		}
-		OS::get_singleton()->set_current_rendering_driver_name(rendering_driver, OS::RENDERING_SOURCE_FALLBACK);
-
-#if defined(GLES3_ENABLED)
-		if (rendering_driver == "opengl3" || rendering_driver == "opengl3_angle") {
-			driver_compiled = true;
-
+			
+	#ifdef GLES3_ENABLED
 			if (rendering_driver == "opengl3") {
-				bool is_vm = OS::get_singleton()->get_processor_name().contains("Virtual");
-				if (is_vm && fb_angle3) {
-					WARN_PRINT("Virtual Machine detected, skipping native OpenGL 3.");
-					init_failed = true;
-					r_error = ERR_UNAVAILABLE;
-				} else {
-					gl_manager_legacy = memnew(GLManagerLegacy_MacOS(3, 3));
-					if (gl_manager_legacy->initialize() != OK) {
-						memdelete(gl_manager_legacy);
-						gl_manager_legacy = nullptr;
-						r_error = ERR_UNAVAILABLE;
-						ERR_PRINT("Could not initialize native OpenGL 3.");
-						init_failed = true;
-					}
+				if (fb_angle3) {
+					driver_attempts.push_back("opengl3_angle");
 				}
 			}
+	#endif
 
-			if (rendering_driver == "opengl3_angle") {
-				gl_manager_angle = memnew(GLManagerANGLE_MacOS(3, 3));
-				if (gl_manager_angle->initialize() != OK || gl_manager_angle->open_display(nullptr) != OK) {
-					memdelete(gl_manager_angle);
-					gl_manager_angle = nullptr;
-					r_error = ERR_UNAVAILABLE;
-					ERR_PRINT("Could not initialize ANGLE OpenGL 3.");
-					init_failed = true;
-				}
-			}
-		}
-#endif
-
-#if defined(GLES2_ENABLED)
-		if (rendering_driver == "opengl2" || rendering_driver == "opengl2_angle") {
-			driver_compiled = true;
-
+	#ifdef GLES2_ENABLED
 			if (rendering_driver == "opengl2") {
-				bool is_vm = OS::get_singleton()->get_processor_name().contains("Virtual");
-				if (is_vm && fb_angle2) {
-					WARN_PRINT("Virtual Machine detected, skipping native OpenGL 2.");
-					init_failed = true;
-					r_error = ERR_UNAVAILABLE;
-				} else {
-					gl_manager_legacy = memnew(GLManagerLegacy_MacOS(2, 1));
-					if (gl_manager_legacy->initialize() != OK) {
-						memdelete(gl_manager_legacy);
-						gl_manager_legacy = nullptr;
-						r_error = ERR_UNAVAILABLE;
-						ERR_PRINT("Could not initialize native OpenGL 2.");
-						init_failed = true;
-					}
+				if (fb_angle2) {
+					driver_attempts.push_back("opengl2_angle");
 				}
 			}
+	#endif
 
-			if (rendering_driver == "opengl2_angle") {
-				gl_manager_angle = memnew(GLManagerANGLE_MacOS(2, 1));
-				if (gl_manager_angle->initialize() != OK || gl_manager_angle->open_display(nullptr) != OK) {
-					memdelete(gl_manager_angle);
-					gl_manager_angle = nullptr;
-					r_error = ERR_UNAVAILABLE;
-					ERR_PRINT("Could not initialize ANGLE OpenGL 2.");
-					init_failed = true;
-				}
-			}
-		}
-#endif
-
-#if defined(GLES1_ENABLED)
-		if (rendering_driver == "opengl1" || rendering_driver == "opengl1_angle") {
-			driver_compiled = true;
-
+	#ifdef GLES1_ENABLED
 			if (rendering_driver == "opengl1") {
-				bool is_vm = OS::get_singleton()->get_processor_name().contains("Virtual");
-				if (is_vm && fb_angle1) {
-					WARN_PRINT("Virtual Machine detected, skipping native OpenGL 1.");
-					init_failed = true;
-					r_error = ERR_UNAVAILABLE;
-				} else {
-					gl_manager_legacy = memnew(GLManagerLegacy_MacOS(1, 5));
-					if (gl_manager_legacy->initialize() != OK) {
-						memdelete(gl_manager_legacy);
-						gl_manager_legacy = nullptr;
+				if (fb_angle1) {
+					driver_attempts.push_back("opengl1_angle");
+				}
+			}
+	#endif
+		}
+		
+		String requested_driver = rendering_driver;
+		bool opengl_initialized = false;
+
+		for (int attempt_idx = 0; attempt_idx < driver_attempts.size(); attempt_idx++) {
+			rendering_driver = driver_attempts[attempt_idx];
+			bool init_failed = false;
+			bool driver_compiled = false;
+			r_error = OK;
+
+			// Inform the OS of the fallback state.
+			if (rendering_driver.begins_with("opengl3")) {
+				OS::get_singleton()->set_current_rendering_method("gl_compatibility", OS::RENDERING_SOURCE_FALLBACK);
+			} else if (rendering_driver.begins_with("opengl2")) {
+				OS::get_singleton()->set_current_rendering_method("gl_legacy", OS::RENDERING_SOURCE_FALLBACK);
+			} else if (rendering_driver.begins_with("opengl1")) {
+				OS::get_singleton()->set_current_rendering_method("gl_classic", OS::RENDERING_SOURCE_FALLBACK);
+			}
+			OS::get_singleton()->set_current_rendering_driver_name(rendering_driver, OS::RENDERING_SOURCE_FALLBACK);
+
+	#if defined(GLES3_ENABLED)
+			if (rendering_driver == "opengl3" || rendering_driver == "opengl3_angle") {
+				driver_compiled = true;
+
+				if (rendering_driver == "opengl3") {
+					bool is_vm = OS::get_singleton()->get_processor_name().contains("Virtual");
+					if (is_vm && fb_angle3) {
+						WARN_PRINT("Virtual Machine detected, skipping native OpenGL 3.");
+						init_failed = true;
 						r_error = ERR_UNAVAILABLE;
-						ERR_PRINT("Could not initialize native OpenGL 1.");
+					} else {
+						gl_manager_legacy = memnew(GLManagerLegacy_MacOS(3, 3));
+						if (gl_manager_legacy->initialize() != OK) {
+							memdelete(gl_manager_legacy);
+							gl_manager_legacy = nullptr;
+							r_error = ERR_UNAVAILABLE;
+							ERR_PRINT("Could not initialize native OpenGL 3.");
+							init_failed = true;
+						}
+					}
+				}
+
+				if (rendering_driver == "opengl3_angle") {
+					gl_manager_angle = memnew(GLManagerANGLE_MacOS(3, 3));
+					if (gl_manager_angle->initialize() != OK || gl_manager_angle->open_display(nullptr) != OK) {
+						memdelete(gl_manager_angle);
+						gl_manager_angle = nullptr;
+						r_error = ERR_UNAVAILABLE;
+						ERR_PRINT("Could not initialize ANGLE OpenGL 3.");
 						init_failed = true;
 					}
 				}
 			}
+	#endif
 
-			if (rendering_driver == "opengl1_angle") {
-				gl_manager_angle = memnew(GLManagerANGLE_MacOS(1, 5));
-				if (gl_manager_angle->initialize() != OK || gl_manager_angle->open_display(nullptr) != OK) {
-					memdelete(gl_manager_angle);
-					gl_manager_angle = nullptr;
-					r_error = ERR_UNAVAILABLE;
-					ERR_PRINT("Could not initialize ANGLE OpenGL 1.");
-					init_failed = true;
+	#if defined(GLES2_ENABLED)
+			if (rendering_driver == "opengl2" || rendering_driver == "opengl2_angle") {
+				driver_compiled = true;
+
+				if (rendering_driver == "opengl2") {
+					bool is_vm = OS::get_singleton()->get_processor_name().contains("Virtual");
+					if (is_vm && fb_angle2) {
+						WARN_PRINT("Virtual Machine detected, skipping native OpenGL 2.");
+						init_failed = true;
+						r_error = ERR_UNAVAILABLE;
+					} else {
+						gl_manager_legacy = memnew(GLManagerLegacy_MacOS(2, 1));
+						if (gl_manager_legacy->initialize() != OK) {
+							memdelete(gl_manager_legacy);
+							gl_manager_legacy = nullptr;
+							r_error = ERR_UNAVAILABLE;
+							ERR_PRINT("Could not initialize native OpenGL 2.");
+							init_failed = true;
+						}
+					}
+				}
+
+				if (rendering_driver == "opengl2_angle") {
+					gl_manager_angle = memnew(GLManagerANGLE_MacOS(2, 1));
+					if (gl_manager_angle->initialize() != OK || gl_manager_angle->open_display(nullptr) != OK) {
+						memdelete(gl_manager_angle);
+						gl_manager_angle = nullptr;
+						r_error = ERR_UNAVAILABLE;
+						ERR_PRINT("Could not initialize ANGLE OpenGL 2.");
+						init_failed = true;
+					}
 				}
 			}
-		}
-#endif
+	#endif
 
-		if (!driver_compiled) {
-			init_failed = true;
-			r_error = ERR_UNAVAILABLE;
-		}
+	#if defined(GLES1_ENABLED)
+			if (rendering_driver == "opengl1" || rendering_driver == "opengl1_angle") {
+				driver_compiled = true;
 
-		if (!init_failed) {
-			context_initialized = true;
-			if (driver_attempts[attempt_idx] != requested_driver) {
-				// Set the fallback to the driver that won the battle.
-				OS::get_singleton()->set_current_rendering_driver_name(driver_attempts[attempt_idx], OS::RENDERING_SOURCE_FALLBACK);
-
-				String req_api;
-				String req_method;
-				String req_type;
-
-				if (requested_driver.begins_with("opengl3")) {
-					req_api = "GLES3";
-					req_method = "Compatibility";
-				} else if (requested_driver.begins_with("opengl2")) {
-					req_api = "GLES2";
-					req_method = "Legacy";
-				} else {
-					req_api = "GLES1";
-					req_method = "Classic";
+				if (rendering_driver == "opengl1") {
+					bool is_vm = OS::get_singleton()->get_processor_name().contains("Virtual");
+					if (is_vm && fb_angle1) {
+						WARN_PRINT("Virtual Machine detected, skipping native OpenGL 1.");
+						init_failed = true;
+						r_error = ERR_UNAVAILABLE;
+					} else {
+						gl_manager_legacy = memnew(GLManagerLegacy_MacOS(1, 5));
+						if (gl_manager_legacy->initialize() != OK) {
+							memdelete(gl_manager_legacy);
+							gl_manager_legacy = nullptr;
+							r_error = ERR_UNAVAILABLE;
+							ERR_PRINT("Could not initialize native OpenGL 1.");
+							init_failed = true;
+						}
+					}
 				}
 
-				if (requested_driver.ends_with("_angle")) {
-					req_type = "ANGLE";
-				} else {
-					req_type = "Native";
+				if (rendering_driver == "opengl1_angle") {
+					gl_manager_angle = memnew(GLManagerANGLE_MacOS(1, 5));
+					if (gl_manager_angle->initialize() != OK || gl_manager_angle->open_display(nullptr) != OK) {
+						memdelete(gl_manager_angle);
+						gl_manager_angle = nullptr;
+						r_error = ERR_UNAVAILABLE;
+						ERR_PRINT("Could not initialize ANGLE OpenGL 1.");
+						init_failed = true;
+					}
 				}
-
-				String fallback_method;
-				String fallback_type;
-
-				if (driver_attempts[attempt_idx].begins_with("opengl3")) {
-					fallback_method = "Compatibility";
-				} else if (driver_attempts[attempt_idx].begins_with("opengl2")) {
-					fallback_method = "Legacy";
-				} else {
-					fallback_method = "Classic";
-				}
-
-				if (driver_attempts[attempt_idx].ends_with("_angle")) {
-					fallback_type = "ANGLE";
-				} else {
-					fallback_type = "native";
-				}
-
-				WARN_PRINT(vformat("The %s driver for the %s renderer (%s) could not be initialized. Using the %s driver for the %s renderer, visuals may be affected.",
-						req_type, req_method, req_api, fallback_type, fallback_method));
 			}
-			break;
-		}
-	} // for attempt_idx < driver_attempts.size()
+	#endif
 
-	// Really should NOT happen under any circumstance.
-	if (unlikely(!context_initialized)) {
-		ERR_FAIL_MSG("Could not initialize any OpenGL drivers.");
-	}
+			if (!driver_compiled) {
+				init_failed = true;
+				r_error = ERR_UNAVAILABLE;
+			}
+
+			if (!init_failed) {
+				opengl_initialized = true;
+				if (driver_attempts[attempt_idx] != requested_driver) {
+					// Set the fallback to the driver that won the battle.
+					OS::get_singleton()->set_current_rendering_driver_name(driver_attempts[attempt_idx], OS::RENDERING_SOURCE_FALLBACK);
+
+					String req_api;
+					String req_method;
+					String req_type;
+
+					if (requested_driver.begins_with("opengl3")) {
+						req_api = "GLES3";
+						req_method = "Compatibility";
+					} else if (requested_driver.begins_with("opengl2")) {
+						req_api = "GLES2";
+						req_method = "Legacy";
+					} else {
+						req_api = "GLES1";
+						req_method = "Classic";
+					}
+
+					if (requested_driver.ends_with("_angle")) {
+						req_type = "ANGLE";
+					} else {
+						req_type = "Native";
+					}
+
+					String fallback_method;
+					String fallback_type;
+
+					if (driver_attempts[attempt_idx].begins_with("opengl3")) {
+						fallback_method = "Compatibility";
+					} else if (driver_attempts[attempt_idx].begins_with("opengl2")) {
+						fallback_method = "Legacy";
+					} else {
+						fallback_method = "Classic";
+					}
+
+					if (driver_attempts[attempt_idx].ends_with("_angle")) {
+						fallback_type = "ANGLE";
+					} else {
+						fallback_type = "native";
+					}
+
+					WARN_PRINT(vformat("The %s driver for the %s renderer (%s) could not be initialized. Using the %s driver for the %s renderer, visuals may be affected.",
+							req_type, req_method, req_api, fallback_type, fallback_method));
+				}
+				break;
+			}
+		} // for attempt_idx < driver_attempts.size()
+
+		// Really should NOT happen under any circumstance.
+		if (unlikely(!opengl_initialized)) {
+			ERR_FAIL_MSG("Could not initialize any OpenGL drivers.");
+		}
+	} // rendering_device.begins_with("opengl")
 
 	Point2i window_position;
 	if (p_position != nullptr) {

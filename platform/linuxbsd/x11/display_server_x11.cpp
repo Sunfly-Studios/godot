@@ -6956,442 +6956,446 @@ DisplayServerX11::DisplayServerX11(const String &p_rendering_driver, WindowMode 
 	}
 #endif // RD_ENABLED
 
-	// Init context and rendering device multi-layer fallback
-	bool multilayer_fallback = GLOBAL_GET("rendering/rendering_device/driver_fallback_multilayer");
-	bool fb_gles3 = GLOBAL_GET("rendering/gl_compatibility/fallback_to_gles");
-	bool fb_gles2 = GLOBAL_GET("rendering/gl_legacy/fallback_to_gles");
-	bool fb_gles1 = GLOBAL_GET("rendering/gl_classic/fallback_to_gles");
+	if (rendering_driver.begins_with("opengl")) {
+		// Init context and rendering device multi-layer fallback
+		bool multilayer_fallback = GLOBAL_GET("rendering/rendering_device/driver_fallback_multilayer");
+		bool fb_gles3 = GLOBAL_GET("rendering/gl_compatibility/fallback_to_gles");
+		bool fb_gles2 = GLOBAL_GET("rendering/gl_legacy/fallback_to_gles");
+		bool fb_gles1 = GLOBAL_GET("rendering/gl_classic/fallback_to_gles");
 
-	Vector<String> driver_attempts;
+		Vector<String> driver_attempts;
 
-	if (multilayer_fallback) {
-		if (rendering_driver.begins_with("opengl3")) {
-#ifdef GLES3_ENABLED
-			driver_attempts.push_back("opengl3");
-#endif
-#ifdef GLES2_ENABLED
-			driver_attempts.push_back("opengl2");
-#endif
-#ifdef GLES1_ENABLED
-			driver_attempts.push_back("opengl1");
-#endif
-#ifdef GLES3_ENABLED
-			if (fb_gles3) {
-				driver_attempts.push_back("opengl3_es");
+		if (multilayer_fallback) {
+			if (rendering_driver.begins_with("opengl3")) {
+	#ifdef GLES3_ENABLED
+				driver_attempts.push_back("opengl3");
+	#endif
+	#ifdef GLES2_ENABLED
+				driver_attempts.push_back("opengl2");
+	#endif
+	#ifdef GLES1_ENABLED
+				driver_attempts.push_back("opengl1");
+	#endif
+	#ifdef GLES3_ENABLED
+				if (fb_gles3) {
+					driver_attempts.push_back("opengl3_es");
+				}
+	#endif
+	#ifdef GLES2_ENABLED
+				if (fb_gles2) {
+					driver_attempts.push_back("opengl2_es");
+				}
+	#endif
+	#ifdef GLES1_ENABLED
+				if (fb_gles1) {
+					driver_attempts.push_back("opengl1_es");
+				}
+	#endif
+			} else if (rendering_driver.begins_with("opengl2")) {
+	#ifdef GLES2_ENABLED
+				driver_attempts.push_back("opengl2");
+	#endif
+	#ifdef GLES1_ENABLED
+				driver_attempts.push_back("opengl1");
+	#endif
+	#ifdef GLES3_ENABLED
+				driver_attempts.push_back("opengl3");
+	#endif
+	#ifdef GLES2_ENABLED
+				if (fb_gles2) {
+					driver_attempts.push_back("opengl2_es");
+				}
+	#endif
+	#ifdef GLES1_ENABLED
+				if (fb_gles1) {
+					driver_attempts.push_back("opengl1_es");
+				}
+	#endif
+	#ifdef GLES3_ENABLED
+				if (fb_gles3) {
+					driver_attempts.push_back("opengl3_es");
+				}
+	#endif
+			} else if (rendering_driver.begins_with("opengl1")) {
+	#ifdef GLES1_ENABLED
+				driver_attempts.push_back("opengl1");
+	#endif
+	#ifdef GLES2_ENABLED
+				driver_attempts.push_back("opengl2");
+	#endif
+	#ifdef GLES3_ENABLED
+				driver_attempts.push_back("opengl3");
+	#endif
+	#ifdef GLES1_ENABLED
+				if (fb_gles1) {
+					driver_attempts.push_back("opengl1_es");
+				}
+	#endif
+	#ifdef GLES2_ENABLED
+				if (fb_gles2) {
+					driver_attempts.push_back("opengl2_es");
+				}
+	#endif
+	#ifdef GLES3_ENABLED
+				if (fb_gles3) {
+					driver_attempts.push_back("opengl3_es");
+				}
+	#endif
+			} else {
+				driver_attempts.push_back(rendering_driver);
 			}
-#endif
-#ifdef GLES2_ENABLED
-			if (fb_gles2) {
-				driver_attempts.push_back("opengl2_es");
-			}
-#endif
-#ifdef GLES1_ENABLED
-			if (fb_gles1) {
-				driver_attempts.push_back("opengl1_es");
-			}
-#endif
-		} else if (rendering_driver.begins_with("opengl2")) {
-#ifdef GLES2_ENABLED
-			driver_attempts.push_back("opengl2");
-#endif
-#ifdef GLES1_ENABLED
-			driver_attempts.push_back("opengl1");
-#endif
-#ifdef GLES3_ENABLED
-			driver_attempts.push_back("opengl3");
-#endif
-#ifdef GLES2_ENABLED
-			if (fb_gles2) {
-				driver_attempts.push_back("opengl2_es");
-			}
-#endif
-#ifdef GLES1_ENABLED
-			if (fb_gles1) {
-				driver_attempts.push_back("opengl1_es");
-			}
-#endif
-#ifdef GLES3_ENABLED
-			if (fb_gles3) {
-				driver_attempts.push_back("opengl3_es");
-			}
-#endif
-		} else if (rendering_driver.begins_with("opengl1")) {
-#ifdef GLES1_ENABLED
-			driver_attempts.push_back("opengl1");
-#endif
-#ifdef GLES2_ENABLED
-			driver_attempts.push_back("opengl2");
-#endif
-#ifdef GLES3_ENABLED
-			driver_attempts.push_back("opengl3");
-#endif
-#ifdef GLES1_ENABLED
-			if (fb_gles1) {
-				driver_attempts.push_back("opengl1_es");
-			}
-#endif
-#ifdef GLES2_ENABLED
-			if (fb_gles2) {
-				driver_attempts.push_back("opengl2_es");
-			}
-#endif
-#ifdef GLES3_ENABLED
-			if (fb_gles3) {
-				driver_attempts.push_back("opengl3_es");
-			}
-#endif
 		} else {
+			// Use only the one the game requested
 			driver_attempts.push_back(rendering_driver);
-		}
-	} else {
-		// Use only the one the game requested
-		driver_attempts.push_back(rendering_driver);
 
-#ifdef GLES3_ENABLED
-		if (rendering_driver == "opengl3") {
-			if (fb_gles3) {
-				driver_attempts.push_back("opengl3_es");
-			}
-		}
-#endif
-		
-#ifdef GLES2_ENABLED
-		if (rendering_driver == "opengl2") {
-			if (fb_gles2) {
-				driver_attempts.push_back("opengl2_es");
-			}
-		}
-#endif
-
-#ifdef GLES1_ENABLED
-		if (rendering_driver == "opengl1") {
-			if (fb_gles1) {
-				driver_attempts.push_back("opengl1_es");
-			}
-		}
-#endif
-	}
-	
-	String requested_driver = rendering_driver;
-
-	for (int attempt_idx = 0; attempt_idx < driver_attempts.size(); attempt_idx++) {
-		rendering_driver = driver_attempts[attempt_idx];
-		bool init_failed = false;
-		bool driver_compiled = false;
-		r_error = OK;
-		
-		// Inform the OS of the fallback state.
-		if (rendering_driver.begins_with("opengl3")) {
-			OS::get_singleton()->set_current_rendering_method("gl_compatibility", OS::RENDERING_SOURCE_FALLBACK);
-		} else if (rendering_driver.begins_with("opengl2")) {
-			OS::get_singleton()->set_current_rendering_method("gl_legacy", OS::RENDERING_SOURCE_FALLBACK);
-		} else if (rendering_driver.begins_with("opengl1")) {
-			OS::get_singleton()->set_current_rendering_method("gl_classic", OS::RENDERING_SOURCE_FALLBACK);
-		}
-		
-		OS::get_singleton()->set_current_rendering_driver_name(rendering_driver, OS::RENDERING_SOURCE_FALLBACK);
-
-#if defined(GLES3_ENABLED)
-		if (rendering_driver == "opengl3" || rendering_driver == "opengl3_es") {
-			driver_compiled = true;
-			if (getenv("DRI_PRIME") == nullptr) {
-				int use_prime = -1;
-	
-				if (getenv("PRIMUS_DISPLAY") ||
-						getenv("PRIMUS_libGLd") ||
-						getenv("PRIMUS_libGLa") ||
-						getenv("PRIMUS_libGL") ||
-						getenv("PRIMUS_LOAD_GLOBAL") ||
-						getenv("BUMBLEBEE_SOCKET")) {
-					print_verbose("Optirun/primusrun detected. Skipping GPU detection");
-					use_prime = 0;
+	#ifdef GLES3_ENABLED
+			if (rendering_driver == "opengl3") {
+				if (fb_gles3) {
+					driver_attempts.push_back("opengl3_es");
 				}
-				
-				if (OS::get_singleton()->has_environment("GODOT_LEGACY_X11_STUB")) {
-					print_verbose("Legacy X11 stub active. Skipping GPU detection");
-					use_prime = 0;
+			}
+	#endif
+			
+	#ifdef GLES2_ENABLED
+			if (rendering_driver == "opengl2") {
+				if (fb_gles2) {
+					driver_attempts.push_back("opengl2_es");
 				}
+			}
+	#endif
 
-				// Some tools use fake libGL libraries and have them override the real one using
-				// LD_LIBRARY_PATH, so we skip them. *But* Steam also sets LD_LIBRARY_PATH for its
-				// runtime and includes system `/lib` and `/lib64`... so ignore Steam.
-				if (use_prime == -1 && getenv("LD_LIBRARY_PATH") && !getenv("STEAM_RUNTIME_LIBRARY_PATH")) {
-					String ld_library_path(getenv("LD_LIBRARY_PATH"));
-					Vector<String> libraries = ld_library_path.split(":");
-	
-					for (int i = 0; i < libraries.size(); ++i) {
-						if (FileAccess::exists(libraries[i] + "/libGL.so.1") ||
-								FileAccess::exists(libraries[i] + "/libGL.so")) {
-							print_verbose("Custom libGL override detected. Skipping GPU detection");
-							use_prime = 0;
+	#ifdef GLES1_ENABLED
+			if (rendering_driver == "opengl1") {
+				if (fb_gles1) {
+					driver_attempts.push_back("opengl1_es");
+				}
+			}
+	#endif
+		}
+		
+		String requested_driver = rendering_driver;
+
+		for (int attempt_idx = 0; attempt_idx < driver_attempts.size(); attempt_idx++) {
+			rendering_driver = driver_attempts[attempt_idx];
+			bool init_failed = false;
+			bool driver_compiled = false;
+			r_error = OK;
+			
+			// Inform the OS of the fallback state.
+			if (rendering_driver.begins_with("opengl3")) {
+				OS::get_singleton()->set_current_rendering_method("gl_compatibility", OS::RENDERING_SOURCE_FALLBACK);
+			} else if (rendering_driver.begins_with("opengl2")) {
+				OS::get_singleton()->set_current_rendering_method("gl_legacy", OS::RENDERING_SOURCE_FALLBACK);
+			} else if (rendering_driver.begins_with("opengl1")) {
+				OS::get_singleton()->set_current_rendering_method("gl_classic", OS::RENDERING_SOURCE_FALLBACK);
+			}
+			
+			OS::get_singleton()->set_current_rendering_driver_name(rendering_driver, OS::RENDERING_SOURCE_FALLBACK);
+
+	#if defined(GLES3_ENABLED)
+			if (rendering_driver == "opengl3" || rendering_driver == "opengl3_es") {
+				driver_compiled = true;
+				if (getenv("DRI_PRIME") == nullptr) {
+					int use_prime = -1;
+		
+					if (getenv("PRIMUS_DISPLAY") ||
+							getenv("PRIMUS_libGLd") ||
+							getenv("PRIMUS_libGLa") ||
+							getenv("PRIMUS_libGL") ||
+							getenv("PRIMUS_LOAD_GLOBAL") ||
+							getenv("BUMBLEBEE_SOCKET")) {
+						print_verbose("Optirun/primusrun detected. Skipping GPU detection");
+						use_prime = 0;
+					}
+					
+					if (OS::get_singleton()->has_environment("GODOT_LEGACY_X11_STUB")) {
+						print_verbose("Legacy X11 stub active. Skipping GPU detection");
+						use_prime = 0;
+					}
+
+					// Some tools use fake libGL libraries and have them override the real one using
+					// LD_LIBRARY_PATH, so we skip them. *But* Steam also sets LD_LIBRARY_PATH for its
+					// runtime and includes system `/lib` and `/lib64`... so ignore Steam.
+					if (use_prime == -1 && getenv("LD_LIBRARY_PATH") && !getenv("STEAM_RUNTIME_LIBRARY_PATH")) {
+						String ld_library_path(getenv("LD_LIBRARY_PATH"));
+						Vector<String> libraries = ld_library_path.split(":");
+		
+						for (int i = 0; i < libraries.size(); ++i) {
+							if (FileAccess::exists(libraries[i] + "/libGL.so.1") ||
+									FileAccess::exists(libraries[i] + "/libGL.so")) {
+								print_verbose("Custom libGL override detected. Skipping GPU detection");
+								use_prime = 0;
+							}
 						}
 					}
-				}
-	
-				if (use_prime == -1) {
-					print_verbose("Detecting GPUs, set DRI_PRIME in the environment to override GPU detection logic.");
-					use_prime = DetectPrimeX11::detect_prime(3, 3);
-				}
-	
-				if (use_prime) {
-					print_line("Found discrete GPU, setting DRI_PRIME=1 to use it.");
-					print_line("Note: Set DRI_PRIME=0 in the environment to disable Godot from using the discrete GPU.");
-					setenv("DRI_PRIME", "1", 1);
-				}
-			}
-		}
 		
-		if (rendering_driver == "opengl3") {
-			gl_manager = memnew(GLManager_X11(p_resolution, GLManager_X11::GLES_3_0_COMPATIBLE));
-			if (gl_manager->initialize(x11_display) != OK || gl_manager->open_display(x11_display) != OK) {
-				memdelete(gl_manager);
-				gl_manager = nullptr;
-				r_error = ERR_UNAVAILABLE;
-				ERR_PRINT("Could not initialize OpenGL 3 video driver.");
-				init_failed = true;
-			} else {
-				driver_found = true;
-				RasterizerGLES3::make_current(true);
-			}
-		}
-	
-		if (rendering_driver == "opengl3_es") {
-			gl_manager_egl = memnew(GLManagerEGL_X11(3, 3));
-			if (gl_manager_egl->initialize() != OK || gl_manager_egl->open_display(x11_display) != OK) {
-				memdelete(gl_manager_egl);
-				gl_manager_egl = nullptr;
-				r_error = ERR_UNAVAILABLE;
-				ERR_PRINT("Could not initialize OpenGL ES 3.0 video driver.");
-				init_failed = true;
-			} else {
-				driver_found = true;
-				RasterizerGLES3::make_current(false);
-			}
-		}
-#endif // GLES3_ENABLED
-
-#if defined(GLES2_ENABLED)
-		if (rendering_driver == "opengl2" || rendering_driver == "opengl2_es") {
-			driver_compiled = true;
-			if (getenv("DRI_PRIME") == nullptr) {
-				int use_prime = -1;
-	
-				if (getenv("PRIMUS_DISPLAY") ||
-						getenv("PRIMUS_libGLd") ||
-						getenv("PRIMUS_libGLa") ||
-						getenv("PRIMUS_libGL") ||
-						getenv("PRIMUS_LOAD_GLOBAL") ||
-						getenv("BUMBLEBEE_SOCKET")) {
-					print_verbose("Optirun/primusrun detected. Skipping GPU detection");
-					use_prime = 0;
-				}
-				
-				if (OS::get_singleton()->has_environment("GODOT_LEGACY_X11_STUB")) {
-					print_verbose("Legacy X11 stub active. Skipping GPU detection");
-					use_prime = 0;
-				}
-				
-				// Some tools use fake libGL libraries and have them override the real one using
-				// LD_LIBRARY_PATH, so we skip them. *But* Steam also sets LD_LIBRARY_PATH for its
-				// runtime and includes system `/lib` and `/lib64`... so ignore Steam.
-				if (use_prime == -1 && getenv("LD_LIBRARY_PATH") && !getenv("STEAM_RUNTIME_LIBRARY_PATH")) {
-					String ld_library_path(getenv("LD_LIBRARY_PATH"));
-					Vector<String> libraries = ld_library_path.split(":");
-	
-					for (int i = 0; i < libraries.size(); ++i) {
-						if (FileAccess::exists(libraries[i] + "/libGL.so.1") ||
-								FileAccess::exists(libraries[i] + "/libGL.so")) {
-							print_verbose("Custom libGL override detected. Skipping GPU detection");
-							use_prime = 0;
-						}
+					if (use_prime == -1) {
+						print_verbose("Detecting GPUs, set DRI_PRIME in the environment to override GPU detection logic.");
+						use_prime = DetectPrimeX11::detect_prime(3, 3);
+					}
+		
+					if (use_prime) {
+						print_line("Found discrete GPU, setting DRI_PRIME=1 to use it.");
+						print_line("Note: Set DRI_PRIME=0 in the environment to disable Godot from using the discrete GPU.");
+						setenv("DRI_PRIME", "1", 1);
 					}
 				}
-	
-				if (use_prime == -1) {
-					print_verbose("Detecting GPUs, set DRI_PRIME in the environment to override GPU detection logic.");
-					use_prime = DetectPrimeX11::detect_prime(2, 1);
-				}
-	
-				if (use_prime) {
-					print_line("Found discrete GPU, setting DRI_PRIME=1 to use it.");
-					print_line("Note: Set DRI_PRIME=0 in the environment to disable Godot from using the discrete GPU.");
-					setenv("DRI_PRIME", "1", 1);
+			}
+			
+			if (rendering_driver == "opengl3") {
+				gl_manager = memnew(GLManager_X11(p_resolution, GLManager_X11::GLES_3_0_COMPATIBLE));
+				if (gl_manager->initialize(x11_display) != OK || gl_manager->open_display(x11_display) != OK) {
+					memdelete(gl_manager);
+					gl_manager = nullptr;
+					r_error = ERR_UNAVAILABLE;
+					ERR_PRINT("Could not initialize OpenGL 3 video driver.");
+					init_failed = true;
+				} else {
+					driver_found = true;
+					RasterizerGLES3::make_current(true);
 				}
 			}
-		}
 		
-		if (rendering_driver == "opengl2") {
-			gl_manager = memnew(GLManager_X11(p_resolution, GLManager_X11::GLES_2_1_COMPATIBLE));
-			if (gl_manager->initialize(x11_display) != OK || gl_manager->open_display(x11_display) != OK) {
-				memdelete(gl_manager);
-				gl_manager = nullptr;
-				r_error = ERR_UNAVAILABLE;
-				ERR_PRINT("Could not initialize OpenGL 2 video driver.");
-				init_failed = true;
-			} else {
-				driver_found = true;
-				RasterizerGLES2::make_current(true);
+			if (rendering_driver == "opengl3_es") {
+				gl_manager_egl = memnew(GLManagerEGL_X11(3, 3));
+				if (gl_manager_egl->initialize() != OK || gl_manager_egl->open_display(x11_display) != OK) {
+					memdelete(gl_manager_egl);
+					gl_manager_egl = nullptr;
+					r_error = ERR_UNAVAILABLE;
+					ERR_PRINT("Could not initialize OpenGL ES 3.0 video driver.");
+					init_failed = true;
+				} else {
+					driver_found = true;
+					RasterizerGLES3::make_current(false);
+				}
 			}
-		}
-	
-		if (rendering_driver == "opengl2_es") {
-			gl_manager_egl = memnew(GLManagerEGL_X11(2, 1));
-			if (gl_manager_egl->initialize() != OK || gl_manager_egl->open_display(x11_display) != OK) {
-				memdelete(gl_manager_egl);
-				gl_manager_egl = nullptr;
-				r_error = ERR_UNAVAILABLE;
-				ERR_PRINT("Could not initialize OpenGL ES 2.1 video driver.");
-				init_failed = true;
-			} else {
-				driver_found = true;
-				RasterizerGLES2::make_current(false);
-			}
-		}
-#endif // GLES2_ENABLED
+	#endif // GLES3_ENABLED
 
-#if defined(GLES1_ENABLED)
-		if (rendering_driver == "opengl1" || rendering_driver == "opengl1_es") {
-			driver_compiled = true;
-			if (getenv("DRI_PRIME") == nullptr) {
-				int use_prime = -1;
-	
-				if (getenv("PRIMUS_DISPLAY") ||
-						getenv("PRIMUS_libGLd") ||
-						getenv("PRIMUS_libGLa") ||
-						getenv("PRIMUS_libGL") ||
-						getenv("PRIMUS_LOAD_GLOBAL") ||
-						getenv("BUMBLEBEE_SOCKET")) {
-					print_verbose("Optirun/primusrun detected. Skipping GPU detection");
-					use_prime = 0;
-				}
-				
-				if (OS::get_singleton()->has_environment("GODOT_LEGACY_X11_STUB")) {
-					print_verbose("Legacy X11 stub active. Skipping GPU detection");
-					use_prime = 0;
-				}
-	
-				// Some tools use fake libGL libraries and have them override the real one using
-				// LD_LIBRARY_PATH, so we skip them. *But* Steam also sets LD_LIBRARY_PATH for its
-				// runtime and includes system `/lib` and `/lib64`... so ignore Steam.
-				if (use_prime == -1 && getenv("LD_LIBRARY_PATH") && !getenv("STEAM_RUNTIME_LIBRARY_PATH")) {
-					String ld_library_path(getenv("LD_LIBRARY_PATH"));
-					Vector<String> libraries = ld_library_path.split(":");
-	
-					for (int i = 0; i < libraries.size(); ++i) {
-						if (FileAccess::exists(libraries[i] + "/libGL.so.1") ||
-								FileAccess::exists(libraries[i] + "/libGL.so")) {
-							print_verbose("Custom libGL override detected. Skipping GPU detection");
-							use_prime = 0;
+	#if defined(GLES2_ENABLED)
+			if (rendering_driver == "opengl2" || rendering_driver == "opengl2_es") {
+				driver_compiled = true;
+				if (getenv("DRI_PRIME") == nullptr) {
+					int use_prime = -1;
+		
+					if (getenv("PRIMUS_DISPLAY") ||
+							getenv("PRIMUS_libGLd") ||
+							getenv("PRIMUS_libGLa") ||
+							getenv("PRIMUS_libGL") ||
+							getenv("PRIMUS_LOAD_GLOBAL") ||
+							getenv("BUMBLEBEE_SOCKET")) {
+						print_verbose("Optirun/primusrun detected. Skipping GPU detection");
+						use_prime = 0;
+					}
+					
+					if (OS::get_singleton()->has_environment("GODOT_LEGACY_X11_STUB")) {
+						print_verbose("Legacy X11 stub active. Skipping GPU detection");
+						use_prime = 0;
+					}
+					
+					// Some tools use fake libGL libraries and have them override the real one using
+					// LD_LIBRARY_PATH, so we skip them. *But* Steam also sets LD_LIBRARY_PATH for its
+					// runtime and includes system `/lib` and `/lib64`... so ignore Steam.
+					if (use_prime == -1 && getenv("LD_LIBRARY_PATH") && !getenv("STEAM_RUNTIME_LIBRARY_PATH")) {
+						String ld_library_path(getenv("LD_LIBRARY_PATH"));
+						Vector<String> libraries = ld_library_path.split(":");
+		
+						for (int i = 0; i < libraries.size(); ++i) {
+							if (FileAccess::exists(libraries[i] + "/libGL.so.1") ||
+									FileAccess::exists(libraries[i] + "/libGL.so")) {
+								print_verbose("Custom libGL override detected. Skipping GPU detection");
+								use_prime = 0;
+							}
 						}
 					}
-				}
-	
-				if (use_prime == -1) {
-					print_verbose("Detecting GPUs, set DRI_PRIME in the environment to override GPU detection logic.");
-					use_prime = DetectPrimeX11::detect_prime(1, 5);
-				}
-	
-				if (use_prime) {
-					print_line("Found discrete GPU, setting DRI_PRIME=1 to use it.");
-					print_line("Note: Set DRI_PRIME=0 in the environment to disable Godot from using the discrete GPU.");
-					setenv("DRI_PRIME", "1", 1);
+		
+					if (use_prime == -1) {
+						print_verbose("Detecting GPUs, set DRI_PRIME in the environment to override GPU detection logic.");
+						use_prime = DetectPrimeX11::detect_prime(2, 1);
+					}
+		
+					if (use_prime) {
+						print_line("Found discrete GPU, setting DRI_PRIME=1 to use it.");
+						print_line("Note: Set DRI_PRIME=0 in the environment to disable Godot from using the discrete GPU.");
+						setenv("DRI_PRIME", "1", 1);
+					}
 				}
 			}
-		}
-		if (rendering_driver == "opengl1") {
-			gl_manager = memnew(GLManager_X11(p_resolution, GLManager_X11::GLES_1_5_COMPATIBLE));
-			if (gl_manager->initialize(x11_display) != OK || gl_manager->open_display(x11_display) != OK) {
-				memdelete(gl_manager);
-				gl_manager = nullptr;
-				r_error = ERR_UNAVAILABLE;
-				ERR_PRINT("Could not initialize OpenGL 1 video driver.");
+			
+			if (rendering_driver == "opengl2") {
+				gl_manager = memnew(GLManager_X11(p_resolution, GLManager_X11::GLES_2_1_COMPATIBLE));
+				if (gl_manager->initialize(x11_display) != OK || gl_manager->open_display(x11_display) != OK) {
+					memdelete(gl_manager);
+					gl_manager = nullptr;
+					r_error = ERR_UNAVAILABLE;
+					ERR_PRINT("Could not initialize OpenGL 2 video driver.");
+					init_failed = true;
+				} else {
+					driver_found = true;
+					RasterizerGLES2::make_current(true);
+				}
+			}
+		
+			if (rendering_driver == "opengl2_es") {
+				gl_manager_egl = memnew(GLManagerEGL_X11(2, 1));
+				if (gl_manager_egl->initialize() != OK || gl_manager_egl->open_display(x11_display) != OK) {
+					memdelete(gl_manager_egl);
+					gl_manager_egl = nullptr;
+					r_error = ERR_UNAVAILABLE;
+					ERR_PRINT("Could not initialize OpenGL ES 2.1 video driver.");
+					init_failed = true;
+				} else {
+					driver_found = true;
+					RasterizerGLES2::make_current(false);
+				}
+			}
+	#endif // GLES2_ENABLED
+
+	#if defined(GLES1_ENABLED)
+			if (rendering_driver == "opengl1" || rendering_driver == "opengl1_es") {
+				driver_compiled = true;
+				if (getenv("DRI_PRIME") == nullptr) {
+					int use_prime = -1;
+		
+					if (getenv("PRIMUS_DISPLAY") ||
+							getenv("PRIMUS_libGLd") ||
+							getenv("PRIMUS_libGLa") ||
+							getenv("PRIMUS_libGL") ||
+							getenv("PRIMUS_LOAD_GLOBAL") ||
+							getenv("BUMBLEBEE_SOCKET")) {
+						print_verbose("Optirun/primusrun detected. Skipping GPU detection");
+						use_prime = 0;
+					}
+					
+					if (OS::get_singleton()->has_environment("GODOT_LEGACY_X11_STUB")) {
+						print_verbose("Legacy X11 stub active. Skipping GPU detection");
+						use_prime = 0;
+					}
+		
+					// Some tools use fake libGL libraries and have them override the real one using
+					// LD_LIBRARY_PATH, so we skip them. *But* Steam also sets LD_LIBRARY_PATH for its
+					// runtime and includes system `/lib` and `/lib64`... so ignore Steam.
+					if (use_prime == -1 && getenv("LD_LIBRARY_PATH") && !getenv("STEAM_RUNTIME_LIBRARY_PATH")) {
+						String ld_library_path(getenv("LD_LIBRARY_PATH"));
+						Vector<String> libraries = ld_library_path.split(":");
+		
+						for (int i = 0; i < libraries.size(); ++i) {
+							if (FileAccess::exists(libraries[i] + "/libGL.so.1") ||
+									FileAccess::exists(libraries[i] + "/libGL.so")) {
+								print_verbose("Custom libGL override detected. Skipping GPU detection");
+								use_prime = 0;
+							}
+						}
+					}
+		
+					if (use_prime == -1) {
+						print_verbose("Detecting GPUs, set DRI_PRIME in the environment to override GPU detection logic.");
+						use_prime = DetectPrimeX11::detect_prime(1, 5);
+					}
+		
+					if (use_prime) {
+						print_line("Found discrete GPU, setting DRI_PRIME=1 to use it.");
+						print_line("Note: Set DRI_PRIME=0 in the environment to disable Godot from using the discrete GPU.");
+						setenv("DRI_PRIME", "1", 1);
+					}
+				}
+			}
+			if (rendering_driver == "opengl1") {
+				gl_manager = memnew(GLManager_X11(p_resolution, GLManager_X11::GLES_1_5_COMPATIBLE));
+				if (gl_manager->initialize(x11_display) != OK || gl_manager->open_display(x11_display) != OK) {
+					memdelete(gl_manager);
+					gl_manager = nullptr;
+					r_error = ERR_UNAVAILABLE;
+					ERR_PRINT("Could not initialize OpenGL 1 video driver.");
+					init_failed = true;
+				} else {
+					driver_found = true;
+					RasterizerGLES1::make_current(true);
+				}
+			}
+		
+			if (rendering_driver == "opengl1_es") {
+				gl_manager_egl = memnew(GLManagerEGL_X11(1, 5));
+				if (gl_manager_egl->initialize() != OK || gl_manager_egl->open_display(x11_display) != OK) {
+					memdelete(gl_manager_egl);
+					gl_manager_egl = nullptr;
+					r_error = ERR_UNAVAILABLE;
+					ERR_PRINT("Could not initialize OpenGL ES 1.1 video driver.");
+					init_failed = true;
+				} else {
+					driver_found = true;
+					RasterizerGLES1::make_current(false);
+				}
+			}
+	#endif // GLES1_ENABLED
+
+			if (!driver_compiled) {
 				init_failed = true;
-			} else {
-				driver_found = true;
-				RasterizerGLES1::make_current(true);
-			}
-		}
-	
-		if (rendering_driver == "opengl1_es") {
-			gl_manager_egl = memnew(GLManagerEGL_X11(1, 5));
-			if (gl_manager_egl->initialize() != OK || gl_manager_egl->open_display(x11_display) != OK) {
-				memdelete(gl_manager_egl);
-				gl_manager_egl = nullptr;
 				r_error = ERR_UNAVAILABLE;
-				ERR_PRINT("Could not initialize OpenGL ES 1.1 video driver.");
-				init_failed = true;
-			} else {
-				driver_found = true;
-				RasterizerGLES1::make_current(false);
 			}
-		}
-#endif // GLES1_ENABLED
 
-		if (!driver_compiled) {
-			init_failed = true;
-			r_error = ERR_UNAVAILABLE;
-		}
+			if (!init_failed) {
+				if (driver_attempts[attempt_idx] != requested_driver) {
+					// Set the fallback to the driver that won the battle.
+					OS::get_singleton()->set_current_rendering_driver_name(driver_attempts[attempt_idx], OS::RENDERING_SOURCE_FALLBACK);
 
-		if (!init_failed) {
-			if (driver_attempts[attempt_idx] != requested_driver) {
-				// Set the fallback to the driver that won the battle.
-				OS::get_singleton()->set_current_rendering_driver_name(driver_attempts[attempt_idx], OS::RENDERING_SOURCE_FALLBACK);
+					String req_api;
+					String req_method;
+					String req_type;
 
-				String req_api;
-				String req_method;
-				String req_type;
+					if (requested_driver.begins_with("opengl3")) {
+						req_api = "GLES3";
+						req_method = "Compatibility";
+					} else if (requested_driver.begins_with("opengl2")) {
+						req_api = "GLES2";
+						req_method = "Legacy";
+					} else {
+						req_api = "GLES1";
+						req_method = "Classic";
+					}
 
-				if (requested_driver.begins_with("opengl3")) {
-					req_api = "GLES3";
-					req_method = "Compatibility";
-				} else if (requested_driver.begins_with("opengl2")) {
-					req_api = "GLES2";
-					req_method = "Legacy";
-				} else {
-					req_api = "GLES1";
-					req_method = "Classic";
+					if (requested_driver.ends_with("_es")) {
+						req_type = "ES";
+					} else {
+						req_type = "Native";
+					}
+
+					String fallback_method;
+					String fallback_type;
+
+					if (driver_attempts[attempt_idx].begins_with("opengl3")) {
+						fallback_method = "Compatibility";
+					} else if (driver_attempts[attempt_idx].begins_with("opengl2")) {
+						fallback_method = "Legacy";
+					} else {
+						fallback_method = "Classic";
+					}
+
+					if (driver_attempts[attempt_idx].ends_with("_es")) {
+						fallback_type = "ES";
+					} else {
+						fallback_type = "native";
+					}
+
+					WARN_PRINT(vformat("The %s driver for the %s renderer (%s) could not be initialized. Using the %s driver for the %s renderer, visuals may be affected.",
+							req_type, req_method, req_api, fallback_type, fallback_method));
 				}
-
-				if (requested_driver.ends_with("_es")) {
-					req_type = "ES";
-				} else {
-					req_type = "Native";
-				}
-
-				String fallback_method;
-				String fallback_type;
-
-				if (driver_attempts[attempt_idx].begins_with("opengl3")) {
-					fallback_method = "Compatibility";
-				} else if (driver_attempts[attempt_idx].begins_with("opengl2")) {
-					fallback_method = "Legacy";
-				} else {
-					fallback_method = "Classic";
-				}
-
-				if (driver_attempts[attempt_idx].ends_with("_es")) {
-					fallback_type = "ES";
-				} else {
-					fallback_type = "native";
-				}
-
-				WARN_PRINT(vformat("The %s driver for the %s renderer (%s) could not be initialized. Using the %s driver for the %s renderer, visuals may be affected.",
-						req_type, req_method, req_api, fallback_type, fallback_method));
+				break;
 			}
-			break;
-		}
-	} // for attempt_idx < driver_attempts.size()
+		} // for attempt_idx < driver_attempts.size()
+	} // rendering_device.begins_with("opengl")
 
 	if (unlikely(!driver_found)) {
 		r_error = ERR_UNAVAILABLE;
 
-		OS::get_singleton()->alert(
-			vformat("Your video card drivers seem to not support the required %s version.\n\n"
-					"if possible, consider updating your video card drivers.\n\n"
-					"If you have recently updated your video card drivers, try rebooting.",
-					String(" or ").join(driver_attempts)
-			),
-			"Unable to initialize video driver");
+		if (rendering_device.begins_with("opengl")) {
+			OS::get_singleton()->alert(
+				vformat("Your video card drivers seem to not support the required %s version.\n\n"
+						"if possible, consider updating your video card drivers.\n\n"
+						"If you have recently updated your video card drivers, try rebooting.",
+						String(" or ").join(driver_attempts)
+				),
+				"Unable to initialize video driver");
+		}
 
 		ERR_FAIL_MSG("Video driver not found.");
 	}
