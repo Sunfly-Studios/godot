@@ -38,4 +38,8 @@
 #define GL_MAP_WRITE_BIT_OES GL_MAP_WRITE_BIT
 #endif
 
+#ifndef GL_HALF_FLOAT_OES
+#define GL_HALF_FLOAT_OES 0x8D61
+#endif
+
 #endif // COMMON_DEFINES_GLES_COMMON_H
