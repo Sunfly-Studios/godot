@@ -221,21 +221,14 @@ Error EditorExportPlatformWindows::export_project(const Ref<EditorExportPreset> 
 		path = tmp_dir_path.path_join(p_path.get_file().get_basename() + ".exe");
 	}
 
+	const String rendering_method = GLOBAL_GET("rendering/renderer/rendering_method");
 	int export_angle = p_preset->get("application/export_angle");
 	bool include_angle_libs = false;
 	if (export_angle == 0) {
 		include_angle_libs = (
-			(
-				String(GLOBAL_GET("rendering/gl_compatibility/driver.windows")) == "opengl3_angle"
-			) && (
-				String(GLOBAL_GET("rendering/renderer/rendering_method")) == "gl_compatibility"
-			)
-		) || (
-			(
-				String(GLOBAL_GET("rendering/gl_compatibility/driver.windows")) == "opengl2_angle"
-			) && (
-				String(GLOBAL_GET("rendering/renderer/rendering_method")) == "gl_legacy"
-			)
+			(rendering_method == "gl_compatibility" && String(GLOBAL_GET("rendering/gl_compatibility/driver.windows")) == "opengl3_angle") ||
+			(rendering_method == "gl_legacy" && String(GLOBAL_GET("rendering/gl_legacy/driver.windows")) == "opengl2_angle") ||
+			(rendering_method == "gl_classic" && String(GLOBAL_GET("rendering/gl_classic/driver.windows")) == "opengl1_angle")
 		);
 	} else if (export_angle == 1) {
 		include_angle_libs = true;
@@ -248,23 +241,21 @@ Error EditorExportPlatformWindows::export_project(const Ref<EditorExportPreset> 
 		if (da->file_exists(template_path.get_base_dir().path_join("libGLESv2." + arch + ".dll"))) {
 			da->copy(template_path.get_base_dir().path_join("libGLESv2." + arch + ".dll"), path.get_base_dir().path_join("libGLESv2.dll"), get_chmod_flags());
 		}
+		if (da->file_exists(template_path.get_base_dir().path_join("d3dcompiler_47." + arch + ".dll"))) {
+			da->copy(template_path.get_base_dir().path_join("d3dcompiler_47." + arch + ".dll"), path.get_base_dir().path_join("d3dcompiler_47.dll"), get_chmod_flags());
+		}
 	}
 
 	int export_d3d12 = p_preset->get("application/export_d3d12");
 	bool agility_sdk_multiarch = p_preset->get("application/d3d12_agility_sdk_multiarch");
 	bool include_d3d12_extra_libs = false;
 	if (export_d3d12 == 0) {
+		const bool is_d3d12_driver = (String(GLOBAL_GET("rendering/rendering_device/driver.windows")) == "d3d12");
 		include_d3d12_extra_libs = (
-			(
-				String(GLOBAL_GET("rendering/rendering_device/driver.windows")) == "d3d12"
-			) && (
-				String(GLOBAL_GET("rendering/renderer/rendering_method")) != "gl_compatibility"
-			)
-		) || (
-			(
-				String(GLOBAL_GET("rendering/rendering_device/driver.windows")) == "d3d12"
-			) && (
-				String(GLOBAL_GET("rendering/renderer/rendering_method")) != "gl_legacy"
+			is_d3d12_driver && (
+				rendering_method != "gl_compatibility" ||
+				rendering_method != "gl_legacy" ||
+				rendering_method != "gl_classic"
 			)
 		);
 	} else if (export_d3d12 == 1) {

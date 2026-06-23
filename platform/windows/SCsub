@@ -124,6 +124,66 @@ if env["d3d12"]:
             env["pix_path"] + "/bin/" + dxc_arch_subdir + "/" + pix_dll,
             Copy("$TARGET", "$SOURCE"),
         )
+    
+# d3d47 compiler DLL for ANGLE
+if env["angle_libs"] and env["winsdk_sysroot"]:
+    winsdk_sysroot_alias = {
+        "x86_32": "x86",
+        "x86_64": "x64",
+        "arm32": "arm",
+        "arm64": "arm64",
+    }
+    arch_subdir = winsdk_sysroot_alias[env["arch"]]
+    d3dcompiler_dll = "d3dcompiler_47.dll"
+
+    # Normalise MSYS2/Git bash paths
+    sysroot = env["winsdk_sysroot"]
+    if sysroot.startswith("/") and len(sysroot) > 2 and sysroot[2] == "/":
+        sysroot = sysroot[1] + ":" + sysroot[2:]
+
+    bin_dir = os.path.join(sysroot, "bin")
+    sdk_version = env.get("winsdk_version", "")
+    resolved_dll_path = ""
+    explicit_version = ARGUMENTS.get("winsdk_version", env.get("winsdk_version", ""))
+
+    # Use the version explicitly requested frist
+    if explicit_version:
+        potential_path = os.path.join(bin_dir, explicit_version, arch_subdir, d3dcompiler_dll)
+        if os.path.exists(potential_path):
+            resolved_dll_path = potential_path
+
+    # Probe for the highest WinSDK folder containing the DLL
+    if not resolved_dll_path and os.path.exists(bin_dir):
+        try:
+            subdirs = [d for d in os.listdir(bin_dir) if os.path.isdir(os.path.join(bin_dir, d))]
+            # Filter for standard Windows 10/11 SDK version patterns (e.g., 10.x.x.x)
+            sdk_versions = [d for d in subdirs if d.startswith("10.")]
+            
+            if sdk_versions:
+                # Sort components semantically as integers (e.g., 10.0.22621.0 > 10.0.18362.0)
+                sdk_versions.sort(key=lambda s: [int(x) for x in s.split(".") if x.isdigit()], reverse=True)
+                
+                for version in sdk_versions:
+                    potential_path = os.path.join(bin_dir, version, arch_subdir, d3dcompiler_dll)
+                    if os.path.exists(potential_path):
+                        resolved_dll_path = potential_path
+                        break
+        except Exception:
+            pass
+
+    # Fallback to the original hardcoded path
+    if not resolved_dll_path:
+        sdk_version = sdk_version if sdk_version else "10.0.18362.0"
+        resolved_dll_path = env["winsdk_sysroot"] + "/bin/" + sdk_version + "/" + arch_subdir + "/" + d3dcompiler_dll
+    else:
+        # Uniformly format slashes
+        resolved_dll_path = resolved_dll_path.replace("\\", "/")
+
+    env.Command(
+        "#bin/" + d3dcompiler_dll,
+        resolved_dll_path,
+        Copy("$TARGET", "$SOURCE"),
+    )
 
 if not os.getenv("VCINSTALLDIR"):
     if env["debug_symbols"]:

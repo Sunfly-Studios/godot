@@ -1862,21 +1862,14 @@ Error EditorExportPlatformMacOS::export_project(const Ref<EditorExportPreset> &p
 	// Now process our template.
 	bool found_binary = false;
 
+	const String rendering_method = GLOBAL_GET("rendering/renderer/rendering_method");
 	int export_angle = p_preset->get("application/export_angle");
 	bool include_angle_libs = false;
 	if (export_angle == 0) {
 		include_angle_libs = (
-			(
-				String(GLOBAL_GET("rendering/gl_compatibility/driver.macos")) == "opengl3_angle"
-			) && (
-				String(GLOBAL_GET("rendering/renderer/rendering_method")) == "gl_compatibility"
-			)
-		) || (
-			(
-				String(GLOBAL_GET("rendering/gl_compatibility/driver.macos")) == "opengl2_angle"
-			) && (
-				String(GLOBAL_GET("rendering/renderer/rendering_method")) == "gl_legacy"
-			)
+			(rendering_method == "gl_compatibility" && String(GLOBAL_GET("rendering/gl_compatibility/driver.macos")) == "opengl3_angle") ||
+			(rendering_method == "gl_legacy" && String(GLOBAL_GET("rendering/gl_legacy/driver.macos")) == "opengl2_angle") ||
+			(rendering_method == "gl_classic" && String(GLOBAL_GET("rendering/gl_classic/driver.macos")) == "opengl1_angle")
 		);
 	} else if (export_angle == 1) {
 		include_angle_libs = true;
