@@ -1313,6 +1313,9 @@ void RasterizerCanvasGLES1::canvas_render_items(RID p_to_render_target, Item *p_
 	state.default_filter = p_default_filter;
 	state.default_repeat = p_default_repeat;
 
+	// Record the current render info for tracking
+	current_render_info = r_render_info;
+
 	// ==========================================
 	// The base rendering pass
 	// ==========================================
@@ -1461,7 +1464,9 @@ void RasterizerCanvasGLES1::canvas_render_items(RID p_to_render_target, Item *p_
 		current_light = next_light_ptr;
 	}
 
+	// Clear
 	canvas_end();
+	current_render_info = nullptr;
 }
 
 void RasterizerCanvasGLES1::canvas_render_items_begin(const Color &p_modulate, Light *p_light, const Transform2D &p_base_transform) {
@@ -2505,12 +2510,22 @@ void RasterizerCanvasGLES1::_batch_render_generic(const Batch &p_batch, GLES1::C
 				}
 				glDrawElements(GL_TRIANGLES, num_elements, GL_UNSIGNED_SHORT, idx_ptr);
 			}
+			if (current_render_info) {
+				current_render_info->info[RS::VIEWPORT_RENDER_INFO_TYPE_CANVAS][RS::VIEWPORT_RENDER_INFO_OBJECTS_IN_FRAME] += 1;
+				current_render_info->info[RS::VIEWPORT_RENDER_INFO_TYPE_CANVAS][RS::VIEWPORT_RENDER_INFO_PRIMITIVES_IN_FRAME] += num_elements / 3;
+				current_render_info->info[RS::VIEWPORT_RENDER_INFO_TYPE_CANVAS][RS::VIEWPORT_RENDER_INFO_DRAW_CALLS_IN_FRAME]++;
+			}
 			GL_CHECK_ERROR("GLES1::Canvas::batch_render_generic: glDrawElements (BT_RECT)");
 		} break;
 		case BatcherEnums::BT_POLY: {
 			glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
 			int num_elements = p_batch.num_commands;
 			glDrawArrays(GL_TRIANGLES, 0, num_elements);
+			if (current_render_info) {
+				current_render_info->info[RS::VIEWPORT_RENDER_INFO_TYPE_CANVAS][RS::VIEWPORT_RENDER_INFO_OBJECTS_IN_FRAME] += 1;
+				current_render_info->info[RS::VIEWPORT_RENDER_INFO_TYPE_CANVAS][RS::VIEWPORT_RENDER_INFO_PRIMITIVES_IN_FRAME] += num_elements / 3;
+				current_render_info->info[RS::VIEWPORT_RENDER_INFO_TYPE_CANVAS][RS::VIEWPORT_RENDER_INFO_DRAW_CALLS_IN_FRAME]++;
+			}
 			GL_CHECK_ERROR("GLES1::Canvas::batch_render_generic: glDrawArrays (BT_POLY)");
 		} break;
 		default:
@@ -2778,6 +2793,11 @@ void RasterizerCanvasGLES1::render_batches(Item::Command *const *p_commands, Ite
 
 							glEnable(GL_TEXTURE_2D);
 							glDrawArrays(GL_TRIANGLE_FAN, 0, 4);
+							if (current_render_info) {
+								current_render_info->info[RS::VIEWPORT_RENDER_INFO_TYPE_CANVAS][RS::VIEWPORT_RENDER_INFO_OBJECTS_IN_FRAME]++;
+								current_render_info->info[RS::VIEWPORT_RENDER_INFO_TYPE_CANVAS][RS::VIEWPORT_RENDER_INFO_PRIMITIVES_IN_FRAME] += 2;
+								current_render_info->info[RS::VIEWPORT_RENDER_INFO_TYPE_CANVAS][RS::VIEWPORT_RENDER_INFO_DRAW_CALLS_IN_FRAME]++;
+							}
 							GL_CHECK_ERROR("GLES1::Canvas::render_batches: TYPE_RECT glDrawArrays");
 
 							// Cleanup and restore
@@ -2962,6 +2982,11 @@ void RasterizerCanvasGLES1::render_batches(Item::Command *const *p_commands, Ite
 								state.canvas_shader->version_set_uniform(CanvasShaderGLES1::SRC_RECT, Color(src_rect.position.x, src_rect.position.y, src_rect.size.x, src_rect.size.y), state.shader_version, state.mode_variant, state.specialization);
 
 								glDrawArrays(GL_TRIANGLE_FAN, 0, 4);
+								if (current_render_info) {
+									current_render_info->info[RS::VIEWPORT_RENDER_INFO_TYPE_CANVAS][RS::VIEWPORT_RENDER_INFO_OBJECTS_IN_FRAME]++;
+									current_render_info->info[RS::VIEWPORT_RENDER_INFO_TYPE_CANVAS][RS::VIEWPORT_RENDER_INFO_PRIMITIVES_IN_FRAME] += 2;
+									current_render_info->info[RS::VIEWPORT_RENDER_INFO_TYPE_CANVAS][RS::VIEWPORT_RENDER_INFO_DRAW_CALLS_IN_FRAME]++;
+								}
 
 								// Cleanup and restore per rect
 								if (state.using_light) {
@@ -3193,6 +3218,11 @@ void RasterizerCanvasGLES1::render_batches(Item::Command *const *p_commands, Ite
 								GL_CHECK_ERROR("GLES1::Canvas::render_batches: TYPE_NINEPATCH client states");
 
 								glDrawElements(GL_TRIANGLES, 18 * 3 - (np->draw_center ? 0 : 6), GL_UNSIGNED_SHORT, nullptr);
+								if (current_render_info) {
+									current_render_info->info[RS::VIEWPORT_RENDER_INFO_TYPE_CANVAS][RS::VIEWPORT_RENDER_INFO_OBJECTS_IN_FRAME]++;
+									current_render_info->info[RS::VIEWPORT_RENDER_INFO_TYPE_CANVAS][RS::VIEWPORT_RENDER_INFO_PRIMITIVES_IN_FRAME] += (18 * 3 - (np->draw_center ? 0 : 6)) / 3;
+									current_render_info->info[RS::VIEWPORT_RENDER_INFO_TYPE_CANVAS][RS::VIEWPORT_RENDER_INFO_DRAW_CALLS_IN_FRAME]++;
+								}
 								GL_CHECK_ERROR("GLES1::Canvas::render_batches: TYPE_NINEPATCH glDrawElements");
 							} else { // data.ninepatch_vertices != 0 && data.ninepatch_elements != 0
 								glBindBuffer(GL_ARRAY_BUFFER, 0);
@@ -3266,6 +3296,11 @@ void RasterizerCanvasGLES1::render_batches(Item::Command *const *p_commands, Ite
 								GL_CHECK_ERROR("GLES1::Canvas::render_batches: TYPE_NINEPATCH client states (fallback)");
 
 								glDrawElements(GL_TRIANGLES, 18 * 3 - (np->draw_center ? 0 : 6), GL_UNSIGNED_SHORT, ninepatch_elems);
+								if (current_render_info) {
+									current_render_info->info[RS::VIEWPORT_RENDER_INFO_TYPE_CANVAS][RS::VIEWPORT_RENDER_INFO_OBJECTS_IN_FRAME]++;
+									current_render_info->info[RS::VIEWPORT_RENDER_INFO_TYPE_CANVAS][RS::VIEWPORT_RENDER_INFO_PRIMITIVES_IN_FRAME] += (18 * 3 - (np->draw_center ? 0 : 6)) / 3;
+									current_render_info->info[RS::VIEWPORT_RENDER_INFO_TYPE_CANVAS][RS::VIEWPORT_RENDER_INFO_DRAW_CALLS_IN_FRAME]++;
+								}
 								GL_CHECK_ERROR("GLES1::Canvas::render_batches: TYPE_NINEPATCH glDrawElements (fallback)");
 							}
 
@@ -3540,14 +3575,35 @@ void RasterizerCanvasGLES1::render_batches(Item::Command *const *p_commands, Ite
 											GLenum index_type = needs_32_bit ? GL_UNSIGNED_INT : GL_UNSIGNED_SHORT;
 											if (use_index_vbo) {
 												glDrawElements(gl_primitive, s->index_count, index_type, nullptr);
+												if (current_render_info) {
+													current_render_info->info[RS::VIEWPORT_RENDER_INFO_TYPE_CANVAS][RS::VIEWPORT_RENDER_INFO_OBJECTS_IN_FRAME]++;
+													current_render_info->info[RS::VIEWPORT_RENDER_INFO_TYPE_CANVAS][RS::VIEWPORT_RENDER_INFO_PRIMITIVES_IN_FRAME] += _gl_indices_to_primitives(gl_primitive, s->index_count);
+													current_render_info->info[RS::VIEWPORT_RENDER_INFO_TYPE_CANVAS][RS::VIEWPORT_RENDER_INFO_DRAW_CALLS_IN_FRAME]++;
+												}
 											} else {
 												ERR_FAIL_COND(s->index_buffer_fallback.is_empty());
 												glDrawElements(gl_primitive, s->index_count, index_type, s->index_buffer_fallback.ptr());
+												if (current_render_info) {
+													uint32_t fallback_size = 0;
+
+													for (uint8_t ii = 0; ii < s->index_buffer_fallback.size(); ii++) {
+														fallback_size += s->index_buffer_fallback.ptrw()[ii];
+													}
+
+													current_render_info->info[RS::VIEWPORT_RENDER_INFO_TYPE_CANVAS][RS::VIEWPORT_RENDER_INFO_OBJECTS_IN_FRAME]++;
+													current_render_info->info[RS::VIEWPORT_RENDER_INFO_TYPE_CANVAS][RS::VIEWPORT_RENDER_INFO_PRIMITIVES_IN_FRAME] += _gl_indices_to_primitives(gl_primitive, fallback_size);
+													current_render_info->info[RS::VIEWPORT_RENDER_INFO_TYPE_CANVAS][RS::VIEWPORT_RENDER_INFO_DRAW_CALLS_IN_FRAME]++;
+												}
 											}
 											GL_CHECK_ERROR("GLES1::Canvas::render_batches: TYPE_MESH glDrawElements");
 										}
 									} else {
 										glDrawArrays(gl_primitive, 0, s->vertex_count);
+										if (current_render_info) {
+											current_render_info->info[RS::VIEWPORT_RENDER_INFO_TYPE_CANVAS][RS::VIEWPORT_RENDER_INFO_OBJECTS_IN_FRAME]++;
+											current_render_info->info[RS::VIEWPORT_RENDER_INFO_TYPE_CANVAS][RS::VIEWPORT_RENDER_INFO_PRIMITIVES_IN_FRAME] += _gl_indices_to_primitives(gl_primitive, s->vertex_count);
+											current_render_info->info[RS::VIEWPORT_RENDER_INFO_TYPE_CANVAS][RS::VIEWPORT_RENDER_INFO_DRAW_CALLS_IN_FRAME]++;
+										}
 										GL_CHECK_ERROR("GLES1::Canvas::render_batches: TYPE_MESH glDrawArrays");
 									}
 
@@ -3890,14 +3946,35 @@ void RasterizerCanvasGLES1::render_batches(Item::Command *const *p_commands, Ite
 										} else {
 											if (use_index_vbo) {
 												glDrawElements(gl_primitive, s->index_count, index_type, nullptr);
+												if (current_render_info) {
+													current_render_info->info[RS::VIEWPORT_RENDER_INFO_TYPE_CANVAS][RS::VIEWPORT_RENDER_INFO_OBJECTS_IN_FRAME]++;
+													current_render_info->info[RS::VIEWPORT_RENDER_INFO_TYPE_CANVAS][RS::VIEWPORT_RENDER_INFO_PRIMITIVES_IN_FRAME] += _gl_indices_to_primitives(gl_primitive, s->index_count);
+													current_render_info->info[RS::VIEWPORT_RENDER_INFO_TYPE_CANVAS][RS::VIEWPORT_RENDER_INFO_DRAW_CALLS_IN_FRAME]++;
+												}
 											} else {
 												ERR_FAIL_COND(s->index_buffer_fallback.is_empty());
 												glDrawElements(gl_primitive, s->index_count, index_type, s->index_buffer_fallback.ptr());
+												if (current_render_info) {
+													uint32_t fallback_size = 0;
+
+													for (uint8_t ii = 0; ii < s->index_buffer_fallback.size(); ii++) {
+														fallback_size += s->index_buffer_fallback.ptrw()[ii];
+													}
+
+													current_render_info->info[RS::VIEWPORT_RENDER_INFO_TYPE_CANVAS][RS::VIEWPORT_RENDER_INFO_OBJECTS_IN_FRAME]++;
+													current_render_info->info[RS::VIEWPORT_RENDER_INFO_TYPE_CANVAS][RS::VIEWPORT_RENDER_INFO_PRIMITIVES_IN_FRAME] += _gl_indices_to_primitives(gl_primitive, fallback_size);
+													current_render_info->info[RS::VIEWPORT_RENDER_INFO_TYPE_CANVAS][RS::VIEWPORT_RENDER_INFO_DRAW_CALLS_IN_FRAME]++;
+												}
 											}
 											GL_CHECK_ERROR("GLES1::Canvas::render_batches: TYPE_MULTIMESH glDrawElements");
 										}
 									} else {
 										glDrawArrays(gl_primitive, 0, s->vertex_count);
+										if (current_render_info) {
+											current_render_info->info[RS::VIEWPORT_RENDER_INFO_TYPE_CANVAS][RS::VIEWPORT_RENDER_INFO_OBJECTS_IN_FRAME]++;
+											current_render_info->info[RS::VIEWPORT_RENDER_INFO_TYPE_CANVAS][RS::VIEWPORT_RENDER_INFO_PRIMITIVES_IN_FRAME] += _gl_indices_to_primitives(gl_primitive, s->vertex_count);
+											current_render_info->info[RS::VIEWPORT_RENDER_INFO_TYPE_CANVAS][RS::VIEWPORT_RENDER_INFO_DRAW_CALLS_IN_FRAME]++;
+										}
 										GL_CHECK_ERROR("GLES1::Canvas::render_batches: TYPE_MULTIMESH glDrawArrays");
 									}
 								}
@@ -4252,6 +4329,11 @@ void RasterizerCanvasGLES1::_draw_gui_primitive(int p_points, const Vector2 *p_v
 	}
 
 	glDrawArrays(draw_mode, 0, p_points);
+	if (current_render_info) {
+		current_render_info->info[RS::VIEWPORT_RENDER_INFO_TYPE_CANVAS][RS::VIEWPORT_RENDER_INFO_OBJECTS_IN_FRAME]++;
+		current_render_info->info[RS::VIEWPORT_RENDER_INFO_TYPE_CANVAS][RS::VIEWPORT_RENDER_INFO_PRIMITIVES_IN_FRAME] += _gl_indices_to_primitives(draw_mode, p_points);
+		current_render_info->info[RS::VIEWPORT_RENDER_INFO_TYPE_CANVAS][RS::VIEWPORT_RENDER_INFO_DRAW_CALLS_IN_FRAME]++;
+	}
 	GL_CHECK_ERROR("GLES1::Canvas::_draw_gui_primitive: glDrawArrays");
 
 	glDisableClientState(GL_VERTEX_ARRAY);
@@ -4673,9 +4755,19 @@ void RasterizerCanvasGLES1::_legacy_draw_polygon(Item::CommandPolygon *p_poly, G
 		// Godot passes PRIMITIVE_TRIANGLES, but un-indexed polygons must be fanned.
 		if (gl_primitive == GL_TRIANGLES) {
 			glDrawArrays(GL_TRIANGLE_FAN, 0, pd.points.size());
+			if (current_render_info) {
+				current_render_info->info[RS::VIEWPORT_RENDER_INFO_TYPE_CANVAS][RS::VIEWPORT_RENDER_INFO_OBJECTS_IN_FRAME]++;
+				current_render_info->info[RS::VIEWPORT_RENDER_INFO_TYPE_CANVAS][RS::VIEWPORT_RENDER_INFO_PRIMITIVES_IN_FRAME] += _gl_indices_to_primitives(GL_TRIANGLE_FAN, pd.points.size());
+				current_render_info->info[RS::VIEWPORT_RENDER_INFO_TYPE_CANVAS][RS::VIEWPORT_RENDER_INFO_DRAW_CALLS_IN_FRAME]++;
+			}
 			GL_CHECK_ERROR("GLES1::Canvas::_legacy_draw_polygon: glDrawArrays (GL_TRIANGLE_FAN)");
 		} else {
 			glDrawArrays(gl_primitive, 0, pd.points.size());
+			if (current_render_info) {
+				current_render_info->info[RS::VIEWPORT_RENDER_INFO_TYPE_CANVAS][RS::VIEWPORT_RENDER_INFO_OBJECTS_IN_FRAME]++;
+				current_render_info->info[RS::VIEWPORT_RENDER_INFO_TYPE_CANVAS][RS::VIEWPORT_RENDER_INFO_PRIMITIVES_IN_FRAME] += _gl_indices_to_primitives(GL_TRIANGLE_FAN, pd.points.size());
+				current_render_info->info[RS::VIEWPORT_RENDER_INFO_TYPE_CANVAS][RS::VIEWPORT_RENDER_INFO_DRAW_CALLS_IN_FRAME]++;
+			}
 			GL_CHECK_ERROR("GLES1::Canvas::_legacy_draw_polygon: glDrawArrays (Primitive)");
 		}
 	}

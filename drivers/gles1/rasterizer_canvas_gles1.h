@@ -226,6 +226,8 @@ protected:
 
 	int maximum_attributes = 0;
 
+	RenderingMethod::RenderInfo *current_render_info = nullptr;
+
 	// Internal bindings
 	void _set_texture_rect_mode(bool p_texture_rect, bool p_light_angle = false, bool p_modulate = false, bool p_large_vertex = false);
 	void _bind_canvas_texture(RID p_texture, RS::CanvasItemTextureFilter p_base_filter, RS::CanvasItemTextureRepeat p_base_repeat);
@@ -429,6 +431,25 @@ public:
 			return false;
 		}
 		return true;
+	}
+
+	_FORCE_INLINE_ static uint32_t _gl_indices_to_primitives(GLenum p_primitive, uint32_t p_indices) {
+		switch (p_primitive) {
+			case GL_POINTS:
+				return p_indices;
+			case GL_LINES:
+				return p_indices / 2;
+			case GL_LINE_STRIP:
+			case GL_LINE_LOOP:
+				return p_indices > 1 ? p_indices - 1 : 0;
+			case GL_TRIANGLES:
+				return p_indices / 3;
+			case GL_TRIANGLE_STRIP:
+			case GL_TRIANGLE_FAN:
+				return p_indices > 2 ? p_indices - 2 : 0;
+			default:
+				return 0;
+		}
 	}
 
 private:
