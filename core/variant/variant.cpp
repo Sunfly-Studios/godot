@@ -1752,13 +1752,17 @@ Variant::operator Vector2() const {
 	} else if (type == VECTOR2I) {
 		return unaligned_read<Vector2i>(_data._mem);
 	} else if (type == VECTOR3) {
-		return Vector2(unaligned_read<Vector3>(_data._mem).x, unaligned_read<Vector3>(_data._mem).y);
+		const Vector3 v3 = unaligned_read<Vector3>(_data._mem);
+		return Vector2(v3.x, v3.y);
 	} else if (type == VECTOR3I) {
-		return Vector2(unaligned_read<Vector3i>(_data._mem).x, unaligned_read<Vector3i>(_data._mem).y);
+		const Vector3i v3i = unaligned_read<Vector3i>(_data._mem);
+		return Vector2(v3i.x, v3i.y);
 	} else if (type == VECTOR4) {
-		return Vector2(unaligned_read<Vector4>(_data._mem).x, unaligned_read<Vector4>(_data._mem).y);
+		const Vector4 v4 = unaligned_read<Vector4>(_data._mem);
+		return Vector2(v4.x, v4.y);
 	} else if (type == VECTOR4I) {
-		return Vector2(unaligned_read<Vector4i>(_data._mem).x, unaligned_read<Vector4i>(_data._mem).y);
+		const Vector4i v4i = unaligned_read<Vector4i>(_data._mem);
+		return Vector2(v4i.x, v4i.y);
 	} else {
 		return Vector2();
 	}
@@ -1770,13 +1774,17 @@ Variant::operator Vector2i() const {
 	} else if (type == VECTOR2) {
 		return unaligned_read<Vector2>(_data._mem);
 	} else if (type == VECTOR3) {
-		return Vector2(unaligned_read<Vector3>(_data._mem).x, unaligned_read<Vector3>(_data._mem).y);
+		const Vector3 v3 = unaligned_read<Vector3>(_data._mem);
+		return Vector2(v3.x, v3.y);
 	} else if (type == VECTOR3I) {
-		return Vector2(unaligned_read<Vector3i>(_data._mem).x, unaligned_read<Vector3i>(_data._mem).y);
+		const Vector3i v3i = unaligned_read<Vector3i>(_data._mem);
+		return Vector2(v3i.x, v3i.y);
 	} else if (type == VECTOR4) {
-		return Vector2(unaligned_read<Vector4>(_data._mem).x, unaligned_read<Vector4>(_data._mem).y);
+		const Vector4 v4 = unaligned_read<Vector4>(_data._mem);
+		return Vector2(v4.x, v4.y);
 	} else if (type == VECTOR4I) {
-		return Vector2(unaligned_read<Vector4i>(_data._mem).x, unaligned_read<Vector4i>(_data._mem).y);
+		const Vector4i v4i = unaligned_read<Vector4i>(_data._mem);
+		return Vector2(v4i.x, v4i.y);
 	} else {
 		return Vector2i();
 	}
@@ -1808,13 +1816,17 @@ Variant::operator Vector3() const {
 	} else if (type == VECTOR3I) {
 		return unaligned_read<Vector3i>(_data._mem);
 	} else if (type == VECTOR2) {
-		return Vector3(unaligned_read<Vector2>(_data._mem).x, unaligned_read<Vector2>(_data._mem).y, 0.0);
+		const Vector2 v2 = unaligned_read<Vector2>(_data._mem);
+		return Vector3(v2.x, v2.y, 0.0);
 	} else if (type == VECTOR2I) {
-		return Vector3(unaligned_read<Vector2i>(_data._mem).x, unaligned_read<Vector2i>(_data._mem).y, 0.0);
+		const Vector2i v2i = unaligned_read<Vector2i>(_data._mem);
+		return Vector3(v2i.x, v2i.y, 0.0);
 	} else if (type == VECTOR4) {
-		return Vector3(unaligned_read<Vector4>(_data._mem).x, unaligned_read<Vector4>(_data._mem).y, unaligned_read<Vector4>(_data._mem).z);
+		const Vector4 v4 = unaligned_read<Vector4>(_data._mem);
+		return Vector3(v4.x, v4.y, v4.z);
 	} else if (type == VECTOR4I) {
-		return Vector3(unaligned_read<Vector4i>(_data._mem).x, unaligned_read<Vector4i>(_data._mem).y, unaligned_read<Vector4i>(_data._mem).z);
+		const Vector4i v4i = unaligned_read<Vector4i>(_data._mem);
+		return Vector3(v4i.x, v4i.y, v4i.z);
 	} else {
 		return Vector3();
 	}
@@ -1826,13 +1838,17 @@ Variant::operator Vector3i() const {
 	} else if (type == VECTOR3) {
 		return unaligned_read<Vector3>(_data._mem);
 	} else if (type == VECTOR2) {
-		return Vector3i(unaligned_read<Vector2>(_data._mem).x, unaligned_read<Vector2>(_data._mem).y, 0.0);
+		const Vector2 v2 = unaligned_read<Vector2>(_data._mem);
+		return Vector3i(v2.x, v2.y, 0.0);
 	} else if (type == VECTOR2I) {
-		return Vector3i(unaligned_read<Vector2i>(_data._mem).x, unaligned_read<Vector2i>(_data._mem).y, 0.0);
+		const Vector2i v2i = unaligned_read<Vector2i>(_data._mem);
+		return Vector3i(v2i.x, v2i.y, 0.0);
 	} else if (type == VECTOR4) {
-		return Vector3i(unaligned_read<Vector4>(_data._mem).x, unaligned_read<Vector4>(_data._mem).y, unaligned_read<Vector4>(_data._mem).z);
+		const Vector4 v4 = unaligned_read<Vector4>(_data._mem);
+		return Vector3i(v4.x, v4.y, v4.z);
 	} else if (type == VECTOR4I) {
-		return Vector3i(unaligned_read<Vector4i>(_data._mem).x, unaligned_read<Vector4i>(_data._mem).y, unaligned_read<Vector4i>(_data._mem).z);
+		const Vector4i v4i = unaligned_read<Vector4i>(_data._mem);
+		return Vector3i(v4i.x, v4i.y, v4i.z);
 	} else {
 		return Vector3i();
 	}
@@ -1844,13 +1860,17 @@ Variant::operator Vector4() const {
 	} else if (type == VECTOR4I) {
 		return unaligned_read<Vector4i>(_data._mem);
 	} else if (type == VECTOR2) {
-		return Vector4(unaligned_read<Vector2>(_data._mem).x, unaligned_read<Vector2>(_data._mem).y, 0.0, 0.0);
+		const Vector2 v2 = unaligned_read<Vector2>(_data._mem);
+		return Vector4(v2.x, v2.y, 0.0, 0.0);
 	} else if (type == VECTOR2I) {
-		return Vector4(unaligned_read<Vector2i>(_data._mem).x, unaligned_read<Vector2i>(_data._mem).y, 0.0, 0.0);
+		const Vector2i v2i = unaligned_read<Vector2i>(_data._mem);
+		return Vector4(v2i.x, v2i.y, 0.0, 0.0);
 	} else if (type == VECTOR3) {
-		return Vector4(unaligned_read<Vector3>(_data._mem).x, unaligned_read<Vector3>(_data._mem).y, unaligned_read<Vector3>(_data._mem).z, 0.0);
+		const Vector3 v3 = unaligned_read<Vector3>(_data._mem);
+		return Vector4(v3.x, v3.y, v3.z, 0.0);
 	} else if (type == VECTOR3I) {
-		return Vector4(unaligned_read<Vector3i>(_data._mem).x, unaligned_read<Vector3i>(_data._mem).y, unaligned_read<Vector3i>(_data._mem).z, 0.0);
+		const Vector3i v3i = unaligned_read<Vector3i>(_data._mem);
+		return Vector4(v3i.x, v3i.y, v3i.z, 0.0);
 	} else {
 		return Vector4();
 	}
@@ -1863,13 +1883,17 @@ Variant::operator Vector4i() const {
 		const Vector4 v4 = unaligned_read<Vector4>(_data._mem);
 		return Vector4i(v4.x, v4.y, v4.z, v4.w);
 	} else if (type == VECTOR2) {
-		return Vector4i(unaligned_read<Vector2>(_data._mem).x, unaligned_read<Vector2>(_data._mem).y, 0.0, 0.0);
+		const Vector2 v2 = unaligned_read<Vector2>(_data._mem);
+		return Vector4i(v2.x, v2.y, 0.0, 0.0);
 	} else if (type == VECTOR2I) {
-		return Vector4i(unaligned_read<Vector2i>(_data._mem).x, unaligned_read<Vector2i>(_data._mem).y, 0.0, 0.0);
+		const Vector2i v2i = unaligned_read<Vector2i>(_data._mem);
+		return Vector4i(v2i.x, v2i.y, 0.0, 0.0);
 	} else if (type == VECTOR3) {
-		return Vector4i(unaligned_read<Vector3>(_data._mem).x, unaligned_read<Vector3>(_data._mem).y, unaligned_read<Vector3>(_data._mem).z, 0.0);
+		const Vector3 v3 = unaligned_read<Vector3>(_data._mem);
+		return Vector4i(v3.x, v3.y, v3.z, 0.0);
 	} else if (type == VECTOR3I) {
-		return Vector4i(unaligned_read<Vector3i>(_data._mem).x, unaligned_read<Vector3i>(_data._mem).y, unaligned_read<Vector3i>(_data._mem).z, 0.0);
+		const Vector3i v3i = unaligned_read<Vector3i>(_data._mem);
+		return Vector4i(v3i.x, v3i.y, v3i.z, 0.0);
 	} else {
 		return Vector4i();
 	}
