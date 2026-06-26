@@ -300,6 +300,19 @@ _FORCE_INLINE_ void unaligned_construct(void *p_ptr, const ArgT &p_arg) {
 }
 
 template <typename T>
+_FORCE_INLINE_ void unaligned_destroy(void *p_ptr) {
+	if constexpr (!std::is_trivially_destructible_v<T>) {
+#if defined(DEV_ENABLED) || defined(TOOLS_ENABLED)
+		const uintptr_t addr = reinterpret_cast<uintptr_t>(p_ptr);
+		if (unlikely((addr & (alignof(T) - 1)) != 0)) {
+			CRASH_NOW_MSG("FATAL: Unaligned destruction of non-trivial type.");
+		}
+#endif
+		std::launder(static_cast<T *>(p_ptr))->~T();
+	}
+}
+
+template <typename T>
 void memdelete(T *p_class) {
 	if (!predelete_handler(p_class)) {
 		return; // doesn't want to be deleted

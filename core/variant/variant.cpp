@@ -1377,41 +1377,41 @@ void Variant::zero() {
 void Variant::_clear_internal() {
 	switch (type) {
 		case STRING: {
-			reinterpret_cast<String *>(_data._mem)->~String();
+			unaligned_destroy<String>(_data._mem);
 		} break;
 
 		// Math types.
 		case TRANSFORM2D: {
 			if (_data._transform2d) {
-				_data._transform2d->~Transform2D();
+				unaligned_destroy<Transform2D>(_data._transform2d);
 				Pools::_bucket_small.free((Pools::BucketSmall *)_data._transform2d);
 				_data._transform2d = nullptr;
 			}
 		} break;
 		case AABB: {
 			if (_data._aabb) {
-				_data._aabb->~AABB();
+				unaligned_destroy<::AABB>(_data._aabb);
 				Pools::_bucket_small.free((Pools::BucketSmall *)_data._aabb);
 				_data._aabb = nullptr;
 			}
 		} break;
 		case BASIS: {
 			if (_data._basis) {
-				_data._basis->~Basis();
+				unaligned_destroy<Basis>(_data._basis);
 				Pools::_bucket_medium.free((Pools::BucketMedium *)_data._basis);
 				_data._basis = nullptr;
 			}
 		} break;
 		case TRANSFORM3D: {
 			if (_data._transform3d) {
-				_data._transform3d->~Transform3D();
+				unaligned_destroy<Transform3D>(_data._transform3d);
 				Pools::_bucket_medium.free((Pools::BucketMedium *)_data._transform3d);
 				_data._transform3d = nullptr;
 			}
 		} break;
 		case PROJECTION: {
 			if (_data._projection) {
-				_data._projection->~Projection();
+				unaligned_destroy<Projection>(_data._projection);
 				Pools::_bucket_large.free((Pools::BucketLarge *)_data._projection);
 				_data._projection = nullptr;
 			}
@@ -1419,61 +1419,44 @@ void Variant::_clear_internal() {
 
 		// Miscellaneous types.
 		case STRING_NAME: {
-			reinterpret_cast<StringName *>(_data._mem)->~StringName();
+			unaligned_destroy<StringName>(_data._mem);
 		} break;
 		case NODE_PATH: {
-			reinterpret_cast<NodePath *>(_data._mem)->~NodePath();
+			unaligned_destroy<NodePath>(_data._mem);
 		} break;
 		case OBJECT: {
 			_get_obj().unref();
 		} break;
 		case RID: {
 			// Not much need probably.
-			// HACK: Can't seem to use destructor + scoping operator, so hack.
-			typedef ::RID RID_Class;
-			reinterpret_cast<RID_Class *>(_data._mem)->~RID_Class();
+			// ~~HACK: Can't seem to use destructor + scoping operator, so hack.~~
+			// Hack no longer needed because our utility
+			// inherently bypasses the parsing ambiguity
+			unaligned_destroy<::RID>(_data._mem);
 		} break;
 		case CALLABLE: {
-			reinterpret_cast<Callable *>(_data._mem)->~Callable();
+			unaligned_destroy<Callable>(_data._mem);
 		} break;
 		case SIGNAL: {
-			reinterpret_cast<Signal *>(_data._mem)->~Signal();
+			unaligned_destroy<Signal>(_data._mem);
 		} break;
 		case DICTIONARY: {
-			reinterpret_cast<Dictionary *>(_data._mem)->~Dictionary();
+			unaligned_destroy<Dictionary>(_data._mem);
 		} break;
 		case ARRAY: {
-			reinterpret_cast<Array *>(_data._mem)->~Array();
+			unaligned_destroy<Array>(_data._mem);
 		} break;
 
 		// Arrays.
-		case PACKED_BYTE_ARRAY: {
-			PackedArrayRefBase::destroy(_data.packed_array);
-		} break;
-		case PACKED_INT32_ARRAY: {
-			PackedArrayRefBase::destroy(_data.packed_array);
-		} break;
-		case PACKED_INT64_ARRAY: {
-			PackedArrayRefBase::destroy(_data.packed_array);
-		} break;
-		case PACKED_FLOAT32_ARRAY: {
-			PackedArrayRefBase::destroy(_data.packed_array);
-		} break;
-		case PACKED_FLOAT64_ARRAY: {
-			PackedArrayRefBase::destroy(_data.packed_array);
-		} break;
-		case PACKED_STRING_ARRAY: {
-			PackedArrayRefBase::destroy(_data.packed_array);
-		} break;
-		case PACKED_VECTOR2_ARRAY: {
-			PackedArrayRefBase::destroy(_data.packed_array);
-		} break;
-		case PACKED_VECTOR3_ARRAY: {
-			PackedArrayRefBase::destroy(_data.packed_array);
-		} break;
-		case PACKED_COLOR_ARRAY: {
-			PackedArrayRefBase::destroy(_data.packed_array);
-		} break;
+		case PACKED_BYTE_ARRAY: 
+        case PACKED_INT32_ARRAY:
+		case PACKED_INT64_ARRAY:
+		case PACKED_FLOAT32_ARRAY:
+		case PACKED_FLOAT64_ARRAY:
+		case PACKED_STRING_ARRAY:
+		case PACKED_VECTOR2_ARRAY:
+		case PACKED_VECTOR3_ARRAY:
+		case PACKED_COLOR_ARRAY:
 		case PACKED_VECTOR4_ARRAY: {
 			PackedArrayRefBase::destroy(_data.packed_array);
 		} break;

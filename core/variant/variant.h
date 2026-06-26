@@ -928,11 +928,11 @@ struct StringLikeVariantOrder {
 };
 
 Variant::ObjData &Variant::_get_obj() {
-	return *reinterpret_cast<ObjData *>(&_data._mem[0]);
+	return *std::launder(reinterpret_cast<ObjData *>(_data._mem));
 }
 
 const Variant::ObjData &Variant::_get_obj() const {
-	return *reinterpret_cast<const ObjData *>(&_data._mem[0]);
+	return *std::launder(reinterpret_cast<const ObjData *>(_data._mem));
 }
 
 template <typename... VarArgs>
