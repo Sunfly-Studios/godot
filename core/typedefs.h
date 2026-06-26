@@ -259,7 +259,7 @@ static inline uint64_t BSWAP64(uint64_t x) {
 template <typename T>
 struct Comparator {
 	_ALWAYS_INLINE_ bool operator()(const T &p_a, const T &p_b) const {
-		return std::less<T>{}(p_a, p_b);
+		return std::less<>{}(p_a, p_b);
 	}
 };
 

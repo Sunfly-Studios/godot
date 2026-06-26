@@ -45,7 +45,7 @@
 template <typename T>
 struct _DefaultComparator {
 	_FORCE_INLINE_ bool operator()(const T &a, const T &b) const {
-		return std::less<T>{}(a, b);
+		return std::less<>{}(a, b);
 	}
 };
 
