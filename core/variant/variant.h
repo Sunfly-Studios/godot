@@ -357,7 +357,7 @@ private:
 			case FLOAT:
 				return T(_data._float);
 			case STRING:
-				return unaligned_read<const String *>(&_data._mem)->to_int();
+				return unaligned_read<String>(&_data._mem).to_int();
 			default: {
 				return 0;
 			}
@@ -376,7 +376,7 @@ private:
 			case FLOAT:
 				return T(_data._float);
 			case STRING:
-				return unaligned_read<const String *>(&_data._mem)->to_float();
+				return unaligned_read<String>(&_data._mem).to_float();
 			default: {
 				return 0;
 			}
