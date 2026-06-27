@@ -530,10 +530,10 @@ bool PackedSourcePCK::try_open_pack(const String &p_path, bool p_replace_files, 
 			}
 		}
 
-		bool signature_verified = !verify_result && !tls_ctx->verify(HashingContext::HASH_SHA256, directory_hash, signature, p_key);
+		bool signature_verified = verify_result || tls_ctx->verify(HashingContext::HASH_SHA256, directory_hash, signature, p_key);
 		if (!signature_verified) {
 #ifdef DEBUG_ENABLED
-			ERR_FAIL_COND_V_MSG(signature_verified, false, "Pack directory integrity verification failed, invalid signature.");
+			ERR_FAIL_V_MSG(false, "Pack directory integrity verification failed, invalid signature.");
 #else
 			return false;
 #endif
