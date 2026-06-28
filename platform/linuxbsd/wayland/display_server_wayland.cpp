@@ -1555,92 +1555,91 @@ DisplayServerWayland::DisplayServerWayland(const String &p_rendering_driver, Win
 	}
 #endif // RD_ENABLED
 
-	if (rendering_driver.begins_with("opengl")) {
+	Vector<String> driver_attempts;
 
+	if (p_rendering_driver.begins_with("opengl")) {
 		// Init context and rendering device multi-layer fallback
 		bool multilayer_fallback = GLOBAL_GET("rendering/rendering_device/driver_fallback_multilayer");
 		bool fb_gles3 = GLOBAL_GET("rendering/gl_compatibility/fallback_to_gles");
 		bool fb_gles2 = GLOBAL_GET("rendering/gl_legacy/fallback_to_gles");
 		bool fb_gles1 = GLOBAL_GET("rendering/gl_classic/fallback_to_gles");
 
-		Vector<String> driver_attempts;
-
 		if (multilayer_fallback) {
-			if (rendering_driver.begins_with("opengl3")) {
-	#ifdef GLES3_ENABLED
+			if (p_rendering_driver.begins_with("opengl3")) {
+#ifdef GLES3_ENABLED
 				driver_attempts.push_back("opengl3");
-	#endif
-	#ifdef GLES2_ENABLED
+#endif
+#ifdef GLES2_ENABLED
 				driver_attempts.push_back("opengl2");
-	#endif
-	#ifdef GLES1_ENABLED
+#endif
+#ifdef GLES1_ENABLED
 				driver_attempts.push_back("opengl1");
-	#endif
-	#ifdef GLES3_ENABLED
+#endif
+#ifdef GLES3_ENABLED
 				if (fb_gles3) {
 					driver_attempts.push_back("opengl3_es");
 				}
-	#endif
-	#ifdef GLES2_ENABLED
+#endif
+#ifdef GLES2_ENABLED
 				if (fb_gles2) {
 					driver_attempts.push_back("opengl2_es");
 				}
-	#endif
-	#ifdef GLES1_ENABLED
+#endif
+#ifdef GLES1_ENABLED
 				if (fb_gles1) {
 					driver_attempts.push_back("opengl1_es");
 				}
-	#endif
-			} else if (rendering_driver.begins_with("opengl2")) {
-	#ifdef GLES2_ENABLED
+#endif
+			} else if (p_rendering_driver.begins_with("opengl2")) {
+#ifdef GLES2_ENABLED
 				driver_attempts.push_back("opengl2");
-	#endif
-	#ifdef GLES1_ENABLED
+#endif
+#ifdef GLES1_ENABLED
 				driver_attempts.push_back("opengl1");
-	#endif
-	#ifdef GLES3_ENABLED
+#endif
+#ifdef GLES3_ENABLED
 				driver_attempts.push_back("opengl3");
-	#endif
-	#ifdef GLES2_ENABLED
+#endif
+#ifdef GLES2_ENABLED
 				if (fb_gles2) {
 					driver_attempts.push_back("opengl2_es");
 				}
-	#endif
-	#ifdef GLES1_ENABLED
+#endif
+#ifdef GLES1_ENABLED
 				if (fb_gles1) {
 					driver_attempts.push_back("opengl1_es");
 				}
-	#endif
-	#ifdef GLES3_ENABLED
+#endif
+#ifdef GLES3_ENABLED
 				if (fb_gles3) {
 					driver_attempts.push_back("opengl3_es");
 				}
-	#endif
-			} else if (rendering_driver.begins_with("opengl1")) {
-	#ifdef GLES1_ENABLED
+#endif
+			} else if (p_rendering_driver.begins_with("opengl1")) {
+#ifdef GLES1_ENABLED
 				driver_attempts.push_back("opengl1");
-	#endif
-	#ifdef GLES2_ENABLED
+#endif
+#ifdef GLES2_ENABLED
 				driver_attempts.push_back("opengl2");
-	#endif
-	#ifdef GLES3_ENABLED
+#endif
+#ifdef GLES3_ENABLED
 				driver_attempts.push_back("opengl3");
-	#endif
-	#ifdef GLES1_ENABLED
+#endif
+#ifdef GLES1_ENABLED
 				if (fb_gles1) {
 					driver_attempts.push_back("opengl1_es");
 				}
-	#endif
-	#ifdef GLES2_ENABLED
+#endif
+#ifdef GLES2_ENABLED
 				if (fb_gles2) {
 					driver_attempts.push_back("opengl2_es");
 				}
-	#endif
-	#ifdef GLES3_ENABLED
+#endif
+#ifdef GLES3_ENABLED
 				if (fb_gles3) {
 					driver_attempts.push_back("opengl3_es");
 				}
-	#endif
+#endif
 			} else {
 				driver_attempts.push_back(rendering_driver);
 			}
@@ -1648,29 +1647,29 @@ DisplayServerWayland::DisplayServerWayland(const String &p_rendering_driver, Win
 			// Use only the one the game requested
 			driver_attempts.push_back(rendering_driver);
 
-	#ifdef GLES3_ENABLED
-			if (rendering_driver == "opengl3") {
+#ifdef GLES3_ENABLED
+			if (p_rendering_driver == "opengl3") {
 				if (fb_gles3) {
 					driver_attempts.push_back("opengl3_es");
 				}
 			}
-	#endif
+#endif
 			
-	#ifdef GLES2_ENABLED
-			if (rendering_driver == "opengl2") {
+#ifdef GLES2_ENABLED
+			if (p_rendering_driver == "opengl2") {
 				if (fb_gles2) {
 					driver_attempts.push_back("opengl2_es");
 				}
 			}
-	#endif
+#endif
 
-	#ifdef GLES1_ENABLED
-			if (rendering_driver == "opengl1") {
+#ifdef GLES1_ENABLED
+			if (p_rendering_driver == "opengl1") {
 				if (fb_gles1) {
 					driver_attempts.push_back("opengl1_es");
 				}
 			}
-	#endif
+#endif
 		}
 		
 		String requested_driver = rendering_driver;
@@ -1692,15 +1691,15 @@ DisplayServerWayland::DisplayServerWayland(const String &p_rendering_driver, Win
 
 			OS::get_singleton()->set_current_rendering_driver_name(rendering_driver, OS::RENDERING_SOURCE_FALLBACK);
 
-	#ifdef GLES3_ENABLED
+#ifdef GLES3_ENABLED
 			if (rendering_driver == "opengl3" || rendering_driver == "opengl3_es") {
 				driver_compiled = true;
-	#ifdef SOWRAP_ENABLED
+#ifdef SOWRAP_ENABLED
 				if (initialize_wayland_egl(dylibloader_verbose) != 0) {
 					WARN_PRINT("Can't load the Wayland EGL library.");
 					return;
 				}
-	#endif // SOWRAP_ENABLED
+#endif // SOWRAP_ENABLED
 				
 				if (getenv("DRI_PRIME") == nullptr) {
 					int prime_idx = -1;
@@ -1776,15 +1775,15 @@ DisplayServerWayland::DisplayServerWayland(const String &p_rendering_driver, Win
 			}
 	#endif // GLES3_ENABLED
 
-	#ifdef GLES2_ENABLED
+#ifdef GLES2_ENABLED
 			if (rendering_driver == "opengl2" || rendering_driver == "opengl2_es") {
 				driver_compiled = true;
-	#ifdef SOWRAP_ENABLED
+#ifdef SOWRAP_ENABLED
 				if (initialize_wayland_egl(dylibloader_verbose) != 0) {
 					WARN_PRINT("Can't load the Wayland EGL library.");
 					return;
 				}
-	#endif // SOWRAP_ENABLED
+#endif // SOWRAP_ENABLED
 				
 				if (getenv("DRI_PRIME") == nullptr) {
 					int prime_idx = -1;
@@ -1860,15 +1859,15 @@ DisplayServerWayland::DisplayServerWayland(const String &p_rendering_driver, Win
 			}
 	#endif // GLES2_ENABLED
 
-	#ifdef GLES1_ENABLED
+#ifdef GLES1_ENABLED
 			if (rendering_driver == "opengl1" || rendering_driver == "opengl1_es") {
 				driver_compiled = true;
-	#ifdef SOWRAP_ENABLED
+#ifdef SOWRAP_ENABLED
 				if (initialize_wayland_egl(dylibloader_verbose) != 0) {
 					WARN_PRINT("Can't load the Wayland EGL library.");
 					return;
 				}
-	#endif // SOWRAP_ENABLED
+#endif // SOWRAP_ENABLED
 				
 				if (getenv("DRI_PRIME") == nullptr) {
 					int prime_idx = -1;
@@ -1942,7 +1941,7 @@ DisplayServerWayland::DisplayServerWayland(const String &p_rendering_driver, Win
 					}
 				}
 			}
-	#endif // GLES1_ENABLED
+#endif // GLES1_ENABLED
 
 			if (!driver_compiled) {
 				init_failed = true;
@@ -2003,7 +2002,7 @@ DisplayServerWayland::DisplayServerWayland(const String &p_rendering_driver, Win
 	if (unlikely(!driver_found)) {
 		r_error = ERR_UNAVAILABLE;
 
-		if (rendering_device.begins_with("opengl")) {
+		if (p_rendering_driver.begins_with("opengl")) {
 			OS::get_singleton()->alert(
 				vformat("Your video card drivers seem to not support the required %s version.\n\n"
 						"if possible, consider updating your video card drivers.\n\n"
