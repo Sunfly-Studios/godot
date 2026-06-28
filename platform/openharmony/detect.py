@@ -14,7 +14,11 @@ def get_name():
 
 
 def can_build():
-    return os.path.exists(get_default_sdk_path())
+    sdk_path = get_default_sdk_path()
+    # If the path is None or an empty string, we can't build.
+    if not sdk_path:
+        return False
+    return os.path.exists(sdk_path)
 
 
 def get_tools(env: "SConsEnvironment"):
