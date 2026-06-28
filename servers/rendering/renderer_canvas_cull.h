@@ -76,6 +76,9 @@ public:
 						case Item::Command::Type::TYPE_RECT: {
 							l_rid = static_cast<CommandRect *>(l.command)->texture.get_id();
 						} break;
+						case Item::Command::Type::TYPE_MULTIRECT: {
+							l_rid = static_cast<CommandMultiRect *>(l.command)->texture.get_id();
+						} break;
 						case Item::Command::Type::TYPE_NINEPATCH: {
 							l_rid = static_cast<CommandNinePatch *>(l.command)->texture.get_id();
 						} break;
@@ -101,6 +104,9 @@ public:
 					switch (r.command->type) {
 						case Item::Command::Type::TYPE_RECT: {
 							r_rid = static_cast<CommandRect *>(r.command)->texture.get_id();
+						} break;
+						case Item::Command::Type::TYPE_MULTIRECT: {
+							r_rid = static_cast<CommandMultiRect *>(r.command)->texture.get_id();
 						} break;
 						case Item::Command::Type::TYPE_NINEPATCH: {
 							r_rid = static_cast<CommandNinePatch *>(r.command)->texture.get_id();
