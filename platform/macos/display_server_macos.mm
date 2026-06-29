@@ -4130,111 +4130,116 @@ DisplayServerMacOS::DisplayServerMacOS(const String &p_rendering_driver, WindowM
 		Vector<String> driver_attempts;
 
 		if (multilayer_fallback) {
+			Vector<String> native_attempts;
+			Vector<String> angle_attempts;
+
 			if (rendering_driver.begins_with("opengl3")) {
-	#ifdef GLES3_ENABLED
-				driver_attempts.push_back("opengl3");
-	#endif
-	#ifdef GLES2_ENABLED
-				driver_attempts.push_back("opengl2");
-	#endif
-	#ifdef GLES1_ENABLED
-				driver_attempts.push_back("opengl1");
-	#endif
-	#ifdef GLES3_ENABLED
-				if (fb_angle3) {
-					driver_attempts.push_back("opengl3_angle");
+#ifdef GLES3_ENABLED
+				native_attempts.push_back("opengl3");
+#endif
+#ifdef GLES2_ENABLED
+				native_attempts.push_back("opengl2");
+#endif
+#ifdef GLES1_ENABLED
+				native_attempts.push_back("opengl1");
+#endif
+#ifdef GLES3_ENABLED
+				if (fb_angle3 || rendering_driver == "opengl3_angle") {
+					angle_attempts.push_back("opengl3_angle");
 				}
-	#endif
-	#ifdef GLES2_ENABLED
+#endif
+#ifdef GLES2_ENABLED
 				if (fb_angle2) {
-					driver_attempts.push_back("opengl2_angle");
+					angle_attempts.push_back("opengl2_angle");
 				}
-	#endif
-	#ifdef GLES1_ENABLED
+#endif
+#ifdef GLES1_ENABLED
 				if (fb_angle1) {
-					driver_attempts.push_back("opengl1_angle");
+					angle_attempts.push_back("opengl1_angle");
 				}
-	#endif
+#endif
 			} else if (rendering_driver.begins_with("opengl2")) {
-	#ifdef GLES2_ENABLED
-				driver_attempts.push_back("opengl2");
-	#endif
-	#ifdef GLES1_ENABLED
-				driver_attempts.push_back("opengl1");
-	#endif
-	#ifdef GLES3_ENABLED
-				driver_attempts.push_back("opengl3");
-	#endif
-	#ifdef GLES2_ENABLED
-				if (fb_angle2) {
-					driver_attempts.push_back("opengl2_angle");
+#ifdef GLES2_ENABLED
+				native_attempts.push_back("opengl2");
+#endif
+#ifdef GLES1_ENABLED
+				native_attempts.push_back("opengl1");
+#endif
+#ifdef GLES3_ENABLED
+				native_attempts.push_back("opengl3");
+#endif
+#ifdef GLES2_ENABLED
+				if (fb_angle2 || rendering_driver == "opengl2_angle") {
+					angle_attempts.push_back("opengl2_angle");
 				}
-	#endif
-	#ifdef GLES1_ENABLED
+#endif
+#ifdef GLES1_ENABLED
 				if (fb_angle1) {
-					driver_attempts.push_back("opengl1_angle");
+					angle_attempts.push_back("opengl1_angle");
 				}
-	#endif
-	#ifdef GLES3_ENABLED
+#endif
+#ifdef GLES3_ENABLED
 				if (fb_angle3) {
-					driver_attempts.push_back("opengl3_angle");
+					angle_attempts.push_back("opengl3_angle");
 				}
-	#endif
+#endif
 			} else if (rendering_driver.begins_with("opengl1")) {
-	#ifdef GLES1_ENABLED
-				driver_attempts.push_back("opengl1");
-	#endif
-	#ifdef GLES2_ENABLED
-				driver_attempts.push_back("opengl2");
-	#endif
-	#ifdef GLES3_ENABLED
-				driver_attempts.push_back("opengl3");
-	#endif
-	#ifdef GLES1_ENABLED
-				if (fb_angle1) {
-					driver_attempts.push_back("opengl1_angle");
+#ifdef GLES1_ENABLED
+				native_attempts.push_back("opengl1");
+#endif
+#ifdef GLES2_ENABLED
+				native_attempts.push_back("opengl2");
+#endif
+#ifdef GLES3_ENABLED
+				native_attempts.push_back("opengl3");
+#endif
+#ifdef GLES1_ENABLED
+				if (fb_angle1 || rendering_driver == "opengl1_angle") {
+					angle_attempts.push_back("opengl1_angle");
 				}
-	#endif
-	#ifdef GLES2_ENABLED
+#endif
+#ifdef GLES2_ENABLED
 				if (fb_angle2) {
-					driver_attempts.push_back("opengl2_angle");
+					angle_attempts.push_back("opengl2_angle");
 				}
-	#endif
-	#ifdef GLES3_ENABLED
+#endif
+#ifdef GLES3_ENABLED
 				if (fb_angle3) {
-					driver_attempts.push_back("opengl3_angle");
+					angle_attempts.push_back("opengl3_angle");
 				}
-	#endif
+#endif
 			} else {
-				driver_attempts.push_back(rendering_driver);
+				native_attempts.push_back(rendering_driver);
+			} // rendering_driver.begins_with("opengl3")
+
+			if (rendering_driver.ends_with("_angle")) {
+				driver_attempts.append_array(angle_attempts);
+				driver_attempts.append_array(native_attempts);
+			} else {
+				driver_attempts.append_array(native_attempts);
+				driver_attempts.append_array(angle_attempts);
 			}
 		} else {
 			// Use only the one the game requested, plus its direct ANGLE fallback
 			driver_attempts.push_back(rendering_driver);
-			
-	#ifdef GLES3_ENABLED
-			if (rendering_driver == "opengl3") {
-				if (fb_angle3) {
-					driver_attempts.push_back("opengl3_angle");
-				}
-			}
-	#endif
 
-	#ifdef GLES2_ENABLED
-			if (rendering_driver == "opengl2") {
-				if (fb_angle2) {
-					driver_attempts.push_back("opengl2_angle");
-				}
+#ifdef GLES3_ENABLED
+			if (rendering_driver == "opengl3" && fb_angle3) {
+				driver_attempts.push_back("opengl3_angle");
 			}
-	#endif
+#endif
 
-	#ifdef GLES1_ENABLED
-			if (rendering_driver == "opengl1") {
-				if (fb_angle1) {
-					driver_attempts.push_back("opengl1_angle");
-				}
+#ifdef GLES2_ENABLED
+			if (rendering_driver == "opengl2" && fb_angle2) {
+				driver_attempts.push_back("opengl2_angle");
 			}
-	#endif
+#endif
+
+#ifdef GLES1_ENABLED
+			if (rendering_driver == "opengl1" && fb_angle1) {
+				driver_attempts.push_back("opengl1_angle");
+			}
+#endif
 		}
 		
 		String requested_driver = rendering_driver;
@@ -4256,7 +4261,7 @@ DisplayServerMacOS::DisplayServerMacOS(const String &p_rendering_driver, WindowM
 			}
 			OS::get_singleton()->set_current_rendering_driver_name(rendering_driver, OS::RENDERING_SOURCE_FALLBACK);
 
-	#if defined(GLES3_ENABLED)
+#if defined(GLES3_ENABLED)
 			if (rendering_driver == "opengl3" || rendering_driver == "opengl3_angle") {
 				driver_compiled = true;
 
@@ -4289,9 +4294,9 @@ DisplayServerMacOS::DisplayServerMacOS(const String &p_rendering_driver, WindowM
 					}
 				}
 			}
-	#endif
+#endif // GLES3_ENABLED
 
-	#if defined(GLES2_ENABLED)
+#if defined(GLES2_ENABLED)
 			if (rendering_driver == "opengl2" || rendering_driver == "opengl2_angle") {
 				driver_compiled = true;
 
@@ -4324,9 +4329,9 @@ DisplayServerMacOS::DisplayServerMacOS(const String &p_rendering_driver, WindowM
 					}
 				}
 			}
-	#endif
+#endif // GLES2_ENABLED
 
-	#if defined(GLES1_ENABLED)
+#if defined(GLES1_ENABLED)
 			if (rendering_driver == "opengl1" || rendering_driver == "opengl1_angle") {
 				driver_compiled = true;
 
@@ -4359,7 +4364,7 @@ DisplayServerMacOS::DisplayServerMacOS(const String &p_rendering_driver, WindowM
 					}
 				}
 			}
-	#endif
+#endif // GLES1_ENABLED
 
 			if (!driver_compiled) {
 				init_failed = true;

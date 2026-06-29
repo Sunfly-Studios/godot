@@ -7272,109 +7272,114 @@ DisplayServerWindows::DisplayServerWindows(const String &p_rendering_driver, Win
 		Vector<String> driver_attempts;
 
 		if (multilayer_fallback) {
+			Vector<String> native_attempts;
+			Vector<String> angle_attempts;
+
 			if (rendering_driver.begins_with("opengl3")) {
 #ifdef GLES3_ENABLED
-				driver_attempts.push_back("opengl3");
+				native_attempts.push_back("opengl3");
 #endif
 #ifdef GLES2_ENABLED
-				driver_attempts.push_back("opengl2");
+				native_attempts.push_back("opengl2");
 #endif
 #ifdef GLES1_ENABLED
-				driver_attempts.push_back("opengl1");
+				native_attempts.push_back("opengl1");
 #endif
 #ifdef GLES3_ENABLED
-				if (fb_angle3) {
-					driver_attempts.push_back("opengl3_angle");
+				if (fb_angle3 || rendering_driver == "opengl3_angle") {
+					angle_attempts.push_back("opengl3_angle");
 				}
 #endif
 #ifdef GLES2_ENABLED
 				if (fb_angle2) {
-					driver_attempts.push_back("opengl2_angle");
+					angle_attempts.push_back("opengl2_angle");
 				}
 #endif
 #ifdef GLES1_ENABLED
 				if (fb_angle1) {
-					driver_attempts.push_back("opengl1_angle");
+					angle_attempts.push_back("opengl1_angle");
 				}
 #endif
 			} else if (rendering_driver.begins_with("opengl2")) {
 #ifdef GLES2_ENABLED
-				driver_attempts.push_back("opengl2");
+				native_attempts.push_back("opengl2");
 #endif
 #ifdef GLES1_ENABLED
-				driver_attempts.push_back("opengl1");
+				native_attempts.push_back("opengl1");
 #endif
 #ifdef GLES3_ENABLED
-				driver_attempts.push_back("opengl3");
+				native_attempts.push_back("opengl3");
 #endif
 #ifdef GLES2_ENABLED
-				if (fb_angle2) {
-					driver_attempts.push_back("opengl2_angle");
+				if (fb_angle2 || rendering_driver == "opengl2_angle") {
+					angle_attempts.push_back("opengl2_angle");
 				}
 #endif
 #ifdef GLES1_ENABLED
 				if (fb_angle1) {
-					driver_attempts.push_back("opengl1_angle");
+					angle_attempts.push_back("opengl1_angle");
 				}
 #endif
 #ifdef GLES3_ENABLED
 				if (fb_angle3) {
-					driver_attempts.push_back("opengl3_angle");
+					angle_attempts.push_back("opengl3_angle");
 				}
 #endif
 			} else if (rendering_driver.begins_with("opengl1")) {
 #ifdef GLES1_ENABLED
-				driver_attempts.push_back("opengl1");
+				native_attempts.push_back("opengl1");
 #endif
 #ifdef GLES2_ENABLED
-				driver_attempts.push_back("opengl2");
+				native_attempts.push_back("opengl2");
 #endif
 #ifdef GLES3_ENABLED
-				driver_attempts.push_back("opengl3");
+				native_attempts.push_back("opengl3");
 #endif
 #ifdef GLES1_ENABLED
-				if (fb_angle1) {
-					driver_attempts.push_back("opengl1_angle");
+				if (fb_angle1 || rendering_driver == "opengl1_angle") {
+					angle_attempts.push_back("opengl1_angle");
 				}
 #endif
 #ifdef GLES2_ENABLED
 				if (fb_angle2) {
-					driver_attempts.push_back("opengl2_angle");
+					angle_attempts.push_back("opengl2_angle");
 				}
 #endif
 #ifdef GLES3_ENABLED
 				if (fb_angle3) {
-					driver_attempts.push_back("opengl3_angle");
+					angle_attempts.push_back("opengl3_angle");
 				}
 #endif
 			} else {
-				driver_attempts.push_back(rendering_driver);
+				native_attempts.push_back(rendering_driver);
+			} // rendering_driver.begins_with("opengl3")
+
+			if (rendering_driver.ends_with("_angle")) {
+				driver_attempts.append_array(angle_attempts);
+				driver_attempts.append_array(native_attempts);
+			} else {
+				driver_attempts.append_array(native_attempts);
+				driver_attempts.append_array(angle_attempts);
 			}
 		} else {
 			// Use only the one the game requested, plus its direct ANGLE fallback
 			driver_attempts.push_back(rendering_driver);
 
 #ifdef GLES3_ENABLED
-			if (rendering_driver == "opengl3") {
-				if (fb_angle3) {
-					driver_attempts.push_back("opengl3_angle");
-				}
+			if (rendering_driver == "opengl3" && fb_angle3) {
+				driver_attempts.push_back("opengl3_angle");
 			}
 #endif
 
 #ifdef GLES2_ENABLED
-			if (rendering_driver == "opengl2") {
-				if (fb_angle2) {
-					driver_attempts.push_back("opengl2_angle");
-				}
+			if (rendering_driver == "opengl2" && fb_angle2) {
+				driver_attempts.push_back("opengl2_angle");
 			}
 #endif
 
 #ifdef GLES1_ENABLED
-			if (rendering_driver == "opengl1") {
-				if (fb_angle1) {
-					driver_attempts.push_back("opengl1_angle");
-				}
+			if (rendering_driver == "opengl1" && fb_angle1) {
+				driver_attempts.push_back("opengl1_angle");
 			}
 #endif
 		}
