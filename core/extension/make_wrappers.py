@@ -2,7 +2,8 @@ proto_mod = """
 #define MODBIND$VER($RETTYPE m_name$ARG) \\
 virtual $RETVAL _##m_name($FUNCARGS) $CONST; \\
 _FORCE_INLINE_ virtual $RETVAL m_name($FUNCARGS) $CONST override { \\
-    $RETX _##m_name($CALLARGS);\\
+    using ThisClass = std::remove_pointer_t<decltype(this)>; \\
+    $RETX ThisClass::_##m_name($CALLARGS);\\
 }
 """
 
@@ -71,8 +72,14 @@ def generate_ex_version(argcount, const=False, returns=False):
         sproto += "R"
         s = s.replace("$RETTYPE", "m_ret, ")
         s = s.replace("$RETVAL", "m_ret")
-        s = s.replace("$RETPRE", "m_ret ret; ZeroInitializer<m_ret>::initialize(ret);\\\n")
-        s = s.replace("$RETPOST", "return ret;\\\n")
+        s = s.replace("$RETPRE", 
+            "using RetT = m_ret;\\\n"
+            "\tRetT *ret_ptr = (RetT *)SAFE_ALLOCA_SINGLE(RetT);\\\n"
+            "\t::new ((void *)ret_ptr) RetT();\\\n")
+        s = s.replace("$RETPOST", 
+            "m_ret ret_val = (m_ret)*ret_ptr;\\\n"
+            "\tret_ptr->~RetT();\\\n"
+            "\treturn ret_val;\\\n")
 
     else:
         s = s.replace("$RETTYPE", "")
@@ -109,7 +116,7 @@ def generate_ex_version(argcount, const=False, returns=False):
         s = s.replace("$CALLARGS", callargs)
 
     if returns:
-        s = s.replace("$RETREF", ", ret")
+        s = s.replace("$RETREF", ", *ret_ptr")
     else:
         s = s.replace("$RETREF", "")
 
@@ -119,9 +126,12 @@ def generate_ex_version(argcount, const=False, returns=False):
 def run(target, source, env):
     max_versions = 12
 
-    txt = """
+    txt = """/* THIS FILE IS GENERATED DO NOT EDIT */
 #ifndef GDEXTENSION_WRAPPERS_GEN_H
 #define GDEXTENSION_WRAPPERS_GEN_H
+
+#include "core/os/memory.h"
+#include <type_traits>
 """
 
     for i in range(max_versions + 1):
