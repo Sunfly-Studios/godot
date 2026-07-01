@@ -1914,29 +1914,43 @@ Node *Node::find_child(const String &p_pattern, bool p_recursive, bool p_owned) 
 	return nullptr;
 }
 
-// Finds child nodes based on their name using pattern matching, or class name,
+/// Finds child nodes based on their name using pattern matching, or class name,
 // or both (either pattern or type can be left empty).
 // Can be recursive or not, and limited to owned nodes.
 TypedArray<Node> Node::find_children(const String &p_pattern, const String &p_type, bool p_recursive, bool p_owned) const {
 	ERR_THREAD_GUARD_V(TypedArray<Node>());
+
 	TypedArray<Node> ret;
 	ERR_FAIL_COND_V(p_pattern.is_empty() && p_type.is_empty(), ret);
+
 	_update_children_cache();
-	Node *const *cptr = data.children_cache.ptr();
-	int ccount = data.children_cache.size();
-	for (int i = 0; i < ccount; i++) {
-		if (p_owned && !cptr[i]->data.owner) {
+	if (data.children_cache.is_empty()) {
+		return ret;
+	}
+
+	LocalVector<Node *> stack;
+
+	// Push children in reverse so the first child is popped first
+	for (int i = data.children_cache.size() - 1; i >= 0; i--) {
+		stack.push_back(data.children_cache[i]);
+	}
+
+	while (!stack.is_empty()) {
+		Node *current_node = stack[stack.size() - 1];
+		stack.remove_at(stack.size() - 1);
+
+		if (p_owned && !current_node->data.owner) {
 			continue;
 		}
 
-		if (p_pattern.is_empty() || cptr[i]->data.name.operator String().match(p_pattern)) {
-			if (p_type.is_empty() || cptr[i]->is_class(p_type)) {
-				ret.append(cptr[i]);
-			} else if (cptr[i]->get_script_instance()) {
-				Ref<Script> scr = cptr[i]->get_script_instance()->get_script();
+		if (p_pattern.is_empty() || current_node->data.name.operator String().match(p_pattern)) {
+			if (p_type.is_empty() || current_node->is_class(p_type)) {
+				ret.append(current_node);
+			} else if (current_node->get_script_instance()) {
+				Ref<Script> scr = current_node->get_script_instance()->get_script();
 				while (scr.is_valid()) {
 					if ((ScriptServer::is_global_class(p_type) && ScriptServer::get_global_class_path(p_type) == scr->get_path()) || p_type == scr->get_path()) {
-						ret.append(cptr[i]);
+						ret.append(current_node);
 						break;
 					}
 
@@ -1946,7 +1960,10 @@ TypedArray<Node> Node::find_children(const String &p_pattern, const String &p_ty
 		}
 
 		if (p_recursive) {
-			ret.append_array(cptr[i]->find_children(p_pattern, p_type, true, p_owned));
+			current_node->_update_children_cache();
+			for (int i = current_node->data.children_cache.size() - 1; i >= 0; i--) {
+				stack.push_back(current_node->data.children_cache[i]);
+			}
 		}
 	}
 
