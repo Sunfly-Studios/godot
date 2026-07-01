@@ -109,11 +109,21 @@ void RaycastOcclusionCull::RaycastHZBuffer::_camera_rays_threaded(uint32_t p_thr
 	uint32_t total_threads = p_data->thread_count;
 	uint32_t from = p_thread * total_tiles / total_threads;
 	uint32_t to = (p_thread + 1 == total_threads) ? total_tiles : ((p_thread + 1) * total_tiles / total_threads);
-	_generate_camera_rays(p_data, from, to);
+
+	if (p_data->camera_orthogonal) {
+		_generate_camera_rays<true>(p_data, from, to);
+	} else {
+		_generate_camera_rays<false>(p_data, from, to);
+	}
 }
 
-void RaycastOcclusionCull::RaycastHZBuffer::_generate_camera_rays(const CameraRayThreadData *p_data, int p_from, int p_to) {
-	const Size2i &buffer_size = sizes[0];
+template <bool orthogonal>
+void RaycastOcclusionCull::RaycastHZBuffer::_generate_camera_rays(const CameraRayThreadData *p_data, int p_from, int p_to) const {
+	const Size2i &buffer_size = sizes.ptr()[0];
+	CameraRayThreadData *data_aligned = SAFE_ALLOCA_SINGLE(CameraRayThreadData);
+
+	// Copy the contents of the struct
+	unaligned_construct<CameraRayThreadData>(data_aligned, unaligned_read<CameraRayThreadData>(p_data));
 
 	for (int i = p_from; i < p_to; i++) {
 		CameraRayTile &tile = camera_rays[i];
@@ -126,29 +136,29 @@ void RaycastOcclusionCull::RaycastHZBuffer::_generate_camera_rays(const CameraRa
 
 			float u = (float(x) + 0.5f) / buffer_size.x;
 			float v = (float(y) + 0.5f) / buffer_size.y;
-			Vector3 pixel_pos = p_data->pixel_corner + u * p_data->pixel_u_interp + v * p_data->pixel_v_interp;
+			Vector3 pixel_pos = data_aligned->pixel_corner + u * data_aligned->pixel_u_interp + v * data_aligned->pixel_v_interp;
 
-			tile.ray.tnear[j] = p_data->z_near;
+			tile.ray.tnear[j] = data_aligned->z_near;
 
 			Vector3 dir;
-			if (p_data->camera_orthogonal) {
-				dir = p_data->camera_dir;
-				tile.ray.org_x[j] = pixel_pos.x - dir.x * p_data->z_near;
-				tile.ray.org_y[j] = pixel_pos.y - dir.y * p_data->z_near;
-				tile.ray.org_z[j] = pixel_pos.z - dir.z * p_data->z_near;
+			if constexpr (orthogonal) {
+				dir = data_aligned->camera_dir;
+				tile.ray.org_x[j] = pixel_pos.x - dir.x * data_aligned->z_near;
+				tile.ray.org_y[j] = pixel_pos.y - dir.y * data_aligned->z_near;
+				tile.ray.org_z[j] = pixel_pos.z - dir.z * data_aligned->z_near;
 			} else {
-				dir = (pixel_pos - p_data->camera_pos).normalized();
-				tile.ray.org_x[j] = p_data->camera_pos.x;
-				tile.ray.org_y[j] = p_data->camera_pos.y;
-				tile.ray.org_z[j] = p_data->camera_pos.z;
-				tile.ray.tnear[j] /= dir.dot(p_data->camera_dir);
+				dir = (pixel_pos - data_aligned->camera_pos).normalized();
+				tile.ray.org_x[j] = data_aligned->camera_pos.x;
+				tile.ray.org_y[j] = data_aligned->camera_pos.y;
+				tile.ray.org_z[j] = data_aligned->camera_pos.z;
+				tile.ray.tnear[j] /= dir.dot(data_aligned->camera_dir);
 			}
 
 			tile.ray.dir_x[j] = dir.x;
 			tile.ray.dir_y[j] = dir.y;
 			tile.ray.dir_z[j] = dir.z;
 
-			tile.ray.tfar[j] = p_data->z_far;
+			tile.ray.tfar[j] = data_aligned->z_far;
 			tile.ray.time[j] = 0.0f;
 
 			tile.ray.flags[j] = 0;

@@ -46,21 +46,26 @@ public:
 	private:
 		Size2i tile_grid_size;
 
-		struct CameraRayThreadData {
+		struct alignas(GODOT_MIN_STACK_ALIGN) CameraRayThreadData {
 			int thread_count;
 			float z_near;
 			float z_far;
-			Vector3 camera_dir;
-			Vector3 camera_pos;
-			Vector3 pixel_corner;
-			Vector3 pixel_u_interp;
-			Vector3 pixel_v_interp;
+
+			// Guarantee these struct members will pack
+			// tightly.
+			alignas(GODOT_MIN_STACK_ALIGN) Vector3 camera_dir;
+			alignas(GODOT_MIN_STACK_ALIGN) Vector3 camera_pos;
+			alignas(GODOT_MIN_STACK_ALIGN) Vector3 pixel_corner;
+			alignas(GODOT_MIN_STACK_ALIGN) Vector3 pixel_u_interp;
+			alignas(GODOT_MIN_STACK_ALIGN) Vector3 pixel_v_interp;
 			bool camera_orthogonal;
 			Size2i buffer_size;
 		};
 
 		void _camera_rays_threaded(uint32_t p_thread, const CameraRayThreadData *p_data);
-		void _generate_camera_rays(const CameraRayThreadData *p_data, int p_from, int p_to);
+
+		template <bool orthogonal>
+		void _generate_camera_rays(const CameraRayThreadData *p_data, int p_from, int p_to) const;
 
 	public:
 		unsigned int camera_rays_tile_count = 0;
