@@ -278,15 +278,15 @@ _FORCE_INLINE_ void unaligned_write(void *p_ptr, const T &p_val) {
 }
 
 template <typename ConstructT, typename ArgT>
-_FORCE_INLINE_ void unaligned_construct(void *p_ptr, const ArgT &p_arg) {
+_FORCE_INLINE_ void unaligned_construct(void *p_ptr, ArgT &&p_arg) {
 	const uintptr_t addr = reinterpret_cast<uintptr_t>(p_ptr);
 	const bool is_aligned = (addr & (alignof(ConstructT) - 1)) == 0;
 
 	if constexpr (std::is_trivially_copyable_v<ConstructT>) {
 		if (is_aligned) {
-			::new (p_ptr) ConstructT(p_arg);
+			::new (p_ptr) ConstructT(std::forward<ArgT>(p_arg));
 		} else {
-			ConstructT local(p_arg);
+			ConstructT local(std::forward<ArgT>(p_arg));
 			memcpy(p_ptr, &local, sizeof(ConstructT));
 		}
 	} else {
@@ -295,7 +295,7 @@ _FORCE_INLINE_ void unaligned_construct(void *p_ptr, const ArgT &p_arg) {
 			CRASH_NOW_MSG("FATAL: Unaligned construction of non-trivial type.");
 		}
 #endif
-		::new (p_ptr) ConstructT(p_arg);
+		::new (p_ptr) ConstructT(std::forward<ArgT>(p_arg));
 	}
 }
 

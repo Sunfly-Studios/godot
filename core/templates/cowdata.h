@@ -278,7 +278,7 @@ void CowData<T>::_unref() {
 
 	if constexpr (!std::is_trivially_destructible_v<T>) {
 		for (USize i = 0; i < current_size; ++i) {
-			prev_ptr[i].~T();
+			unaligned_destroy<T>(prev_ptr + i);
 		}
 	}
 
@@ -320,7 +320,7 @@ typename CowData<T>::USize CowData<T>::_copy_on_write() {
 			memcpy((void *)_data_ptr, (const void *)_ptr, current_size * sizeof(T));
 		} else {
 			for (USize i = 0; i < current_size; i++) {
-				memnew_placement(&_data_ptr[i], T(_ptr[i]));
+				unaligned_construct<T>(_data_ptr + i, unaligned_read<T>(_ptr + i));
 			}
 		}
 
@@ -392,7 +392,7 @@ Error CowData<T>::resize(Size p_size) {
 			// Always formally begin the object lifetime
 			// for anything with non-trivial operators
 			for (Size i = *_get_size(); i < p_size; i++) {
-				memnew_placement(&_ptr[i], T());
+				unaligned_construct<T>(_ptr + i, T());
 			}
 		}
 
@@ -402,8 +402,7 @@ Error CowData<T>::resize(Size p_size) {
 		if constexpr (!std::is_trivially_destructible_v<T>) {
 			// deinitialize no longer needed elements
 			for (USize i = p_size; i < *_get_size(); i++) {
-				T *t = &_ptr[i];
-				t->~T();
+				unaligned_destroy<T>(_ptr + i);
 			}
 		}
 
@@ -451,8 +450,12 @@ Error CowData<T>::_realloc(Size p_alloc_size) {
 
 		// Cleanly move only the living objects
 		for (USize i = 0; i < active_elements; i++) {
-			memnew_placement(&_data_ptr[i], T(std::move(_ptr[i])));
-			_ptr[i].~T(); // Destroy old
+			// Wrap the pointer in std launder first to confirm
+			// to the compiler the pointer exists, then we baton-pass
+			// the move to unaligned construct so that it perfectly
+			// forwards the move semantics properly.
+			unaligned_construct<T>(_data_ptr + i, std::move(*std::launder(_ptr + i)));
+			unaligned_destroy<T>(_ptr + i); // Destroy old
 		}
 
 		Memory::free_static(((uint8_t *)_ptr) - DATA_OFFSET, false);
