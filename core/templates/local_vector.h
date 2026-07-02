@@ -66,7 +66,8 @@ public:
 		}
 
 		if constexpr (!std::is_trivially_constructible_v<T> && !force_trivial) {
-			memnew_placement(&data[count++], T(p_elem));
+			// std::move perfectly forwards the stack copy into the vector
+			memnew_placement(&data[count++], T(std::move(p_elem)));
 		} else {
 			data[count++] = std::move(p_elem);
 		}
@@ -141,9 +142,27 @@ public:
 	_FORCE_INLINE_ void reserve(U p_size) {
 		p_size = tight ? p_size : nearest_power_of_2_templated(p_size);
 		if (p_size > capacity) {
+			// C-realloc if the type is trivial, forced, or strictly immobile.
+			// Godot relies on bitwise relocation for types with atomics that cannot be C++ moved.
+			if constexpr (std::is_trivially_copyable_v<T> || force_trivial || !std::is_move_constructible_v<T>) {
+				data = (T *)memrealloc(data, p_size * sizeof(T));
+				CRASH_COND_MSG(!data, "Out of memory");
+			} else {
+				// Non-trivial types that are C++ movable must be formally moved
+				T *new_data = (T *)memalloc(p_size * sizeof(T));
+				CRASH_COND_MSG(!new_data, "Out of memory");
+
+				for (U i = 0; i < count; i++) {
+					memnew_placement(&new_data[i], T(std::move(data[i])));
+					data[i].~T();
+				}
+
+				if (data) {
+					memfree(data);
+				}
+				data = new_data;
+			}
 			capacity = p_size;
-			data = (T *)memrealloc(data, capacity * sizeof(T));
-			CRASH_COND_MSG(!data, "Out of memory");
 		}
 	}
 
@@ -157,15 +176,15 @@ public:
 			}
 			count = p_size;
 		} else if (p_size > count) {
-			if (unlikely(p_size > capacity)) {
-				capacity = tight ? p_size : nearest_power_of_2_templated(p_size);
-				data = (T *)memrealloc(data, capacity * sizeof(T));
-				CRASH_COND_MSG(!data, "Out of memory");
-			}
+			reserve(p_size); // Re-use the reallocation logic
+
 			if constexpr (!std::is_trivially_constructible_v<T> && !force_trivial) {
 				for (U i = count; i < p_size; i++) {
-					memnew_placement(&data[i], T);
+					memnew_placement(&data[i], T());
 				}
+			} else {
+				// Prevent rubbish for trivial types
+				memset(&data[count], 0, (p_size - count) * sizeof(T));
 			}
 			count = p_size;
 		}
@@ -344,6 +363,9 @@ public:
 	}
 
 	inline void operator=(const LocalVector &p_from) {
+		if (unlikely(this == &p_from)) {
+			return;
+		}
 		resize(p_from.size());
 		for (U i = 0; i < p_from.count; i++) {
 			data[i] = p_from.data[i];

@@ -422,7 +422,7 @@ template <typename T>
 class DefaultTypedAllocator {
 public:
 	template <typename... Args>
-	_FORCE_INLINE_ T *new_allocation(const Args &&...p_args) { return memnew(T(p_args...)); }
+	_FORCE_INLINE_ T *new_allocation(Args &&...p_args) { return memnew(T(std::forward<Args>(p_args)...)); }
 	_FORCE_INLINE_ void delete_allocation(T *p_allocation) { memdelete(p_allocation); }
 };
 

@@ -102,7 +102,7 @@ public:
 template <typename T, bool THREAD_SAFE = false>
 class RID_Alloc : public RID_AllocBase {
 	struct Chunk {
-		T data;
+		alignas(T) uint8_t data[sizeof(T)];
 		uint32_t validator;
 	};
 	Chunk **chunks = nullptr;
@@ -147,8 +147,9 @@ class RID_Alloc : public RID_AllocBase {
 
 			//initialize
 			for (uint32_t i = 0; i < elements_in_chunk; i++) {
-				// Don't initialize chunk.
-				chunks[chunk_count][i].validator = 0xFFFFFFFF;
+				// Formally begin lifetime
+				Chunk *c = ::new (static_cast<void *>(&chunks[chunk_count][i])) Chunk;
+				c->validator = 0xFFFFFFFF;
 				free_list_chunks[chunk_count][i] = alloc_count + i;
 			}
 
@@ -262,6 +263,9 @@ public:
 
 			c.validator &= 0x7FFFFFFF; //initialized
 
+			// Return raw pointer for placement new.
+			return reinterpret_cast<T *>(&c.data);
+
 		} else if (unlikely(c.validator != validator)) {
 			if ((c.validator & 0x80000000) && c.validator != 0xFFFFFFFF) {
 				ERR_FAIL_V_MSG(nullptr, "Attempting to use an uninitialized RID");
@@ -275,9 +279,8 @@ public:
 #endif
 		}
 
-		T *ptr = &c.data;
-
-		return ptr;
+		// Object is alive.
+		return std::launder(reinterpret_cast<T *>(&c.data));
 	}
 	void initialize_rid(RID p_rid) {
 		T *mem = get_or_null(p_rid, true);
@@ -309,7 +312,7 @@ public:
 #endif
 		}
 
-		memnew_placement(mem, T(p_value));
+		unaligned_construct<T>(mem, p_value);
 
 		if constexpr (THREAD_SAFE) {
 #ifdef TSAN_ENABLED
@@ -377,7 +380,7 @@ public:
 			ERR_FAIL();
 		}
 
-		chunks[idx_chunk][idx_element].data.~T();
+		unaligned_destroy<T>(&chunks[idx_chunk][idx_element].data);
 		chunks[idx_chunk][idx_element].validator = 0xFFFFFFFF; // go invalid
 
 		alloc_count--;
@@ -448,13 +451,15 @@ public:
 			print_error(vformat("ERROR: %d RID allocations of type '%s' were leaked at exit.",
 					alloc_count, description ? description : typeid(T).name()));
 
-			for (size_t i = 0; i < max_alloc; i++) {
-				uint32_t validator = chunks[i / elements_in_chunk][i % elements_in_chunk].validator;
-				if (validator & 0x80000000) {
-					continue; //uninitialized
-				}
-				if (validator != 0xFFFFFFFF) {
-					chunks[i / elements_in_chunk][i % elements_in_chunk].data.~T();
+			if constexpr (!std::is_trivially_destructible_v<T>) {
+				for (size_t i = 0; i < max_alloc; i++) {
+					uint32_t validator = chunks[i / elements_in_chunk][i % elements_in_chunk].validator;
+					if (validator & 0x80000000) {
+						continue; //uninitialized
+					}
+					if (validator != 0xFFFFFFFF) {
+						unaligned_destroy<T>(&chunks[i / elements_in_chunk][i % elements_in_chunk].data);
+					}
 				}
 			}
 		}

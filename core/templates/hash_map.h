@@ -222,7 +222,7 @@ private:
 				_resize_and_rehash(capacity_index + 1);
 			}
 
-			HashMapElement<TKey, TValue> *elem = element_alloc.new_allocation(HashMapElement<TKey, TValue>(p_key, p_value));
+			HashMapElement<TKey, TValue> *elem = element_alloc.new_allocation(p_key, p_value);
 
 			if (tail_element == nullptr) {
 				head_element = elem;
@@ -423,7 +423,10 @@ public:
 		num_elements--;
 
 		// Update the HashMapElement with the new key and reinsert it.
-		const_cast<TKey &>(element->data.key) = p_new_key;
+		TValue temp_value = std::move(element->data.value);
+		unaligned_destroy<KeyValue<TKey, TValue>>(&element->data);
+		unaligned_construct<KeyValue<TKey, TValue>>(&element->data, KeyValue<TKey, TValue>(p_new_key, std::move(temp_value)));
+
 		uint32_t hash = _hash(p_new_key);
 		_insert_with_hash(hash, element);
 

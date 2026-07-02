@@ -99,7 +99,7 @@ private:
 				return false;
 			}
 
-			if (hashes[pos] == hash && Comparator::compare(keys[hash_to_key[pos]], p_key)) {
+			if (hashes[pos] == hash && Comparator::compare(*std::launder(&keys[hash_to_key[pos]]), p_key)) {
 				r_pos = hash_to_key[pos];
 				return true;
 			}
@@ -153,6 +153,20 @@ private:
 		key_to_hash = reinterpret_cast<uint32_t *>(Memory::alloc_static(sizeof(uint32_t) * capacity));
 		hash_to_key = reinterpret_cast<uint32_t *>(Memory::realloc_static(hash_to_key, sizeof(uint32_t) * capacity));
 
+		if constexpr (std::is_trivially_copyable_v<TKey>) {
+			keys = reinterpret_cast<TKey *>(Memory::realloc_static(keys, sizeof(TKey) * capacity));
+		} else {
+			TKey *new_keys = reinterpret_cast<TKey *>(Memory::alloc_static(sizeof(TKey) * capacity));
+			if (keys != nullptr) {
+				for (uint32_t i = 0; i < num_elements; i++) {
+					unaligned_construct<TKey>(&new_keys[i], std::move(*std::launder(&keys[i])));
+					unaligned_destroy<TKey>(&keys[i]);
+				}
+				Memory::free_static(keys);
+			}
+			keys = new_keys;
+		}
+
 		for (uint32_t i = 0; i < capacity; i++) {
 			hashes[i] = EMPTY_HASH;
 		}
@@ -193,7 +207,7 @@ private:
 			}
 
 			uint32_t hash = _hash(p_key);
-			memnew_placement(&keys[num_elements], TKey(p_key));
+			unaligned_construct<TKey>(&keys[num_elements], p_key);
 			_insert_with_hash(hash, num_elements);
 			num_elements++;
 			return num_elements - 1;
@@ -215,9 +229,14 @@ private:
 		key_to_hash = reinterpret_cast<uint32_t *>(Memory::alloc_static(sizeof(uint32_t) * capacity));
 		hash_to_key = reinterpret_cast<uint32_t *>(Memory::alloc_static(sizeof(uint32_t) * capacity));
 
-		for (uint32_t i = 0; i < num_elements; i++) {
-			memnew_placement(&keys[i], TKey(p_other.keys[i]));
-			key_to_hash[i] = p_other.key_to_hash[i];
+		if constexpr (std::is_trivially_copyable_v<TKey>) {
+			memcpy(keys, p_other.keys, sizeof(TKey) * num_elements);
+			memcpy(key_to_hash, p_other.key_to_hash, sizeof(uint32_t) * num_elements);
+		} else {
+			for (uint32_t i = 0; i < num_elements; i++) {
+				unaligned_construct<TKey>(&keys[i], *std::launder(&p_other.keys[i]));
+				key_to_hash[i] = p_other.key_to_hash[i];
+			}
 		}
 
 		for (uint32_t i = 0; i < capacity; i++) {
@@ -244,8 +263,11 @@ public:
 		for (uint32_t i = 0; i < capacity; i++) {
 			hashes[i] = EMPTY_HASH;
 		}
-		for (uint32_t i = 0; i < num_elements; i++) {
-			keys[i].~TKey();
+
+		if constexpr (!std::is_trivially_destructible_v<TKey>) {
+			for (uint32_t i = 0; i < num_elements; i++) {
+				unaligned_destroy<TKey>(&keys[i]);
+			}
 		}
 
 		num_elements = 0;
@@ -282,12 +304,18 @@ public:
 		}
 
 		hashes[pos] = EMPTY_HASH;
-		keys[key_pos].~TKey();
+		if constexpr (!std::is_trivially_destructible_v<TKey>) {
+			unaligned_destroy<TKey>(&keys[key_pos]);
+		}
 		num_elements--;
 		if (key_pos < num_elements) {
 			// Not the last key, move the last one here to keep keys lineal
-			memnew_placement(&keys[key_pos], TKey(keys[num_elements]));
-			keys[num_elements].~TKey();
+			if constexpr (std::is_trivially_copyable_v<TKey>) {
+				memcpy(&keys[key_pos], &keys[num_elements], sizeof(TKey));
+			} else {
+				unaligned_construct<TKey>(&keys[key_pos], std::move(*std::launder(&keys[num_elements])));
+				unaligned_destroy<TKey>(&keys[num_elements]);
+			}
 			key_to_hash[key_pos] = key_to_hash[num_elements];
 			hash_to_key[key_to_hash[num_elements]] = key_pos;
 		}
@@ -320,10 +348,10 @@ public:
 
 	struct Iterator {
 		_FORCE_INLINE_ const TKey &operator*() const {
-			return keys[index];
+			return *std::launder(&keys[index]);
 		}
 		_FORCE_INLINE_ const TKey *operator->() const {
-			return &keys[index];
+			return std::launder(&keys[index]);
 		}
 		_FORCE_INLINE_ Iterator &operator++() {
 			index++;

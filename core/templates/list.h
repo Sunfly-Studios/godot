@@ -127,7 +127,13 @@ public:
 		 * set the value stored in this element.
 		 */
 		_FORCE_INLINE_ void set(const T &p_value) {
-			value = (T &)p_value;
+			value = p_value;
+		}
+		/*
+		 * set the value for "perfect forwarding"
+		 */
+		_FORCE_INLINE_ void set(T &&p_value) {
+			value = std::move(p_value);
 		}
 
 		void erase() {
@@ -136,7 +142,11 @@ public:
 
 		void transfer_to_back(List<T, A> *p_dst_list);
 
-		_FORCE_INLINE_ Element() : value() {}
+		// C++17 Perfect forwarding constructor to avoid double-initialization.
+		// Bypasses the need for T to be default-constructible.
+		template <typename... Args>
+		_FORCE_INLINE_ explicit Element(Args &&...p_args) :
+				value(std::forward<Args>(p_args)...) {}
 	};
 
 	typedef T ValueType;
@@ -246,7 +256,9 @@ private:
 				p_I->next_ptr->prev_ptr = p_I->prev_ptr;
 			}
 
-			memdelete_allocator<Element, A>(p_I);
+			// Invoke the destructor and free memory
+			p_I->~Element();
+			A::free(p_I);
 			size_cache--;
 
 			return true;
@@ -284,10 +296,8 @@ public:
 		return _data ? _data->last : nullptr;
 	}
 
-	/**
-	 * store a new element at the end of the list
-	 */
-	Element *push_back(const T &value) {
+	template <typename... Args>
+	Element *emplace_back(Args &&...p_args) {
 		if (!_data) {
 			_data = memnew_allocator(_Data, A);
 			_data->first = nullptr;
@@ -295,8 +305,10 @@ public:
 			_data->size_cache = 0;
 		}
 
-		Element *n = memnew_allocator(Element, A);
-		n->value = (T &)value;
+		// Allocate raw memory and formally begin lifetime with forwarded args.
+		void *mem = A::alloc(sizeof(Element));
+		ERR_FAIL_NULL_V(mem, nullptr);
+		Element *n = ::new (mem) Element(std::forward<Args>(p_args)...);
 
 		n->prev_ptr = _data->last;
 		n->next_ptr = nullptr;
@@ -305,17 +317,21 @@ public:
 		if (_data->last) {
 			_data->last->next_ptr = n;
 		}
-
 		_data->last = n;
 
 		if (!_data->first) {
 			_data->first = n;
 		}
-
 		_data->size_cache++;
 
 		return n;
 	}
+
+	/**
+	 * store a new element at the end of the list
+	 */
+	Element *push_back(const T &value) { return emplace_back(value); }
+	Element *push_back(T &&value) { return emplace_back(std::move(value)); }
 
 	void pop_back() {
 		if (_data && _data->last) {
@@ -323,10 +339,10 @@ public:
 		}
 	}
 
-	/**
-	 * store a new element at the beginning of the list
-	 */
-	Element *push_front(const T &value) {
+	
+
+	template <typename... Args>
+	Element *emplace_front(Args &&...p_args) {
 		if (!_data) {
 			_data = memnew_allocator(_Data, A);
 			_data->first = nullptr;
@@ -334,8 +350,10 @@ public:
 			_data->size_cache = 0;
 		}
 
-		Element *n = memnew_allocator(Element, A);
-		n->value = (T &)value;
+		void *mem = A::alloc(sizeof(Element));
+		ERR_FAIL_NULL_V(mem, nullptr);
+		Element *n = ::new (mem) Element(std::forward<Args>(p_args)...);
+
 		n->prev_ptr = nullptr;
 		n->next_ptr = _data->first;
 		n->data = _data;
@@ -343,17 +361,21 @@ public:
 		if (_data->first) {
 			_data->first->prev_ptr = n;
 		}
-
 		_data->first = n;
 
 		if (!_data->last) {
 			_data->last = n;
 		}
-
 		_data->size_cache++;
 
 		return n;
 	}
+
+	/**
+	 * store a new element at the beginning of the list
+	 */
+	Element *push_front(const T &value) { return emplace_front(value); }
+	Element *push_front(T &&value) { return emplace_front(std::move(value)); }
 
 	void pop_front() {
 		if (_data && _data->first) {
@@ -517,6 +539,9 @@ public:
 	 * copy the list
 	 */
 	void operator=(const List &p_list) {
+		if (unlikely(this == &p_list)) {
+			return; // Prevent self-assignment
+		}
 		clear();
 		const Element *it = p_list.front();
 		while (it) {
@@ -595,7 +620,14 @@ public:
 		Element *F = front();
 		Element *B = back();
 		for (int i = 0; i < s; i++) {
-			SWAP(F->value, B->value);
+			if constexpr (std::is_trivially_copyable_v<T>) {
+				T temp;
+				memcpy(&temp, &F->value, sizeof(T));
+				memcpy(&F->value, &B->value, sizeof(T));
+				memcpy(&B->value, &temp, sizeof(T));
+			} else {
+				SWAP(F->value, B->value);
+			}
 			F = F->next();
 			B = B->prev();
 		}

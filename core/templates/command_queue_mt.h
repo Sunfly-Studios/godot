@@ -129,7 +129,7 @@ class CommandQueueMT {
 		unaligned_write<uint64_t>(&command_mem[size], alloc_size);
 
 		void *cmd = &command_mem[size + sizeof(uint64_t)];
-		new (cmd) T(std::forward<Args>(p_args)...);
+		::new (cmd) T(std::forward<Args>(p_args)...);
 		pending.store(true);
 	}
 

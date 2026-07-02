@@ -53,6 +53,10 @@ class PagedArrayPool {
 	SpinLock spin_lock;
 
 public:
+	// Prevent double-free copies possibilities
+	PagedArrayPool(const PagedArrayPool &) = delete;
+	void operator=(const PagedArrayPool &) = delete;
+
 	struct PageInfo {
 		T *page = nullptr;
 		uint32_t page_id = 0;
@@ -180,6 +184,32 @@ public:
 		return page_data[page][offset];
 	}
 
+	template <typename... Args>
+	_FORCE_INLINE_ void emplace_back(Args &&...p_args) {
+		uint32_t remainder = count & page_size_mask;
+		if (unlikely(remainder == 0)) {
+			uint32_t page_count = _get_pages_in_use();
+			uint32_t new_page_count = page_count + 1;
+
+			if (unlikely(new_page_count > max_pages_used)) {
+				ERR_FAIL_NULL(page_pool);
+				_grow_page_array();
+			}
+
+			typename PagedArrayPool<T>::PageInfo page_info = page_pool->alloc_page();
+			page_data[page_count] = page_info.page;
+			page_ids[page_count] = page_info.page_id;
+		}
+
+		uint32_t page = count >> page_size_shift;
+		uint32_t offset = count & page_size_mask;
+
+		// Formally begin lifetime
+		memnew_placement(&page_data[page][offset], T(std::forward<Args>(p_args)...));
+
+		count++;
+	}
+
 	_FORCE_INLINE_ void push_back(const T &p_value) {
 		uint32_t remainder = count & page_size_mask;
 		if (unlikely(remainder == 0)) {
@@ -211,6 +241,10 @@ public:
 		count++;
 	}
 
+	_FORCE_INLINE_ void push_back(T &&p_value) {
+		emplace_back(std::move(p_value));
+	}
+
 	_FORCE_INLINE_ void pop_back() {
 		ERR_FAIL_COND(count == 0);
 
@@ -231,7 +265,9 @@ public:
 
 	void remove_at_unordered(uint64_t p_index) {
 		ERR_FAIL_UNSIGNED_INDEX(p_index, count);
-		(*this)[p_index] = (*this)[count - 1];
+		if (p_index != count - 1) {
+			(*this)[p_index] = std::move((*this)[count - 1]);
+		}
 		pop_back();
 	}
 
@@ -319,9 +355,9 @@ public:
 
 				for (uint32_t i = 0; i < to_copy; i++) {
 					if constexpr (!std::is_trivially_constructible_v<T>) {
-						memnew_placement(&dst_page[i + new_remainder], T(remainder_page[i + remainder - to_copy]));
+						memnew_placement(&dst_page[i + new_remainder], T(std::move(remainder_page[i + remainder - to_copy])));
 					} else {
-						dst_page[i + new_remainder] = remainder_page[i + remainder - to_copy];
+						dst_page[i + new_remainder] = std::move(remainder_page[i + remainder - to_copy]);
 					}
 
 					if constexpr (!std::is_trivially_destructible_v<T>) {
@@ -366,6 +402,48 @@ public:
 		page_pool = p_page_pool;
 		page_size_mask = page_pool->get_page_size_mask();
 		page_size_shift = page_pool->get_page_size_shift();
+	}
+
+	// Enable default constructor now that we have
+	// formal move constructors
+	PagedArray() = default;
+
+	// Prevent double-free copies
+	PagedArray(const PagedArray &) = delete;
+	void operator=(const PagedArray &) = delete;
+
+	PagedArray(PagedArray &&p_other) noexcept {
+		page_pool = p_other.page_pool;
+		page_data = p_other.page_data;
+		page_ids = p_other.page_ids;
+		max_pages_used = p_other.max_pages_used;
+		page_size_shift = p_other.page_size_shift;
+		page_size_mask = p_other.page_size_mask;
+		count = p_other.count;
+
+		p_other.page_data = nullptr;
+		p_other.page_ids = nullptr;
+		p_other.max_pages_used = 0;
+		p_other.count = 0;
+	}
+
+	void operator=(PagedArray &&p_other) noexcept {
+		if (unlikely(this == &p_other)) {
+			return;
+		}
+		reset();
+		page_pool = p_other.page_pool;
+		page_data = p_other.page_data;
+		page_ids = p_other.page_ids;
+		max_pages_used = p_other.max_pages_used;
+		page_size_shift = p_other.page_size_shift;
+		page_size_mask = p_other.page_size_mask;
+		count = p_other.count;
+
+		p_other.page_data = nullptr;
+		p_other.page_ids = nullptr;
+		p_other.max_pages_used = 0;
+		p_other.count = 0;
 	}
 
 	~PagedArray() {

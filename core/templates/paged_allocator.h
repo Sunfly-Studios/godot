@@ -65,29 +65,43 @@ public:
 			page_pool = (T **)memrealloc(page_pool, sizeof(T *) * pages_allocated);
 			available_pool = (T ***)memrealloc(available_pool, sizeof(T **) * pages_allocated);
 
-			page_pool[pages_used] = (T *)memalloc(sizeof(T) * page_size);
+			uint8_t *raw_page = (uint8_t *)memalloc(sizeof(T) * page_size);
+
+#if defined(DEV_ENABLED) || defined(TOOLS_ENABLED)
+			if (unlikely((reinterpret_cast<uintptr_t>(raw_page) & (alignof(T) - 1)) != 0)) {
+				CRASH_NOW_MSG("FATAL: Unaligned page allocation. memalloc cannot satisfy alignof(T).");
+			}
+#endif
+
+			page_pool[pages_used] = reinterpret_cast<T *>(raw_page);
 			available_pool[pages_used] = (T **)memalloc(sizeof(T *) * page_size);
 
+			// Calculate offsets purely in bytes before casting to T*
 			for (uint32_t i = 0; i < page_size; i++) {
-				available_pool[0][i] = &page_pool[pages_used][i];
+				available_pool[0][i] = reinterpret_cast<T *>(raw_page + (i * sizeof(T)));
 			}
 			allocs_available += page_size;
 		}
 
 		allocs_available--;
-		T *alloc = available_pool[allocs_available >> page_shift][allocs_available & page_mask];
+		T *raw_alloc = available_pool[allocs_available >> page_shift][allocs_available & page_mask];
+
 		if constexpr (thread_safe) {
 			spin_lock.unlock();
 		}
-		memnew_placement(alloc, T(p_args...));
-		return alloc;
+
+		if constexpr (std::is_trivially_constructible_v<T> && sizeof...(Args) == 0) {
+			return std::launder(raw_alloc);
+		} else {
+			return ::new (raw_alloc) T(std::forward<Args>(p_args)...);
+		}
 	}
 
 	void free(T *p_mem) {
 		if constexpr (thread_safe) {
 			spin_lock.lock();
 		}
-		p_mem->~T();
+		unaligned_destroy<T>(p_mem);
 		available_pool[allocs_available >> page_shift][allocs_available & page_mask] = p_mem;
 		allocs_available++;
 		if constexpr (thread_safe) {
@@ -96,7 +110,7 @@ public:
 	}
 
 	template <typename... Args>
-	T *new_allocation(Args &&...p_args) { return alloc(p_args...); }
+	T *new_allocation(Args &&...p_args) { return alloc(std::forward<Args>(p_args)...); }
 	void delete_allocation(T *p_mem) { free(p_mem); }
 
 private:

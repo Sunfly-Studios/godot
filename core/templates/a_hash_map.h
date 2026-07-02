@@ -214,9 +214,21 @@ private:
 		capacity = real_capacity - 1;
 
 		HashMapData *old_map_data = map_data;
-
 		map_data = reinterpret_cast<HashMapData *>(Memory::alloc_static(sizeof(HashMapData) * real_capacity));
-		elements = reinterpret_cast<MapKeyValue *>(Memory::realloc_static(elements, sizeof(MapKeyValue) * (_get_resize_count(capacity) + 1)));
+
+		if constexpr (std::is_trivially_copyable_v<MapKeyValue>) {
+			elements = reinterpret_cast<MapKeyValue *>(Memory::realloc_static(elements, sizeof(MapKeyValue) * (_get_resize_count(capacity) + 1)));
+		} else {
+			MapKeyValue *new_elements = reinterpret_cast<MapKeyValue *>(Memory::alloc_static(sizeof(MapKeyValue) * (_get_resize_count(capacity) + 1)));
+			if (elements != nullptr) {
+				for (uint32_t i = 0; i < num_elements; i++) {
+					unaligned_construct<MapKeyValue>(&new_elements[i], std::move(*std::launder(&elements[i])));
+					unaligned_destroy<MapKeyValue>(&elements[i]);
+				}
+				Memory::free_static(elements);
+			}
+			elements = new_elements;
+		}
 
 		memset(map_data, EMPTY_HASH, real_capacity * sizeof(HashMapData));
 
@@ -247,7 +259,7 @@ private:
 			_resize_and_rehash(capacity * 2);
 		}
 
-		memnew_placement(&elements[num_elements], MapKeyValue(p_key, p_value));
+		unaligned_construct<MapKeyValue>(&elements[num_elements], MapKeyValue(p_key, p_value));
 
 		_insert_with_hash(p_hash, num_elements);
 		num_elements++;
@@ -266,13 +278,13 @@ private:
 		map_data = reinterpret_cast<HashMapData *>(Memory::alloc_static(sizeof(HashMapData) * real_capacity));
 		elements = reinterpret_cast<MapKeyValue *>(Memory::alloc_static(sizeof(MapKeyValue) * (_get_resize_count(capacity) + 1)));
 
-		if constexpr (std::is_trivially_copyable_v<TKey> && std::is_trivially_copyable_v<TValue>) {
+		if constexpr (std::is_trivially_copyable_v<MapKeyValue>) {
 			void *destination = elements;
 			const void *source = p_other.elements;
 			memcpy(destination, source, sizeof(MapKeyValue) * num_elements);
 		} else {
 			for (uint32_t i = 0; i < num_elements; i++) {
-				memnew_placement(&elements[i], MapKeyValue(p_other.elements[i]));
+				unaligned_construct<MapKeyValue>(&elements[i], *std::launder(&p_other.elements[i]));
 			}
 		}
 
@@ -295,10 +307,9 @@ public:
 		}
 
 		memset(map_data, EMPTY_HASH, (capacity + 1) * sizeof(HashMapData));
-		if constexpr (!(std::is_trivially_destructible_v<TKey> && std::is_trivially_destructible_v<TValue>)) {
+		if constexpr (!std::is_trivially_destructible_v<MapKeyValue>) {
 			for (uint32_t i = 0; i < num_elements; i++) {
-				elements[i].key.~TKey();
-				elements[i].value.~TValue();
+				unaligned_destroy<MapKeyValue>(&elements[i]);
 			}
 		}
 
@@ -367,16 +378,21 @@ public:
 		}
 
 		map_data[pos].data = EMPTY_HASH;
-		elements[element_pos].key.~TKey();
-		elements[element_pos].value.~TValue();
+		if constexpr (!std::is_trivially_destructible_v<MapKeyValue>) {
+			unaligned_destroy<MapKeyValue>(&elements[element_pos]);
+		}
 		num_elements--;
 
 		if (element_pos < num_elements) {
-			void *destination = &elements[element_pos];
-			const void *source = &elements[num_elements];
-			memcpy(destination, source, sizeof(MapKeyValue));
 			uint32_t h_pos = 0;
-			_lookup_pos(elements[num_elements].key, pos, h_pos);
+			_lookup_pos(elements[element_pos].key, pos, h_pos);
+
+			if constexpr (std::is_trivially_copyable_v<MapKeyValue>) {
+				memcpy(&elements[element_pos], &elements[num_elements], sizeof(MapKeyValue));
+			} else {
+				unaligned_construct<MapKeyValue>(&elements[element_pos], std::move(*std::launder(&elements[num_elements])));
+				unaligned_destroy<MapKeyValue>(&elements[num_elements]);
+			}
 			map_data[h_pos].hash_to_key = element_pos;
 		}
 
@@ -393,8 +409,10 @@ public:
 		uint32_t element_pos = 0;
 		ERR_FAIL_COND_V(_lookup_pos(p_new_key, element_pos, pos), false);
 		ERR_FAIL_COND_V(!_lookup_pos(p_old_key, element_pos, pos), false);
-		MapKeyValue &element = elements[element_pos];
-		const_cast<TKey &>(element.key) = p_new_key;
+
+		TValue val = std::move(elements[element_pos].value);
+		unaligned_destroy<MapKeyValue>(&elements[element_pos]);
+		unaligned_construct<MapKeyValue>(&elements[element_pos], MapKeyValue(p_new_key, std::move(val)));
 
 		uint32_t next_pos = (pos + 1) & capacity;
 		while (map_data[next_pos].hash != EMPTY_HASH && _get_probe_length(next_pos, map_data[next_pos].hash, capacity) != 0) {
@@ -716,10 +734,9 @@ public:
 
 	void reset() {
 		if (elements != nullptr) {
-			if constexpr (!(std::is_trivially_destructible_v<TKey> && std::is_trivially_destructible_v<TValue>)) {
+			if constexpr (!std::is_trivially_destructible_v<MapKeyValue>) {
 				for (uint32_t i = 0; i < num_elements; i++) {
-					elements[i].key.~TKey();
-					elements[i].value.~TValue();
+					unaligned_destroy<MapKeyValue>(&elements[i]);
 				}
 			}
 			Memory::free_static(elements);

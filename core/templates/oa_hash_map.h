@@ -82,8 +82,8 @@ private:
 	}
 
 	_FORCE_INLINE_ void _construct(uint32_t p_pos, uint32_t p_hash, const TKey &p_key, const TValue &p_value) {
-		memnew_placement(&keys[p_pos], TKey(p_key));
-		memnew_placement(&values[p_pos], TValue(p_value));
+		unaligned_construct<TKey>(&keys[p_pos], p_key);
+		unaligned_construct<TValue>(&values[p_pos], p_value);
 		hashes[p_pos] = p_hash;
 
 		num_elements++;
@@ -103,7 +103,7 @@ private:
 				return false;
 			}
 
-			if (hashes[pos] == hash && Comparator::compare(keys[pos], p_key)) {
+			if (hashes[pos] == hash && Comparator::compare(*std::launder(&keys[pos]), p_key)) {
 				r_pos = pos;
 				return true;
 			}
@@ -132,8 +132,38 @@ private:
 			uint32_t existing_probe_len = _get_probe_length(pos, hashes[pos]);
 			if (existing_probe_len < distance) {
 				SWAP(hash, hashes[pos]);
-				SWAP(key, keys[pos]);
-				SWAP(value, values[pos]);
+				SWAP(key, *std::launder(&keys[pos]));
+				SWAP(value, *std::launder(&values[pos]));
+				distance = existing_probe_len;
+			}
+
+			pos = (pos + 1) % capacity;
+			distance++;
+		}
+	}
+
+	void _insert_with_hash_moved(uint32_t p_hash, TKey &&p_key, TValue &&p_value) {
+		uint32_t hash = p_hash;
+		uint32_t distance = 0;
+		uint32_t pos = hash % capacity;
+
+		TKey key = std::move(p_key);
+		TValue value = std::move(p_value);
+
+		while (true) {
+			if (hashes[pos] == EMPTY_HASH) {
+				unaligned_construct<TKey>(&keys[pos], std::move(key));
+				unaligned_construct<TValue>(&values[pos], std::move(value));
+				hashes[pos] = hash;
+				num_elements++;
+				return;
+			}
+
+			uint32_t existing_probe_len = _get_probe_length(pos, hashes[pos]);
+			if (existing_probe_len < distance) {
+				SWAP(hash, hashes[pos]);
+				SWAP(key, *std::launder(&keys[pos]));
+				SWAP(value, *std::launder(&values[pos]));
 				distance = existing_probe_len;
 			}
 
@@ -171,10 +201,10 @@ private:
 				continue;
 			}
 
-			_insert_with_hash(old_hashes[i], old_keys[i], old_values[i]);
+			_insert_with_hash_moved(old_hashes[i], std::move(*std::launder(&old_keys[i])), std::move(*std::launder(&old_values[i])));
 
-			old_keys[i].~TKey();
-			old_values[i].~TValue();
+			unaligned_destroy<TKey>(&old_keys[i]);
+			unaligned_destroy<TValue>(&old_values[i]);
 		}
 
 		Memory::free_static(old_keys);
@@ -195,14 +225,17 @@ public:
 	}
 
 	void clear() {
-		for (uint32_t i = 0; i < capacity; i++) {
-			if (hashes[i] == EMPTY_HASH) {
-				continue;
+		if constexpr (!(std::is_trivially_destructible_v<TKey> && std::is_trivially_destructible_v<TValue>)) {
+			for (uint32_t i = 0; i < capacity; i++) {
+				if (hashes[i] != EMPTY_HASH) {
+					unaligned_destroy<TValue>(&values[i]);
+					unaligned_destroy<TKey>(&keys[i]);
+				}
 			}
+		}
 
+		for (uint32_t i = 0; i < capacity; i++) {
 			hashes[i] = EMPTY_HASH;
-			values[i].~TValue();
-			keys[i].~TKey();
 		}
 
 		num_elements = 0;
@@ -240,7 +273,7 @@ public:
 		bool exists = _lookup_pos(p_key, pos);
 
 		if (exists) {
-			r_data = values[pos];
+			r_data = *std::launder(&values[pos]);
 			return true;
 		}
 
@@ -249,20 +282,16 @@ public:
 
 	const TValue *lookup_ptr(const TKey &p_key) const {
 		uint32_t pos = 0;
-		bool exists = _lookup_pos(p_key, pos);
-
-		if (exists) {
-			return &values[pos];
+		if (_lookup_pos(p_key, pos)) {
+			return std::launder(&values[pos]);
 		}
 		return nullptr;
 	}
 
 	TValue *lookup_ptr(const TKey &p_key) {
 		uint32_t pos = 0;
-		bool exists = _lookup_pos(p_key, pos);
-
-		if (exists) {
-			return &values[pos];
+		if (_lookup_pos(p_key, pos)) {
+			return std::launder(&values[pos]);
 		}
 		return nullptr;
 	}
@@ -284,15 +313,15 @@ public:
 		while (hashes[next_pos] != EMPTY_HASH &&
 				_get_probe_length(next_pos, hashes[next_pos]) != 0) {
 			SWAP(hashes[next_pos], hashes[pos]);
-			SWAP(keys[next_pos], keys[pos]);
-			SWAP(values[next_pos], values[pos]);
+			SWAP(*std::launder(&keys[next_pos]), *std::launder(&keys[pos]));
+			SWAP(*std::launder(&values[next_pos]), *std::launder(&values[pos]));
 			pos = next_pos;
 			next_pos = (pos + 1) % capacity;
 		}
 
 		hashes[pos] = EMPTY_HASH;
-		values[pos].~TValue();
-		keys[pos].~TKey();
+		unaligned_destroy<TValue>(&values[pos]);
+		unaligned_destroy<TKey>(&keys[pos]);
 
 		num_elements--;
 	}
@@ -346,8 +375,8 @@ public:
 			}
 
 			it.valid = true;
-			it.key = &keys[i];
-			it.value = &values[i];
+			it.key = std::launder(&keys[i]);
+			it.value = std::launder(&values[i]);
 			return it;
 		}
 
@@ -372,8 +401,17 @@ public:
 
 		_resize_and_rehash(p_other.capacity);
 
-		for (Iterator it = p_other.iter(); it.valid; it = p_other.next_iter(it)) {
-			set(*it.key, *it.value);
+		if constexpr (std::is_trivially_copyable_v<TKey> && std::is_trivially_copyable_v<TValue>) {
+			if (capacity > 0) {
+				memcpy(keys, p_other.keys, sizeof(TKey) * capacity);
+				memcpy(values, p_other.values, sizeof(TValue) * capacity);
+				memcpy(hashes, p_other.hashes, sizeof(uint32_t) * capacity);
+				num_elements = p_other.num_elements;
+			}
+		} else {
+			for (Iterator it = p_other.iter(); it.valid; it = p_other.next_iter(it)) {
+				set(*it.key, *it.value);
+			}
 		}
 	}
 
@@ -391,13 +429,13 @@ public:
 	}
 
 	~OAHashMap() {
-		for (uint32_t i = 0; i < capacity; i++) {
-			if (hashes[i] == EMPTY_HASH) {
-				continue;
+		if constexpr (!(std::is_trivially_destructible_v<TKey> && std::is_trivially_destructible_v<TValue>)) {
+			for (uint32_t i = 0; i < capacity; i++) {
+				if (hashes[i] != EMPTY_HASH) {
+					unaligned_destroy<TValue>(&values[i]);
+					unaligned_destroy<TKey>(&keys[i]);
+				}
 			}
-
-			values[i].~TValue();
-			keys[i].~TKey();
 		}
 
 		Memory::free_static(keys);
