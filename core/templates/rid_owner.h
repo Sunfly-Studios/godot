@@ -161,7 +161,17 @@ class RID_Alloc : public RID_AllocBase {
 // causes slowdowns. We cannot do anything other than to
 // silence it.
 #pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Watomic-alignment"
+
+// Check if the compiler supports __has_warning before using it
+#if defined(__has_warning)
+    #if __has_warning("-Watomic-alignment")
+        #pragma GCC diagnostic ignored "-Watomic-alignment"
+    #endif
+#else
+    // Fallback for older GCC versions
+    #pragma GCC diagnostic ignored "-Watomic-alignment"
+#endif
+
 				__atomic_store_n(&max_alloc, max_alloc + elements_in_chunk, __ATOMIC_RELAXED);
 #pragma GCC diagnostic pop
 #else
@@ -227,11 +237,22 @@ public:
 		if constexpr (THREAD_SAFE) { // Read atomically to avoid data race with the store in _allocate_rid().
 #if defined(__GNUC__) || defined(__clang__)
 #pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Watomic-alignment"
-			ma = __atomic_load_n(&max_alloc, __ATOMIC_RELAXED);
+
+// Check if the compiler supports __has_warning before using it
+#if defined(__has_warning)
+    #if __has_warning("-Watomic-alignment")
+        #pragma GCC diagnostic ignored "-Watomic-alignment"
+    #endif
+#else
+    // Fallback for older GCC versions
+    #pragma GCC diagnostic ignored "-Watomic-alignment"
+#endif
+
+            ma = __atomic_load_n(&max_alloc, __ATOMIC_RELAXED);
+
 #pragma GCC diagnostic pop
 #else
-			ma = ((std::atomic<uint32_t> *)&max_alloc)->load(std::memory_order_relaxed);
+            ma = ((std::atomic<uint32_t> *)&max_alloc)->load(std::memory_order_relaxed);
 #endif
 		} else {
 			ma = max_alloc;
