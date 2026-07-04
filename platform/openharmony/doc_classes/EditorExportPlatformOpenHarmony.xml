@@ -19,6 +19,7 @@
 		- For signing: Valid certificate files and signing profiles
 		[b]Supported Architectures:[/b]
 		- ARM64 (arm64-v8a) - Primary architecture for most OpenHarmony devices
+		- ARM32 (armeabi-v7a) - For constrained and embedded devices
 		- x86_64 - For emulator and development purposes
 		[b]Export Process:[/b]
 		1. Template preparation and extraction
@@ -34,6 +35,9 @@
 	<members>
 		<member name="architectures/arm64" type="bool" setter="" getter="">
 			Enable ARM64 architecture support. This is the primary architecture for most OpenHarmony devices including smartphones and tablets. Only one architecture can be selected at a time. This option is only visible when advanced options are enabled in the export preset.
+		</member>
+		<member name="architectures/arm32" type="bool" setter="" getter="">
+			Enable ARM32 architecture support. This is primarily used for constraint enviroments or embedded systems development. Only one architecture can be selected at a time. This option is only visible when advanced options are enabled in the export preset.
 		</member>
 		<member name="architectures/x86_64" type="bool" setter="" getter="">
 			Enable x86_64 architecture support. This is primarily used for emulator testing and development purposes. Only one architecture can be selected at a time. This option is only visible when advanced options are enabled in the export preset.

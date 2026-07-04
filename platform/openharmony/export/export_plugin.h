@@ -69,7 +69,7 @@ class EditorExportPlatformOpenHarmony : public EditorExportPlatform {
 	void _update_preset_status();
 	void _remove_dir_recursive(const String &p_dir);
 
-	String _get_template_name(bool p_debug, bool p_is_arm64) const {
+	String _get_template_name(bool p_debug, String arch_string) const {
 		String name = "openharmony";
 
 		if (p_debug) {
@@ -78,8 +78,10 @@ class EditorExportPlatformOpenHarmony : public EditorExportPlatform {
 			name += "_release";
 		}
 
-		if (p_is_arm64) {
+		if (arch_string == "arm64") {
 			name += "_arm64-v8a";
+		} else if (arch_string == "arm32") {
+			name += "_armeabi-v7a";
 		} else {
 			name += "_x86_64";
 		}

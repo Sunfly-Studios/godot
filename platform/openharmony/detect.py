@@ -68,7 +68,7 @@ def configure(env: "SConsEnvironment"):
         sys.exit(255)
 
     # Validate arch.
-    supported_arches = ["arm64", "x86_64"]
+    supported_arches = ["arm64", "arm32", "x86_64"]
     validate_arch(env["arch"], get_name(), supported_arches)
 
     ## Compiler configuration
@@ -100,6 +100,9 @@ def configure(env: "SConsEnvironment"):
     elif env["arch"] == "arm64":
         target_name = "aarch64-linux-ohos"
         env.Append(ASFLAGS=["-arch", "aarch64"])
+    elif env["arch"] == "arm32":
+        target_name = "arm-linux-ohos"
+        env.Append(ASFLAGS=["-arch", "arm"])
 
     env.Append(
         CCFLAGS=[

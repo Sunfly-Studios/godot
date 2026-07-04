@@ -80,6 +80,8 @@ void EditorExportPlatformOpenHarmony::get_preset_features(const Ref<EditorExport
 
 	if (architecture == "arm64") {
 		r_features->push_back("arm64");
+	} else if (architecture == "arm32") {
+		r_features->push_back("arm32");
 	} else if (architecture == "x86_64") {
 		r_features->push_back("x86_64");
 		r_features->push_back("mmx");
@@ -89,7 +91,7 @@ void EditorExportPlatformOpenHarmony::get_preset_features(const Ref<EditorExport
 }
 
 void EditorExportPlatformOpenHarmony::get_export_options(List<ExportOption> *r_options) const {
-	r_options->push_back(ExportOption(PropertyInfo(Variant::STRING, "binary_format/architecture", PROPERTY_HINT_ENUM, "arm64,x86_64"), "arm64"));
+	r_options->push_back(ExportOption(PropertyInfo(Variant::STRING, "binary_format/architecture", PROPERTY_HINT_ENUM, "arm64,arm32,x86_64"), "arm64"));
 	r_options->push_back(ExportOption(PropertyInfo(Variant::STRING, "custom_template/debug", PROPERTY_HINT_GLOBAL_FILE, "*.zip"), ""));
 	r_options->push_back(ExportOption(PropertyInfo(Variant::STRING, "custom_template/release", PROPERTY_HINT_GLOBAL_FILE, "*.zip"), ""));
 
@@ -253,11 +255,11 @@ Error EditorExportPlatformOpenHarmony::export_project_helper(const Ref<EditorExp
 	String custom_debug = p_preset->get("custom_template/debug");
 	String custom_release = p_preset->get("custom_template/release");
 	String template_path = p_debug ? custom_debug : custom_release;
-	bool is_arm64 = p_preset->get("binary_format/architecture") == "arm64";
+	String arch_string = p_preset->get("binary_format/architecture");
 	template_path = template_path.strip_edges();
 
 	if (template_path.is_empty()) {
-		String template_file_name = _get_template_name(p_debug, is_arm64);
+		String template_file_name = _get_template_name(p_debug, arch_string);
 		String err;
 		
 		template_path = find_export_template(template_file_name, &err);
@@ -1028,9 +1030,9 @@ bool EditorExportPlatformOpenHarmony::has_valid_export_configuration(const Ref<E
 	String err;
 	bool valid = false;
 
-	bool is_arm64 = p_preset->get("binary_format/architecture") == "arm64";
-	bool dvalid = exists_export_template(_get_template_name(true, is_arm64), &err);
-	bool rvalid = exists_export_template(_get_template_name(false, is_arm64), &err);
+	String arch_string = p_preset->get("binary_format/architecture");
+	bool dvalid = exists_export_template(_get_template_name(true, arch_string), &err);
+	bool rvalid = exists_export_template(_get_template_name(false, arch_string), &err);
 
 	if (p_preset->get("custom_template/debug") != "") {
 		dvalid = FileAccess::exists(p_preset->get("custom_template/debug"));

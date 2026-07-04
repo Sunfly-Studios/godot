@@ -38,6 +38,8 @@ for x in openharmony_files:
 lib_arch_dir = ""
 if env["arch"] == "arm64":
     lib_arch_dir = "arm64-v8a"
+if env["arch"] == "arm32":
+    lib_arch_dir = "armeabi-v7a"
 elif env["arch"] == "x86_64":
     lib_arch_dir = "x86_64"
 else:
