@@ -450,6 +450,44 @@ String OS_Android::get_model_name() const {
 	return OS_Unix::get_model_name();
 }
 
+String OS_Android::get_processor_name() const {
+    const char *properties[] = {
+        "ro.soc.model",
+        "ro.board.platform",
+        "ro.hardware",
+        "ro.mediatek.platform",
+        "ro.chipname",
+        "ro.arch"
+    };
+
+    int num_properties = sizeof(properties) / sizeof(properties[0]);
+    for (int i = 0; i < num_properties; i++) {
+        String processor_name = get_system_property(properties[i]);
+        if (!processor_name.is_empty()) {
+            return processor_name;
+        }
+    }
+
+    // If none of the above work, then read `/proc/cpuinfo`.
+	FILE *file = fopen("/proc/cpuinfo", "r");
+    if (file != nullptr) {
+        char buffer[256] = {};
+        while (fgets(buffer, sizeof(buffer), file) != nullptr) {
+            String line = String(buffer);
+            if (line.begins_with("Hardware")) {
+                Vector<String> parts = line.split(":");
+                if (parts.size() > 1) { // Found SoC info
+                    fclose(file);
+                    return parts[1].strip_edges();
+                }
+            }
+        }
+        fclose(file);
+    }
+
+    return String();
+}
+
 String OS_Android::get_data_path() const {
 	return OS::get_user_data_dir();
 }

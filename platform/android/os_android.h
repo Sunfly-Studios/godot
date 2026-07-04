@@ -153,7 +153,8 @@ public:
 	virtual String get_resource_dir() const override;
 	virtual String get_locale() const override;
 	virtual String get_model_name() const override;
-
+	virtual String get_processor_name() const override;
+	
 	virtual String get_unique_id() const override;
 
 	virtual String get_system_dir(SystemDir p_dir, bool p_shared_storage = true) const override;
