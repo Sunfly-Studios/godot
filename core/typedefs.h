@@ -76,6 +76,22 @@ static_assert(__cplusplus >= 201703L);
 #endif
 #endif
 
+// Some platforms may not natievly support atomics, but the compiler
+// can emulate it in software.
+#define GODOT_REQUIRE_LOCK_FREE_ATOMICS 1
+
+// Platform list
+#if defined(__powerpc__) && !defined(__powerpc64__) // 32-bit PPC
+	#undef GODOT_REQUIRE_LOCK_FREE_ATOMICS
+	#define GODOT_REQUIRE_LOCK_FREE_ATOMICS 0
+#elif defined(__arc__) // 32-bit ARC
+	#undef GODOT_REQUIRE_LOCK_FREE_ATOMICS
+	#define GODOT_REQUIRE_LOCK_FREE_ATOMICS 0
+#elif defined(__arm__) && defined(__ARM_ARCH) && (__ARM_ARCH < 6) // armv5 or lower
+	#undef GODOT_REQUIRE_LOCK_FREE_ATOMICS
+	#define GODOT_REQUIRE_LOCK_FREE_ATOMICS 0
+#endif
+
 // In some cases [[nodiscard]] will get false positives,
 // we can prevent the warning in specific cases by preceding the call with a cast.
 #ifndef _ALLOW_DISCARD_

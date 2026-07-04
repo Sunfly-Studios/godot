@@ -86,9 +86,13 @@ _ALWAYS_INLINE_ static void _cpu_pause() {
 #if defined(__i386__) || defined(__x86_64__) // x86.
 	__builtin_ia32_pause();
 #elif defined(__arm__) || defined(__aarch64__) // ARM.
-	// Use memory clobber to prevent
-	// reordering/optimisation by the compiler.
+#if defined(__arm__) && (defined(__ARM_ARCH) && (__ARM_ARCH < 6))
+	// 32-bit arm older than armv6k
+	asm volatile("nop" ::: "memory");
+#else
+	// armv6k+ or ARM64.
 	asm volatile("yield" ::: "memory");
+#endif // __arm__
 #elif defined(__powerpc__) || defined(__ppc__) || defined(__PPC__) // PowerPC.
 	asm volatile("or 27,27,27" ::: "memory");
 #elif defined(__riscv) // RISC-V.
@@ -141,7 +145,7 @@ _ALWAYS_INLINE_ static void _cpu_pause() {
 #endif
 }
 
-#if (!defined(__powerpc__) || defined(__powerpc64__)) && !defined(__arc__)
+#if GODOT_REQUIRE_LOCK_FREE_ATOMICS
 static_assert(std::atomic_bool::is_always_lock_free);
 #endif
 

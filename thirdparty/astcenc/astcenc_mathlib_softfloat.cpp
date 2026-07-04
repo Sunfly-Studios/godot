@@ -36,7 +36,7 @@ typedef uint32_t sf32;
 
 #if defined(__GNUC__) && (defined(__i386) || defined(__amd64))
 #elif defined(__arm__) && defined(__ARMCC_VERSION)
-#elif defined(__arm__) && defined(__GNUC__)
+#elif defined(__arm__) && defined(__GNUC__) && (defined(__ARM_ARCH) && (__ARM_ARCH > 6))
 #else
 	/* table used for the slow default versions. */
 	static const uint8_t clz_table[256] =
@@ -72,7 +72,7 @@ static uint32_t clz32(uint32_t inp)
 		#if defined(__arm__) && defined(__ARMCC_VERSION)
 			return __clz(inp);			/* armcc builtin */
 		#else
-			#if defined(__arm__) && defined(__GNUC__)
+			#if defined(__arm__) && defined(__GNUC__) && (defined(__ARM_ARCH) && (__ARM_ARCH > 6))
 				uint32_t lz;
 				__asm__("clz %0, %1": "=r"(lz):"r"(inp));
 				return lz;

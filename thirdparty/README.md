@@ -58,6 +58,9 @@ Files extracted from upstream source:
 - `astcenc_*` and `astcenc.h` files from `Source`
 - `LICENSE.txt`
 
+Patches:
+- `0001-older-arm32-compile.patch`
+
 
 ## basis_universal
 
