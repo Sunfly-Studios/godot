@@ -4132,16 +4132,20 @@ DisplayServerMacOS::DisplayServerMacOS(const String &p_rendering_driver, WindowM
 		if (multilayer_fallback) {
 			Vector<String> native_attempts;
 			Vector<String> angle_attempts;
+			Vector<String> forced_attempts;
 
 			if (rendering_driver.begins_with("opengl3")) {
 #ifdef GLES3_ENABLED
 				native_attempts.push_back("opengl3");
+				forced_attempts.push_back("opengl3_forced");
 #endif
 #ifdef GLES2_ENABLED
 				native_attempts.push_back("opengl2");
+				forced_attempts.push_back("opengl2_forced");
 #endif
 #ifdef GLES1_ENABLED
 				native_attempts.push_back("opengl1");
+				forced_attempts.push_back("opengl1_forced");
 #endif
 #ifdef GLES3_ENABLED
 				if (fb_angle3 || rendering_driver == "opengl3_angle") {
@@ -4161,12 +4165,15 @@ DisplayServerMacOS::DisplayServerMacOS(const String &p_rendering_driver, WindowM
 			} else if (rendering_driver.begins_with("opengl2")) {
 #ifdef GLES2_ENABLED
 				native_attempts.push_back("opengl2");
+				forced_attempts.push_back("opengl2_forced");
 #endif
 #ifdef GLES1_ENABLED
 				native_attempts.push_back("opengl1");
+				forced_attempts.push_back("opengl1_forced");
 #endif
 #ifdef GLES3_ENABLED
 				native_attempts.push_back("opengl3");
+				forced_attempts.push_back("opengl3_forced");
 #endif
 #ifdef GLES2_ENABLED
 				if (fb_angle2 || rendering_driver == "opengl2_angle") {
@@ -4186,12 +4193,15 @@ DisplayServerMacOS::DisplayServerMacOS(const String &p_rendering_driver, WindowM
 			} else if (rendering_driver.begins_with("opengl1")) {
 #ifdef GLES1_ENABLED
 				native_attempts.push_back("opengl1");
+				forced_attempts.push_back("opengl1_forced");
 #endif
 #ifdef GLES2_ENABLED
 				native_attempts.push_back("opengl2");
+				forced_attempts.push_back("opengl2_forced");
 #endif
 #ifdef GLES3_ENABLED
 				native_attempts.push_back("opengl3");
+				forced_attempts.push_back("opengl3_forced");
 #endif
 #ifdef GLES1_ENABLED
 				if (fb_angle1 || rendering_driver == "opengl1_angle") {
@@ -4210,14 +4220,17 @@ DisplayServerMacOS::DisplayServerMacOS(const String &p_rendering_driver, WindowM
 #endif
 			} else {
 				native_attempts.push_back(rendering_driver);
+				forced_attempts.push_back(rendering_driver + "_forced");
 			} // rendering_driver.begins_with("opengl3")
 
 			if (rendering_driver.ends_with("_angle")) {
 				driver_attempts.append_array(angle_attempts);
 				driver_attempts.append_array(native_attempts);
+				driver_attempts.append_array(forced_attempts);
 			} else {
 				driver_attempts.append_array(native_attempts);
 				driver_attempts.append_array(angle_attempts);
+				driver_attempts.append_array(forced_attempts);
 			}
 		} else {
 			// Use only the one the game requested, plus its direct ANGLE fallback
@@ -4226,18 +4239,21 @@ DisplayServerMacOS::DisplayServerMacOS(const String &p_rendering_driver, WindowM
 #ifdef GLES3_ENABLED
 			if (rendering_driver == "opengl3" && fb_angle3) {
 				driver_attempts.push_back("opengl3_angle");
+				driver_attempts.push_back("opengl3_forced");
 			}
 #endif
 
 #ifdef GLES2_ENABLED
 			if (rendering_driver == "opengl2" && fb_angle2) {
 				driver_attempts.push_back("opengl2_angle");
+				driver_attempts.push_back("opengl2_forced");
 			}
 #endif
 
 #ifdef GLES1_ENABLED
 			if (rendering_driver == "opengl1" && fb_angle1) {
 				driver_attempts.push_back("opengl1_angle");
+				driver_attempts.push_back("opengl1_forced");
 			}
 #endif
 		}
@@ -4249,7 +4265,13 @@ DisplayServerMacOS::DisplayServerMacOS(const String &p_rendering_driver, WindowM
 			rendering_driver = driver_attempts[attempt_idx];
 			bool init_failed = false;
 			bool driver_compiled = false;
+			bool ignore_blacklist = false;
 			r_error = OK;
+			
+			if (rendering_driver.ends_with("_forced")) {
+				ignore_blacklist = true;
+				rendering_driver = rendering_driver.replace("_forced", "");
+			}
 
 			// Inform the OS of the fallback state.
 			if (rendering_driver.begins_with("opengl3")) {
@@ -4267,7 +4289,7 @@ DisplayServerMacOS::DisplayServerMacOS(const String &p_rendering_driver, WindowM
 
 				if (rendering_driver == "opengl3") {
 					bool is_vm = OS::get_singleton()->get_processor_name().contains("Virtual");
-					if (is_vm && fb_angle3) {
+					if (!ignore_blacklist && is_vm && fb_angle3) {
 						WARN_PRINT("Virtual Machine detected, skipping native OpenGL 3.");
 						init_failed = true;
 						r_error = ERR_UNAVAILABLE;
@@ -4302,7 +4324,7 @@ DisplayServerMacOS::DisplayServerMacOS(const String &p_rendering_driver, WindowM
 
 				if (rendering_driver == "opengl2") {
 					bool is_vm = OS::get_singleton()->get_processor_name().contains("Virtual");
-					if (is_vm && fb_angle2) {
+					if (!ignore_blacklist && is_vm && fb_angle2) {
 						WARN_PRINT("Virtual Machine detected, skipping native OpenGL 2.");
 						init_failed = true;
 						r_error = ERR_UNAVAILABLE;
@@ -4337,7 +4359,7 @@ DisplayServerMacOS::DisplayServerMacOS(const String &p_rendering_driver, WindowM
 
 				if (rendering_driver == "opengl1") {
 					bool is_vm = OS::get_singleton()->get_processor_name().contains("Virtual");
-					if (is_vm && fb_angle1) {
+					if (!ignore_blacklist && is_vm && fb_angle1) {
 						WARN_PRINT("Virtual Machine detected, skipping native OpenGL 1.");
 						init_failed = true;
 						r_error = ERR_UNAVAILABLE;
@@ -4400,23 +4422,27 @@ DisplayServerMacOS::DisplayServerMacOS(const String &p_rendering_driver, WindowM
 
 					String fallback_method;
 					String fallback_type;
+					String fallback_api;
 
 					if (driver_attempts[attempt_idx].begins_with("opengl3")) {
 						fallback_method = "Compatibility";
+						fallback_api = "GLES3";
 					} else if (driver_attempts[attempt_idx].begins_with("opengl2")) {
 						fallback_method = "Legacy";
+						fallback_api = "GLES2";
 					} else {
 						fallback_method = "Classic";
+						fallback_api = "GLES1";
 					}
 
 					if (driver_attempts[attempt_idx].ends_with("_angle")) {
 						fallback_type = "ANGLE";
 					} else {
-						fallback_type = "native";
+						fallback_type = "Native";
 					}
 
-					WARN_PRINT(vformat("The %s driver for the %s renderer (%s) could not be initialized. Using the %s driver for the %s renderer, visuals may be affected.",
-							req_type, req_method, req_api, fallback_type, fallback_method));
+					WARN_PRINT(vformat("The %s driver for the %s renderer (%s) could not be initialized. Using the %s driver for the %s renderer (%s), visuals may be affected.",
+							req_type, req_method, req_api, fallback_type, fallback_method, fallback_api));
 				}
 				break;
 			}

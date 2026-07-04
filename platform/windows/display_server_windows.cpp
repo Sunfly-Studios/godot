@@ -7274,16 +7274,20 @@ DisplayServerWindows::DisplayServerWindows(const String &p_rendering_driver, Win
 		if (multilayer_fallback) {
 			Vector<String> native_attempts;
 			Vector<String> angle_attempts;
+			Vector<String> forced_attempts;
 
 			if (rendering_driver.begins_with("opengl3")) {
 #ifdef GLES3_ENABLED
 				native_attempts.push_back("opengl3");
+				forced_attempts.push_back("opengl3_forced");
 #endif
 #ifdef GLES2_ENABLED
 				native_attempts.push_back("opengl2");
+				forced_attempts.push_back("opengl2_forced");
 #endif
 #ifdef GLES1_ENABLED
 				native_attempts.push_back("opengl1");
+				forced_attempts.push_back("opengl1_forced");
 #endif
 #ifdef GLES3_ENABLED
 				if (fb_angle3 || rendering_driver == "opengl3_angle") {
@@ -7303,12 +7307,15 @@ DisplayServerWindows::DisplayServerWindows(const String &p_rendering_driver, Win
 			} else if (rendering_driver.begins_with("opengl2")) {
 #ifdef GLES2_ENABLED
 				native_attempts.push_back("opengl2");
+				forced_attempts.push_back("opengl2_forced");
 #endif
 #ifdef GLES1_ENABLED
 				native_attempts.push_back("opengl1");
+				forced_attempts.push_back("opengl1_forced");
 #endif
 #ifdef GLES3_ENABLED
 				native_attempts.push_back("opengl3");
+				forced_attempts.push_back("opengl3_forced");
 #endif
 #ifdef GLES2_ENABLED
 				if (fb_angle2 || rendering_driver == "opengl2_angle") {
@@ -7328,12 +7335,15 @@ DisplayServerWindows::DisplayServerWindows(const String &p_rendering_driver, Win
 			} else if (rendering_driver.begins_with("opengl1")) {
 #ifdef GLES1_ENABLED
 				native_attempts.push_back("opengl1");
+				forced_attempts.push_back("opengl1_forced");
 #endif
 #ifdef GLES2_ENABLED
 				native_attempts.push_back("opengl2");
+				forced_attempts.push_back("opengl2_forced");
 #endif
 #ifdef GLES3_ENABLED
 				native_attempts.push_back("opengl3");
+				forced_attempts.push_back("opengl3_forced");
 #endif
 #ifdef GLES1_ENABLED
 				if (fb_angle1 || rendering_driver == "opengl1_angle") {
@@ -7352,14 +7362,17 @@ DisplayServerWindows::DisplayServerWindows(const String &p_rendering_driver, Win
 #endif
 			} else {
 				native_attempts.push_back(rendering_driver);
+				forced_attempts.push_back(rendering_driver + "_forced");
 			} // rendering_driver.begins_with("opengl3")
 
 			if (rendering_driver.ends_with("_angle")) {
 				driver_attempts.append_array(angle_attempts);
 				driver_attempts.append_array(native_attempts);
+				driver_attempts.append_array(forced_attempts);
 			} else {
 				driver_attempts.append_array(native_attempts);
 				driver_attempts.append_array(angle_attempts);
+				driver_attempts.append_array(forced_attempts);
 			}
 		} else {
 			// Use only the one the game requested, plus its direct ANGLE fallback
@@ -7368,18 +7381,21 @@ DisplayServerWindows::DisplayServerWindows(const String &p_rendering_driver, Win
 #ifdef GLES3_ENABLED
 			if (rendering_driver == "opengl3" && fb_angle3) {
 				driver_attempts.push_back("opengl3_angle");
+				driver_attempts.push_back("opengl3_forced");
 			}
 #endif
 
 #ifdef GLES2_ENABLED
 			if (rendering_driver == "opengl2" && fb_angle2) {
 				driver_attempts.push_back("opengl2_angle");
+				driver_attempts.push_back("opengl2_forced");
 			}
 #endif
 
 #ifdef GLES1_ENABLED
 			if (rendering_driver == "opengl1" && fb_angle1) {
 				driver_attempts.push_back("opengl1_angle");
+				driver_attempts.push_back("opengl1_forced");
 			}
 #endif
 		}
@@ -7391,7 +7407,13 @@ DisplayServerWindows::DisplayServerWindows(const String &p_rendering_driver, Win
 			rendering_driver = driver_attempts[attempt_idx];
 			bool init_failed = false;
 			bool driver_compiled = false;
+			bool ignore_blacklist = false;
 			r_error = OK;
+			
+			if (rendering_driver.ends_with("_forced")) {
+				ignore_blacklist = true;
+				rendering_driver = rendering_driver.replace("_forced", "");
+			}
 
 			// Inform the OS of the fallback state.
 			if (rendering_driver.begins_with("opengl3")) {
@@ -7411,49 +7433,51 @@ DisplayServerWindows::DisplayServerWindows(const String &p_rendering_driver, Win
 					// There's no native OpenGL drivers on Windows for ARM, always enable fallback.
 					bool is_bad_driver = false;
 					bool show_warning = true;
-
+					
+					if (!ignore_blacklist) {
 #if defined(__arm__) || defined(__aarch64__) || defined(_M_ARM) || defined(_M_ARM64)
-					is_bad_driver = true;
-					show_warning = false;
+						is_bad_driver = true;
+						show_warning = false;
 #else
-					typedef BOOL(WINAPI * IsWow64Process2Ptr)(HANDLE, USHORT *, USHORT *);
+						typedef BOOL(WINAPI * IsWow64Process2Ptr)(HANDLE, USHORT *, USHORT *);
 
-					IsWow64Process2Ptr IsWow64Process2 = (IsWow64Process2Ptr)GetProcAddress(GetModuleHandle(TEXT("kernel32")), "IsWow64Process2");
-					if (IsWow64Process2) {
-						USHORT process_arch = 0;
-						USHORT machine_arch = 0;
-						if (!IsWow64Process2(GetCurrentProcess(), &process_arch, &machine_arch)) {
-							machine_arch = 0;
-						}
-						if (machine_arch == 0xAA64) {
-							is_bad_driver = true;
-							show_warning = false;
-						}
-					}
-#endif
-					if (!is_bad_driver && fb_angle3) {
-						Dictionary gl_info = detect_wgl(3, 3);
-						constexpr int gl_version = make_gl_version(3, 3);
-
-						Vector2i device_id = _get_device_ids(gl_info["name"]);
-						Array device_list = GLOBAL_GET("rendering/gl_compatibility/force_angle_on_devices");
-						for (int i = 0; i < device_list.size(); i++) {
-							const Dictionary &device = device_list[i];
-							if (device.has("vendor") && device.has("name")) {
-								const String &vendor = device["vendor"];
-								const String &name = device["name"];
-								if (device_id != Vector2i() && vendor.begins_with("0x") && name.begins_with("0x") && device_id.x == vendor.lstrip("0x").hex_to_int() && device_id.y == name.lstrip("0x").hex_to_int()) {
-									is_bad_driver = true;
-									break;
-								} else if (gl_info["vendor"].operator String().to_upper().contains(vendor.to_upper()) && (name == "*" || gl_info["name"].operator String().to_upper().contains(name.to_upper()))) {
-									is_bad_driver = true;
-									break;
-								}
+						IsWow64Process2Ptr IsWow64Process2 = (IsWow64Process2Ptr)GetProcAddress(GetModuleHandle(TEXT("kernel32")), "IsWow64Process2");
+						if (IsWow64Process2) {
+							USHORT process_arch = 0;
+							USHORT machine_arch = 0;
+							if (!IsWow64Process2(GetCurrentProcess(), &process_arch, &machine_arch)) {
+								machine_arch = 0;
+							}
+							if (machine_arch == 0xAA64) {
+								is_bad_driver = true;
+								show_warning = false;
 							}
 						}
+#endif // __arm__ || __aarch64__ || _M_ARM || _M_ARM64
+						if (!is_bad_driver && fb_angle3) {
+							Dictionary gl_info = detect_wgl(3, 3);
+							constexpr int gl_version = make_gl_version(3, 3);
 
-						if (gl_info["version"].operator int() < gl_version) {
-							is_bad_driver = true;
+							Vector2i device_id = _get_device_ids(gl_info["name"]);
+							Array device_list = GLOBAL_GET("rendering/gl_compatibility/force_angle_on_devices");
+							for (int i = 0; i < device_list.size(); i++) {
+								const Dictionary &device = device_list[i];
+								if (device.has("vendor") && device.has("name")) {
+									const String &vendor = device["vendor"];
+									const String &name = device["name"];
+									if (device_id != Vector2i() && vendor.begins_with("0x") && name.begins_with("0x") && device_id.x == vendor.lstrip("0x").hex_to_int() && device_id.y == name.lstrip("0x").hex_to_int()) {
+										is_bad_driver = true;
+										break;
+									} else if (gl_info["vendor"].operator String().to_upper().contains(vendor.to_upper()) && (name == "*" || gl_info["name"].operator String().to_upper().contains(name.to_upper()))) {
+										is_bad_driver = true;
+										break;
+									}
+								}
+							}
+
+							if (gl_info["version"].operator int() < gl_version) {
+								is_bad_driver = true;
+							}
 						}
 					}
 
@@ -7502,48 +7526,50 @@ DisplayServerWindows::DisplayServerWindows(const String &p_rendering_driver, Win
 					bool is_bad_driver = false;
 					bool show_warning = true;
 
+					if (!ignore_blacklist) {
 #if defined(__arm__) || defined(__aarch64__) || defined(_M_ARM) || defined(_M_ARM64)
-					is_bad_driver = true;
-					show_warning = false;
+						is_bad_driver = true;
+						show_warning = false;
 #else
-					typedef BOOL(WINAPI * IsWow64Process2Ptr)(HANDLE, USHORT *, USHORT *);
+						typedef BOOL(WINAPI * IsWow64Process2Ptr)(HANDLE, USHORT *, USHORT *);
 
-					IsWow64Process2Ptr IsWow64Process2 = (IsWow64Process2Ptr)GetProcAddress(GetModuleHandle(TEXT("kernel32")), "IsWow64Process2");
-					if (IsWow64Process2) {
-						USHORT process_arch = 0;
-						USHORT machine_arch = 0;
-						if (!IsWow64Process2(GetCurrentProcess(), &process_arch, &machine_arch)) {
-							machine_arch = 0;
-						}
-						if (machine_arch == 0xAA64) {
-							is_bad_driver = true;
-							show_warning = false;
-						}
-					}
-#endif
-					if (!is_bad_driver && fb_angle2) {
-						Dictionary gl_info = detect_wgl(2, 1);
-						constexpr int gl_version = make_gl_version(2, 1);
-
-						Vector2i device_id = _get_device_ids(gl_info["name"]);
-						Array device_list = GLOBAL_GET("rendering/gl_legacy/force_angle_on_devices");
-						for (int i = 0; i < device_list.size(); i++) {
-							const Dictionary &device = device_list[i];
-							if (device.has("vendor") && device.has("name")) {
-								const String &vendor = device["vendor"];
-								const String &name = device["name"];
-								if (device_id != Vector2i() && vendor.begins_with("0x") && name.begins_with("0x") && device_id.x == vendor.lstrip("0x").hex_to_int() && device_id.y == name.lstrip("0x").hex_to_int()) {
-									is_bad_driver = true;
-									break;
-								} else if (gl_info["vendor"].operator String().to_upper().contains(vendor.to_upper()) && (name == "*" || gl_info["name"].operator String().to_upper().contains(name.to_upper()))) {
-									is_bad_driver = true;
-									break;
-								}
+						IsWow64Process2Ptr IsWow64Process2 = (IsWow64Process2Ptr)GetProcAddress(GetModuleHandle(TEXT("kernel32")), "IsWow64Process2");
+						if (IsWow64Process2) {
+							USHORT process_arch = 0;
+							USHORT machine_arch = 0;
+							if (!IsWow64Process2(GetCurrentProcess(), &process_arch, &machine_arch)) {
+								machine_arch = 0;
+							}
+							if (machine_arch == 0xAA64) {
+								is_bad_driver = true;
+								show_warning = false;
 							}
 						}
+#endif // __arm__ || __aarch64__ || _M_ARM || _M_ARM64
+						if (!is_bad_driver && fb_angle2) {
+							Dictionary gl_info = detect_wgl(2, 1);
+							constexpr int gl_version = make_gl_version(2, 1);
 
-						if (gl_info["version"].operator int() < gl_version) {
-							is_bad_driver = true;
+							Vector2i device_id = _get_device_ids(gl_info["name"]);
+							Array device_list = GLOBAL_GET("rendering/gl_legacy/force_angle_on_devices");
+							for (int i = 0; i < device_list.size(); i++) {
+								const Dictionary &device = device_list[i];
+								if (device.has("vendor") && device.has("name")) {
+									const String &vendor = device["vendor"];
+									const String &name = device["name"];
+									if (device_id != Vector2i() && vendor.begins_with("0x") && name.begins_with("0x") && device_id.x == vendor.lstrip("0x").hex_to_int() && device_id.y == name.lstrip("0x").hex_to_int()) {
+										is_bad_driver = true;
+										break;
+									} else if (gl_info["vendor"].operator String().to_upper().contains(vendor.to_upper()) && (name == "*" || gl_info["name"].operator String().to_upper().contains(name.to_upper()))) {
+										is_bad_driver = true;
+										break;
+									}
+								}
+							}
+
+							if (gl_info["version"].operator int() < gl_version) {
+								is_bad_driver = true;
+							}
 						}
 					}
 
@@ -7592,48 +7618,50 @@ DisplayServerWindows::DisplayServerWindows(const String &p_rendering_driver, Win
 					bool is_bad_driver = false;
 					bool show_warning = true;
 
+					if (!ignore_blacklist) {
 #if defined(__arm__) || defined(__aarch64__) || defined(_M_ARM) || defined(_M_ARM64)
-					is_bad_driver = true;
-					show_warning = false;
+						is_bad_driver = true;
+						show_warning = false;
 #else
-					typedef BOOL(WINAPI * IsWow64Process2Ptr)(HANDLE, USHORT *, USHORT *);
+						typedef BOOL(WINAPI * IsWow64Process2Ptr)(HANDLE, USHORT *, USHORT *);
 
-					IsWow64Process2Ptr IsWow64Process2 = (IsWow64Process2Ptr)GetProcAddress(GetModuleHandle(TEXT("kernel32")), "IsWow64Process2");
-					if (IsWow64Process2) {
-						USHORT process_arch = 0;
-						USHORT machine_arch = 0;
-						if (!IsWow64Process2(GetCurrentProcess(), &process_arch, &machine_arch)) {
-							machine_arch = 0;
-						}
-						if (machine_arch == 0xAA64) {
-							is_bad_driver = true;
-							show_warning = false;
-						}
-					}
-#endif
-					if (!is_bad_driver && fb_angle1) {
-						Dictionary gl_info = detect_wgl(1, 5);
-						constexpr int gl_version = make_gl_version(1, 5);
-
-						Vector2i device_id = _get_device_ids(gl_info["name"]);
-						Array device_list = GLOBAL_GET("rendering/gl_classic/force_angle_on_devices");
-						for (int i = 0; i < device_list.size(); i++) {
-							const Dictionary &device = device_list[i];
-							if (device.has("vendor") && device.has("name")) {
-								const String &vendor = device["vendor"];
-								const String &name = device["name"];
-								if (device_id != Vector2i() && vendor.begins_with("0x") && name.begins_with("0x") && device_id.x == vendor.lstrip("0x").hex_to_int() && device_id.y == name.lstrip("0x").hex_to_int()) {
-									is_bad_driver = true;
-									break;
-								} else if (gl_info["vendor"].operator String().to_upper().contains(vendor.to_upper()) && (name == "*" || gl_info["name"].operator String().to_upper().contains(name.to_upper()))) {
-									is_bad_driver = true;
-									break;
-								}
+						IsWow64Process2Ptr IsWow64Process2 = (IsWow64Process2Ptr)GetProcAddress(GetModuleHandle(TEXT("kernel32")), "IsWow64Process2");
+						if (IsWow64Process2) {
+							USHORT process_arch = 0;
+							USHORT machine_arch = 0;
+							if (!IsWow64Process2(GetCurrentProcess(), &process_arch, &machine_arch)) {
+								machine_arch = 0;
+							}
+							if (machine_arch == 0xAA64) {
+								is_bad_driver = true;
+								show_warning = false;
 							}
 						}
+#endif // __arm__ || __aarch64__ || _M_ARM || _M_ARM64
+						if (!is_bad_driver && fb_angle1) {
+							Dictionary gl_info = detect_wgl(1, 5);
+							constexpr int gl_version = make_gl_version(1, 5);
 
-						if (gl_info["version"].operator int() < gl_version) {
-							is_bad_driver = true;
+							Vector2i device_id = _get_device_ids(gl_info["name"]);
+							Array device_list = GLOBAL_GET("rendering/gl_classic/force_angle_on_devices");
+							for (int i = 0; i < device_list.size(); i++) {
+								const Dictionary &device = device_list[i];
+								if (device.has("vendor") && device.has("name")) {
+									const String &vendor = device["vendor"];
+									const String &name = device["name"];
+									if (device_id != Vector2i() && vendor.begins_with("0x") && name.begins_with("0x") && device_id.x == vendor.lstrip("0x").hex_to_int() && device_id.y == name.lstrip("0x").hex_to_int()) {
+										is_bad_driver = true;
+										break;
+									} else if (gl_info["vendor"].operator String().to_upper().contains(vendor.to_upper()) && (name == "*" || gl_info["name"].operator String().to_upper().contains(name.to_upper()))) {
+										is_bad_driver = true;
+										break;
+									}
+								}
+							}
+
+							if (gl_info["version"].operator int() < gl_version) {
+								is_bad_driver = true;
+							}
 						}
 					}
 
@@ -7707,23 +7735,27 @@ DisplayServerWindows::DisplayServerWindows(const String &p_rendering_driver, Win
 
 					String fallback_method;
 					String fallback_type;
+					String fallback_api;
 
 					if (driver_attempts[attempt_idx].begins_with("opengl3")) {
 						fallback_method = "Compatibility";
+						fallback_api = "GLES3";
 					} else if (driver_attempts[attempt_idx].begins_with("opengl2")) {
 						fallback_method = "Legacy";
+						fallback_api = "GLES2";
 					} else {
 						fallback_method = "Classic";
+						fallback_api = "GLES1";
 					}
 
 					if (driver_attempts[attempt_idx].ends_with("_angle")) {
 						fallback_type = "ANGLE";
 					} else {
-						fallback_type = "native";
+						fallback_type = "Native";
 					}
 
-					WARN_PRINT(vformat("The %s driver for the %s renderer (%s) could not be initialized. Using the %s driver for the %s renderer, visuals may be affected.",
-							req_type, req_method, req_api, fallback_type, fallback_method));
+					WARN_PRINT(vformat("The %s driver for the %s renderer (%s) could not be initialized. Using the %s driver for the %s renderer (%s), visuals may be affected.",
+							req_type, req_method, req_api, fallback_type, fallback_method, fallback_api));
 				}
 				break;
 			}

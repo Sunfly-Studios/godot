@@ -7366,23 +7366,27 @@ DisplayServerX11::DisplayServerX11(const String &p_rendering_driver, WindowMode 
 
 					String fallback_method;
 					String fallback_type;
+					String fallback_api;
 
 					if (driver_attempts[attempt_idx].begins_with("opengl3")) {
 						fallback_method = "Compatibility";
+						fallback_api = "GLES3";
 					} else if (driver_attempts[attempt_idx].begins_with("opengl2")) {
 						fallback_method = "Legacy";
+						fallback_api = "GLES2";
 					} else {
 						fallback_method = "Classic";
+						fallback_api = "GLES1";
 					}
 
 					if (driver_attempts[attempt_idx].ends_with("_es")) {
 						fallback_type = "ES";
 					} else {
-						fallback_type = "native";
+						fallback_type = "Native";
 					}
 
-					WARN_PRINT(vformat("The %s driver for the %s renderer (%s) could not be initialized. Using the %s driver for the %s renderer, visuals may be affected.",
-							req_type, req_method, req_api, fallback_type, fallback_method));
+					WARN_PRINT(vformat("The %s driver for the %s renderer (%s) could not be initialized. Using the %s driver for the %s renderer (%s), visuals may be affected.",
+							req_type, req_method, req_api, fallback_type, fallback_method, fallback_api));
 				}
 				break;
 			}
