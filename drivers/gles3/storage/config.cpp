@@ -93,10 +93,11 @@ Config::Config() {
 		float_texture_supported = extensions.has("GL_EXT_color_buffer_float");
 		float_texture_linear_supported = extensions.has("GL_OES_texture_float_linear");
 		etc2_supported = true;
-#if defined(ANDROID_ENABLED) || defined(IOS_ENABLED)
+#if defined(ANDROID_ENABLED) || defined(IOS_ENABLED) || defined(OPENHARMONY_ENABLED)
 		// Some Android devices report support for S3TC but we don't expect that and don't export the textures.
 		// This could be fixed but so few devices support it that it doesn't seem useful (and makes bigger APKs).
 		// For good measure we do the same hack for iOS, just in case.
+		// We also do it in OpenHarmony for another dose of good measure.
 		s3tc_supported = false;
 #else
 		s3tc_supported = extensions.has("GL_EXT_texture_compression_dxt1") || extensions.has("GL_EXT_texture_compression_s3tc") || extensions.has("WEBGL_compressed_texture_s3tc");

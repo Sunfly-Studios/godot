@@ -44,7 +44,7 @@ PFNGLUNMAPBUFFERPROC Polyfill::unmapBuffer = nullptr;
 #endif
 
 Polyfill::Polyfill() {
-#if defined(ANDROID_ENABLED) || defined(IOS_ENABLED) || defined(WEB_ENABLED)
+#if defined(ANDROID_ENABLED) || defined(IOS_ENABLED) || defined(WEB_ENABLED) || defined(OPENHARMONY_ENABLED)
 	// On mobile, these are statically linked in the headers
 	// and do not require runtime null checks or EXT fallbacks.
 	bindBufferBase = glBindBufferBase;

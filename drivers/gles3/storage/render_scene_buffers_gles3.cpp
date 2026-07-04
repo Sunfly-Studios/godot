@@ -68,7 +68,7 @@ void RenderSceneBuffersGLES3::_rt_attach_textures(GLuint p_color, GLuint p_depth
 			ERR_PRINT_ONCE("Multiview MSAA isn't supported on this platform.");
 #endif
 		} else {
-#ifndef IOS_ENABLED
+#if !defined(IOS_ENABLED) && !defined(OPENHARMONY_ENABLED)
 			glFramebufferTextureMultiviewOVR(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, p_color, 0, 0, p_view_count);
 			glFramebufferTextureMultiviewOVR(GL_FRAMEBUFFER, p_depth_has_stencil ? GL_DEPTH_STENCIL_ATTACHMENT : GL_DEPTH_ATTACHMENT, p_depth, 0, 0, p_view_count);
 #else
@@ -93,8 +93,8 @@ void RenderSceneBuffersGLES3::_rt_attach_textures(GLuint p_color, GLuint p_depth
 GLuint RenderSceneBuffersGLES3::_rt_get_cached_fbo(GLuint p_color, GLuint p_depth, GLsizei p_samples, uint32_t p_view_count) {
 	FBDEF new_fbo;
 
-#if defined(ANDROID_ENABLED) || defined(WEB_ENABLED)
-	// There shouldn't be more then 3 entries in this...
+#if defined(ANDROID_ENABLED) || defined(WEB_ENABLED) || defined(OPENHARMONY_ENABLED)
+	// There shouldn't be more than 3 entries in this...
 	for (const FBDEF &cached_fbo : msaa3d.cached_fbos) {
 		if (cached_fbo.color == p_color && cached_fbo.depth == p_depth) {
 			return cached_fbo.fbo;
@@ -247,7 +247,7 @@ void RenderSceneBuffersGLES3::_check_render_buffers() {
 		glGenFramebuffers(1, &internal3d.fbo);
 		glBindFramebuffer(GL_FRAMEBUFFER, internal3d.fbo);
 
-#ifndef IOS_ENABLED
+#if !defined(IOS_ENABLED) && !defined(OPENHARMONY_ENABLED)
 		if (use_multiview) {
 			glFramebufferTextureMultiviewOVR(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, internal3d.color, 0, 0, view_count);
 			glFramebufferTextureMultiviewOVR(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, internal3d.depth, 0, 0, view_count);
@@ -328,11 +328,15 @@ void RenderSceneBuffersGLES3::_check_render_buffers() {
 			glGenTextures(1, &msaa3d.color);
 			glBindTexture(GL_TEXTURE_2D_MULTISAMPLE_ARRAY, msaa3d.color);
 
-#ifdef ANDROID_ENABLED
+// TODO: OpenHarmony seems to support neither?
+// not sure the consequences on this platform will be.
+#ifndef OPENHARMONY_ENABLED
+#if defined(ANDROID_ENABLED)
 			glTexStorage3DMultisample(GL_TEXTURE_2D_MULTISAMPLE_ARRAY, msaa3d.samples, color_internal_format, internal_size.x, internal_size.y, view_count, GL_TRUE);
 #else
 			glTexImage3DMultisample(GL_TEXTURE_2D_MULTISAMPLE_ARRAY, msaa3d.samples, color_internal_format, internal_size.x, internal_size.y, view_count, GL_TRUE);
 #endif
+#endif // OPENHARMONY_ENABLED
 
 			GLES3::Utilities::get_singleton()->texture_allocated_data(msaa3d.color, internal_size.x * internal_size.y * view_count * color_format_size * msaa3d.samples, "MSAA 3D color texture");
 
@@ -340,11 +344,13 @@ void RenderSceneBuffersGLES3::_check_render_buffers() {
 			glGenTextures(1, &msaa3d.depth);
 			glBindTexture(GL_TEXTURE_2D_MULTISAMPLE_ARRAY, msaa3d.depth);
 
-#ifdef ANDROID_ENABLED
+#ifndef OPENHARMONY_ENABLED
+#if defined(ANDROID_ENABLED)
 			glTexStorage3DMultisample(GL_TEXTURE_2D_MULTISAMPLE_ARRAY, msaa3d.samples, GL_DEPTH_COMPONENT24, internal_size.x, internal_size.y, view_count, GL_TRUE);
 #else
 			glTexImage3DMultisample(GL_TEXTURE_2D_MULTISAMPLE_ARRAY, msaa3d.samples, GL_DEPTH_COMPONENT24, internal_size.x, internal_size.y, view_count, GL_TRUE);
 #endif
+#endif // OPENHARMONY_ENABLED
 
 			GLES3::Utilities::get_singleton()->texture_allocated_data(msaa3d.depth, internal_size.x * internal_size.y * view_count * depth_format_size * msaa3d.samples, "MSAA 3D depth texture");
 
@@ -352,9 +358,10 @@ void RenderSceneBuffersGLES3::_check_render_buffers() {
 			glGenFramebuffers(1, &msaa3d.fbo);
 			glBindFramebuffer(GL_FRAMEBUFFER, msaa3d.fbo);
 
+#ifndef OPENHARMONY_ENABLED
 			glFramebufferTextureMultiviewOVR(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, msaa3d.color, 0, 0, view_count);
 			glFramebufferTextureMultiviewOVR(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, msaa3d.depth, 0, 0, view_count);
-
+#endif
 			GLenum status = glCheckFramebufferStatus(GL_FRAMEBUFFER);
 			if (status != GL_FRAMEBUFFER_COMPLETE) {
 				_clear_msaa3d_buffers();
@@ -365,7 +372,7 @@ void RenderSceneBuffersGLES3::_check_render_buffers() {
 			glBindTexture(GL_TEXTURE_2D_MULTISAMPLE_ARRAY, 0);
 			glBindFramebuffer(GL_FRAMEBUFFER, GLES3::TextureStorage::system_fbo);
 #endif
-#if defined(ANDROID_ENABLED) || defined(WEB_ENABLED) // Only supported on OpenGLES!
+#if defined(ANDROID_ENABLED) || defined(WEB_ENABLED) || defined(OPENHARMONY_ENABLED) // Only supported on OpenGLES!
 		} else if (!use_internal_buffer) {
 			// We are going to render directly into our render target textures,
 			// these can change from frame to frame as we cycle through swapchains,
@@ -493,7 +500,7 @@ void RenderSceneBuffersGLES3::check_backbuffer(bool p_need_color, bool p_need_de
 
 		GLES3::Utilities::get_singleton()->texture_allocated_data(backbuffer3d.color, internal_size.x * internal_size.y * view_count * color_format_size, "3D Back buffer color texture");
 
-#ifndef IOS_ENABLED
+#if !defined(IOS_ENABLED) && !defined(OPENHARMONY_ENABLED)
 		if (use_multiview) {
 			glFramebufferTextureMultiviewOVR(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, backbuffer3d.color, 0, 0, view_count);
 		} else {
@@ -521,7 +528,7 @@ void RenderSceneBuffersGLES3::check_backbuffer(bool p_need_color, bool p_need_de
 
 		GLES3::Utilities::get_singleton()->texture_allocated_data(backbuffer3d.depth, internal_size.x * internal_size.y * view_count * depth_format_size, "3D back buffer depth texture");
 
-#ifndef IOS_ENABLED
+#if !defined(IOS_ENABLED) && !defined(OPENHARMONY_ENABLED)
 		if (use_multiview) {
 			glFramebufferTextureMultiviewOVR(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, backbuffer3d.depth, 0, 0, view_count);
 		} else {

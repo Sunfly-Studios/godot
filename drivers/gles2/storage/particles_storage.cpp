@@ -402,7 +402,7 @@ AABB ParticlesStorage::particles_get_current_aabb(RID p_particles) {
 
 	AABB aabb;
 
-#ifdef WEB_ENABLED
+#if defined(WEB_ENABLED) || defined(OPENHARMONY_ENABLED)
 	aabb = particles->custom_aabb;
 #else
 	glBindBuffer(GL_ARRAY_BUFFER, read_buffer);
@@ -818,8 +818,8 @@ void ParticlesStorage::update_particles() {
 			_particles_allocate_history_buffers(particles);
 			SWAP(particles->last_frame_buffer, particles->sort_buffer);
 
-#ifdef WEB_ENABLED
-			WARN_PRINT_ONCE("Particle history and depth sorting not available on the web for GLES2.");
+#if defined(WEB_ENABLED) || defined(OPENHARMONY_ENABLED)
+			WARN_PRINT_ONCE("Particle history and depth sorting not available.");
 			particles->sort_buffer_filled = false;
 			particles->last_frame_buffer_filled = false;
 #else
