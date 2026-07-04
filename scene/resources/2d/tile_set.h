@@ -152,8 +152,8 @@ class TileSet : public Resource {
 private:
 	struct CompatibilityShapeData {
 		Vector2i autotile_coords;
-		bool one_way;
-		float one_way_margin;
+		bool one_way = false;
+		float one_way_margin = 1.0f;
 		Ref<Shape2D> shape;
 		Transform2D transform;
 	};

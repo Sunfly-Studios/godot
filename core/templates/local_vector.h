@@ -169,7 +169,7 @@ public:
 	_FORCE_INLINE_ U size() const { return count; }
 	void resize(U p_size) {
 		if (p_size < count) {
-			if constexpr (!std::is_trivially_destructible_v<T> && !force_trivial) {
+			if constexpr (!std::is_trivially_destructible_v<T>) {
 				for (U i = p_size; i < count; i++) {
 					data[i].~T();
 				}
@@ -178,7 +178,7 @@ public:
 		} else if (p_size > count) {
 			reserve(p_size); // Re-use the reallocation logic
 
-			if constexpr (!std::is_trivially_constructible_v<T> && !force_trivial) {
+			if constexpr (!std::is_trivially_constructible_v<T>) {
 				for (U i = count; i < p_size; i++) {
 					memnew_placement(&data[i], T());
 				}

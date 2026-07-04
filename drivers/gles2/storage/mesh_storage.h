@@ -449,7 +449,7 @@ public:
 
 		ERR_FAIL_NULL(s->versions);
 
-		memset(&s->versions[version], 0, sizeof(Mesh::Surface::Version));
+		::new (&s->versions[version]) Mesh::Surface::Version();
 
 		_mesh_surface_generate_version_for_input_mask(s->versions[version], s, p_input_mask);
 

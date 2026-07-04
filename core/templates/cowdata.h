@@ -385,7 +385,7 @@ Error CowData<T>::resize(Size p_size) {
 		if constexpr (std::is_trivially_constructible_v<T> && std::is_trivially_copyable_v<T>) {
 			// Safe to leave uninitialized or zero out because
 			// lifetime is implicit for trivial C-types
-			if (p_ensure_zero) {
+			if constexpr (p_ensure_zero) {
 				memset((void *)(_ptr + current_size), 0, (p_size - current_size) * sizeof(T));
 			}
 		} else {

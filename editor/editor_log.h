@@ -54,7 +54,7 @@ public:
 private:
 	struct LogMessage {
 		String text;
-		MessageType type;
+		MessageType type = MSG_TYPE_STD;
 		int count = 1;
 		bool clear = true;
 
