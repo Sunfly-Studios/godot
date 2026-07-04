@@ -1222,6 +1222,7 @@ public class GLSurfaceView extends SurfaceView implements SurfaceHolder.Callback
 
 		private void destroySurfaceImp() {
 			if (mEglSurface != null && mEglSurface != EGL10.EGL_NO_SURFACE) {
+				mEgl.eglWaitGL();
 				mEgl.eglMakeCurrent(mEglDisplay, EGL10.EGL_NO_SURFACE,
 					EGL10.EGL_NO_SURFACE,
 					EGL10.EGL_NO_CONTEXT);
