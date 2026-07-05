@@ -65,7 +65,7 @@ public:
 			page_pool = (T **)memrealloc(page_pool, sizeof(T *) * pages_allocated);
 			available_pool = (T ***)memrealloc(available_pool, sizeof(T **) * pages_allocated);
 
-			uint8_t *raw_page = (uint8_t *)memalloc(sizeof(T) * page_size);
+			uint8_t *raw_page = static_cast<uint8_t *>(Memory::alloc_aligned_static(sizeof(T) * page_size, alignof(T)));
 
 #if defined(DEV_ENABLED) || defined(TOOLS_ENABLED)
 			if (unlikely((reinterpret_cast<uintptr_t>(raw_page) & (alignof(T) - 1)) != 0)) {
@@ -120,7 +120,7 @@ private:
 		}
 		if (pages_allocated) {
 			for (uint32_t i = 0; i < pages_allocated; i++) {
-				memfree(page_pool[i]);
+				Memory::free_aligned_static(page_pool[i]);
 				memfree(available_pool[i]);
 			}
 			memfree(page_pool);

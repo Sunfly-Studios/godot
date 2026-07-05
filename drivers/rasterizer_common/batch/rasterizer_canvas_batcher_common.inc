@@ -1943,7 +1943,7 @@ bool RasterizerCanvasBatcherCommon<T_API>::_software_skin_poly(RendererCanvasRen
 
 	if (
 		num_verts &&
-		(poly_data->bones.size() == (uint32_t)(num_verts * 4)) && (poly_data->weights.size() == poly_data->bones.size())
+		((uint32_t)poly_data->bones.size() == (uint32_t)(num_verts * 4)) && (poly_data->weights.size() == poly_data->bones.size())
 	) {
 		for (int n = 0; n < num_verts; n++) {
 			const Vector2 &src_pos = poly_data->points[n];

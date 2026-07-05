@@ -25,7 +25,7 @@ def make_icu_data(target, source, env):
             buf = f.read()
 
         g.write('extern "C" U_EXPORT const size_t U_ICUDATA_SIZE = ' + str(len(buf)) + ";\n")
-        g.write('extern "C" U_EXPORT alignas(16) const unsigned char U_ICUDATA_ENTRY_POINT[] = {\n')
+        g.write('extern "C" U_EXPORT alignas(GODOT_MIN_STACK_ALIGN) const unsigned char U_ICUDATA_ENTRY_POINT[] = {\n')
         for i in range(len(buf)):
             g.write("\t" + str(buf[i]) + ",\n")
 

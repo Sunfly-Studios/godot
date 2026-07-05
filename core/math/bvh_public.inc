@@ -202,7 +202,9 @@ void item_remove(BVHHandle p_handle) {
 
 	// swap back and decrement for fast unordered remove
 	_active_refs[active_ref_id] = ref_id_moved_back;
-	_active_refs.resize(_active_refs.size() - 1);
+	if (_active_refs.size() > 0) {
+		_active_refs.resize(_active_refs.size() - 1);
+	}
 
 	// keep the moved active reference up to date
 	_extra[ref_id_moved_back].active_ref_id = active_ref_id;

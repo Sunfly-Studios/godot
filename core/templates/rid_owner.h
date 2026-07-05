@@ -164,14 +164,10 @@ class RID_Alloc : public RID_AllocBase {
 
 // Check if the compiler supports __has_warning before using it
 #if defined(__has_warning)
-    #if __has_warning("-Watomic-alignment")
-        #pragma GCC diagnostic ignored "-Watomic-alignment"
-    #endif
-#else
-    // Fallback for older GCC versions
-    #pragma GCC diagnostic ignored "-Watomic-alignment"
+	#if __has_warning("-Watomic-alignment")
+		#pragma GCC diagnostic ignored "-Watomic-alignment"
+	#endif
 #endif
-
 				__atomic_store_n(&max_alloc, max_alloc + elements_in_chunk, __ATOMIC_RELAXED);
 #pragma GCC diagnostic pop
 #else
@@ -240,19 +236,15 @@ public:
 
 // Check if the compiler supports __has_warning before using it
 #if defined(__has_warning)
-    #if __has_warning("-Watomic-alignment")
-        #pragma GCC diagnostic ignored "-Watomic-alignment"
-    #endif
-#else
-    // Fallback for older GCC versions
-    #pragma GCC diagnostic ignored "-Watomic-alignment"
+	#if __has_warning("-Watomic-alignment")
+		#pragma GCC diagnostic ignored "-Watomic-alignment"
+	#endif
 #endif
-
-            ma = __atomic_load_n(&max_alloc, __ATOMIC_RELAXED);
+			ma = __atomic_load_n(&max_alloc, __ATOMIC_RELAXED);
 
 #pragma GCC diagnostic pop
 #else
-            ma = ((std::atomic<uint32_t> *)&max_alloc)->load(std::memory_order_relaxed);
+			ma = ((std::atomic<uint32_t> *)&max_alloc)->load(std::memory_order_relaxed);
 #endif
 		} else {
 			ma = max_alloc;
