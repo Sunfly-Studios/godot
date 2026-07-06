@@ -1776,6 +1776,18 @@ public class GLSurfaceView extends SurfaceView implements SurfaceHolder.Callback
 				}
 				mRequestPaused = true;
 				sGLThreadManager.notifyAll();
+
+				// Make sure that Godot is disconnected from the
+				// GPU before Android sends the memory trim signal.
+				// Which at this point, we're good to go on rendering
+				// again.
+				while ((!mExited) && (!mPaused)) {
+					try {
+						sGLThreadManager.wait();
+					} catch (InterruptedException ex) {
+						Thread.currentThread().interrupt();
+					}
+				}
 			}
 		}
 
@@ -1788,6 +1800,13 @@ public class GLSurfaceView extends SurfaceView implements SurfaceHolder.Callback
 				mRequestRender = true;
 				mRenderComplete = false;
 				sGLThreadManager.notifyAll();
+				while ((!mExited) && mPaused) {
+					try {
+						sGLThreadManager.wait();
+					} catch (InterruptedException ex) {
+						Thread.currentThread().interrupt();
+					}
+				}
 			}
 		}
 
