@@ -363,7 +363,7 @@ T *memnew_arr_template(size_t p_elements) {
 	ERR_FAIL_NULL_V(mem, failptr);
 
 	uint64_t *_elem_count_ptr = _get_element_count_ptr(mem);
-	*(_elem_count_ptr) = p_elements;
+	::new (_elem_count_ptr) uint64_t(p_elements);
 
 	if constexpr (!std::is_trivially_constructible_v<T>) {
 		T *elems = (T *)mem;
