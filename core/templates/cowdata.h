@@ -283,7 +283,7 @@ void CowData<T>::_unref() {
 	}
 
 	// free mem
-	Memory::free_static((uint8_t *)prev_ptr - DATA_OFFSET, false);
+	Memory::free_aligned_static((uint8_t *)prev_ptr - DATA_OFFSET);
 
 #ifdef DEBUG_ENABLED
 	// If any destructors access us through pointers, it is a bug.
@@ -305,7 +305,7 @@ typename CowData<T>::USize CowData<T>::_copy_on_write() {
 		/* in use by more than me */
 		USize current_size = *_get_size();
 
-		uint8_t *mem_new = (uint8_t *)Memory::alloc_static(_get_alloc_size(current_size) + DATA_OFFSET, false);
+		uint8_t *mem_new = static_cast<uint8_t *>(Memory::alloc_aligned_static(_get_alloc_size(current_size) + DATA_OFFSET, Memory::MAX_ALIGN));
 		ERR_FAIL_NULL_V(mem_new, 0);
 
 		SafeNumeric<USize> *_refc_ptr = _get_refcount_ptr(mem_new);
@@ -360,7 +360,7 @@ Error CowData<T>::resize(Size p_size) {
 		if (alloc_size != current_alloc_size) {
 			if (current_size == 0) {
 				// alloc from scratch
-				uint8_t *mem_new = (uint8_t *)Memory::alloc_static(alloc_size + DATA_OFFSET, false);
+				uint8_t *mem_new = static_cast<uint8_t *>(Memory::alloc_aligned_static(alloc_size + DATA_OFFSET, Memory::MAX_ALIGN));
 				ERR_FAIL_NULL_V(mem_new, ERR_OUT_OF_MEMORY);
 
 				SafeNumeric<USize> *_refc_ptr = _get_refcount_ptr(mem_new);
@@ -426,7 +426,8 @@ template <typename T>
 Error CowData<T>::_realloc(Size p_alloc_size) {
 	if constexpr (std::is_trivially_copyable_v<T>) {
 		// Safe to C-realloc
-		uint8_t *mem_new = (uint8_t *)Memory::realloc_static(((uint8_t *)_ptr) - DATA_OFFSET, p_alloc_size + DATA_OFFSET, false);
+		Size current_alloc_size = _get_alloc_size(*_get_size());
+		uint8_t *mem_new = static_cast<uint8_t *>(Memory::realloc_aligned_static(((uint8_t *)_ptr) - DATA_OFFSET, p_alloc_size + DATA_OFFSET, current_alloc_size + DATA_OFFSET, Memory::MAX_ALIGN));
 		ERR_FAIL_NULL_V(mem_new, ERR_OUT_OF_MEMORY);
 
 		SafeNumeric<USize> *_refc_ptr = _get_refcount_ptr(mem_new);
@@ -438,7 +439,7 @@ Error CowData<T>::_realloc(Size p_alloc_size) {
 		// Non-trivial types must be formally moved
 		USize active_elements = *_get_size();
 
-		uint8_t *mem_new = (uint8_t *)Memory::alloc_static(p_alloc_size + DATA_OFFSET, false);
+		uint8_t *mem_new = static_cast<uint8_t *>(Memory::alloc_aligned_static(p_alloc_size + DATA_OFFSET, Memory::MAX_ALIGN));
 		ERR_FAIL_NULL_V(mem_new, ERR_OUT_OF_MEMORY);
 
 		SafeNumeric<USize> *_refc_ptr = _get_refcount_ptr(mem_new);
@@ -458,7 +459,7 @@ Error CowData<T>::_realloc(Size p_alloc_size) {
 			unaligned_destroy<T>(_ptr + i); // Destroy old
 		}
 
-		Memory::free_static(((uint8_t *)_ptr) - DATA_OFFSET, false);
+		Memory::free_aligned_static(((uint8_t *)_ptr) - DATA_OFFSET);
 		_ptr = _data_ptr;
 	}
 

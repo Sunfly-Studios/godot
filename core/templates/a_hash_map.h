@@ -214,18 +214,18 @@ private:
 		capacity = real_capacity - 1;
 
 		HashMapData *old_map_data = map_data;
-		map_data = reinterpret_cast<HashMapData *>(Memory::alloc_static(sizeof(HashMapData) * real_capacity));
+		map_data = reinterpret_cast<HashMapData *>(Memory::alloc_aligned_static(sizeof(HashMapData) * real_capacity, alignof(HashMapData)));
 
 		if constexpr (std::is_trivially_copyable_v<MapKeyValue>) {
-			elements = reinterpret_cast<MapKeyValue *>(Memory::realloc_static(elements, sizeof(MapKeyValue) * (_get_resize_count(capacity) + 1)));
+			elements = reinterpret_cast<MapKeyValue *>(Memory::realloc_aligned_static(elements, sizeof(MapKeyValue) * (_get_resize_count(capacity) + 1), sizeof(MapKeyValue) * (_get_resize_count(real_old_capacity - 1) + 1), alignof(MapKeyValue)));
 		} else {
-			MapKeyValue *new_elements = reinterpret_cast<MapKeyValue *>(Memory::alloc_static(sizeof(MapKeyValue) * (_get_resize_count(capacity) + 1)));
+			MapKeyValue *new_elements = reinterpret_cast<MapKeyValue *>(Memory::alloc_aligned_static(sizeof(MapKeyValue) * (_get_resize_count(capacity) + 1), alignof(MapKeyValue)));
 			if (elements != nullptr) {
 				for (uint32_t i = 0; i < num_elements; i++) {
 					unaligned_construct<MapKeyValue>(&new_elements[i], std::move(*std::launder(&elements[i])));
 					unaligned_destroy<MapKeyValue>(&elements[i]);
 				}
-				Memory::free_static(elements);
+				Memory::free_aligned_static(elements);
 			}
 			elements = new_elements;
 		}
@@ -241,7 +241,7 @@ private:
 			}
 		}
 
-		Memory::free_static(old_map_data);
+		Memory::free_aligned_static(old_map_data);
 	}
 
 	int32_t _insert_element(const TKey &p_key, const TValue &p_value, uint32_t p_hash) {
@@ -249,8 +249,8 @@ private:
 			// Allocate on demand to save memory.
 
 			uint32_t real_capacity = capacity + 1;
-			map_data = reinterpret_cast<HashMapData *>(Memory::alloc_static(sizeof(HashMapData) * real_capacity));
-			elements = reinterpret_cast<MapKeyValue *>(Memory::alloc_static(sizeof(MapKeyValue) * (_get_resize_count(capacity) + 1)));
+			map_data = reinterpret_cast<HashMapData *>(Memory::alloc_aligned_static(sizeof(HashMapData) * real_capacity, alignof(HashMapData)));
+			elements = reinterpret_cast<MapKeyValue *>(Memory::alloc_aligned_static(sizeof(MapKeyValue) * (_get_resize_count(capacity) + 1), alignof(MapKeyValue)));
 
 			memset(map_data, EMPTY_HASH, real_capacity * sizeof(HashMapData));
 		}
@@ -275,8 +275,8 @@ private:
 			return;
 		}
 
-		map_data = reinterpret_cast<HashMapData *>(Memory::alloc_static(sizeof(HashMapData) * real_capacity));
-		elements = reinterpret_cast<MapKeyValue *>(Memory::alloc_static(sizeof(MapKeyValue) * (_get_resize_count(capacity) + 1)));
+		map_data = reinterpret_cast<HashMapData *>(Memory::alloc_aligned_static(sizeof(HashMapData) * real_capacity, alignof(HashMapData)));
+		elements = reinterpret_cast<MapKeyValue *>(Memory::alloc_aligned_static(sizeof(MapKeyValue) * (_get_resize_count(capacity) + 1), alignof(MapKeyValue)));
 
 		if constexpr (std::is_trivially_copyable_v<MapKeyValue>) {
 			void *destination = elements;
@@ -739,8 +739,8 @@ public:
 					unaligned_destroy<MapKeyValue>(&elements[i]);
 				}
 			}
-			Memory::free_static(elements);
-			Memory::free_static(map_data);
+			Memory::free_aligned_static(elements);
+			Memory::free_aligned_static(map_data);
 			elements = nullptr;
 		}
 		capacity = INITIAL_CAPACITY - 1;

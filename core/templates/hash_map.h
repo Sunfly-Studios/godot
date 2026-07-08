@@ -171,8 +171,8 @@ private:
 		uint32_t *old_hashes = hashes;
 
 		num_elements = 0;
-		hashes = reinterpret_cast<uint32_t *>(Memory::alloc_static(sizeof(uint32_t) * capacity));
-		elements = reinterpret_cast<HashMapElement<TKey, TValue> **>(Memory::alloc_static(sizeof(HashMapElement<TKey, TValue> *) * capacity));
+		hashes = reinterpret_cast<uint32_t *>(Memory::alloc_aligned_static(sizeof(uint32_t) * capacity, alignof(uint32_t)));
+		elements = reinterpret_cast<HashMapElement<TKey, TValue> **>(Memory::alloc_aligned_static(sizeof(HashMapElement<TKey, TValue> *) * capacity, alignof(HashMapElement<TKey, TValue> *)));
 
 		for (uint32_t i = 0; i < capacity; i++) {
 			hashes[i] = EMPTY_HASH;
@@ -192,8 +192,8 @@ private:
 			_insert_with_hash(old_hashes[i], old_elements[i]);
 		}
 
-		Memory::free_static(old_elements);
-		Memory::free_static(old_hashes);
+		Memory::free_aligned_static(old_elements);
+		Memory::free_aligned_static(old_hashes);
 	}
 
 	_FORCE_INLINE_ HashMapElement<TKey, TValue> *_insert(const TKey &p_key, const TValue &p_value, bool p_front_insert = false) {
@@ -201,8 +201,8 @@ private:
 		if (unlikely(elements == nullptr)) {
 			// Allocate on demand to save memory.
 
-			hashes = reinterpret_cast<uint32_t *>(Memory::alloc_static(sizeof(uint32_t) * capacity));
-			elements = reinterpret_cast<HashMapElement<TKey, TValue> **>(Memory::alloc_static(sizeof(HashMapElement<TKey, TValue> *) * capacity));
+			hashes = reinterpret_cast<uint32_t *>(Memory::alloc_aligned_static(sizeof(uint32_t) * capacity, alignof(uint32_t)));
+			elements = reinterpret_cast<HashMapElement<TKey, TValue> **>(Memory::alloc_aligned_static(sizeof(HashMapElement<TKey, TValue> *) * capacity, alignof(HashMapElement<TKey, TValue> *)));
 
 			for (uint32_t i = 0; i < capacity; i++) {
 				hashes[i] = EMPTY_HASH;
@@ -669,8 +669,8 @@ public:
 		clear();
 
 		if (elements != nullptr) {
-			Memory::free_static(elements);
-			Memory::free_static(hashes);
+			Memory::free_aligned_static(elements);
+			Memory::free_aligned_static(hashes);
 		}
 	}
 };

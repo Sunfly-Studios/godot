@@ -60,8 +60,13 @@ public:
 	// Must take a copy instead of a reference (see GH-31736).
 	_FORCE_INLINE_ void push_back(T p_elem) {
 		if (unlikely(count == capacity)) {
-			capacity = tight ? (capacity + 1) : MAX((U)1, capacity << 1);
-			data = (T *)memrealloc(data, capacity * sizeof(T));
+			uint32_t old_capacity = capacity;
+			if (tight) {
+				capacity = capacity + 1;
+			} else {
+				capacity = MAX((U)1, capacity << 1);
+			}
+			data = static_cast<T *>(Memory::realloc_aligned_static(data, capacity * sizeof(T), old_capacity * sizeof(T), alignof(T)));
 			CRASH_COND_MSG(!data, "Out of memory");
 		}
 
@@ -132,7 +137,7 @@ public:
 	_FORCE_INLINE_ void reset() {
 		clear();
 		if (data) {
-			memfree(data);
+			Memory::free_aligned_static(data);
 			data = nullptr;
 			capacity = 0;
 		}
@@ -142,14 +147,15 @@ public:
 	_FORCE_INLINE_ void reserve(U p_size) {
 		p_size = tight ? p_size : nearest_power_of_2_templated(p_size);
 		if (p_size > capacity) {
+			uint32_t old_capacity = capacity;
 			// C-realloc if the type is trivial, forced, or strictly immobile.
 			// Godot relies on bitwise relocation for types with atomics that cannot be C++ moved.
 			if constexpr (std::is_trivially_copyable_v<T> || force_trivial || !std::is_move_constructible_v<T>) {
-				data = (T *)memrealloc(data, p_size * sizeof(T));
+				data = static_cast<T *>(Memory::realloc_aligned_static(data, p_size * sizeof(T), old_capacity * sizeof(T), alignof(T)));
 				CRASH_COND_MSG(!data, "Out of memory");
 			} else {
 				// Non-trivial types that are C++ movable must be formally moved
-				T *new_data = (T *)memalloc(p_size * sizeof(T));
+				T *new_data = static_cast<T *>(Memory::alloc_aligned_static(p_size * sizeof(T), alignof(T)));
 				CRASH_COND_MSG(!new_data, "Out of memory");
 
 				for (U i = 0; i < count; i++) {
@@ -158,7 +164,7 @@ public:
 				}
 
 				if (data) {
-					memfree(data);
+					Memory::free_aligned_static(data);
 				}
 				data = new_data;
 			}

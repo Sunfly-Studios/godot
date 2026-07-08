@@ -34,6 +34,7 @@
 #include "core/object/class_db.h"
 #include "core/object/script_language.h"
 
+#include <new> // for std::launder
 #include <stdio.h>
 
 #ifdef DEV_ENABLED
@@ -57,6 +58,10 @@
 	if (this != MessageQueue::thread_singleton) { \
 		mutex.unlock();                           \
 	}
+
+static _FORCE_INLINE_ uintptr_t _align_addr(uintptr_t p_addr, size_t p_alignment) {
+	return (p_addr + p_alignment - 1) & ~(p_alignment - 1);
+}
 
 void CallQueue::_add_page() {
 	if (pages_used == page_bytes.size()) {
@@ -84,7 +89,7 @@ Error CallQueue::push_set(Object *p_object, const StringName &p_prop, const Vari
 }
 
 Error CallQueue::push_callablep(const Callable &p_callable, const Variant **p_args, int p_argcount, bool p_show_error) {
-	uint32_t room_needed = sizeof(Message) + sizeof(Variant) * p_argcount;
+	uint32_t room_needed = (alignof(Message) - 1) + sizeof(Message) + (alignof(Variant) - 1) + (sizeof(Variant) * p_argcount);
 
 	ERR_FAIL_COND_V_MSG(room_needed > uint32_t(PAGE_SIZE_BYTES), ERR_INVALID_PARAMETER, "Message is too large to fit on a page (" + itos(PAGE_SIZE_BYTES) + " bytes), consider passing less arguments.");
 
@@ -103,30 +108,33 @@ Error CallQueue::push_callablep(const Callable &p_callable, const Variant **p_ar
 	}
 
 	Page *page = pages[pages_used - 1];
+	uint8_t *buffer_start = &page->data[page_bytes[pages_used - 1]];
+	uintptr_t start_addr = reinterpret_cast<uintptr_t>(buffer_start);
 
-	uint8_t *buffer_end = &page->data[page_bytes[pages_used - 1]];
-
-	Message *msg = memnew_placement(buffer_end, Message);
+	uintptr_t msg_addr = _align_addr(start_addr, alignof(Message));
+	Message *msg = memnew_placement(reinterpret_cast<void *>(msg_addr), Message);
 	msg->args = p_argcount;
 	msg->callable = p_callable;
 	msg->type = TYPE_CALL;
 	if (p_show_error) {
 		msg->type |= FLAG_SHOW_ERROR;
 	}
-	// Support callables of static methods.
+
 	if (p_callable.get_object_id().is_null() && p_callable.is_valid()) {
 		msg->type |= FLAG_NULL_IS_OK;
 	}
 
-	buffer_end += sizeof(Message);
+	uintptr_t var_addr = _align_addr(msg_addr + sizeof(Message), alignof(Variant));
+	uint8_t *var_ptr = reinterpret_cast<uint8_t *>(var_addr);
 
 	for (int i = 0; i < p_argcount; i++) {
-		Variant *v = memnew_placement(buffer_end, Variant);
-		buffer_end += sizeof(Variant);
+		Variant *v = memnew_placement(var_ptr, Variant);
+		var_ptr += sizeof(Variant);
 		*v = *p_args[i];
 	}
 
-	page_bytes[pages_used - 1] += room_needed;
+	uintptr_t end_addr = var_addr + (sizeof(Variant) * p_argcount);
+	page_bytes[pages_used - 1] += (uint32_t)(end_addr - start_addr);
 
 	UNLOCK_MUTEX;
 
@@ -135,7 +143,7 @@ Error CallQueue::push_callablep(const Callable &p_callable, const Variant **p_ar
 
 Error CallQueue::push_set(ObjectID p_id, const StringName &p_prop, const Variant &p_value) {
 	LOCK_MUTEX;
-	uint32_t room_needed = sizeof(Message) + sizeof(Variant);
+	uint32_t room_needed = (alignof(Message) - 1) + sizeof(Message) + (alignof(Variant) - 1) + sizeof(Variant);
 
 	_ensure_first_page();
 
@@ -155,19 +163,22 @@ Error CallQueue::push_set(ObjectID p_id, const StringName &p_prop, const Variant
 	}
 
 	Page *page = pages[pages_used - 1];
-	uint8_t *buffer_end = &page->data[page_bytes[pages_used - 1]];
+	uint8_t *buffer_start = &page->data[page_bytes[pages_used - 1]];
+	uintptr_t start_addr = reinterpret_cast<uintptr_t>(buffer_start);
 
-	Message *msg = memnew_placement(buffer_end, Message);
+	uintptr_t msg_addr = _align_addr(start_addr, alignof(Message));
+	Message *msg = memnew_placement(reinterpret_cast<void *>(msg_addr), Message);
 	msg->args = 1;
 	msg->callable = Callable(p_id, p_prop);
 	msg->type = TYPE_SET;
 
-	buffer_end += sizeof(Message);
-
-	Variant *v = memnew_placement(buffer_end, Variant);
+	uintptr_t var_addr = _align_addr(msg_addr + sizeof(Message), alignof(Variant));
+	Variant *v = memnew_placement(reinterpret_cast<void *>(var_addr), Variant);
 	*v = p_value;
 
-	page_bytes[pages_used - 1] += room_needed;
+	uintptr_t end_addr = var_addr + sizeof(Variant);
+	page_bytes[pages_used - 1] += (uint32_t)(end_addr - start_addr);
+
 	UNLOCK_MUTEX;
 
 	return OK;
@@ -176,7 +187,7 @@ Error CallQueue::push_set(ObjectID p_id, const StringName &p_prop, const Variant
 Error CallQueue::push_notification(ObjectID p_id, int p_notification) {
 	ERR_FAIL_COND_V(p_notification < 0, ERR_INVALID_PARAMETER);
 	LOCK_MUTEX;
-	uint32_t room_needed = sizeof(Message);
+	uint32_t room_needed = (alignof(Message) - 1) + sizeof(Message);
 
 	_ensure_first_page();
 
@@ -191,16 +202,19 @@ Error CallQueue::push_notification(ObjectID p_id, int p_notification) {
 	}
 
 	Page *page = pages[pages_used - 1];
-	uint8_t *buffer_end = &page->data[page_bytes[pages_used - 1]];
+	uint8_t *buffer_start = &page->data[page_bytes[pages_used - 1]];
+	uintptr_t start_addr = reinterpret_cast<uintptr_t>(buffer_start);
 
-	Message *msg = memnew_placement(buffer_end, Message);
+	uintptr_t msg_addr = _align_addr(start_addr, alignof(Message));
+	Message *msg = memnew_placement(reinterpret_cast<void *>(msg_addr), Message);
 
 	msg->type = TYPE_NOTIFICATION;
 	msg->callable = Callable(p_id, CoreStringName(notification)); //name is meaningless but callable needs it
-	//msg->target;
 	msg->notification = p_notification;
 
-	page_bytes[pages_used - 1] += room_needed;
+	uintptr_t end_addr = msg_addr + sizeof(Message);
+	page_bytes[pages_used - 1] += (uint32_t)(end_addr - start_addr);
+
 	UNLOCK_MUTEX;
 
 	return OK;
@@ -247,14 +261,20 @@ Error CallQueue::flush() {
 
 		//lock on each iteration, so a call can re-add itself to the message queue
 
-		Message *message = (Message *)&page->data[offset];
+		uint8_t *base_ptr = &page->data[offset];
+		uintptr_t base_addr = reinterpret_cast<uintptr_t>(base_ptr);
 
-		uint32_t advance = sizeof(Message);
+		uintptr_t msg_addr = _align_addr(base_addr, alignof(Message));
+		Message *message = std::launder(reinterpret_cast<Message *>(msg_addr));
+
+		uintptr_t next_addr = msg_addr + sizeof(Message);
 		if ((message->type & FLAG_MASK) != TYPE_NOTIFICATION) {
-			advance += sizeof(Variant) * message->args;
+			next_addr = _align_addr(next_addr, alignof(Variant));
+			next_addr += sizeof(Variant) * message->args;
 		}
 
 		//pre-advance so this function is reentrant
+		uint32_t advance = (uint32_t)(next_addr - base_addr);
 		offset += advance;
 
 		Object *target = message->callable.get_object();
@@ -264,7 +284,8 @@ Error CallQueue::flush() {
 		switch (message->type & FLAG_MASK) {
 			case TYPE_CALL: {
 				if (target || (message->type & FLAG_NULL_IS_OK)) {
-					Variant *args = (Variant *)(message + 1);
+					uintptr_t args_addr = _align_addr(msg_addr + sizeof(Message), alignof(Variant));
+					Variant *args = std::launder(reinterpret_cast<Variant *>(args_addr));
 					_call_function(message->callable, args, message->args, message->type & FLAG_SHOW_ERROR);
 				}
 			} break;
@@ -275,14 +296,16 @@ Error CallQueue::flush() {
 			} break;
 			case TYPE_SET: {
 				if (target) {
-					Variant *arg = (Variant *)(message + 1);
+					uintptr_t args_addr = _align_addr(msg_addr + sizeof(Message), alignof(Variant));
+					Variant *arg = std::launder(reinterpret_cast<Variant *>(args_addr));
 					target->set(message->callable.get_method(), *arg);
 				}
 			} break;
 		}
 
 		if ((message->type & FLAG_MASK) != TYPE_NOTIFICATION) {
-			Variant *args = (Variant *)(message + 1);
+			uintptr_t args_addr = _align_addr(msg_addr + sizeof(Message), alignof(Variant));
+			Variant *args = std::launder(reinterpret_cast<Variant *>(args_addr));
 			for (int k = 0; k < message->args; k++) {
 				args[k].~Variant();
 			}
@@ -320,17 +343,24 @@ void CallQueue::clear() {
 
 			//lock on each iteration, so a call can re-add itself to the message queue
 
-			Message *message = (Message *)&page->data[offset];
+			uint8_t *base_ptr = &page->data[offset];
+			uintptr_t base_addr = reinterpret_cast<uintptr_t>(base_ptr);
 
-			uint32_t advance = sizeof(Message);
+			uintptr_t msg_addr = _align_addr(base_addr, alignof(Message));
+			Message *message = std::launder(reinterpret_cast<Message *>(msg_addr));
+
+			uintptr_t next_addr = msg_addr + sizeof(Message);
 			if ((message->type & FLAG_MASK) != TYPE_NOTIFICATION) {
-				advance += sizeof(Variant) * message->args;
+				next_addr = _align_addr(next_addr, alignof(Variant));
+				next_addr += sizeof(Variant) * message->args;
 			}
 
+			uint32_t advance = (uint32_t)(next_addr - base_addr);
 			offset += advance;
 
 			if ((message->type & FLAG_MASK) != TYPE_NOTIFICATION) {
-				Variant *args = (Variant *)(message + 1);
+				uintptr_t args_addr = _align_addr(msg_addr + sizeof(Message), alignof(Variant));
+				Variant *args = std::launder(reinterpret_cast<Variant *>(args_addr));
 				for (int k = 0; k < message->args; k++) {
 					args[k].~Variant();
 				}
@@ -360,13 +390,19 @@ void CallQueue::statistics() {
 
 			//lock on each iteration, so a call can re-add itself to the message queue
 
-			Message *message = (Message *)&page->data[offset];
+			uint8_t *base_ptr = &page->data[offset];
+			uintptr_t base_addr = reinterpret_cast<uintptr_t>(base_ptr);
 
-			uint32_t advance = sizeof(Message);
+			uintptr_t msg_addr = _align_addr(base_addr, alignof(Message));
+			Message *message = std::launder(reinterpret_cast<Message *>(msg_addr));
+
+			uintptr_t next_addr = msg_addr + sizeof(Message);
 			if ((message->type & FLAG_MASK) != TYPE_NOTIFICATION) {
-				advance += sizeof(Variant) * message->args;
+				next_addr = _align_addr(next_addr, alignof(Variant));
+				next_addr += sizeof(Variant) * message->args;
 			}
 
+			uint32_t advance = (uint32_t)(next_addr - base_addr);
 			Object *target = message->callable.get_object();
 
 			bool null_target = true;
@@ -403,6 +439,7 @@ void CallQueue::statistics() {
 					}
 				} break;
 			}
+
 			if (null_target) {
 				// Object was deleted.
 				fprintf(stdout, "Object was deleted while awaiting a callback.\n");
@@ -413,7 +450,8 @@ void CallQueue::statistics() {
 			offset += advance;
 
 			if ((message->type & FLAG_MASK) != TYPE_NOTIFICATION) {
-				Variant *args = (Variant *)(message + 1);
+				uintptr_t args_addr = _align_addr(msg_addr + sizeof(Message), alignof(Variant));
+				Variant *args = std::launder(reinterpret_cast<Variant *>(args_addr));
 				for (int k = 0; k < message->args; k++) {
 					args[k].~Variant();
 				}

@@ -183,9 +183,9 @@ private:
 		uint32_t *old_hashes = hashes;
 
 		num_elements = 0;
-		keys = static_cast<TKey *>(Memory::alloc_static(sizeof(TKey) * capacity));
-		values = static_cast<TValue *>(Memory::alloc_static(sizeof(TValue) * capacity));
-		hashes = static_cast<uint32_t *>(Memory::alloc_static(sizeof(uint32_t) * capacity));
+		keys = static_cast<TKey *>(Memory::alloc_aligned_static(sizeof(TKey) * capacity, alignof(TKey)));
+		values = static_cast<TValue *>(Memory::alloc_aligned_static(sizeof(TValue) * capacity, alignof(TValue)));
+		hashes = static_cast<uint32_t *>(Memory::alloc_aligned_static(sizeof(uint32_t) * capacity, alignof(uint32_t)));
 
 		for (uint32_t i = 0; i < capacity; i++) {
 			hashes[i] = 0;
@@ -207,9 +207,9 @@ private:
 			unaligned_destroy<TValue>(&old_values[i]);
 		}
 
-		Memory::free_static(old_keys);
-		Memory::free_static(old_values);
-		Memory::free_static(old_hashes);
+		Memory::free_aligned_static(old_keys);
+		Memory::free_aligned_static(old_values);
+		Memory::free_aligned_static(old_hashes);
 	}
 
 	void _resize_and_rehash() {
@@ -419,9 +419,9 @@ public:
 		// Capacity can't be 0.
 		capacity = MAX(1u, p_initial_capacity);
 
-		keys = static_cast<TKey *>(Memory::alloc_static(sizeof(TKey) * capacity));
-		values = static_cast<TValue *>(Memory::alloc_static(sizeof(TValue) * capacity));
-		hashes = static_cast<uint32_t *>(Memory::alloc_static(sizeof(uint32_t) * capacity));
+		keys = static_cast<TKey *>(Memory::alloc_aligned_static(sizeof(TKey) * capacity, alignof(TKey)));
+		values = static_cast<TValue *>(Memory::alloc_aligned_static(sizeof(TValue) * capacity, alignof(TValue)));
+		hashes = static_cast<uint32_t *>(Memory::alloc_aligned_static(sizeof(uint32_t) * capacity, alignof(uint32_t)));
 
 		for (uint32_t i = 0; i < capacity; i++) {
 			hashes[i] = EMPTY_HASH;
@@ -438,9 +438,9 @@ public:
 			}
 		}
 
-		Memory::free_static(keys);
-		Memory::free_static(values);
-		Memory::free_static(hashes);
+		Memory::free_aligned_static(keys);
+		Memory::free_aligned_static(values);
+		Memory::free_aligned_static(hashes);
 	}
 };
 

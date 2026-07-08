@@ -62,8 +62,8 @@ public:
 			uint32_t pages_used = pages_allocated;
 
 			pages_allocated++;
-			page_pool = (T **)memrealloc(page_pool, sizeof(T *) * pages_allocated);
-			available_pool = (T ***)memrealloc(available_pool, sizeof(T **) * pages_allocated);
+			page_pool = static_cast<T **>(Memory::realloc_aligned_static(page_pool, sizeof(T *) * pages_allocated, sizeof(T *) * pages_used, alignof(T *)));
+			available_pool = static_cast<T ***>(Memory::realloc_aligned_static(available_pool, sizeof(T **) * pages_allocated, sizeof(T **) * pages_used, alignof(T **)));
 
 			uint8_t *raw_page = static_cast<uint8_t *>(Memory::alloc_aligned_static(sizeof(T) * page_size, alignof(T)));
 
@@ -74,7 +74,7 @@ public:
 #endif
 
 			page_pool[pages_used] = reinterpret_cast<T *>(raw_page);
-			available_pool[pages_used] = (T **)memalloc(sizeof(T *) * page_size);
+			available_pool[pages_used] = static_cast<T **>(Memory::alloc_aligned_static(sizeof(T *) * page_size, alignof(T *)));
 
 			// Calculate offsets purely in bytes before casting to T*
 			for (uint32_t i = 0; i < page_size; i++) {
@@ -121,10 +121,10 @@ private:
 		if (pages_allocated) {
 			for (uint32_t i = 0; i < pages_allocated; i++) {
 				Memory::free_aligned_static(page_pool[i]);
-				memfree(available_pool[i]);
+				Memory::free_aligned_static(available_pool[i]);
 			}
-			memfree(page_pool);
-			memfree(available_pool);
+			Memory::free_aligned_static(page_pool);
+			Memory::free_aligned_static(available_pool);
 			page_pool = nullptr;
 			available_pool = nullptr;
 			pages_allocated = 0;

@@ -136,14 +136,14 @@ class RID_Alloc : public RID_AllocBase {
 
 			//grow chunks
 			if constexpr (!THREAD_SAFE) {
-				chunks = (Chunk **)memrealloc(chunks, sizeof(Chunk *) * (chunk_count + 1));
+				chunks = static_cast<Chunk **>(Memory::realloc_aligned_static(chunks, sizeof(Chunk *) * (chunk_count + 1), sizeof(Chunk *) * chunk_count, alignof(Chunk *)));
 			}
-			chunks[chunk_count] = (Chunk *)memalloc(sizeof(Chunk) * elements_in_chunk); //but don't initialize
+			chunks[chunk_count] = static_cast<Chunk *>(Memory::alloc_aligned_static(sizeof(Chunk) * elements_in_chunk, alignof(Chunk))); //but don't initialize
 			//grow free lists
 			if constexpr (!THREAD_SAFE) {
-				free_list_chunks = (uint32_t **)memrealloc(free_list_chunks, sizeof(uint32_t *) * (chunk_count + 1));
+				free_list_chunks = static_cast<uint32_t **>(Memory::realloc_aligned_static(free_list_chunks, sizeof(uint32_t *) * (chunk_count + 1), sizeof(uint32_t *) * chunk_count, alignof(uint32_t *)));
 			}
-			free_list_chunks[chunk_count] = (uint32_t *)memalloc(sizeof(uint32_t) * elements_in_chunk);
+			free_list_chunks[chunk_count] = static_cast<uint32_t *>(Memory::alloc_aligned_static(sizeof(uint32_t) * elements_in_chunk, alignof(uint32_t)));
 
 			//initialize
 			for (uint32_t i = 0; i < elements_in_chunk; i++) {
@@ -456,11 +456,15 @@ public:
 	}
 
 	RID_Alloc(uint32_t p_target_chunk_byte_size = 65536, uint32_t p_maximum_number_of_elements = 262144) {
-		elements_in_chunk = sizeof(T) > p_target_chunk_byte_size ? 1 : (p_target_chunk_byte_size / sizeof(T));
+		if (sizeof(T) > p_target_chunk_byte_size) {
+			elements_in_chunk = 1;
+		} else {
+			elements_in_chunk = (p_target_chunk_byte_size / sizeof(T));
+		}
 		if constexpr (THREAD_SAFE) {
 			chunk_limit = (p_maximum_number_of_elements / elements_in_chunk) + 1;
-			chunks = (Chunk **)memalloc(sizeof(Chunk *) * chunk_limit);
-			free_list_chunks = (uint32_t **)memalloc(sizeof(uint32_t *) * chunk_limit);
+			chunks = static_cast<Chunk **>(Memory::alloc_aligned_static(sizeof(Chunk *) * chunk_limit, alignof(Chunk *)));
+			free_list_chunks = static_cast<uint32_t **>(Memory::alloc_aligned_static(sizeof(uint32_t *) * chunk_limit, alignof(uint32_t *)));
 			SYNC_RELEASE;
 		}
 	}
@@ -489,13 +493,13 @@ public:
 
 		uint32_t chunk_count = max_alloc / elements_in_chunk;
 		for (uint32_t i = 0; i < chunk_count; i++) {
-			memfree(chunks[i]);
-			memfree(free_list_chunks[i]);
+			Memory::free_aligned_static(chunks[i]);
+			Memory::free_aligned_static(free_list_chunks[i]);
 		}
 
 		if (chunks) {
-			memfree(chunks);
-			memfree(free_list_chunks);
+			Memory::free_aligned_static(chunks);
+			Memory::free_aligned_static(free_list_chunks);
 		}
 	}
 };

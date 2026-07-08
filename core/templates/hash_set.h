@@ -140,6 +140,7 @@ private:
 	}
 
 	void _resize_and_rehash(uint32_t p_new_capacity_index) {
+		uint32_t old_capacity = hash_table_size_primes[capacity_index];
 		// Capacity can't be 0.
 		capacity_index = MAX((uint32_t)MIN_CAPACITY_INDEX, p_new_capacity_index);
 
@@ -148,21 +149,20 @@ private:
 		uint32_t *old_hashes = hashes;
 		uint32_t *old_key_to_hash = key_to_hash;
 
-		hashes = reinterpret_cast<uint32_t *>(Memory::alloc_static(sizeof(uint32_t) * capacity));
-		keys = reinterpret_cast<TKey *>(Memory::realloc_static(keys, sizeof(TKey) * capacity));
-		key_to_hash = reinterpret_cast<uint32_t *>(Memory::alloc_static(sizeof(uint32_t) * capacity));
-		hash_to_key = reinterpret_cast<uint32_t *>(Memory::realloc_static(hash_to_key, sizeof(uint32_t) * capacity));
+		hashes = reinterpret_cast<uint32_t *>(Memory::alloc_aligned_static(sizeof(uint32_t) * capacity, alignof(uint32_t)));
+		key_to_hash = reinterpret_cast<uint32_t *>(Memory::alloc_aligned_static(sizeof(uint32_t) * capacity, alignof(uint32_t)));
+		hash_to_key = reinterpret_cast<uint32_t *>(Memory::realloc_aligned_static(hash_to_key, sizeof(uint32_t) * capacity, sizeof(uint32_t) * old_capacity, alignof(uint32_t)));
 
 		if constexpr (std::is_trivially_copyable_v<TKey>) {
-			keys = reinterpret_cast<TKey *>(Memory::realloc_static(keys, sizeof(TKey) * capacity));
+			keys = reinterpret_cast<TKey *>(Memory::realloc_aligned_static(keys, sizeof(TKey) * capacity, sizeof(TKey) * old_capacity, alignof(TKey)));
 		} else {
-			TKey *new_keys = reinterpret_cast<TKey *>(Memory::alloc_static(sizeof(TKey) * capacity));
+			TKey *new_keys = reinterpret_cast<TKey *>(Memory::alloc_aligned_static(sizeof(TKey) * capacity, alignof(TKey)));
 			if (keys != nullptr) {
 				for (uint32_t i = 0; i < num_elements; i++) {
 					unaligned_construct<TKey>(&new_keys[i], std::move(*std::launder(&keys[i])));
 					unaligned_destroy<TKey>(&keys[i]);
 				}
-				Memory::free_static(keys);
+				Memory::free_aligned_static(keys);
 			}
 			keys = new_keys;
 		}
@@ -176,8 +176,8 @@ private:
 			_insert_with_hash(h, i);
 		}
 
-		Memory::free_static(old_hashes);
-		Memory::free_static(old_key_to_hash);
+		Memory::free_aligned_static(old_hashes);
+		Memory::free_aligned_static(old_key_to_hash);
 	}
 
 	_FORCE_INLINE_ int32_t _insert(const TKey &p_key) {
@@ -185,10 +185,10 @@ private:
 		if (unlikely(keys == nullptr)) {
 			// Allocate on demand to save memory.
 
-			hashes = reinterpret_cast<uint32_t *>(Memory::alloc_static(sizeof(uint32_t) * capacity));
-			keys = reinterpret_cast<TKey *>(Memory::alloc_static(sizeof(TKey) * capacity));
-			key_to_hash = reinterpret_cast<uint32_t *>(Memory::alloc_static(sizeof(uint32_t) * capacity));
-			hash_to_key = reinterpret_cast<uint32_t *>(Memory::alloc_static(sizeof(uint32_t) * capacity));
+			hashes = reinterpret_cast<uint32_t *>(Memory::alloc_aligned_static(sizeof(uint32_t) * capacity, alignof(uint32_t)));
+			keys = reinterpret_cast<TKey *>(Memory::alloc_aligned_static(sizeof(TKey) * capacity, alignof(TKey)));
+			key_to_hash = reinterpret_cast<uint32_t *>(Memory::alloc_aligned_static(sizeof(uint32_t) * capacity, alignof(uint32_t)));
+			hash_to_key = reinterpret_cast<uint32_t *>(Memory::alloc_aligned_static(sizeof(uint32_t) * capacity, alignof(uint32_t)));
 
 			for (uint32_t i = 0; i < capacity; i++) {
 				hashes[i] = EMPTY_HASH;
@@ -224,10 +224,10 @@ private:
 
 		uint32_t capacity = hash_table_size_primes[capacity_index];
 
-		hashes = reinterpret_cast<uint32_t *>(Memory::alloc_static(sizeof(uint32_t) * capacity));
-		keys = reinterpret_cast<TKey *>(Memory::alloc_static(sizeof(TKey) * capacity));
-		key_to_hash = reinterpret_cast<uint32_t *>(Memory::alloc_static(sizeof(uint32_t) * capacity));
-		hash_to_key = reinterpret_cast<uint32_t *>(Memory::alloc_static(sizeof(uint32_t) * capacity));
+		hashes = reinterpret_cast<uint32_t *>(Memory::alloc_aligned_static(sizeof(uint32_t) * capacity, alignof(uint32_t)));
+		keys = reinterpret_cast<TKey *>(Memory::alloc_aligned_static(sizeof(TKey) * capacity, alignof(TKey)));
+		key_to_hash = reinterpret_cast<uint32_t *>(Memory::alloc_aligned_static(sizeof(uint32_t) * capacity, alignof(uint32_t)));
+		hash_to_key = reinterpret_cast<uint32_t *>(Memory::alloc_aligned_static(sizeof(uint32_t) * capacity, alignof(uint32_t)));
 
 		if constexpr (std::is_trivially_copyable_v<TKey>) {
 			memcpy(keys, p_other.keys, sizeof(TKey) * num_elements);
@@ -451,10 +451,10 @@ public:
 		clear();
 
 		if (keys != nullptr) {
-			Memory::free_static(keys);
-			Memory::free_static(key_to_hash);
-			Memory::free_static(hash_to_key);
-			Memory::free_static(hashes);
+			Memory::free_aligned_static(keys);
+			Memory::free_aligned_static(key_to_hash);
+			Memory::free_aligned_static(hash_to_key);
+			Memory::free_aligned_static(hashes);
 			keys = nullptr;
 			hashes = nullptr;
 			hash_to_key = nullptr;
@@ -484,10 +484,10 @@ public:
 		clear();
 
 		if (keys != nullptr) {
-			Memory::free_static(keys);
-			Memory::free_static(key_to_hash);
-			Memory::free_static(hash_to_key);
-			Memory::free_static(hashes);
+			Memory::free_aligned_static(keys);
+			Memory::free_aligned_static(key_to_hash);
+			Memory::free_aligned_static(hash_to_key);
+			Memory::free_aligned_static(hashes);
 			keys = nullptr;
 			hashes = nullptr;
 			hash_to_key = nullptr;
@@ -500,10 +500,10 @@ public:
 		clear();
 
 		if (keys != nullptr) {
-			Memory::free_static(keys);
-			Memory::free_static(key_to_hash);
-			Memory::free_static(hash_to_key);
-			Memory::free_static(hashes);
+			Memory::free_aligned_static(keys);
+			Memory::free_aligned_static(key_to_hash);
+			Memory::free_aligned_static(hash_to_key);
+			Memory::free_aligned_static(hashes);
 		}
 	}
 };

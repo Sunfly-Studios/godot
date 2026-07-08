@@ -68,10 +68,10 @@ public:
 			uint32_t pages_used = pages_allocated;
 
 			pages_allocated++;
-			page_pool = (T **)memrealloc(page_pool, sizeof(T *) * pages_allocated);
-			available_page_pool = (uint32_t *)memrealloc(available_page_pool, sizeof(uint32_t) * pages_allocated);
+			page_pool = static_cast<T **>(Memory::realloc_aligned_static(page_pool, sizeof(T *) * pages_allocated, sizeof(T *) * pages_used, alignof(T *)));
+			available_page_pool = static_cast<uint32_t *>(Memory::realloc_aligned_static(available_page_pool, sizeof(uint32_t) * pages_allocated, sizeof(uint32_t) * pages_used, alignof(uint32_t)));
 
-			page_pool[pages_used] = (T *)memalloc(sizeof(T) * page_size);
+			page_pool[pages_used] = static_cast<T *>(Memory::alloc_aligned_static(sizeof(T) * page_size, alignof(T)));
 			available_page_pool[0] = pages_used;
 
 			pages_available++;
@@ -104,10 +104,10 @@ public:
 		ERR_FAIL_COND(pages_available < pages_allocated);
 		if (pages_allocated) {
 			for (uint32_t i = 0; i < pages_allocated; i++) {
-				memfree(page_pool[i]);
+				Memory::free_aligned_static(page_pool[i]);
 			}
-			memfree(page_pool);
-			memfree(available_page_pool);
+			Memory::free_aligned_static(page_pool);
+			Memory::free_aligned_static(available_page_pool);
 			page_pool = nullptr;
 			available_page_pool = nullptr;
 			pages_allocated = 0;
@@ -159,13 +159,14 @@ class PagedArray {
 
 	void _grow_page_array() {
 		//no more room in the page array to put the new page, make room
+		uint32_t old_max_pages_used = max_pages_used;
 		if (max_pages_used == 0) {
 			max_pages_used = 1;
 		} else {
 			max_pages_used *= 2; // increase in powers of 2 to keep allocations to minimum
 		}
-		page_data = (T **)memrealloc(page_data, sizeof(T *) * max_pages_used);
-		page_ids = (uint32_t *)memrealloc(page_ids, sizeof(uint32_t) * max_pages_used);
+		page_data = static_cast<T **>(Memory::realloc_aligned_static(page_data, sizeof(T *) * max_pages_used, sizeof(T *) * old_max_pages_used, alignof(T *)));
+		page_ids = static_cast<uint32_t *>(Memory::realloc_aligned_static(page_ids, sizeof(uint32_t) * max_pages_used, sizeof(uint32_t) * old_max_pages_used, alignof(uint32_t)));
 	}
 
 public:
@@ -295,8 +296,8 @@ public:
 	void reset() {
 		clear();
 		if (page_data) {
-			memfree(page_data);
-			memfree(page_ids);
+			Memory::free_aligned_static(page_data);
+			Memory::free_aligned_static(page_ids);
 			page_data = nullptr;
 			page_ids = nullptr;
 			max_pages_used = 0;
