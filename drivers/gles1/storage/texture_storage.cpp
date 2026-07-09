@@ -876,7 +876,10 @@ Ref<Image> TextureStorage::texture_2d_get(RID p_texture) const {
 
 	GLint prev_active_tex = 0;
 	glGetIntegerv(GL_ACTIVE_TEXTURE, &prev_active_tex);
-	glActiveTexture(GL_TEXTURE0);
+	
+	if (Config::get_singleton()->max_texture_units > 1) {
+		glActiveTexture(GL_TEXTURE0);
+	}
 	GLint prev_bound_tex = 0;
 	glGetIntegerv(GL_TEXTURE_BINDING_2D, &prev_bound_tex);
 	GL_CHECK_ERROR("GLES1::TextureStorage::texture_2d_get: state capture");
@@ -906,7 +909,10 @@ Ref<Image> TextureStorage::texture_2d_get(RID p_texture) const {
 		glColorMask(prev_color_mask[0], prev_color_mask[1], prev_color_mask[2], prev_color_mask[3]);
 		glClearColor(prev_clear_color[0], prev_clear_color[1], prev_clear_color[2], prev_clear_color[3]);
 		glBindTexture(GL_TEXTURE_2D, prev_bound_tex);
-		glActiveTexture(prev_active_tex);
+		
+		if (Config::get_singleton()->max_texture_units > 1) {
+			glActiveTexture(prev_active_tex);
+		}
 
 		ERR_FAIL_V_MSG(Ref<Image>(), "GLES1: FBO incomplete during texture_2d_get fallback readback.");
 	}
@@ -980,7 +986,10 @@ Ref<Image> TextureStorage::texture_2d_get(RID p_texture) const {
 	glClearColor(prev_clear_color[0], prev_clear_color[1], prev_clear_color[2], prev_clear_color[3]);
 
 	glBindTexture(GL_TEXTURE_2D, prev_bound_tex);
-	glActiveTexture(prev_active_tex);
+	
+	if (Config::get_singleton()->max_texture_units > 1) {
+		glActiveTexture(prev_active_tex);
+	}
 	GL_CHECK_ERROR("GLES1::TextureStorage::texture_2d_get: state restore");
 
 	data.resize(data_size);
@@ -1210,8 +1219,11 @@ void TextureStorage::_texture_set_data(RID p_texture, const Ref<Image> &p_image,
 
 	// Capture previous state
 	GLint prev_active_tex = 0;
-	glGetIntegerv(GL_ACTIVE_TEXTURE, &prev_active_tex);
-	glActiveTexture(GL_TEXTURE0);
+	
+	if (Config::get_singleton()->max_texture_units > 1) {
+		glGetIntegerv(GL_ACTIVE_TEXTURE, &prev_active_tex);
+		glActiveTexture(GL_TEXTURE0);
+	}
 	GLint prev_bound_tex = 0;
 	glGetIntegerv(GL_TEXTURE_BINDING_2D, &prev_bound_tex);
 	GL_CHECK_ERROR("GLES1::TextureStorage::_texture_set_data: texture state capture");
@@ -1257,7 +1269,10 @@ void TextureStorage::_texture_set_data(RID p_texture, const Ref<Image> &p_image,
 	// Restore state
 	glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
 	glBindTexture(texture->target, prev_bound_tex);
-	glActiveTexture(prev_active_tex);
+	
+	if (Config::get_singleton()->max_texture_units > 1) {
+		glActiveTexture(prev_active_tex);
+	}
 	GL_CHECK_ERROR("GLES1::TextureStorage::_texture_set_data: texture state capture restore");
 }
 
@@ -1308,7 +1323,10 @@ uint32_t TextureStorage::texture_get_depth(RID p_texture) const {
 void TextureStorage::texture_bind(RID p_texture, uint32_t p_texture_no) {
 	Texture *tex = texture_owner.get_or_null(p_texture);
 	ERR_FAIL_NULL(tex);
-	glActiveTexture(GL_TEXTURE0 + p_texture_no);
+	
+	if (Config::get_singleton()->max_texture_units > 1) {
+		glActiveTexture(GL_TEXTURE0 + p_texture_no);
+	}
 	glBindTexture(tex->target, tex->tex_id);
 }
 
@@ -1365,7 +1383,9 @@ GLES1::Texture *TextureStorage::texture_bind_and_validate(RID p_texture, GLenum 
 	}
 
 	if (likely(texture && texture->tex_id != 0)) {
-		glActiveTexture(p_texture_unit);
+		if (GLES1::Config::get_singleton()->max_texture_units > 1) {
+			glActiveTexture(p_texture_unit);
+		}
 
 		if (unlikely(texture->target == 0)) {
 			texture->target = GL_TEXTURE_2D;
@@ -1523,8 +1543,11 @@ void TextureStorage::_update_render_target(RenderTarget *rt) {
 	glGetFloatv(GL_COLOR_CLEAR_VALUE, prev_clear_color);
 
 	GLint prev_active_tex = 0;
-	glGetIntegerv(GL_ACTIVE_TEXTURE, &prev_active_tex);
-	glActiveTexture(GL_TEXTURE0);
+	
+	if (config->max_texture_units > 1) {
+		glGetIntegerv(GL_ACTIVE_TEXTURE, &prev_active_tex);
+		glActiveTexture(GL_TEXTURE0);
+	}
 
 	GLint prev_bound_tex = 0;
 	glGetIntegerv(GL_TEXTURE_BINDING_2D, &prev_bound_tex);
@@ -1554,7 +1577,10 @@ void TextureStorage::_update_render_target(RenderTarget *rt) {
 		glClearColor(prev_clear_color[0], prev_clear_color[1], prev_clear_color[2], prev_clear_color[3]);
 		glBindRenderbufferOES(GL_RENDERBUFFER_OES, prev_renderbuffer);
 		glBindTexture(GL_TEXTURE_2D, prev_bound_tex);
-		glActiveTexture(prev_active_tex);
+		
+		if (config->max_texture_units > 1) {
+			glActiveTexture(prev_active_tex);
+		}
 
 		ERR_FAIL_MSG("GLES1: Failed to generate Framebuffer Object. Context lost?");
 	}
@@ -1694,7 +1720,10 @@ void TextureStorage::_update_render_target(RenderTarget *rt) {
 		glClearColor(prev_clear_color[0], prev_clear_color[1], prev_clear_color[2], prev_clear_color[3]);
 		glBindRenderbufferOES(GL_RENDERBUFFER_OES, prev_renderbuffer);
 		glBindTexture(GL_TEXTURE_2D, prev_bound_tex);
-		glActiveTexture(prev_active_tex);
+		
+		if (config->max_texture_units > 1) {
+			glActiveTexture(prev_active_tex);
+		}
 
 		rt->fbo = 0;
 		rt->size.x = 0;
@@ -1751,7 +1780,10 @@ void TextureStorage::_update_render_target(RenderTarget *rt) {
 	glClearColor(prev_clear_color[0], prev_clear_color[1], prev_clear_color[2], prev_clear_color[3]);
 	glBindRenderbufferOES(GL_RENDERBUFFER_OES, prev_renderbuffer);
 	glBindTexture(GL_TEXTURE_2D, prev_bound_tex);
-	glActiveTexture(prev_active_tex);
+	
+	if (config->max_texture_units > 1) {
+		glActiveTexture(prev_active_tex);
+	}
 	GL_CHECK_ERROR("GLES1::TextureStorage::_update_render_target: state restore");
 }
 
@@ -2247,8 +2279,10 @@ void TextureStorage::render_target_copy_to_back_buffer(RID p_render_target, cons
 	ERR_FAIL_NULL(rt);
 
 	GLint prev_active_tex = 0;
-	glGetIntegerv(GL_ACTIVE_TEXTURE, &prev_active_tex);
-	glActiveTexture(GL_TEXTURE0);
+	if (Config::get_singleton()->max_texture_units > 1) {
+		glGetIntegerv(GL_ACTIVE_TEXTURE, &prev_active_tex);
+		glActiveTexture(GL_TEXTURE0);
+	}
 	GLint prev_bound_tex = 0;
 	glGetIntegerv(GL_TEXTURE_BINDING_2D, &prev_bound_tex);
 	GL_CHECK_ERROR("GLES1::TextureStorage::render_target_copy_to_back_buffer: glGetIntegerv GL_TEXTURE0 texture state hijack");
@@ -2260,7 +2294,10 @@ void TextureStorage::render_target_copy_to_back_buffer(RID p_render_target, cons
 		if (unlikely(rt->backbuffer == 0)) {
 			// Restore hijacked active texture
 			glBindTexture(GL_TEXTURE_2D, prev_bound_tex);
-			glActiveTexture(prev_active_tex);
+			
+			if (Config::get_singleton()->max_texture_units > 1) {
+				glActiveTexture(prev_active_tex);
+			}
 			ERR_FAIL_MSG("GLES1: Failed to allocate backbuffer texture.");
 		}
 
@@ -2301,7 +2338,10 @@ void TextureStorage::render_target_copy_to_back_buffer(RID p_render_target, cons
 
 	// Clean up
 	glBindTexture(GL_TEXTURE_2D, prev_bound_tex);
-	glActiveTexture(prev_active_tex);
+	
+	if (Config::get_singleton()->max_texture_units > 1) {
+		glActiveTexture(prev_active_tex);
+	}
 	GL_CHECK_ERROR("GLES1::TextureStorage::render_target_copy_to_back_buffer: glGetIntegerv GL_TEXTURE0 texture state restore");
 }
 
@@ -2348,7 +2388,9 @@ void TextureStorage::render_target_gen_back_buffer_mipmaps(RID p_render_target, 
 		return;
 	}
 
-	glActiveTexture(GL_TEXTURE0);
+	if (Config::get_singleton()->max_texture_units > 1) {
+		glActiveTexture(GL_TEXTURE0);
+	}
 	glBindTexture(GL_TEXTURE_2D, rt->backbuffer);
 
 	bool is_npot = (

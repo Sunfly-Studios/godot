@@ -189,29 +189,29 @@
 				[gdscript]
 				var arguments = {}
 				for argument in OS.get_cmdline_args():
-				    if argument.contains("="):
-				        var key_value = argument.split("=")
-				        arguments[key_value[0].trim_prefix("--")] = key_value[1]
-				    else:
-				        # Options without an argument will be present in the dictionary,
-				        # with the value set to an empty string.
-				        arguments[argument.trim_prefix("--")] = ""
+					if argument.contains("="):
+						var key_value = argument.split("=")
+						arguments[key_value[0].trim_prefix("--")] = key_value[1]
+					else:
+						# Options without an argument will be present in the dictionary,
+						# with the value set to an empty string.
+						arguments[argument.trim_prefix("--")] = ""
 				[/gdscript]
 				[csharp]
 				var arguments = new Dictionary&lt;string, string&gt;();
 				foreach (var argument in OS.GetCmdlineArgs())
 				{
-				    if (argument.Contains('='))
-				    {
-				        string[] keyValue = argument.Split("=");
-				        arguments[keyValue[0].TrimPrefix("--")] = keyValue[1];
-				    }
-				    else
-				    {
-				        // Options without an argument will be present in the dictionary,
-				        // with the value set to an empty string.
-				        arguments[argument.TrimPrefix("--")] = "";
-				    }
+					if (argument.Contains('='))
+					{
+						string[] keyValue = argument.Split("=");
+						arguments[keyValue[0].TrimPrefix("--")] = keyValue[1];
+					}
+					else
+					{
+						// Options without an argument will be present in the dictionary,
+						// with the value set to an empty string.
+						arguments[argument.TrimPrefix("--")] = "";
+					}
 				}
 				[/csharp]
 				[/codeblocks]
@@ -376,44 +376,44 @@
 				[codeblocks]
 				[gdscript]
 				match OS.get_name():
-				    "Windows":
-				        print("Welcome to Windows!")
-				    "macOS":
-				        print("Welcome to macOS!")
-				    "Linux", "FreeBSD", "NetBSD", "OpenBSD", "BSD":
-				        print("Welcome to Linux/BSD!")
-				    "Android":
-				        print("Welcome to Android!")
-				    "iOS":
-				        print("Welcome to iOS!")
-				    "Web":
-				        print("Welcome to the Web!")
+					"Windows":
+						print("Welcome to Windows!")
+					"macOS":
+						print("Welcome to macOS!")
+					"Linux", "FreeBSD", "NetBSD", "OpenBSD", "BSD":
+						print("Welcome to Linux/BSD!")
+					"Android":
+						print("Welcome to Android!")
+					"iOS":
+						print("Welcome to iOS!")
+					"Web":
+						print("Welcome to the Web!")
 				[/gdscript]
 				[csharp]
 				switch (OS.GetName())
 				{
-				    case "Windows":
-				        GD.Print("Welcome to Windows");
-				        break;
-				    case "macOS":
-				        GD.Print("Welcome to macOS!");
-				        break;
-				    case "Linux":
-				    case "FreeBSD":
-				    case "NetBSD":
-				    case "OpenBSD":
-				    case "BSD":
-				        GD.Print("Welcome to Linux/BSD!");
-				        break;
-				    case "Android":
-				        GD.Print("Welcome to Android!");
-				        break;
-				    case "iOS":
-				        GD.Print("Welcome to iOS!");
-				        break;
-				    case "Web":
-				        GD.Print("Welcome to the Web!");
-				        break;
+					case "Windows":
+						GD.Print("Welcome to Windows");
+						break;
+					case "macOS":
+						GD.Print("Welcome to macOS!");
+						break;
+					case "Linux":
+					case "FreeBSD":
+					case "NetBSD":
+					case "OpenBSD":
+					case "BSD":
+						GD.Print("Welcome to Linux/BSD!");
+						break;
+					case "Android":
+						GD.Print("Welcome to Android!");
+						break;
+					case "iOS":
+						GD.Print("Welcome to iOS!");
+						break;
+					case "Web":
+						GD.Print("Welcome to the Web!");
+						break;
 				}
 				[/csharp]
 				[/codeblocks]
@@ -864,7 +864,7 @@
 			The OpenGL 2 rendering driver. It uses OpenGL 2.1 Compatibility Profile on desktop platforms, OpenGL ES 2.0 on mobile devices, and WebGL 1.0 on Web.
 		</constant>
 		<constant name="RENDERING_DRIVER_OPENGL1" value="3" enum="RenderingDriver">
-			The OpenGL 1 rendering driver. It uses OpenGL 1.5, 1.4, or 1.3 Compatibility Profile on desktop platforms depending on device support, and OpenGL ES 1.1 on mobile devices.
+			The OpenGL 1 rendering driver. It uses OpenGL 1.2-1.5 Compatibility Profile on desktop platforms depending on device support, and OpenGL ES 1.1 on mobile devices.
 		</constant>
 		<constant name="RENDERING_DRIVER_D3D12" value="4" enum="RenderingDriver">
 			The Direct3D 12 rendering driver. It requires the 12_0 feature level and Shader Model 6.0 support.

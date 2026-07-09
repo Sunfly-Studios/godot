@@ -365,8 +365,9 @@ Config::Config() {
 	}
 
 	// If running over desktop OpenGL, we require at least
-	// OpenGL 1.5 for VBOs and FBOs. Legacy contexts may
-	// advertise these extensions but lack proper functional support.
+	// OpenGL 1.5 for VBOs, FBOs and proper engine functionality,
+	// and OpenGL 1.2 for runtime (games) support (at the expense of no SubViewport nodes or similar VBO/FBO functionality)
+	// Legacy contexts may advertise these extensions but lack proper functional support.
 	if (RasterizerGLES1::is_gles_over_gl()) {
 		// Extract "1.4" from strings like "1.4 Mesa 7.7.1-DEVEL" or "4.6.0 NVIDIA..."
 		String gl_ver = version_string.get_slice(" ", 0);
