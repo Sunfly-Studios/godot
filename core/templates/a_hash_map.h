@@ -385,7 +385,7 @@ public:
 
 		if (element_pos < num_elements) {
 			uint32_t h_pos = 0;
-			_lookup_pos(elements[element_pos].key, pos, h_pos);
+			_lookup_pos(elements[num_elements].key, pos, h_pos);
 
 			if constexpr (std::is_trivially_copyable_v<MapKeyValue>) {
 				memcpy(&elements[element_pos], &elements[num_elements], sizeof(MapKeyValue));
