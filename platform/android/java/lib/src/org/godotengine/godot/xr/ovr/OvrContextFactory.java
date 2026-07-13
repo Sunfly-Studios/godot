@@ -54,6 +54,7 @@ public class OvrContextFactory implements GLSurfaceView.EGLContextFactory {
 
 	@Override
 	public void destroyContext(EGL10 egl, EGLDisplay display, EGLContext context) {
+		egl.eglMakeCurrent(display, EGL10.EGL_NO_SURFACE, EGL10.EGL_NO_SURFACE, EGL10.EGL_NO_CONTEXT);
 		egl.eglDestroyContext(display, context);
 	}
 }

@@ -1242,6 +1242,9 @@ public class GLSurfaceView extends SurfaceView implements SurfaceHolder.Callback
 				Log.w("EglHelper", "finish() tid=" + Thread.currentThread().getId());
 			}
 			if (mEglContext != null) {
+				// Workaround for MediaTek PowerVR driver crashes during context destruction
+				mEgl.eglMakeCurrent(mEglDisplay, EGL10.EGL_NO_SURFACE, EGL10.EGL_NO_SURFACE, EGL10.EGL_NO_CONTEXT);
+
 				GLSurfaceView view = mGLSurfaceViewWeakRef.get();
 				if (view != null) {
 					view.mEGLContextFactory.destroyContext(mEgl, mEglDisplay, mEglContext);
@@ -1676,6 +1679,8 @@ public class GLSurfaceView extends SurfaceView implements SurfaceHolder.Callback
 					stopEglSurfaceLocked();
 					stopEglContextLocked();
 				}
+				// Force EGL thread state to be released
+				android.opengl.EGL14.eglReleaseThread();
 			}
 		}
 
@@ -1756,6 +1761,13 @@ public class GLSurfaceView extends SurfaceView implements SurfaceHolder.Callback
 				mHasSurface = true;
 				mFinishedCreatingEglSurface = false;
 				sGLThreadManager.notifyAll();
+				while (mWaitingForSurface && !mFinishedCreatingEglSurface && !mExited) {
+					try {
+						sGLThreadManager.wait();
+					} catch (InterruptedException e) {
+						Thread.currentThread().interrupt();
+					}
+				}
 			}
 		}
 
@@ -1766,6 +1778,13 @@ public class GLSurfaceView extends SurfaceView implements SurfaceHolder.Callback
 				}
 				mHasSurface = false;
 				sGLThreadManager.notifyAll();
+				while ((!mWaitingForSurface) && (!mExited)) {
+					try {
+						sGLThreadManager.wait();
+					} catch (InterruptedException e) {
+						Thread.currentThread().interrupt();
+					}
+				}
 			}
 		}
 
