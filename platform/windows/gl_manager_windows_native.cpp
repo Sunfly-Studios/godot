@@ -438,51 +438,51 @@ Error GLManagerNative_Windows::_create_context(GLWindow &win, GLDisplay &gl_disp
 		ERR_PRINT("Could not attach OpenGL context to newly created window: " + format_error_message(GetLastError()));
 	}
 
-	Vector<int> attribs;
-	attribs.push_back(WGL_CONTEXT_MAJOR_VERSION_ARB);
-	attribs.push_back(gles_major);
-	attribs.push_back(WGL_CONTEXT_MINOR_VERSION_ARB);
-	attribs.push_back(gles_minor);
+	if (gles_major >= 3) {
+		Vector<int> attribs;
+		attribs.push_back(WGL_CONTEXT_MAJOR_VERSION_ARB);
+		attribs.push_back(gles_major);
+		attribs.push_back(WGL_CONTEXT_MINOR_VERSION_ARB);
+		attribs.push_back(gles_minor);
 
-	if (gles_major > 2) {
 		// Only GLES3/GL3.3+ uses strict core and forward compatibility profiles
 		attribs.push_back(WGL_CONTEXT_PROFILE_MASK_ARB);
 		attribs.push_back(WGL_CONTEXT_CORE_PROFILE_BIT_ARB);
 		attribs.push_back(WGL_CONTEXT_FLAGS_ARB);
 		attribs.push_back(WGL_CONTEXT_FORWARD_COMPATIBLE_BIT_ARB);
-	}
-	attribs.push_back(0); // zero indicates the end of the array
+		attribs.push_back(0); // zero indicates the end of the array
 
-	PFNWGLCREATECONTEXTATTRIBSARBPROC wglCreateContextAttribsARB = nullptr; //pointer to the method
-	wglCreateContextAttribsARB = (PFNWGLCREATECONTEXTATTRIBSARBPROC)gd_wglGetProcAddress("wglCreateContextAttribsARB");
+		PFNWGLCREATECONTEXTATTRIBSARBPROC wglCreateContextAttribsARB = nullptr; //pointer to the method
+		wglCreateContextAttribsARB = (PFNWGLCREATECONTEXTATTRIBSARBPROC)gd_wglGetProcAddress("wglCreateContextAttribsARB");
 
-	if (wglCreateContextAttribsARB == nullptr) //OpenGL 3/2/1 is not supported
-	{
+		if (wglCreateContextAttribsARB == nullptr) //OpenGL 3 is not supported
+		{
+			gd_wglDeleteContext(gl_display.hRC);
+			gl_display.hRC = nullptr;
+			return ERR_CANT_CREATE;
+		}
+
+		HGLRC new_hRC = wglCreateContextAttribsARB(win.hDC, nullptr, attribs.ptr());
+		if (!new_hRC) {
+			gd_wglDeleteContext(gl_display.hRC);
+			gl_display.hRC = nullptr;
+			return ERR_CANT_CREATE;
+		}
+
+		if (!gd_wglMakeCurrent(win.hDC, nullptr)) {
+			ERR_PRINT("Could not detach OpenGL context from newly created window: " + format_error_message(GetLastError()));
+		}
+
 		gd_wglDeleteContext(gl_display.hRC);
-		gl_display.hRC = nullptr;
-		return ERR_CANT_CREATE;
-	}
+		gl_display.hRC = new_hRC;
 
-	HGLRC new_hRC = wglCreateContextAttribsARB(win.hDC, nullptr, attribs.ptr());
-	if (!new_hRC) {
-		gd_wglDeleteContext(gl_display.hRC);
-		gl_display.hRC = nullptr;
-		return ERR_CANT_CREATE;
-	}
-
-	if (!gd_wglMakeCurrent(win.hDC, nullptr)) {
-		ERR_PRINT("Could not detach OpenGL context from newly created window: " + format_error_message(GetLastError()));
-	}
-
-	gd_wglDeleteContext(gl_display.hRC);
-	gl_display.hRC = new_hRC;
-
-	if (!gd_wglMakeCurrent(win.hDC, gl_display.hRC)) // Try to activate the rendering context.
-	{
-		ERR_PRINT("Could not attach OpenGL context to newly created window with replaced OpenGL context: " + format_error_message(GetLastError()));
-		gd_wglDeleteContext(gl_display.hRC);
-		gl_display.hRC = nullptr;
-		return ERR_CANT_CREATE;
+		if (!gd_wglMakeCurrent(win.hDC, gl_display.hRC)) // Try to activate the rendering context.
+		{
+			ERR_PRINT("Could not attach OpenGL context to newly created window with replaced OpenGL context: " + format_error_message(GetLastError()));
+			gd_wglDeleteContext(gl_display.hRC);
+			gl_display.hRC = nullptr;
+			return ERR_CANT_CREATE;
+		}
 	}
 
 	if (!wglSwapIntervalEXT) {

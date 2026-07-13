@@ -129,65 +129,70 @@ Dictionary detect_wgl(int p_gles_major, int p_gles_minor) {
 			HGLRC hRC = gd_wglCreateContext(hDC);
 			if (hRC) {
 				if (gd_wglMakeCurrent(hDC, hRC)) {
-                    
-					int attribs[9] = {};
-					int attr_idx = 0;
-					attribs[attr_idx++] = WGL_CONTEXT_MAJOR_VERSION_ARB;
-					attribs[attr_idx++] = p_gles_major;
-					attribs[attr_idx++] = WGL_CONTEXT_MINOR_VERSION_ARB;
-					attribs[attr_idx++] = p_gles_minor;
 
-					if (p_gles_major > 2) {
+					HGLRC new_hRC = nullptr;
+
+					if (p_gles_major >= 3) {
+						int attribs[9] = {};
+						int attr_idx = 0;
+						attribs[attr_idx++] = WGL_CONTEXT_MAJOR_VERSION_ARB;
+						attribs[attr_idx++] = p_gles_major;
+						attribs[attr_idx++] = WGL_CONTEXT_MINOR_VERSION_ARB;
+						attribs[attr_idx++] = p_gles_minor;
+
 						attribs[attr_idx++] = WGL_CONTEXT_PROFILE_MASK_ARB;
 						attribs[attr_idx++] = WGL_CONTEXT_CORE_PROFILE_BIT_ARB;
 						attribs[attr_idx++] = WGL_CONTEXT_FLAGS_ARB;
 						attribs[attr_idx++] = WGL_CONTEXT_FORWARD_COMPATIBLE_BIT_ARB;
-					}
-					attribs[attr_idx++] = 0; // Null terminator
+						attribs[attr_idx++] = 0; // Null terminator
 
-					PFNWGLCREATECONTEXTATTRIBSARBPROC gd_wglCreateContextAttribsARB = nullptr;
-					gd_wglCreateContextAttribsARB = (PFNWGLCREATECONTEXTATTRIBSARBPROC)gd_wglGetProcAddress("wglCreateContextAttribsARB");
-					if (gd_wglCreateContextAttribsARB) {
-						HGLRC new_hRC = gd_wglCreateContextAttribsARB(hDC, nullptr, attribs);
-						if (new_hRC) {
-							if (gd_wglMakeCurrent(hDC, new_hRC)) {
-								PFNWGLGETSTRINGPROC gd_wglGetString = (PFNWGLGETSTRINGPROC)GetProcAddress(module, "glGetString");
-								if (gd_wglGetString) {
-									const char *prefixes[] = {
-										"OpenGL ES-CM ",
-										"OpenGL ES-CL ",
-										"OpenGL ES ",
-										"OpenGL SC ",
-										nullptr
-									};
-									const char *version = (const char *)gd_wglGetString(WGL_VERSION);
-									if (version) {
-										const String device_vendor = String::utf8((const char *)gd_wglGetString(WGL_VENDOR)).strip_edges().trim_suffix(" Corporation");
-										const String device_name = String::utf8((const char *)gd_wglGetString(WGL_RENDERER)).strip_edges().trim_suffix("/PCIe/SSE2");
-										for (int i = 0; prefixes[i]; i++) {
-											size_t length = strlen(prefixes[i]);
-											if (strncmp(version, prefixes[i], length) == 0) {
-												version += length;
-												break;
-											}
-										}
-										int major = 0;
-										int minor = 0;
-#ifdef _MSC_VER
-										sscanf_s(version, "%d.%d", &major, &minor);
-#else
-										sscanf(version, "%d.%d", &major, &minor);
-#endif
-										print_verbose(vformat("Native OpenGL API detected: %d.%d: %s - %s", major, minor, device_vendor, device_name));
-										gl_info["vendor"] = device_vendor;
-										gl_info["name"] = device_name;
-										gl_info["version"] = major * 10000 + minor;
-									}
+						PFNWGLCREATECONTEXTATTRIBSARBPROC gd_wglCreateContextAttribsARB = nullptr;
+						gd_wglCreateContextAttribsARB = (PFNWGLCREATECONTEXTATTRIBSARBPROC)gd_wglGetProcAddress("wglCreateContextAttribsARB");
+						if (gd_wglCreateContextAttribsARB) {
+							new_hRC = gd_wglCreateContextAttribsARB(hDC, nullptr, attribs);
+							if (new_hRC) {
+								gd_wglMakeCurrent(hDC, new_hRC);
+							}
+						}
+					}
+
+					PFNWGLGETSTRINGPROC gd_wglGetString = (PFNWGLGETSTRINGPROC)GetProcAddress(module, "glGetString");
+					if (gd_wglGetString) {
+						const char *prefixes[] = {
+							"OpenGL ES-CM ",
+							"OpenGL ES-CL ",
+							"OpenGL ES ",
+							"OpenGL SC ",
+							nullptr
+						};
+						const char *version = (const char *)gd_wglGetString(WGL_VERSION);
+						if (version) {
+							const String device_vendor = String::utf8((const char *)gd_wglGetString(WGL_VENDOR)).strip_edges().trim_suffix(" Corporation");
+							const String device_name = String::utf8((const char *)gd_wglGetString(WGL_RENDERER)).strip_edges().trim_suffix("/PCIe/SSE2");
+							for (int i = 0; prefixes[i]; i++) {
+								size_t length = strlen(prefixes[i]);
+								if (strncmp(version, prefixes[i], length) == 0) {
+									version += length;
+									break;
 								}
 							}
-							gd_wglMakeCurrent(nullptr, nullptr);
-							gd_wglDeleteContext(new_hRC);
+							int major = 0;
+							int minor = 0;
+#ifdef _MSC_VER
+							sscanf_s(version, "%d.%d", &major, &minor);
+#else
+							sscanf(version, "%d.%d", &major, &minor);
+#endif
+							print_verbose(vformat("Native OpenGL API detected: %d.%d: %s - %s", major, minor, device_vendor, device_name));
+							gl_info["vendor"] = device_vendor;
+							gl_info["name"] = device_name;
+							gl_info["version"] = major * 10000 + minor;
 						}
+					}
+
+					if (new_hRC) {
+						gd_wglMakeCurrent(nullptr, nullptr);
+						gd_wglDeleteContext(new_hRC);
 					}
 				}
 				gd_wglMakeCurrent(nullptr, nullptr);
