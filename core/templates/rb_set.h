@@ -172,15 +172,27 @@ private:
 
 		_FORCE_INLINE_ _Data() {
 #ifdef GLOBALNIL_DISABLED
-			_nil = memnew_allocator(Element, A);
-			_nil->parent = _nil->left = _nil->right = _nil;
-			_nil->color = BLACK;
+			if (_nil == nullptr) {
+				_nil = memnew_allocator(Element, A);
+				_nil->parent = _nil->left = _nil->right = _nil;
+				_nil->color = BLACK;
+			}
 #else
 			_nil = (Element *)&_GlobalNilClass::_nil;
 #endif
 		}
 
 		void _create_root() {
+			// Lazily initialize _nil if the static constructor hasn't run yet.
+			if (_nil == nullptr) {
+#ifdef GLOBALNIL_DISABLED
+				_nil = memnew_allocator(Element, A);
+				_nil->parent = _nil->left = _nil->right = _nil;
+				_nil->color = BLACK;
+#else
+				_nil = (Element *)&_GlobalNilClass::_nil;
+#endif
+			}
 			_root = memnew_allocator(Element, A);
 			_root->parent = _root->left = _root->right = _nil;
 			_root->color = BLACK;

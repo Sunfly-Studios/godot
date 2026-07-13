@@ -117,10 +117,44 @@ class RID_Alloc : public RID_AllocBase {
 
 	mutable Mutex mutex;
 
+	void _ensure_initialized() {
+        if (likely(elements_in_chunk > 0)) {
+			// Already initialised
+            return;
+        }
+
+        const uint32_t target_chunk_byte_size = 65536;
+        const uint32_t maximum_number_of_elements = 262144;
+
+        if (sizeof(T) > target_chunk_byte_size) {
+            elements_in_chunk = 1;
+        } else {
+            elements_in_chunk = (target_chunk_byte_size / sizeof(T));
+        }
+
+        // Handle thread-safe pre-allocations if they haven't happened yet
+        if constexpr (THREAD_SAFE) {
+            if (chunks == nullptr) {
+                chunk_limit = (maximum_number_of_elements / elements_in_chunk) + 1;
+                chunks = static_cast<Chunk **>(Memory::alloc_aligned_static(sizeof(Chunk *) * chunk_limit, alignof(Chunk *)));
+                free_list_chunks = static_cast<uint32_t **>(Memory::alloc_aligned_static(sizeof(uint32_t *) * chunk_limit, alignof(uint32_t *)));
+                
+                // Clear the pre-allocated array pointers
+                for (uint32_t i = 0; i < chunk_limit; i++) {
+                    chunks[i] = nullptr;
+                    free_list_chunks[i] = nullptr;
+                }
+                SYNC_RELEASE;
+            }
+        }
+    }
+
 	_FORCE_INLINE_ RID _allocate_rid() {
 		if constexpr (THREAD_SAFE) {
 			mutex.lock();
 		}
+
+		_ensure_initialized();
 
 		if (alloc_count == max_alloc) {
 			//allocate a new chunk
@@ -456,6 +490,10 @@ public:
 	}
 
 	RID_Alloc(uint32_t p_target_chunk_byte_size = 65536, uint32_t p_maximum_number_of_elements = 262144) {
+		if (elements_in_chunk > 0) {
+			return; // Already initialised
+		}
+		
 		if (sizeof(T) > p_target_chunk_byte_size) {
 			elements_in_chunk = 1;
 		} else {

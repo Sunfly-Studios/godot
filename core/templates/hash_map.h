@@ -640,7 +640,9 @@ public:
 		reserve(p_initial_capacity);
 	}
 	HashMap() {
-		capacity_index = MIN_CAPACITY_INDEX;
+		if (elements == nullptr) {
+			capacity_index = MIN_CAPACITY_INDEX;
+		}
 	}
 
 	HashMap(std::initializer_list<KeyValue<TKey, TValue>> p_init) {

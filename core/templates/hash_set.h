@@ -470,7 +470,9 @@ public:
 		reserve(p_initial_capacity);
 	}
 	HashSet() {
-		capacity_index = MIN_CAPACITY_INDEX;
+		if (keys == nullptr) {
+			capacity_index = MIN_CAPACITY_INDEX;
+		}
 	}
 
 	HashSet(std::initializer_list<TKey> p_init) {

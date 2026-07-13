@@ -719,8 +719,10 @@ public:
 		capacity = MAX(4u, p_initial_capacity);
 		capacity = next_power_of_2(capacity) - 1;
 	}
-	AHashMap() :
-			capacity(INITIAL_CAPACITY - 1) {
+	AHashMap() {
+		if (elements == nullptr) {
+			capacity = INITIAL_CAPACITY - 1;
+		}
 	}
 
 	AHashMap(std::initializer_list<KeyValue<TKey, TValue>> p_init) {

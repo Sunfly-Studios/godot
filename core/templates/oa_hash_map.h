@@ -416,6 +416,10 @@ public:
 	}
 
 	OAHashMap(uint32_t p_initial_capacity = 64) {
+		if (keys != nullptr) {
+			return; 
+		}
+		
 		// Capacity can't be 0.
 		capacity = MAX(1u, p_initial_capacity);
 
