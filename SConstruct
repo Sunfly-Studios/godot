@@ -787,9 +787,11 @@ if is_production and is_strict_target:
         # Assumes vptr is invariant during object's legal lifetime.
         # Safe here due to `std::launder` in `core/` and `unaligned_` helpers.
         "-fstrict-vtable-pointers",
-        "-fwhole-program-vtables",
         "-fstrict-return",
     ]
+
+    if ARGUMENTS.get("lto", "none") != "none":
+        llvm_flags += ["-fwhole-program-vtables"]
     
     # GCC exclusive flags
     gcc_flags = [
