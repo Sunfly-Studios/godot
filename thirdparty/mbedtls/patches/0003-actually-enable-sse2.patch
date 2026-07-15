@@ -1,0 +1,15 @@
+diff --git a/thirdparty/mbedtls/include/mbedtls/mbedtls_config.h b/thirdparty/mbedtls/include/mbedtls/mbedtls_config.h
+index d1775ae228..c674f7e840 100644
+--- a/thirdparty/mbedtls/include/mbedtls/mbedtls_config.h
++++ b/thirdparty/mbedtls/include/mbedtls/mbedtls_config.h
+@@ -108,7 +108,9 @@
+  *
+  * Uncomment if the CPU supports SSE2 (IA-32 specific).
+  */
+-//#define MBEDTLS_HAVE_SSE2
++#if __SSE_LEVEL__ >= 2
++#define MBEDTLS_HAVE_SSE2
++#endif
+ 
+ /**
+  * \def MBEDTLS_HAVE_TIME

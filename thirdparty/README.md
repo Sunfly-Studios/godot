@@ -658,6 +658,8 @@ File extracted from upstream release tarball:
 Patches:
 
 - `0001-msvc-2019-psa-redeclaration.patch` (GH-90535)
+- `0002-condition-sse-assumptions.patch`
+- `0003-actually-enable-sse2.patch`
 
 
 ## meshoptimizer
