@@ -787,16 +787,22 @@ if is_production and is_strict_target:
         # Assumes vptr is invariant during object's legal lifetime.
         # Safe here due to `std::launder` in `core/` and `unaligned_` helpers.
         "-fstrict-vtable-pointers",
-        "-fstrict-return",
+        "-fstrict-return"
     ]
 
-    if ARGUMENTS.get("lto", "none") != "none":
-        llvm_flags += ["-fwhole-program-vtables"]
+    lto_mode = ARGUMENTS.get("lto", "none")
+    if lto_mode != "none":
+        llvm_flags += [
+            "-fwhole-program-vtables"
+        ]
+
+        if lto_mode == "full":
+            llvm_flags += ["-fvirtual-function-elimination"]
     
     # GCC exclusive flags
     gcc_flags = [
-        # TODO(MBCX): Test the impact of this flag.
-        "-fipa-pta"
+        # TODO(MBCX): Fix the engine with this flag ON.
+        #"-fipa-pta"
     ]
 
     # Compiler detection
