@@ -765,6 +765,8 @@ detect_and_set_32_bit_arch(env)
 is_production = env.get("production", False)
 is_strict_target = env["target"] in ["editor", "template_release"]
 
+# Agressive optimisation sections.
+
 if is_production and is_strict_target:
     # Force every single RBMap instance to
     # allocate its own distinct _nil node using memnew_allocator.
@@ -773,11 +775,52 @@ if is_production and is_strict_target:
     # to absorb the overhead of a few thousand extra map nodes.
     env.Append(CPPDEFINES=["GLOBALNIL_DISABLED"])
 
-    # MSVC doesn't have this, but `clang-cl` does.
-    # (another reason why GCC/LLVM are better ;>).
-    if not env.msvc or (env.msvc and env["use_llvm"]):
-        env.Append(CCFLAGS=["-fstrict-aliasing"])
-        env.Append(CPPDEFINES=["STRICT_ALIASING_ENABLED"])
+    # Flags
+
+    # Flags shared by both GCC and LLVM
+    shared_flags = [
+        "-fstrict-aliasing"
+    ]
+
+    # LLVM exclusive flags
+    llvm_flags = [
+        # Assumes vptr is invariant during object's legal lifetime.
+        # Safe here due to `std::launder` in `core/` and `unaligned_` helpers.
+        "-fstrict-vtable-pointers",
+        "-fwhole-program-vtables",
+        "-fstrict-return",
+    ]
+    
+    # GCC exclusive flags
+    gcc_flags = [
+        # TODO(MBCX): Test the impact of this flag.
+        "-fipa-pta"
+    ]
+
+    # Compiler detection
+    is_clang = methods.using_clang(env) or env.get("use_llvm", False)
+    is_gcc = methods.using_gcc(env)
+    is_msvc = getattr(env, "msvc", env.get("msvc", False))
+
+    # Build the final list of flags for the active compiler
+    active_flags = []
+    
+    if is_clang or is_gcc:
+        active_flags.extend(shared_flags)
+        
+    if is_clang:
+        active_flags.extend(llvm_flags)
+    elif is_gcc:
+        active_flags.extend(gcc_flags)
+
+    if active_flags:
+        if is_msvc and is_clang:
+            # clang-cl needs the /clang: prefix to pass these specific
+            # flags through to the LLVM backend
+            env.Append(CCFLAGS=[f"/clang:{flag}" for flag in active_flags])
+        else:
+            # Standard GCC/Clang frontend
+            env.Append(CCFLAGS=active_flags)
 
 # Explicitly specify colored output.
 if methods.using_gcc(env):
