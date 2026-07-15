@@ -133,7 +133,7 @@ private:
 
 		uint32_t pos = p_hash & capacity;
 		HashMapData data = map_data[pos];
-		if (data.hash == p_hash && Comparator::compare(elements[data.hash_to_key].key, p_key)) {
+		if (data.hash == p_hash && Comparator::compare(std::launder(&elements[data.hash_to_key])->key, p_key)) {
 			r_pos = data.hash_to_key;
 			r_hash_pos = pos;
 			return true;
@@ -148,7 +148,7 @@ private:
 		uint32_t distance = 1;
 		while (true) {
 			data = map_data[pos];
-			if (data.hash == p_hash && Comparator::compare(elements[data.hash_to_key].key, p_key)) {
+			if (data.hash == p_hash && Comparator::compare(std::launder(&elements[data.hash_to_key])->key, p_key)) {
 				r_pos = data.hash_to_key;
 				r_hash_pos = pos;
 				return true;
