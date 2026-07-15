@@ -189,8 +189,12 @@ void MeshStorage::mesh_add_surface(RID p_mesh, const RS::SurfaceData &p_surface)
 
 	// Skin data
 	if (p_surface.skin_data.size()) {
-		glGenBuffers(1, &s->skin_buffer);
-		glBindBuffer(GL_ARRAY_BUFFER, s->skin_buffer);
+		if (GLES1::Config::get_singleton()->support_vbo) {
+			glGenBuffers(1, &s->skin_buffer);
+		
+			glBindBuffer(GL_ARRAY_BUFFER, s->skin_buffer);
+		}
+		
 		GLES1::Utilities::get_singleton()->buffer_allocate_data(
 			GL_ARRAY_BUFFER,
 			s->skin_buffer,

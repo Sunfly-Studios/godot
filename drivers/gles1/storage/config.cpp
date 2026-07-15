@@ -235,7 +235,7 @@ Config::Config() {
 
 	// Extensions
 	support_fbo = extensions.has("GL_OES_framebuffer_object") || extensions.has("GL_EXT_framebuffer_object") || extensions.has("GL_ARB_framebuffer_object");
-	support_vbo = extensions.has("GL_ARB_vertex_buffer_object") || extensions.has("GL_OES_mapbuffer");
+	support_vbo = extensions.has("GL_ARB_vertex_buffer_object") || extensions.has("GL_OES_mapbuffer") || extensions.has("GL_OES_vertex_buffer_object");
 	support_blend_func_separate = extensions.has("GL_OES_blend_func_separate") || extensions.has("GL_EXT_blend_func_separate") || extensions.has("GL_ARB_draw_buffers_blend");
 	support_point_sprite = extensions.has("GL_OES_point_sprite") || extensions.has("GL_ARB_point_sprite") || extensions.has("GL_NV_point_sprite");
 	support_matrix_palette = extensions.has("GL_OES_matrix_palette") || extensions.has("GL_OES_extended_matrix_palette");

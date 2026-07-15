@@ -1080,29 +1080,54 @@ void TextureStorage::texture_set_size_override(RID p_texture, int p_width, int p
 }
 
 void TextureStorage::texture_set_path(RID p_texture, const String &p_path) {
+	Texture *texture = texture_owner.get_or_null(p_texture);
+	ERR_FAIL_NULL(texture);
 
+	texture->path = p_path;
 }
 
 String TextureStorage::texture_get_path(RID p_texture) const {
-	return String();
+	Texture *texture = texture_owner.get_or_null(p_texture);
+	ERR_FAIL_NULL_V(texture, "");
+
+	return texture->path;
 }
 
 void TextureStorage::texture_set_detect_3d_callback(RID p_texture, RS::TextureDetectCallback p_callback, void *p_userdata) {
+	Texture *texture = texture_owner.get_or_null(p_texture);
+	ERR_FAIL_NULL(texture);
+
+	texture->detect_3d_callback = p_callback;
+	texture->detect_3d_callback_ud = p_userdata;
 }
 
 void TextureStorage::texture_set_detect_srgb_callback(RID p_texture, RS::TextureDetectCallback p_callback, void *p_userdata) {
 }
 
 void TextureStorage::texture_set_detect_normal_callback(RID p_texture, RS::TextureDetectCallback p_callback, void *p_userdata) {
+	Texture *texture = texture_owner.get_or_null(p_texture);
+	ERR_FAIL_NULL(texture);
+
+	texture->detect_normal_callback = p_callback;
+	texture->detect_normal_callback_ud = p_userdata;
 }
 
 void TextureStorage::texture_set_detect_roughness_callback(RID p_texture, RS::TextureDetectRoughnessCallback p_callback, void *p_userdata) {
+	Texture *texture = texture_owner.get_or_null(p_texture);
+	ERR_FAIL_NULL(texture);
+
+	texture->detect_roughness_callback = p_callback;
+	texture->detect_roughness_callback_ud = p_userdata;
 }
 
 void TextureStorage::texture_debug_usage(List<RS::TextureInfo> *r_info) {
 }
 
 void TextureStorage::texture_set_force_redraw_if_visible(RID p_texture, bool p_enable) {
+	Texture *texture = texture_owner.get_or_null(p_texture);
+	ERR_FAIL_NULL(texture);
+
+	texture->redraw_if_visible = p_enable;
 }
 
 Size2 TextureStorage::texture_size_with_proxy(RID p_texture) {
@@ -1123,7 +1148,10 @@ RID TextureStorage::texture_get_rd_texture(RID p_texture, bool p_srgb) const {
 }
 
 uint64_t TextureStorage::texture_get_native_handle(RID p_texture, bool p_srgb) const {
-	return 0;
+	const Texture *texture = texture_owner.get_or_null(p_texture);
+	ERR_FAIL_NULL_V(texture, 0);
+
+	return texture->tex_id;
 }
 
 void TextureStorage::texture_set_data(RID p_texture, const Ref<Image> &p_image, int p_layer) {
@@ -1454,7 +1482,7 @@ void TextureStorage::texture_atlas_remove_texture(RID p_texture) {
 }
 
 GLuint TextureStorage::texture_atlas_get_texture() const {
-	return 0;
+	return texture_atlas.texture;
 }
 
 void TextureStorage::update_texture_atlas() {
@@ -1553,7 +1581,9 @@ void TextureStorage::_update_render_target(RenderTarget *rt) {
 	glGetIntegerv(GL_TEXTURE_BINDING_2D, &prev_bound_tex);
 
 	GLint prev_renderbuffer = 0;
-	glGetIntegerv(GL_RENDERBUFFER_BINDING_OES, &prev_renderbuffer);
+	if (config->support_fbo) {
+		glGetIntegerv(GL_RENDERBUFFER_BINDING_OES, &prev_renderbuffer);
+	}
 	GL_CHECK_ERROR("GLES1::TextureStorage::_update_render_target: state capture");
 
 	glDisable(GL_SCISSOR_TEST);
@@ -1575,7 +1605,9 @@ void TextureStorage::_update_render_target(RenderTarget *rt) {
 		glDepthMask(prev_depth_mask);
 		glColorMask(prev_color_mask[0], prev_color_mask[1], prev_color_mask[2], prev_color_mask[3]);
 		glClearColor(prev_clear_color[0], prev_clear_color[1], prev_clear_color[2], prev_clear_color[3]);
-		glBindRenderbufferOES(GL_RENDERBUFFER_OES, prev_renderbuffer);
+		if (config->support_fbo) {
+			glBindRenderbufferOES(GL_RENDERBUFFER_OES, prev_renderbuffer);
+		}
 		glBindTexture(GL_TEXTURE_2D, prev_bound_tex);
 		
 		if (config->max_texture_units > 1) {
@@ -1718,7 +1750,9 @@ void TextureStorage::_update_render_target(RenderTarget *rt) {
 		glDepthMask(prev_depth_mask);
 		glColorMask(prev_color_mask[0], prev_color_mask[1], prev_color_mask[2], prev_color_mask[3]);
 		glClearColor(prev_clear_color[0], prev_clear_color[1], prev_clear_color[2], prev_clear_color[3]);
-		glBindRenderbufferOES(GL_RENDERBUFFER_OES, prev_renderbuffer);
+		if (config->support_fbo) {
+			glBindRenderbufferOES(GL_RENDERBUFFER_OES, prev_renderbuffer);
+		}
 		glBindTexture(GL_TEXTURE_2D, prev_bound_tex);
 		
 		if (config->max_texture_units > 1) {
@@ -1778,7 +1812,9 @@ void TextureStorage::_update_render_target(RenderTarget *rt) {
 	glDepthMask(prev_depth_mask);
 	glColorMask(prev_color_mask[0], prev_color_mask[1], prev_color_mask[2], prev_color_mask[3]);
 	glClearColor(prev_clear_color[0], prev_clear_color[1], prev_clear_color[2], prev_clear_color[3]);
-	glBindRenderbufferOES(GL_RENDERBUFFER_OES, prev_renderbuffer);
+	if (config->support_fbo) {
+		glBindRenderbufferOES(GL_RENDERBUFFER_OES, prev_renderbuffer);
+	}
 	glBindTexture(GL_TEXTURE_2D, prev_bound_tex);
 	
 	if (config->max_texture_units > 1) {
@@ -1788,10 +1824,55 @@ void TextureStorage::_update_render_target(RenderTarget *rt) {
 }
 
 void TextureStorage::_create_render_target_backbuffer(RenderTarget *rt) {
+	if (!Config::get_singleton()->support_fbo) {
+		return;
+	}
 
+	if (rt->backbuffer_fbo != 0) {
+		return;
+	}
+
+	glGenFramebuffersOES(1, &rt->backbuffer_fbo);
+	bind_framebuffer(rt->backbuffer_fbo);
+	GL_CHECK_ERROR("GLES1::TextureStorage::_create_render_target_backbuffer: backbuffer FBO");
+
+	if (rt->backbuffer == 0) {
+		glGenTextures(1, &rt->backbuffer);
+		glBindTexture(GL_TEXTURE_2D, rt->backbuffer);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+
+		glTexImage2D(GL_TEXTURE_2D, 0, rt->color_internal_format, rt->size.width, rt->size.height, 0, rt->color_format, rt->color_type, nullptr);
+		GL_CHECK_ERROR("GLES1::TextureStorage::_create_render_target_backbuffer: glTexImage2D");
+
+		if (!GLES1::Utilities::get_singleton()->has_texture_data(rt->backbuffer)) {
+			GLES1::Utilities::get_singleton()->texture_allocated_data(rt->backbuffer, rt->size.width * rt->size.height * rt->color_format_size, "Render target backbuffer");
+		}
+	} else {
+		glBindTexture(GL_TEXTURE_2D, rt->backbuffer);
+	}
+
+	glFramebufferTexture2DOES(GL_FRAMEBUFFER_OES, GL_COLOR_ATTACHMENT0_OES, GL_TEXTURE_2D, rt->backbuffer, 0);
+	GL_CHECK_ERROR("GLES1::TextureStorage::_create_render_target_backbuffer: glFramebufferTexture2DOES");
+
+	GLenum status = glCheckFramebufferStatusOES(GL_FRAMEBUFFER_OES);
+	if (status != GL_FRAMEBUFFER_COMPLETE_OES) {
+		WARN_PRINT("Could not create render target backbuffer FBO, status: " + get_framebuffer_error(status));
+	}
+
+	bind_framebuffer(system_fbo);
 }
 
 void GLES1::TextureStorage::check_backbuffer(RenderTarget *rt, const bool uses_screen_texture, const bool uses_depth_texture) {
+	if (!rt) {
+		return;
+	}
+
+	if (uses_screen_texture && rt->backbuffer_fbo == 0) {
+		_create_render_target_backbuffer(rt);
+	}
 }
 
 void TextureStorage::_clear_render_target(RenderTarget *rt) {
@@ -1870,8 +1951,10 @@ void TextureStorage::render_target_free(RID p_rid) {
 		for (const KeyValue<uint32_t, RenderTarget::RTOverridden::FBOCacheEntry> &E : rt->overridden.fbo_cache) {
 			GLuint fbo_id = E.value.fbo;
 			if (fbo_id != 0 && fbo_id != system_fbo) {
-				glDeleteFramebuffersOES(1, &fbo_id);
-				GL_CHECK_ERROR("GLES1::TextureStorage::render_target_free: glDeleteFramebuffersOES cache");
+				if (Config::get_singleton()->support_fbo) {
+					glDeleteFramebuffersOES(1, &fbo_id);
+					GL_CHECK_ERROR("GLES1::TextureStorage::render_target_free: glDeleteFramebuffersOES cache");
+				}
 			}
 			for (int i = 0; i < E.value.allocated_textures.size(); i++) {
 				GLuint tex_id = E.value.allocated_textures[i];
@@ -2349,6 +2432,9 @@ void TextureStorage::render_target_clear_back_buffer(RID p_render_target, const 
 	RenderTarget *rt = render_target_owner.get_or_null(p_render_target);
 	ERR_FAIL_NULL(rt);
 	ERR_FAIL_COND(rt->direct_to_screen);
+	if (!Config::get_singleton()->support_fbo) {
+		return;
+	}
 
 	if (rt->backbuffer_fbo == 0) {
 		_create_render_target_backbuffer(rt);
@@ -2401,9 +2487,13 @@ void TextureStorage::render_target_gen_back_buffer_mipmaps(RID p_render_target, 
 		// Fall back to linear filtering.
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
 	} else {
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
-		glGenerateMipmapOES(GL_TEXTURE_2D);
-		GL_CHECK_ERROR("GLES1::TextureStorage::render_target_gen_back_buffer_mipmaps: glGenerateMipmapOES");
+		if (GLES1::Config::get_singleton()->support_generate_mipmap) {
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+			glGenerateMipmapOES(GL_TEXTURE_2D);
+			GL_CHECK_ERROR("GLES1::TextureStorage::render_target_gen_back_buffer_mipmaps: glGenerateMipmapOES");
+		} else {
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+		}
 	}
 }
 

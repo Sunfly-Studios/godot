@@ -354,7 +354,7 @@ void RasterizerCanvasGLES1::initialize() {
 	// Quad buffer
 	{
 		data.canvas_quad_vertices = 0;
-		if (!GLES1::Config::get_singleton()->is_android_emulator) {
+		if (!GLES1::Config::get_singleton()->is_android_emulator || GLES1::Config::get_singleton()->support_vbo) {
 			glGenBuffers(1, &data.canvas_quad_vertices);
 			GL_CHECK_ERROR("GLES1::Canvas::initialize: glGenBuffers quad");
 		}
@@ -386,7 +386,7 @@ void RasterizerCanvasGLES1::initialize() {
 		poly_size *= 1024;
 
 		data.polygon_buffer = 0;
-		if (!GLES1::Config::get_singleton()->is_android_emulator) {
+		if (!GLES1::Config::get_singleton()->is_android_emulator || GLES1::Config::get_singleton()->support_vbo) {
 			glGenBuffers(1, &data.polygon_buffer);
 			GL_CHECK_ERROR("GLES1::Canvas::initialize: glGenBuffers poly");
 		}
@@ -409,7 +409,7 @@ void RasterizerCanvasGLES1::initialize() {
 
 		data.polygon_index_buffer = 0;
 
-		if (!GLES1::Config::get_singleton()->is_android_emulator) {
+		if (!GLES1::Config::get_singleton()->is_android_emulator || GLES1::Config::get_singleton()->support_vbo) {
 			glGenBuffers(1, &data.polygon_index_buffer);
 			GL_CHECK_ERROR("GLES1::Canvas::initialize: glGenBuffers poly index");
 		}
@@ -427,7 +427,7 @@ void RasterizerCanvasGLES1::initialize() {
 	{
 		data.ninepatch_vertices = 0;
 
-		if (!GLES1::Config::get_singleton()->is_android_emulator) {
+		if (!GLES1::Config::get_singleton()->is_android_emulator || GLES1::Config::get_singleton()->support_vbo) {
 			glGenBuffers(1, &data.ninepatch_vertices);
 			GL_CHECK_ERROR("GLES1::Canvas::initialize: glGenBuffers ninepatch");
 		}
@@ -441,7 +441,7 @@ void RasterizerCanvasGLES1::initialize() {
 
 		data.ninepatch_elements = 0;
 
-		if (!GLES1::Config::get_singleton()->is_android_emulator) {
+		if (!GLES1::Config::get_singleton()->is_android_emulator || GLES1::Config::get_singleton()->support_vbo) {
 			glGenBuffers(1, &data.ninepatch_elements);
 			GL_CHECK_ERROR("GLES1::Canvas::initialize: glGenBuffers ninepatch index");
 		}
@@ -515,7 +515,7 @@ void RasterizerCanvasGLES1::initialize() {
 	if (bdata.vertex_buffer_size_bytes && bdata.index_buffer_size_units > 0) {
 		bdata.gl_vertex_buffer = 0;
 
-		if (!GLES1::Config::get_singleton()->is_android_emulator) {
+		if (!GLES1::Config::get_singleton()->is_android_emulator || GLES1::Config::get_singleton()->support_vbo) {
 			glGenBuffers(1, &bdata.gl_vertex_buffer);
 			GL_CHECK_ERROR("GLES1::Canvas::initialize: glGenBuffers batcher");
 		}
@@ -533,7 +533,7 @@ void RasterizerCanvasGLES1::initialize() {
 
 		bdata.gl_index_buffer = 0;
 
-		if (!GLES1::Config::get_singleton()->is_android_emulator) {
+		if (!GLES1::Config::get_singleton()->is_android_emulator || GLES1::Config::get_singleton()->support_vbo) {
 			glGenBuffers(1, &bdata.gl_index_buffer);
 			GL_CHECK_ERROR("GLES1::Canvas::initialize: glGenBuffers batcher index");
 		}
@@ -1062,7 +1062,7 @@ void RasterizerCanvasGLES1::canvas_begin(RID p_to_render_target, bool p_to_backb
 	}
 
 	if (render_target && render_target->fbo != 0) {
-		if (glIsFramebufferOES(render_target->fbo) == GL_FALSE) {
+		if (config->support_fbo && glIsFramebufferOES(render_target->fbo) == GL_FALSE) {
 			print_verbose("GLES1: Dead FBO detected. Forcing recreation.");
 			render_target->fbo = 0; 
 			texture_storage->render_target_set_size(p_to_render_target, render_target->size.width, render_target->size.height, render_target->view_count);
@@ -1195,8 +1195,10 @@ void RasterizerCanvasGLES1::canvas_begin(RID p_to_render_target, bool p_to_backb
 void RasterizerCanvasGLES1::canvas_end() {
 	batch_canvas_end();
 
-	glBindBuffer(GL_ARRAY_BUFFER, 0);
-	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+	if (GLES1::Config::get_singleton()->support_vbo) {
+		glBindBuffer(GL_ARRAY_BUFFER, 0);
+		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+	}
 
 	glDisableClientState(GL_VERTEX_ARRAY);
 	glDisableClientState(GL_TEXTURE_COORD_ARRAY);
@@ -1313,9 +1315,11 @@ void RasterizerCanvasGLES1::reset_canvas() {
 	}
 	GL_CHECK_ERROR("GLES1::Canvas::reset_canvas: blend func");
 
-	glBindBuffer(GL_ARRAY_BUFFER, 0);
-	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
-	GL_CHECK_ERROR("GLES1::Canvas::reset_canvas: unbind buffers");
+	if (GLES1::Config::get_singleton()->support_vbo) {
+		glBindBuffer(GL_ARRAY_BUFFER, 0);
+		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+		GL_CHECK_ERROR("GLES1::Canvas::reset_canvas: unbind buffers");
+	}
 
 	glColor4f(1.0f, 1.0f, 1.0f, 1.0f);
 	GL_CHECK_ERROR("GLES1::Canvas::reset_canvas: reset color");
@@ -1747,7 +1751,9 @@ void RasterizerCanvasGLES1::canvas_render_items_implementation(Item *p_item_list
 				}
 
 				// Clear IBOs
-				glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+				if (config->support_vbo) {
+					glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+				}
 				GL_CHECK_ERROR("GLES1::Canvas::canvas_render_items_implementation: shadow state setup");
 
 				if (p_light->mode == RS::CANVAS_LIGHT_MODE_DIRECTIONAL) {
@@ -2214,8 +2220,10 @@ void RasterizerCanvasGLES1::_bind_quad_buffer() const {
 			}
 		}
 	} else { // data.canvas_quad_vertices != 0
-		glBindBuffer(GL_ARRAY_BUFFER, 0);
-		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+		if (GLES1::Config::get_singleton()->support_vbo) {
+			glBindBuffer(GL_ARRAY_BUFFER, 0);
+			glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+		}
 		glEnableClientState(GL_VERTEX_ARRAY);
 		glEnableClientState(GL_TEXTURE_COORD_ARRAY);
 
@@ -2447,11 +2455,14 @@ void RasterizerCanvasGLES1::_batch_render_generic(const Batch &p_batch, GLES1::C
 		// Bind the massive dynamic buffer
 		glBindBuffer(GL_ARRAY_BUFFER, bdata.gl_vertex_buffer);
 		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, bdata.gl_index_buffer);
+		GL_CHECK_ERROR("GLES1::Canvas::batch_render_generic: bind VBO/IBO");
 	} else {
-		glBindBuffer(GL_ARRAY_BUFFER, 0);
-		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+		if (GLES1::Config::get_singleton()->support_vbo) {
+			glBindBuffer(GL_ARRAY_BUFFER, 0);
+			glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+			GL_CHECK_ERROR("GLES1::Canvas::batch_render_generic: bind VBO/IBO");
+		}
 	}
-	GL_CHECK_ERROR("GLES1::Canvas::batch_render_generic: bind VBO/IBO");
 
 	uint64_t pointer_offset = p_batch.first_vert * sizeof_vert;
 	const void *base_ptr = nullptr;
@@ -2608,8 +2619,10 @@ void RasterizerCanvasGLES1::_batch_render_generic(const Batch &p_batch, GLES1::C
 	glDisableClientState(GL_COLOR_ARRAY);
 	glDisable(GL_TEXTURE_2D);
 
-	glBindBuffer(GL_ARRAY_BUFFER, 0);
-	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+	if (GLES1::Config::get_singleton()->support_vbo) {
+		glBindBuffer(GL_ARRAY_BUFFER, 0);
+		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+	}
 
 	// Restore baseline color if the vertex array messed it up
 	if (colored_verts) {
@@ -2895,7 +2908,9 @@ void RasterizerCanvasGLES1::render_batches(Item::Command *const *p_commands, Ite
 							glPopMatrix();
 							GL_CHECK_ERROR("GLES1::Canvas::render_batches: TYPE_RECT glPopMatrix");
 
-							glBindBuffer(GL_ARRAY_BUFFER, 0);
+							if (GLES1::Config::get_singleton()->support_vbo) {
+								glBindBuffer(GL_ARRAY_BUFFER, 0);
+							}
 							glDisableClientState(GL_VERTEX_ARRAY);
 							glDisableClientState(GL_TEXTURE_COORD_ARRAY);
 							glDisable(GL_TEXTURE_2D);
@@ -3086,7 +3101,9 @@ void RasterizerCanvasGLES1::render_batches(Item::Command *const *p_commands, Ite
 							GL_CHECK_ERROR("GLES1::Canvas::render_batches: TYPE_MULTIRECT glDrawArrays");
 
 							// Cleanup
-							glBindBuffer(GL_ARRAY_BUFFER, 0);
+							if (GLES1::Config::get_singleton()->support_vbo) {
+								glBindBuffer(GL_ARRAY_BUFFER, 0);
+							}
 							glDisableClientState(GL_VERTEX_ARRAY);
 							glDisableClientState(GL_TEXTURE_COORD_ARRAY);
 							glDisable(GL_TEXTURE_2D);
@@ -3297,8 +3314,10 @@ void RasterizerCanvasGLES1::render_batches(Item::Command *const *p_commands, Ite
 								}
 								GL_CHECK_ERROR("GLES1::Canvas::render_batches: TYPE_NINEPATCH glDrawElements");
 							} else { // data.ninepatch_vertices != 0 && data.ninepatch_elements != 0
-								glBindBuffer(GL_ARRAY_BUFFER, 0);
-								glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+								if (GLES1::Config::get_singleton()->support_vbo) {
+									glBindBuffer(GL_ARRAY_BUFFER, 0);
+									glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+								}
 
 								glEnableClientState(GL_VERTEX_ARRAY);
 								glEnableClientState(GL_TEXTURE_COORD_ARRAY);
@@ -3381,8 +3400,10 @@ void RasterizerCanvasGLES1::render_batches(Item::Command *const *p_commands, Ite
 								GL_CHECK_ERROR("GLES1::Canvas::render_batches: TYPE_NINEPATCH glDrawElements (fallback)");
 							}
 
-							glBindBuffer(GL_ARRAY_BUFFER, 0);
-							glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+							if (GLES1::Config::get_singleton()->support_vbo) {
+								glBindBuffer(GL_ARRAY_BUFFER, 0);
+								glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+							}
 							glDisableClientState(GL_VERTEX_ARRAY);
 							glDisableClientState(GL_TEXTURE_COORD_ARRAY);
 							glDisable(GL_TEXTURE_2D);
@@ -3703,8 +3724,10 @@ void RasterizerCanvasGLES1::render_batches(Item::Command *const *p_commands, Ite
 							state.uniforms.extra_matrix = prev_transform_extra;
 							state.uniforms.final_modulate = prev_colour_module;
 
-							glBindBuffer(GL_ARRAY_BUFFER, 0);
-							glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+							if (GLES1::Config::get_singleton()->support_vbo) {
+								glBindBuffer(GL_ARRAY_BUFFER, 0);
+								glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+							}
 							glDisable(GL_TEXTURE_2D);
 						} break;
 
@@ -4084,8 +4107,10 @@ void RasterizerCanvasGLES1::render_batches(Item::Command *const *p_commands, Ite
 								glActiveTexture(GL_TEXTURE0);
 							}
 
-							glBindBuffer(GL_ARRAY_BUFFER, 0);
-							glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+							if (GLES1::Config::get_singleton()->support_vbo) {
+								glBindBuffer(GL_ARRAY_BUFFER, 0);
+								glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+							}
 							glDisable(GL_TEXTURE_2D);
 						} break;
 
@@ -4290,8 +4315,10 @@ void RasterizerCanvasGLES1::_draw_gui_primitive(int p_points, const Vector2 *p_v
 		}
 		GL_CHECK_ERROR("GLES1::Canvas::_draw_gui_primitive: buffer subdata and pointers");
 	} else { // non-VBO
-		glBindBuffer(GL_ARRAY_BUFFER, 0);
-		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+		if (GLES1::Config::get_singleton()->support_vbo) {
+			glBindBuffer(GL_ARRAY_BUFFER, 0);
+			glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+		}
 
 #ifdef REAL_T_IS_DOUBLE
 		// Convert vertices to float array
@@ -4429,8 +4456,10 @@ void RasterizerCanvasGLES1::_draw_gui_primitive(int p_points, const Vector2 *p_v
 	glDisableClientState(GL_TEXTURE_COORD_ARRAY);
 	glDisableClientState(GL_COLOR_ARRAY);
 	glDisable(GL_TEXTURE_2D);
-	glBindBuffer(GL_ARRAY_BUFFER, 0);
-	GL_CHECK_ERROR("GLES1::Canvas::_draw_gui_primitive: glBindBuffer");
+	if (GLES1::Config::get_singleton()->support_vbo) {
+		glBindBuffer(GL_ARRAY_BUFFER, 0);
+		GL_CHECK_ERROR("GLES1::Canvas::_draw_gui_primitive: glBindBuffer");
+	}
 }
 
 void RasterizerCanvasGLES1::_legacy_draw_primitive(Item::CommandPrimitive *p_pr, GLES1::CanvasMaterialData *p_material) {
@@ -4674,7 +4703,10 @@ void RasterizerCanvasGLES1::_legacy_draw_polygon(Item::CommandPolygon *p_poly, G
 		}
 		GL_CHECK_ERROR("GLES1::Canvas::_legacy_draw_polygon: color subdata and pointers");
 	} else { // non-VBO
-		glBindBuffer(GL_ARRAY_BUFFER, 0);
+		
+		if (GLES1::Config::get_singleton()->support_vbo) {
+			glBindBuffer(GL_ARRAY_BUFFER, 0);
+		}
 
 #ifdef REAL_T_IS_DOUBLE
 		float *pts_f = nullptr;
@@ -4849,9 +4881,13 @@ void RasterizerCanvasGLES1::_legacy_draw_polygon(Item::CommandPolygon *p_poly, G
 				current_render_info->info[RS::VIEWPORT_RENDER_INFO_TYPE_CANVAS][RS::VIEWPORT_RENDER_INFO_PRIMITIVES_IN_FRAME] += _gl_indices_to_primitives(gl_primitive, index_count);
 				current_render_info->info[RS::VIEWPORT_RENDER_INFO_TYPE_CANVAS][RS::VIEWPORT_RENDER_INFO_DRAW_CALLS_IN_FRAME]++;
 			}
-			glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+			if (GLES1::Config::get_singleton()->support_vbo) {
+				glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+			}
 		} else {
-			glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+			if (GLES1::Config::get_singleton()->support_vbo) {
+				glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+			}
 			glDrawElements(gl_primitive, index_count, GL_UNSIGNED_SHORT, indices_16);
 			if (current_render_info) {
 				current_render_info->info[RS::VIEWPORT_RENDER_INFO_TYPE_CANVAS][RS::VIEWPORT_RENDER_INFO_OBJECTS_IN_FRAME]++;
@@ -4860,7 +4896,9 @@ void RasterizerCanvasGLES1::_legacy_draw_polygon(Item::CommandPolygon *p_poly, G
 			}
 		}
 	} else {
-		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+		if (GLES1::Config::get_singleton()->support_vbo) {
+			glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+		}
 
 		// Draw arrays if no indices
 		// Godot passes PRIMITIVE_TRIANGLES, but un-indexed polygons must be fanned.
@@ -4888,7 +4926,9 @@ void RasterizerCanvasGLES1::_legacy_draw_polygon(Item::CommandPolygon *p_poly, G
 	glDisableClientState(GL_TEXTURE_COORD_ARRAY);
 	glDisableClientState(GL_COLOR_ARRAY);
 	glDisable(GL_TEXTURE_2D);
-	glBindBuffer(GL_ARRAY_BUFFER, 0);
+	if (GLES1::Config::get_singleton()->support_vbo) {
+		glBindBuffer(GL_ARRAY_BUFFER, 0);
+	}
 	GL_CHECK_ERROR("GLES1::Canvas::_legacy_draw_polygon: cleanup");
 }
 
@@ -4943,10 +4983,13 @@ RendererCanvasRender::PolygonID RasterizerCanvasGLES1::request_polygon(const Vec
 	}
 
 	PolygonBuffers pb;
-	glGenBuffers(1, &pb.vertex_buffer);
-	GL_CHECK_ERROR("GLES1::Canvas::request_polygon: glGenBuffers(pb.vertex_buffer)");
-	pb.count = vertex_count;
+	pb.vertex_buffer = 0;
 	pb.index_buffer = 0;
+	pb.count = vertex_count;
+	if (GLES1::Config::get_singleton()->support_vbo) {
+		glGenBuffers(1, &pb.vertex_buffer);
+		GL_CHECK_ERROR("GLES1::Canvas::request_polygon: glGenBuffers(pb.vertex_buffer)");
+	}
 
 	uint32_t buffer_size = stride * p_points.size();
 
@@ -5037,17 +5080,23 @@ RendererCanvasRender::PolygonID RasterizerCanvasGLES1::request_polygon(const Vec
 				unaligned_write<int32_t>(w + i * sizeof(int32_t), indices_ptr[i]);
 			}
 		}
-		glGenBuffers(1, &pb.index_buffer);
-		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, pb.index_buffer);
+
+		if (GLES1::Config::get_singleton()->support_vbo) {
+			glGenBuffers(1, &pb.index_buffer);
+			glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, pb.index_buffer);
+		}
+
 		// Multiply size by 2 (sizeof(uint16_t))
 		GLES1::Utilities::get_singleton()->buffer_allocate_data(GL_ELEMENT_ARRAY_BUFFER, pb.index_buffer, p_indices.size() * 2, index_buffer.ptr(), GL_STATIC_DRAW, "Polygon 2D index buffer");
 		pb.count = p_indices.size();
 	}
 
-	glBindBuffer(GL_ARRAY_BUFFER, 0);
-	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+	if (GLES1::Config::get_singleton()->support_vbo) {
+		glBindBuffer(GL_ARRAY_BUFFER, 0);
+		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
 
-	GL_CHECK_ERROR("GLES1::Canvas::request_polygon: glBindBuffer(GL_ELEMENT_ARRAY_BUFFER)");
+		GL_CHECK_ERROR("GLES1::Canvas::request_polygon: glBindBuffer(GL_ELEMENT_ARRAY_BUFFER)");
+	}
 
 	PolygonID id = polygon_buffers.last_id++;
 	polygon_buffers.polygons[id] = pb;
@@ -5085,6 +5134,10 @@ void RasterizerCanvasGLES1::set_time(double p_time) {
 }
 
 bool RasterizerCanvasGLES1::is_context_lost() const {
+	if (!GLES1::Config::get_singleton()->support_vbo) {
+		return false;
+	}
+
 	if (data.canvas_quad_vertices != 0) {
 		// Honest drivers will flag this immediately.
 		if (glIsBuffer(data.canvas_quad_vertices) == GL_FALSE) {

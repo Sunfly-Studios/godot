@@ -534,10 +534,12 @@ void ParticlesStorage::_particles_update_buffers(Particles *particles) {
 		instance_data.resize_zeroed(particles->instance_buffer_size_cache);
 
 		// Generate buffers
-		glGenBuffers(1, &particles->front_process_buffer);
-		GL_CHECK_ERROR("GLES1::ParticlesStorage::_particles_update_buffers: glGenBuffers front_process");
-		glGenBuffers(1, &particles->front_instance_buffer);
-		GL_CHECK_ERROR("GLES1::ParticlesStorage::_particles_update_buffers: glGenBuffers front_instance");
+		if (GLES1::Config::get_singleton()->support_vbo) {
+			glGenBuffers(1, &particles->front_process_buffer);
+			GL_CHECK_ERROR("GLES1::ParticlesStorage::_particles_update_buffers: glGenBuffers front_process");
+			glGenBuffers(1, &particles->front_instance_buffer);
+			GL_CHECK_ERROR("GLES1::ParticlesStorage::_particles_update_buffers: glGenBuffers front_instance");
+		}
 
 		if (likely(particles->front_process_buffer != 0)) {
 			glBindBuffer(GL_ARRAY_BUFFER, particles->front_process_buffer);
@@ -548,10 +550,12 @@ void ParticlesStorage::_particles_update_buffers(Particles *particles) {
 			GLES1::Utilities::get_singleton()->buffer_allocate_data(GL_ARRAY_BUFFER, particles->front_instance_buffer, particles->instance_buffer_size_cache, instance_data.ptr(), GL_DYNAMIC_DRAW, "Particles front instance buffer");
 		}
 
-		glGenBuffers(1, &particles->back_process_buffer);
-		GL_CHECK_ERROR("GLES1::ParticlesStorage::_particles_update_buffers: glGenBuffers back_process");
-		glGenBuffers(1, &particles->back_instance_buffer);
-		GL_CHECK_ERROR("GLES1::ParticlesStorage::_particles_update_buffers: glGenBuffers back_instance");
+		if (GLES1::Config::get_singleton()->support_vbo) {
+			glGenBuffers(1, &particles->back_process_buffer);
+			GL_CHECK_ERROR("GLES1::ParticlesStorage::_particles_update_buffers: glGenBuffers back_process");
+			glGenBuffers(1, &particles->back_instance_buffer);
+			GL_CHECK_ERROR("GLES1::ParticlesStorage::_particles_update_buffers: glGenBuffers back_instance");
+		}
 
 		if (likely(particles->back_process_buffer != 0)) {
 			glBindBuffer(GL_ARRAY_BUFFER, particles->back_process_buffer);
@@ -568,17 +572,21 @@ void ParticlesStorage::_particles_update_buffers(Particles *particles) {
 void ParticlesStorage::_particles_allocate_history_buffers(Particles *particles) {
 	ERR_FAIL_NULL(particles);
 	if (particles->sort_buffer == 0) {
-		glGenBuffers(1, &particles->last_frame_buffer);
-		GL_CHECK_ERROR("ParticlesStorage::_particles_allocate_history_buffers: glGenBuffers last_frame");
+		if (GLES1::Config::get_singleton()->support_vbo) {
+			glGenBuffers(1, &particles->last_frame_buffer);
+			GL_CHECK_ERROR("ParticlesStorage::_particles_allocate_history_buffers: glGenBuffers last_frame");
+		}
 		
 		if (likely(particles->last_frame_buffer != 0)) {
 			glBindBuffer(GL_ARRAY_BUFFER, particles->last_frame_buffer);
 			GLES1::Utilities::get_singleton()->buffer_allocate_data(GL_ARRAY_BUFFER, particles->last_frame_buffer, particles->instance_buffer_size_cache, nullptr, GL_DYNAMIC_DRAW, "Particles last frame buffer");
 		}
 
-		glGenBuffers(1, &particles->sort_buffer);
-		GL_CHECK_ERROR("ParticlesStorage::_particles_allocate_history_buffers: glGenBuffers sort_buffer");
-		
+		if (GLES1::Config::get_singleton()->support_vbo) {
+			glGenBuffers(1, &particles->sort_buffer);
+			GL_CHECK_ERROR("ParticlesStorage::_particles_allocate_history_buffers: glGenBuffers sort_buffer");
+		}
+
 		if (likely(particles->sort_buffer != 0)) {
 			glBindBuffer(GL_ARRAY_BUFFER, particles->sort_buffer);
 			GLES1::Utilities::get_singleton()->buffer_allocate_data(GL_ARRAY_BUFFER, particles->sort_buffer, particles->instance_buffer_size_cache, nullptr, GL_DYNAMIC_DRAW, "Particles sort buffer");
@@ -765,7 +773,27 @@ void ParticlesStorage::update_particles() {
 
 template <typename ParticleInstanceData>
 void ParticlesStorage::_particles_reverse_lifetime_sort(Particles *particles) {
+	if (!particles->sort_buffer_filled || particles->sort_buffer == 0) {
+		return;
+	}
 
+	glBindBuffer(GL_ARRAY_BUFFER, particles->sort_buffer);
+	void *sort_data = glMapBufferOES(GL_ARRAY_BUFFER, GL_MAP_READ_BIT_OES | GL_MAP_WRITE_BIT_OES);
+	GL_CHECK_ERROR("ParticlesStorage::_particles_reverse_lifetime_sort: glMapBufferOES sort data");
+
+	if (sort_data) {
+		ParticleInstanceData *data = static_cast<ParticleInstanceData *>(sort_data);
+		int amount = particles->amount;
+
+		SortArray<ParticleInstanceData, ParticleInstanceDataSort<ParticleInstanceData>> sorter;
+		sorter.sort(data, amount);
+
+		glUnmapBufferOES(GL_ARRAY_BUFFER);
+	} else {
+		glUnmapBufferOES(GL_ARRAY_BUFFER);
+	}
+	GL_CHECK_ERROR("ParticlesStorage::_particles_reverse_lifetime_sort: glUnmapBufferOES");
+	glBindBuffer(GL_ARRAY_BUFFER, 0);
 }
 
 Dependency *ParticlesStorage::particles_get_dependency(RID p_particles) const {
@@ -795,13 +823,6 @@ void ParticlesStorage::particles_collision_free(RID p_rid) {
 	ParticlesCollision *particles_collision = particles_collision_owner.get_or_null(p_rid);
 	ERR_FAIL_NULL(particles_collision);
 
-	if (particles_collision->heightfield_texture != 0) {
-		GLES1::Utilities::get_singleton()->texture_free_data(particles_collision->heightfield_texture);
-		particles_collision->heightfield_texture = 0;
-		glDeleteFramebuffersOES(1, &particles_collision->heightfield_fb);
-		GL_CHECK_ERROR("ParticlesStorage::particles_collision_free: glDeleteFramebuffersOES");
-		particles_collision->heightfield_fb = 0;
-	}
 	particles_collision->dependency.deleted_notify(p_rid);
 	particles_collision_owner.free(p_rid);
 }
@@ -811,7 +832,15 @@ GLuint ParticlesStorage::particles_collision_get_heightfield_framebuffer(RID p_p
 }
 
 void ParticlesStorage::particles_collision_set_collision_type(RID p_particles_collision, RS::ParticlesCollisionType p_type) {
+	ParticlesCollision *particles_collision = particles_collision_owner.get_or_null(p_particles_collision);
+	ERR_FAIL_NULL(particles_collision);
 
+	if (p_type == particles_collision->type) {
+		return;
+	}
+
+	particles_collision->type = p_type;
+	particles_collision->dependency.changed_notify(Dependency::DEPENDENCY_CHANGED_AABB);
 }
 
 void ParticlesStorage::particles_collision_set_cull_mask(RID p_particles_collision, uint32_t p_cull_mask) {
@@ -863,7 +892,15 @@ void ParticlesStorage::particles_collision_height_field_update(RID p_particles_c
 }
 
 void ParticlesStorage::particles_collision_set_height_field_resolution(RID p_particles_collision, RS::ParticlesCollisionHeightfieldResolution p_resolution) {
+	ParticlesCollision *particles_collision = particles_collision_owner.get_or_null(p_particles_collision);
+	ERR_FAIL_NULL(particles_collision);
+	ERR_FAIL_INDEX(p_resolution, RS::PARTICLES_COLLISION_HEIGHTFIELD_RESOLUTION_MAX);
 
+	if (particles_collision->heightfield_resolution == p_resolution) {
+		return;
+	}
+
+	particles_collision->heightfield_resolution = p_resolution;
 }
 
 AABB ParticlesStorage::particles_collision_get_aabb(RID p_particles_collision) const {

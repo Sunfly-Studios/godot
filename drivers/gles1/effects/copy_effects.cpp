@@ -68,7 +68,10 @@ CopyEffects::CopyEffects() {
 	copy.shader.version_bind_shader(copy.shader_version, CopyShaderGLES1::MODE_DEFAULT);
 
 	// Screen Triangle VBO
-	glGenBuffers(1, &screen_triangle);
+	if (GLES1::Config::get_singleton()->support_vbo) {
+		glGenBuffers(1, &screen_triangle);
+	}
+
 	if (screen_triangle != 0) {
 		glBindBuffer(GL_ARRAY_BUFFER, screen_triangle);
 		GL_CHECK_ERROR("GLES1::CopyEffects setup: bind screen_triangle");
@@ -83,7 +86,10 @@ CopyEffects::CopyEffects() {
 	}
 
 	// Screen Quad VBO
-	glGenBuffers(1, &quad);
+	if (GLES1::Config::get_singleton()->support_vbo) {
+		glGenBuffers(1, &quad);
+	}
+
 	if (quad != 0) {
 		glBindBuffer(GL_ARRAY_BUFFER, quad);
 		GL_CHECK_ERROR("GLES1::CopyEffects setup: bind screen_quad");
