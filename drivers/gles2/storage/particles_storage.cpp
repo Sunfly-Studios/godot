@@ -914,7 +914,31 @@ void ParticlesStorage::update_particles() {
 
 template <typename ParticleInstanceData>
 void ParticlesStorage::_particles_reverse_lifetime_sort(Particles *particles) {
+	if (
+		!GLES2::Config::get_singleton()->support_mapbuffer ||
+		!particles->sort_buffer_filled ||
+		particles->sort_buffer == 0
+	) {
+		return;
+	}
 
+	glBindBuffer(GL_ARRAY_BUFFER, particles->sort_buffer);
+	void *sort_data = glMapBufferOES(GL_ARRAY_BUFFER, GL_MAP_READ_BIT_OES | GL_MAP_WRITE_BIT_OES);
+	GL_CHECK_ERROR("GLES2::ParticlesStorage::_particles_reverse_lifetime_sort: glMapBufferOES sort data");
+
+	if (sort_data) {
+		ParticleInstanceData *data = static_cast<ParticleInstanceData *>(sort_data);
+		int amount = particles->amount;
+
+		SortArray<ParticleInstanceData, ParticleInstanceDataSort<ParticleInstanceData>> sorter;
+		sorter.sort(data, amount);
+
+		glUnmapBufferOES(GL_ARRAY_BUFFER);
+	} else {
+		glUnmapBufferOES(GL_ARRAY_BUFFER);
+	}
+	GL_CHECK_ERROR("GLES2::ParticlesStorage::_particles_reverse_lifetime_sort: glUnmapBufferOES");
+	glBindBuffer(GL_ARRAY_BUFFER, 0);
 }
 
 Dependency *ParticlesStorage::particles_get_dependency(RID p_particles) const {

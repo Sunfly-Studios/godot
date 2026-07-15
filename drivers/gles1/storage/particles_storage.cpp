@@ -773,7 +773,11 @@ void ParticlesStorage::update_particles() {
 
 template <typename ParticleInstanceData>
 void ParticlesStorage::_particles_reverse_lifetime_sort(Particles *particles) {
-	if (!particles->sort_buffer_filled || particles->sort_buffer == 0) {
+	if (
+		!GLES1::Config::get_singleton()->support_mapbuffer ||
+		!particles->sort_buffer_filled ||
+		particles->sort_buffer == 0
+	) {
 		return;
 	}
 
