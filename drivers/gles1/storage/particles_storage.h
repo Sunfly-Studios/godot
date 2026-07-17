@@ -77,7 +77,7 @@ private:
 	template <typename ParticleInstanceData>
 	struct ParticleInstanceDataSort {
 		bool operator()(const ParticleInstanceData &p_a, const ParticleInstanceData &p_b) const {
-			return p_a.custom[3] > p_b.custom[3];
+			return p_a.custom[1] > p_b.custom[1];
 		}
 	};
 
