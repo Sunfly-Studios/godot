@@ -4198,7 +4198,13 @@
  * This is the default value of ::mbedtls_platform_dev_random, which
  * can be changed at run time.
  */
-//#define MBEDTLS_PLATFORM_DEV_RANDOM "/dev/random"
+#ifdef OLDER_UNIX_ENABLED
+// Non-blocking for older Linux is less probably to lock-up.
+// Especially compiling with `-fipa-pta` enabled.
+#define MBEDTLS_PLATFORM_DEV_RANDOM "/dev/urandom"
+#else
+#define MBEDTLS_PLATFORM_DEV_RANDOM "/dev/random"
+#endif
 
 /** \def MBEDTLS_CHECK_RETURN
  *

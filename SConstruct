@@ -801,8 +801,7 @@ if is_production and is_strict_target:
     
     # GCC exclusive flags
     gcc_flags = [
-        # TODO(MBCX): Fix the engine with this flag ON.
-        #"-fipa-pta"
+        "-fipa-pta"
     ]
 
     # Compiler detection
