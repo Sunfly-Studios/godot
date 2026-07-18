@@ -777,22 +777,28 @@ if is_production and is_strict_target:
 
     # Flags
 
-    # Flags shared by both GCC and LLVM
+    # Shared by both GCC and LLVM
     shared_flags = [
-        "-fstrict-aliasing"
+        "-fstrict-aliasing",
+
+        # We comply with the standard enough so that
+        # the compiler breaks the rules for us :wink:
+        "-fmerge-all-constants",
     ]
 
     # LLVM exclusive flags
     llvm_flags = [
         # Assumes vptr is invariant during object's legal lifetime.
-        # Safe here due to `std::launder` in `core/` and `unaligned_` helpers.
         "-fstrict-vtable-pointers",
-        "-fstrict-return"
+        "-fstrict-return",
+        "-fsplit-lto-unit",
+        "-funroll-loops",
     ]
 
     lto_mode = ARGUMENTS.get("lto", "none")
     if lto_mode != "none":
         llvm_flags += [
+            # Requires (any) LTO to be active
             "-fwhole-program-vtables"
         ]
 
@@ -801,7 +807,16 @@ if is_production and is_strict_target:
     
     # GCC exclusive flags
     gcc_flags = [
-        "-fipa-pta"
+        # Enable Interprocedural Pointer Analysis and Points-To Analysis
+        # for GCC. Increases compilation times which we accept for production builds.
+        "-fipa-pta",
+
+        # More aggressive devirtualisation at link-time
+        "-fdevirtualize-at-ltrans",
+
+        # Move loads/stores out of loops where possible.
+        "-fgcse-sm",
+        "-fgcse-las",
     ]
 
     # Compiler detection
