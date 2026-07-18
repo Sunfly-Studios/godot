@@ -660,7 +660,7 @@ Patches:
 - `0001-msvc-2019-psa-redeclaration.patch` (GH-90535)
 - `0002-condition-sse-assumptions.patch`
 - `0003-actually-enable-sse2.patch`
-- `0004-do-not-use-military-randomness.patch`
+- `0004-use-urandom-by-default.patch`
 
 
 ## meshoptimizer
