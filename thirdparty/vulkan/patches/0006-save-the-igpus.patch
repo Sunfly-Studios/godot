@@ -1,0 +1,14 @@
+diff --git a/thirdparty/vulkan/vk_mem_alloc.cpp b/thirdparty/vulkan/vk_mem_alloc.cpp
+index 529f5b5d5c..2a25056980 100644
+--- a/thirdparty/vulkan/vk_mem_alloc.cpp
++++ b/thirdparty/vulkan/vk_mem_alloc.cpp
+@@ -4,4 +4,9 @@
+ #define _DEBUG
+ #endif
+ #endif
++
++// Makes integrated AMD GPUs not crash when Godot exceeds
++// more than 4096 allocations
++#define VMA_DEBUG_DONT_EXCEED_MAX_MEMORY_ALLOCATION_COUNT 0
++
+ #include "vk_mem_alloc.h"
