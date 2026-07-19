@@ -46,18 +46,18 @@ public:
 	private:
 		Size2i tile_grid_size;
 
-		struct alignas(GODOT_MIN_STACK_ALIGN) CameraRayThreadData {
+		struct alignas(Memory::MAX_ALIGN) CameraRayThreadData {
 			int thread_count;
 			float z_near;
 			float z_far;
 
 			// Guarantee these struct members will pack
 			// tightly.
-			alignas(GODOT_MIN_STACK_ALIGN) Vector3 camera_dir;
-			alignas(GODOT_MIN_STACK_ALIGN) Vector3 camera_pos;
-			alignas(GODOT_MIN_STACK_ALIGN) Vector3 pixel_corner;
-			alignas(GODOT_MIN_STACK_ALIGN) Vector3 pixel_u_interp;
-			alignas(GODOT_MIN_STACK_ALIGN) Vector3 pixel_v_interp;
+			alignas(Memory::MAX_ALIGN) Vector3 camera_dir;
+			alignas(Memory::MAX_ALIGN) Vector3 camera_pos;
+			alignas(Memory::MAX_ALIGN) Vector3 pixel_corner;
+			alignas(Memory::MAX_ALIGN) Vector3 pixel_u_interp;
+			alignas(Memory::MAX_ALIGN) Vector3 pixel_v_interp;
 			bool camera_orthogonal;
 			Size2i buffer_size;
 		};

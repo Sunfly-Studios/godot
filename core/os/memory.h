@@ -48,20 +48,31 @@
 	#include <alloca.h>
 #endif
 
-// Detect 32-bit architectures with 128-bit vector units.
+// Detect architectures with 256-bit (or larger) vector units.
+#if defined(__AVX__) || defined(__AVX2__) || \
+	(defined(__ARM_FEATURE_SVE_BITS) && __ARM_FEATURE_SVE_BITS >= 256) || \
+	(defined(__riscv_v_min_vlen) && __riscv_v_min_vlen >= 256)
+	#define HAS_256_BIT_SIMD 1
+#endif
+
+// Detect architectures with 128-bit vector units.
 #if (defined(__i386__) && (defined(__SSE__) || defined(__SSE2__))) || \
 	(defined(_M_IX86) && _M_IX86_FP > 0) || \
-	defined(__ARM_NEON)
+	defined(__ARM_NEON) || defined(__aarch64__) || defined(_M_ARM64) || \
+	(defined(__riscv_v_min_vlen) && __riscv_v_min_vlen >= 128)
 	#define HAS_128_BIT_SIMD 1
 #endif
 
 // Determine the safe minimum stack alignment.
-#if !defined(IS_32_BIT) || defined(HAS_128_BIT_SIMD)
-	// 16 for 64-bit platforms or
-	// 32-bit platforms with 128-bit SIMD (x86_32 SSE, etc.).
+#if defined(HAS_256_BIT_SIMD)
+	// 32 bytes for platforms with 256-bit SIMD
+	#define GODOT_MIN_STACK_ALIGN 32
+#elif !defined(IS_32_BIT) || defined(HAS_128_BIT_SIMD)
+	// 16 bytes for 64-bit platforms or
+	// 32-bit platforms with 128-bit SIMD
 	#define GODOT_MIN_STACK_ALIGN 16 
 #else
-	// 8 bits for "vanilla" 32-bit architectures with no SSE-like goodies.
+	// 8 bytes for "vanilla" 32-bit architectures with no SIMD goodies.
 	#define GODOT_MIN_STACK_ALIGN 8 
 #endif
 
@@ -121,10 +132,10 @@ private:
 	static SafeNumeric<uint64_t> alloc_count;
 
 public:
-	// Force a minimum alignment of 16 bytes.
+	// Force a minimum alignment of either `max_align_t` or `GODOT_MIN_STACK_ALIGN`
 	// This handles strict-alignment RISC architectures (SPARC, MIPS, Alpha, etc.),
 	// ensures SIMD safety, and fixes the MinGW 32-bit compiler bug (GH-113145)
-	// by clamping its fluctuating alignof value (8 vs 16) to a consistent 16.
+	// by clamping its fluctuating alignof value to a consistent value.
 	static constexpr size_t MAX_ALIGN = (alignof(max_align_t) > GODOT_MIN_STACK_ALIGN) ? alignof(max_align_t) : GODOT_MIN_STACK_ALIGN;
 
 	static_assert(MAX_ALIGN % alignof(max_align_t) == 0);

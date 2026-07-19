@@ -165,7 +165,7 @@ class CommandQueueMT {
 			return;
 		}
 
-		alignas(GODOT_MIN_STACK_ALIGN) char cmd_backup[MAX_COMMAND_SIZE];
+		alignas(Memory::MAX_ALIGN) char cmd_backup[MAX_COMMAND_SIZE];
 
 		while (flush_read_ptr < command_mem.size()) {
 			uint64_t size = unaligned_read<uint64_t>(&command_mem[flush_read_ptr]);
