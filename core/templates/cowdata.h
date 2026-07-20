@@ -538,6 +538,9 @@ void CowData<T>::_ref(const CowData &p_from) {
 
 template <typename T>
 CowData<T>::CowData(std::initializer_list<T> p_init) {
+	if (!p_init.size()) {
+		return;
+	}
 	Error err = resize(p_init.size());
 	if (err != OK) {
 		return;
