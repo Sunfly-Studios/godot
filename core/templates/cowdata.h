@@ -124,7 +124,43 @@ private:
 	}
 
 	_FORCE_INLINE_ USize _get_alloc_size(USize p_elements) const {
-		return next_power_of_2(p_elements * sizeof(T));
+		if (unlikely(p_elements == 0)) {
+			return 0;
+		}
+
+		// Implement the 1.5x Golden Ratio from upstream
+		// but without any of the shenanigans (exact vs non-exact functions).
+		//
+		// The core problem with upstream implementation is two-fold:
+		// First, it severly complicates the architecture of CowData for
+		// very minimal gain (and regressions).
+		// But second and most important of all: OS memory allocators are not spherical.
+		//
+		// The theory linked from upstream by Chris Taylor assumes pristine perfect conditions,
+		// but implementing the pure math (as upstream did), reveals the flaw that OS
+		// fragmentation rarely cooperates. Almost all memory allocators from GLIBC,
+		// UGLIBC, Windows's UCRT, etc, all use bucketing size-classes under
+		// the hood to prevent fragmentation.
+		// Essentially meaning that if you ask for 81 bytes, you'll be in a
+		// 96 or 128 byte bucket anyway.
+		//
+		// To solve all of the above problems without sacrificing both neither
+		// my ISO C++ memory model _and_ the performance overhead from upstream,
+		// the solution is: Binary Buddy + Golden Ratio.
+		//
+		// Instead of calculating 1.5 x current on every push, we take advantage
+		// of the fact that CPUs can calculate POT in a single clock cycle. We
+		// then interleave a single "mid-point" bucket exactly 75% of the way
+		// to the next POT.
+		//
+		// The average growth factor is bounded to ~1.414 average, also satisfying
+		// the sweet spot of Simon Frankau's golden ratio theory, AND also aligns
+		// with the expectations of OS page sizes, with O(1) performance "overhead".
+
+		USize req_bytes = p_elements * sizeof(T);
+		USize p2 = next_power_of_2(req_bytes);
+		USize mid = p2 - (p2 >> 2); // 75% midpoint
+		return (req_bytes <= mid) ? mid : p2;
 	}
 
 	_FORCE_INLINE_ bool _get_alloc_size_checked(USize p_elements, USize *out) const {

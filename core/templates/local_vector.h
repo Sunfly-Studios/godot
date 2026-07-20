@@ -48,6 +48,26 @@ private:
 	U capacity = 0;
 	T *data = nullptr;
 
+private:
+	// Implement the 1.5x Binary Buddy + Golden Ratio.
+	_FORCE_INLINE_ U _get_capacity_for_size(U p_elements) const {
+		if (unlikely(p_elements == 0)) {
+			return 0;
+		}
+
+		// Calculate this in bytes.
+		size_t req_bytes = static_cast<size_t>(p_elements * sizeof(T));
+		size_t p2 = next_power_of_2(req_bytes);
+		size_t mid = p2 - (p2 >> 2); // 75% midpoint
+		size_t alloc_bytes = (req_bytes <= mid) ? mid : p2;
+
+		// Convert back to element capacity.
+		// Dividing back by sizeof(T) ensures any leftover
+		// bytes in the OS buckets will be converted into
+		// extra element capacity for free.
+		return static_cast<U>((alloc_bytes / sizeof(T)));
+	}
+
 public:
 	T *ptr() {
 		return data;
@@ -60,14 +80,7 @@ public:
 	// Must take a copy instead of a reference (see GH-31736).
 	_FORCE_INLINE_ void push_back(T p_elem) {
 		if (unlikely(count == capacity)) {
-			uint32_t old_capacity = capacity;
-			if (tight) {
-				capacity = capacity + 1;
-			} else {
-				capacity = MAX((U)1, capacity << 1);
-			}
-			data = static_cast<T *>(Memory::realloc_aligned_static(data, capacity * sizeof(T), old_capacity * sizeof(T), alignof(T)));
-			CRASH_COND_MSG(!data, "Out of memory");
+			reserve(count + 1);
 		}
 
 		if constexpr (!std::is_trivially_constructible_v<T> && !force_trivial) {
@@ -145,17 +158,17 @@ public:
 	_FORCE_INLINE_ bool is_empty() const { return count == 0; }
 	_FORCE_INLINE_ U get_capacity() const { return capacity; }
 	_FORCE_INLINE_ void reserve(U p_size) {
-		p_size = tight ? p_size : nearest_power_of_2_templated(p_size);
 		if (p_size > capacity) {
+			U new_capacity = tight ? p_size : _get_capacity_for_size(p_size);
 			uint32_t old_capacity = capacity;
 			// C-realloc if the type is trivial, forced, or strictly immobile.
 			// Godot relies on bitwise relocation for types with atomics that cannot be C++ moved.
 			if constexpr (std::is_trivially_copyable_v<T> || force_trivial || !std::is_move_constructible_v<T>) {
-				data = static_cast<T *>(Memory::realloc_aligned_static(data, p_size * sizeof(T), old_capacity * sizeof(T), alignof(T)));
+				data = static_cast<T *>(Memory::realloc_aligned_static(data, new_capacity * sizeof(T), old_capacity * sizeof(T), alignof(T)));
 				CRASH_COND_MSG(!data, "Out of memory");
 			} else {
 				// Non-trivial types that are C++ movable must be formally moved
-				T *new_data = static_cast<T *>(Memory::alloc_aligned_static(p_size * sizeof(T), alignof(T)));
+				T *new_data = static_cast<T *>(Memory::alloc_aligned_static(new_capacity * sizeof(T), alignof(T)));
 				CRASH_COND_MSG(!new_data, "Out of memory");
 
 				for (U i = 0; i < count; i++) {
@@ -168,7 +181,7 @@ public:
 				}
 				data = new_data;
 			}
-			capacity = p_size;
+			capacity = new_capacity;
 		}
 	}
 
