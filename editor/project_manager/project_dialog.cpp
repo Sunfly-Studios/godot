@@ -488,7 +488,7 @@ void ProjectDialog::_renderer_selected() {
 				String::utf8("•  ") + TTR("Supports desktop + mobile platforms.") +
 				String::utf8("\n•  ") + TTR("Comprehensive 2D support; minimal 3D graphics.") +
 				String::utf8("\n•  ") + TTR("Intended for earliest supported devices.") +
-				String::utf8("\n•  ") + TTR("Uses OpenGL 1 backend (OpenGL 1.2-1.5 / ES 1.1).") +
+				String::utf8("\n•  ") + TTR("Uses OpenGL 1 backend (OpenGL 1.2-1.5 / ES 1.1-1.0).") +
 				String::utf8("\n•  ") + TTR("No custom programmable shaders (fixed-function pipeline)."));
 	} else {
 		WARN_PRINT("Unknown renderer type. Please report this as a bug on GitHub.");

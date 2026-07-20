@@ -864,7 +864,7 @@
 			The OpenGL 2 rendering driver. It uses OpenGL 2.1 Compatibility Profile on desktop platforms, OpenGL ES 2.0 on mobile devices, and WebGL 1.0 on Web.
 		</constant>
 		<constant name="RENDERING_DRIVER_OPENGL1" value="3" enum="RenderingDriver">
-			The OpenGL 1 rendering driver. It uses OpenGL 1.2-1.5 Compatibility Profile on desktop platforms depending on device support, and OpenGL ES 1.1 on mobile devices.
+			The OpenGL 1 rendering driver. It uses OpenGL 1.2-1.5 Compatibility Profile on desktop platforms depending on device support, and OpenGL ES 1.1-1.0 on mobile devices.
 		</constant>
 		<constant name="RENDERING_DRIVER_D3D12" value="4" enum="RenderingDriver">
 			The Direct3D 12 rendering driver. It requires the 12_0 feature level and Shader Model 6.0 support.

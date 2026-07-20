@@ -627,8 +627,9 @@ DisplayServer *DisplayServerAndroid::create_func(const String &p_rendering_drive
 					"Please try exporting your game using the 'gl_classic' renderer.",
 					"Unable to initialize OpenGL 2 video driver");
 		} else {
+			// Shouldn't be possible but anyway...
 			OS::get_singleton()->alert(
-					"Your device seems not to support the required OpenGL ES 1.1 version.",
+					"Your device seems not to support the required OpenGL ES 1.1-1.0 version.",
 					"Unable to initialize OpenGL 1 video driver");
 		}
 	}
