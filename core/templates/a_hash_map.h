@@ -120,15 +120,15 @@ private:
 	}
 
 	bool _lookup_pos(const TKey &p_key, uint32_t &r_pos, uint32_t &r_hash_pos) const {
-		if (unlikely(elements == nullptr)) {
-			return false; // Failed lookups, no elements.
+		if (unlikely(num_elements == 0)) {
+			return false; // Failed lookups, number of elements is 0.
 		}
 		return _lookup_pos_with_hash(p_key, r_pos, r_hash_pos, _hash(p_key));
 	}
 
 	bool _lookup_pos_with_hash(const TKey &p_key, uint32_t &r_pos, uint32_t &r_hash_pos, uint32_t p_hash) const {
-		if (unlikely(elements == nullptr)) {
-			return false; // Failed lookups, no elements.
+		if (unlikely(elements == nullptr || num_elements == 0)) {
+			return false; // Failed lookups, no elements or number of elements is 0.
 		}
 
 		uint32_t pos = p_hash & capacity;
