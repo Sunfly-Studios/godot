@@ -243,19 +243,6 @@ _FORCE_INLINE_ T unaligned_read(const void *p_ptr) {
 		memcpy(&local, p_ptr, sizeof(T));
 		return local;
 	} else {
-		// TODO(MBCX): I have set it here to also crash on editor builds
-		// but this can get confusing at times. For example, when loading previous
-		// versions of our `godot-cpp` (where this architecture wasn't present)
-		// these functions catch the unaligned types and crash.
-		// Technically this is bad UX/DX because you'd have no idea why it is crashing
-		// at first glance (heck, I didn't at first until I attached the MSVC debugger).
-		// On the other hand, our `godot-cpp` is up-to-date with our architecture,
-		// and when you pull it in from our editor
-		// (which will always pull the latest commit from our fork automatically),
-		// it will always get the up-to-date matching version.
-		//
-		// Technically, this is here to catch any older versions of our own plugins
-		// and ecosystem tools to demand to update. I just have to make sure I remember.
 #if defined(DEV_ENABLED) || defined(TOOLS_ENABLED)
 		const uintptr_t addr = reinterpret_cast<uintptr_t>(p_ptr);
 		if (unlikely((addr & (alignof(T) - 1)) != 0)) {
