@@ -1369,6 +1369,7 @@ public class GLSurfaceView extends SurfaceView implements SurfaceHolder.Callback
 				int h = 0;
 				Runnable event = null;
 				Runnable finishDrawingRunnable = null;
+				Runnable pendingEglTeardown = null;
 
 				while (true) {
 					synchronized (sGLThreadManager) {
@@ -1416,7 +1417,8 @@ public class GLSurfaceView extends SurfaceView implements SurfaceHolder.Callback
 								if (LOG_SURFACE) {
 									Log.i("GLThread", "releasing EGL surface because paused tid=" + getId());
 								}
-								stopEglSurfaceLocked();
+								mHaveEglSurface = false;
+    							pendingEglTeardown = () -> mEglHelper.destroySurface();
 							}
 
 							// When pausing, optionally release the EGL Context:
@@ -1424,12 +1426,28 @@ public class GLSurfaceView extends SurfaceView implements SurfaceHolder.Callback
 								GLSurfaceView view = mGLSurfaceViewWeakRef.get();
 								boolean preserveEglContextOnPause = view == null ?
 										false : view.mPreserveEGLContextOnPause;
+								
 								if (!preserveEglContextOnPause) {
-									stopEglContextLocked();
 									if (LOG_SURFACE) {
 										Log.i("GLThread", "releasing EGL context because paused tid=" + getId());
 									}
+									mHaveEglContext = false;
+									sGLThreadManager.releaseEglContextLocked(this);
+									
+									// Chain the context destruction after the surface destruction
+									Runnable previousTask = pendingEglTeardown;
+									pendingEglTeardown = () -> {
+										if (previousTask != null) {
+											previousTask.run();
+										}
+										mEglHelper.finish();
+									};
 								}
+							}
+
+							// Break out of the inner loop if we have teardown work
+							if (pendingEglTeardown != null) {
+								break;
 							}
 
 							// Have we lost the SurfaceView surface?
@@ -1547,6 +1565,12 @@ public class GLSurfaceView extends SurfaceView implements SurfaceHolder.Callback
 							sGLThreadManager.wait();
 						}
 					} // end of synchronized(sGLThreadManager)
+
+					if (pendingEglTeardown != null) {
+						pendingEglTeardown.run();
+						pendingEglTeardown = null;
+						continue;
+					}		
 
 					if (event != null) {
 						event.run();
