@@ -174,16 +174,12 @@ namespace basisu
 	template<typename T> inline T open_range_check(T v, T minv, T maxv) { assert(v >= minv && v < maxv); BASISU_NOTE_UNUSED(minv); BASISU_NOTE_UNUSED(maxv); return v; }
 	template<typename T> inline T open_range_check(T v, T maxv) { assert(v < maxv); BASISU_NOTE_UNUSED(maxv); return v; }
 
+	// We only use these for trivial types, so this is A-OK.
 	template <typename T>
 	inline T safe_read(const void *p_ptr) {
-		alignas(alignof(T)) uint8_t buf[sizeof(T)] = {};
-		memcpy(buf, p_ptr, sizeof(T));
-		return *reinterpret_cast<const T *>(buf);
-	}
-	
-	template <typename T>
-	inline void safe_write(void *p_ptr, const T &p_val) {
-		memcpy(p_ptr, &p_val, sizeof(T));
+		T local;
+		memcpy(&local, p_ptr, sizeof(T));
+		return local;
 	}
 
 	// Open interval

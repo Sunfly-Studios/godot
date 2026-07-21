@@ -32,22 +32,7 @@
 #endif // BASISD_IS_BIG_ENDIAN
 
 #ifndef BASISD_USE_UNALIGNED_WORD_READS
-	#ifdef __EMSCRIPTEN__
-		// Can't use unaligned loads/stores with WebAssembly.
-		#define BASISD_USE_UNALIGNED_WORD_READS (0)
-	#elif defined(_M_AMD64) || defined(_M_IX86) || defined(__i386__) || defined(__x86_64__)
-		#define BASISD_USE_UNALIGNED_WORD_READS (1)
-	#else
-		#define BASISD_USE_UNALIGNED_WORD_READS (0)
-	#endif
-#endif
-
-// Using unaligned loads and stores causes errors when using UBSan. Jam it off.
-#if defined(__has_feature)
-#if __has_feature(undefined_behavior_sanitizer)
-#undef BASISD_USE_UNALIGNED_WORD_READS
-#define BASISD_USE_UNALIGNED_WORD_READS 0
-#endif
+	#define BASISD_USE_UNALIGNED_WORD_READS (0)
 #endif
 
 #define BASISD_SUPPORTED_BASIS_VERSION (0x13)
