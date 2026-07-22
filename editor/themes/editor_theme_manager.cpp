@@ -541,11 +541,11 @@ void EditorThemeManager::_create_shared_styles(const Ref<EditorTheme> &p_theme, 
 
 		// Special colors for rendering methods.
 
-		p_theme->set_color("forward_plus_color", EditorStringName(Editor), Color::hex(0x5d8c3fff));
-		p_theme->set_color("mobile_color", EditorStringName(Editor), Color::hex(0xa5557dff));
-		p_theme->set_color("gl_compatibility_color", EditorStringName(Editor), Color::hex(0x5586a4ff));
-		p_theme->set_color("gl_legacy_color", EditorStringName(Editor), Color::hex(0xa46b55ff));
-		p_theme->set_color("gl_classic_color", EditorStringName(Editor), Color::hex(0x80628aff));
+		p_theme->set_color("forward_plus_color", EditorStringName(Editor), Color::hex(0x4c7a2dff));
+		p_theme->set_color("mobile_color", EditorStringName(Editor), Color::hex(0xba5984ff));
+		p_theme->set_color("gl_compatibility_color", EditorStringName(Editor), Color::hex(0x5199c2ff));
+		p_theme->set_color("gl_legacy_color", EditorStringName(Editor), Color::hex(0xcf8a6bff));
+		p_theme->set_color("gl_classic_color", EditorStringName(Editor), Color::hex(0xd494f0ff));
 
 		if (p_config.dark_theme) {
 			p_theme->set_color("highend_color", EditorStringName(Editor), Color(1.0, 0.0, 0.0));
