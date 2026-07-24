@@ -438,18 +438,35 @@ Error GLManagerNative_Windows::_create_context(GLWindow &win, GLDisplay &gl_disp
 		ERR_PRINT("Could not attach OpenGL context to newly created window: " + format_error_message(GetLastError()));
 	}
 
-	if (gles_major >= 3) {
+	// For development builds, we always request
+	// modern ARB context so that tools like RenderDoc can
+	// hook into our rendering for the older GLES2 api.
+	// For non-dev builds, only request ARB for GLES3 (since it requires it),
+	// for GLES2 and GLES1 always use the legacy context creation
+	// for wider compatibility.
+#ifdef DEV_ENABLED
+	const bool force_attribs = true;
+#else
+	const bool force_attribs = false;
+#endif
+
+	bool is_gles3 = gles_major >= 3;
+
+	if (is_gles3 || force_attribs) {
 		Vector<int> attribs;
 		attribs.push_back(WGL_CONTEXT_MAJOR_VERSION_ARB);
 		attribs.push_back(gles_major);
 		attribs.push_back(WGL_CONTEXT_MINOR_VERSION_ARB);
 		attribs.push_back(gles_minor);
 
-		// Only GLES3/GL3.3+ uses strict core and forward compatibility profiles
-		attribs.push_back(WGL_CONTEXT_PROFILE_MASK_ARB);
-		attribs.push_back(WGL_CONTEXT_CORE_PROFILE_BIT_ARB);
-		attribs.push_back(WGL_CONTEXT_FLAGS_ARB);
-		attribs.push_back(WGL_CONTEXT_FORWARD_COMPATIBLE_BIT_ARB);
+		if (is_gles3) {
+			// Only GLES3/GL3.3+ uses strict core and forward compatibility profiles
+			attribs.push_back(WGL_CONTEXT_PROFILE_MASK_ARB);
+			attribs.push_back(WGL_CONTEXT_CORE_PROFILE_BIT_ARB);
+			attribs.push_back(WGL_CONTEXT_FLAGS_ARB);
+			attribs.push_back(WGL_CONTEXT_FORWARD_COMPATIBLE_BIT_ARB);
+		}
+
 		attribs.push_back(0); // zero indicates the end of the array
 
 		PFNWGLCREATECONTEXTATTRIBSARBPROC wglCreateContextAttribsARB = nullptr; //pointer to the method
@@ -457,6 +474,7 @@ Error GLManagerNative_Windows::_create_context(GLWindow &win, GLDisplay &gl_disp
 
 		if (wglCreateContextAttribsARB == nullptr) //OpenGL 3 is not supported
 		{
+			gd_wglMakeCurrent(nullptr, nullptr);
 			gd_wglDeleteContext(gl_display.hRC);
 			gl_display.hRC = nullptr;
 			return ERR_CANT_CREATE;
@@ -464,12 +482,13 @@ Error GLManagerNative_Windows::_create_context(GLWindow &win, GLDisplay &gl_disp
 
 		HGLRC new_hRC = wglCreateContextAttribsARB(win.hDC, nullptr, attribs.ptr());
 		if (!new_hRC) {
+			gd_wglMakeCurrent(nullptr, nullptr);
 			gd_wglDeleteContext(gl_display.hRC);
 			gl_display.hRC = nullptr;
 			return ERR_CANT_CREATE;
 		}
 
-		if (!gd_wglMakeCurrent(win.hDC, nullptr)) {
+		if (!gd_wglMakeCurrent(nullptr, nullptr)) {
 			ERR_PRINT("Could not detach OpenGL context from newly created window: " + format_error_message(GetLastError()));
 		}
 
