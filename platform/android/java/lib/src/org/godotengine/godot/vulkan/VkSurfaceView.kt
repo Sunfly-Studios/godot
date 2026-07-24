@@ -51,6 +51,8 @@ import android.view.SurfaceView
  */
 internal open class VkSurfaceView(context: Context) : SurfaceView(context), SurfaceHolder.Callback {
 	companion object {
+		private val TAG = VkSurfaceView::class.java.simpleName
+
 		fun checkState(expression: Boolean, errorMessage: Any) {
 			check(expression) { errorMessage.toString() }
 		}
@@ -129,14 +131,17 @@ internal open class VkSurfaceView(context: Context) : SurfaceView(context), Surf
 	}
 
 	override fun surfaceChanged(holder: SurfaceHolder, format: Int, width: Int, height: Int) {
+		Log.v(TAG, "On surface changed [$format]: $width x $height")
 		vkThread.onSurfaceChanged(width, height)
 	}
 
 	override fun surfaceDestroyed(holder: SurfaceHolder) {
+		Log.v(TAG, "On surface destroyed")
 		vkThread.onSurfaceDestroyed()
 	}
 
 	override fun surfaceCreated(holder: SurfaceHolder) {
+		Log.v(TAG, "On surface created")
 		vkThread.onSurfaceCreated()
 	}
 }
