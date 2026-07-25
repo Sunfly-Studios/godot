@@ -116,7 +116,7 @@ if lib_arch_dir != "":
 
     jni_libs_dir = "#platform/android/java/lib/libs/" + lib_tools_dir + lib_type_dir + "/"
     out_dir = jni_libs_dir + lib_arch_dir
-    env_android.CommandNoCache(out_dir + "/libgodot_android.so", lib, Move("$TARGET", "$SOURCE"))
+    so_node = env_android.CommandNoCache(out_dir + "/libgodot_android.so", lib, Copy("$TARGET", "$SOURCE"))
 
     stl_lib_path = find_stl_lib_path(
         str(env["ANDROID_NDK_ROOT"]), 
@@ -125,20 +125,22 @@ if lib_arch_dir != "":
         host_subpath
     )
     
+    stl_node = None
     if stl_lib_path:
-        env_android.Command(out_dir + "/libc++_shared.so", stl_lib_path, Copy("$TARGET", "$SOURCE"))
+        stl_node = env_android.Command(out_dir + "/libc++_shared.so", stl_lib_path, Copy("$TARGET", "$SOURCE"))
     else:
         print_warning(f"Could not find libc++_shared.so for architecture {lib_arch_dir}")
         print_warning("Checked both old and new NDK directory structures")
         print_warning("Build may fail - please verify your NDK installation")
     
+    zip_node = None
     if env["debug_symbols"] and env["separate_debug_symbols"]:
         debug_symbols_zip_file = (
             ("#bin/android-editor-" if env.editor_build else "#bin/android-template-")
             + lib_type_dir
             + "-native-symbols.zip"
         )
-        env_android.NoCache(Zip(debug_symbols_zip_file, jni_libs_dir, ZIPROOT=Dir(jni_libs_dir)))
+        zip_node = env_android.NoCache(Zip(debug_symbols_zip_file, jni_libs_dir, ZIPROOT=Dir(jni_libs_dir)))
 
     def generate_android_binaries(target, source, env):
         gradle_process = []
@@ -168,4 +170,12 @@ if lib_arch_dir != "":
     if env["generate_android_binaries"]:
         generate_binaries_command = env_android.Command("generate_android_binaries", [], generate_android_binaries)
         command = env_android.AlwaysBuild(generate_binaries_command)
-        env_android.Depends(command, [lib])
+        
+        # Force Gradle to wait for all files to finish copying/zipping.
+        env_android.Depends(command, so_node)
+        
+        if stl_node:
+            env_android.Depends(command, stl_node)
+            
+        if zip_node:
+            env_android.Depends(command, zip_node)
