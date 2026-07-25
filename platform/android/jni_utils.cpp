@@ -540,7 +540,9 @@ Variant _jobject_to_variant(JNIEnv *env, jobject obj) {
 			jobject jobj = env->GetObjectArrayElement(arr, i);
 			JNI_CHECK_EXCEPTION_CONTINUE(env); // Safe: Inside a loop
 			
-			if (jobj != nullptr) {
+			if (jobj == nullptr) {
+				varr.push_back(Variant());
+			} else {
 				varr.push_back(_jobject_to_variant(env, jobj));
 				env->DeleteLocalRef(jobj);
 			}
@@ -566,7 +568,8 @@ Variant _jobject_to_variant(JNIEnv *env, jobject obj) {
 		Array vals = _jobject_to_variant(env, arr_vals);
 		env->DeleteLocalRef(arr_vals);
 
-		for (int i = 0; i < keys.size(); i++) {
+		int count = MIN(keys.size(), vals.size()); // Prevent mismatches
+		for (int i = 0; i < count; i++) {
 			ret[keys[i]] = vals[i];
 		}
 		result = ret;
