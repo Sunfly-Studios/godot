@@ -1124,6 +1124,8 @@ void Window::_update_window_size() {
 			DisplayServer::get_singleton()->window_set_min_size(size_limit, window_id);
 			DisplayServer::get_singleton()->window_set_size(size, window_id);
 		}
+		// Always check size because WM or embedded window can mess with window set_size
+		size = DisplayServer::get_singleton()->window_get_size(window_id);
 	}
 
 	//update the viewport

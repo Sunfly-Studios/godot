@@ -41,6 +41,7 @@ class DisplayServerMock : public DisplayServerHeadless {
 private:
 	friend class DisplayServer;
 
+	Vector2i size = Size2i(1920, 1080);
 	Point2i mouse_position = Point2i(-1, -1); // Outside of Window.
 	CursorShape cursor_shape = CursorShape::CURSOR_ARROW;
 	bool window_over = false;
@@ -130,8 +131,12 @@ public:
 	virtual void clipboard_set_primary(const String &p_text) override { primary_clipboard_text = p_text; }
 	virtual String clipboard_get_primary() const override { return primary_clipboard_text; }
 
+	virtual Size2i window_set_size(const Size2i p_size, WindowID p_window = MAIN_WINDOW_ID) const override {
+		size = p_size;
+	}
+
 	virtual Size2i window_get_size(WindowID p_window = MAIN_WINDOW_ID) const override {
-		return Size2i(1920, 1080);
+		return size;
 	}
 
 	virtual void cursor_set_shape(CursorShape p_shape) override {
