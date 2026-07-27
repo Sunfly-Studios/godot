@@ -243,17 +243,41 @@ void MaterialData::update_textures(const HashMap<StringName, Variant> &p_paramet
 		if (V && V->value.get_type() == Variant::ARRAY) {
 			Array tex_array = V->value;
 			for (int j = 0; j < array_size; j++) {
-				RID gl_texture = texture_storage->texture_gl_get_default(GLES1::DEFAULT_GL_TEXTURE_WHITE);
-				if (j < tex_array.size() && tex_array[j].get_type() == Variant::RID) {
-					gl_texture = tex_array[j];
+				RID gl_texture;
+				if (p_default_textures.has(uniform_name) && p_default_textures[uniform_name].has(j)) {
+					gl_texture = p_default_textures[uniform_name][j];
+				} else {
+					GLES1::DefaultGLTexture default_tex = GLES1::DEFAULT_GL_TEXTURE_WHITE;
+					if (p_texture_uniforms[i].hint == ShaderLanguage::ShaderNode::Uniform::HINT_DEFAULT_BLACK) {
+						default_tex = GLES1::DEFAULT_GL_TEXTURE_BLACK;
+					} else if (p_texture_uniforms[i].hint == ShaderLanguage::ShaderNode::Uniform::HINT_DEFAULT_TRANSPARENT) {
+						default_tex = GLES1::DEFAULT_GL_TEXTURE_TRANSPARENT;
+					} else if (p_texture_uniforms[i].hint == ShaderLanguage::ShaderNode::Uniform::HINT_NORMAL_ROUGHNESS_TEXTURE || p_texture_uniforms[i].hint == ShaderLanguage::ShaderNode::Uniform::HINT_NORMAL) {
+						default_tex = GLES1::DEFAULT_GL_TEXTURE_NORMAL;
+					} else if (p_texture_uniforms[i].hint == ShaderLanguage::ShaderNode::Uniform::HINT_ANISOTROPY) {
+						default_tex = GLES1::DEFAULT_GL_TEXTURE_ANISO;
+					}
+					gl_texture = texture_storage->texture_gl_get_default(default_tex);
 				}
 				p_textures[k++] = gl_texture;
 			}
 		} else {
 			// Single texture or fallback
-			RID gl_texture = texture_storage->texture_gl_get_default(GLES1::DEFAULT_GL_TEXTURE_WHITE);
-			if (V && V->value.get_type() == Variant::RID) {
-				gl_texture = V->value;
+			RID gl_texture;
+			if (p_default_textures.has(uniform_name) && p_default_textures[uniform_name].has(0)) {
+				gl_texture = p_default_textures[uniform_name][0];
+			} else {
+				GLES1::DefaultGLTexture default_tex = GLES1::DEFAULT_GL_TEXTURE_WHITE;
+				if (p_texture_uniforms[i].hint == ShaderLanguage::ShaderNode::Uniform::HINT_DEFAULT_BLACK) {
+					default_tex = GLES1::DEFAULT_GL_TEXTURE_BLACK;
+				} else if (p_texture_uniforms[i].hint == ShaderLanguage::ShaderNode::Uniform::HINT_DEFAULT_TRANSPARENT) {
+					default_tex = GLES1::DEFAULT_GL_TEXTURE_TRANSPARENT;
+				} else if (p_texture_uniforms[i].hint == ShaderLanguage::ShaderNode::Uniform::HINT_NORMAL_ROUGHNESS_TEXTURE || p_texture_uniforms[i].hint == ShaderLanguage::ShaderNode::Uniform::HINT_NORMAL) {
+					default_tex = GLES1::DEFAULT_GL_TEXTURE_NORMAL;
+				} else if (p_texture_uniforms[i].hint == ShaderLanguage::ShaderNode::Uniform::HINT_ANISOTROPY) {
+					default_tex = GLES1::DEFAULT_GL_TEXTURE_ANISO;
+				}
+				gl_texture = texture_storage->texture_gl_get_default(default_tex);
 			}
 
 			// Fill the entire array span even if the user only provided one texture
@@ -357,7 +381,7 @@ MaterialStorage::MaterialStorage() {
 		actions.renames["POINT_COORD"] = "gl_PointCoord";
 
 		// Requires hardware extensions
-		// (handled in `config.cpp` and `compiler/shader_gles2.cpp`)
+		// (handled in `config.cpp` and `compiler/shader_GLES1.cpp`)
 		actions.renames["INSTANCE_ID"] = "gl_InstanceID";
 		actions.renames["VERTEX_ID"] = "gl_VertexID";
 
@@ -462,7 +486,7 @@ MaterialStorage::MaterialStorage() {
 		actions.renames["SCREEN_UV"] = "screen_uv";
 
 		// Requires hardware extensions
-		// (handled in `config.cpp` and `compiler/shader_gles2.cpp`)
+		// (handled in `config.cpp` and `compiler/shader_GLES1.cpp`)
 		actions.renames["DEPTH"] = "gl_FragDepth";
 
 		actions.renames["FOG"] = "fog";
@@ -998,7 +1022,7 @@ void MaterialStorage::_update_queued_materials() {
 	while (material_update_list.first()) {
 		Material *mat = material_update_list.first()->self();
 
-		// Push the cached params into the GLES2 Uniform Buffers
+		// Push the cached params into the GLES1 Uniform Buffers
 		if (mat->data) {
 			mat->data->update_parameters(mat->params, mat->uniform_dirty, mat->texture_dirty);
 		}
@@ -1890,4 +1914,4 @@ void ParticleProcessMaterialData::bind_uniforms() {
 	bind_uniforms_and_textures_generic_gles1(texture_cache, shader_data->texture_uniforms);
 }
 
-#endif // !GLES2_ENABLED
+#endif // !GLES1_ENABLED

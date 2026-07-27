@@ -655,12 +655,6 @@ Array MeshStorage::mesh_surface_get_arrays(RID p_mesh, int p_surface) const {
 				const float *f = (const float *)src;
 				dst[i] = Vector3(f[0], f[1], 0);
 			} else if (s->format & RS::ARRAY_FLAG_COMPRESS_ATTRIBUTES) {
-				// TODO(GLES1): It seems that GLES1 doesn't natievly
-				// support Godot's compressed meshes. And putting
-				// a fallback here like this causes nullptr driver crashes.
-				// Write a decompressor that physically unpacks the
-				// `SurfaceData` data back into uncompressed
-				// GL_FLOAT buffers before VRAM allocation.
 				dst[i] = Vector3(0, 0, 0);
 			} else {
 				const float *f = (const float *)src;
@@ -679,10 +673,18 @@ Array MeshStorage::mesh_surface_get_arrays(RID p_mesh, int p_surface) const {
 		int offset = v.attribs[RS::ARRAY_NORMAL].offset;
 
 		for (uint32_t i = 0; i < sd.vertex_count; i++) {
-			const uint8_t *src = v_data + i * stride + offset;
+			uint32_t read_offset = i * stride + offset;
+
+			// Don't overflow past an offset.
+			if ((read_offset + sizeof(float) * 3) > (uint32_t)(sd.vertex_data.size())) {
+				dst[i] = Vector3(0, 1, 0);
+				continue;
+			}
+
+			const uint8_t *src = v_data + read_offset;
 			if (!(s->format & RS::ARRAY_FLAG_COMPRESS_ATTRIBUTES)) {
-				const uint16_t *ui = (const uint16_t *)src;
-				dst[i] = Vector3((ui[0] / 65535.0f) * 2.0f - 1.0f, (ui[1] / 65535.0f) * 2.0f - 1.0f, (ui[2] / 65535.0f) * 2.0f - 1.0f);
+				const float *f = (const float *)src;
+				dst[i] = Vector3(f[0], f[1], f[2]);
 			} else {
 				dst[i] = Vector3(0, 1, 0);
 			}
@@ -1408,6 +1410,7 @@ void MeshStorage::_decompress_surface_data(RS::SurfaceData &r_surface) {
 		r_surface.attribute_data.clear();
 	}
 
+	// Reset all flags.
 	r_surface.format &= ~RS::ARRAY_FLAG_COMPRESS_ATTRIBUTES;
 	r_surface.format &= ~RS::ARRAY_FORMAT_CUSTOM0;
 	r_surface.format &= ~RS::ARRAY_FORMAT_CUSTOM1;

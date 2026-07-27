@@ -976,9 +976,17 @@ void MaterialData::update_textures(const HashMap<StringName, Variant> &p_paramet
 				if (p_default_textures.has(uniform_name) && p_default_textures[uniform_name].has(j)) {
 					gl_texture = p_default_textures[uniform_name][j];
 				} else {
-					gl_texture = texture_storage->texture_gl_get_default(
-						GLES2::DEFAULT_GL_TEXTURE_WHITE
-					);
+					GLES2::DefaultGLTexture default_tex = GLES2::DEFAULT_GL_TEXTURE_WHITE;
+					if (p_texture_uniforms[i].hint == ShaderLanguage::ShaderNode::Uniform::HINT_DEFAULT_BLACK) {
+						default_tex = GLES2::DEFAULT_GL_TEXTURE_BLACK;
+					} else if (p_texture_uniforms[i].hint == ShaderLanguage::ShaderNode::Uniform::HINT_DEFAULT_TRANSPARENT) {
+						default_tex = GLES2::DEFAULT_GL_TEXTURE_TRANSPARENT;
+					} else if (p_texture_uniforms[i].hint == ShaderLanguage::ShaderNode::Uniform::HINT_NORMAL_ROUGHNESS_TEXTURE || p_texture_uniforms[i].hint == ShaderLanguage::ShaderNode::Uniform::HINT_NORMAL) {
+						default_tex = GLES2::DEFAULT_GL_TEXTURE_NORMAL;
+					} else if (p_texture_uniforms[i].hint == ShaderLanguage::ShaderNode::Uniform::HINT_ANISOTROPY) {
+						default_tex = GLES2::DEFAULT_GL_TEXTURE_ANISO;
+					}
+					gl_texture = texture_storage->texture_gl_get_default(default_tex);
 				}
 
 				if (j < tex_array.size() && tex_array[j].get_type() == Variant::RID) {
@@ -995,9 +1003,17 @@ void MaterialData::update_textures(const HashMap<StringName, Variant> &p_paramet
 			if (p_default_textures.has(uniform_name) && p_default_textures[uniform_name].has(0)) {
 				gl_texture = p_default_textures[uniform_name][0];
 			} else {
-				gl_texture = texture_storage->texture_gl_get_default(
-					GLES2::DEFAULT_GL_TEXTURE_WHITE
-				);
+				GLES2::DefaultGLTexture default_tex = GLES2::DEFAULT_GL_TEXTURE_WHITE;
+				if (p_texture_uniforms[i].hint == ShaderLanguage::ShaderNode::Uniform::HINT_DEFAULT_BLACK) {
+					default_tex = GLES2::DEFAULT_GL_TEXTURE_BLACK;
+				} else if (p_texture_uniforms[i].hint == ShaderLanguage::ShaderNode::Uniform::HINT_DEFAULT_TRANSPARENT) {
+					default_tex = GLES2::DEFAULT_GL_TEXTURE_TRANSPARENT;
+				} else if (p_texture_uniforms[i].hint == ShaderLanguage::ShaderNode::Uniform::HINT_NORMAL_ROUGHNESS_TEXTURE || p_texture_uniforms[i].hint == ShaderLanguage::ShaderNode::Uniform::HINT_NORMAL) {
+					default_tex = GLES2::DEFAULT_GL_TEXTURE_NORMAL;
+				} else if (p_texture_uniforms[i].hint == ShaderLanguage::ShaderNode::Uniform::HINT_ANISOTROPY) {
+					default_tex = GLES2::DEFAULT_GL_TEXTURE_ANISO;
+				}
+				gl_texture = texture_storage->texture_gl_get_default(default_tex);
 			}
 
 			if (V && V->value.get_type() == Variant::RID) {

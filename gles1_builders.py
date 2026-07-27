@@ -312,12 +312,63 @@ class GLESHeaderStruct:
         self.specialization_names = []
         self.specialization_values = []
 
+        # TODO(GLES2): The engine pre-populates these at runtime, meaning
+        # that the builder doesn't have these available when building the
+        # shaders.
+        # Having them here works, but now we must sync between:
+        # - servers/rendering/renderer_scene_render.h
+        # - servers/rendering_server.cpp
+        # - drivers/gles2/rasterizer_scene_gles2.cpp (for the runtime defines)
+        self.constants = {
+            "MAX_DIRECTIONAL_LIGHT_DATA_STRUCTS": 8,
+            "MAX_FORWARD_LIGHTS": 8, # up to 1024, default 8
+
+            # The actual value is 32, up to 256,
+            # though I don't think we will use them all in GLES2.
+            "MAX_LIGHT_DATA_STRUCTS": 8,
+        }
+        self.structs = {}
+        self.current_struct = None
+
 
 def include_file_in_gles_header(filename: str, header_data: GLESHeaderStruct, depth: int):
     fs = open(filename, "r")
     line = fs.readline()
 
     while line:
+        line_stripped = line.strip()
+
+        # Parse inline defines
+        if line_stripped.startswith("#define "):
+            parts = line_stripped.split()
+            if len(parts) >= 3:
+                header_data.constants[parts[1]] = parts[2]
+
+        if line_stripped.startswith("struct ") and line_stripped.find("{") != -1:
+            struct_name = line_stripped.replace("struct ", "").split("{")[0].strip()
+            header_data.structs[struct_name] = []
+            header_data.current_struct = struct_name
+        elif header_data.current_struct is not None:
+            if line_stripped.startswith("}"):
+                header_data.current_struct = None
+            elif line_stripped.endswith(";"):
+                member_line = line_stripped.replace(";", "").strip()
+                parts = member_line.split()
+                if len(parts) >= 2:
+                    m_type = parts[-2]
+                    m_name = parts[-1]
+                    m_arr_size = 0
+                    if "[" in m_name:
+                        size_str = m_name[m_name.find("[")+1:m_name.find("]")]
+                        m_name = m_name[:m_name.find("[")]
+                        if size_str in header_data.constants:
+                            size_str = header_data.constants[size_str]
+                        try:
+                            m_arr_size = int(size_str)
+                        except ValueError:
+                            m_arr_size = 1
+                    header_data.structs[header_data.current_struct].append((m_type, m_name, m_arr_size))
+
         if line.find("=") != -1 and header_data.reading == "":
             # Mode
             eqpos = line.find("=")
@@ -434,18 +485,51 @@ def include_file_in_gles_header(filename: str, header_data: GLESHeaderStruct, de
                     header_data.ubo_names += [x]
 
         elif line.find("uniform") != -1 and line.find("{") == -1 and line.find(";") != -1:
-            uline = line.replace("uniform", "")
-            uline = uline.replace(";", "")
-            lines = uline.split(",")
-            for x in lines:
-                x = x.strip()
-                x = x[x.rfind(" ") + 1 :]
-                if x.find("[") != -1:
-                    # unfiorm array
-                    x = x[: x.find("[")]
-
-                if not x in header_data.uniforms:
-                    header_data.uniforms += [x]
+            uline = line.replace("uniform", "").replace(";", "").strip()
+            parts = uline.split()
+            if len(parts) >= 2:
+                type_name = parts[0]
+                if type_name in ["highp", "mediump", "lowp"] and len(parts) >= 3:
+                    type_name = parts[1]
+                
+                type_name_idx = uline.find(type_name) + len(type_name)
+                vars_str = uline[type_name_idx:]
+                var_lines = vars_str.split(",")
+                
+                for x in var_lines:
+                    var_name = x.strip()
+                    arr_size = 0
+                    if var_name.find("[") != -1:
+                        size_str = var_name[var_name.find("[")+1:var_name.find("]")]
+                        var_name = var_name[:var_name.find("[")]
+                        if size_str in header_data.constants:
+                            size_str = header_data.constants[size_str]
+                        try:
+                            arr_size = int(size_str)
+                        except ValueError:
+                            arr_size = 1
+                            
+                    if type_name in header_data.structs:
+                        def unroll_struct(s_type, prefix, s_dict, out_uniforms):
+                            if s_type not in s_dict:
+                                if prefix not in out_uniforms:
+                                    out_uniforms.append(prefix)
+                                return
+                            for m_type, m_name, m_size in s_dict[s_type]:
+                                if m_size > 0:
+                                    for i in range(m_size):
+                                        unroll_struct(m_type, f"{prefix}.{m_name}[{i}]", s_dict, out_uniforms)
+                                else:
+                                    unroll_struct(m_type, f"{prefix}.{m_name}", s_dict, out_uniforms)
+                        
+                        if arr_size > 0:
+                            for i in range(arr_size):
+                                unroll_struct(type_name, f"{var_name}[{i}]", header_data.structs, header_data.uniforms)
+                        else:
+                            unroll_struct(type_name, var_name, header_data.structs, header_data.uniforms)
+                    else:
+                        if var_name not in header_data.uniforms:
+                            header_data.uniforms.append(var_name)
 
         if line.strip().find("attribute ") == 0 and line.find("attrib:") != -1:
             uline = line.replace("in ", "")
@@ -533,14 +617,16 @@ def build_gles_header(
     if header_data.uniforms:
         fd.write("\tenum Uniforms {\n")
         for x in header_data.uniforms:
-            fd.write("\t\t" + x.upper() + ",\n")
+            enum_name = x.replace(".", "_").replace("[", "_").replace("]", "").upper()
+            fd.write("\t\t" + enum_name + ",\n")
         fd.write("\t};\n\n")
 
         # "Hidden" state machine router
         fd.write("\t_FORCE_INLINE_ void _apply_gles1_state(Uniforms p_uniform, const Variant& p_value) {\n")
         fd.write("\t\tswitch(p_uniform) {\n")
         for x in header_data.uniforms:
-            fd.write("\t\t\tcase " + x.upper() + ": {\n")
+            enum_name = x.replace(".", "_").replace("[", "_").replace("]", "").upper()
+            fd.write("\t\t\tcase " + enum_name + ": {\n")
             if x in GL_1_5_MAPPINGS:
                 for line in GL_1_5_MAPPINGS[x].split("\n"):
                     fd.write("\t\t\t\t" + line + "\n")

@@ -5211,6 +5211,7 @@ RasterizerCanvasGLES1::~RasterizerCanvasGLES1() {
 	texture_storage->canvas_texture_free(default_canvas_texture);
 
 	// Shaders
+	material_storage->shaders.canvas_shader.version_free(data.canvas_shader_default_version);
 	if (shadow_render.shader_version.is_valid()) {
 		shadow_render.shader.version_free(shadow_render.shader_version);
 	}

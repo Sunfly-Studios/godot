@@ -92,7 +92,7 @@ void RasterizerSceneGLES1::initialize() {
 
 	cull_argument.set_page_pool(&cull_argument_pool);
 
-{
+	{
 		String global_defines;
 		global_defines += "#define MAX_GLOBAL_SHADER_UNIFORMS 256\n"; // TODO: this is arbitrary for now
 		global_defines += "\n#define MAX_LIGHT_DATA_STRUCTS " + itos(config->max_renderable_lights) + "\n";
@@ -242,6 +242,13 @@ void fragment() {
 
 	// MultiMesh may read from color when color is disabled, so make sure that the color defaults to white instead of black.
 	glColor4f(1.0f, 1.0f, 1.0f, 1.0f);
+
+	// Prevent affine interpolation artifacts.
+	// Varying parameters are often interpolated in
+	// screen space rather than perspective space.
+	// This will cause issues which is why we set this up.
+	glHint(GL_PERSPECTIVE_CORRECTION_HINT, GL_NICEST);
+	GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::initialize: glHint GL_PERSPECTIVE_CORRECTION_HINT");
 }
 
 RenderGeometryInstance *RasterizerSceneGLES1::geometry_instance_create(RID p_base) {
@@ -741,9 +748,9 @@ void RasterizerSceneGLES1::_setup_sky(const RenderDataGLES1 *p_render_data, cons
 			}
 
 			if (light_data_dirty) {
-				DirectionalLightData *temp = sky_globals.last_frame_directional_lights;
-				sky_globals.last_frame_directional_lights = sky_globals.directional_lights;
-				sky_globals.directional_lights = temp;
+				for (uint32_t i = 0; i < sky_globals.max_directional_lights; i++) {
+					sky_globals.last_frame_directional_lights[i] = sky_globals.directional_lights[i];
+				}
 				sky_globals.last_frame_directional_light_count = sky_globals.directional_light_count;
 				sky->reflection_dirty = true;
 			}
@@ -795,8 +802,27 @@ void RasterizerSceneGLES1::_draw_sky(RID p_env, const Projection &p_projection, 
 		return;
 	}
 
-	bool success = material_storage->shaders.sky_shader.version_bind_shader(shader_data->version, SkyShaderGLES1::MODE_BACKGROUND, 0);
+	// Push the matrices before everything.
+	glMatrixMode(GL_PROJECTION);
+	glPushMatrix();
+	glMatrixMode(GL_MODELVIEW);
+	glPushMatrix();
+
+	uint64_t sky_spec = 0;
+	if (p_flip_y) {
+		sky_spec |= SkyShaderGLES1::USE_INVERTED_Y;
+	}
+	if (!p_apply_color_adjustments_in_post) {
+		sky_spec |= SkyShaderGLES1::APPLY_TONEMAPPING;
+	}
+
+	bool success = material_storage->shaders.sky_shader.version_bind_shader(shader_data->version, SkyShaderGLES1::MODE_BACKGROUND, sky_spec);
 	if (!success) {
+		// Pop the matrices
+		glMatrixMode(GL_PROJECTION);
+		glPopMatrix();
+		glMatrixMode(GL_MODELVIEW);
+		glPopMatrix();
 		return;
 	}
 
@@ -823,95 +849,633 @@ void RasterizerSceneGLES1::_draw_sky(RID p_env, const Projection &p_projection, 
 	}
 	sky_transform = sky_transform * p_transform.basis;
 
-	material_storage->shaders.sky_shader.version_set_uniform(SkyShaderGLES1::ORIENTATION, sky_transform, shader_data->version, SkyShaderGLES1::MODE_BACKGROUND, 0);
-	material_storage->shaders.sky_shader.version_set_uniform(SkyShaderGLES1::PROJECTION, camera.columns[2][0], camera.columns[0][0], camera.columns[2][1], camera.columns[1][1], shader_data->version, SkyShaderGLES1::MODE_BACKGROUND, 0);
-	material_storage->shaders.sky_shader.version_set_uniform(SkyShaderGLES1::POSITION, p_transform.origin, shader_data->version, SkyShaderGLES1::MODE_BACKGROUND, 0);
-	material_storage->shaders.sky_shader.version_set_uniform(SkyShaderGLES1::TIME, (float)time, shader_data->version, SkyShaderGLES1::MODE_BACKGROUND, 0);
-	material_storage->shaders.sky_shader.version_set_uniform(SkyShaderGLES1::LUMINANCE_MULTIPLIER, p_luminance_multiplier, shader_data->version, SkyShaderGLES1::MODE_BACKGROUND, 0);
-	material_storage->shaders.sky_shader.version_set_uniform(SkyShaderGLES1::EXPOSURE, scene_state.tonemap_ubo.exposure, shader_data->version, SkyShaderGLES1::MODE_BACKGROUND, 0);
-	material_storage->shaders.sky_shader.version_set_uniform(SkyShaderGLES1::WHITE, scene_state.tonemap_ubo.white, shader_data->version, SkyShaderGLES1::MODE_BACKGROUND, 0);
+	material_storage->shaders.sky_shader.version_set_uniform(SkyShaderGLES1::ORIENTATION, sky_transform, shader_data->version, SkyShaderGLES1::MODE_BACKGROUND, sky_spec);
+	material_storage->shaders.sky_shader.version_set_uniform(SkyShaderGLES1::PROJECTION, camera.columns[2][0], camera.columns[0][0], camera.columns[2][1], camera.columns[1][1], shader_data->version, SkyShaderGLES1::MODE_BACKGROUND, sky_spec);
+	material_storage->shaders.sky_shader.version_set_uniform(SkyShaderGLES1::POSITION, p_transform.origin, shader_data->version, SkyShaderGLES1::MODE_BACKGROUND, sky_spec);
+	material_storage->shaders.sky_shader.version_set_uniform(SkyShaderGLES1::TIME, (float)time, shader_data->version, SkyShaderGLES1::MODE_BACKGROUND, sky_spec);
+	material_storage->shaders.sky_shader.version_set_uniform(SkyShaderGLES1::LUMINANCE_MULTIPLIER, p_luminance_multiplier, shader_data->version, SkyShaderGLES1::MODE_BACKGROUND, sky_spec);
+	material_storage->shaders.sky_shader.version_set_uniform(SkyShaderGLES1::EXPOSURE, scene_state.tonemap_ubo.exposure, shader_data->version, SkyShaderGLES1::MODE_BACKGROUND, sky_spec);
+	material_storage->shaders.sky_shader.version_set_uniform(SkyShaderGLES1::WHITE, scene_state.tonemap_ubo.white, shader_data->version, SkyShaderGLES1::MODE_BACKGROUND, sky_spec);
 
 	if (p_env.is_valid()) {
 		Color fog_color = environment_get_fog_light_color(p_env).srgb_to_linear() * environment_get_fog_light_energy(p_env);
-		material_storage->shaders.sky_shader.version_set_uniform(SkyShaderGLES1::FOG_ENABLED, environment_get_fog_enabled(p_env), shader_data->version, SkyShaderGLES1::MODE_BACKGROUND, 0);
-		material_storage->shaders.sky_shader.version_set_uniform(SkyShaderGLES1::FOG_AERIAL_PERSPECTIVE, environment_get_fog_aerial_perspective(p_env), shader_data->version, SkyShaderGLES1::MODE_BACKGROUND, 0);
-		material_storage->shaders.sky_shader.version_set_uniform(SkyShaderGLES1::FOG_LIGHT_COLOR, fog_color, shader_data->version, SkyShaderGLES1::MODE_BACKGROUND, 0);
-		material_storage->shaders.sky_shader.version_set_uniform(SkyShaderGLES1::FOG_SUN_SCATTER, environment_get_fog_sun_scatter(p_env), shader_data->version, SkyShaderGLES1::MODE_BACKGROUND, 0);
-		material_storage->shaders.sky_shader.version_set_uniform(SkyShaderGLES1::FOG_DENSITY, environment_get_fog_density(p_env), shader_data->version, SkyShaderGLES1::MODE_BACKGROUND, 0);
+		material_storage->shaders.sky_shader.version_set_uniform(SkyShaderGLES1::FOG_ENABLED, environment_get_fog_enabled(p_env), shader_data->version, SkyShaderGLES1::MODE_BACKGROUND, sky_spec);
+		material_storage->shaders.sky_shader.version_set_uniform(SkyShaderGLES1::FOG_AERIAL_PERSPECTIVE, environment_get_fog_aerial_perspective(p_env), shader_data->version, SkyShaderGLES1::MODE_BACKGROUND, sky_spec);
+		material_storage->shaders.sky_shader.version_set_uniform(SkyShaderGLES1::FOG_LIGHT_COLOR, fog_color, shader_data->version, SkyShaderGLES1::MODE_BACKGROUND, sky_spec);
+		material_storage->shaders.sky_shader.version_set_uniform(SkyShaderGLES1::FOG_SUN_SCATTER, environment_get_fog_sun_scatter(p_env), shader_data->version, SkyShaderGLES1::MODE_BACKGROUND, sky_spec);
+		material_storage->shaders.sky_shader.version_set_uniform(SkyShaderGLES1::FOG_DENSITY, environment_get_fog_density(p_env), shader_data->version, SkyShaderGLES1::MODE_BACKGROUND, sky_spec);
 	} else {
-		material_storage->shaders.sky_shader.version_set_uniform(SkyShaderGLES1::FOG_ENABLED, false, shader_data->version, SkyShaderGLES1::MODE_BACKGROUND, 0);
+		material_storage->shaders.sky_shader.version_set_uniform(SkyShaderGLES1::FOG_ENABLED, false, shader_data->version, SkyShaderGLES1::MODE_BACKGROUND, sky_spec);
 	}
 
-	material_storage->shaders.sky_shader.version_set_uniform(SkyShaderGLES1::DIRECTIONAL_LIGHT_COUNT, (int)sky_globals.directional_light_count, shader_data->version, SkyShaderGLES1::MODE_BACKGROUND, 0);
-	material_storage->shaders.sky_shader.version_set_uniform(SkyShaderGLES1::Z_FAR, p_projection.get_z_far(), shader_data->version, SkyShaderGLES1::MODE_BACKGROUND, 0);
+	material_storage->shaders.sky_shader.version_set_uniform(SkyShaderGLES1::DIRECTIONAL_LIGHT_COUNT, (int)sky_globals.directional_light_count, shader_data->version, SkyShaderGLES1::MODE_BACKGROUND, sky_spec);
+	for (uint32_t i = 0; i < sky_globals.directional_light_count; i++) {
+		const DirectionalLightData &light = sky_globals.directional_lights[i];
+		Vector4 dir_energy(light.direction[0], light.direction[1], light.direction[2], light.energy);
+		Vector4 col_size(light.color[0], light.color[1], light.color[2], light.size);
+		int32_t enabled = light.enabled ? 1 : 0;
 
-	// Protect against uniform matrix leak
+		switch (i) {
+			case 0:
+				material_storage->shaders.sky_shader.version_set_uniform(SkyShaderGLES1::DIRECTIONAL_LIGHTS_DATA_0_DIRECTION_ENERGY, dir_energy, shader_data->version, SkyShaderGLES1::MODE_BACKGROUND, sky_spec);
+				material_storage->shaders.sky_shader.version_set_uniform(SkyShaderGLES1::DIRECTIONAL_LIGHTS_DATA_0_COLOR_SIZE, col_size, shader_data->version, SkyShaderGLES1::MODE_BACKGROUND, sky_spec);
+				material_storage->shaders.sky_shader.version_set_uniform(SkyShaderGLES1::DIRECTIONAL_LIGHTS_DATA_0_ENABLED, enabled, shader_data->version, SkyShaderGLES1::MODE_BACKGROUND, sky_spec);
+				break;
+			case 1:
+				material_storage->shaders.sky_shader.version_set_uniform(SkyShaderGLES1::DIRECTIONAL_LIGHTS_DATA_1_DIRECTION_ENERGY, dir_energy, shader_data->version, SkyShaderGLES1::MODE_BACKGROUND, sky_spec);
+				material_storage->shaders.sky_shader.version_set_uniform(SkyShaderGLES1::DIRECTIONAL_LIGHTS_DATA_1_COLOR_SIZE, col_size, shader_data->version, SkyShaderGLES1::MODE_BACKGROUND, sky_spec);
+				material_storage->shaders.sky_shader.version_set_uniform(SkyShaderGLES1::DIRECTIONAL_LIGHTS_DATA_1_ENABLED, enabled, shader_data->version, SkyShaderGLES1::MODE_BACKGROUND, sky_spec);
+				break;
+			case 2:
+				material_storage->shaders.sky_shader.version_set_uniform(SkyShaderGLES1::DIRECTIONAL_LIGHTS_DATA_2_DIRECTION_ENERGY, dir_energy, shader_data->version, SkyShaderGLES1::MODE_BACKGROUND, sky_spec);
+				material_storage->shaders.sky_shader.version_set_uniform(SkyShaderGLES1::DIRECTIONAL_LIGHTS_DATA_2_COLOR_SIZE, col_size, shader_data->version, SkyShaderGLES1::MODE_BACKGROUND, sky_spec);
+				material_storage->shaders.sky_shader.version_set_uniform(SkyShaderGLES1::DIRECTIONAL_LIGHTS_DATA_2_ENABLED, enabled, shader_data->version, SkyShaderGLES1::MODE_BACKGROUND, sky_spec);
+				break;
+			case 3:
+				material_storage->shaders.sky_shader.version_set_uniform(SkyShaderGLES1::DIRECTIONAL_LIGHTS_DATA_3_DIRECTION_ENERGY, dir_energy, shader_data->version, SkyShaderGLES1::MODE_BACKGROUND, sky_spec);
+				material_storage->shaders.sky_shader.version_set_uniform(SkyShaderGLES1::DIRECTIONAL_LIGHTS_DATA_3_COLOR_SIZE, col_size, shader_data->version, SkyShaderGLES1::MODE_BACKGROUND, sky_spec);
+				material_storage->shaders.sky_shader.version_set_uniform(SkyShaderGLES1::DIRECTIONAL_LIGHTS_DATA_3_ENABLED, enabled, shader_data->version, SkyShaderGLES1::MODE_BACKGROUND, sky_spec);
+				break;
+		}
+	}
+
+	material_storage->shaders.sky_shader.version_set_uniform(SkyShaderGLES1::Z_FAR, p_projection.get_z_far(), shader_data->version, SkyShaderGLES1::MODE_BACKGROUND, sky_spec);
+
+	// Clean-up from opaque geometry passes
+	scene_state.enable_gl_depth_test(true);
+	scene_state.enable_gl_depth_draw(false);
+	glDepthFunc(GL_GEQUAL);
+	GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_draw_sky: glDepthFunc");
+
+	scene_state.enable_gl_blend(false);
+	scene_state.set_gl_cull_mode(RS::CULL_MODE_BACK);
+
+	// Setup identity matrices for full-screen quad
 	glMatrixMode(GL_PROJECTION);
-	glPushMatrix();
 	glLoadIdentity();
-	GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_draw_sky: glMatrixMode projection push");
 
 	glMatrixMode(GL_MODELVIEW);
-	glPushMatrix();
 	glLoadIdentity();
-	GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_draw_sky: glMatrixMode modelview push");
 
 	// Disable more client states
 	glDisable(GL_LIGHTING);
-	glDisable(GL_DEPTH_TEST);
-	glDepthMask(GL_FALSE);
+	glActiveTexture(GL_TEXTURE0);
 	glDisable(GL_TEXTURE_2D);
+	GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_draw_sky: glDisable GL_LIGHTING and GL_TEXTURE_2D");
 
 	glEnableClientState(GL_VERTEX_ARRAY);
+	GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_draw_sky: glEnableClientState GL_VERTEX_ARRAY");
 	glDisableClientState(GL_COLOR_ARRAY);
 	glDisableClientState(GL_NORMAL_ARRAY);
 
 	glClientActiveTexture(GL_TEXTURE1);
 	glDisableClientState(GL_TEXTURE_COORD_ARRAY);
 	glClientActiveTexture(GL_TEXTURE0);
-	glDisableClientState(GL_TEXTURE_COORD_ARRAY);
+
+	// We need UV coordinates to sample the sky texture.
+	glEnableClientState(GL_TEXTURE_COORD_ARRAY);
 	GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_draw_sky: Client State hardened");
 
-	// Draw the sky colour
-	Color sky_color = Color(0.3, 0.3, 0.3, 1.0); // Default Godot clear colour
-	if (sky_material.is_valid()) {
-		Variant v = material_storage->material_get_param(sky_material, "clear_color");
-		if (v.get_type() == Variant::COLOR) {
-			sky_color = v;
-		}
-	}
-	glColor4f(sky_color.r, sky_color.g, sky_color.b, sky_color.a);
+	float sky_uvw[9] = {};
 
-	if (sky_globals.screen_triangle != 0) {
-		glBindBuffer(GL_ARRAY_BUFFER, sky_globals.screen_triangle);
-		glVertexPointer(2, GL_FLOAT, 0, nullptr);
-	} else {
-		glBindBuffer(GL_ARRAY_BUFFER, 0);
-		glVertexPointer(2, GL_FLOAT, 0, qv_fallback);
+	// Replicate the `sky.glsl` shader math manually.
+	// We do the same in `_update_sky_radiance`
+	for (int i = 0; i < 3; i++) {
+		Vector2 uv_interp = Vector2(qv_fallback[i * 2], qv_fallback[i * 2 + 1]);
+		if (!p_flip_y) {
+			uv_interp.y *= -1.0f;
+		}
+
+		Vector3 cube_normal;
+		cube_normal.z = -1.0f;
+		cube_normal.x = (uv_interp.x - camera.columns[2][0]) / camera.columns[0][0];
+		cube_normal.y = (uv_interp.y - camera.columns[2][1]) / camera.columns[1][1];
+
+		cube_normal = sky_transform.xform(cube_normal);
+
+		sky_uvw[i * 3 + 0] = cube_normal.x;
+		sky_uvw[i * 3 + 1] = cube_normal.y;
+		sky_uvw[i * 3 + 2] = cube_normal.z;
 	}
-	GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_draw_sky: glVertexPointer setup");
+
+	if (sky && sky->radiance != 0) {
+		glEnable(GL_TEXTURE_CUBE_MAP);
+		glBindTexture(GL_TEXTURE_CUBE_MAP, sky->radiance);
+		glColor4f(p_sky_energy_multiplier, p_sky_energy_multiplier, p_sky_energy_multiplier, 1.0f);
+	} else {
+		// Fallback if the radiance map isn't baked/ready
+		Color sky_color = Color(0.3, 0.3, 0.3, 1.0);
+		if (sky_material.is_valid()) {
+			Variant v = material_storage->material_get_param(sky_material, "clear_color");
+			if (v.get_type() == Variant::COLOR) {
+				sky_color = v;
+			}
+		}
+		glColor4f(sky_color.r, sky_color.g, sky_color.b, sky_color.a);
+	}
+	GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_draw_sky: Sky state setup");
+
+	// Unbind VBOs
+	if (GLES1::Config::get_singleton()->support_vbo) {
+		glBindBuffer(GL_ARRAY_BUFFER, 0);
+	}
+
+	// Pass client-side memory for both pointers
+	glVertexPointer(2, GL_FLOAT, 0, qv_fallback);
+	GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_draw_sky: glVertexPointer");
+
+	glTexCoordPointer(3, GL_FLOAT, 0, sky_uvw);
+	GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_draw_sky: glTexCoordPointer client array");
 
 	glDrawArrays(GL_TRIANGLES, 0, 3);
 	GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_draw_sky: glDrawArrays");
 
 	// Unbind state
+	if (sky && sky->radiance != 0) {
+		glDisable(GL_TEXTURE_CUBE_MAP);
+	}
+
 	glDisableClientState(GL_VERTEX_ARRAY);
-	glBindBuffer(GL_ARRAY_BUFFER, 0);
+	glDisableClientState(GL_TEXTURE_COORD_ARRAY);
+	GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_draw_sky: glDisableClientState cleanup");
+
+	if (GLES1::Config::get_singleton()->support_vbo) {
+		glBindBuffer(GL_ARRAY_BUFFER, 0);
+		GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_draw_sky: unbind GL_ARRAY_BUFFER");
+	}
 
 	// Restore state
 	glMatrixMode(GL_PROJECTION);
 	glPopMatrix();
 	glMatrixMode(GL_MODELVIEW);
 	glPopMatrix();
-	GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_draw_sky: unbind state");
+	GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_draw_sky: matrix pop");
+
+	glColor4f(1.0f, 1.0f, 1.0f, 1.0f);
+	GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_draw_sky: glColor4f restore");
 }
 
 void RasterizerSceneGLES1::_update_sky_radiance(RID p_env, const Projection &p_projection, const Transform3D &p_transform, float p_sky_energy_multiplier) {
+	GLES1::MaterialStorage *material_storage = GLES1::MaterialStorage::get_singleton();
+	if (p_env.is_null()) {
+		return;
+	}
 
+	Sky *sky = sky_owner.get_or_null(environment_get_sky(p_env));
+	if (!sky) {
+		return;
+	}
+
+	GLES1::SkyMaterialData *material_data = nullptr;
+	RID sky_material;
+
+	RS::EnvironmentBG background = environment_get_background(p_env);
+
+	if (sky) {
+		sky_material = sky->material;
+		if (sky_material.is_valid()) {
+			material_data = static_cast<GLES1::SkyMaterialData *>(material_storage->material_get_data(sky_material, RS::SHADER_SKY));
+			if (!material_data || !material_data->shader_data->valid) {
+				material_data = nullptr;
+			}
+		}
+
+		if (!material_data) {
+			sky_material = sky_globals.default_material;
+			material_data = static_cast<GLES1::SkyMaterialData *>(material_storage->material_get_data(sky_material, RS::SHADER_SKY));
+		}
+	} else if (background == RS::ENV_BG_CLEAR_COLOR || background == RS::ENV_BG_COLOR) {
+		sky_material = sky_globals.fog_material;
+		material_data = static_cast<GLES1::SkyMaterialData *>(material_storage->material_get_data(sky_material, RS::SHADER_SKY));
+	}
+
+	if (!material_data) {
+		return;
+	}
+
+	GLES1::SkyShaderData *shader_data = material_data->shader_data;
+	if (!shader_data) {
+		return;
+	}
+
+	bool update_single_frame = sky->mode == RS::SKY_MODE_REALTIME || sky->mode == RS::SKY_MODE_QUALITY;
+	RS::SkyMode sky_mode = sky->mode;
+
+	if (sky_mode == RS::SKY_MODE_AUTOMATIC) {
+		if ((shader_data->uses_time || shader_data->uses_position) && sky->radiance_size == 256) {
+			update_single_frame = true;
+			sky_mode = RS::SKY_MODE_REALTIME;
+		} else if (shader_data->uses_light || shader_data->ubo_size > 0) {
+			update_single_frame = false;
+			sky_mode = RS::SKY_MODE_INCREMENTAL;
+		} else {
+			update_single_frame = true;
+			sky_mode = RS::SKY_MODE_QUALITY;
+		}
+	}
+
+	if (sky->processing_layer == 0 && sky_mode == RS::SKY_MODE_INCREMENTAL) {
+		update_single_frame = true;
+		sky_mode = RS::SKY_MODE_QUALITY;
+	}
+
+	int max_processing_layer = sky->mipmap_count;
+
+	if (sky->reflection_dirty && (sky->processing_layer >= max_processing_layer || update_single_frame)) {
+		static const Vector3 view_normals[6] = {
+			Vector3(+1, 0, 0),
+			Vector3(-1, 0, 0),
+			Vector3(0, +1, 0),
+			Vector3(0, -1, 0),
+			Vector3(0, 0, +1),
+			Vector3(0, 0, -1)
+		};
+		static const Vector3 view_up[6] = {
+			Vector3(0, -1, 0),
+			Vector3(0, -1, 0),
+			Vector3(0, 0, +1),
+			Vector3(0, 0, -1),
+			Vector3(0, -1, 0),
+			Vector3(0, -1, 0)
+		};
+
+		Projection cm;
+		cm.set_perspective(90, 1, 0.01, 10.0);
+		Projection correction;
+		correction.set_depth_correction(true, true, false);
+		cm = correction * cm;
+
+		uint64_t sky_spec = 0;
+		bool success = material_storage->shaders.sky_shader.version_bind_shader(shader_data->version, SkyShaderGLES1::MODE_CUBEMAP, sky_spec);
+		if (!success) {
+			return;
+		}
+
+		material_data->bind_uniforms();
+
+		material_storage->shaders.sky_shader.version_set_uniform(SkyShaderGLES1::POSITION, p_transform.origin, shader_data->version, SkyShaderGLES1::MODE_CUBEMAP, sky_spec);
+		material_storage->shaders.sky_shader.version_set_uniform(SkyShaderGLES1::TIME, (float)time, shader_data->version, SkyShaderGLES1::MODE_CUBEMAP, sky_spec);
+		material_storage->shaders.sky_shader.version_set_uniform(SkyShaderGLES1::PROJECTION, cm.columns[2][0], cm.columns[0][0], cm.columns[2][1], cm.columns[1][1], shader_data->version, SkyShaderGLES1::MODE_CUBEMAP, sky_spec);
+		material_storage->shaders.sky_shader.version_set_uniform(SkyShaderGLES1::LUMINANCE_MULTIPLIER, p_sky_energy_multiplier, shader_data->version, SkyShaderGLES1::MODE_CUBEMAP, sky_spec);
+
+		material_storage->shaders.sky_shader.version_set_uniform(SkyShaderGLES1::DIRECTIONAL_LIGHT_COUNT, (int)sky_globals.directional_light_count, shader_data->version, SkyShaderGLES1::MODE_CUBEMAP, sky_spec);
+		for (uint32_t i = 0; i < sky_globals.directional_light_count; i++) {
+			const DirectionalLightData &light = sky_globals.directional_lights[i];
+			Vector4 dir_energy(light.direction[0], light.direction[1], light.direction[2], light.energy);
+			Vector4 col_size(light.color[0], light.color[1], light.color[2], light.size);
+			int32_t enabled = light.enabled ? 1 : 0;
+
+			switch (i) {
+				case 0:
+					material_storage->shaders.sky_shader.version_set_uniform(SkyShaderGLES1::DIRECTIONAL_LIGHTS_DATA_0_DIRECTION_ENERGY, dir_energy, shader_data->version, SkyShaderGLES1::MODE_CUBEMAP, sky_spec);
+					material_storage->shaders.sky_shader.version_set_uniform(SkyShaderGLES1::DIRECTIONAL_LIGHTS_DATA_0_COLOR_SIZE, col_size, shader_data->version, SkyShaderGLES1::MODE_CUBEMAP, sky_spec);
+					material_storage->shaders.sky_shader.version_set_uniform(SkyShaderGLES1::DIRECTIONAL_LIGHTS_DATA_0_ENABLED, enabled, shader_data->version, SkyShaderGLES1::MODE_CUBEMAP, sky_spec);
+					break;
+				case 1:
+					material_storage->shaders.sky_shader.version_set_uniform(SkyShaderGLES1::DIRECTIONAL_LIGHTS_DATA_1_DIRECTION_ENERGY, dir_energy, shader_data->version, SkyShaderGLES1::MODE_CUBEMAP, sky_spec);
+					material_storage->shaders.sky_shader.version_set_uniform(SkyShaderGLES1::DIRECTIONAL_LIGHTS_DATA_1_COLOR_SIZE, col_size, shader_data->version, SkyShaderGLES1::MODE_CUBEMAP, sky_spec);
+					material_storage->shaders.sky_shader.version_set_uniform(SkyShaderGLES1::DIRECTIONAL_LIGHTS_DATA_1_ENABLED, enabled, shader_data->version, SkyShaderGLES1::MODE_CUBEMAP, sky_spec);
+					break;
+				case 2:
+					material_storage->shaders.sky_shader.version_set_uniform(SkyShaderGLES1::DIRECTIONAL_LIGHTS_DATA_2_DIRECTION_ENERGY, dir_energy, shader_data->version, SkyShaderGLES1::MODE_CUBEMAP, sky_spec);
+					material_storage->shaders.sky_shader.version_set_uniform(SkyShaderGLES1::DIRECTIONAL_LIGHTS_DATA_2_COLOR_SIZE, col_size, shader_data->version, SkyShaderGLES1::MODE_CUBEMAP, sky_spec);
+					material_storage->shaders.sky_shader.version_set_uniform(SkyShaderGLES1::DIRECTIONAL_LIGHTS_DATA_2_ENABLED, enabled, shader_data->version, SkyShaderGLES1::MODE_CUBEMAP, sky_spec);
+					break;
+				case 3:
+					material_storage->shaders.sky_shader.version_set_uniform(SkyShaderGLES1::DIRECTIONAL_LIGHTS_DATA_3_DIRECTION_ENERGY, dir_energy, shader_data->version, SkyShaderGLES1::MODE_CUBEMAP, sky_spec);
+					material_storage->shaders.sky_shader.version_set_uniform(SkyShaderGLES1::DIRECTIONAL_LIGHTS_DATA_3_COLOR_SIZE, col_size, shader_data->version, SkyShaderGLES1::MODE_CUBEMAP, sky_spec);
+					material_storage->shaders.sky_shader.version_set_uniform(SkyShaderGLES1::DIRECTIONAL_LIGHTS_DATA_3_ENABLED, enabled, shader_data->version, SkyShaderGLES1::MODE_CUBEMAP, sky_spec);
+					break;
+			}
+		}
+
+		GLint prev_viewport[4] = {};
+		glGetIntegerv(GL_VIEWPORT, prev_viewport);
+		GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_update_sky_radiance: glGetIntegerv GL_VIEWPORT");
+
+		GLint prev_fbo;
+		glGetIntegerv(GL_FRAMEBUFFER_BINDING, &prev_fbo);
+		GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_update_sky_radiance: glGetIntegerv GL_FRAMEBUFFER_BINDING");
+
+		glViewport(0, 0, sky->radiance_size, sky->radiance_size);
+		GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_update_sky_radiance: glViewport");
+
+		glBindFramebuffer(GL_FRAMEBUFFER, sky->radiance_framebuffer);
+		GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_update_sky_radiance: glBindFramebuffer");
+
+		// Protect against uniform matrix leak
+		glMatrixMode(GL_PROJECTION);
+		glPushMatrix();
+		glLoadIdentity();
+		GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_update_sky_radiance: glMatrixMode projection push");
+
+		glMatrixMode(GL_MODELVIEW);
+		glPushMatrix();
+		glLoadIdentity();
+		GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_update_sky_radiance: glMatrixMode modelview push");
+
+		// Reset state
+		scene_state.reset_gl_state();
+		scene_state.set_gl_cull_mode(RS::CULL_MODE_DISABLED);
+		scene_state.enable_gl_blend(false);
+
+		glDisable(GL_LIGHTING);
+		glDisable(GL_TEXTURE_2D);
+
+		glEnableClientState(GL_VERTEX_ARRAY);
+		glEnableClientState(GL_COLOR_ARRAY);
+		glDisableClientState(GL_NORMAL_ARRAY);
+
+		glClientActiveTexture(GL_TEXTURE1);
+		glDisableClientState(GL_TEXTURE_COORD_ARRAY);
+		glClientActiveTexture(GL_TEXTURE0);
+		glEnableClientState(GL_TEXTURE_COORD_ARRAY); // Enable for 3D UVWs
+		GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_update_sky_radiance: Client State hardened");
+
+		// Default approximate sky colours if stuff goes
+		// wrong.
+		Color sky_top_color = Color(0.385, 0.454, 0.55, 1.0);
+		Color sky_horizon_color = Color(0.646, 0.656, 0.67, 1.0);
+		float sky_curve = 0.15f;
+		float sky_energy = 1.0f;
+
+		Color ground_bottom_color = Color(0.2, 0.169, 0.133, 1.0);
+		Color ground_horizon_color = Color(0.646, 0.656, 0.67, 1.0);
+		float ground_curve = 0.02f;
+		float ground_energy = 1.0f;
+
+		float exposure = 1.0f;
+
+		if (sky_material.is_valid()) {
+			Variant v;
+			v = material_storage->material_get_param(sky_material, "sky_top_color");
+			if (v.get_type() == Variant::COLOR) {
+				sky_top_color = v;
+			}
+			v = material_storage->material_get_param(sky_material, "sky_horizon_color");
+			if (v.get_type() == Variant::COLOR) {
+				sky_horizon_color = v;
+			}
+			v = material_storage->material_get_param(sky_material, "sky_curve");
+			if (v.get_type() == Variant::FLOAT) {
+				sky_curve = v;
+			}
+			v = material_storage->material_get_param(sky_material, "sky_energy");
+			if (v.get_type() == Variant::FLOAT) {
+				sky_energy = v;
+			}
+
+			v = material_storage->material_get_param(sky_material, "ground_bottom_color");
+			if (v.get_type() == Variant::COLOR) {
+				ground_bottom_color = v;
+			}
+			v = material_storage->material_get_param(sky_material, "ground_horizon_color");
+			if (v.get_type() == Variant::COLOR) {
+				ground_horizon_color = v;
+			}
+			v = material_storage->material_get_param(sky_material, "ground_curve");
+			if (v.get_type() == Variant::FLOAT) {
+				ground_curve = v;
+			}
+			v = material_storage->material_get_param(sky_material, "ground_energy");
+			if (v.get_type() == Variant::FLOAT) {
+				ground_energy = v;
+			}
+
+			v = material_storage->material_get_param(sky_material, "exposure");
+			if (v.get_type() == Variant::FLOAT) {
+				exposure = v;
+			}
+		}
+		sky_curve = MAX(sky_curve, 0.0001f);
+		ground_curve = MAX(ground_curve, 0.0001f);
+
+		// TODO(GLES1): This isn't very performant all things considered.
+		// For now though, the concern is to get this working reliably.
+		for (int i = 0; i < 6; i++) {
+			Basis local_view = Basis::looking_at(view_normals[i], view_up[i]);
+
+			constexpr int grid_size = 16;
+			constexpr int num_vertices = grid_size * grid_size * 6;
+
+			LocalVector<float> bake_verts;
+			bake_verts.resize(num_vertices * 2);
+			LocalVector<float> sky_uvw;
+			sky_uvw.resize(num_vertices * 3);
+			LocalVector<uint8_t> sky_color_arr;
+			sky_color_arr.resize(num_vertices * 4);
+
+			int v_idx = 0;
+			for (int y = 0; y < grid_size; y++) {
+				for (int x = 0; x < grid_size; x++) {
+					float px0 = -1.0f + 2.0f * (x / static_cast<float>(grid_size));
+					float py0 = -1.0f + 2.0f * (y / static_cast<float>(grid_size));
+					float px1 = -1.0f + 2.0f * ((x + 1) / static_cast<float>(grid_size));
+					float py1 = -1.0f + 2.0f * ((y + 1) / static_cast<float>(grid_size));
+
+					Vector2 quad[6] = {
+						Vector2(px0, py0), Vector2(px1, py0), Vector2(px0, py1),
+						Vector2(px1, py0), Vector2(px1, py1), Vector2(px0, py1)
+					};
+
+					for (int v = 0; v < 6; v++) {
+						bake_verts[v_idx * 2 + 0] = quad[v].x;
+						bake_verts[v_idx * 2 + 1] = quad[v].y;
+
+						Vector2 uv_interp = quad[v];
+						uv_interp.y *= -1.0f; // sky_spec is 0, USE_INVERTED_Y is false in shader mapping
+
+						Vector3 cube_normal;
+						cube_normal.z = -1.0f;
+						cube_normal.x = (uv_interp.x - cm.columns[2][0]) / cm.columns[0][0];
+						cube_normal.y = (uv_interp.y - cm.columns[2][1]) / cm.columns[1][1];
+
+						cube_normal = local_view.xform(cube_normal);
+
+						sky_uvw[v_idx * 3 + 0] = cube_normal.x;
+						sky_uvw[v_idx * 3 + 1] = cube_normal.y;
+						sky_uvw[v_idx * 3 + 2] = cube_normal.z;
+
+						Color c;
+						float v_angle = Math::acos(CLAMP(cube_normal.y, -1.0f, 1.0f));
+
+						if (cube_normal.y >= 0.0f) {
+							float c_val = 1.0f - (v_angle / (Math_PI * 0.5f));
+							float blend = CLAMP(1.0f - Math::pow(1.0f - c_val, 1.0f / sky_curve), 0.0f, 1.0f);
+							c = sky_horizon_color.lerp(sky_top_color, blend);
+							c.r *= sky_energy;
+							c.g *= sky_energy;
+							c.b *= sky_energy;
+						} else {
+							float c_val = (v_angle - (Math_PI * 0.5f)) / (Math_PI * 0.5f);
+							float blend = CLAMP(1.0f - Math::pow(1.0f - c_val, 1.0f / ground_curve), 0.0f, 1.0f);
+							c = ground_horizon_color.lerp(ground_bottom_color, blend);
+							c.r *= ground_energy;
+							c.g *= ground_energy;
+							c.b *= ground_energy;
+						}
+
+						c.r *= exposure;
+						c.g *= exposure;
+						c.b *= exposure;
+
+						sky_color_arr[v_idx * 4 + 0] = uint8_t(CLAMP(c.r * 255.0f, 0.0f, 255.0f));
+						sky_color_arr[v_idx * 4 + 1] = uint8_t(CLAMP(c.g * 255.0f, 0.0f, 255.0f));
+						sky_color_arr[v_idx * 4 + 2] = uint8_t(CLAMP(c.b * 255.0f, 0.0f, 255.0f));
+						sky_color_arr[v_idx * 4 + 3] = 255;
+
+						v_idx++;
+					}
+				}
+			}
+
+			if (GLES1::Config::get_singleton()->support_vbo) {
+				glBindBuffer(GL_ARRAY_BUFFER, 0); // Read client-side
+			}
+			glVertexPointer(2, GL_FLOAT, 0, bake_verts.ptr());
+			glTexCoordPointer(3, GL_FLOAT, 0, sky_uvw.ptr());
+			glColorPointer(4, GL_UNSIGNED_BYTE, 0, sky_color_arr.ptr());
+
+			glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_CUBE_MAP_POSITIVE_X + i, sky->radiance, 0);
+			GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_update_sky_radiance: glFramebufferTexture2D");
+			glDrawArrays(GL_TRIANGLES, 0, num_vertices);
+			GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_update_sky_radiance: glDrawArrays");
+		}
+
+		glDisableClientState(GL_VERTEX_ARRAY);
+		glDisableClientState(GL_TEXTURE_COORD_ARRAY);
+		glDisableClientState(GL_COLOR_ARRAY);
+		if (GLES1::Config::get_singleton()->support_vbo) {
+			glBindBuffer(GL_ARRAY_BUFFER, 0);
+		}
+		GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_update_sky_radiance: VBO cleanup");
+
+		// Native cubemap LODs
+		glActiveTexture(GL_TEXTURE0);
+		glBindTexture(GL_TEXTURE_CUBE_MAP, sky->radiance);
+		glGenerateMipmapOES(GL_TEXTURE_CUBE_MAP_OES);
+		GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_update_sky_radiance: glGenerateMipmapOES");
+
+		sky->processing_layer = 1;
+		sky->baked_exposure = p_sky_energy_multiplier;
+		sky->reflection_dirty = false;
+
+		// Restore matrix stack
+		glMatrixMode(GL_PROJECTION);
+		glPopMatrix();
+		glMatrixMode(GL_MODELVIEW);
+		glPopMatrix();
+		GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_update_sky_radiance: matrix pop");
+
+		glBindFramebuffer(GL_FRAMEBUFFER, prev_fbo);
+		glViewport(prev_viewport[0], prev_viewport[1], prev_viewport[2], prev_viewport[3]);
+		GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_update_sky_radiance: restore GL state");
+
+	} else {
+		if (sky_mode == RS::SKY_MODE_INCREMENTAL && sky->processing_layer < max_processing_layer) {
+			sky->processing_layer++;
+		}
+	}
 }
 
 Ref<Image> RasterizerSceneGLES1::sky_bake_panorama(RID p_sky, float p_energy, bool p_bake_irradiance, const Size2i &p_size) {
-	return Ref<Image>();
+	Sky *sky = sky_owner.get_or_null(p_sky);
+	if (!sky) {
+		return Ref<Image>();
+	}
+
+	_update_dirty_skys();
+
+	if (sky->radiance == 0) {
+		return Ref<Image>();
+	}
+
+	GLES1::CopyEffects *copy_effects = GLES1::CopyEffects::get_singleton();
+	if (!copy_effects) {
+		return Ref<Image>();
+	}
+
+	GLuint rad_tex = 0;
+	glGenTextures(1, &rad_tex);
+	glBindTexture(GL_TEXTURE_2D, rad_tex);
+
+	bool use_float = false; // Config fallback to unsigned byte as default for GLES1 portability.
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, p_size.width, p_size.height, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
+	GLES1::Utilities::get_singleton()->texture_allocated_data(rad_tex, p_size.width * p_size.height * 4, "Temp sky panorama");
+	GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::sky_bake_panorama: glTexImage2D");
+
+	GLint prev_fbo = 0;
+	glGetIntegerv(GL_FRAMEBUFFER_BINDING, &prev_fbo);
+	GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::sky_bake_panorama: glGetIntegerv GL_FRAMEBUFFER_BINDING");
+
+	GLuint rad_fbo = 0;
+	glGenFramebuffers(1, &rad_fbo);
+	glBindFramebuffer(GL_FRAMEBUFFER, rad_fbo);
+	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, rad_tex, 0);
+	GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::sky_bake_panorama: glFramebufferTexture2D");
+
+	glActiveTexture(GL_TEXTURE0);
+	glBindTexture(GL_TEXTURE_CUBE_MAP, sky->radiance);
+	GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::sky_bake_panorama: glBindTexture");
+
+	GLint prev_viewport[4];
+	glGetIntegerv(GL_VIEWPORT, prev_viewport);
+	glViewport(0, 0, p_size.width, p_size.height);
+	GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::sky_bake_panorama: glViewport");
+
+	glClearColor(0.0, 0.0, 0.0, 1.0);
+	glClear(GL_COLOR_BUFFER_BIT);
+	GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::sky_bake_panorama: glClear");
+
+	copy_effects->copy_cube_to_panorama(p_bake_irradiance ? float(sky->mipmap_count) : 0.0);
+	GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::sky_bake_panorama: copy_cube_to_panorama");
+
+	glBindFramebuffer(GL_FRAMEBUFFER, prev_fbo);
+	glDeleteFramebuffers(1, &rad_fbo);
+	glViewport(prev_viewport[0], prev_viewport[1], prev_viewport[2], prev_viewport[3]);
+	GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::sky_bake_panorama: restore GL state");
+
+	RID tex_rid = GLES1::TextureStorage::get_singleton()->texture_allocate();
+	{
+		GLES1::Texture texture;
+		texture.width = p_size.width;
+		texture.height = p_size.height;
+		texture.alloc_width = p_size.width;
+		texture.alloc_height = p_size.height;
+		texture.format = use_float ? Image::FORMAT_RGBAF : Image::FORMAT_RGBA8;
+		texture.real_format = use_float ? Image::FORMAT_RGBAF : Image::FORMAT_RGBA8;
+		texture.gl_format_cache = GL_RGBA;
+		texture.gl_type_cache = use_float ? GL_FLOAT : GL_UNSIGNED_BYTE;
+		texture.type = GLES1::Texture::TYPE_2D;
+		texture.target = GL_TEXTURE_2D;
+		texture.active = true;
+		texture.tex_id = rad_tex;
+		texture.is_render_target = true; // HACK: Prevent TextureStorage from retaining a cached copy of the texture.
+		GLES1::TextureStorage::get_singleton()->texture_2d_initialize_from_texture(tex_rid, texture);
+	}
+
+	Ref<Image> img = GLES1::TextureStorage::get_singleton()->texture_2d_get(tex_rid);
+	GLES1::Utilities::get_singleton()->texture_free_data(rad_tex);
+
+	GLES1::Texture *texture = GLES1::TextureStorage::get_singleton()->get_texture(tex_rid);
+	if (texture) {
+		texture->is_render_target = false; // HACK: Avoid an error when freeing the texture.
+		texture->tex_id = 0;
+	}
+	GLES1::TextureStorage::get_singleton()->texture_free(tex_rid);
+
+	if (img.is_valid()) {
+		for (int i = 0; i < p_size.width; i++) {
+			for (int j = 0; j < p_size.height; j++) {
+				Color c = img->get_pixel(i, j);
+				c.r *= p_energy;
+				c.g *= p_energy;
+				c.b *= p_energy;
+				img->set_pixel(i, j, c);
+			}
+		}
+	}
+	return img;
 }
 
 /* ENVIRONMENT API */
@@ -1900,13 +2464,16 @@ RasterizerSceneGLES1::~RasterizerSceneGLES1() {
 	RSG::material_storage->material_free(scene_globals.default_material);
 	RSG::material_storage->shader_free(scene_globals.default_shader);
 
+	// Overdraw Shader
+	RSG::material_storage->material_free(scene_globals.overdraw_material);
+	RSG::material_storage->shader_free(scene_globals.overdraw_shader);
+
 	// Sky Shader
 	GLES1::MaterialStorage::get_singleton()->shaders.sky_shader.version_free(sky_globals.shader_default_version);
 	RSG::material_storage->material_free(sky_globals.default_material);
 	RSG::material_storage->shader_free(sky_globals.default_shader);
 	RSG::material_storage->material_free(sky_globals.fog_material);
 	RSG::material_storage->shader_free(sky_globals.fog_shader);
-	GLES1::Utilities::get_singleton()->buffer_free_data(sky_globals.screen_triangle);
 	memdelete_arr(sky_globals.directional_lights);
 	memdelete_arr(sky_globals.last_frame_directional_lights);
 
