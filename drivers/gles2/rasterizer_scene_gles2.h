@@ -687,6 +687,7 @@ private:
 	/* Batch API */
 	void scene_render_items_implementation(GeometryInstanceSurface **p_surfaces, int p_count, const Transform3D &p_camera_transform, bool p_transparent);
 
+	void _batch_get_hardware_limits(RasterizerSceneBatcherCommon<BatcherAPISceneGLES2>::BatchLimits &r_limits);
 	void _batch_get_instance_geometry_capacity(const GeometryInstanceSurface *p_surface, uint32_t &r_vertex_count, uint32_t &r_index_count);
 	float _batch_get_item_depth(const GeometryInstanceSurface *p_surface, const Transform3D &p_camera_transform);
 	uint64_t _batch_get_state_hash(const GeometryInstanceSurface *p_surface);

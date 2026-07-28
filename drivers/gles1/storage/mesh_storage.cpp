@@ -920,7 +920,9 @@ AABB MeshStorage::mesh_get_custom_aabb(RID p_mesh) const {
 
 AABB MeshStorage::mesh_get_aabb(RID p_mesh, RID p_skeleton) {
 	Mesh *mesh = mesh_owner.get_or_null(p_mesh);
-	ERR_FAIL_NULL_V(mesh, AABB());
+	if (!mesh) {
+		return AABB();
+	}
 
 	if (mesh->custom_aabb != AABB()) {
 		return mesh->custom_aabb;

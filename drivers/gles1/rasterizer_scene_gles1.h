@@ -292,6 +292,12 @@ private:
 		int32_t light_pass_index = -1;
 		bool finished_base_pass = false;
 
+		PackedVector3Array vertex_cache;
+		PackedVector3Array normal_cache;
+		PackedVector2Array uv_cache;
+		PackedColorArray color_cache;
+		PackedInt32Array index_cache;
+
 		void *surface = nullptr;
 		GLES1::SceneShaderData *shader = nullptr;
 		GLES1::SceneMaterialData *material = nullptr;
@@ -517,6 +523,12 @@ private:
 			current_depth_test_enabled = false;
 
 			glDisable(GL_FOG);
+
+			glActiveTexture(GL_TEXTURE0);
+			glDisable(GL_TEXTURE_2D);
+			glActiveTexture(GL_TEXTURE1);
+			glDisable(GL_TEXTURE_2D);
+			glActiveTexture(GL_TEXTURE0);
 		}
 
 		void set_gl_cull_mode(RS::CullMode p_mode) {
@@ -681,6 +693,7 @@ private:
 	/* Batch API */
 	void scene_render_items_implementation(GeometryInstanceSurface **p_surfaces, int p_count, const Transform3D &p_camera_transform, bool p_transparent);
 
+	void _batch_get_hardware_limits(RasterizerSceneBatcherCommon<BatcherAPISceneGLES1>::BatchLimits &r_limits);
 	void _batch_get_instance_geometry_capacity(const GeometryInstanceSurface *p_surface, uint32_t &r_vertex_count, uint32_t &r_index_count);
 	float _batch_get_item_depth(const GeometryInstanceSurface *p_surface, const Transform3D &p_camera_transform);
 	uint64_t _batch_get_state_hash(const GeometryInstanceSurface *p_surface);
@@ -751,6 +764,13 @@ protected:
 		GLuint screen_triangle = 0;
 		uint32_t max_directional_lights = 4;
 		uint32_t roughness_layers = 8;
+
+		float *radiance_verts = nullptr;
+		float *radiance_uvw = nullptr;
+		uint8_t *radiance_colors = nullptr;
+		GLuint radiance_verts_vbo = 0;
+		GLuint radiance_uvw_vbo = 0;
+		GLuint radiance_colors_vbo = 0;
 	} sky_globals;
 
 	struct Sky {

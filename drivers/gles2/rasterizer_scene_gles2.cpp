@@ -1299,6 +1299,16 @@ void RasterizerSceneGLES2::scene_render_items_implementation(GeometryInstanceSur
 	}
 }
 
+void RasterizerSceneGLES2::_batch_get_hardware_limits(RasterizerSceneBatcherCommon<BatcherAPISceneGLES2>::BatchLimits &r_limits) {
+	GLint max_vectors;
+	glGetIntegerv(GL_MAX_VERTEX_UNIFORM_VECTORS, &max_vectors);
+	GL_CHECK_ERROR("GLES2::RasterizerSceneGLES2::_batch_get_hardware_limits: glGetIntegerv GL_MAX_VERTEX_UNIFORM_VECTORS");
+
+	r_limits.max_matrix_palette_vectors = max_vectors;
+	r_limits.max_vertices_per_buffer = 65536;
+	r_limits.max_indices_per_buffer = 65536 * 2;
+}
+
 void RasterizerSceneGLES2::_batch_get_instance_geometry_capacity(const GeometryInstanceSurface *p_surface, uint32_t &r_vertex_count, uint32_t &r_index_count) {
 	GLES2::MeshStorage *mesh_storage = GLES2::MeshStorage::get_singleton();
 
@@ -1324,11 +1334,29 @@ void RasterizerSceneGLES2::_batch_get_instance_geometry_capacity(const GeometryI
 }
 
 float RasterizerSceneGLES2::_batch_get_item_depth(const GeometryInstanceSurface *p_surface, const Transform3D &p_camera_transform) {
-	return p_surface->owner->depth;
+	// Planar depth: Dot product of the camera's look vector
+	// and the vector to the object's origin
+	Vector3 look_vector = -p_camera_transform.basis.get_column(2);
+	Vector3 to_object = p_surface->owner->transform.origin - p_camera_transform.origin;
+	return look_vector.dot(to_object) - p_surface->owner->sorting_offset;
 }
 
 uint64_t RasterizerSceneGLES2::_batch_get_state_hash(const GeometryInstanceSurface *p_surface) {
-	return p_surface->sort.sort_key2; // Contains material and shader ID
+	uint64_t hash = 0;
+
+	// Bits 63-48: Shader version
+	uint64_t shader_id = p_surface->shader ? p_surface->shader->version.get_id() : 0;
+	hash |= (shader_id & 0xFFFF) << 48;
+
+	// Bits 47-16: Material ID
+	uint64_t mat_id = p_surface->material ? p_surface->material->index : 0;
+	hash |= (mat_id & 0xFFFFFFFF) << 16;
+
+	// Bits 15-0: Mesh surface ID / FVF Profile
+	uint64_t surface_id = p_surface->surface_index;
+	hash |= (surface_id & 0xFFFF);
+
+	return hash;
 }
 
 GLES2::SceneMaterialData *RasterizerSceneGLES2::_batch_get_material_data(const GeometryInstanceSurface *p_surface) {
@@ -1336,53 +1364,122 @@ GLES2::SceneMaterialData *RasterizerSceneGLES2::_batch_get_material_data(const G
 }
 
 void RasterizerSceneGLES2::_batch_fill_instance_geometry(const GeometryInstanceSurface *p_surface, RasterizerSceneBatcherCommon<BatcherAPISceneGLES2>::BatchVertex3D *r_bvs, uint16_t *r_inds, uint32_t p_start_vert) {
-	RID mesh = p_surface->owner->data->base;
-	Array arrays = RenderingServer::get_singleton()->mesh_surface_get_arrays(mesh, p_surface->surface_index);
-	
-	if (arrays.is_empty()) {
+	// TODO(GLES2): This is mostly duplicated logic from the
+	// mesh storage to stop the reliance on `RenderingServer`.
+	// Should probably create a dedicated function in `mesh_storage`
+	// that does all of this.
+	if (!p_surface || !p_surface->surface) {
 		return;
 	}
 
-	PackedVector3Array positions = arrays[RS::ARRAY_VERTEX];
-	PackedVector3Array normals = arrays[RS::ARRAY_NORMAL];
-	PackedVector2Array uvs = arrays[RS::ARRAY_TEX_UV];
-	PackedColorArray colors = arrays[RS::ARRAY_COLOR];
-	PackedInt32Array indices = arrays[RS::ARRAY_INDEX];
+	GLES2::Mesh::Surface *s = static_cast<GLES2::Mesh::Surface *>(p_surface->surface);
+
+	if (s->vertex_count == 0 || s->vertex_buffer == 0) {
+		return;
+	}
+
+	Vector<uint8_t> v_data = GLES2::Utilities::get_singleton()->buffer_get_data(GL_ARRAY_BUFFER, s->vertex_buffer, s->vertex_buffer_size);
+	Vector<uint8_t> a_data;
+	if (s->attribute_buffer != 0) {
+		a_data = GLES2::Utilities::get_singleton()->buffer_get_data(GL_ARRAY_BUFFER, s->attribute_buffer, s->attribute_buffer_size);
+	}
+
+	if (v_data.is_empty()) {
+		return;
+	}
 
 	Transform3D xform = p_surface->owner->transform;
 	Basis normal_basis = xform.basis.inverse().transposed();
 
-	uint32_t v_count = positions.size();
-	for (uint32_t i = 0; i < v_count; i++) {
-		Vector3 p = xform.xform(positions[i]);
-		r_bvs[i].pos.set(p);
+	bool is_2d = s->format & RS::ARRAY_FLAG_USE_2D_VERTICES;
+	bool is_compressed = s->format & RS::ARRAY_FLAG_COMPRESS_ATTRIBUTES;
 
-		if (normals.size() > i) {
-			Vector3 n = normal_basis.xform(normals[i]).normalized();
-			r_bvs[i].normal.set(n);
+	int vertex_stride = s->vertex_buffer_size / s->vertex_count;
+	int attr_stride = (s->attribute_buffer_size > 0 && s->vertex_count > 0) ? (s->attribute_buffer_size / s->vertex_count) : 0;
+
+	const uint8_t *v_read = v_data.ptr();
+	const uint8_t *a_read = a_data.is_empty() ? nullptr : a_data.ptr();
+
+	for (uint32_t i = 0; i < s->vertex_count; i++) {
+		const uint8_t *v_ptr = v_read + i * vertex_stride;
+
+		Vector3 p;
+		int pos_bytes = 0;
+		if (is_2d) {
+			float *f = (float *)v_ptr;
+			p = Vector3(f[0], f[1], 0.0f);
+			pos_bytes = sizeof(float) * 2;
+		} else if (is_compressed) {
+			uint16_t *us = (uint16_t *)v_ptr;
+			p = Vector3(us[0] / 65535.0f, us[1] / 65535.0f, us[2] / 65535.0f);
+			pos_bytes = sizeof(uint16_t) * 4;
+		} else {
+			float *f = (float *)v_ptr;
+			p = Vector3(f[0], f[1], f[2]);
+			pos_bytes = sizeof(float) * 3;
+		}
+
+		r_bvs[i].pos.set(xform.xform(p));
+
+		if (s->format & RS::ARRAY_FORMAT_NORMAL) {
+			Vector3 n;
+			if (is_compressed) {
+				uint16_t *us = (uint16_t *)(v_ptr + pos_bytes);
+				n = Vector3((us[0] / 65535.0f) * 2.0f - 1.0f, (us[1] / 65535.0f) * 2.0f - 1.0f, 0.0f);
+			} else {
+				uint16_t *us = (uint16_t *)(v_ptr + pos_bytes);
+				n = Vector3((us[0] / 65535.0f) * 2.0f - 1.0f, (us[1] / 65535.0f) * 2.0f - 1.0f, (us[2] / 65535.0f) * 2.0f - 1.0f);
+			}
+			r_bvs[i].normal.set(normal_basis.xform(n).normalized());
 		} else {
 			r_bvs[i].normal.set(0, 1, 0);
 		}
 
-		if (uvs.size() > i) {
-			r_bvs[i].uv.set(uvs[i]);
+		if (a_read) {
+			const uint8_t *a_ptr = a_read + i * attr_stride;
+			int attr_offset = 0;
+
+			if (s->format & RS::ARRAY_FORMAT_COLOR) {
+				r_bvs[i].color.r = a_ptr[attr_offset + 0];
+				r_bvs[i].color.g = a_ptr[attr_offset + 1];
+				r_bvs[i].color.b = a_ptr[attr_offset + 2];
+				r_bvs[i].color.a = a_ptr[attr_offset + 3];
+				attr_offset += 4;
+			} else {
+				r_bvs[i].color.set_white();
+			}
+
+			if (s->format & RS::ARRAY_FORMAT_TEX_UV) {
+				if (is_compressed) {
+					uint16_t *uv_s = (uint16_t *)(a_ptr + attr_offset);
+					r_bvs[i].uv.set(uv_s[0] / 65535.0f, uv_s[1] / 65535.0f);
+					attr_offset += 4;
+				} else {
+					float *uv_f = (float *)(a_ptr + attr_offset);
+					r_bvs[i].uv.set(uv_f[0], uv_f[1]);
+					attr_offset += 8;
+				}
+			} else {
+				r_bvs[i].uv.set(0, 0);
+			}
 		} else {
+			r_bvs[i].color.set_white();
 			r_bvs[i].uv.set(0, 0);
 		}
 
-		if (colors.size() > i) {
-			r_bvs[i].color.set(colors[i]);
-		} else {
-			r_bvs[i].color.set_white();
-		}
-
-		r_bvs[i].instance_index = 0.0f; // Matrix Palette hook, defaults to 0
+		r_bvs[i].instance_index = 0.0f;
 	}
 
-	if (r_inds) {
-		uint32_t i_count = indices.size();
-		for (uint32_t i = 0; i < i_count; i++) {
-			r_inds[i] = (uint16_t)(indices[i] + p_start_vert);
+	if (r_inds && s->index_count > 0 && s->index_buffer != 0) {
+		Vector<uint8_t> i_data = GLES2::Utilities::get_singleton()->buffer_get_data(GL_ELEMENT_ARRAY_BUFFER, s->index_buffer, s->index_buffer_size);
+		if (!i_data.is_empty()) {
+			bool is_16 = s->vertex_count <= 65536;
+			const uint8_t *i_read = i_data.ptr();
+
+			for (uint32_t i = 0; i < s->index_count; i++) {
+				uint32_t idx = is_16 ? ((uint16_t *)i_read)[i] : ((uint32_t *)i_read)[i];
+				r_inds[i] = (uint16_t)(idx + p_start_vert);
+			}
 		}
 	}
 }
@@ -1485,9 +1582,10 @@ void RasterizerSceneGLES2::_render_single_item_immediate(const GeometryInstanceS
 	GLuint vertex_array_gl = 0;
 	mesh_storage->mesh_surface_get_vertex_arrays_and_format(p_surface->surface, shader->vertex_input_mask, vertex_array_gl);
 
-	if (vertex_array_gl != 0) {
-		glBindVertexArray(vertex_array_gl);
+	if (vertex_array_gl == 0) {
+		return;
 	}
+	glBindVertexArray(vertex_array_gl);
 
 	GLuint index_array_gl = mesh_storage->mesh_surface_get_index_buffer(p_surface->surface, p_surface->lod_index);
 	bool use_index_buffer = index_array_gl != 0;

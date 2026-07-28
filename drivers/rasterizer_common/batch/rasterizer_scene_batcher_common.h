@@ -28,6 +28,47 @@
 /* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                 */
 /**************************************************************************/
 
+/*
+ * CORE PIPELINE:
+ * [ Incoming Surface ] -> Exceeds dynamic limits? -> [ Bypass queue (Direct immediate render) ]
+ *          | (No)
+ *          v
+ * [   Hash & Depth   ] -> Driver calculates a planar depth by projecting the instance's bounds onto the camera's forward vecto.
+ *          |                Eliminates issues regarding distortion artifacts.
+ *          v
+ * [    Sort Queue    ]   -> Opaque items are FTB (Front-to-Back) sorted to maximise early-Z rejection.
+ *          |             -> Transparent items are BTF (Back-to-Front) sorted (Painter's Algorithm, following the 2D batcher logic),
+ *          |                which is required for alpha blending.
+ *          v
+ * [    Pack VBOs     ]   -> Transforms instances and packs them into a RasterizerUnitArray.
+ *          |                Forces a batch break if it exceeds the device's uniform vector's limit.
+ *          v
+ * [   Flush to GPU   ]   -> Triggers the draw call. VBOs and index buffers are reset via reset_flush().
+ *                           Bypass queues are intentionally omitted here so multiple flushes don't break, and are only cleared by reset_scene().
+ *
+ * 64-BIT STATE HASHING:
+ * The state_hash is a 64-bit integer which contains the most expensive operations in the higher bits, while the least expensive
+ * operations in the lower bits. This is done to exploit standard `<` operator in the opaque sort for speed.
+ * Placing the most expensive state changes in the highest bits natively groups identical configurations and prevents state thrashin.
+ * 
+ *  63                    48 47                    16 15                 0
+ *  +----------------------+----------------------+----------------------+
+ *  |  Shader / Prog ID    |  Material / Tex ID   |  FVF / Mesh ID       |
+ *  +----------------------+----------------------+----------------------+
+ *
+ * - Bits 63-48: Shader/Program ID.
+ *   Note: For GLES1, this maps to its state mask (texture environment modes, hardware lighting state).
+ * - Bits 47-16: Material/Texture ID
+ * - Bits 15-0: Flexible Vertex Format (FVF) type or Mesh ID.
+ *
+ * To guarantee optimal vertex fetching speeds, the FVF definitions intentionally pad these byte arrays to 16-byte boundaries.
+ *
+ * For hardware lacking matrix palettes, we execute CPU-side spatial baking similar to Ogre3D's StaticGeometry.
+ * The Transform3D matrix is applied directly to the vertex payload before pushing to the VBO.
+ * For accurate lighting without distorting normals under non-uniform scaling, the inverse-transpose
+ * of the Basis matrix is precalculated once per instance and passed to the software transform loop.
+ */
+
 #ifndef RASTERIZER_SCENE_BATCHER_COMMON_H
 #define RASTERIZER_SCENE_BATCHER_COMMON_H
 
@@ -144,25 +185,39 @@ public:
 		uint64_t state_hash;
 	};
 
+	struct BatchLimits {
+		uint32_t max_matrix_palette_vectors;
+		uint32_t max_vertices_per_buffer;
+		uint32_t max_indices_per_buffer;
+	};
+
 	struct BatchData3D {
 		BatchData3D() {
-			reset_flush();
+			reset_scene();
 			gl_vertex_buffer = 0;
 			gl_index_buffer = 0;
-			max_vertices = 0;
-			max_indices = 0;
 			settings_use_batching = true;
 			settings_dynamic_vertex_limit = 1024;
 		}
 
+		BatchLimits hardware_limits;
+
+		void reset_scene() {
+			reset_flush();
+			bypassed_opaque_items.clear();
+			bypassed_transparent_items.clear();
+			sort_items.reset();
+		}
+
 		void reset_flush() {
 			batches.reset();
+
+			// Keep active FVF byte size, reset cursor
+			unit_vertices.prepare(unit_vertices.get_unit_size_bytes());
 			vertices.reset();
 			indices.reset();
 			total_verts = 0;
 			total_indices = 0;
-			bypassed_opaque_items.clear();
-			bypassed_transparent_items.clear();
 		}
 
 		uint32_t gl_vertex_buffer;
@@ -174,8 +229,11 @@ public:
 		uint32_t settings_dynamic_vertex_limit;
 		bool settings_use_batching;
 
-		RasterizerArray<BatchVertex3D> vertices;
+		BatcherEnums::FVF fvf;
+		RasterizerUnitArray<uint8_t> unit_vertices;
 		RasterizerArray<uint16_t> indices;
+
+		RasterizerArray<BatchVertex3D> vertices;
 		RasterizerArray<Batch3D> batches;
 		RasterizerArray<BSortItem3D> sort_items;
 
@@ -190,9 +248,11 @@ public:
 		void reset() {
 			current_state_hash = 0;
 			current_material_data = nullptr;
+			consumed_uniform_vectors = 0;
 		}
 		uint64_t current_state_hash;
 		typename T_API::MaterialData *current_material_data;
+		uint32_t consumed_uniform_vectors;
 	} _render_item_state;
 
 private:

@@ -48,25 +48,25 @@ void RasterizerSceneBatcherCommon<T_API>::batch_initialize() {
 	bdata.settings_use_batching = GLOBAL_GET("rendering/batching/use_batching");
 	bdata.settings_dynamic_vertex_limit = GLOBAL_GET("rendering/limits/opengl/max_dynamic_vertex_limit");
 
-	bdata.max_vertices = 65536; // Standard 16-bit index limit
-	bdata.max_indices = 65536 * 2;
+	// Driver-specific hardware capabilities
+	get_this()->_batch_get_hardware_limits(bdata.hardware_limits);
 
-	bdata.vertices.create(bdata.max_vertices);
-	bdata.indices.create(bdata.max_indices);
+	bdata.unit_vertices.create(bdata.hardware_limits.max_vertices_per_buffer, 32); 
+	bdata.unit_vertices.prepare(32); // Default to a standard 32-byte FVF
+	bdata.indices.create(bdata.hardware_limits.max_indices_per_buffer);
+	
 	bdata.batches.create(256);
 	bdata.sort_items.create(2048);
 }
 
 template <typename T_API>
 void RasterizerSceneBatcherCommon<T_API>::batch_scene_begin() {
-	bdata.reset_flush();
-	bdata.sort_items.reset();
+	bdata.reset_scene();
 }
 
 template <typename T_API>
 void RasterizerSceneBatcherCommon<T_API>::batch_scene_end() {
-	bdata.reset_flush();
-	bdata.sort_items.reset();
+	bdata.reset_scene();
 }
 
 template <typename T_API>
@@ -77,7 +77,7 @@ void RasterizerSceneBatcherCommon<T_API>::batch_scene_render_items(T_SURFACE **p
 		return;
 	}
 
-	bdata.reset_flush();
+	bdata.reset_scene();
 	_render_item_state.reset();
 
 	// Separate batchable small props from massive unbatchable meshes
@@ -208,10 +208,17 @@ bool RasterizerSceneBatcherCommon<T_API>::prefill_joined_item(T_SURFACE *p_surfa
 		return false;
 	}
 
-	if ((bdata.vertices.size() + incoming_verts > bdata.max_vertices) ||
-		(bdata.indices.size() + incoming_indices > bdata.max_indices)) {
+	// Each instance consumes 3 vectors for its matrix (4x3)
+	// during GLES2 Matrix Palette operations
+	uint32_t uniform_vectors_required = 3; 
+	
+	if ((bdata.vertices.size() + incoming_verts > bdata.hardware_limits.max_vertices_per_buffer) ||
+		(bdata.indices.size() + incoming_indices > bdata.hardware_limits.max_indices_per_buffer) ||
+		(_render_item_state.consumed_uniform_vectors + uniform_vectors_required > bdata.hardware_limits.max_matrix_palette_vectors)) {
 		return true; // Buffer is full, signal caller to flush
 	}
+	
+	_render_item_state.consumed_uniform_vectors += uniform_vectors_required;
 
 	uint32_t start_vert = bdata.vertices.size();
 	BatchVertex3D *bvs = bdata.vertices.request(incoming_verts);
