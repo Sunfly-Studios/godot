@@ -1347,10 +1347,16 @@ Error ShaderPreprocessor::preprocess(const String &p_code, const String &p_filen
 			insert_builtin_define("CURRENT_RENDERER", _MKSTR(1), pp_state);
 		} else if (rendering_method == "gl_compatibility") {
 			insert_builtin_define("CURRENT_RENDERER", _MKSTR(0), pp_state);
-		} else { // gl_legacy
+		} else if (rendering_method == "gl_legacy") {
 			insert_builtin_define("CURRENT_RENDERER", _MKSTR(-1), pp_state);
+		} else { // gl_classic
+			// Even though users are not allowed to create custom shaders
+			// under Classic, we still need some some of way to differ between
+			// renderers under Godot's own built-in shaders.
+			insert_builtin_define("CURRENT_RENDERER", _MKSTR(-2), pp_state);
 		}
 
+		insert_builtin_define("RENDERER_CLASSIC", _MKSTR(-2), pp_state);
 		insert_builtin_define("RENDERER_LEGACY", _MKSTR(-1), pp_state);
 		insert_builtin_define("RENDERER_COMPATIBILITY", _MKSTR(0), pp_state);
 		insert_builtin_define("RENDERER_MOBILE", _MKSTR(1), pp_state);
