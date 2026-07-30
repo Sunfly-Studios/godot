@@ -1700,9 +1700,15 @@ void RasterizerSceneGLES1::_batch_get_instance_geometry_capacity(const GeometryI
 
 float RasterizerSceneGLES1::_batch_get_item_depth(const GeometryInstanceSurface *p_surface, const Transform3D &p_camera_transform) {
 	// Planar depth: Dot product of the camera's look vector
-	// and the vector to the object's origin
+	// and the vector to the object's centre
 	Vector3 look_vector = -p_camera_transform.basis.get_column(2);
-	Vector3 to_object = p_surface->owner->transform.origin - p_camera_transform.origin;
+
+	Vector3 center = p_surface->owner->transform.origin;
+	if (p_surface->owner->use_aabb_center) {
+		center = p_surface->owner->transformed_aabb.position + (p_surface->owner->transformed_aabb.size * 0.5f);
+	}
+
+	Vector3 to_object = center - p_camera_transform.origin;
 	return look_vector.dot(to_object) - p_surface->owner->sorting_offset;
 }
 

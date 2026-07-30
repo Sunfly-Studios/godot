@@ -1314,29 +1314,25 @@ void RasterizerSceneGLES2::_batch_get_instance_geometry_capacity(const GeometryI
 
 	uint32_t drawn_count = mesh_storage->mesh_surface_get_vertices_drawn_count(p_surface->surface);
 
-<<<<<<< HEAD
 	// Multiply by instance count so massive multimeshes automatically bypass the batcher
 	uint32_t instances = p_surface->owner->instance_count > 0 ? p_surface->owner->instance_count : 1;
-
-	if (index_array_gl != 0) {
-		r_index_count = drawn_count * instances;
-		r_vertex_count = drawn_count * instances; // Proxy limit check
-	} else {
-		r_index_count = 0;
-		r_vertex_count = drawn_count * instances;
-	}
-=======
+	
 	// Get base mesh complexity.
 	r_index_count = drawn_count;
 	r_vertex_count = drawn_count; // Proxy limit check
->>>>>>> 8bdb7d44be ([GLES1 & GLES2 (M3.1.2)]: The X/Y/Z origin lines are rendering in GLES1)
 }
 
 float RasterizerSceneGLES2::_batch_get_item_depth(const GeometryInstanceSurface *p_surface, const Transform3D &p_camera_transform) {
 	// Planar depth: Dot product of the camera's look vector
-	// and the vector to the object's origin
+	// and the vector to the object's centre
 	Vector3 look_vector = -p_camera_transform.basis.get_column(2);
-	Vector3 to_object = p_surface->owner->transform.origin - p_camera_transform.origin;
+
+	Vector3 center = p_surface->owner->transform.origin;
+	if (p_surface->owner->use_aabb_center) {
+		center = p_surface->owner->transformed_aabb.position + (p_surface->owner->transformed_aabb.size * 0.5f);
+	}
+
+	Vector3 to_object = center - p_camera_transform.origin;
 	return look_vector.dot(to_object) - p_surface->owner->sorting_offset;
 }
 
@@ -1640,15 +1636,166 @@ void RasterizerSceneGLES2::_batch_fill_multimesh_geometry(const GeometryInstance
 	}
 }
 
+void RasterizerSceneGLES2::_batch_fill_multimesh_geometry(const GeometryInstanceSurface *p_surface, RasterizerSceneBatcherCommon<BatcherAPISceneGLES2>::BatchVertex3DInstanced *r_bvs, uint16_t *r_inds, uint32_t p_start_vert) {
+	if (!p_surface || !p_surface->surface || p_surface->owner->instance_count <= 0) {
+		return;
+	}
+
+	GLES2::Mesh::Surface *s = static_cast<GLES2::Mesh::Surface *>(p_surface->surface);
+	if (s->vertex_count == 0 || s->vertex_buffer == 0) {
+		return;
+	}
+
+	Vector<uint8_t> v_data = GLES2::Utilities::get_singleton()->buffer_get_data(GL_ARRAY_BUFFER, s->vertex_buffer, s->vertex_buffer_size);
+	Vector<uint8_t> a_data;
+	if (s->attribute_buffer != 0) {
+		a_data = GLES2::Utilities::get_singleton()->buffer_get_data(GL_ARRAY_BUFFER, s->attribute_buffer, s->attribute_buffer_size);
+	}
+
+	if (v_data.is_empty()) {
+		return;
+	}
+
+	bool is_2d = s->format & RS::ARRAY_FLAG_USE_2D_VERTICES;
+	bool is_compressed = s->format & RS::ARRAY_FLAG_COMPRESS_ATTRIBUTES;
+	int vertex_stride = s->vertex_buffer_size / s->vertex_count;
+	int attr_stride = (s->attribute_buffer_size > 0 && s->vertex_count > 0) ? (s->attribute_buffer_size / s->vertex_count) : 0;
+
+	const uint8_t *v_read = v_data.ptr();
+	const uint8_t *a_read = a_data.is_empty() ? nullptr : a_data.ptr();
+
+	int instances = p_surface->owner->instance_count;
+	RID base_rid = p_surface->owner->data->base;
+
+	uint32_t bvs_idx = 0;
+	Transform3D owner_transform = p_surface->owner->transform;
+
+	for (int inst = 0; inst < instances; inst++) {
+		Transform3D xform;
+		Color inst_color = Color(1, 1, 1, 1);
+
+		if (p_surface->owner->data->base_type == RS::INSTANCE_MULTIMESH) {
+			xform = RenderingServer::get_singleton()->multimesh_instance_get_transform(base_rid, inst);
+			inst_color = RenderingServer::get_singleton()->multimesh_instance_get_color(base_rid, inst);
+		} else if (p_surface->owner->data->base_type == RS::INSTANCE_PARTICLES) {
+			// TODO(GLES2): Expand with ParticlesStorage querying.
+			xform = Transform3D();
+		}
+
+		Transform3D world_xform = owner_transform * xform;
+
+		for (uint32_t i = 0; i < s->vertex_count; i++) {
+			const uint8_t *v_ptr = v_read + i * vertex_stride;
+
+			Vector3 p;
+			int pos_bytes = 0;
+			if (is_2d) {
+				float *f = (float *)v_ptr;
+				p = Vector3(f[0], f[1], 0.0f);
+				pos_bytes = sizeof(float) * 2;
+			} else if (is_compressed) {
+				uint16_t *us = (uint16_t *)v_ptr;
+				p = Vector3(us[0] / 65535.0f, us[1] / 65535.0f, us[2] / 65535.0f);
+				pos_bytes = sizeof(uint16_t) * 4;
+			} else {
+				float *f = (float *)v_ptr;
+				p = Vector3(f[0], f[1], f[2]);
+				pos_bytes = sizeof(float) * 3;
+			}
+
+			r_bvs[bvs_idx].pos.set(p);
+
+			if (s->format & RS::ARRAY_FORMAT_NORMAL) {
+				Vector3 n;
+				if (is_compressed) {
+					uint16_t *us = (uint16_t *)(v_ptr + pos_bytes);
+					n = Vector3((us[0] / 65535.0f) * 2.0f - 1.0f, (us[1] / 65535.0f) * 2.0f - 1.0f, 0.0f);
+				} else {
+					uint16_t *us = (uint16_t *)(v_ptr + pos_bytes);
+					n = Vector3((us[0] / 65535.0f) * 2.0f - 1.0f, (us[1] / 65535.0f) * 2.0f - 1.0f, (us[2] / 65535.0f) * 2.0f - 1.0f);
+				}
+				r_bvs[bvs_idx].normal.set(n.normalized());
+			} else {
+				r_bvs[bvs_idx].normal.set(0, 1, 0);
+			}
+
+			if (a_read) {
+				const uint8_t *a_ptr = a_read + i * attr_stride;
+				int attr_offset = 0;
+
+				if (s->format & RS::ARRAY_FORMAT_COLOR) {
+					r_bvs[bvs_idx].color.r = a_ptr[attr_offset + 0];
+					r_bvs[bvs_idx].color.g = a_ptr[attr_offset + 1];
+					r_bvs[bvs_idx].color.b = a_ptr[attr_offset + 2];
+					r_bvs[bvs_idx].color.a = a_ptr[attr_offset + 3];
+					attr_offset += 4;
+				} else {
+					r_bvs[bvs_idx].color.set_white();
+				}
+
+				if (s->format & RS::ARRAY_FORMAT_TEX_UV) {
+					if (is_compressed) {
+						uint16_t *uv_s = (uint16_t *)(a_ptr + attr_offset);
+						r_bvs[bvs_idx].uv.set(uv_s[0] / 65535.0f, uv_s[1] / 65535.0f);
+						attr_offset += 4;
+					} else {
+						float *uv_f = (float *)(a_ptr + attr_offset);
+						r_bvs[bvs_idx].uv.set(uv_f[0], uv_f[1]);
+						attr_offset += 8;
+					}
+				} else {
+					r_bvs[bvs_idx].uv.set(0, 0);
+				}
+			} else {
+				r_bvs[bvs_idx].color.set_white();
+				r_bvs[bvs_idx].uv.set(0, 0);
+			}
+
+			r_bvs[bvs_idx].instance_index = 0.0f;
+
+			r_bvs[bvs_idx].instance_xform0.set(world_xform.basis.rows[0][0], world_xform.basis.rows[0][1], world_xform.basis.rows[0][2], world_xform.origin.x);
+			r_bvs[bvs_idx].instance_xform1.set(world_xform.basis.rows[1][0], world_xform.basis.rows[1][1], world_xform.basis.rows[1][2], world_xform.origin.y);
+			r_bvs[bvs_idx].instance_xform2.set(world_xform.basis.rows[2][0], world_xform.basis.rows[2][1], world_xform.basis.rows[2][2], world_xform.origin.z);
+
+			r_bvs[bvs_idx].instance_color_custom_data.set(inst_color);
+
+			bvs_idx++;
+		}
+	}
+
+	if (r_inds && s->index_count > 0 && s->index_buffer != 0) {
+		Vector<uint8_t> i_data = GLES2::Utilities::get_singleton()->buffer_get_data(GL_ELEMENT_ARRAY_BUFFER, s->index_buffer, s->index_buffer_size);
+		if (!i_data.is_empty()) {
+			bool is_16 = s->vertex_count <= 65536;
+			const uint8_t *i_read = i_data.ptr();
+
+			uint32_t inds_idx = 0;
+			for (int inst = 0; inst < instances; inst++) {
+				for (uint32_t i = 0; i < s->index_count; i++) {
+					uint32_t idx = is_16 ? ((uint16_t *)i_read)[i] : ((uint32_t *)i_read)[i];
+					r_inds[inds_idx++] = (uint16_t)(idx + p_start_vert + (inst * s->vertex_count));
+				}
+			}
+		}
+	}
+}
+
 void RasterizerSceneGLES2::_batch_upload_buffers() {
 	if (!bdata.gl_vertex_buffer) {
 		glGenBuffers(1, &bdata.gl_vertex_buffer);
+		glGenBuffers(1, &bdata.gl_instanced_vertex_buffer);
 		glGenBuffers(1, &bdata.gl_index_buffer);
 	}
 
-	glBindBuffer(GL_ARRAY_BUFFER, bdata.gl_vertex_buffer);
-	glBufferData(GL_ARRAY_BUFFER, bdata.vertices.size() * sizeof(RasterizerSceneBatcherCommon<BatcherAPISceneGLES2>::BatchVertex3D), bdata.vertices.get_data(), GL_DYNAMIC_DRAW);
-	GL_CHECK_ERROR("GLES2::RasterizerSceneGLES2::_batch_upload_buffers: glBufferData ARRAY_BUFFER");
+	if (bdata.fvf == BatcherEnums::FVF_INSTANCED) {
+		glBindBuffer(GL_ARRAY_BUFFER, bdata.gl_instanced_vertex_buffer);
+		glBufferData(GL_ARRAY_BUFFER, bdata.instanced_vertices.size() * sizeof(RasterizerSceneBatcherCommon<BatcherAPISceneGLES2>::BatchVertex3DInstanced), bdata.instanced_vertices.get_data(), GL_DYNAMIC_DRAW);
+		GL_CHECK_ERROR("GLES2::RasterizerSceneGLES2::_batch_upload_buffers: glBufferData ARRAY_BUFFER INSTANCED");
+	} else {
+		glBindBuffer(GL_ARRAY_BUFFER, bdata.gl_vertex_buffer);
+		glBufferData(GL_ARRAY_BUFFER, bdata.vertices.size() * sizeof(RasterizerSceneBatcherCommon<BatcherAPISceneGLES2>::BatchVertex3D), bdata.vertices.get_data(), GL_DYNAMIC_DRAW);
+		GL_CHECK_ERROR("GLES2::RasterizerSceneGLES2::_batch_upload_buffers: glBufferData ARRAY_BUFFER");
+	}
 
 	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, bdata.gl_index_buffer);
 	glBufferData(GL_ELEMENT_ARRAY_BUFFER, bdata.indices.size() * sizeof(uint16_t), bdata.indices.get_data(), GL_DYNAMIC_DRAW);
@@ -1657,16 +1804,21 @@ void RasterizerSceneGLES2::_batch_upload_buffers() {
 
 void RasterizerSceneGLES2::_batch_bind_material(GLES2::SceneMaterialData *p_material_data) {
 	if (p_material_data) {
+		SceneShaderGLES2::ShaderVariant variant = SceneShaderGLES2::MODE_COLOR;
+		if (bdata.fvf == BatcherEnums::FVF_INSTANCED) {
+			variant = SceneShaderGLES2::MODE_COLOR_INSTANCING;
+		}
+
 		if (p_material_data->shader_data) {
-			GLES2::MaterialStorage::get_singleton()->shaders.scene_shader.version_bind_shader(p_material_data->shader_data->version, SceneShaderGLES2::MODE_COLOR, 0);
+			GLES2::MaterialStorage::get_singleton()->shaders.scene_shader.version_bind_shader(p_material_data->shader_data->version, variant, 0);
 		}
 
 		p_material_data->bind_uniforms();
 
 		if (p_material_data->shader_data) {
-			_bind_scene_camera_uniforms(p_material_data->shader_data->version, SceneShaderGLES2::MODE_COLOR, 0);
+			_bind_scene_camera_uniforms(p_material_data->shader_data->version, variant, 0);
 			Transform3D identity;
-			GLES2::MaterialStorage::get_singleton()->shaders.scene_shader.version_set_uniform(SceneShaderGLES2::WORLD_TRANSFORM, identity, p_material_data->shader_data->version, SceneShaderGLES2::MODE_COLOR, 0);
+			GLES2::MaterialStorage::get_singleton()->shaders.scene_shader.version_set_uniform(SceneShaderGLES2::WORLD_TRANSFORM, identity, p_material_data->shader_data->version, variant, 0);
 		}
 	}
 }
@@ -1676,8 +1828,10 @@ void RasterizerSceneGLES2::_batch_render_generic() {
 		return;
 	}
 
-	glBindBuffer(GL_ARRAY_BUFFER, bdata.gl_vertex_buffer);
-	uint32_t stride = sizeof(RasterizerSceneBatcherCommon<BatcherAPISceneGLES2>::BatchVertex3D);
+	bool is_instanced = bdata.fvf == BatcherEnums::FVF_INSTANCED;
+	uint32_t stride = is_instanced ? sizeof(RasterizerSceneBatcherCommon<BatcherAPISceneGLES2>::BatchVertex3DInstanced) : sizeof(RasterizerSceneBatcherCommon<BatcherAPISceneGLES2>::BatchVertex3D);
+
+	glBindBuffer(GL_ARRAY_BUFFER, is_instanced ? bdata.gl_instanced_vertex_buffer : bdata.gl_vertex_buffer);
 
 	// TODO(GLES2): These are hardcoded to be these for now.
 	glEnableVertexAttribArray(RS::ARRAY_VERTEX);
@@ -1692,6 +1846,20 @@ void RasterizerSceneGLES2::_batch_render_generic() {
 	glEnableVertexAttribArray(RS::ARRAY_COLOR);
 	glVertexAttribPointer(RS::ARRAY_COLOR, 4, GL_UNSIGNED_BYTE, GL_TRUE, stride, (void *)offsetof(RasterizerSceneBatcherCommon<BatcherAPISceneGLES2>::BatchVertex3D, color));
 
+	glEnableVertexAttribArray(11); // instance_index
+	glVertexAttribPointer(11, 1, GL_FLOAT, GL_FALSE, stride, (void *)offsetof(RasterizerSceneBatcherCommon<BatcherAPISceneGLES2>::BatchVertex3D, instance_index));
+
+	if (is_instanced) {
+		glEnableVertexAttribArray(12); // instance_xform0
+		glVertexAttribPointer(12, 4, GL_FLOAT, GL_FALSE, stride, (void *)offsetof(RasterizerSceneBatcherCommon<BatcherAPISceneGLES2>::BatchVertex3DInstanced, instance_xform0));
+		glEnableVertexAttribArray(13); // instance_xform1
+		glVertexAttribPointer(13, 4, GL_FLOAT, GL_FALSE, stride, (void *)offsetof(RasterizerSceneBatcherCommon<BatcherAPISceneGLES2>::BatchVertex3DInstanced, instance_xform1));
+		glEnableVertexAttribArray(14); // instance_xform2
+		glVertexAttribPointer(14, 4, GL_FLOAT, GL_FALSE, stride, (void *)offsetof(RasterizerSceneBatcherCommon<BatcherAPISceneGLES2>::BatchVertex3DInstanced, instance_xform2));
+		glEnableVertexAttribArray(15); // instance_color_custom_data
+		glVertexAttribPointer(15, 4, GL_UNSIGNED_BYTE, GL_TRUE, stride, (void *)offsetof(RasterizerSceneBatcherCommon<BatcherAPISceneGLES2>::BatchVertex3DInstanced, instance_color_custom_data));
+	}
+
 	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, bdata.gl_index_buffer);
 
 	glDrawElements(GL_TRIANGLES, bdata.indices.size(), GL_UNSIGNED_SHORT, nullptr);
@@ -1703,6 +1871,14 @@ void RasterizerSceneGLES2::_batch_render_generic() {
 	glDisableVertexAttribArray(RS::ARRAY_NORMAL);
 	glDisableVertexAttribArray(RS::ARRAY_TEX_UV);
 	glDisableVertexAttribArray(RS::ARRAY_COLOR);
+	glDisableVertexAttribArray(11);
+
+	if (is_instanced) {
+		glDisableVertexAttribArray(12);
+		glDisableVertexAttribArray(13);
+		glDisableVertexAttribArray(14);
+		glDisableVertexAttribArray(15);
+	}
 
 	glBindBuffer(GL_ARRAY_BUFFER, 0);
 	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
@@ -1717,18 +1893,25 @@ void RasterizerSceneGLES2::_render_single_item_immediate(const GeometryInstanceS
 		return;
 	}
 
-	// Bind shader
-	bool success = material_storage->shaders.scene_shader.version_bind_shader(shader->version, SceneShaderGLES2::MODE_COLOR, 0);
-	if (!success) {
-		return;
-	}
+	uint64_t item_hash = _batch_get_state_hash(p_surface);
 
-	if (p_surface->material) {
-		p_surface->material->bind_uniforms();
-	}
+	if (item_hash != _render_item_state.current_state_hash) {
+		// Bind shader
+		bool success = material_storage->shaders.scene_shader.version_bind_shader(shader->version, SceneShaderGLES2::MODE_COLOR, 0);
+		if (!success) {
+			return;
+		}
 
-	// Push camera state
-	_bind_scene_camera_uniforms(shader->version, SceneShaderGLES2::MODE_COLOR, 0);
+		if (p_surface->material) {
+			p_surface->material->bind_uniforms();
+		}
+
+		// Push camera state
+		_bind_scene_camera_uniforms(shader->version, SceneShaderGLES2::MODE_COLOR, 0);
+
+		_render_item_state.current_state_hash = item_hash;
+		_render_item_state.current_material_data = p_surface->material;
+	}
 
 	// Upload world transform
 	Transform3D world_transform = p_surface->owner->transform;

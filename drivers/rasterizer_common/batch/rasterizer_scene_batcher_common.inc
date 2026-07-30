@@ -80,7 +80,7 @@ void RasterizerSceneBatcherCommon<T_API>::batch_scene_render_items(T_SURFACE **p
 	bdata.reset_scene();
 	_render_item_state.reset();
 
-	// Separate batchable small props from massive unbatchable meshes
+	// Separate batchable small props from unbatchable meshes
 	record_items<T_SURFACE>(p_surfaces, p_count, p_camera_transform, p_transparent);
 
 	// Only sort the items that survived the filter
@@ -91,7 +91,7 @@ void RasterizerSceneBatcherCommon<T_API>::batch_scene_render_items(T_SURFACE **p
 		join_and_flush_sorted_items<T_SURFACE>(p_transparent);
 	}
 
-	// Draw the massive meshes directly, completely bypassing the batcher overhead
+	// Draw the unbatchable meshes directly, bypassing the batcher overhead
 	render_bypassed_items<T_SURFACE>(p_transparent);
 }
 
@@ -101,20 +101,24 @@ void RasterizerSceneBatcherCommon<T_API>::record_items(T_SURFACE **p_surfaces, i
 	for (int i = 0; i < p_count; i++) {
 		T_SURFACE *surface = p_surfaces[i];
 		
-		uint32_t incoming_verts = 0;
-		uint32_t incoming_indices = 0;
+		uint32_t base_verts = 0;
+		uint32_t base_indices = 0;
 		
-		// Quickly look up the vertex count.
-		get_this()->_batch_get_instance_geometry_capacity(surface, incoming_verts, incoming_indices);
+		// Quickly look up the base vertex count for the mesh complexity threshold.
+		get_this()->_batch_get_instance_geometry_capacity(surface, base_verts, base_indices);
 
-		// Do not batch if it passes limit
-		if (incoming_verts > bdata.settings_dynamic_vertex_limit) {
+		// Much like the 2D batcher, ours is really optimised for
+		// triangles.
+		bool can_batch = surface->primitive == RS::PRIMITIVE_TRIANGLES;
+
+		// Do not batch if the base mesh passes the complexity limit
+		if (base_verts > bdata.settings_dynamic_vertex_limit || !can_batch) {
 			if (!p_transparent) {
 				// Opaque massive models don't need strict sorting. Just dump them in the bypass list.
 				bdata.bypassed_opaque_items.push_back((void*)surface);
 			} else {
 				// Transparent massive models still need
-				// depth calculation for back-to-front rendering
+				// depth calculation for BTF rendering
 				BSortItem3D bypassed_trans;
 				bypassed_trans.item = (void*)surface;
 				bypassed_trans.depth = get_this()->_batch_get_item_depth(surface, p_camera_transform);
@@ -141,9 +145,6 @@ void RasterizerSceneBatcherCommon<T_API>::record_items(T_SURFACE **p_surfaces, i
 		s->depth = get_this()->_batch_get_item_depth(surface, p_camera_transform);
 		
 		// Generate a state hash.
-		// This will depend by driver:
-		// GLES1 is Material + Lights.
-		// GLES2 is Material + Shader ID.
 		s->state_hash = get_this()->_batch_get_state_hash(surface); 
 	}
 }
@@ -193,41 +194,78 @@ template <typename T_API>
 template <class T_SURFACE>
 bool RasterizerSceneBatcherCommon<T_API>::try_join_item(T_SURFACE *p_surface, RenderItemState3D &r_ris) {
 	uint64_t item_hash = get_this()->_batch_get_state_hash(p_surface);
+	bool is_multimesh = (
+		p_surface->owner->data->base_type == RS::INSTANCE_MULTIMESH
+	);
+	bool current_is_multimesh = bdata.fvf == BatcherEnums::FVF_INSTANCED;
+	
+	// Topology switch between instanced and regular
+	// always break batches
+	if (is_multimesh != current_is_multimesh && bdata.fvf != BatcherEnums::FVF_UNBATCHED) {
+		return false;
+	}
+
 	return (item_hash == r_ris.current_state_hash);
 }
 
 template <typename T_API>
 template <class T_SURFACE>
 bool RasterizerSceneBatcherCommon<T_API>::prefill_joined_item(T_SURFACE *p_surface) {
-	uint32_t incoming_verts = 0;
-	uint32_t incoming_indices = 0;
+	uint32_t base_verts = 0;
+	uint32_t base_indices = 0;
 	
-	get_this()->_batch_get_instance_geometry_capacity(p_surface, incoming_verts, incoming_indices);
+	get_this()->_batch_get_instance_geometry_capacity(p_surface, base_verts, base_indices);
 
-	if (incoming_verts == 0) {
+	if (base_verts == 0) {
 		return false;
 	}
 
-	// Each instance consumes 3 vectors for its matrix (4x3)
-	// during GLES2 Matrix Palette operations
-	uint32_t uniform_vectors_required = 3; 
-	
-	if ((bdata.vertices.size() + incoming_verts > bdata.hardware_limits.max_vertices_per_buffer) ||
-		(bdata.indices.size() + incoming_indices > bdata.hardware_limits.max_indices_per_buffer) ||
-		(_render_item_state.consumed_uniform_vectors + uniform_vectors_required > bdata.hardware_limits.max_matrix_palette_vectors)) {
-		return true; // Buffer is full, signal caller to flush
-	}
-	
-	_render_item_state.consumed_uniform_vectors += uniform_vectors_required;
+	bool is_multimesh = p_surface->owner->data->base_type == RS::INSTANCE_MULTIMESH;
+	uint32_t instances = is_multimesh ? p_surface->owner->instance_count : 1;
+	uint32_t incoming_verts = base_verts * instances;
+	uint32_t incoming_indices = base_indices * instances;
 
-	uint32_t start_vert = bdata.vertices.size();
-	BatchVertex3D *bvs = bdata.vertices.request(incoming_verts);
-	uint16_t *inds = incoming_indices > 0 ? bdata.indices.request(incoming_indices) : nullptr;
+	if (is_multimesh) {
+		if (bdata.instanced_vertices.max_size() == 0) {
+			// We allocate on demand for performance and to save
+			// memory.
+			bdata.instanced_vertices.create(bdata.hardware_limits.max_vertices_per_buffer);
+		}
+		
+		if ((bdata.instanced_vertices.size() + incoming_verts > bdata.hardware_limits.max_vertices_per_buffer) ||
+			(bdata.indices.size() + incoming_indices > bdata.hardware_limits.max_indices_per_buffer)) {
+			return true; // Buffer is full, signal caller to flush
+		}
 
-	if (bvs) {
-		// The driver handles the packing.
-		// Multi-threading dispatch (GLES1), or matrix palette recording (GLES2).
-		get_this()->_batch_fill_instance_geometry(p_surface, bvs, inds, start_vert);
+		bdata.fvf = BatcherEnums::FVF_INSTANCED;
+		uint32_t start_vert = bdata.instanced_vertices.size();
+		BatchVertex3DInstanced *bvs = bdata.instanced_vertices.request(incoming_verts);
+		uint16_t *inds = nullptr;
+
+		if (incoming_indices > 0) {
+			inds = bdata.indices.request(incoming_indices);
+		}
+
+		if (bvs) {
+			get_this()->_batch_fill_multimesh_geometry(p_surface, bvs, inds, start_vert);
+		}
+	} else {
+		if ((bdata.vertices.size() + incoming_verts > bdata.hardware_limits.max_vertices_per_buffer) ||
+			(bdata.indices.size() + incoming_indices > bdata.hardware_limits.max_indices_per_buffer)) {
+			return true; // Buffer is full, signal caller to flush
+		}
+		
+		bdata.fvf = BatcherEnums::FVF_REGULAR;
+
+		uint32_t start_vert = bdata.vertices.size();
+		BatchVertex3D *bvs = bdata.vertices.request(incoming_verts);
+		uint16_t *inds = incoming_indices > 0 ? bdata.indices.request(incoming_indices) : nullptr;
+
+		if (bvs) {
+			// The driver handles the packing.
+			// Multi-threading dispatch (GLES1), or CPU transforming (GLES2).
+			get_this()->_batch_fill_instance_geometry(p_surface, bvs, inds, start_vert);
+		}
 	}
 
 	return false;
@@ -236,17 +274,17 @@ bool RasterizerSceneBatcherCommon<T_API>::prefill_joined_item(T_SURFACE *p_surfa
 template <typename T_API>
 template <class T_SURFACE>
 void RasterizerSceneBatcherCommon<T_API>::flush_render_batches(typename T_API::MaterialData *p_material_data) {
-	if (bdata.vertices.size() == 0) {
+	if (bdata.vertices.size() == 0 && bdata.instanced_vertices.size() == 0) {
 		return;
 	}
 
 	// Upload batched VBOs
 	get_this()->_batch_upload_buffers();
 	
-	// Bind shaders or fixed function states
+	// Bind states
 	get_this()->_batch_bind_material(p_material_data);
 	
-	// Execute the glDrawElements call
+	// Execute draw calls
 	get_this()->_batch_render_generic();
 
 	bdata.reset_flush();
@@ -255,6 +293,9 @@ void RasterizerSceneBatcherCommon<T_API>::flush_render_batches(typename T_API::M
 template <typename T_API>
 template <class T_SURFACE>
 void RasterizerSceneBatcherCommon<T_API>::render_bypassed_items(bool p_transparent) {
+	// Reset the tracker before bypassing
+	_render_item_state.reset();
+
 	if (!p_transparent) {
 		for (uint32_t i = 0; i < (uint32_t)bdata.bypassed_opaque_items.size(); i++) {
 			get_this()->_render_single_item_immediate(static_cast<T_SURFACE*>(bdata.bypassed_opaque_items[i]));

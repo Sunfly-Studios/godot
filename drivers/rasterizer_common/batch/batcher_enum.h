@@ -42,6 +42,7 @@ public:
 		FVF_LIGHT_ANGLE,
 		FVF_MODULATED,
 		FVF_LARGE,
+		FVF_INSTANCED,
 	};
 
 	// these flags are specifically for batching

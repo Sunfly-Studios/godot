@@ -104,6 +104,16 @@ public:
 		}
 	};
 
+	struct BatchVector4 {
+		float x, y, z, w;
+		void set(float xx, float yy, float zz, float ww) {
+			x = xx;
+			y = yy;
+			z = zz;
+			w = ww;
+		}
+	};
+
 	struct BatchVector2 {
 		float x, y;
 		void set(float xx, float yy) {
@@ -164,6 +174,23 @@ public:
 		BatchVector2 uv;
 		BatchColor color;
 		float instance_index; // Used by Matrix Palette Uniforms in GLES2
+
+		float pad[2];
+	};
+
+	// A struct used to simulate instaced rendering for
+	// MultiMesh
+	struct BatchVertex3DInstanced {
+		BatchVector3 pos;
+		BatchVector3 normal;
+		BatchVector2 uv;
+		BatchColor color;
+		float instance_index;
+		BatchVector4 instance_xform0;
+		BatchVector4 instance_xform1;
+		BatchVector4 instance_xform2;
+		BatchColor instance_color_custom_data;
+		float pad;
 	};
 
 	// A batch represents a single draw call of aggregated geometry
@@ -195,6 +222,7 @@ public:
 		BatchData3D() {
 			reset_scene();
 			gl_vertex_buffer = 0;
+			gl_instanced_vertex_buffer = 0;
 			gl_index_buffer = 0;
 			settings_use_batching = true;
 			settings_dynamic_vertex_limit = 1024;
@@ -207,6 +235,7 @@ public:
 			bypassed_opaque_items.clear();
 			bypassed_transparent_items.clear();
 			sort_items.reset();
+			fvf = BatcherEnums::FVF_REGULAR;
 		}
 
 		void reset_flush() {
@@ -215,12 +244,14 @@ public:
 			// Keep active FVF byte size, reset cursor
 			unit_vertices.prepare(unit_vertices.get_unit_size_bytes());
 			vertices.reset();
+			instanced_vertices.reset();
 			indices.reset();
 			total_verts = 0;
 			total_indices = 0;
 		}
 
 		uint32_t gl_vertex_buffer;
+		uint32_t gl_instanced_vertex_buffer;
 		uint32_t gl_index_buffer;
 
 		uint32_t max_vertices;
@@ -234,6 +265,7 @@ public:
 		RasterizerArray<uint16_t> indices;
 
 		RasterizerArray<BatchVertex3D> vertices;
+		RasterizerArray<BatchVertex3DInstanced> instanced_vertices;
 		RasterizerArray<Batch3D> batches;
 		RasterizerArray<BSortItem3D> sort_items;
 
