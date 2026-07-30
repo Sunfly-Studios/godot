@@ -49,6 +49,8 @@
 
 RasterizerSceneGLES2 *RasterizerSceneGLES2::singleton = nullptr;
 
+/* STATIC */
+
 static GLuint _init_radiance_texture_gles2(int p_size, int p_mipmaps, String p_name) {
 	GLuint tex;
 	glGenTextures(1, &tex);
@@ -78,6 +80,15 @@ static GLuint _init_radiance_texture_gles2(int p_size, int p_mipmaps, String p_n
 
 	return tex;
 }
+
+static const Vector3 view_normals[6] = {
+	Vector3(+1, 0, 0), Vector3(-1, 0, 0), Vector3(0, +1, 0),
+	Vector3(0, -1, 0), Vector3(0, 0, +1), Vector3(0, 0, -1)
+};
+static const Vector3 view_up[6] = {
+	Vector3(0, -1, 0), Vector3(0, -1, 0), Vector3(0, 0, +1),
+	Vector3(0, 0, -1), Vector3(0, -1, 0), Vector3(0, -1, 0)
+};
 
 void RasterizerSceneGLES2::initialize() {
 	GLES2::MaterialStorage *material_storage = GLES2::MaterialStorage::get_singleton();
@@ -971,23 +982,6 @@ void RasterizerSceneGLES2::_update_sky_radiance(RID p_env, const Projection &p_p
 
 	// Update radiance cubemap
 	if (sky->reflection_dirty && (sky->processing_layer >= max_processing_layer || update_single_frame)) {
-		static const Vector3 view_normals[6] = {
-			Vector3(+1, 0, 0),
-			Vector3(-1, 0, 0),
-			Vector3(0, +1, 0),
-			Vector3(0, -1, 0),
-			Vector3(0, 0, +1),
-			Vector3(0, 0, -1)
-		};
-		static const Vector3 view_up[6] = {
-			Vector3(0, -1, 0),
-			Vector3(0, -1, 0),
-			Vector3(0, 0, +1),
-			Vector3(0, 0, -1),
-			Vector3(0, -1, 0),
-			Vector3(0, -1, 0)
-		};
-
 		Projection cm;
 		cm.set_perspective(90, 1, 0.01, 10.0);
 		Projection correction;
@@ -1319,8 +1313,8 @@ void RasterizerSceneGLES2::_batch_get_instance_geometry_capacity(const GeometryI
 	}
 
 	uint32_t drawn_count = mesh_storage->mesh_surface_get_vertices_drawn_count(p_surface->surface);
-	GLuint index_array_gl = mesh_storage->mesh_surface_get_index_buffer(p_surface->surface, p_surface->lod_index);
 
+<<<<<<< HEAD
 	// Multiply by instance count so massive multimeshes automatically bypass the batcher
 	uint32_t instances = p_surface->owner->instance_count > 0 ? p_surface->owner->instance_count : 1;
 
@@ -1331,6 +1325,11 @@ void RasterizerSceneGLES2::_batch_get_instance_geometry_capacity(const GeometryI
 		r_index_count = 0;
 		r_vertex_count = drawn_count * instances;
 	}
+=======
+	// Get base mesh complexity.
+	r_index_count = drawn_count;
+	r_vertex_count = drawn_count; // Proxy limit check
+>>>>>>> 8bdb7d44be ([GLES1 & GLES2 (M3.1.2)]: The X/Y/Z origin lines are rendering in GLES1)
 }
 
 float RasterizerSceneGLES2::_batch_get_item_depth(const GeometryInstanceSurface *p_surface, const Transform3D &p_camera_transform) {
@@ -1479,6 +1478,163 @@ void RasterizerSceneGLES2::_batch_fill_instance_geometry(const GeometryInstanceS
 			for (uint32_t i = 0; i < s->index_count; i++) {
 				uint32_t idx = is_16 ? ((uint16_t *)i_read)[i] : ((uint32_t *)i_read)[i];
 				r_inds[i] = (uint16_t)(idx + p_start_vert);
+			}
+		}
+	} else if (r_inds) {
+		// Auto-generate sequential indices for unindexed meshes.
+		for (uint32_t i = 0; i < s->vertex_count; i++) {
+			r_inds[i] = (uint16_t)(i + p_start_vert);
+		}
+	}
+}
+
+void RasterizerSceneGLES2::_batch_fill_multimesh_geometry(const GeometryInstanceSurface *p_surface, RasterizerSceneBatcherCommon<BatcherAPISceneGLES2>::BatchVertex3DInstanced *r_bvs, uint16_t *r_inds, uint32_t p_start_vert) {
+	if (!p_surface || !p_surface->surface || p_surface->owner->instance_count <= 0) {
+		return;
+	}
+
+	GLES2::Mesh::Surface *s = static_cast<GLES2::Mesh::Surface *>(p_surface->surface);
+	if (s->vertex_count == 0 || s->vertex_buffer == 0) {
+		return;
+	}
+
+	Vector<uint8_t> v_data = GLES2::Utilities::get_singleton()->buffer_get_data(GL_ARRAY_BUFFER, s->vertex_buffer, s->vertex_buffer_size);
+	Vector<uint8_t> a_data;
+	if (s->attribute_buffer != 0) {
+		a_data = GLES2::Utilities::get_singleton()->buffer_get_data(GL_ARRAY_BUFFER, s->attribute_buffer, s->attribute_buffer_size);
+	}
+
+	if (v_data.is_empty()) {
+		return;
+	}
+
+	bool is_2d = s->format & RS::ARRAY_FLAG_USE_2D_VERTICES;
+	bool is_compressed = s->format & RS::ARRAY_FLAG_COMPRESS_ATTRIBUTES;
+	int vertex_stride = s->vertex_buffer_size / s->vertex_count;
+	int attr_stride = (s->attribute_buffer_size > 0 && s->vertex_count > 0) ? (s->attribute_buffer_size / s->vertex_count) : 0;
+
+	const uint8_t *v_read = v_data.ptr();
+	const uint8_t *a_read = a_data.is_empty() ? nullptr : a_data.ptr();
+
+	int instances = p_surface->owner->instance_count;
+	RID base_rid = p_surface->owner->data->base;
+
+	uint32_t bvs_idx = 0;
+	Transform3D owner_transform = p_surface->owner->transform;
+
+	for (int inst = 0; inst < instances; inst++) {
+		Transform3D xform;
+		Color inst_color = Color(1, 1, 1, 1);
+
+		if (p_surface->owner->data->base_type == RS::INSTANCE_MULTIMESH) {
+			xform = GLES2::MeshStorage::get_singleton()->multimesh_instance_get_transform(base_rid, inst);
+			inst_color = GLES2::MeshStorage::get_singleton()->multimesh_instance_get_color(base_rid, inst);
+		} else if (p_surface->owner->data->base_type == RS::INSTANCE_PARTICLES) {
+			// TODO(GLES2): Expand with ParticlesStorage querying.
+			xform = Transform3D();
+		}
+
+		Transform3D world_xform = owner_transform * xform;
+
+		for (uint32_t i = 0; i < s->vertex_count; i++) {
+			const uint8_t *v_ptr = v_read + i * vertex_stride;
+
+			Vector3 p;
+			int pos_bytes = 0;
+			if (is_2d) {
+				float *f = (float *)v_ptr;
+				p = Vector3(f[0], f[1], 0.0f);
+				pos_bytes = sizeof(float) * 2;
+			} else if (is_compressed) {
+				uint16_t *us = (uint16_t *)v_ptr;
+				p = Vector3(us[0] / 65535.0f, us[1] / 65535.0f, us[2] / 65535.0f);
+				pos_bytes = sizeof(uint16_t) * 4;
+			} else {
+				float *f = (float *)v_ptr;
+				p = Vector3(f[0], f[1], f[2]);
+				pos_bytes = sizeof(float) * 3;
+			}
+
+			r_bvs[bvs_idx].pos.set(p);
+
+			if (s->format & RS::ARRAY_FORMAT_NORMAL) {
+				Vector3 n;
+				if (is_compressed) {
+					uint16_t *us = (uint16_t *)(v_ptr + pos_bytes);
+					n = Vector3((us[0] / 65535.0f) * 2.0f - 1.0f, (us[1] / 65535.0f) * 2.0f - 1.0f, 0.0f);
+				} else {
+					uint16_t *us = (uint16_t *)(v_ptr + pos_bytes);
+					n = Vector3((us[0] / 65535.0f) * 2.0f - 1.0f, (us[1] / 65535.0f) * 2.0f - 1.0f, (us[2] / 65535.0f) * 2.0f - 1.0f);
+				}
+				r_bvs[bvs_idx].normal.set(n.normalized());
+			} else {
+				r_bvs[bvs_idx].normal.set(0, 1, 0);
+			}
+
+			if (a_read) {
+				const uint8_t *a_ptr = a_read + i * attr_stride;
+				int attr_offset = 0;
+
+				if (s->format & RS::ARRAY_FORMAT_COLOR) {
+					r_bvs[bvs_idx].color.r = a_ptr[attr_offset + 0];
+					r_bvs[bvs_idx].color.g = a_ptr[attr_offset + 1];
+					r_bvs[bvs_idx].color.b = a_ptr[attr_offset + 2];
+					r_bvs[bvs_idx].color.a = a_ptr[attr_offset + 3];
+					attr_offset += 4;
+				} else {
+					r_bvs[bvs_idx].color.set_white();
+				}
+
+				if (s->format & RS::ARRAY_FORMAT_TEX_UV) {
+					if (is_compressed) {
+						uint16_t *uv_s = (uint16_t *)(a_ptr + attr_offset);
+						r_bvs[bvs_idx].uv.set(uv_s[0] / 65535.0f, uv_s[1] / 65535.0f);
+						attr_offset += 4;
+					} else {
+						float *uv_f = (float *)(a_ptr + attr_offset);
+						r_bvs[bvs_idx].uv.set(uv_f[0], uv_f[1]);
+						attr_offset += 8;
+					}
+				} else {
+					r_bvs[bvs_idx].uv.set(0, 0);
+				}
+			} else {
+				r_bvs[bvs_idx].color.set_white();
+				r_bvs[bvs_idx].uv.set(0, 0);
+			}
+
+			r_bvs[bvs_idx].instance_index = 0.0f;
+
+			r_bvs[bvs_idx].instance_xform0.set(world_xform.basis.rows[0][0], world_xform.basis.rows[0][1], world_xform.basis.rows[0][2], world_xform.origin.x);
+			r_bvs[bvs_idx].instance_xform1.set(world_xform.basis.rows[1][0], world_xform.basis.rows[1][1], world_xform.basis.rows[1][2], world_xform.origin.y);
+			r_bvs[bvs_idx].instance_xform2.set(world_xform.basis.rows[2][0], world_xform.basis.rows[2][1], world_xform.basis.rows[2][2], world_xform.origin.z);
+
+			r_bvs[bvs_idx].instance_color_custom_data.set(inst_color);
+
+			bvs_idx++;
+		}
+	}
+
+	if (r_inds && s->index_count > 0 && s->index_buffer != 0) {
+		Vector<uint8_t> i_data = GLES2::Utilities::get_singleton()->buffer_get_data(GL_ELEMENT_ARRAY_BUFFER, s->index_buffer, s->index_buffer_size);
+		if (!i_data.is_empty()) {
+			bool is_16 = s->vertex_count <= 65536;
+			const uint8_t *i_read = i_data.ptr();
+
+			uint32_t inds_idx = 0;
+			for (int inst = 0; inst < instances; inst++) {
+				for (uint32_t i = 0; i < s->index_count; i++) {
+					uint32_t idx = is_16 ? ((uint16_t *)i_read)[i] : ((uint32_t *)i_read)[i];
+					r_inds[inds_idx++] = (uint16_t)(idx + p_start_vert + (inst * s->vertex_count));
+				}
+			}
+		}
+	} else if (r_inds) {
+		// Auto-generate sequential indices for unindexed meshes.
+		uint32_t inds_idx = 0;
+		for (int inst = 0; inst < instances; inst++) {
+			for (uint32_t i = 0; i < s->vertex_count; i++) {
+				r_inds[inds_idx++] = (uint16_t)(i + p_start_vert + (inst * s->vertex_count));
 			}
 		}
 	}

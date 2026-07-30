@@ -7479,6 +7479,10 @@ void Node3DEditor::_init_indicators() {
 shader_type spatial;
 render_mode blend_mix, cull_disabled, unshaded, fog_disabled;
 
+#if CURRENT_RENDERER == RENDERER_LEGACY
+varying float clip_w;
+#endif
+
 void vertex() {
 	vec3 point_a = MODEL_MATRIX[3].xyz;
 	// Encoded in scale.
@@ -7488,21 +7492,26 @@ void vertex() {
 	vec4 clip_a = PROJECTION_MATRIX * (VIEW_MATRIX * vec4(point_a, 1.0));
 	vec4 clip_b = PROJECTION_MATRIX * (VIEW_MATRIX * vec4(point_b, 1.0));
 
-	vec2 screen_a = VIEWPORT_SIZE * (0.5 * clip_a.xy / clip_a.w + 0.5);
-	vec2 screen_b = VIEWPORT_SIZE * (0.5 * clip_b.xy / clip_b.w + 0.5);
+	vec4 clip_final = mix(clip_a, clip_b, VERTEX.z);
 
-	vec2 x_basis = normalize(screen_b - screen_a);
+	// Calculate un-flipped 2D screen direction directly from clip space,
+	// accounting for aspect ratio.
+	vec2 delta = (clip_b.xy * clip_a.w - clip_a.xy * clip_b.w) * VIEWPORT_SIZE;
+	vec2 x_basis = length(delta) > 0.00001 ? normalize(delta) : vec2(1.0, 0.0);
 	vec2 y_basis = vec2(-x_basis.y, x_basis.x);
 
 	float width = 3.0;
-	vec2 screen_point_a = screen_a + width * (VERTEX.x * x_basis + VERTEX.y * y_basis);
-	vec2 screen_point_b = screen_b + width * (VERTEX.x * x_basis + VERTEX.y * y_basis);
-	vec2 screen_point_final = mix(screen_point_a, screen_point_b, VERTEX.z);
-
-	vec4 clip_final = mix(clip_a, clip_b, VERTEX.z);
-
-	POSITION = vec4(clip_final.w * ((2.0 * screen_point_final) / VIEWPORT_SIZE - 1.0), clip_final.z, clip_final.w);
+	vec2 offset_screen = width * (VERTEX.x * x_basis + VERTEX.y * y_basis);
+	vec2 offset_clip = offset_screen * clip_final.w / VIEWPORT_SIZE * 2.0;
+	
+#if CURRENT_RENDERER == RENDERER_LEGACY
+	POSITION = vec4(clip_final.xy + offset_clip, clip_final.z, clip_final.w);
 	UV = VERTEX.yz * clip_final.w;
+	clip_w = clip_final.w;
+#else
+	POSITION = vec4(clip_final.xy + offset_clip, clip_final.z, clip_final.w);
+	UV = VERTEX.yz * clip_final.w;
+#endif
 
 	if (!OUTPUT_IS_SRGB) {
 		COLOR.rgb = mix(pow((COLOR.rgb + vec3(0.055)) * (1.0 / (1.0 + 0.055)), vec3(2.4)), COLOR.rgb * (1.0 / 12.92), lessThan(COLOR.rgb, vec3(0.04045)));
@@ -7510,11 +7519,16 @@ void vertex() {
 }
 
 void fragment() {
+#if CURRENT_RENDERER == RENDERER_LEGACY
+	float line_width = abs(clip_w * 0.5) / 3.0;
+	float line_uv = abs(UV.x * 0.5);
+	float line = 1.0 - smoothstep(line_width * 0.25, line_width * 1.0, line_uv);
+#else
 	// Multiply by 0.5 since UV is actually UV is [-1, 1].
 	float line_width = fwidth(UV.x * 0.5);
 	float line_uv = abs(UV.x * 0.5);
 	float line = smoothstep(line_width * 1.0, line_width * 0.25, line_uv);
-
+#endif
 	ALBEDO = COLOR.rgb;
 	ALPHA *= COLOR.a * line;
 }

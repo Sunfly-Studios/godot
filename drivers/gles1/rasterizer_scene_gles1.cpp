@@ -97,6 +97,34 @@ static const Vector3 view_up[6] = {
 	Vector3(0, 0, -1), Vector3(0, -1, 0), Vector3(0, -1, 0)
 };
 
+#ifdef TOOLS_ENABLED
+// We manually draw the grid X/Y/Z editor lines regardless
+// of the world's opinion.
+// This is because the shader in Node3DEditorPlugin is a ghost
+// shader that exists but cannot be retrieved in anyway.
+// And because I don't want the user to just have a
+// grid + sky and that's it, we do it ourselves then.
+// 
+// We don't count the draw calls made by these when
+// reporting rendering data.
+static constexpr float line_verts[] = {
+	0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f,   // +X Axis
+	0.0f, 0.0f, 0.0f, -1.0f, 0.0f, 0.0f,  // -X Axis
+	0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f,   // +Y Axis
+	0.0f, 0.0f, 0.0f, 0.0f, -1.0f, 0.0f,  // -Y Axis
+	0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f,   // +Z Axis
+	0.0f, 0.0f, 0.0f, 0.0f, 0.0f, -1.0f   // -Z Axis
+};
+static constexpr uint8_t line_colors[] = {
+	246, 83, 101, 255, 246, 83, 101, 255, // +X Axis
+	246, 83, 101, 255, 246, 83, 101, 255, // -X Axis
+	139, 216, 67, 255, 139, 216, 67, 255, // +Y Axis
+	139, 216, 67, 255, 139, 216, 67, 255, // -Y Axis
+	57, 156, 237, 255, 57, 156, 237, 255, // +Z Axis
+	57, 156, 237, 255, 57, 156, 237, 255  // -Z Axis
+};
+#endif
+
 void RasterizerSceneGLES1::initialize() {
 	GLES1::MaterialStorage *material_storage = GLES1::MaterialStorage::get_singleton();
 	GLES1::Config *config = GLES1::Config::get_singleton();
@@ -323,6 +351,22 @@ void fragment() {
 		material_storage->material_initialize(scene_globals.overdraw_material);
 		material_storage->material_set_shader(scene_globals.overdraw_material, scene_globals.overdraw_shader);
 	}
+
+#ifdef TOOLS_ENABLED
+	if (!GLES1::Config::get_singleton()->is_android_emulator || GLES1::Config::get_singleton()->support_vbo) {
+		// Prebake the editor origin lines directly to VRAM.
+		glGenBuffers(1, &editor_lines_vbo);
+		glBindBuffer(GL_ARRAY_BUFFER, editor_lines_vbo);
+		glBufferData(GL_ARRAY_BUFFER, sizeof(line_verts), line_verts, GL_STATIC_DRAW);
+
+		glGenBuffers(1, &editor_lines_color_vbo);
+		glBindBuffer(GL_ARRAY_BUFFER, editor_lines_color_vbo);
+		glBufferData(GL_ARRAY_BUFFER, sizeof(line_colors), line_colors, GL_STATIC_DRAW);
+
+		glBindBuffer(GL_ARRAY_BUFFER, 0);
+		GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::initialize: TOOLS_ENABLED editor lines prebake");
+	}
+#endif
 
 	// MultiMesh may read from color when color is disabled, so make sure that the color defaults to white instead of black.
 	glColor4f(1.0f, 1.0f, 1.0f, 1.0f);
@@ -1266,8 +1310,18 @@ void RasterizerSceneGLES1::_update_sky_radiance(RID p_env, const Projection &p_p
 
 		float exposure = 1.0f;
 
+		// If we actually have the material, extract the real colours
+		// from it.
 		if (sky_material.is_valid()) {
 			Variant v;
+
+			// TODO(GLES1): This function gets called every frame.
+			// We should cache these sky colours so that
+			// these only get updated when absolutely necessary
+			// (like we already do with the sky paronama).
+			//
+			// ...also not have to copy paste these manually.
+
 			v = material_storage->material_get_param(sky_material, "sky_top_color");
 			if (v.get_type() == Variant::COLOR) {
 				sky_top_color = v;
@@ -1315,7 +1369,7 @@ void RasterizerSceneGLES1::_update_sky_radiance(RID p_env, const Projection &p_p
 
 		// Only perform CPU math on the very first layer of processing.
 		if (sky->processing_layer == 0) {
-			for (int i = 0; i < 6; i++) {
+			for (int i = 0; i < max_processing_layer; i++) {
 				for (int v = 0; v < num_vertices; v++) {
 					Vector3 cube_normal;
 					cube_normal.x = sky_globals.radiance_uvw[(i * num_vertices + v) * 3 + 0];
@@ -1368,7 +1422,7 @@ void RasterizerSceneGLES1::_update_sky_radiance(RID p_env, const Projection &p_p
 			last_face = sky->processing_layer;
 		}
 
-		if (sky->processing_layer < 6) {
+		if (sky->processing_layer < max_processing_layer) {
 			for (int i = first_face; i <= last_face; i++) {
 				if (GLES1::Config::get_singleton()->support_vbo) {
 					glBindBuffer(GL_ARRAY_BUFFER, sky_globals.radiance_verts_vbo);
@@ -1727,6 +1781,84 @@ void RasterizerSceneGLES1::_batch_fill_instance_geometry(const GeometryInstanceS
 	}
 }
 
+void RasterizerSceneGLES1::_batch_fill_multimesh_geometry(const GeometryInstanceSurface *p_surface, RasterizerSceneBatcherCommon<BatcherAPISceneGLES1>::BatchVertex3DInstanced *r_bvs, uint16_t *r_inds, uint32_t p_start_vert) {
+	if (!p_surface || !p_surface->surface || p_surface->owner->instance_count <= 0) {
+		return;
+	}
+
+	const PackedVector3Array &positions = p_surface->vertex_cache;
+	if (positions.is_empty()) {
+		return;
+	}
+
+	const PackedVector3Array &normals = p_surface->normal_cache;
+	const PackedVector2Array &uvs = p_surface->uv_cache;
+	const PackedColorArray &colors = p_surface->color_cache;
+	const PackedInt32Array &indices = p_surface->index_cache;
+
+	uint32_t v_count = positions.size();
+	const Vector3 *pos_ptr = positions.ptr();
+	const Vector3 *norm_ptr = normals.size() > 0 ? normals.ptr() : nullptr;
+	const Vector2 *uv_ptr = uvs.size() > 0 ? uvs.ptr() : nullptr;
+	const Color *col_ptr = colors.size() > 0 ? colors.ptr() : nullptr;
+
+	int instances = p_surface->owner->instance_count;
+	RID base_rid = p_surface->owner->data->base;
+
+	uint32_t bvs_idx = 0;
+	Transform3D owner_transform = p_surface->owner->transform;
+
+	for (int inst = 0; inst < instances; inst++) {
+		Transform3D xform;
+		Color inst_color = Color(1, 1, 1, 1);
+
+		if (p_surface->owner->data->base_type == RS::INSTANCE_MULTIMESH) {
+			xform = GLES1::MeshStorage::get_singleton()->multimesh_instance_get_transform(base_rid, inst);
+			inst_color = GLES1::MeshStorage::get_singleton()->multimesh_instance_get_color(base_rid, inst);
+		}
+
+		Transform3D world_xform = owner_transform * xform;
+		Basis normal_basis = world_xform.basis.inverse().transposed();
+
+		for (uint32_t i = 0; i < v_count; i++) {
+			r_bvs[bvs_idx].pos.set(world_xform.xform(pos_ptr[i]));
+
+			if (norm_ptr) {
+				r_bvs[bvs_idx].normal.set(normal_basis.xform(norm_ptr[i]).normalized());
+			} else {
+				r_bvs[bvs_idx].normal.set(0, 1, 0);
+			}
+
+			if (uv_ptr) {
+				r_bvs[bvs_idx].uv.set(uv_ptr[i]);
+			} else {
+				r_bvs[bvs_idx].uv.set(0, 0);
+			}
+
+			if (col_ptr) {
+				r_bvs[bvs_idx].color.set(col_ptr[i] * inst_color);
+			} else {
+				r_bvs[bvs_idx].color.set(inst_color);
+			}
+
+			r_bvs[bvs_idx].instance_index = 0.0f;
+			bvs_idx++;
+		}
+	}
+
+	if (r_inds) {
+		uint32_t i_count = indices.size();
+		const int32_t *idx_ptr = indices.ptr();
+
+		uint32_t inds_idx = 0;
+		for (int inst = 0; inst < instances; inst++) {
+			for (uint32_t i = 0; i < i_count; i++) {
+				r_inds[inds_idx++] = (uint16_t)(idx_ptr[i] + p_start_vert + (inst * v_count));
+			}
+		}
+	}
+}
+
 void RasterizerSceneGLES1::_batch_upload_buffers() {
 	if (!bdata.gl_vertex_buffer) {
 		if (!GLES1::Config::get_singleton()->is_android_emulator || GLES1::Config::get_singleton()->support_vbo) {
@@ -1799,18 +1931,32 @@ void RasterizerSceneGLES1::_batch_render_generic() {
 
 	if (bdata.gl_vertex_buffer != 0) {
 		glBindBuffer(GL_ARRAY_BUFFER, bdata.gl_vertex_buffer);
-		glVertexPointer(3, GL_FLOAT, stride, (void *)offsetof(RasterizerSceneBatcherCommon<BatcherAPISceneGLES1>::BatchVertex3D, pos));
-		glNormalPointer(GL_FLOAT, stride, (void *)offsetof(RasterizerSceneBatcherCommon<BatcherAPISceneGLES1>::BatchVertex3D, normal));
-		glTexCoordPointer(2, GL_FLOAT, stride, (void *)offsetof(RasterizerSceneBatcherCommon<BatcherAPISceneGLES1>::BatchVertex3D, uv));
-		glColorPointer(4, GL_UNSIGNED_BYTE, stride, (void *)offsetof(RasterizerSceneBatcherCommon<BatcherAPISceneGLES1>::BatchVertex3D, color));
+		if (bdata.fvf == BatcherEnums::FVF_INSTANCED) {
+			glVertexPointer(3, GL_FLOAT, stride, (void *)offsetof(RasterizerSceneBatcherCommon<BatcherAPISceneGLES1>::BatchVertex3DInstanced, pos));
+			glNormalPointer(GL_FLOAT, stride, (void *)offsetof(RasterizerSceneBatcherCommon<BatcherAPISceneGLES1>::BatchVertex3DInstanced, normal));
+			glTexCoordPointer(2, GL_FLOAT, stride, (void *)offsetof(RasterizerSceneBatcherCommon<BatcherAPISceneGLES1>::BatchVertex3DInstanced, uv));
+			glColorPointer(4, GL_UNSIGNED_BYTE, stride, (void *)offsetof(RasterizerSceneBatcherCommon<BatcherAPISceneGLES1>::BatchVertex3DInstanced, color));
+		} else {
+			glVertexPointer(3, GL_FLOAT, stride, (void *)offsetof(RasterizerSceneBatcherCommon<BatcherAPISceneGLES1>::BatchVertex3D, pos));
+			glNormalPointer(GL_FLOAT, stride, (void *)offsetof(RasterizerSceneBatcherCommon<BatcherAPISceneGLES1>::BatchVertex3D, normal));
+			glTexCoordPointer(2, GL_FLOAT, stride, (void *)offsetof(RasterizerSceneBatcherCommon<BatcherAPISceneGLES1>::BatchVertex3D, uv));
+			glColorPointer(4, GL_UNSIGNED_BYTE, stride, (void *)offsetof(RasterizerSceneBatcherCommon<BatcherAPISceneGLES1>::BatchVertex3D, color));
+		}
 		GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_batch_render_generic: VBO Array setup");
 	} else {
 		glBindBuffer(GL_ARRAY_BUFFER, 0);
 		const uint8_t *data_ptr = (const uint8_t *)bdata.unit_vertices.get_data();
-		glVertexPointer(3, GL_FLOAT, stride, data_ptr + offsetof(RasterizerSceneBatcherCommon<BatcherAPISceneGLES1>::BatchVertex3D, pos));
-		glNormalPointer(GL_FLOAT, stride, data_ptr + offsetof(RasterizerSceneBatcherCommon<BatcherAPISceneGLES1>::BatchVertex3D, normal));
-		glTexCoordPointer(2, GL_FLOAT, stride, data_ptr + offsetof(RasterizerSceneBatcherCommon<BatcherAPISceneGLES1>::BatchVertex3D, uv));
-		glColorPointer(4, GL_UNSIGNED_BYTE, stride, data_ptr + offsetof(RasterizerSceneBatcherCommon<BatcherAPISceneGLES1>::BatchVertex3D, color));
+		if (bdata.fvf == BatcherEnums::FVF_INSTANCED) {
+			glVertexPointer(3, GL_FLOAT, stride, data_ptr + offsetof(RasterizerSceneBatcherCommon<BatcherAPISceneGLES1>::BatchVertex3DInstanced, pos));
+			glNormalPointer(GL_FLOAT, stride, data_ptr + offsetof(RasterizerSceneBatcherCommon<BatcherAPISceneGLES1>::BatchVertex3DInstanced, normal));
+			glTexCoordPointer(2, GL_FLOAT, stride, data_ptr + offsetof(RasterizerSceneBatcherCommon<BatcherAPISceneGLES1>::BatchVertex3DInstanced, uv));
+			glColorPointer(4, GL_UNSIGNED_BYTE, stride, data_ptr + offsetof(RasterizerSceneBatcherCommon<BatcherAPISceneGLES1>::BatchVertex3DInstanced, color));
+		} else {
+			glVertexPointer(3, GL_FLOAT, stride, data_ptr + offsetof(RasterizerSceneBatcherCommon<BatcherAPISceneGLES1>::BatchVertex3D, pos));
+			glNormalPointer(GL_FLOAT, stride, data_ptr + offsetof(RasterizerSceneBatcherCommon<BatcherAPISceneGLES1>::BatchVertex3D, normal));
+			glTexCoordPointer(2, GL_FLOAT, stride, data_ptr + offsetof(RasterizerSceneBatcherCommon<BatcherAPISceneGLES1>::BatchVertex3D, uv));
+			glColorPointer(4, GL_UNSIGNED_BYTE, stride, data_ptr + offsetof(RasterizerSceneBatcherCommon<BatcherAPISceneGLES1>::BatchVertex3D, color));
+		}
 		GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_batch_render_generic: Client Array setup");
 	}
 
@@ -2379,6 +2525,10 @@ void RasterizerSceneGLES1::render_scene(const Ref<RenderSceneBuffers> &p_render_
 	RenderListParameters render_list_params_alpha(render_list[RENDER_LIST_ALPHA].elements.ptr(), render_list[RENDER_LIST_ALPHA].elements.size(), reverse_cull, spec_constant_base_flags, use_wireframe);
 	_render_list_template<PASS_MODE_COLOR_TRANSPARENT>(&render_list_params_alpha, &render_data, 0, render_list[RENDER_LIST_ALPHA].elements.size(), true);
 
+#ifdef TOOLS_ENABLED
+	_draw_editor_lines(&render_data);
+#endif
+
 	// Rescue the 3D scene from the internal buffer if it was used.
 	_render_post_processing(&render_data);
 
@@ -2390,6 +2540,139 @@ void RasterizerSceneGLES1::render_scene(const Ref<RenderSceneBuffers> &p_render_
 	GLES1::TextureStorage::get_singleton()->bind_framebuffer_system();
 	GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::render_scene: reset_gl_state cleanup");
 }
+
+#ifdef TOOLS_ENABLED
+void RasterizerSceneGLES1::_draw_editor_lines(const RenderDataGLES1 *p_render_data) {
+	// Restrict to viewports requesting the gizmo grid layer
+	// (Node3DEditorViewport::GIZMO_GRID_LAYER == 27).
+	if (!(p_render_data->camera_visible_layers & (1 << 27))) {
+		return;
+	}
+
+	scene_state.reset_gl_state();
+
+	glMatrixMode(GL_PROJECTION);
+	glPushMatrix();
+	glLoadIdentity();
+
+	Projection projection = p_render_data->cam_projection;
+	Projection correction;
+	correction.columns[1][1] = -1.0f; // flip_y
+	projection = correction * projection;
+
+	const float proj_m[16] = {
+		projection.columns[0][0], projection.columns[0][1], projection.columns[0][2], projection.columns[0][3],
+		projection.columns[1][0], projection.columns[1][1], projection.columns[1][2], projection.columns[1][3],
+		projection.columns[2][0], projection.columns[2][1], projection.columns[2][2], projection.columns[2][3],
+		projection.columns[3][0], projection.columns[3][1], projection.columns[3][2], projection.columns[3][3]
+	};
+	glMultMatrixf(proj_m);
+
+	glMatrixMode(GL_MODELVIEW);
+	glPushMatrix();
+	glLoadIdentity();
+
+	Transform3D view = p_render_data->inv_cam_transform;
+	const float view_m[16] = {
+		view.basis.rows[0][0], view.basis.rows[1][0], view.basis.rows[2][0], 0.0f,
+		view.basis.rows[0][1], view.basis.rows[1][1], view.basis.rows[2][1], 0.0f,
+		view.basis.rows[0][2], view.basis.rows[1][2], view.basis.rows[2][2], 0.0f,
+		view.origin.x, view.origin.y, view.origin.z, 1.0f
+	};
+	glMultMatrixf(view_m);
+
+	float max_dist = p_render_data->cam_transform.origin.length() + p_render_data->z_far;
+
+	// GLES1 doesn't like long distances (it starts
+	// to jitter when drawing these long lines).
+	// 2^12 stretches it far enough into "infinity"
+	max_dist = MAX(max_dist, 4096.0f);
+
+	glScalef(max_dist, max_dist, max_dist);
+	GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_draw_editor_lines: glScalef");
+
+	glDisable(GL_LIGHTING);
+	glDisable(GL_TEXTURE_2D);
+	glDisable(GL_FOG);
+	glEnable(GL_DEPTH_TEST);
+	glDepthMask(GL_TRUE);
+	glEnable(GL_BLEND);
+	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+	// Width of the line.
+	// 3.0 seems to be the magic number that draws it
+	// similarly to the GLES2/GLES3 drivers.
+	glLineWidth(3.0f);
+	GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_draw_editor_lines: setup");
+
+	glEnableClientState(GL_VERTEX_ARRAY);
+	glEnableClientState(GL_COLOR_ARRAY);
+	glDisableClientState(GL_NORMAL_ARRAY);
+	glDisableClientState(GL_TEXTURE_COORD_ARRAY);
+
+	if (GLES1::Config::get_singleton()->support_vbo && editor_lines_vbo != 0) {
+		glBindBuffer(GL_ARRAY_BUFFER, editor_lines_vbo);
+		glVertexPointer(3, GL_FLOAT, 0, nullptr);
+
+		glBindBuffer(GL_ARRAY_BUFFER, editor_lines_color_vbo);
+		glColorPointer(4, GL_UNSIGNED_BYTE, 0, nullptr);
+	} else {
+		glBindBuffer(GL_ARRAY_BUFFER, 0);
+		glVertexPointer(3, GL_FLOAT, 0, line_verts);
+		glColorPointer(4, GL_UNSIGNED_BYTE, 0, line_colors);
+	}
+
+	// Draw each of the axis lines individually.
+	// This allows for customising each line
+	// individually if needed.
+	
+	// X axis
+	glDrawArrays(GL_LINES, 0, 4);
+
+	// Y axis
+	// Fade the alpha to 0 as the camera looks directly down the Y-axis.
+	Vector3 view_dir = p_render_data->cam_transform.basis.get_column(2).normalized();
+	constexpr float MAX_FADE = 0.5f;
+	constexpr float FADE_RANGE = 0.15f;
+	float y_dot = Math::abs(view_dir.y);
+	float alpha_factor = 1.0f;
+
+	if (y_dot > MAX_FADE) {
+		alpha_factor = CLAMP(1.0f - ((y_dot - MAX_FADE) / FADE_RANGE), 0.0f, 1.0f);
+	}
+
+	glDisableClientState(GL_COLOR_ARRAY);
+	glColor4f(line_colors[16] / 255.0f, line_colors[17] / 255.0f, line_colors[18] / 255.0f, alpha_factor);
+
+	glPushMatrix();
+	glDrawArrays(GL_LINES, 4, 4);
+	glPopMatrix();
+
+	glEnableClientState(GL_COLOR_ARRAY);
+
+	// Z axis
+	glDrawArrays(GL_LINES, 8, 4);
+	GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_draw_editor_lines: glDrawArrays");
+
+	// Reset states
+	glLineWidth(1.0f); // Default value
+
+	glDisableClientState(GL_VERTEX_ARRAY);
+	glDisableClientState(GL_COLOR_ARRAY);
+	glDisable(GL_BLEND);
+
+	if (GLES1::Config::get_singleton()->support_vbo) {
+		glBindBuffer(GL_ARRAY_BUFFER, 0);
+	}
+
+	glMatrixMode(GL_PROJECTION);
+	glPopMatrix();
+	glMatrixMode(GL_MODELVIEW);
+	glPopMatrix();
+
+	GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_draw_editor_lines: cleanup");
+}
+#endif
 
 void RasterizerSceneGLES1::_render_post_processing(const RenderDataGLES1 *p_render_data) {
 	Ref<RenderSceneBuffersGLES1> rb = p_render_data->render_buffers;
@@ -2584,6 +2867,15 @@ RasterizerSceneGLES1::~RasterizerSceneGLES1() {
 	if (sky_globals.radiance_colors_vbo != 0) {
 		glDeleteBuffers(1, &sky_globals.radiance_colors_vbo);
 	}
+
+#ifdef TOOLS_ENABLED
+	if (editor_lines_vbo != 0) {
+		glDeleteBuffers(1, &editor_lines_vbo);
+	}
+	if (editor_lines_color_vbo != 0) {
+		glDeleteBuffers(1, &editor_lines_color_vbo);
+	}
+#endif
 }
 
 #endif // GLES1_ENABLED

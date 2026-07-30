@@ -186,6 +186,12 @@ private:
 		RID overdraw_shader;
 	} scene_globals;
 
+#ifdef TOOLS_ENABLED
+	GLuint editor_lines_vbo = 0;
+	GLuint editor_lines_color_vbo = 0;
+	void _draw_editor_lines(const RenderDataGLES1 *p_render_data);
+#endif
+
 	/* LIGHT INSTANCE */
 
 	struct LightData {

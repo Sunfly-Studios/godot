@@ -1596,6 +1596,8 @@ void MeshStorage::_multimesh_instance_set_transform(RID p_multimesh, int p_index
 	data[9] = p_transform.basis[2][1];
 	data[10] = p_transform.basis[2][2];
 	data[11] = p_transform.origin[2];
+
+	_multimesh_mark_dirty(multimesh, p_index, true);
 }
 
 void MeshStorage::_multimesh_instance_set_transform_2d(RID p_multimesh, int p_index, const Transform2D &p_transform) {
@@ -1637,6 +1639,8 @@ void MeshStorage::_multimesh_instance_set_color(RID p_multimesh, int p_index, co
 	data[1] = p_color.g;
 	data[2] = p_color.b;
 	data[3] = p_color.a;
+
+	_multimesh_mark_dirty(multimesh, p_index, true);
 }
 
 void MeshStorage::_multimesh_instance_set_custom_data(RID p_multimesh, int p_index, const Color &p_color) {
@@ -1652,6 +1656,8 @@ void MeshStorage::_multimesh_instance_set_custom_data(RID p_multimesh, int p_ind
 	data[1] = p_color.g;
 	data[2] = p_color.b;
 	data[3] = p_color.a;
+
+	_multimesh_mark_dirty(multimesh, p_index, true);
 }
 
 RID MeshStorage::_multimesh_get_mesh(RID p_multimesh) const {
