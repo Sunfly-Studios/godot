@@ -51,8 +51,8 @@ void RasterizerSceneBatcherCommon<T_API>::batch_initialize() {
 	// Driver-specific hardware capabilities
 	get_this()->_batch_get_hardware_limits(bdata.hardware_limits);
 
-	bdata.unit_vertices.create(bdata.hardware_limits.max_vertices_per_buffer, 32); 
-	bdata.unit_vertices.prepare(32); // Default to a standard 32-byte FVF
+	bdata.unit_vertices.create(bdata.hardware_limits.max_vertices_per_buffer, sizeof(BatchVertex3DInstanced)); 
+	bdata.unit_vertices.prepare(sizeof(BatchVertex3D)); // Default FVF
 	bdata.indices.create(bdata.hardware_limits.max_indices_per_buffer);
 	
 	bdata.batches.create(256);
@@ -107,12 +107,14 @@ void RasterizerSceneBatcherCommon<T_API>::record_items(T_SURFACE **p_surfaces, i
 		// Quickly look up the base vertex count for the mesh complexity threshold.
 		get_this()->_batch_get_instance_geometry_capacity(surface, base_verts, base_indices);
 
-		// Much like the 2D batcher, ours is really optimised for
-		// triangles.
-		bool can_batch = surface->primitive == RS::PRIMITIVE_TRIANGLES;
+		if (base_verts == 0) {
+			// This happens when primitive topology differs
+			// forcing batch break
+			continue;
+		}
 
 		// Do not batch if the base mesh passes the complexity limit
-		if (base_verts > bdata.settings_dynamic_vertex_limit || !can_batch) {
+		if (base_verts > bdata.settings_dynamic_vertex_limit) {
 			if (!p_transparent) {
 				// Opaque massive models don't need strict sorting. Just dump them in the bypass list.
 				bdata.bypassed_opaque_items.push_back((void*)surface);
@@ -163,31 +165,68 @@ void RasterizerSceneBatcherCommon<T_API>::sort_items(bool p_transparent) {
 template <typename T_API>
 template <class T_SURFACE>
 void RasterizerSceneBatcherCommon<T_API>::join_and_flush_sorted_items(bool p_transparent) {
+	_render_item_state.reset();
+	bdata.batches.reset();
+	
+	// =========================
+	// Grouping pass
+	// =========================
 	for (uint32_t i = 0; i < (uint32_t)bdata.sort_items.size(); i++) {
 		T_SURFACE *surface = static_cast<T_SURFACE *>(bdata.sort_items[i].item);
 
-		// Check for state breaks (Material change, Light environment change)
-		if (!try_join_item<T_SURFACE>(surface, _render_item_state)) {
-			// Flush the pipe before changing state
-			flush_render_batches<T_SURFACE>(_render_item_state.current_material_data);
-			
-			// Update the state tracker
+		if (!try_join_item<T_SURFACE>(surface, _render_item_state) || !_render_item_state.curr_batch) {
+			_render_item_state.curr_batch = _batch_request_new();
+			if (!_render_item_state.curr_batch) {
+				break;
+			}
+
+			_render_item_state.curr_batch->first_item_index = i;
+			_render_item_state.curr_batch->num_items = 0;
+			_render_item_state.curr_batch->first_vert = 0;
+			_render_item_state.curr_batch->num_verts = 0;
+			_render_item_state.curr_batch->num_indices = 0;
+
 			_render_item_state.current_state_hash = bdata.sort_items[i].state_hash;
 			_render_item_state.current_material_data = get_this()->_batch_get_material_data(surface);
+			_render_item_state.current_primitive = surface->primitive;
 		}
 
-		// Attempt to pack the geometry. prefill_joined_item returns TRUE if the buffer is full.
-		if (prefill_joined_item<T_SURFACE>(surface)) {
-			// Buffer full! Flush it.
-			flush_render_batches<T_SURFACE>(_render_item_state.current_material_data);
-			
-			// Retry packing the instance now that the buffer is empty
-			prefill_joined_item<T_SURFACE>(surface);
-		}
+		_render_item_state.curr_batch->num_items++;
 	}
+	
+	// =========================
+	// Packing & flushing pass
+	// =========================
+	for (uint32_t b = 0; b < (uint32_t)bdata.batches.size(); b++) {
+		Batch3D &batch = bdata.batches[b];
+		T_SURFACE *first_surface = static_cast<T_SURFACE *>(bdata.sort_items[batch.first_item_index].item);
+		typename T_API::MaterialData *material = get_this()->_batch_get_material_data(first_surface);
+		RS::PrimitiveType primitive = first_surface->primitive;
 
-	// Final flush for remaining batched geometry
-	flush_render_batches<T_SURFACE>(_render_item_state.current_material_data);
+		bool use_hardware_transform = (batch.num_items == 1);
+
+		_render_item_state.curr_batch = &batch;
+
+		for (uint32_t i = 0; i < batch.num_items; i++) {
+			T_SURFACE *surface = static_cast<T_SURFACE *>(bdata.sort_items[batch.first_item_index + i].item);
+
+			if (prefill_joined_item<T_SURFACE>(surface, use_hardware_transform)) {
+				// Buffer full! Flush what we have so far
+				flush_render_batches<T_SURFACE>(material, primitive, batch);
+
+				// Reset batch pointers for the remainder
+				batch.first_vert = bdata.total_verts;
+				batch.num_verts = 0;
+				batch.num_indices = 0;
+
+				// Retry current item
+				prefill_joined_item<T_SURFACE>(surface, use_hardware_transform);
+			}
+		}
+
+		// Flush the batch
+		flush_render_batches<T_SURFACE>(material, primitive, batch);
+	}
 }
 
 template <typename T_API>
@@ -197,11 +236,16 @@ bool RasterizerSceneBatcherCommon<T_API>::try_join_item(T_SURFACE *p_surface, Re
 	bool is_multimesh = (
 		p_surface->owner->data->base_type == RS::INSTANCE_MULTIMESH
 	);
-	bool current_is_multimesh = bdata.fvf == BatcherEnums::FVF_INSTANCED;
+	
+	bool current_is_multimesh = false;
+	if (r_ris.curr_batch && r_ris.curr_batch->num_items > 0) {
+		T_SURFACE *first_surf = static_cast<T_SURFACE *>(bdata.sort_items[r_ris.curr_batch->first_item_index].item);
+		current_is_multimesh = (first_surf->owner->data->base_type == RS::INSTANCE_MULTIMESH);
+	}
 	
 	// Topology switch between instanced and regular
 	// always break batches
-	if (is_multimesh != current_is_multimesh && bdata.fvf != BatcherEnums::FVF_UNBATCHED) {
+	if (r_ris.curr_batch && r_ris.curr_batch->num_items > 0 && is_multimesh != current_is_multimesh) {
 		return false;
 	}
 
@@ -210,7 +254,7 @@ bool RasterizerSceneBatcherCommon<T_API>::try_join_item(T_SURFACE *p_surface, Re
 
 template <typename T_API>
 template <class T_SURFACE>
-bool RasterizerSceneBatcherCommon<T_API>::prefill_joined_item(T_SURFACE *p_surface) {
+bool RasterizerSceneBatcherCommon<T_API>::prefill_joined_item(T_SURFACE *p_surface, bool p_use_hardware_transform) {
 	uint32_t base_verts = 0;
 	uint32_t base_indices = 0;
 	
@@ -225,47 +269,49 @@ bool RasterizerSceneBatcherCommon<T_API>::prefill_joined_item(T_SURFACE *p_surfa
 	uint32_t incoming_verts = base_verts * instances;
 	uint32_t incoming_indices = base_indices * instances;
 
-	if (is_multimesh) {
-		if (bdata.instanced_vertices.max_size() == 0) {
-			// We allocate on demand for performance and to save
-			// memory.
-			bdata.instanced_vertices.create(bdata.hardware_limits.max_vertices_per_buffer);
-		}
-		
-		if ((bdata.instanced_vertices.size() + incoming_verts > bdata.hardware_limits.max_vertices_per_buffer) ||
-			(bdata.indices.size() + incoming_indices > bdata.hardware_limits.max_indices_per_buffer)) {
-			return true; // Buffer is full, signal caller to flush
-		}
+	// Track matrix palette hardware limits
+	// A single Transform3D requires 3 vec4 uniforms.
+	uint32_t incoming_uniform_vectors = instances * 3;
+	if (_render_item_state.consumed_uniform_vectors + incoming_uniform_vectors > bdata.hardware_limits.max_matrix_palette_vectors) {
+		return true; // Buffer is full, signal caller to flush
+	}
 
-		bdata.fvf = BatcherEnums::FVF_INSTANCED;
-		uint32_t start_vert = bdata.instanced_vertices.size();
-		BatchVertex3DInstanced *bvs = bdata.instanced_vertices.request(incoming_verts);
-		uint16_t *inds = nullptr;
-
-		if (incoming_indices > 0) {
-			inds = bdata.indices.request(incoming_indices);
+	// Only prepare when this is the first item in the batch.
+	// Subsequent items don't need to override.
+	if (bdata.total_verts == 0) {
+		if (is_multimesh) {
+			bdata.fvf = BatcherEnums::FVF_INSTANCED;
+			bdata.unit_vertices.prepare(sizeof(BatchVertex3DInstanced));
+		} else {
+			bdata.fvf = BatcherEnums::FVF_REGULAR;
+			bdata.unit_vertices.prepare(sizeof(BatchVertex3D));
 		}
+	}
 
-		if (bvs) {
-			get_this()->_batch_fill_multimesh_geometry(p_surface, bvs, inds, start_vert);
-		}
-	} else {
-		if ((bdata.vertices.size() + incoming_verts > bdata.hardware_limits.max_vertices_per_buffer) ||
-			(bdata.indices.size() + incoming_indices > bdata.hardware_limits.max_indices_per_buffer)) {
-			return true; // Buffer is full, signal caller to flush
-		}
-		
-		bdata.fvf = BatcherEnums::FVF_REGULAR;
+	// Validate VBO bounds against the dynamic unit cursor
+	if ((bdata.total_verts + incoming_verts > (uint32_t)bdata.unit_vertices.max_size()) ||
+		(bdata.total_indices + incoming_indices > (uint32_t)bdata.indices.max_size())) {
+		return true; // Buffer is full, signal caller to flush
+	}
 
-		uint32_t start_vert = bdata.vertices.size();
-		BatchVertex3D *bvs = bdata.vertices.request(incoming_verts);
-		uint16_t *inds = incoming_indices > 0 ? bdata.indices.request(incoming_indices) : nullptr;
+	uint32_t start_vert = bdata.total_verts;
+	uint8_t *bvs = bdata.unit_vertices.request(incoming_verts);
+	uint16_t *inds = incoming_indices > 0 ? bdata.indices.request(incoming_indices) : nullptr;
 
-		if (bvs) {
+	if (bvs) {
+		if (is_multimesh) {
+			get_this()->_batch_fill_multimesh_geometry(p_surface, (BatchVertex3DInstanced *)bvs, inds, start_vert, p_use_hardware_transform);
+		} else {
 			// The driver handles the packing.
 			// Multi-threading dispatch (GLES1), or CPU transforming (GLES2).
-			get_this()->_batch_fill_instance_geometry(p_surface, bvs, inds, start_vert);
+			get_this()->_batch_fill_instance_geometry(p_surface, (BatchVertex3D *)bvs, inds, start_vert, p_use_hardware_transform);
 		}
+		
+		bdata.total_verts += incoming_verts;
+		bdata.total_indices += incoming_indices;
+		_render_item_state.curr_batch->num_verts += incoming_verts;
+		_render_item_state.curr_batch->num_indices += incoming_indices;
+		_render_item_state.consumed_uniform_vectors += incoming_uniform_vectors;
 	}
 
 	return false;
@@ -273,21 +319,33 @@ bool RasterizerSceneBatcherCommon<T_API>::prefill_joined_item(T_SURFACE *p_surfa
 
 template <typename T_API>
 template <class T_SURFACE>
-void RasterizerSceneBatcherCommon<T_API>::flush_render_batches(typename T_API::MaterialData *p_material_data) {
-	if (bdata.vertices.size() == 0 && bdata.instanced_vertices.size() == 0) {
+void RasterizerSceneBatcherCommon<T_API>::flush_render_batches(typename T_API::MaterialData *p_material_data, RS::PrimitiveType p_primitive, Batch3D &p_batch) {
+	if (p_batch.num_verts == 0 || p_primitive == RS::PRIMITIVE_MAX) {
 		return;
 	}
 
 	// Upload batched VBOs
 	get_this()->_batch_upload_buffers();
-	
-	// Bind states
-	get_this()->_batch_bind_material(p_material_data);
-	
-	// Execute draw calls
-	get_this()->_batch_render_generic();
 
-	bdata.reset_flush();
+	// Bind states
+	bool use_hardware_transform = (p_batch.num_items == 1);
+	if (use_hardware_transform) {
+		T_SURFACE *first_surf = static_cast<T_SURFACE*>(bdata.sort_items[p_batch.first_item_index].item);
+		get_this()->_batch_bind_material(p_material_data, first_surf->owner->transform);
+	} else {
+		get_this()->_batch_bind_material(p_material_data, Transform3D());
+	}
+	
+	// Execute draw calls with the correct topology
+	get_this()->_batch_render_generic(p_primitive);
+
+	// Reset VBO cursors
+	bdata.unit_vertices.prepare(bdata.unit_vertices.get_unit_size_bytes());
+	bdata.indices.reset();
+	bdata.total_verts = 0;
+	bdata.total_indices = 0;
+
+	_render_item_state.consumed_uniform_vectors = 0; // Release uniform locks for the next batch
 }
 
 template <typename T_API>
@@ -308,4 +366,25 @@ void RasterizerSceneBatcherCommon<T_API>::render_bypassed_items(bool p_transpare
 			get_this()->_render_single_item_immediate(static_cast<T_SURFACE*>(bdata.bypassed_transparent_items[i].item));
 		}
 	}
+}
+
+template <typename T_API>
+void RasterizerSceneBatcherCommon<T_API>::_software_transform_vertex(BatchVector3 &r_v, const Transform3D &p_tr) const {
+	Vector3 vc(r_v.x, r_v.y, r_v.z);
+	vc = p_tr.xform(vc);
+	r_v.set(vc);
+}
+
+template <typename T_API>
+void RasterizerSceneBatcherCommon<T_API>::_software_transform_normal(BatchVector3 &r_n, const Transform3D &p_tr) const {
+	Vector3 nc(r_n.x, r_n.y, r_n.z);
+	// Normals must be transformed by the inverse-transpose of the basis matrix
+	// to avoid distortion when the instance has non-uniform scaling.
+	Basis cofactor;
+	cofactor.set_column(0, p_tr.basis.get_column(1).cross(p_tr.basis.get_column(2)));
+	cofactor.set_column(1, p_tr.basis.get_column(2).cross(p_tr.basis.get_column(0)));
+	cofactor.set_column(2, p_tr.basis.get_column(0).cross(p_tr.basis.get_column(1)));
+	
+	nc = cofactor.xform(nc).normalized();
+	r_n.set(nc);
 }

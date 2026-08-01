@@ -173,9 +173,11 @@ public:
 		BatchVector3 normal;
 		BatchVector2 uv;
 		BatchColor color;
-		float instance_index; // Used by Matrix Palette Uniforms in GLES2
+		BatchVector4 instance_xform0;
+		BatchVector4 instance_xform1;
+		BatchVector4 instance_xform2;
 
-		float pad[2];
+		float pad[3];
 	};
 
 	// A struct used to simulate instaced rendering for
@@ -185,17 +187,17 @@ public:
 		BatchVector3 normal;
 		BatchVector2 uv;
 		BatchColor color;
-		float instance_index;
 		BatchVector4 instance_xform0;
 		BatchVector4 instance_xform1;
 		BatchVector4 instance_xform2;
 		BatchColor instance_color_custom_data;
-		float pad;
+		float pad[2];
 	};
 
 	// A batch represents a single draw call of aggregated geometry
 	struct Batch3D {
-		BatcherEnums::BatchType type;
+		uint32_t first_item_index;
+		uint32_t num_items;
 		uint32_t first_vert;
 		uint32_t num_verts;
 		uint32_t num_indices;
@@ -243,8 +245,6 @@ public:
 
 			// Keep active FVF byte size, reset cursor
 			unit_vertices.prepare(unit_vertices.get_unit_size_bytes());
-			vertices.reset();
-			instanced_vertices.reset();
 			indices.reset();
 			total_verts = 0;
 			total_indices = 0;
@@ -264,8 +264,6 @@ public:
 		RasterizerUnitArray<uint8_t> unit_vertices;
 		RasterizerArray<uint16_t> indices;
 
-		RasterizerArray<BatchVertex3D> vertices;
-		RasterizerArray<BatchVertex3DInstanced> instanced_vertices;
 		RasterizerArray<Batch3D> batches;
 		RasterizerArray<BSortItem3D> sort_items;
 
@@ -281,10 +279,16 @@ public:
 			current_state_hash = 0;
 			current_material_data = nullptr;
 			consumed_uniform_vectors = 0;
+			matrix_palette_count = 0;
+			current_primitive = RS::PRIMITIVE_MAX;
+			curr_batch = nullptr;
 		}
 		uint64_t current_state_hash;
 		typename T_API::MaterialData *current_material_data;
 		uint32_t consumed_uniform_vectors;
+		uint32_t matrix_palette_count;
+		RS::PrimitiveType current_primitive;
+		Batch3D *curr_batch;
 	} _render_item_state;
 
 private:
@@ -328,10 +332,10 @@ protected:
 	bool try_join_item(T_SURFACE *p_surface, RenderItemState3D &r_ris);
 
 	template <class T_SURFACE>
-	bool prefill_joined_item(T_SURFACE *p_surface);
+	bool prefill_joined_item(T_SURFACE *p_surface, bool p_use_hardware_transform);
 
 	template <class T_SURFACE>
-	void flush_render_batches(typename T_API::MaterialData *p_material_data);
+	void flush_render_batches(typename T_API::MaterialData *p_material_data, RS::PrimitiveType p_primitive, Batch3D &p_batch);
 
 	template <class T_SURFACE>
 	void render_bypassed_items(bool p_transparent);

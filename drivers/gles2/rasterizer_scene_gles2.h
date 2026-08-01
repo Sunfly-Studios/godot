@@ -657,7 +657,13 @@ private:
 
 		struct SortByReverseDepthAndPriority {
 			_FORCE_INLINE_ bool operator()(const GeometryInstanceSurface *A, const GeometryInstanceSurface *B) const {
-				return (A->sort.priority == B->sort.priority) ? (A->owner->depth > B->owner->depth) : (A->sort.priority < B->sort.priority);
+				if (A->sort.priority == B->sort.priority) {
+					if (A->owner->depth == B->owner->depth) {
+						return (A->sort.sort_key2 == B->sort.sort_key2) ? (A->sort.sort_key1 < B->sort.sort_key1) : (A->sort.sort_key2 < B->sort.sort_key2);
+					}
+					return A->owner->depth > B->owner->depth;
+				}
+				return A->sort.priority < B->sort.priority;
 			}
 		};
 
@@ -693,11 +699,11 @@ private:
 	uint64_t _batch_get_state_hash(const GeometryInstanceSurface *p_surface);
 	GLES2::SceneMaterialData *_batch_get_material_data(const GeometryInstanceSurface *p_surface);
 
-	void _batch_fill_instance_geometry(const GeometryInstanceSurface *p_surface, RasterizerSceneBatcherCommon<BatcherAPISceneGLES2>::BatchVertex3D *r_bvs, uint16_t *r_inds, uint32_t p_start_vert);
-	void _batch_fill_multimesh_geometry(const GeometryInstanceSurface *p_surface, RasterizerSceneBatcherCommon<BatcherAPISceneGLES2>::BatchVertex3DInstanced *r_bvs, uint16_t *r_inds, uint32_t p_start_vert);
+	void _batch_fill_instance_geometry(const GeometryInstanceSurface *p_surface, RasterizerSceneBatcherCommon<BatcherAPISceneGLES2>::BatchVertex3D *r_bvs, uint16_t *r_inds, uint32_t p_start_vert, bool p_use_hardware_transform);
+	void _batch_fill_multimesh_geometry(const GeometryInstanceSurface *p_surface, RasterizerSceneBatcherCommon<BatcherAPISceneGLES2>::BatchVertex3DInstanced *r_bvs, uint16_t *r_inds, uint32_t p_start_vert, bool p_use_hardware_transform);
 	void _batch_upload_buffers();
-	void _batch_bind_material(GLES2::SceneMaterialData *p_material_data);
-	void _batch_render_generic();
+	void _batch_bind_material(GLES2::SceneMaterialData *p_material_data, const Transform3D &p_world_transform);
+	void _batch_render_generic(RS::PrimitiveType p_primitive);
 
 	void _render_single_item_immediate(const GeometryInstanceSurface *p_surface);
 	void _bind_scene_camera_uniforms(RID p_version, SceneShaderGLES2::ShaderVariant p_variant, uint64_t p_spec_constants);

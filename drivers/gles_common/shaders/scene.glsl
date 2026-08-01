@@ -3,6 +3,7 @@
 
 mode_color = #define BASE_PASS
 mode_color_instancing = #define BASE_PASS \n#define USE_INSTANCING
+mode_color_matrix_palette = #define BASE_PASS \n#define USE_FAT_VERTEX
 mode_additive = #define USE_ADDITIVE_LIGHTING
 mode_additive_instancing = #define USE_ADDITIVE_LIGHTING \n#define USE_INSTANCING
 mode_depth = #define MODE_RENDER_DEPTH
@@ -103,10 +104,13 @@ vec3 oct_to_vec3(vec2 e) {
 	return normalize(v);
 }
 
-#ifdef USE_INSTANCING
+#if defined(USE_INSTANCING) || defined(USE_FAT_VERTEX)
 attribute highp vec4 instance_xform0; // attrib:12
 attribute highp vec4 instance_xform1; // attrib:13
 attribute highp vec4 instance_xform2; // attrib:14
+#endif
+
+#ifdef USE_INSTANCING
 attribute highp vec4 instance_color_custom_data; // attrib:15
 #endif
 
@@ -206,8 +210,8 @@ void main() {
 	highp vec3 vertex = vertex_attrib;
 
 	highp mat4 model_matrix = world_transform;
-#ifdef USE_INSTANCING
-    // GLES2 doesn't have transpose(). We manually transpose the incoming row vectors.
+#if defined(USE_INSTANCING) || defined(USE_FAT_VERTEX)
+	// GLES2 doesn't have transpose(). We manually transpose the incoming row vectors.
 	highp mat4 m = mat4(
 		vec4(instance_xform0.x, instance_xform1.x, instance_xform2.x, 0.0),
 		vec4(instance_xform0.y, instance_xform1.y, instance_xform2.y, 0.0),
@@ -864,7 +868,7 @@ vec4 fog_process(vec3 vertex) {
 		float sun_total = 0.0;
 		vec3 view = normalize(vertex);
 		for (int i = 0; i < MAX_DIRECTIONAL_LIGHT_DATA_STRUCTS; i++) {
-            if (i >= directional_light_count) break;
+			if (i >= directional_light_count) break;
 			vec3 light_color = directional_lights[i].color * directional_lights[i].energy;
 			float light_amount = pow(max(dot(view, directional_lights[i].direction), 0.0), 8.0);
 			fog_color += light_color * light_amount * fog_sun_scatter;
@@ -1137,7 +1141,7 @@ void main() {
 
 #ifndef DISABLE_LIGHT_DIRECTIONAL
 	for (int i = 0; i < MAX_DIRECTIONAL_LIGHT_DATA_STRUCTS; i++) {
-        if (i >= directional_light_count) {
+		if (i >= directional_light_count) {
 			break;
 		}
 		light_compute(normal, normalize(directional_lights[i].direction), normalize(view), directional_lights[i].size, directional_lights[i].color * directional_lights[i].energy, 1.0, f0, roughness, metallic, 1.0, albedo, alpha,
@@ -1275,5 +1279,5 @@ void main() {
 
 #endif //!MODE_RENDER_DEPTH
 
-    gl_FragColor = frag_color;
+	gl_FragColor = frag_color;
 }

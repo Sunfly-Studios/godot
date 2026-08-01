@@ -757,15 +757,8 @@ void MeshStorage::_mesh_surface_generate_version_for_input_mask(Mesh::Surface::V
 					v.attribs[i].size = 2;
 					position_stride = v.attribs[i].size * sizeof(float);
 				} else {
-					if (!mis && (s->format & RS::ARRAY_FLAG_COMPRESS_ATTRIBUTES)) {
-						v.attribs[i].size = 4;
-						position_stride = v.attribs[i].size * sizeof(uint16_t);
-						v.attribs[i].type = GL_UNSIGNED_SHORT;
-						v.attribs[i].normalized = GL_TRUE;
-					} else {
-						v.attribs[i].size = 3;
-						position_stride = v.attribs[i].size * sizeof(float);
-					}
+					v.attribs[i].size = 3;
+					position_stride = v.attribs[i].size * sizeof(float);
 				}
 			} break;
 			case RS::ARRAY_NORMAL: {
@@ -876,6 +869,25 @@ void MeshStorage::_mesh_surface_generate_version_for_input_mask(Mesh::Surface::V
 	}
 
 	v.input_mask = p_input_mask;
+}
+
+void MeshStorage::surface_get_batch_data(void *p_surface, uint64_t &r_format, uint32_t &r_vertex_count, uint32_t &r_index_count, Vector<uint8_t> &r_vertex_data, Vector<uint8_t> &r_attribute_data, Vector<uint8_t> &r_index_data) {
+	Mesh::Surface *s = reinterpret_cast<Mesh::Surface *>(p_surface);
+	if (!s) {
+		return;
+	}
+	r_format = s->format;
+	r_vertex_count = s->vertex_count;
+	r_index_count = s->index_count;
+	if (s->vertex_buffer != 0) {
+		r_vertex_data = GLES2::Utilities::get_singleton()->buffer_get_data(GL_ARRAY_BUFFER, s->vertex_buffer, s->vertex_buffer_size);
+	}
+	if (s->attribute_buffer != 0) {
+		r_attribute_data = GLES2::Utilities::get_singleton()->buffer_get_data(GL_ARRAY_BUFFER, s->attribute_buffer, s->attribute_buffer_size);
+	}
+	if (s->index_buffer != 0) {
+		r_index_data = GLES2::Utilities::get_singleton()->buffer_get_data(GL_ELEMENT_ARRAY_BUFFER, s->index_buffer, s->index_buffer_size);
+	}
 }
 
 void MeshStorage::mesh_surface_remove(RID p_mesh, int p_surface) {

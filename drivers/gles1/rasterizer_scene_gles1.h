@@ -122,6 +122,9 @@ public:
 		RENDER_LIST_OPAQUE, //used for opaque objects
 		RENDER_LIST_ALPHA, //used for transparent objects
 		RENDER_LIST_SECONDARY, //used for shadows and other objects
+#ifdef TOOLS_ENABLED
+		RENDER_LIST_GIZMOS, //used for intercepting editor gizmos
+#endif
 		RENDER_LIST_MAX
 	};
 
@@ -187,9 +190,18 @@ private:
 	} scene_globals;
 
 #ifdef TOOLS_ENABLED
+	// Editor lines
 	GLuint editor_lines_vbo = 0;
 	GLuint editor_lines_color_vbo = 0;
+
+	// 3D Gizmos
+	GLuint rotate_gizmo_border_vbo = 0;
+	float *rotate_gizmo_border_verts = nullptr;
+	float *rotate_gizmo_ring_verts = nullptr;
+
+	// Draw functions
 	void _draw_editor_lines(const RenderDataGLES1 *p_render_data);
+	void _draw_editor_gizmos(const RenderDataGLES1 *p_render_data);
 #endif
 
 	/* LIGHT INSTANCE */
@@ -312,6 +324,13 @@ private:
 		GLES1::SceneShaderData *shader_shadow = nullptr;
 		GLES1::SceneMaterialData *material_shadow = nullptr;
 
+		bool gizmo_cached = false;
+		GLuint gizmo_vertex_buffer = 0;
+		GLuint gizmo_color_buffer = 0;
+		GLuint gizmo_index_buffer = 0;
+		float *gizmo_vertex_array = nullptr;
+		uint16_t *gizmo_index_array = nullptr;
+
 		GeometryInstanceSurface *next = nullptr;
 		GeometryInstanceGLES1 *owner = nullptr;
 	};
@@ -424,6 +443,7 @@ private:
 	void _geometry_instance_add_surface(GeometryInstanceGLES1 *ginstance, uint32_t p_surface, RID p_material, RID p_mesh);
 	void _geometry_instance_update(RenderGeometryInstance *p_geometry_instance);
 	void _update_dirty_geometry_instances();
+	void _remove_cached_surface(GeometryInstanceSurface *p_surface);
 
 	struct SceneState {
 		struct UBO {
@@ -514,6 +534,14 @@ private:
 
 		void reset_gl_state() {
 			glDisable(GL_BLEND);
+			if (GLES1::Config::get_singleton()->support_blend_subtract) {
+				glBlendEquationOES(GL_FUNC_ADD_OES);
+			}
+			if (GLES1::Config::get_singleton()->support_blend_func_separate) {
+				glBlendFuncSeparateOES(GL_ONE, GL_ZERO, GL_ONE, GL_ZERO);
+			} else {
+				glBlendFunc(GL_ONE, GL_ZERO);
+			}
 			current_blend_enabled = false;
 
 			glDisable(GL_SCISSOR_TEST);
@@ -530,11 +558,12 @@ private:
 
 			glDisable(GL_FOG);
 
-			glActiveTexture(GL_TEXTURE0);
+			if (GLES1::Config::get_singleton()->max_texture_units > 1) {
+				glActiveTexture(GL_TEXTURE1);
+				glDisable(GL_TEXTURE_2D);
+				glActiveTexture(GL_TEXTURE0);
+			}
 			glDisable(GL_TEXTURE_2D);
-			glActiveTexture(GL_TEXTURE1);
-			glDisable(GL_TEXTURE_2D);
-			glActiveTexture(GL_TEXTURE0);
 		}
 
 		void set_gl_cull_mode(RS::CullMode p_mode) {
@@ -705,11 +734,11 @@ private:
 	uint64_t _batch_get_state_hash(const GeometryInstanceSurface *p_surface);
 	GLES1::SceneMaterialData *_batch_get_material_data(const GeometryInstanceSurface *p_surface);
 
-	void _batch_fill_multimesh_geometry(const GeometryInstanceSurface *p_surface, RasterizerSceneBatcherCommon<BatcherAPISceneGLES1>::BatchVertex3DInstanced *r_bvs, uint16_t *r_inds, uint32_t p_start_vert);
-	void _batch_fill_instance_geometry(const GeometryInstanceSurface *p_surface, RasterizerSceneBatcherCommon<BatcherAPISceneGLES1>::BatchVertex3D *r_bvs, uint16_t *r_inds, uint32_t p_start_vert);
+	void _batch_fill_instance_geometry(const GeometryInstanceSurface *p_surface, RasterizerSceneBatcherCommon<BatcherAPISceneGLES1>::BatchVertex3D *r_bvs, uint16_t *r_inds, uint32_t p_start_vert, bool p_use_hardware_transform);
+	void _batch_fill_multimesh_geometry(const GeometryInstanceSurface *p_surface, RasterizerSceneBatcherCommon<BatcherAPISceneGLES1>::BatchVertex3DInstanced *r_bvs, uint16_t *r_inds, uint32_t p_start_vert, bool p_use_hardware_transform);
 	void _batch_upload_buffers();
-	void _batch_bind_material(GLES1::SceneMaterialData *p_material_data);
-	void _batch_render_generic();
+	void _batch_bind_material(GLES1::SceneMaterialData *p_material_data, const Transform3D &p_world_transform);
+	void _batch_render_generic(RS::PrimitiveType p_primitive);
 
 	void _render_single_item_immediate(const GeometryInstanceSurface *p_surface);
 	void _bind_scene_camera_uniforms(RID p_version, SceneShaderGLES1::ShaderVariant p_variant, uint64_t p_spec_constants);

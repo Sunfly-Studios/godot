@@ -7916,7 +7916,16 @@ mat3 orthonormalize(mat3 m) {
 
 void vertex() {
 	mat3 mv = orthonormalize(mat3(MODELVIEW_MATRIX));
+#if CURRENT_RENDERER == RENDERER_LEGACY
+	// Do the formula manually.
+	mv = mat3(
+		vec3(mv[0].x, mv[1].x, mv[2].x),
+		vec3(mv[0].y, mv[1].y, mv[2].y),
+		vec3(mv[0].z, mv[1].z, mv[2].z)
+	);
+#else
 	mv = inverse(mv);
+#endif
 	VERTEX += NORMAL * 0.008;
 	vec3 camera_dir_local = mv * vec3(0.0, 0.0, 1.0);
 	vec3 camera_up_local = mv * vec3(0.0, 1.0, 0.0);

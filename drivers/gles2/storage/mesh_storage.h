@@ -320,6 +320,8 @@ public:
 	virtual void mesh_clear(RID p_mesh) override;
 	virtual void mesh_surface_remove(RID p_mesh, int p_surface) override;
 
+	void surface_get_batch_data(void *p_surface, uint64_t &r_format, uint32_t &r_vertex_count, uint32_t &r_index_count, Vector<uint8_t> &r_vertex_data, Vector<uint8_t> &r_attribute_data, Vector<uint8_t> &r_index_data);
+
 	// TODO(GLES2): All of these below where literally copy-pasted
 	// from GLES3 driver code. Need to verify if these work
 	// and if not, accomodate.

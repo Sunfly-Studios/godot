@@ -81,6 +81,7 @@ static GLuint _init_radiance_texture_gles1(int p_size, int p_mipmaps, String p_n
 	return tex;
 }
 
+// Shared constants across the driver
 static constexpr float qv_fallback[12] = {
 	-1.0f, -1.0f, -1.0f,
 	 1.0f, -1.0f, -1.0f,
@@ -96,6 +97,12 @@ static const Vector3 view_up[6] = {
 	Vector3(0, -1, 0), Vector3(0, -1, 0), Vector3(0, 0, +1),
 	Vector3(0, 0, -1), Vector3(0, -1, 0), Vector3(0, -1, 0)
 };
+
+constexpr int GRID_SIZE = 16;
+constexpr int NUM_VERTICES = GRID_SIZE * GRID_SIZE * 6;
+
+// The 5 GLES1 primitives
+static constexpr GLenum prim[5] = { GL_POINTS, GL_LINES, GL_LINE_STRIP, GL_TRIANGLES, GL_TRIANGLE_STRIP };		
 
 #ifdef TOOLS_ENABLED
 // We manually draw the grid X/Y/Z editor lines regardless
@@ -123,6 +130,11 @@ static constexpr uint8_t line_colors[] = {
 	57, 156, 237, 255, 57, 156, 237, 255, // +Z Axis
 	57, 156, 237, 255, 57, 156, 237, 255  // -Z Axis
 };
+
+// 3D Gizmos configuration
+static constexpr int BORDER_SEGMENTS = 64;
+static constexpr float B_WIDTH = 0.028f; // Border width
+static constexpr float T_WIDTH = 0.02f;
 #endif
 
 void RasterizerSceneGLES1::initialize() {
@@ -216,13 +228,6 @@ void sky() {
 	}
 
 	{
-		constexpr float qv[12] = {
-			-1.0f, -1.0f, -1.0f,
-			 1.0f, -1.0f, -1.0f,
-			-1.0f,  1.0f, -1.0f,
-			 1.0f,  1.0f, -1.0f
-		};
-
 		sky_globals.screen_triangle = 0;
 
 		if (GLES1::Config::get_singleton()->support_vbo) {
@@ -231,7 +236,7 @@ void sky() {
 
 		if (sky_globals.screen_triangle != 0) {
 			glBindBuffer(GL_ARRAY_BUFFER, sky_globals.screen_triangle);
-			glBufferData(GL_ARRAY_BUFFER, sizeof(float) * 12, qv, GL_STATIC_DRAW);
+			glBufferData(GL_ARRAY_BUFFER, sizeof(float) * 12, qv_fallback, GL_STATIC_DRAW);
 			glBindBuffer(GL_ARRAY_BUFFER, 0);
 		}
 
@@ -240,11 +245,9 @@ void sky() {
 
 	{
 		// Pre-compute 16x16 geometry grid for Sky Radiance baking
-		constexpr int grid_size = 16;
-		constexpr int num_vertices = grid_size * grid_size * 6;
-		sky_globals.radiance_verts = memnew_arr(float, 6 * num_vertices * 2);
-		sky_globals.radiance_uvw = memnew_arr(float, 6 * num_vertices * 3);
-		sky_globals.radiance_colors = memnew_arr(uint8_t, 6 * num_vertices * 4);
+		sky_globals.radiance_verts = memnew_arr(float, 6 * NUM_VERTICES * 2);
+		sky_globals.radiance_uvw = memnew_arr(float, 6 * NUM_VERTICES * 3);
+		sky_globals.radiance_colors = memnew_arr(uint8_t, 6 * NUM_VERTICES * 4);
 
 		Projection cm;
 		cm.set_perspective(90, 1, 0.01, 10.0);
@@ -255,12 +258,12 @@ void sky() {
 		int v_idx = 0;
 		for (int i = 0; i < 6; i++) {
 			Basis local_view = Basis::looking_at(view_normals[i], view_up[i]);
-			for (int y = 0; y < grid_size; y++) {
-				for (int x = 0; x < grid_size; x++) {
-					float px0 = -1.0f + 2.0f * (x / static_cast<float>(grid_size));
-					float py0 = -1.0f + 2.0f * (y / static_cast<float>(grid_size));
-					float px1 = -1.0f + 2.0f * ((x + 1) / static_cast<float>(grid_size));
-					float py1 = -1.0f + 2.0f * ((y + 1) / static_cast<float>(grid_size));
+			for (int y = 0; y < GRID_SIZE; y++) {
+				for (int x = 0; x < GRID_SIZE; x++) {
+					float px0 = -1.0f + 2.0f * (x / static_cast<float>(GRID_SIZE));
+					float py0 = -1.0f + 2.0f * (y / static_cast<float>(GRID_SIZE));
+					float px1 = -1.0f + 2.0f * ((x + 1) / static_cast<float>(GRID_SIZE));
+					float py1 = -1.0f + 2.0f * ((y + 1) / static_cast<float>(GRID_SIZE));
 
 					Vector2 quad[6] = {
 						Vector2(px0, py0), Vector2(px1, py0), Vector2(px0, py1),
@@ -293,15 +296,15 @@ void sky() {
 		if (GLES1::Config::get_singleton()->support_vbo) {
 			glGenBuffers(1, &sky_globals.radiance_verts_vbo);
 			glBindBuffer(GL_ARRAY_BUFFER, sky_globals.radiance_verts_vbo);
-			glBufferData(GL_ARRAY_BUFFER, 6 * num_vertices * 2 * sizeof(float), sky_globals.radiance_verts, GL_STATIC_DRAW);
+			glBufferData(GL_ARRAY_BUFFER, 6 * NUM_VERTICES * 2 * sizeof(float), sky_globals.radiance_verts, GL_STATIC_DRAW);
 
 			glGenBuffers(1, &sky_globals.radiance_uvw_vbo);
 			glBindBuffer(GL_ARRAY_BUFFER, sky_globals.radiance_uvw_vbo);
-			glBufferData(GL_ARRAY_BUFFER, 6 * num_vertices * 3 * sizeof(float), sky_globals.radiance_uvw, GL_STATIC_DRAW);
+			glBufferData(GL_ARRAY_BUFFER, 6 * NUM_VERTICES * 3 * sizeof(float), sky_globals.radiance_uvw, GL_STATIC_DRAW);
 
 			glGenBuffers(1, &sky_globals.radiance_colors_vbo);
 			glBindBuffer(GL_ARRAY_BUFFER, sky_globals.radiance_colors_vbo);
-			glBufferData(GL_ARRAY_BUFFER, 6 * num_vertices * 4 * sizeof(uint8_t), nullptr, GL_DYNAMIC_DRAW);
+			glBufferData(GL_ARRAY_BUFFER, 6 * NUM_VERTICES * 4 * sizeof(uint8_t), nullptr, GL_DYNAMIC_DRAW);
 			glBindBuffer(GL_ARRAY_BUFFER, 0);
 		}
 		GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::initialize: radiance VBO cache setup");
@@ -353,6 +356,33 @@ void fragment() {
 	}
 
 #ifdef TOOLS_ENABLED
+	// Here we prekabe and peform the math required for some
+	// of the editor's visuals once and upload to VRAM (when possible)
+	// for performance.
+
+	// Precalcuate the trigonometric overhead of the 3D gizmos
+
+	rotate_gizmo_border_verts = memnew_arr(float, (BORDER_SEGMENTS + 1) * 3);
+	for (int k = 0; k <= BORDER_SEGMENTS; k++) {
+		float angle = (Math_TAU) * (k / static_cast<float>(BORDER_SEGMENTS));
+		rotate_gizmo_border_verts[k * 3 + 0] = Math::cos(angle);
+		rotate_gizmo_border_verts[k * 3 + 1] = Math::sin(angle);
+		rotate_gizmo_border_verts[k * 3 + 2] = 0.0f;
+	}
+
+	// For the coloured rings, we only cache P0 and T0.
+	rotate_gizmo_ring_verts = memnew_arr(float, (BORDER_SEGMENTS + 1) * 6);
+	for (int k = 0; k <= BORDER_SEGMENTS; k++) {
+		float angle = -(Math_PI * 0.55f) + (Math_PI * 1.1f) * (k / static_cast<float>(BORDER_SEGMENTS));
+		rotate_gizmo_ring_verts[k * 6 + 0] = Math::cos(angle);
+		rotate_gizmo_ring_verts[k * 6 + 1] = Math::sin(angle);
+		rotate_gizmo_ring_verts[k * 6 + 2] = 0.0f;
+		rotate_gizmo_ring_verts[k * 6 + 3] = -Math::sin(angle);
+		rotate_gizmo_ring_verts[k * 6 + 4] = Math::cos(angle);
+		rotate_gizmo_ring_verts[k * 6 + 5] = 0.0f;
+	}
+
+	// Editor origin lines
 	if (GLES1::Config::get_singleton()->support_vbo) {
 		// Prebake the editor origin lines directly to VRAM.
 		glGenBuffers(1, &editor_lines_vbo);
@@ -417,6 +447,7 @@ void RasterizerSceneGLES1::geometry_instance_free(RenderGeometryInstance *p_geom
 	GeometryInstanceSurface *surf = ginstance->surface_caches;
 	while (surf) {
 		GeometryInstanceSurface *next = surf->next;
+		_remove_cached_surface(surf);
 		geometry_instance_surface_alloc.free(surf);
 		surf = next;
 	}
@@ -433,6 +464,7 @@ void RasterizerSceneGLES1::GeometryInstanceGLES1::_mark_dirty() {
 	GeometryInstanceSurface *surf = surface_caches;
 	while (surf) {
 		GeometryInstanceSurface *next = surf->next;
+		RasterizerSceneGLES1::get_singleton()->_remove_cached_surface(surf);
 		RasterizerSceneGLES1::get_singleton()->geometry_instance_surface_alloc.free(surf);
 		surf = next;
 	}
@@ -452,6 +484,26 @@ void RasterizerSceneGLES1::GeometryInstanceGLES1::set_lightmap_capture(const Col
 void RasterizerSceneGLES1::_update_dirty_geometry_instances() {
 	while (geometry_instance_dirty_list.first()) {
 		_geometry_instance_update(geometry_instance_dirty_list.first()->self());
+	}
+}
+
+void RasterizerSceneGLES1::_remove_cached_surface(GeometryInstanceSurface* p_surface) {
+	if (p_surface->gizmo_cached) {
+		if (p_surface->gizmo_vertex_buffer != 0) {
+			glDeleteBuffers(1, &p_surface->gizmo_vertex_buffer);
+		}
+		if (p_surface->gizmo_color_buffer != 0) {
+			glDeleteBuffers(1, &p_surface->gizmo_color_buffer);
+		}
+		if (p_surface->gizmo_index_buffer != 0) {
+			glDeleteBuffers(1, &p_surface->gizmo_index_buffer);
+		}
+		if (p_surface->gizmo_vertex_array) {
+			memdelete_arr(p_surface->gizmo_vertex_array);
+		}
+		if (p_surface->gizmo_index_array) {
+			memdelete_arr(p_surface->gizmo_index_array);
+		}
 	}
 }
 
@@ -1053,7 +1105,9 @@ void RasterizerSceneGLES1::_draw_sky(RID p_env, const Projection &p_projection, 
 	// Disable more client states
 	glDisable(GL_LIGHTING);
 	glDisable(GL_FOG);
-	glActiveTexture(GL_TEXTURE0);
+	if (GLES1::Config::get_singleton()->max_texture_units > 1) {
+		glActiveTexture(GL_TEXTURE0);
+	}
 	glDisable(GL_TEXTURE_2D);
 	GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_draw_sky: glDisable GL_LIGHTING, GL_FOG and GL_TEXTURE_2D");
 
@@ -1062,9 +1116,11 @@ void RasterizerSceneGLES1::_draw_sky(RID p_env, const Projection &p_projection, 
 	glDisableClientState(GL_COLOR_ARRAY);
 	glDisableClientState(GL_NORMAL_ARRAY);
 
-	glClientActiveTexture(GL_TEXTURE1);
-	glDisableClientState(GL_TEXTURE_COORD_ARRAY);
-	glClientActiveTexture(GL_TEXTURE0);
+	if (GLES1::Config::get_singleton()->max_texture_units > 1) {
+		glClientActiveTexture(GL_TEXTURE1);
+		glDisableClientState(GL_TEXTURE_COORD_ARRAY);
+		glClientActiveTexture(GL_TEXTURE0);
+	}
 
 	// We need UV coordinates to sample the sky texture.
 	glEnableClientState(GL_TEXTURE_COORD_ARRAY);
@@ -1298,9 +1354,11 @@ void RasterizerSceneGLES1::_update_sky_radiance(RID p_env, const Projection &p_p
 		glEnableClientState(GL_COLOR_ARRAY);
 		glDisableClientState(GL_NORMAL_ARRAY);
 
-		glClientActiveTexture(GL_TEXTURE1);
-		glDisableClientState(GL_TEXTURE_COORD_ARRAY);
-		glClientActiveTexture(GL_TEXTURE0);
+		if (GLES1::Config::get_singleton()->max_texture_units > 1) {
+			glClientActiveTexture(GL_TEXTURE1);
+			glDisableClientState(GL_TEXTURE_COORD_ARRAY);
+			glClientActiveTexture(GL_TEXTURE0);
+		}
 		glEnableClientState(GL_TEXTURE_COORD_ARRAY); // Enable for 3D UVWs
 		GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_update_sky_radiance: Client State hardened");
 
@@ -1371,17 +1429,14 @@ void RasterizerSceneGLES1::_update_sky_radiance(RID p_env, const Projection &p_p
 		sky_curve = MAX(sky_curve, 0.0001f);
 		ground_curve = MAX(ground_curve, 0.0001f);
 
-		constexpr int grid_size = 16;
-		constexpr int num_vertices = grid_size * grid_size * 6;
-
 		// Only perform CPU math on the very first layer of processing.
 		if (sky->processing_layer == 0) {
 			for (int i = 0; i < max_processing_layer; i++) {
-				for (int v = 0; v < num_vertices; v++) {
+				for (int v = 0; v < NUM_VERTICES; v++) {
 					Vector3 cube_normal;
-					cube_normal.x = sky_globals.radiance_uvw[(i * num_vertices + v) * 3 + 0];
-					cube_normal.y = sky_globals.radiance_uvw[(i * num_vertices + v) * 3 + 1];
-					cube_normal.z = sky_globals.radiance_uvw[(i * num_vertices + v) * 3 + 2];
+					cube_normal.x = sky_globals.radiance_uvw[(i * NUM_VERTICES + v) * 3 + 0];
+					cube_normal.y = sky_globals.radiance_uvw[(i * NUM_VERTICES + v) * 3 + 1];
+					cube_normal.z = sky_globals.radiance_uvw[(i * NUM_VERTICES + v) * 3 + 2];
 
 					Color c;
 					float v_angle = Math::acos(CLAMP(cube_normal.y, -1.0f, 1.0f));
@@ -1406,7 +1461,7 @@ void RasterizerSceneGLES1::_update_sky_radiance(RID p_env, const Projection &p_p
 					c.g *= exposure;
 					c.b *= exposure;
 
-					int color_offset = (i * num_vertices + v) * 4;
+					int color_offset = (i * NUM_VERTICES + v) * 4;
 					sky_globals.radiance_colors[color_offset + 0] = uint8_t(CLAMP(c.r * 255.0f, 0.0f, 255.0f));
 					sky_globals.radiance_colors[color_offset + 1] = uint8_t(CLAMP(c.g * 255.0f, 0.0f, 255.0f));
 					sky_globals.radiance_colors[color_offset + 2] = uint8_t(CLAMP(c.b * 255.0f, 0.0f, 255.0f));
@@ -1416,7 +1471,7 @@ void RasterizerSceneGLES1::_update_sky_radiance(RID p_env, const Projection &p_p
 
 			if (GLES1::Config::get_singleton()->support_vbo) {
 				glBindBuffer(GL_ARRAY_BUFFER, sky_globals.radiance_colors_vbo);
-				glBufferSubData(GL_ARRAY_BUFFER, 0, 6 * num_vertices * 4 * sizeof(uint8_t), sky_globals.radiance_colors);
+				glBufferSubData(GL_ARRAY_BUFFER, 0, 6 * NUM_VERTICES * 4 * sizeof(uint8_t), sky_globals.radiance_colors);
 				glBindBuffer(GL_ARRAY_BUFFER, 0);
 			}
 		}
@@ -1433,22 +1488,22 @@ void RasterizerSceneGLES1::_update_sky_radiance(RID p_env, const Projection &p_p
 			for (int i = first_face; i <= last_face; i++) {
 				if (GLES1::Config::get_singleton()->support_vbo) {
 					glBindBuffer(GL_ARRAY_BUFFER, sky_globals.radiance_verts_vbo);
-					glVertexPointer(2, GL_FLOAT, 0, (void *)(uintptr_t)(i * num_vertices * 2 * sizeof(float)));
+					glVertexPointer(2, GL_FLOAT, 0, (void *)(uintptr_t)(i * NUM_VERTICES * 2 * sizeof(float)));
 
 					glBindBuffer(GL_ARRAY_BUFFER, sky_globals.radiance_uvw_vbo);
-					glTexCoordPointer(3, GL_FLOAT, 0, (void *)(uintptr_t)(i * num_vertices * 3 * sizeof(float)));
+					glTexCoordPointer(3, GL_FLOAT, 0, (void *)(uintptr_t)(i * NUM_VERTICES * 3 * sizeof(float)));
 
 					glBindBuffer(GL_ARRAY_BUFFER, sky_globals.radiance_colors_vbo);
-					glColorPointer(4, GL_UNSIGNED_BYTE, 0, (void *)(uintptr_t)(i * num_vertices * 4 * sizeof(uint8_t)));
+					glColorPointer(4, GL_UNSIGNED_BYTE, 0, (void *)(uintptr_t)(i * NUM_VERTICES * 4 * sizeof(uint8_t)));
 				} else {
-					glVertexPointer(2, GL_FLOAT, 0, sky_globals.radiance_verts + (i * num_vertices * 2));
-					glTexCoordPointer(3, GL_FLOAT, 0, sky_globals.radiance_uvw + (i * num_vertices * 3));
-					glColorPointer(4, GL_UNSIGNED_BYTE, 0, sky_globals.radiance_colors + (i * num_vertices * 4));
+					glVertexPointer(2, GL_FLOAT, 0, sky_globals.radiance_verts + (i * NUM_VERTICES * 2));
+					glTexCoordPointer(3, GL_FLOAT, 0, sky_globals.radiance_uvw + (i * NUM_VERTICES * 3));
+					glColorPointer(4, GL_UNSIGNED_BYTE, 0, sky_globals.radiance_colors + (i * NUM_VERTICES * 4));
 				}
 
 				glFramebufferTexture2DOES(GL_FRAMEBUFFER_OES, GL_COLOR_ATTACHMENT0_OES, GL_TEXTURE_CUBE_MAP_POSITIVE_X + i, sky->radiance, 0);
 				GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_update_sky_radiance: glFramebufferTexture2DOES");
-				glDrawArrays(GL_TRIANGLES, 0, num_vertices);
+				glDrawArrays(GL_TRIANGLES, 0, NUM_VERTICES);
 				GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_update_sky_radiance: glDrawArrays");
 			}
 		}
@@ -1469,7 +1524,9 @@ void RasterizerSceneGLES1::_update_sky_radiance(RID p_env, const Projection &p_p
 
 		if (sky->processing_layer >= max_processing_layer) {
 			// Native cubemap LODs
-			glActiveTexture(GL_TEXTURE0);
+			if (GLES1::Config::get_singleton()->max_texture_units > 1) {
+				glActiveTexture(GL_TEXTURE0);
+			}
 			glBindTexture(GL_TEXTURE_CUBE_MAP, sky->radiance);
 			glGenerateMipmapOES(GL_TEXTURE_CUBE_MAP_OES);
 			GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_update_sky_radiance: glGenerateMipmapOES");
@@ -1537,7 +1594,9 @@ Ref<Image> RasterizerSceneGLES1::sky_bake_panorama(RID p_sky, float p_energy, bo
 	glFramebufferTexture2DOES(GL_FRAMEBUFFER_OES, GL_COLOR_ATTACHMENT0_OES, GL_TEXTURE_2D, rad_tex, 0);
 	GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::sky_bake_panorama: glFramebufferTexture2DOES");
 
-	glActiveTexture(GL_TEXTURE0);
+	if (GLES1::Config::get_singleton()->max_texture_units > 1) {
+		glActiveTexture(GL_TEXTURE0);
+	}
 	glBindTexture(GL_TEXTURE_CUBE_MAP, sky->radiance);
 	GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::sky_bake_panorama: glBindTexture");
 
@@ -1690,7 +1749,6 @@ void RasterizerSceneGLES1::scene_render_items_implementation(GeometryInstanceSur
 void RasterizerSceneGLES1::_batch_get_hardware_limits(RasterizerSceneBatcherCommon<BatcherAPISceneGLES1>::BatchLimits &r_limits) {
 	// For GLES1 we do stuff manually via CPU-side transforms, so the matrix palette
 	// here is set to infinite.
-	r_limits.max_matrix_palette_vectors = 0xFFFFFFFF;
 	r_limits.max_vertices_per_buffer = 65536;
 	r_limits.max_indices_per_buffer = 65536 * 2;
 }
@@ -1706,7 +1764,10 @@ void RasterizerSceneGLES1::_batch_get_instance_geometry_capacity(const GeometryI
 	r_vertex_count = drawn_vertex_count * instances;
 	r_index_count = drawn_index_count * instances;
 
-	GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_batch_get_instance_geometry_capacity: get geometry capacity");
+	// Ensure unindexed geometry does not starve the index buffer requirement.
+	if (r_index_count == 0) {
+		r_index_count = r_vertex_count;
+	}
 }
 
 float RasterizerSceneGLES1::_batch_get_item_depth(const GeometryInstanceSurface *p_surface, const Transform3D &p_camera_transform) {
@@ -1726,12 +1787,22 @@ float RasterizerSceneGLES1::_batch_get_item_depth(const GeometryInstanceSurface 
 uint64_t RasterizerSceneGLES1::_batch_get_state_hash(const GeometryInstanceSurface *p_surface) {
 	uint64_t hash = 0;
 
-	// Bits 63-48: Shader version
+	uint64_t cull_mode = p_surface->shader ? p_surface->shader->cull_mode : 0;
+	hash |= (cull_mode & 0x3) << 62; // Bits 63-62: Cull Mode
+
+	uint64_t depth_test = 0;
+
+	if (p_surface->shader && p_surface->shader->depth_test == GLES1::SceneShaderData::DEPTH_TEST_ENABLED) {
+		depth_test = 1;
+	}
+	hash |= (depth_test & 0x1) << 61; // Bit 61: Depth Test
+
+	// Bits 60-48: Shader version
 	uint64_t shader_id = p_surface->shader ? p_surface->shader->version.get_id() : 0;
-	hash |= (shader_id & 0xFFFF) << 48;
+	hash |= (shader_id & 0x1FFF) << 48;
 
 	// Bits 47-16: Material ID
-	uint64_t mat_id = p_surface->material ? p_surface->material->index : 0;
+	uint64_t mat_id = p_surface->material ? static_cast<uint64_t>((uintptr_t)p_surface->material >> 4) : 0;
 	hash |= (mat_id & 0xFFFFFFFF) << 16;
 
 	// Bits 15-0: Mesh surface ID / FVF Profile
@@ -1745,7 +1816,7 @@ GLES1::SceneMaterialData *RasterizerSceneGLES1::_batch_get_material_data(const G
 	return p_surface->material;
 }
 
-void RasterizerSceneGLES1::_batch_fill_instance_geometry(const GeometryInstanceSurface *p_surface, RasterizerSceneBatcherCommon<BatcherAPISceneGLES1>::BatchVertex3D *r_bvs, uint16_t *r_inds, uint32_t p_start_vert) {
+void RasterizerSceneGLES1::_batch_fill_instance_geometry(const GeometryInstanceSurface *p_surface, RasterizerSceneBatcherCommon<BatcherAPISceneGLES1>::BatchVertex3D *r_bvs, uint16_t *r_inds, uint32_t p_start_vert, bool p_use_hardware_transform) {
 	const PackedVector3Array &positions = p_surface->vertex_cache;
 	if (positions.is_empty()) {
 		return;
@@ -1785,20 +1856,23 @@ void RasterizerSceneGLES1::_batch_fill_instance_geometry(const GeometryInstanceS
 		} else {
 			r_bvs[i].color.set_white();
 		}
-
-		r_bvs[i].instance_index = 0.0f; // Matrix Palette hook, defaults to 0
 	}
 
-	if (r_inds) {
+	if (r_inds && indices.size() > 0) {
 		uint32_t i_count = indices.size();
 		const int32_t *idx_ptr = indices.ptr();
 		for (uint32_t i = 0; i < i_count; i++) {
 			r_inds[i] = (uint16_t)(idx_ptr[i] + p_start_vert);
 		}
+	} else if (r_inds) {
+		// Auto-generate sequential indices for unindexed meshes.
+		for (uint32_t i = 0; i < v_count; i++) {
+			r_inds[i] = (uint16_t)(i + p_start_vert);
+		}
 	}
 }
 
-void RasterizerSceneGLES1::_batch_fill_multimesh_geometry(const GeometryInstanceSurface *p_surface, RasterizerSceneBatcherCommon<BatcherAPISceneGLES1>::BatchVertex3DInstanced *r_bvs, uint16_t *r_inds, uint32_t p_start_vert) {
+void RasterizerSceneGLES1::_batch_fill_multimesh_geometry(const GeometryInstanceSurface *p_surface, RasterizerSceneBatcherCommon<BatcherAPISceneGLES1>::BatchVertex3DInstanced *r_bvs, uint16_t *r_inds, uint32_t p_start_vert, bool p_use_hardware_transform) {
 	if (!p_surface || !p_surface->surface || p_surface->owner->instance_count <= 0) {
 		return;
 	}
@@ -1858,12 +1932,11 @@ void RasterizerSceneGLES1::_batch_fill_multimesh_geometry(const GeometryInstance
 				r_bvs[bvs_idx].color.set(inst_color);
 			}
 
-			r_bvs[bvs_idx].instance_index = 0.0f;
 			bvs_idx++;
 		}
 	}
 
-	if (r_inds) {
+	if (r_inds && indices.size() > 0) {
 		uint32_t i_count = indices.size();
 		const int32_t *idx_ptr = indices.ptr();
 
@@ -1871,6 +1944,14 @@ void RasterizerSceneGLES1::_batch_fill_multimesh_geometry(const GeometryInstance
 		for (int inst = 0; inst < instances; inst++) {
 			for (uint32_t i = 0; i < i_count; i++) {
 				r_inds[inds_idx++] = (uint16_t)(idx_ptr[i] + p_start_vert + (inst * v_count));
+			}
+		}
+	} else if (r_inds) {
+		// Auto-generate sequential indices for unindexed meshes.
+		uint32_t inds_idx = 0;
+		for (int inst = 0; inst < instances; inst++) {
+			for (uint32_t i = 0; i < v_count; i++) {
+				r_inds[inds_idx++] = (uint16_t)(i + p_start_vert + (inst * v_count));
 			}
 		}
 	}
@@ -1898,7 +1979,7 @@ void RasterizerSceneGLES1::_batch_upload_buffers() {
 	}
 }
 
-void RasterizerSceneGLES1::_batch_bind_material(GLES1::SceneMaterialData *p_material_data) {
+void RasterizerSceneGLES1::_batch_bind_material(GLES1::SceneMaterialData *p_material_data, const Transform3D &p_world_transform) {
 	if (p_material_data) {
 		if (p_material_data->shader_data) {
 			GLES1::MaterialStorage::get_singleton()->shaders.scene_shader.version_bind_shader(p_material_data->shader_data->version, SceneShaderGLES1::MODE_COLOR, 0);
@@ -1934,7 +2015,7 @@ void RasterizerSceneGLES1::_batch_bind_material(GLES1::SceneMaterialData *p_mate
 	}
 }
 
-void RasterizerSceneGLES1::_batch_render_generic() {
+void RasterizerSceneGLES1::_batch_render_generic(RS::PrimitiveType p_primitive) {
 	if (bdata.indices.size() == 0) {
 		return;
 	}
@@ -1961,7 +2042,9 @@ void RasterizerSceneGLES1::_batch_render_generic() {
 		}
 		GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_batch_render_generic: VBO Array setup");
 	} else {
-		glBindBuffer(GL_ARRAY_BUFFER, 0);
+		if (GLES1::Config::get_singleton()->support_vbo) {
+			glBindBuffer(GL_ARRAY_BUFFER, 0);
+		}
 		const uint8_t *data_ptr = (const uint8_t *)bdata.unit_vertices.get_data();
 		if (bdata.fvf == BatcherEnums::FVF_INSTANCED) {
 			glVertexPointer(3, GL_FLOAT, stride, data_ptr + offsetof(RasterizerSceneBatcherCommon<BatcherAPISceneGLES1>::BatchVertex3DInstanced, pos));
@@ -1982,7 +2065,9 @@ void RasterizerSceneGLES1::_batch_render_generic() {
 		glDrawElements(GL_TRIANGLES, bdata.indices.size(), GL_UNSIGNED_SHORT, nullptr);
 		GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_batch_render_generic: glDrawElements VBO");
 	} else {
-		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+		if (GLES1::Config::get_singleton()->support_vbo) {
+			glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+		}
 		glDrawElements(GL_TRIANGLES, bdata.indices.size(), GL_UNSIGNED_SHORT, bdata.indices.get_data());
 		GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_batch_render_generic: glDrawElements Client");
 	}
@@ -1992,8 +2077,11 @@ void RasterizerSceneGLES1::_batch_render_generic() {
 	glDisableClientState(GL_TEXTURE_COORD_ARRAY);
 	glDisableClientState(GL_COLOR_ARRAY);
 
-	glBindBuffer(GL_ARRAY_BUFFER, 0);
-	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+	if (GLES1::Config::get_singleton()->support_vbo) {
+		glBindBuffer(GL_ARRAY_BUFFER, 0);
+		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+	}
+	GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_batch_render_generic: Unbind state");
 	GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_batch_render_generic: Unbind state");
 }
 
@@ -2057,7 +2145,6 @@ void RasterizerSceneGLES1::_render_single_item_immediate(const GeometryInstanceS
 		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
 	}
 
-	static constexpr GLenum prim[5] = { GL_POINTS, GL_LINES, GL_LINE_STRIP, GL_TRIANGLES, GL_TRIANGLE_STRIP };
 	GLenum primitive_gl = prim[int(p_surface->primitive)];
 	int drawn_count = mesh_storage->mesh_surface_get_vertices_drawn_count(p_surface->surface);
 
@@ -2182,6 +2269,9 @@ void RasterizerSceneGLES1::_fill_render_list(RenderListType p_render_list, const
 		scene_state.used_screen_texture = false;
 		scene_state.used_normal_texture = false;
 		scene_state.used_depth_texture = false;
+#ifdef TOOLS_ENABLED
+		render_list[RENDER_LIST_GIZMOS].clear();
+#endif
 	}
 
 	Plane near_plane;
@@ -2219,6 +2309,20 @@ void RasterizerSceneGLES1::_fill_render_list(RenderListType p_render_list, const
 
 		uint32_t depth_layer = CLAMP(int(inst->depth * 16 / z_max), 0, 15);
 		GeometryInstanceSurface *surf = inst->surface_caches;
+
+#ifdef TOOLS_ENABLED
+		// Intercept gizmos and bypass the standard batching queues.
+		// (Node3DEditorViewport::GIZMO_EDIT_LAYER == 26).
+		if (inst->layer_mask & ((1 << 26) | (1 << 27))) {
+			while (surf) {
+				if (p_pass_mode == PASS_MODE_COLOR) {
+					render_list[RENDER_LIST_GIZMOS].add_element(surf);
+				}
+				surf = surf->next;
+			}
+			continue; // Discard from normal batching queues
+		}
+#endif
 
 		while (surf) {
 			surf->lod_index = 0; // TODO(GLES1): Simple stub for LOD
@@ -2551,6 +2655,7 @@ void RasterizerSceneGLES1::render_scene(const Ref<RenderSceneBuffers> &p_render_
 
 #ifdef TOOLS_ENABLED
 	_draw_editor_lines(&render_data);
+	_draw_editor_gizmos(&render_data);
 #endif
 
 	// Rescue the 3D scene from the internal buffer if it was used.
@@ -2558,14 +2663,379 @@ void RasterizerSceneGLES1::render_scene(const Ref<RenderSceneBuffers> &p_render_
 
 	// Clean up GL state
 	scene_state.reset_gl_state();
-	glBindBuffer(GL_ARRAY_BUFFER, 0);
-	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+	if (GLES1::Config::get_singleton()->support_vbo) {
+		glBindBuffer(GL_ARRAY_BUFFER, 0);
+		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+	}
 
 	GLES1::TextureStorage::get_singleton()->bind_framebuffer_system();
 	GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::render_scene: reset_gl_state cleanup");
 }
 
 #ifdef TOOLS_ENABLED
+void RasterizerSceneGLES1::_draw_editor_gizmos(const RenderDataGLES1 *p_render_data) {
+	if (render_list[RENDER_LIST_GIZMOS].elements.is_empty()) {
+		return;
+	}
+
+	scene_state.reset_gl_state();
+
+	glMatrixMode(GL_PROJECTION);
+	glPushMatrix();
+	glLoadIdentity();
+
+	Projection projection = p_render_data->cam_projection;
+	Projection correction;
+	correction.columns[1][1] = -1.0f; // flip_y
+	projection = correction * projection;
+
+	const float proj_m[16] = {
+		projection.columns[0][0], projection.columns[0][1], projection.columns[0][2], projection.columns[0][3],
+		projection.columns[1][0], projection.columns[1][1], projection.columns[1][2], projection.columns[1][3],
+		projection.columns[2][0], projection.columns[2][1], projection.columns[2][2], projection.columns[2][3],
+		projection.columns[3][0], projection.columns[3][1], projection.columns[3][2], projection.columns[3][3]
+	};
+	glLoadMatrixf(proj_m);
+
+	glMatrixMode(GL_MODELVIEW);
+	glPushMatrix();
+	glLoadIdentity();
+
+	Transform3D view = p_render_data->inv_cam_transform;
+	const float view_m[16] = {
+		view.basis.rows[0][0], view.basis.rows[1][0], view.basis.rows[2][0], 0.0f,
+		view.basis.rows[0][1], view.basis.rows[1][1], view.basis.rows[2][1], 0.0f,
+		view.basis.rows[0][2], view.basis.rows[1][2], view.basis.rows[2][2], 0.0f,
+		view.origin.x, view.origin.y, view.origin.z, 1.0f
+	};
+	glLoadMatrixf(view_m);
+
+	glDisable(GL_LIGHTING);
+	glDisable(GL_TEXTURE_2D);
+	glDisable(GL_FOG);
+	glClear(GL_DEPTH_BUFFER_BIT);
+
+	glEnable(GL_BLEND);
+	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+	if (GLES1::Config::get_singleton()->support_vbo) {
+		glBindBuffer(GL_ARRAY_BUFFER, 0);
+		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+	}
+
+	glEnableClientState(GL_VERTEX_ARRAY);
+	glDisableClientState(GL_NORMAL_ARRAY);
+	glDisableClientState(GL_TEXTURE_COORD_ARRAY);
+
+	for (uint32_t i = 0; i < render_list[RENDER_LIST_GIZMOS].elements.size(); i++) {
+		GeometryInstanceSurface *surf = render_list[RENDER_LIST_GIZMOS].elements[i];
+		if (surf->vertex_cache.is_empty()) {
+			continue;
+		}
+
+		// Correctly cull
+		if (surf->shader) {
+			if (surf->shader->cull_mode == RS::CULL_MODE_DISABLED) {
+				glDisable(GL_CULL_FACE);
+			} else {
+				glEnable(GL_CULL_FACE);
+				glCullFace(surf->shader->cull_mode == RS::CULL_MODE_FRONT ? GL_FRONT : GL_BACK);
+			}
+
+			if (surf->shader->depth_test == GLES1::SceneShaderData::DEPTH_TEST_DISABLED) {
+				glDisable(GL_DEPTH_TEST);
+			} else {
+				glEnable(GL_DEPTH_TEST);
+			}
+
+			if (surf->shader->depth_draw == GLES1::SceneShaderData::DEPTH_DRAW_DISABLED || (surf->flags & GeometryInstanceSurface::FLAG_PASS_ALPHA)) {
+				glDepthMask(GL_FALSE);
+			} else {
+				glDepthMask(GL_TRUE);
+			}
+		} else {
+			glDisable(GL_CULL_FACE);
+			glEnable(GL_DEPTH_TEST);
+			glDepthMask(GL_FALSE);
+		}
+		GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_draw_editor_gizmos: surface state setup");
+
+		bool is_multimesh = surf->owner->data->base_type == RS::INSTANCE_MULTIMESH;
+		uint32_t instances = is_multimesh ? surf->owner->instance_count : 1;
+		RID base_rid = surf->owner->data->base;
+
+		Color base_albedo = Color(1.0f, 1.0f, 1.0f, 1.0f);
+		RID mat_rid = RID();
+
+		if (surf->owner->data->surface_materials.size() > surf->surface_index) {
+			mat_rid = surf->owner->data->surface_materials[surf->surface_index];
+		}
+
+		// Fallback
+		if (!mat_rid.is_valid()) {
+			mat_rid = GLES1::MeshStorage::get_singleton()->mesh_surface_get_material(surf->owner->data->base, surf->surface_index);
+		}
+
+		if (mat_rid.is_valid()) {
+			Variant albedo_var = GLES1::MaterialStorage::get_singleton()->material_get_param(mat_rid, "albedo");
+			if (albedo_var.get_type() == Variant::COLOR) {
+				base_albedo = albedo_var;
+			}
+
+			if (surf->primitive == RS::PRIMITIVE_POINTS) {
+				Variant pt_size = GLES1::MaterialStorage::get_singleton()->material_get_param(mat_rid, "point_size");
+				if (pt_size.get_type() == Variant::FLOAT) {
+					glPointSize(pt_size);
+				} else {
+					glPointSize(1.0f);
+				}
+			}
+		}
+
+		GLenum primitive_gl = prim[int(surf->primitive)];
+
+		if (primitive_gl == GL_LINES || primitive_gl == GL_LINE_STRIP) {
+			glLineWidth(3.0f);
+		} else {
+			glLineWidth(1.0f);
+		}
+
+		// The rotate gizmo has precisely 384 vertices (128 segments * 3 thickness layers)
+		bool is_rotate_gizmo = (
+			surf->vertex_cache.size() == 384 &&
+			surf->normal_cache.size() == 384 &&
+			surf->primitive == RS::PRIMITIVE_TRIANGLES
+		);
+		bool is_border = is_rotate_gizmo && (
+			Math::is_equal_approx(base_albedo.r, 0.75f) &&
+			Math::is_equal_approx(base_albedo.g, 0.75f) &&
+			Math::is_equal_approx(base_albedo.b, 0.75f)
+		);
+
+		// Cache standard gizmo vertices if not already cached
+		if (!is_rotate_gizmo && !surf->gizmo_cached) {
+			int v_count = surf->vertex_cache.size();
+			surf->gizmo_vertex_array = memnew_arr(float, v_count * 3);
+			for (int v = 0; v < v_count; v++) {
+				Vector3 vertex = surf->vertex_cache[v];
+				if (vertex.length_squared() > 16777216.0f) {
+					vertex = vertex.normalized() * 4096.0f;
+				}
+				surf->gizmo_vertex_array[v * 3 + 0] = vertex.x;
+				surf->gizmo_vertex_array[v * 3 + 1] = vertex.y;
+				surf->gizmo_vertex_array[v * 3 + 2] = vertex.z;
+			}
+
+			if (!surf->index_cache.is_empty()) {
+				surf->gizmo_index_array = memnew_arr(uint16_t, surf->index_cache.size());
+				for (uint32_t ii = 0; ii < surf->index_cache.size(); ii++) {
+					surf->gizmo_index_array[ii] = static_cast<uint16_t>(surf->index_cache[ii]);
+				}
+			}
+
+			if (GLES1::Config::get_singleton()->support_vbo) {
+				glGenBuffers(1, &surf->gizmo_vertex_buffer);
+				glBindBuffer(GL_ARRAY_BUFFER, surf->gizmo_vertex_buffer);
+				glBufferData(GL_ARRAY_BUFFER, v_count * 3 * sizeof(float), surf->gizmo_vertex_array, GL_STATIC_DRAW);
+
+				if (!surf->color_cache.is_empty()) {
+					glGenBuffers(1, &surf->gizmo_color_buffer);
+					glBindBuffer(GL_ARRAY_BUFFER, surf->gizmo_color_buffer);
+					glBufferData(GL_ARRAY_BUFFER, surf->color_cache.size() * sizeof(Color), surf->color_cache.ptr(), GL_STATIC_DRAW);
+				}
+
+				if (surf->gizmo_index_array) {
+					glGenBuffers(1, &surf->gizmo_index_buffer);
+					glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, surf->gizmo_index_buffer);
+					glBufferData(GL_ELEMENT_ARRAY_BUFFER, surf->index_cache.size() * sizeof(uint16_t), surf->gizmo_index_array, GL_STATIC_DRAW);
+				}
+				glBindBuffer(GL_ARRAY_BUFFER, 0);
+				glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+				GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_draw_editor_gizmos: gizmo VBO gen");
+			}
+
+			surf->gizmo_cached = true;
+		}
+
+		for (uint32_t inst = 0; inst < instances; inst++) {
+			glPushMatrix();
+
+			Transform3D xform;
+			Color final_color = base_albedo;
+
+			if (is_multimesh) {
+				xform = GLES1::MeshStorage::get_singleton()->multimesh_instance_get_transform(base_rid, inst);
+				final_color *= GLES1::MeshStorage::get_singleton()->multimesh_instance_get_color(base_rid, inst);
+			}
+
+			Transform3D final_xform = surf->owner->transform * xform;
+			const float world_f[16] = {
+				final_xform.basis.rows[0][0], final_xform.basis.rows[1][0], final_xform.basis.rows[2][0], 0.0f,
+				final_xform.basis.rows[0][1], final_xform.basis.rows[1][1], final_xform.basis.rows[2][1], 0.0f,
+				final_xform.basis.rows[0][2], final_xform.basis.rows[1][2], final_xform.basis.rows[2][2], 0.0f,
+				final_xform.origin.x, final_xform.origin.y, final_xform.origin.z, 1.0f
+			};
+			glMultMatrixf(world_f);
+
+			// Rotation rings
+			if (is_rotate_gizmo) {
+				float radius = surf->vertex_cache[0].length();
+
+				// View direction in gizmo's local space
+				Vector3 local_view_dir = final_xform.basis.inverse().xform(
+					p_render_data->cam_transform.basis.get_column(2)
+				).normalized();
+
+				glColor4f(final_color.r, final_color.g, final_color.b, final_color.a);
+				glDisableClientState(GL_COLOR_ARRAY);
+
+				if (is_border) {
+					// White outline: A full 360-degree circle rotated
+					// to billboard the camera
+
+					Vector3 cam_dir = local_view_dir;
+					Vector3 cam_up = final_xform.basis.inverse().xform(p_render_data->cam_transform.basis.get_column(1)).normalized();
+					Vector3 cam_right = cam_up.cross(cam_dir).normalized();
+					cam_up = cam_dir.cross(cam_right).normalized();
+
+					Basis rot_mat;
+					rot_mat.set_column(0, cam_right);
+					rot_mat.set_column(1, cam_up);
+					rot_mat.set_column(2, cam_dir);
+
+					Vector3 temp_verts[(BORDER_SEGMENTS + 1) * 2];
+
+					for (int k = 0; k <= BORDER_SEGMENTS; k++) {
+						Vector3 P0(rotate_gizmo_border_verts[k * 3 + 0], rotate_gizmo_border_verts[k * 3 + 1], rotate_gizmo_border_verts[k * 3 + 2]);
+
+						Vector3 P = P0 * radius;
+						Vector3 v1 = P + P0 * (B_WIDTH * radius);
+						Vector3 v2 = P - P0 * (B_WIDTH * radius);
+
+						temp_verts[k * 2 + 0] = rot_mat.xform(v1);
+						temp_verts[k * 2 + 1] = rot_mat.xform(v2);
+					}
+
+					if (GLES1::Config::get_singleton()->support_vbo) {
+						glBindBuffer(GL_ARRAY_BUFFER, 0);
+					}
+					glVertexPointer(3, GL_FLOAT, 0, temp_verts);
+					glDrawArrays(GL_TRIANGLE_STRIP, 0, (BORDER_SEGMENTS + 1) * 2);
+				} else {
+					// Coloured rings:
+					// We create a dynamic 198-degree half-circle that follows the camera
+
+					// Project the view direction down onto the gizmo's local 2D plane (Z=0)
+					Vector2 front_2d = Vector2(local_view_dir.x, local_view_dir.y);
+					if (front_2d.length_squared() < 0.0001f) {
+						front_2d = Vector2(1, 0);
+					}
+					front_2d.normalize();
+					float base_angle = front_2d.angle();
+
+					// Transform the local view into the ring's
+					// unrotated frame to calculate twist.
+					Vector3 view0 = Basis(Vector3(0, 0, 1), -base_angle).xform(local_view_dir);
+
+					Vector3 temp_verts[(BORDER_SEGMENTS + 1) * 2];
+
+					for (int k = 0; k <= BORDER_SEGMENTS; k++) {
+						Vector3 P0(rotate_gizmo_ring_verts[k * 6 + 0], rotate_gizmo_ring_verts[k * 6 + 1], rotate_gizmo_ring_verts[k * 6 + 2]);
+						Vector3 T0(rotate_gizmo_ring_verts[k * 6 + 3], rotate_gizmo_ring_verts[k * 6 + 4], rotate_gizmo_ring_verts[k * 6 + 5]);
+
+						Vector3 P = P0 * radius;
+						Vector3 W0 = T0.cross(view0).normalized() * (T_WIDTH * radius);
+
+						temp_verts[k * 2 + 0] = P + W0;
+						temp_verts[k * 2 + 1] = P - W0;
+					}
+
+					glRotatef(Math::rad_to_deg(base_angle), 0.0f, 0.0f, 1.0f);
+					if (GLES1::Config::get_singleton()->support_vbo) {
+						glBindBuffer(GL_ARRAY_BUFFER, 0);
+					}
+					glVertexPointer(3, GL_FLOAT, 0, temp_verts);
+					glDrawArrays(GL_TRIANGLE_STRIP, 0, (BORDER_SEGMENTS + 1) * 2);
+				}
+			} else {
+				// Standard drawing
+				if (GLES1::Config::get_singleton()->support_vbo && surf->gizmo_vertex_buffer != 0) {
+					glBindBuffer(GL_ARRAY_BUFFER, surf->gizmo_vertex_buffer);
+					glVertexPointer(3, GL_FLOAT, 0, nullptr);
+
+					if (surf->gizmo_color_buffer != 0) {
+						glEnableClientState(GL_COLOR_ARRAY);
+						glBindBuffer(GL_ARRAY_BUFFER, surf->gizmo_color_buffer);
+						glColorPointer(4, GL_FLOAT, 0, nullptr);
+					} else {
+						glDisableClientState(GL_COLOR_ARRAY);
+						glColor4f(final_color.r, final_color.g, final_color.b, final_color.a);
+					}
+
+					if (surf->gizmo_index_buffer != 0) {
+						glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, surf->gizmo_index_buffer);
+						glDrawElements(primitive_gl, surf->index_cache.size(), GL_UNSIGNED_SHORT, nullptr);
+					} else {
+						glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+						glDrawArrays(primitive_gl, 0, surf->vertex_cache.size());
+					}
+				} else {
+					if (GLES1::Config::get_singleton()->support_vbo) {
+						glBindBuffer(GL_ARRAY_BUFFER, 0);
+					}
+					glVertexPointer(3, GL_FLOAT, 0, surf->gizmo_vertex_array);
+
+					if (!surf->color_cache.is_empty()) {
+						glEnableClientState(GL_COLOR_ARRAY);
+						glColorPointer(4, GL_FLOAT, 0, surf->color_cache.ptr());
+					} else {
+						glDisableClientState(GL_COLOR_ARRAY);
+						glColor4f(final_color.r, final_color.g, final_color.b, final_color.a);
+					}
+
+					if (surf->gizmo_index_array) {
+						if (GLES1::Config::get_singleton()->support_vbo) {
+							glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+						}
+						glDrawElements(primitive_gl, surf->index_cache.size(), GL_UNSIGNED_SHORT, surf->gizmo_index_array);
+					} else {
+						if (GLES1::Config::get_singleton()->support_vbo) {
+							glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+						}
+						glDrawArrays(primitive_gl, 0, surf->vertex_cache.size());
+					}
+				}
+			}
+
+			GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_draw_editor_gizmos: glDraw elements dispatch");
+			glPopMatrix();
+		}
+	}
+
+	// Clean up
+	glLineWidth(1.0f);
+	glDisableClientState(GL_VERTEX_ARRAY);
+	glDisableClientState(GL_COLOR_ARRAY);
+
+	if (GLES1::Config::get_singleton()->support_vbo) {
+		glBindBuffer(GL_ARRAY_BUFFER, 0);
+		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+	}
+
+	glDepthMask(GL_TRUE);
+	glDisable(GL_BLEND);
+	glEnable(GL_DEPTH_TEST);
+	glDisable(GL_CULL_FACE);
+
+	glMatrixMode(GL_PROJECTION);
+	glPopMatrix();
+	glMatrixMode(GL_MODELVIEW);
+	glPopMatrix();
+
+	glColor4f(1.0f, 1.0f, 1.0f, 1.0f);
+	GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_draw_editor_gizmos: cleanup");
+}
+
 void RasterizerSceneGLES1::_draw_editor_lines(const RenderDataGLES1 *p_render_data) {
 	// Restrict to viewports requesting the gizmo grid layer
 	// (Node3DEditorViewport::GIZMO_GRID_LAYER == 27).
@@ -2641,7 +3111,9 @@ void RasterizerSceneGLES1::_draw_editor_lines(const RenderDataGLES1 *p_render_da
 		glBindBuffer(GL_ARRAY_BUFFER, editor_lines_color_vbo);
 		glColorPointer(4, GL_UNSIGNED_BYTE, 0, nullptr);
 	} else {
-		glBindBuffer(GL_ARRAY_BUFFER, 0);
+		if (GLES1::Config::get_singleton()->support_vbo) {
+			glBindBuffer(GL_ARRAY_BUFFER, 0);
+		}
 		glVertexPointer(3, GL_FLOAT, 0, line_verts);
 		glColorPointer(4, GL_UNSIGNED_BYTE, 0, line_colors);
 	}
@@ -2720,7 +3192,9 @@ void RasterizerSceneGLES1::_render_post_processing(const RenderDataGLES1 *p_rend
 	glDepthMask(GL_FALSE);
 	glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
 
-	glActiveTexture(GL_TEXTURE0);
+	if (GLES1::Config::get_singleton()->max_texture_units > 1) {
+		glActiveTexture(GL_TEXTURE0);
+	}
 	glBindTexture(GL_TEXTURE_2D, rb->internal3d.color);
 
 	if (rb->scaling_3d_mode == RS::VIEWPORT_SCALING_3D_MODE_BILINEAR) {
@@ -2898,6 +3372,15 @@ RasterizerSceneGLES1::~RasterizerSceneGLES1() {
 	}
 	if (editor_lines_color_vbo != 0) {
 		glDeleteBuffers(1, &editor_lines_color_vbo);
+	}
+	if (rotate_gizmo_border_vbo != 0) {
+		glDeleteBuffers(1, &rotate_gizmo_border_vbo);
+	}
+	if (rotate_gizmo_border_verts) {
+		memdelete_arr(rotate_gizmo_border_verts);
+	}
+	if (rotate_gizmo_ring_verts) {
+		memdelete_arr(rotate_gizmo_ring_verts);
 	}
 #endif
 }
