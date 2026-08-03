@@ -76,6 +76,17 @@ static_assert(__cplusplus >= 201703L);
 #endif
 #endif
 
+// Prevent inline, no matter what.
+#ifndef _NO_INLINE_
+#if defined(_MSC_VER)
+#define _NO_INLINE_ __declspec(noinline)
+#elif defined(__GNUC__) || defined(__clang__)
+#define _NO_INLINE_ __attribute__((noinline))
+#else
+#define _NO_INLINE_
+#endif
+#endif
+
 // Some platforms may not natievly support atomics, but the compiler
 // can emulate it in software.
 #define GODOT_REQUIRE_LOCK_FREE_ATOMICS 1

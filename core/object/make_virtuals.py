@@ -20,7 +20,7 @@ script_has_method = """ScriptInstance *_script_instance = ((Object *)(this))->ge
 
 proto = """#define GDVIRTUAL$VER($ALIAS $RET m_name $ARG)\\
 	mutable void *_gdvirtual_##$VARNAME = nullptr;\\
-	_FORCE_INLINE_ bool _gdvirtual_##$VARNAME##_call($CALLARGS) $CONST {\\
+	_NO_INLINE_ bool _gdvirtual_##$VARNAME##_call_fallback($CALLARGS) $CONST {\\
 		using ThisClass = std::remove_pointer_t<decltype(this)>;\\
 		static const StringName _gdvirtual_##$VARNAME##_sn = _scs_create(#m_name, true);\\
 		$SCRIPTCALL\\
@@ -58,6 +58,11 @@ proto = """#define GDVIRTUAL$VER($ALIAS $RET m_name $ARG)\\
 		$REQCHECK\\
 		$RVOID\\
 		return false;\\
+	}\\
+	$TRAIT_DEF
+	template <typename T_Exact> \\
+	_FORCE_INLINE_ bool _gdvirtual_##$VARNAME##_call($CALLARGS) $CONST {\\
+		$CRTP_FAST_PATH\\
 	}\\
 	_FORCE_INLINE_ bool _gdvirtual_##$VARNAME##_overridden() const {\\
 		using ThisClass = std::remove_pointer_t<decltype(this)>;\\
@@ -158,8 +163,12 @@ def generate_version(argcount, const=False, returns=False, required=False, compa
 
     s = s.replace("$METHOD_FLAGS", method_flags)
     s = s.replace("$VER", sproto)
+    
     argtext = ""
     callargtext = ""
+    callargs_raw_pass = ""
+    callargs_pass_to_fallback = ""
+    declval_args = ""
     
     callsiargs = ""
     callsiargptrs = ""
@@ -180,11 +189,21 @@ def generate_version(argcount, const=False, returns=False, required=False, compa
         if i > 0:
             argtext += ", "
             callargtext += ", "
+            callargs_raw_pass += ", "
+            callargs_pass_to_fallback += ", "
+            declval_args += ", "
             
         argtext += f"m_type{i + 1}"
         callargtext += f"m_type{i + 1} arg{i + 1}"
-        
+
         # Script arguments
+        callargs_raw_pass += f"arg{i + 1}"
+        callargs_pass_to_fallback += f"arg{i + 1}"
+
+        # For some reason this wants to give me rvalue references.
+        # This forces it to simulate lvalue references.
+        declval_args += f"std::declval<std::add_lvalue_reference_t<m_type{i + 1}>>()"
+        
         callsiargs += f"\t\t\tmemnew_placement(&vargs[{i}], Variant);\\\n"
         callsiargs += f"\t\t\tvargs[{i}] = arg{i + 1};\\\n"
         callsiargptrs += f"\t\t\tvargptrs[{i}] = &vargs[{i}];\\\n"
@@ -201,6 +220,70 @@ def generate_version(argcount, const=False, returns=False, required=False, compa
             method_info += "\\\n\t\t"
         method_info += f"method_info.arguments.push_back(GetTypeInfo<m_type{i + 1}>::get_class_info());\\\n"
         method_info += f"\t\tmethod_info.arguments_metadata.push_back(GetTypeInfo<m_type{i + 1}>::METADATA);"
+
+    s = s.replace("$DECLVAL_ARGS", declval_args)
+
+    var_name = "m_alias" if compat else "m_name"
+    
+    # When the return type is expected, verify
+    # if the C++ method return type is compatible
+    # (so we don't accidentally find duplicate methods)
+    if returns:
+        # `auto` is used here for the same rationale as
+        # core/templates/tuple.h.
+        trait_def = f"""\ttemplate <typename T_Check> \\
+\tstruct _gdvirtual_##{var_name}##_trait {{ \\
+\t\ttemplate <typename U> static auto test(int) -> decltype(std::declval<U>().m_name({declval_args})); \\
+\t\ttemplate <typename> static std::false_type test(...); \\
+\t\tusing RetType = decltype(test<T_Check>(0)); \\
+\t\tstatic constexpr bool value = !std::is_same_v<std::remove_cv_t<T_Check>, self_type> && !std::is_same_v<RetType, std::false_type> && std::is_convertible_v<RetType, m_ret>; \\
+\t}}; \\"""
+    else:
+        trait_def = f"""\ttemplate <typename T_Check> \\
+\tstruct _gdvirtual_##{var_name}##_trait {{ \\
+\t\ttemplate <typename U> static auto test(int) -> decltype(std::declval<U>().m_name({declval_args}), std::true_type()); \\
+\t\ttemplate <typename> static std::false_type test(...); \\
+\t\tstatic constexpr bool value = !std::is_same_v<std::remove_cv_t<T_Check>, self_type> && decltype(test<T_Check>(0))::value; \\
+\t}}; \\"""
+
+    s = s.replace("$TRAIT_DEF\n", trait_def + "\n")
+
+    if returns:
+        # Fast direct CRTP path
+        if argcount > 0:
+            callargtext += ", "
+            callargs_pass_to_fallback += ", "
+        callargtext += "m_ret &r_ret"
+        callargs_pass_to_fallback += "r_ret"
+        
+        var_name = "m_alias" if compat else "m_name"
+        
+        # This long static_cast shenanigan makes sure we strip
+        # `const` from any class, and rebuild a clean
+        # mutable pointer before casting it.
+        crtp_fast_path = f"""\t\tT_Exact* p_instance = static_cast<T_Exact*>(const_cast<std::remove_cv_t<std::remove_pointer_t<decltype(this)>>*>(this));\\
+\t\tif constexpr (_gdvirtual_##{var_name}##_trait<T_Exact>::value) {{\\
+\t\t\tif constexpr (std::is_void_v<decltype(std::declval<T_Exact>().m_name({declval_args}))>) {{\\
+\t\t\t\tp_instance->m_name({callargs_raw_pass});\\
+\t\t\t}} else {{\\
+\t\t\t\tr_ret = (m_ret)p_instance->m_name({callargs_raw_pass});\\
+\t\t\t}}\\
+\t\t\treturn true;\\
+\t\t}} else {{\\
+\t\t\treturn _gdvirtual_##{var_name}##_call_fallback({callargs_pass_to_fallback});\\
+\t\t}}"""
+    else:
+        var_name = "m_alias" if compat else "m_name"
+        
+        crtp_fast_path = f"""\t\tT_Exact* p_instance = static_cast<T_Exact*>(const_cast<std::remove_cv_t<std::remove_pointer_t<decltype(this)>>*>(this));\\
+\t\tif constexpr (_gdvirtual_##{var_name}##_trait<T_Exact>::value) {{\\
+\t\t\tp_instance->m_name({callargs_raw_pass});\\
+\t\t\treturn true;\\
+\t\t}} else {{\\
+\t\t\treturn _gdvirtual_##{var_name}##_call_fallback({callargs_pass_to_fallback});\\
+\t\t}}"""
+
+    s = s.replace("$CRTP_FAST_PATH", crtp_fast_path)
 
     if argcount:
         s = s.replace("$CALLSIARGS", callsiargs + callsiargptrs)
@@ -221,9 +304,6 @@ def generate_version(argcount, const=False, returns=False, required=False, compa
         s = s.replace("$CALLPTRARGPASS", "nullptr")
 
     if returns:
-        if argcount > 0:
-            callargtext += ", "
-        callargtext += "m_ret &r_ret"
         s = s.replace("$CALLSIBEGIN", "Variant ret = ")
         s = s.replace("$CALLSIRET", "r_ret = VariantCaster<m_ret>::cast(ret);")
         
@@ -261,6 +341,7 @@ def run(target, source, env):
 #include "core/object/script_instance.h"
 
 #include <utility>
+#include <type_traits> // for std::is_same_v
 inline constexpr uintptr_t _INVALID_GDVIRTUAL_FUNC_ADDR = static_cast<uintptr_t>(-1);
 
 #ifdef TOOLS_ENABLED
