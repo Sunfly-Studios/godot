@@ -85,7 +85,7 @@ public:
 
 		if constexpr (!std::is_trivially_constructible_v<T> && !force_trivial) {
 			// std::move perfectly forwards the stack copy into the vector
-			memnew_placement(&data[count++], T(std::move(p_elem)));
+			unaligned_construct<T>(&data[count++], std::move(p_elem));
 		} else {
 			data[count++] = std::move(p_elem);
 		}
@@ -98,7 +98,7 @@ public:
 			data[i] = std::move(data[i + 1]);
 		}
 		if constexpr (!std::is_trivially_destructible_v<T> && !force_trivial) {
-			data[count].~T();
+			unaligned_destroy<T>(&data[count]);
 		}
 	}
 
@@ -111,7 +111,7 @@ public:
 			data[p_index] = std::move(data[count]);
 		}
 		if constexpr (!std::is_trivially_destructible_v<T> && !force_trivial) {
-			data[count].~T();
+			unaligned_destroy<T>(&data[count]);
 		}
 	}
 
@@ -172,8 +172,8 @@ public:
 				CRASH_COND_MSG(!new_data, "Out of memory");
 
 				for (U i = 0; i < count; i++) {
-					memnew_placement(&new_data[i], T(std::move(data[i])));
-					data[i].~T();
+					unaligned_construct<T>(&new_data[i], std::move(data[i]));
+					unaligned_destroy<T>(&data[i]);
 				}
 
 				if (data) {
@@ -190,7 +190,7 @@ public:
 		if (p_size < count) {
 			if constexpr (!std::is_trivially_destructible_v<T>) {
 				for (U i = p_size; i < count; i++) {
-					data[i].~T();
+					unaligned_destroy<T>(&data[i]);
 				}
 			}
 			count = p_size;
@@ -199,7 +199,7 @@ public:
 
 			if constexpr (!std::is_trivially_constructible_v<T>) {
 				for (U i = count; i < p_size; i++) {
-					memnew_placement(&data[i], T());
+					unaligned_construct<T>(&data[i]);
 				}
 			} else {
 				// Prevent rubbish for trivial types

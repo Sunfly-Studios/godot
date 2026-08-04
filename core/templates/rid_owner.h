@@ -349,7 +349,7 @@ public:
 #endif
 		}
 
-		memnew_placement(mem, T);
+		unaligned_construct<T>(mem);
 
 		if constexpr (THREAD_SAFE) {
 #ifdef TSAN_ENABLED

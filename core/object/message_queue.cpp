@@ -112,7 +112,9 @@ Error CallQueue::push_callablep(const Callable &p_callable, const Variant **p_ar
 	uintptr_t start_addr = reinterpret_cast<uintptr_t>(buffer_start);
 
 	uintptr_t msg_addr = _align_addr(start_addr, alignof(Message));
-	Message *msg = memnew_placement(reinterpret_cast<void *>(msg_addr), Message);
+	unaligned_construct<Message>(reinterpret_cast<void *>(msg_addr));
+	Message *msg = std::launder(reinterpret_cast<Message *>(msg_addr));
+
 	msg->args = p_argcount;
 	msg->callable = p_callable;
 	msg->type = TYPE_CALL;
@@ -128,7 +130,8 @@ Error CallQueue::push_callablep(const Callable &p_callable, const Variant **p_ar
 	uint8_t *var_ptr = reinterpret_cast<uint8_t *>(var_addr);
 
 	for (int i = 0; i < p_argcount; i++) {
-		Variant *v = memnew_placement(var_ptr, Variant);
+		unaligned_construct<Variant>(var_ptr);
+		Variant *v = std::launder(reinterpret_cast<Variant *>(var_ptr));
 		var_ptr += sizeof(Variant);
 		*v = *p_args[i];
 	}
@@ -167,13 +170,15 @@ Error CallQueue::push_set(ObjectID p_id, const StringName &p_prop, const Variant
 	uintptr_t start_addr = reinterpret_cast<uintptr_t>(buffer_start);
 
 	uintptr_t msg_addr = _align_addr(start_addr, alignof(Message));
-	Message *msg = memnew_placement(reinterpret_cast<void *>(msg_addr), Message);
+	unaligned_construct<Message>(reinterpret_cast<void *>(msg_addr));
+	Message *msg = std::launder(reinterpret_cast<Message *>(msg_addr));
 	msg->args = 1;
 	msg->callable = Callable(p_id, p_prop);
 	msg->type = TYPE_SET;
 
 	uintptr_t var_addr = _align_addr(msg_addr + sizeof(Message), alignof(Variant));
-	Variant *v = memnew_placement(reinterpret_cast<void *>(var_addr), Variant);
+	unaligned_construct<Variant>(reinterpret_cast<void *>(var_addr));
+	Variant *v = std::launder(reinterpret_cast<Variant *>(var_addr));
 	*v = p_value;
 
 	uintptr_t end_addr = var_addr + sizeof(Variant);
@@ -206,7 +211,8 @@ Error CallQueue::push_notification(ObjectID p_id, int p_notification) {
 	uintptr_t start_addr = reinterpret_cast<uintptr_t>(buffer_start);
 
 	uintptr_t msg_addr = _align_addr(start_addr, alignof(Message));
-	Message *msg = memnew_placement(reinterpret_cast<void *>(msg_addr), Message);
+	unaligned_construct<Message>(reinterpret_cast<void *>(msg_addr));
+	Message *msg =std::launder(reinterpret_cast<Message *>(msg_addr));
 
 	msg->type = TYPE_NOTIFICATION;
 	msg->callable = Callable(p_id, CoreStringName(notification)); //name is meaningless but callable needs it

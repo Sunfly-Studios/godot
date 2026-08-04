@@ -95,18 +95,18 @@ template <typename... RESOURCE_TYPES>
 struct VersatileResourceTemplate {
 	static constexpr size_t RESOURCE_SIZES[] = { sizeof(RESOURCE_TYPES)... };
 	static constexpr size_t MAX_RESOURCE_SIZE = std::max_element(RESOURCE_SIZES, RESOURCE_SIZES + sizeof...(RESOURCE_TYPES))[0];
-	uint8_t data[MAX_RESOURCE_SIZE];
+	alignas(RESOURCE_TYPES...) uint8_t data[MAX_RESOURCE_SIZE];
 
 	template <typename T>
 	static T *allocate(PagedAllocator<VersatileResourceTemplate, true> &p_allocator) {
 		T *obj = (T *)p_allocator.alloc();
-		memnew_placement(obj, T);
+		unaligned_construct<T>(obj);
 		return obj;
 	}
 
 	template <typename T>
 	static void free(PagedAllocator<VersatileResourceTemplate, true> &p_allocator, T *p_object) {
-		p_object->~T();
+		unaligned_destroy<T>(p_object);
 		p_allocator.free((VersatileResourceTemplate *)p_object);
 	}
 };

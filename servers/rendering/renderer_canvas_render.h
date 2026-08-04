@@ -448,7 +448,8 @@ public:
 
 					//allocate block and add to the linked list
 					void *memory = c->memory + c->usage;
-					command = memnew_placement(memory, T);
+					unaligned_construct<T>(memory);
+					command = std::launder(reinterpret_cast<T *>(memory));
 					command->next = nullptr;
 					if (p_set_next) {
 						last_command->next = command;

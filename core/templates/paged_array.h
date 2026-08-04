@@ -206,7 +206,7 @@ public:
 		uint32_t offset = count & page_size_mask;
 
 		// Formally begin lifetime
-		memnew_placement(&page_data[page][offset], T(std::forward<Args>(p_args)...));
+		unaligned_construct<T>(&page_data[page][offset], T(std::forward<Args>(p_args)...));
 
 		count++;
 	}
@@ -234,7 +234,7 @@ public:
 		uint32_t offset = count & page_size_mask;
 
 		if constexpr (!std::is_trivially_constructible_v<T>) {
-			memnew_placement(&page_data[page][offset], T(p_value));
+			unaligned_construct<T>(&page_data[page][offset], T(p_value));
 		} else {
 			page_data[page][offset] = p_value;
 		}
@@ -278,7 +278,7 @@ public:
 			for (uint64_t i = 0; i < count; i++) {
 				uint32_t page = i >> page_size_shift;
 				uint32_t offset = i & page_size_mask;
-				page_data[page][offset].~T();
+				unaligned_destroy<T>(&page_data[page][offset]);
 			}
 		}
 
@@ -356,13 +356,13 @@ public:
 
 				for (uint32_t i = 0; i < to_copy; i++) {
 					if constexpr (!std::is_trivially_constructible_v<T>) {
-						memnew_placement(&dst_page[i + new_remainder], T(std::move(remainder_page[i + remainder - to_copy])));
+						unaligned_construct<T>(&dst_page[i + new_remainder], std::move(remainder_page[i + remainder - to_copy]));
 					} else {
 						dst_page[i + new_remainder] = std::move(remainder_page[i + remainder - to_copy]);
 					}
 
 					if constexpr (!std::is_trivially_destructible_v<T>) {
-						remainder_page[i + remainder - to_copy].~T();
+						unaligned_destroy<T>(&remainder_page[i + remainder - to_copy]);
 					}
 				}
 
