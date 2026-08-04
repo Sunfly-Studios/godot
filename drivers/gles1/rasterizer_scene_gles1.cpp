@@ -225,7 +225,7 @@ void sky() {
 
 		sky_globals.screen_triangle = 0;
 
-		if (!GLES1::Config::get_singleton()->is_android_emulator || GLES1::Config::get_singleton()->support_vbo) {
+		if (GLES1::Config::get_singleton()->support_vbo) {
 			glGenBuffers(1, &sky_globals.screen_triangle);
 		}
 
@@ -290,7 +290,7 @@ void sky() {
 			}
 		}
 
-		if (!GLES1::Config::get_singleton()->is_android_emulator || GLES1::Config::get_singleton()->support_vbo) {
+		if (GLES1::Config::get_singleton()->support_vbo) {
 			glGenBuffers(1, &sky_globals.radiance_verts_vbo);
 			glBindBuffer(GL_ARRAY_BUFFER, sky_globals.radiance_verts_vbo);
 			glBufferData(GL_ARRAY_BUFFER, 6 * num_vertices * 2 * sizeof(float), sky_globals.radiance_verts, GL_STATIC_DRAW);
@@ -353,7 +353,7 @@ void fragment() {
 	}
 
 #ifdef TOOLS_ENABLED
-	if (!GLES1::Config::get_singleton()->is_android_emulator || GLES1::Config::get_singleton()->support_vbo) {
+	if (GLES1::Config::get_singleton()->support_vbo) {
 		// Prebake the editor origin lines directly to VRAM.
 		glGenBuffers(1, &editor_lines_vbo);
 		glBindBuffer(GL_ARRAY_BUFFER, editor_lines_vbo);
@@ -650,7 +650,9 @@ void RasterizerSceneGLES1::_free_sky_data(Sky *p_sky) {
 		p_sky->radiance = 0;
 		GLES1::Utilities::get_singleton()->texture_free_data(p_sky->raw_radiance);
 		p_sky->raw_radiance = 0;
-		glDeleteFramebuffersOES(1, &p_sky->radiance_framebuffer);
+		if (GLES1::Config::get_singleton()->support_fbo) {
+			glDeleteFramebuffersOES(1, &p_sky->radiance_framebuffer);
+		}
 		p_sky->radiance_framebuffer = 0;
 	}
 }
@@ -724,7 +726,9 @@ void RasterizerSceneGLES1::_update_dirty_skys() {
 		if (sky->radiance == 0) {
 			sky->mipmap_count = Image::get_image_required_mipmaps(sky->radiance_size, sky->radiance_size, Image::FORMAT_RGBA8) - 1;
 			// Left uninitialized, will attach a texture at render time
-			glGenFramebuffers(1, &sky->radiance_framebuffer);
+			if (GLES1::Config::get_singleton()->support_fbo) {
+				glGenFramebuffers(1, &sky->radiance_framebuffer);
+			}
 			sky->radiance = _init_radiance_texture_gles1(sky->radiance_size, sky->mipmap_count, "Sky radiance texture");
 			sky->raw_radiance = _init_radiance_texture_gles1(sky->radiance_size, sky->mipmap_count, "Sky raw radiance texture");
 		}
@@ -1146,6 +1150,9 @@ void RasterizerSceneGLES1::_draw_sky(RID p_env, const Projection &p_projection, 
 }
 
 void RasterizerSceneGLES1::_update_sky_radiance(RID p_env, const Projection &p_projection, const Transform3D &p_transform, float p_sky_energy_multiplier) {
+	if (!GLES1::Config::get_singleton()->support_fbo) {
+		return;
+	}
 	GLES1::MaterialStorage *material_storage = GLES1::MaterialStorage::get_singleton();
 	if (p_env.is_null()) {
 		return;
@@ -1259,14 +1266,14 @@ void RasterizerSceneGLES1::_update_sky_radiance(RID p_env, const Projection &p_p
 		GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_update_sky_radiance: glGetIntegerv GL_VIEWPORT");
 
 		GLint prev_fbo;
-		glGetIntegerv(GL_FRAMEBUFFER_BINDING, &prev_fbo);
-		GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_update_sky_radiance: glGetIntegerv GL_FRAMEBUFFER_BINDING");
+		glGetIntegerv(GL_FRAMEBUFFER_BINDING_OES, &prev_fbo);
+		GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_update_sky_radiance: glGetIntegerv GL_FRAMEBUFFER_BINDING_OES");
 
 		glViewport(0, 0, sky->radiance_size, sky->radiance_size);
 		GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_update_sky_radiance: glViewport");
 
-		glBindFramebuffer(GL_FRAMEBUFFER, sky->radiance_framebuffer);
-		GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_update_sky_radiance: glBindFramebuffer");
+		glBindFramebufferOES(GL_FRAMEBUFFER_OES, sky->radiance_framebuffer);
+		GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_update_sky_radiance: glBindFramebufferOES");
 
 		// Protect against uniform matrix leak
 		glMatrixMode(GL_PROJECTION);
@@ -1439,8 +1446,8 @@ void RasterizerSceneGLES1::_update_sky_radiance(RID p_env, const Projection &p_p
 					glColorPointer(4, GL_UNSIGNED_BYTE, 0, sky_globals.radiance_colors + (i * num_vertices * 4));
 				}
 
-				glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_CUBE_MAP_POSITIVE_X + i, sky->radiance, 0);
-				GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_update_sky_radiance: glFramebufferTexture2D");
+				glFramebufferTexture2DOES(GL_FRAMEBUFFER_OES, GL_COLOR_ATTACHMENT0_OES, GL_TEXTURE_CUBE_MAP_POSITIVE_X + i, sky->radiance, 0);
+				GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_update_sky_radiance: glFramebufferTexture2DOES");
 				glDrawArrays(GL_TRIANGLES, 0, num_vertices);
 				GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_update_sky_radiance: glDrawArrays");
 			}
@@ -1479,7 +1486,7 @@ void RasterizerSceneGLES1::_update_sky_radiance(RID p_env, const Projection &p_p
 		glPopMatrix();
 		GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_update_sky_radiance: matrix pop");
 
-		glBindFramebuffer(GL_FRAMEBUFFER, prev_fbo);
+		glBindFramebufferOES(GL_FRAMEBUFFER_OES, prev_fbo);
 		glViewport(prev_viewport[0], prev_viewport[1], prev_viewport[2], prev_viewport[3]);
 		GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_update_sky_radiance: restore GL state");
 
@@ -1491,6 +1498,10 @@ void RasterizerSceneGLES1::_update_sky_radiance(RID p_env, const Projection &p_p
 }
 
 Ref<Image> RasterizerSceneGLES1::sky_bake_panorama(RID p_sky, float p_energy, bool p_bake_irradiance, const Size2i &p_size) {
+	if (!GLES1::Config::get_singleton()->support_fbo) {
+		return Ref<Image>();
+	}
+
 	Sky *sky = sky_owner.get_or_null(p_sky);
 	if (!sky) {
 		return Ref<Image>();
@@ -1517,14 +1528,14 @@ Ref<Image> RasterizerSceneGLES1::sky_bake_panorama(RID p_sky, float p_energy, bo
 	GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::sky_bake_panorama: glTexImage2D");
 
 	GLint prev_fbo = 0;
-	glGetIntegerv(GL_FRAMEBUFFER_BINDING, &prev_fbo);
-	GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::sky_bake_panorama: glGetIntegerv GL_FRAMEBUFFER_BINDING");
+	glGetIntegerv(GL_FRAMEBUFFER_BINDING_OES, &prev_fbo);
+	GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::sky_bake_panorama: glGetIntegerv GL_FRAMEBUFFER_BINDING_OES");
 
 	GLuint rad_fbo = 0;
-	glGenFramebuffers(1, &rad_fbo);
-	glBindFramebuffer(GL_FRAMEBUFFER, rad_fbo);
-	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, rad_tex, 0);
-	GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::sky_bake_panorama: glFramebufferTexture2D");
+	glGenFramebuffersOES(1, &rad_fbo);
+	glBindFramebufferOES(GL_FRAMEBUFFER_OES, rad_fbo);
+	glFramebufferTexture2DOES(GL_FRAMEBUFFER_OES, GL_COLOR_ATTACHMENT0_OES, GL_TEXTURE_2D, rad_tex, 0);
+	GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::sky_bake_panorama: glFramebufferTexture2DOES");
 
 	glActiveTexture(GL_TEXTURE0);
 	glBindTexture(GL_TEXTURE_CUBE_MAP, sky->radiance);
@@ -1542,8 +1553,8 @@ Ref<Image> RasterizerSceneGLES1::sky_bake_panorama(RID p_sky, float p_energy, bo
 	copy_effects->copy_cube_to_panorama(p_bake_irradiance ? float(sky->mipmap_count) : 0.0);
 	GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::sky_bake_panorama: copy_cube_to_panorama");
 
-	glBindFramebuffer(GL_FRAMEBUFFER, prev_fbo);
-	glDeleteFramebuffers(1, &rad_fbo);
+	glBindFramebufferOES(GL_FRAMEBUFFER_OES, prev_fbo);
+	glDeleteFramebuffersOES(1, &rad_fbo);
 	glViewport(prev_viewport[0], prev_viewport[1], prev_viewport[2], prev_viewport[3]);
 	GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::sky_bake_panorama: restore GL state");
 
@@ -1867,7 +1878,7 @@ void RasterizerSceneGLES1::_batch_fill_multimesh_geometry(const GeometryInstance
 
 void RasterizerSceneGLES1::_batch_upload_buffers() {
 	if (!bdata.gl_vertex_buffer) {
-		if (!GLES1::Config::get_singleton()->is_android_emulator || GLES1::Config::get_singleton()->support_vbo) {
+		if (GLES1::Config::get_singleton()->support_vbo) {
 			glGenBuffers(1, &bdata.gl_vertex_buffer);
 			glGenBuffers(1, &bdata.gl_index_buffer);
 		} else {
@@ -1903,7 +1914,7 @@ void RasterizerSceneGLES1::_batch_bind_material(GLES1::SceneMaterialData *p_mate
 
 		if (p_material_data->use_distance_fade) {
 			glEnable(GL_FOG);
-			glFogi(GL_FOG_MODE, GL_LINEAR);
+			glFogf(GL_FOG_MODE, static_cast<GLfloat>(GL_LINEAR));
 			glFogf(GL_FOG_START, p_material_data->distance_fade_min);
 			glFogf(GL_FOG_END, p_material_data->distance_fade_max);
 
@@ -1912,7 +1923,7 @@ void RasterizerSceneGLES1::_batch_bind_material(GLES1::SceneMaterialData *p_mate
 			GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1_batch_bind_material: glFog overrides");
 		} else if (scene_state.ubo.fog_enabled) {
 			glEnable(GL_FOG);
-			glFogi(GL_FOG_MODE, GL_EXP);
+			glFogf(GL_FOG_MODE, static_cast<GLfloat>(GL_EXP));
 			glFogf(GL_FOG_DENSITY, scene_state.ubo.fog_density);
 			GLfloat fog_col[4] = { scene_state.ubo.fog_light_color[0], scene_state.ubo.fog_light_color[1], scene_state.ubo.fog_light_color[2], 1.0f };
 			glFogfv(GL_FOG_COLOR, fog_col);
@@ -2010,7 +2021,7 @@ void RasterizerSceneGLES1::_render_single_item_immediate(const GeometryInstanceS
 
 	if (p_surface->material && p_surface->material->use_distance_fade) {
 		glEnable(GL_FOG);
-		glFogi(GL_FOG_MODE, GL_LINEAR);
+		glFogf(GL_FOG_MODE, static_cast<GLfloat>(GL_LINEAR));
 		glFogf(GL_FOG_START, p_surface->material->distance_fade_min);
 		glFogf(GL_FOG_END, p_surface->material->distance_fade_max);
 
@@ -2074,7 +2085,7 @@ void RasterizerSceneGLES1::_render_single_item_immediate(const GeometryInstanceS
 
 	if (p_surface->material && p_surface->material->use_distance_fade) {
 		if (scene_state.ubo.fog_enabled) {
-			glFogi(GL_FOG_MODE, GL_EXP);
+			glFogf(GL_FOG_MODE, static_cast<GLfloat>(GL_EXP));
 			glFogf(GL_FOG_DENSITY, scene_state.ubo.fog_density);
 			GLfloat fog_col[4] = { scene_state.ubo.fog_light_color[0], scene_state.ubo.fog_light_color[1], scene_state.ubo.fog_light_color[2], 1.0f };
 			glFogfv(GL_FOG_COLOR, fog_col);
@@ -2521,11 +2532,18 @@ void RasterizerSceneGLES1::render_scene(const Ref<RenderSceneBuffers> &p_render_
 
 	// Transparent Pass
 	scene_state.enable_gl_blend(true);
-	glBlendEquation(GL_FUNC_ADD);
-	if (render_data.transparent_bg) {
-		glBlendFuncSeparate(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
+	if (GLES1::Config::get_singleton()->support_blend_subtract) {
+		glBlendEquationOES(GL_FUNC_ADD_OES);
+	}
+	
+	if (GLES1::Config::get_singleton()->support_blend_func_separate) {
+		if (render_data.transparent_bg) {
+			glBlendFuncSeparateOES(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
+		} else {
+			glBlendFuncSeparateOES(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_ZERO, GL_ONE);
+		}
 	} else {
-		glBlendFuncSeparate(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_ZERO, GL_ONE);
+		glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 	}
 
 	RenderListParameters render_list_params_alpha(render_list[RENDER_LIST_ALPHA].elements.ptr(), render_list[RENDER_LIST_ALPHA].elements.size(), reverse_cull, spec_constant_base_flags, use_wireframe);
@@ -2779,7 +2797,7 @@ void RasterizerSceneGLES1::sub_surface_scattering_set_scale(float p_scale, float
 }
 
 TypedArray<Image> RasterizerSceneGLES1::bake_render_uv2(RID p_base, const TypedArray<RID> &p_material_overrides, const Size2i &p_image_size) {
-    return TypedArray<Image>();
+	return TypedArray<Image>();
 }
 
 bool RasterizerSceneGLES1::free(RID p_rid) {

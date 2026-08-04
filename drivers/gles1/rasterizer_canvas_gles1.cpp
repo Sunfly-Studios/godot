@@ -354,7 +354,7 @@ void RasterizerCanvasGLES1::initialize() {
 	// Quad buffer
 	{
 		data.canvas_quad_vertices = 0;
-		if (!GLES1::Config::get_singleton()->is_android_emulator || GLES1::Config::get_singleton()->support_vbo) {
+		if (GLES1::Config::get_singleton()->support_vbo) {
 			glGenBuffers(1, &data.canvas_quad_vertices);
 			GL_CHECK_ERROR("GLES1::Canvas::initialize: glGenBuffers quad");
 		}
@@ -386,7 +386,7 @@ void RasterizerCanvasGLES1::initialize() {
 		poly_size *= 1024;
 
 		data.polygon_buffer = 0;
-		if (!GLES1::Config::get_singleton()->is_android_emulator || GLES1::Config::get_singleton()->support_vbo) {
+		if (GLES1::Config::get_singleton()->support_vbo) {
 			glGenBuffers(1, &data.polygon_buffer);
 			GL_CHECK_ERROR("GLES1::Canvas::initialize: glGenBuffers poly");
 		}
@@ -409,7 +409,7 @@ void RasterizerCanvasGLES1::initialize() {
 
 		data.polygon_index_buffer = 0;
 
-		if (!GLES1::Config::get_singleton()->is_android_emulator || GLES1::Config::get_singleton()->support_vbo) {
+		if (GLES1::Config::get_singleton()->support_vbo) {
 			glGenBuffers(1, &data.polygon_index_buffer);
 			GL_CHECK_ERROR("GLES1::Canvas::initialize: glGenBuffers poly index");
 		}
@@ -427,7 +427,7 @@ void RasterizerCanvasGLES1::initialize() {
 	{
 		data.ninepatch_vertices = 0;
 
-		if (!GLES1::Config::get_singleton()->is_android_emulator || GLES1::Config::get_singleton()->support_vbo) {
+		if (GLES1::Config::get_singleton()->support_vbo) {
 			glGenBuffers(1, &data.ninepatch_vertices);
 			GL_CHECK_ERROR("GLES1::Canvas::initialize: glGenBuffers ninepatch");
 		}
@@ -441,7 +441,7 @@ void RasterizerCanvasGLES1::initialize() {
 
 		data.ninepatch_elements = 0;
 
-		if (!GLES1::Config::get_singleton()->is_android_emulator || GLES1::Config::get_singleton()->support_vbo) {
+		if (GLES1::Config::get_singleton()->support_vbo) {
 			glGenBuffers(1, &data.ninepatch_elements);
 			GL_CHECK_ERROR("GLES1::Canvas::initialize: glGenBuffers ninepatch index");
 		}
@@ -515,7 +515,7 @@ void RasterizerCanvasGLES1::initialize() {
 	if (bdata.vertex_buffer_size_bytes && bdata.index_buffer_size_units > 0) {
 		bdata.gl_vertex_buffer = 0;
 
-		if (!GLES1::Config::get_singleton()->is_android_emulator || GLES1::Config::get_singleton()->support_vbo) {
+		if (GLES1::Config::get_singleton()->support_vbo) {
 			glGenBuffers(1, &bdata.gl_vertex_buffer);
 			GL_CHECK_ERROR("GLES1::Canvas::initialize: glGenBuffers batcher");
 		}
@@ -533,7 +533,7 @@ void RasterizerCanvasGLES1::initialize() {
 
 		bdata.gl_index_buffer = 0;
 
-		if (!GLES1::Config::get_singleton()->is_android_emulator || GLES1::Config::get_singleton()->support_vbo) {
+		if (GLES1::Config::get_singleton()->support_vbo) {
 			glGenBuffers(1, &bdata.gl_index_buffer);
 			GL_CHECK_ERROR("GLES1::Canvas::initialize: glGenBuffers batcher index");
 		}

@@ -348,8 +348,7 @@ Config::Config() {
 	is_android_emulator = (
 		rendering_device_name.contains("Android Emulator") ||
 		rendering_device_name.contains("SwiftShader") ||
-		rendering_device_name.contains("Goldfish") ||
-		rendering_device_name.contains("ANGLE")
+		rendering_device_name.contains("Goldfish")
 	);
 
 	if (is_android_emulator) {
