@@ -1891,7 +1891,7 @@ void RasterizerSceneGLES2::_fill_render_list(RenderListType p_render_list, const
 // Needs to be called after _setup_lights so that directional_light_count is accurate.
 void RasterizerSceneGLES2::_setup_environment(const RenderDataGLES2 *p_render_data, bool p_no_fog, const Size2i &p_screen_size, bool p_flip_y, const Color &p_default_bg_color, bool p_pancake_shadows, float p_shadow_bias) {
 	// Zero-out the ubo state.
-	memset(&scene_state.ubo, 0, sizeof(SceneState::UBO));
+	::new (&scene_state.ubo) SceneState::UBO{};
 
 	Projection correction;
 	correction.set_depth_correction(p_flip_y, false, false);
