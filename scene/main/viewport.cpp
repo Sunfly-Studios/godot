@@ -4610,6 +4610,7 @@ void Viewport::set_use_own_world_3d(bool p_use_own_world_3d) {
 			ERR_FAIL_COND(own_world_3d.is_null());
 		}
 	} else {
+		RenderingServer::get_singleton()->viewport_set_scenario(viewport, RID());
 		own_world_3d = Ref<World3D>();
 		if (world_3d.is_valid()) {
 			world_3d->disconnect_changed(callable_mp(this, &Viewport::_own_world_3d_changed));
