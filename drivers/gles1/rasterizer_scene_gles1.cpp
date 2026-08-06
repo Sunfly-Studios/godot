@@ -98,8 +98,9 @@ static const Vector3 view_up[6] = {
 	Vector3(0, 0, -1), Vector3(0, -1, 0), Vector3(0, -1, 0)
 };
 
-constexpr int GRID_SIZE = 16;
-constexpr int NUM_VERTICES = GRID_SIZE * GRID_SIZE * 6;
+static constexpr int GRID_SIZE = 16;
+static constexpr int NUM_VERTICES = GRID_SIZE * GRID_SIZE * 6;
+static constexpr int MAX_SKY_PROCESSING_LAYERS = 6;
 
 // The 5 GLES1 primitives
 static constexpr GLenum prim[5] = { GL_POINTS, GL_LINES, GL_LINE_STRIP, GL_TRIANGLES, GL_TRIANGLE_STRIP };		
@@ -256,7 +257,7 @@ void sky() {
 		cm = correction * cm;
 
 		int v_idx = 0;
-		for (int i = 0; i < 6; i++) {
+		for (int i = 0; i < MAX_SKY_PROCESSING_LAYERS; i++) {
 			Basis local_view = Basis::looking_at(view_normals[i], view_up[i]);
 			for (int y = 0; y < GRID_SIZE; y++) {
 				for (int x = 0; x < GRID_SIZE; x++) {
@@ -270,7 +271,7 @@ void sky() {
 						Vector2(px1, py0), Vector2(px1, py1), Vector2(px0, py1)
 					};
 
-					for (int v = 0; v < 6; v++) {
+					for (int v = 0; v < MAX_SKY_PROCESSING_LAYERS; v++) {
 						sky_globals.radiance_verts[v_idx * 2 + 0] = quad[v].x;
 						sky_globals.radiance_verts[v_idx * 2 + 1] = quad[v].y;
 
@@ -1264,9 +1265,7 @@ void RasterizerSceneGLES1::_update_sky_radiance(RID p_env, const Projection &p_p
 		}
 	}
 
-	constexpr int max_processing_layer = 6;
-
-	if (sky->reflection_dirty && sky->processing_layer <= max_processing_layer) {
+	if (sky->reflection_dirty && sky->processing_layer <= MAX_SKY_PROCESSING_LAYERS) {
 		Projection cm;
 		cm.set_perspective(90, 1, 0.01, 10.0);
 		Projection correction;
@@ -1431,7 +1430,7 @@ void RasterizerSceneGLES1::_update_sky_radiance(RID p_env, const Projection &p_p
 
 		// Only perform CPU math on the very first layer of processing.
 		if (sky->processing_layer == 0) {
-			for (int i = 0; i < max_processing_layer; i++) {
+			for (int i = 0; i < MAX_SKY_PROCESSING_LAYERS; i++) {
 				for (int v = 0; v < NUM_VERTICES; v++) {
 					Vector3 cube_normal;
 					cube_normal.x = sky_globals.radiance_uvw[(i * NUM_VERTICES + v) * 3 + 0];
@@ -1484,7 +1483,7 @@ void RasterizerSceneGLES1::_update_sky_radiance(RID p_env, const Projection &p_p
 			last_face = sky->processing_layer;
 		}
 
-		if (sky->processing_layer < max_processing_layer) {
+		if (sky->processing_layer < MAX_SKY_PROCESSING_LAYERS) {
 			for (int i = first_face; i <= last_face; i++) {
 				if (GLES1::Config::get_singleton()->support_vbo) {
 					glBindBuffer(GL_ARRAY_BUFFER, sky_globals.radiance_verts_vbo);
@@ -1517,12 +1516,12 @@ void RasterizerSceneGLES1::_update_sky_radiance(RID p_env, const Projection &p_p
 		GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_update_sky_radiance: VBO cleanup");
 
 		if (update_single_frame) {
-			sky->processing_layer = max_processing_layer;
+			sky->processing_layer = MAX_SKY_PROCESSING_LAYERS;
 		} else {
 			sky->processing_layer++;
 		}
 
-		if (sky->processing_layer >= max_processing_layer) {
+		if (sky->processing_layer >= MAX_SKY_PROCESSING_LAYERS) {
 			// Native cubemap LODs
 			if (GLES1::Config::get_singleton()->max_texture_units > 1) {
 				glActiveTexture(GL_TEXTURE0);
@@ -1531,7 +1530,7 @@ void RasterizerSceneGLES1::_update_sky_radiance(RID p_env, const Projection &p_p
 			glGenerateMipmapOES(GL_TEXTURE_CUBE_MAP_OES);
 			GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_update_sky_radiance: glGenerateMipmapOES");
 
-			sky->processing_layer = max_processing_layer + 1;
+			sky->processing_layer = MAX_SKY_PROCESSING_LAYERS + 1;
 			sky->baked_exposure = p_sky_energy_multiplier;
 			sky->reflection_dirty = false;
 		}
@@ -1548,7 +1547,7 @@ void RasterizerSceneGLES1::_update_sky_radiance(RID p_env, const Projection &p_p
 		GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_update_sky_radiance: restore GL state");
 
 	} else {
-		if (sky_mode == RS::SKY_MODE_INCREMENTAL && sky->processing_layer < max_processing_layer) {
+		if (sky_mode == RS::SKY_MODE_INCREMENTAL && sky->processing_layer < MAX_SKY_PROCESSING_LAYERS) {
 			sky->processing_layer++;
 		}
 	}
