@@ -1624,10 +1624,16 @@ Ref<Image> RasterizerSceneGLES1::sky_bake_panorama(RID p_sky, float p_energy, bo
 		texture.height = p_size.height;
 		texture.alloc_width = p_size.width;
 		texture.alloc_height = p_size.height;
-		texture.format = use_float ? Image::FORMAT_RGBAF : Image::FORMAT_RGBA8;
-		texture.real_format = use_float ? Image::FORMAT_RGBAF : Image::FORMAT_RGBA8;
+		if (use_float && GLES1::Config::get_singleton()->float_texture_supported) {
+			texture.format = Image::FORMAT_RGBF;
+			texture.real_format = Image::FORMAT_RGBF;
+			texture.gl_type_cache = GL_FLOAT;
+		} else {
+			texture.format = Image::FORMAT_RGB8;
+			texture.real_format = Image::FORMAT_RGB8;
+			texture.gl_type_cache = GL_UNSIGNED_BYTE;
+		}
 		texture.gl_format_cache = GL_RGBA;
-		texture.gl_type_cache = use_float ? GL_FLOAT : GL_UNSIGNED_BYTE;
 		texture.type = GLES1::Texture::TYPE_2D;
 		texture.target = GL_TEXTURE_2D;
 		texture.active = true;
