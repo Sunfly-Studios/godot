@@ -124,6 +124,7 @@ public:
 		RENDER_LIST_SECONDARY, //used for shadows and other objects
 #ifdef TOOLS_ENABLED
 		RENDER_LIST_GIZMOS, //used for intercepting editor gizmos
+		RENDER_LIST_EDITOR_GRID, //used for 3D grid rendering
 #endif
 		RENDER_LIST_MAX
 	};
@@ -201,6 +202,7 @@ private:
 
 	// Draw functions
 	void _draw_editor_lines(const RenderDataGLES1 *p_render_data);
+	void _draw_editor_grid(const RenderDataGLES1 *p_render_data);
 	void _draw_editor_gizmos(const RenderDataGLES1 *p_render_data);
 #endif
 
