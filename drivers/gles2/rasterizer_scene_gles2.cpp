@@ -1239,7 +1239,65 @@ void RasterizerSceneGLES2::environment_set_volumetric_fog_filter_active(bool p_e
 }
 
 Ref<Image> RasterizerSceneGLES2::environment_bake_panorama(RID p_env, bool p_bake_irradiance, const Size2i &p_size) {
-	return Ref<Image>();
+	ERR_FAIL_COND_V(p_env.is_null(), Ref<Image>());
+
+	RS::EnvironmentBG environment_background = environment_get_background(p_env);
+
+	if (environment_background == RS::ENV_BG_CAMERA_FEED || environment_background == RS::ENV_BG_CANVAS || environment_background == RS::ENV_BG_KEEP) {
+		return Ref<Image>(); // Nothing to bake.
+	}
+
+	RS::EnvironmentAmbientSource ambient_source = environment_get_ambient_source(p_env);
+
+	bool use_ambient_light = false;
+	bool use_cube_map = false;
+	if (ambient_source == RS::ENV_AMBIENT_SOURCE_BG && (environment_background == RS::ENV_BG_CLEAR_COLOR || environment_background == RS::ENV_BG_COLOR)) {
+		use_ambient_light = true;
+	} else {
+		use_cube_map = (ambient_source == RS::ENV_AMBIENT_SOURCE_BG && environment_background == RS::ENV_BG_SKY) || ambient_source == RS::ENV_AMBIENT_SOURCE_SKY;
+		use_ambient_light = use_cube_map || ambient_source == RS::ENV_AMBIENT_SOURCE_COLOR;
+	}
+
+	use_cube_map = use_cube_map || (environment_background == RS::ENV_BG_SKY && environment_get_sky(p_env).is_valid());
+
+	Color ambient_color;
+	float ambient_color_sky_mix = 0.0;
+	if (use_ambient_light) {
+		ambient_color_sky_mix = environment_get_ambient_sky_contribution(p_env);
+		const float ambient_energy = environment_get_ambient_light_energy(p_env);
+		ambient_color = environment_get_ambient_light(p_env);
+		ambient_color = ambient_color.srgb_to_linear();
+		ambient_color.r *= ambient_energy;
+		ambient_color.g *= ambient_energy;
+		ambient_color.b *= ambient_energy;
+	}
+
+	if (use_cube_map) {
+		Ref<Image> panorama = sky_bake_panorama(environment_get_sky(p_env), environment_get_bg_energy_multiplier(p_env), p_bake_irradiance, p_size);
+		if (use_ambient_light) {
+			for (int x = 0; x < p_size.width; x++) {
+				for (int y = 0; y < p_size.height; y++) {
+					panorama->set_pixel(x, y, ambient_color.lerp(panorama->get_pixel(x, y), ambient_color_sky_mix));
+				}
+			}
+		}
+		return panorama;
+	} else {
+		const float bg_energy_multiplier = environment_get_bg_energy_multiplier(p_env);
+		Color panorama_color = ((environment_background == RS::ENV_BG_CLEAR_COLOR) ? RSG::texture_storage->get_default_clear_color() : environment_get_bg_color(p_env));
+		panorama_color = panorama_color.srgb_to_linear();
+		panorama_color.r *= bg_energy_multiplier;
+		panorama_color.g *= bg_energy_multiplier;
+		panorama_color.b *= bg_energy_multiplier;
+
+		if (use_ambient_light) {
+			panorama_color = ambient_color.lerp(panorama_color, ambient_color_sky_mix);
+		}
+
+		Ref<Image> panorama = Image::create_empty(p_size.width, p_size.height, false, Image::FORMAT_RGBAF);
+		panorama->fill(panorama_color);
+		return panorama;
+	}
 }
 
 void RasterizerSceneGLES2::positional_soft_shadow_filter_set_quality(RS::ShadowQuality p_quality) {
