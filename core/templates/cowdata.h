@@ -182,7 +182,7 @@ private:
 		// allocators operate, it is less likely to have overhead.
 
 		USize req_bytes = p_elements * sizeof(T);
-		USize p2 = next_power_of_2(req_bytes);
+		USize p2 = static_cast<USize>(next_power_of_2(req_bytes));
 		USize mid = p2 - (p2 >> 2); // 75% midpoint
 		return (req_bytes <= mid) ? mid : p2;
 	}

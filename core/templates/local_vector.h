@@ -57,7 +57,7 @@ private:
 
 		// Calculate this in bytes.
 		size_t req_bytes = static_cast<size_t>(p_elements * sizeof(T));
-		size_t p2 = next_power_of_2(req_bytes);
+		size_t p2 = static_cast<size_t>(next_power_of_2(req_bytes));
 		size_t mid = p2 - (p2 >> 2); // 75% midpoint
 		size_t alloc_bytes = (req_bytes <= mid) ? mid : p2;
 
