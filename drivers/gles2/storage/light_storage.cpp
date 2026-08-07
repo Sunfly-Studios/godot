@@ -709,7 +709,7 @@ void LightStorage::reflection_atlas_set_size(RID p_ref_atlas, int p_reflection_s
 
 		ra->reflections.clear();
 
-		GLES2::Utilities::get_singleton()->texture_free_data(ra->depth);
+		GLES2::Utilities::get_singleton()->render_buffer_free_data(ra->depth);
 		ra->depth = 0;
 	}
 
@@ -802,8 +802,155 @@ bool LightStorage::reflection_probe_instance_has_reflection(RID p_instance) {
 }
 
 bool LightStorage::reflection_probe_instance_begin_render(RID p_instance, RID p_reflection_atlas) {
-	// TODO(GLES2): Port the GLES3 code.
-    return false;
+	TextureStorage *texture_storage = TextureStorage::get_singleton();
+	ReflectionAtlas *atlas = reflection_atlas_owner.get_or_null(p_reflection_atlas);
+
+	ERR_FAIL_NULL_V(atlas, false);
+
+	ReflectionProbeInstance *rpi = reflection_probe_instance_owner.get_or_null(p_instance);
+	ERR_FAIL_NULL_V(rpi, false);
+
+	if (atlas->render_buffers.is_null()) {
+		atlas->render_buffers.instantiate();
+		ERR_FAIL_COND_V(atlas->render_buffers.is_null(), false);
+		atlas->render_buffers->configure_for_probe(Size2i(atlas->size, atlas->size));
+	}
+
+	if (atlas->depth == 0) {
+		// We need to create our textures
+		atlas->mipmap_count = Image::get_image_required_mipmaps(atlas->size, atlas->size, Image::FORMAT_RGBA8) - 1;
+		atlas->mipmap_count = MIN(atlas->mipmap_count, 8); // No more than 8 please..
+
+		glActiveTexture(GL_TEXTURE0);
+
+		{
+			// GLES2: Use a Renderbuffer instead of a 2D Texture Array for depth attachment.
+			glGenRenderbuffers(1, &atlas->depth);
+			glBindRenderbuffer(GL_RENDERBUFFER, atlas->depth);
+
+			GLenum depth_format = GLES2::Config::get_singleton()->support_depth24 ? GL_DEPTH_COMPONENT24_OES : GL_DEPTH_COMPONENT16;
+			glRenderbufferStorage(GL_RENDERBUFFER, depth_format, atlas->size, atlas->size);
+
+			GLES2::Utilities::get_singleton()->render_buffer_allocated_data(atlas->depth, atlas->size * atlas->size * 3, "Reflection probe atlas (depth)");
+		}
+
+		// Make room for our atlas entries
+		atlas->reflections.resize(atlas->count);
+
+		for (int i = 0; i < atlas->count; i++) {
+			// Create a cube map for this atlas entry
+			GLuint color = 0;
+			glGenTextures(1, &color);
+			glBindTexture(GL_TEXTURE_CUBE_MAP, color);
+			atlas->reflections.write[i].color = color;
+
+			// GLES2: No glTexStorage2D, allocate manually
+			int mipmap_size = atlas->size;
+			uint32_t data_size = 0;
+			for (int m = 0; m < atlas->mipmap_count; m++) {
+				atlas->mipmap_size[m] = mipmap_size;
+				for (int s = 0; s < 6; s++) {
+					glTexImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_X + s, m, GL_RGBA, mipmap_size, mipmap_size, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
+				}
+				data_size += mipmap_size * mipmap_size * 6 * 4;
+				mipmap_size = MAX(mipmap_size >> 1, 1);
+			}
+
+			glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+			glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+			glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+			glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+
+			GLES2::Utilities::get_singleton()->texture_allocated_data(color, data_size, String("Reflection probe atlas (") + String::num_int64(i) + String(", color)"));
+
+			// Create a radiance map for this atlas entry
+			GLuint radiance = 0;
+			glGenTextures(1, &radiance);
+			glBindTexture(GL_TEXTURE_CUBE_MAP, radiance);
+			atlas->reflections.write[i].radiance = radiance;
+
+			mipmap_size = atlas->size;
+			for (int m = 0; m < atlas->mipmap_count; m++) {
+				for (int s = 0; s < 6; s++) {
+					glTexImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_X + s, m, GL_RGBA, mipmap_size, mipmap_size, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
+				}
+				mipmap_size = MAX(mipmap_size >> 1, 1);
+			}
+
+			glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+			glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+			glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+			glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+
+			GLES2::Utilities::get_singleton()->texture_allocated_data(radiance, data_size, String("Reflection probe atlas (") + String::num_int64(i) + String(", radiance)"));
+
+			// Create our framebuffers so we can draw to all sides
+			for (int side = 0; side < 6; side++) {
+				GLuint fbo = 0;
+				glGenFramebuffers(1, &fbo);
+				texture_storage->bind_framebuffer(fbo);
+
+				glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_CUBE_MAP_POSITIVE_X + side, color, 0);
+				// Attach Renderbuffer depth instead of Texture2DLayer
+				glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, atlas->depth);
+
+				// Validate framebuffer
+				GLenum status = glCheckFramebufferStatus(GL_FRAMEBUFFER);
+				if (status != GL_FRAMEBUFFER_COMPLETE) {
+					WARN_PRINT("Could not create reflections framebuffer, status: " + texture_storage->get_framebuffer_error(status));
+				}
+
+				atlas->reflections.write[i].fbos[side] = fbo;
+			}
+
+			// Create an extra framebuffer for building our radiance
+			{
+				GLuint fbo = 0;
+				glGenFramebuffers(1, &fbo);
+				texture_storage->bind_framebuffer(fbo);
+
+				atlas->reflections.write[i].fbos[6] = fbo;
+			}
+		}
+
+		texture_storage->bind_framebuffer_system();
+		glBindTexture(GL_TEXTURE_CUBE_MAP, 0);
+		glBindRenderbuffer(GL_RENDERBUFFER, 0);
+	}
+
+	if (rpi->atlas_index == -1) {
+		for (int i = 0; i < atlas->reflections.size(); i++) {
+			if (atlas->reflections[i].owner.is_null()) {
+				rpi->atlas_index = i;
+				break;
+			}
+		}
+		//find the one used last
+		if (rpi->atlas_index == -1) {
+			//everything is in use, find the one least used via LRU
+			uint64_t pass_min = 0;
+
+			for (int i = 0; i < atlas->reflections.size(); i++) {
+				ReflectionProbeInstance *rpi2 = reflection_probe_instance_owner.get_or_null(atlas->reflections[i].owner);
+				if (rpi2->last_pass < pass_min) {
+					pass_min = rpi2->last_pass;
+					rpi->atlas_index = i;
+				}
+			}
+		}
+	}
+
+	if (rpi->atlas_index != -1) { // should we fail if this is still -1 ?
+		atlas->reflections.write[rpi->atlas_index].owner = p_instance;
+	}
+
+	rpi->atlas = p_reflection_atlas;
+	rpi->rendering = true;
+	rpi->dirty = false;
+	rpi->processing_layer = 0;
+
+	GL_CHECK_ERROR("GLES2::LightStorage::reflection_probe_instance_begin_render: glBindRenderbuffer");
+	return true;
 }
 
 Ref<RenderSceneBuffers> LightStorage::reflection_probe_atlas_get_render_buffers(RID p_reflection_atlas) {
@@ -814,8 +961,44 @@ Ref<RenderSceneBuffers> LightStorage::reflection_probe_atlas_get_render_buffers(
 }
 
 bool LightStorage::reflection_probe_instance_postprocess_step(RID p_instance) {
-	// TODO(GLES2): Port the GLES3 code.
-    return false;
+	GLES2::CubemapFilter *cubemap_filter = GLES2::CubemapFilter::get_singleton();
+	ReflectionProbeInstance *rpi = reflection_probe_instance_owner.get_or_null(p_instance);
+	ERR_FAIL_NULL_V(rpi, false);
+	ERR_FAIL_COND_V(!rpi->rendering, false);
+	ERR_FAIL_COND_V(rpi->atlas.is_null(), false);
+
+	ReflectionAtlas *atlas = reflection_atlas_owner.get_or_null(rpi->atlas);
+	if (!atlas || rpi->atlas_index == -1) {
+		//does not belong to an atlas anymore, cancel (was removed from atlas or atlas changed while rendering)
+		rpi->rendering = false;
+		rpi->processing_layer = 0;
+		return false;
+	}
+
+	if (LightStorage::get_singleton()->reflection_probe_get_update_mode(rpi->probe) == RS::REFLECTION_PROBE_UPDATE_ALWAYS) {
+		// Using real time reflections, all roughness is done in one step
+		for (int m = 0; m < atlas->mipmap_count; m++) {
+			const GLES2::ReflectionAtlas::Reflection &reflection = atlas->reflections[rpi->atlas_index];
+			cubemap_filter->filter_radiance(reflection.color, reflection.radiance, reflection.fbos[6], atlas->size, atlas->mipmap_count, m);
+		}
+
+		rpi->rendering = false;
+		rpi->processing_layer = 0;
+		return true;
+	} else {
+		const GLES2::ReflectionAtlas::Reflection &reflection = atlas->reflections[rpi->atlas_index];
+		cubemap_filter->filter_radiance(reflection.color, reflection.radiance, reflection.fbos[6], atlas->size, atlas->mipmap_count, rpi->processing_layer);
+
+		rpi->processing_layer++;
+		if (rpi->processing_layer == atlas->mipmap_count) {
+			rpi->rendering = false;
+			rpi->processing_layer = 0;
+			return true;
+		}
+	}
+
+	GL_CHECK_ERROR("GLES2::LightStorage::reflection_probe_instance_postprocess_step");
+	return false;
 }
 
 GLuint LightStorage::reflection_probe_instance_get_texture(RID p_instance) {
@@ -856,7 +1039,23 @@ void LightStorage::lightmap_free(RID p_rid) {
 }
 
 void LightStorage::lightmap_set_textures(RID p_lightmap, RID p_light, bool p_uses_spherical_haromics) {
-	// TODO(GLES2): Port the GLES3 code.
+	Lightmap *lightmap = lightmap_owner.get_or_null(p_lightmap);
+	ERR_FAIL_NULL(lightmap);
+	lightmap->light_texture = p_light;
+	lightmap->uses_spherical_harmonics = p_uses_spherical_haromics;
+
+	Vector3i light_texture_size = GLES2::TextureStorage::get_singleton()->texture_get_size(lightmap->light_texture);
+	lightmap->light_texture_size = Vector2i(light_texture_size.x, light_texture_size.y);
+
+	GLuint tex = GLES2::TextureStorage::get_singleton()->texture_get_texid(lightmap->light_texture);
+
+	glBindTexture(GL_TEXTURE_2D, tex);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+	glBindTexture(GL_TEXTURE_2D, 0);
+	GL_CHECK_ERROR("GLES2::LightStorage::lightmap_set_textures: glBindTexture");
 }
 
 void LightStorage::lightmap_set_probe_bounds(RID p_lightmap, const AABB &p_bounds) {
@@ -995,7 +1194,14 @@ void LightStorage::lightmap_set_shadowmask_textures(RID p_lightmap, RID p_shadow
 	ERR_FAIL_NULL(lightmap);
 	lightmap->shadow_texture = p_shadow;
 
-	// TODO(GLES2): Port the GLES3 code.
+	GLuint tex = GLES2::TextureStorage::get_singleton()->texture_get_texid(lightmap->shadow_texture);
+	glBindTexture(GL_TEXTURE_2D, tex);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+	glBindTexture(GL_TEXTURE_2D, 0);
+	GL_CHECK_ERROR("GLES2::LightStorage::lightmap_set_shadowmask_textures: glBindTexture");
 }
 
 RS::ShadowmaskMode LightStorage::lightmap_get_shadowmask_mode(RID p_lightmap) {
@@ -1041,20 +1247,346 @@ void LightStorage::shadow_atlas_free(RID p_atlas) {
 }
 
 void LightStorage::shadow_atlas_set_size(RID p_atlas, int p_size, bool p_16_bits) {
-	// TODO(GLES2): Port the GLES3 code.
+	ShadowAtlas *shadow_atlas = shadow_atlas_owner.get_or_null(p_atlas);
+	ERR_FAIL_NULL(shadow_atlas);
+	ERR_FAIL_COND(p_size < 0);
+	p_size = next_power_of_2(p_size);
+
+	if (p_size == shadow_atlas->size && p_16_bits == shadow_atlas->use_16_bits) {
+		return;
+	}
+
+	for (uint32_t i = 0; i < 4; i++) {
+		// Clear all subdivisions and free shadows.
+		for (uint32_t j = 0; j < shadow_atlas->quadrants[i].textures.size(); j++) {
+			glDeleteTextures(1, &shadow_atlas->quadrants[i].textures[j]);
+			glDeleteFramebuffers(1, &shadow_atlas->quadrants[i].fbos[j]);
+		}
+		shadow_atlas->quadrants[i].textures.clear();
+		shadow_atlas->quadrants[i].fbos.clear();
+
+		shadow_atlas->quadrants[i].shadows.clear();
+		shadow_atlas->quadrants[i].shadows.resize(shadow_atlas->quadrants[i].subdivision * shadow_atlas->quadrants[i].subdivision);
+	}
+
+	// Erase shadow atlas reference from lights.
+	for (const KeyValue<RID, uint32_t> &E : shadow_atlas->shadow_owners) {
+		LightInstance *li = light_instance_owner.get_or_null(E.key);
+		ERR_CONTINUE(!li);
+		li->shadow_atlases.erase(p_atlas);
+	}
+
+	if (shadow_atlas->debug_texture != 0) {
+		glDeleteTextures(1, &shadow_atlas->debug_texture);
+	}
+
+	if (shadow_atlas->debug_fbo != 0) {
+		glDeleteFramebuffers(1, &shadow_atlas->debug_fbo);
+	}
+
+	// Clear owners.
+	shadow_atlas->shadow_owners.clear();
+
+	shadow_atlas->size = p_size;
+	shadow_atlas->use_16_bits = p_16_bits;
+
+	GL_CHECK_ERROR("GLES2::LightStorage::shadow_atlas_set_size: glDeleteFramebuffers");
 }
 
 void LightStorage::shadow_atlas_set_quadrant_subdivision(RID p_atlas, int p_quadrant, int p_subdivision) {
-	// TODO(GLES2): Port the GLES3 code.
+	ShadowAtlas *shadow_atlas = shadow_atlas_owner.get_or_null(p_atlas);
+	ERR_FAIL_NULL(shadow_atlas);
+	ERR_FAIL_INDEX(p_quadrant, 4);
+	ERR_FAIL_INDEX(p_subdivision, 16384);
+
+	uint32_t subdiv = next_power_of_2(p_subdivision);
+	if (subdiv & 0xaaaaaaaa) { // sqrt(subdiv) must be integer.
+		subdiv <<= 1;
+	}
+
+	subdiv = int(Math::sqrt((float)subdiv));
+
+	if (shadow_atlas->quadrants[p_quadrant].subdivision == subdiv) {
+		return;
+	}
+
+	// Erase all data from quadrant.
+	for (int i = 0; i < shadow_atlas->quadrants[p_quadrant].shadows.size(); i++) {
+		if (shadow_atlas->quadrants[p_quadrant].shadows[i].owner.is_valid()) {
+			shadow_atlas->shadow_owners.erase(shadow_atlas->quadrants[p_quadrant].shadows[i].owner);
+			LightInstance *li = light_instance_owner.get_or_null(shadow_atlas->quadrants[p_quadrant].shadows[i].owner);
+			ERR_CONTINUE(!li);
+			li->shadow_atlases.erase(p_atlas);
+		}
+	}
+
+	for (uint32_t j = 0; j < shadow_atlas->quadrants[p_quadrant].textures.size(); j++) {
+		glDeleteTextures(1, &shadow_atlas->quadrants[p_quadrant].textures[j]);
+		glDeleteFramebuffers(1, &shadow_atlas->quadrants[p_quadrant].fbos[j]);
+	}
+
+	shadow_atlas->quadrants[p_quadrant].textures.clear();
+	shadow_atlas->quadrants[p_quadrant].fbos.clear();
+
+	shadow_atlas->quadrants[p_quadrant].shadows.clear();
+	shadow_atlas->quadrants[p_quadrant].shadows.resize(subdiv * subdiv);
+	shadow_atlas->quadrants[p_quadrant].subdivision = subdiv;
+
+	// Cache the smallest subdiv (for faster allocation in light update).
+
+	shadow_atlas->smallest_subdiv = 1 << 30;
+
+	for (int i = 0; i < 4; i++) {
+		if (shadow_atlas->quadrants[i].subdivision) {
+			shadow_atlas->smallest_subdiv = MIN(shadow_atlas->smallest_subdiv, shadow_atlas->quadrants[i].subdivision);
+		}
+	}
+
+	if (shadow_atlas->smallest_subdiv == 1 << 30) {
+		shadow_atlas->smallest_subdiv = 0;
+	}
+
+	// Re-sort the size orders, simple bubblesort for 4 elements.
+
+	int swaps = 0;
+	do {
+		swaps = 0;
+
+		for (int i = 0; i < 3; i++) {
+			if (shadow_atlas->quadrants[shadow_atlas->size_order[i]].subdivision < shadow_atlas->quadrants[shadow_atlas->size_order[i + 1]].subdivision) {
+				SWAP(shadow_atlas->size_order[i], shadow_atlas->size_order[i + 1]);
+				swaps++;
+			}
+		}
+	} while (swaps > 0);
+
+	GL_CHECK_ERROR("GLES2::LightStorage::shadow_atlas_set_quadrant_subdivision");
 }
 
 bool LightStorage::shadow_atlas_update_light(RID p_atlas, RID p_light_instance, float p_coverage, uint64_t p_light_version) {
-	// TODO(GLES2): Port the GLES3 code.
-	return false;
+	ShadowAtlas *shadow_atlas = shadow_atlas_owner.get_or_null(p_atlas);
+	ERR_FAIL_NULL_V(shadow_atlas, false);
+
+	LightInstance *li = light_instance_owner.get_or_null(p_light_instance);
+	ERR_FAIL_NULL_V(li, false);
+
+	if (shadow_atlas->size == 0 || shadow_atlas->smallest_subdiv == 0) {
+		return false;
+	}
+
+	uint32_t quad_size = shadow_atlas->size >> 1;
+	int desired_fit = MIN(quad_size / shadow_atlas->smallest_subdiv, next_power_of_2(quad_size * p_coverage));
+
+	int valid_quadrants[4] = {};
+	int valid_quadrant_count = 0;
+	int best_size = -1; // Best size found.
+	int best_subdiv = -1; // Subdiv for the best size.
+
+	// Find the quadrants this fits into, and the best possible size it can fit into.
+	for (int i = 0; i < 4; i++) {
+		int q = shadow_atlas->size_order[i];
+		int sd = shadow_atlas->quadrants[q].subdivision;
+		if (sd == 0) {
+			continue; // Unused.
+		}
+
+		int max_fit = quad_size / sd;
+
+		if (best_size != -1 && max_fit > best_size) {
+			break; // Too large.
+		}
+
+		valid_quadrants[valid_quadrant_count++] = q;
+		best_subdiv = sd;
+
+		if (max_fit >= desired_fit) {
+			best_size = max_fit;
+		}
+	}
+
+	ERR_FAIL_COND_V(valid_quadrant_count == 0, false);
+
+	uint64_t tick = OS::get_singleton()->get_ticks_msec();
+
+	uint32_t old_key = SHADOW_INVALID;
+	uint32_t old_quadrant = SHADOW_INVALID;
+	uint32_t old_shadow = SHADOW_INVALID;
+	int old_subdivision = -1;
+
+	bool should_realloc = false;
+	bool should_redraw = false;
+
+	if (shadow_atlas->shadow_owners.has(p_light_instance)) {
+		old_key = shadow_atlas->shadow_owners[p_light_instance];
+		old_quadrant = (old_key >> QUADRANT_SHIFT) & 0x3;
+		old_shadow = old_key & SHADOW_INDEX_MASK;
+
+		// Only re-allocate if a better option is available, and enough time has passed.
+		should_realloc = shadow_atlas->quadrants[old_quadrant].subdivision != (uint32_t)best_subdiv && (tick - shadow_atlas->quadrants[old_quadrant].shadows[old_shadow].alloc_tick > shadow_atlas_realloc_tolerance_msec);
+		should_redraw = shadow_atlas->quadrants[old_quadrant].shadows[old_shadow].version != p_light_version;
+
+		if (!should_realloc) {
+			shadow_atlas->quadrants[old_quadrant].shadows.write[old_shadow].version = p_light_version;
+			// Already existing, see if it should redraw or it's just OK.
+			return should_redraw;
+		}
+
+		old_subdivision = shadow_atlas->quadrants[old_quadrant].subdivision;
+	}
+
+	bool is_omni = li->light_type == RS::LIGHT_OMNI;
+	bool found_shadow = false;
+	int new_quadrant = -1;
+	int new_shadow = -1;
+
+	found_shadow = _shadow_atlas_find_shadow(shadow_atlas, valid_quadrants, valid_quadrant_count, old_subdivision, tick, is_omni, new_quadrant, new_shadow);
+
+	// For new shadows if we found an atlas.
+	// Or for existing shadows that found a better atlas.
+	if (found_shadow) {
+		if (old_quadrant != SHADOW_INVALID) {
+			shadow_atlas->quadrants[old_quadrant].shadows.write[old_shadow].version = 0;
+			shadow_atlas->quadrants[old_quadrant].shadows.write[old_shadow].owner = RID();
+		}
+
+		uint32_t new_key = new_quadrant << QUADRANT_SHIFT;
+		new_key |= new_shadow;
+
+		ShadowAtlas::Quadrant::Shadow *sh = &shadow_atlas->quadrants[new_quadrant].shadows.write[new_shadow];
+		_shadow_atlas_invalidate_shadow(sh, p_atlas, shadow_atlas, new_quadrant, new_shadow);
+
+		sh->owner = p_light_instance;
+		sh->owner_is_omni = is_omni;
+		sh->alloc_tick = tick;
+		sh->version = p_light_version;
+
+		li->shadow_atlases.insert(p_atlas);
+
+		// Update it in map.
+		shadow_atlas->shadow_owners[p_light_instance] = new_key;
+		// Make it dirty, as it should redraw anyway.
+		return true;
+	}
+
+	return should_redraw;
 }
 
 bool LightStorage::_shadow_atlas_find_shadow(ShadowAtlas *shadow_atlas, int *p_in_quadrants, int p_quadrant_count, int p_current_subdiv, uint64_t p_tick, bool is_omni, int &r_quadrant, int &r_shadow) {
-	// TODO(GLES2): Port the GLES3 code.
+	for (int i = p_quadrant_count - 1; i >= 0; i--) {
+		int qidx = p_in_quadrants[i];
+
+		if (shadow_atlas->quadrants[qidx].subdivision == (uint32_t)p_current_subdiv) {
+			return false;
+		}
+
+		// Look for an empty space.
+		int sc = shadow_atlas->quadrants[qidx].shadows.size();
+		const ShadowAtlas::Quadrant::Shadow *sarr = shadow_atlas->quadrants[qidx].shadows.ptr();
+
+		// We have a free space in this quadrant, allocate a texture and use it.
+		if (sc > (int)shadow_atlas->quadrants[qidx].textures.size()) {
+			GLuint fbo_id = 0;
+			glGenFramebuffers(1, &fbo_id);
+			glBindFramebuffer(GL_FRAMEBUFFER, fbo_id);
+
+			GLuint texture_id = 0;
+			glGenTextures(1, &texture_id);
+			glActiveTexture(GL_TEXTURE0);
+
+			int size = (shadow_atlas->size >> 1) / shadow_atlas->quadrants[qidx].subdivision;
+
+			GLenum format = GL_DEPTH_COMPONENT;
+			GLenum type = shadow_atlas->use_16_bits ? GL_UNSIGNED_SHORT : GL_UNSIGNED_INT;
+			if (!shadow_atlas->use_16_bits && !GLES2::Config::get_singleton()->support_depth24 && !GLES2::Config::get_singleton()->support_depth32) {
+				type = GL_UNSIGNED_SHORT; // Fallback if 24/32 bits not supported
+			}
+
+			if (is_omni) {
+				glBindTexture(GL_TEXTURE_CUBE_MAP, texture_id);
+				for (int id = 0; id < 6; id++) {
+					glTexImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_X + id, 0, format, size / 2, size / 2, 0, GL_DEPTH_COMPONENT, type, nullptr);
+				}
+
+				glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+				glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
+				glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+				glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+
+				// Cubemap depth attachment requires binding specific faces individually when drawing in GLES2.
+				// For the atlas alloc, we just attach POSITIVE_X initially to make the FBO complete.
+				glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_CUBE_MAP_POSITIVE_X, texture_id, 0);
+
+#ifdef DEBUG_ENABLED
+				GLenum status = glCheckFramebufferStatus(GL_FRAMEBUFFER);
+				if (status != GL_FRAMEBUFFER_COMPLETE) {
+					ERR_PRINT("Could not create omni light shadow framebuffer, status: " + GLES2::TextureStorage::get_singleton()->get_framebuffer_error(status));
+				}
+#endif
+				glBindTexture(GL_TEXTURE_CUBE_MAP, 0);
+			} else {
+				glBindTexture(GL_TEXTURE_2D, texture_id);
+
+				glTexImage2D(GL_TEXTURE_2D, 0, format, size, size, 0, GL_DEPTH_COMPONENT, type, nullptr);
+
+				glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+				glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+				glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+				glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+
+				glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, texture_id, 0);
+
+				glBindTexture(GL_TEXTURE_2D, 0);
+			}
+			glBindFramebuffer(GL_FRAMEBUFFER, GLES2::TextureStorage::system_fbo);
+			GL_CHECK_ERROR("GLES2::LightStorage::_shadow_atlas_find_shadow: glBindFramebuffer system_fbo");
+
+			r_quadrant = qidx;
+			r_shadow = shadow_atlas->quadrants[qidx].textures.size();
+
+			shadow_atlas->quadrants[qidx].textures.push_back(texture_id);
+			shadow_atlas->quadrants[qidx].fbos.push_back(fbo_id);
+
+			return true;
+		}
+
+		int found_used_idx = -1; // Found existing one, must steal it.
+		uint64_t min_pass = 0; // Pass of the existing one, try to use the least recently used one (LRU fashion).
+
+		for (int j = 0; j < sc; j++) {
+			if (sarr[j].owner_is_omni != is_omni) {
+				// Existing light instance type doesn't match new light instance type skip.
+				continue;
+			}
+
+			LightInstance *sli = light_instance_owner.get_or_null(sarr[j].owner);
+			if (!sli) {
+				// Found a released light instance.
+				found_used_idx = j;
+				break;
+			}
+
+			if (sli->last_scene_pass != RasterizerSceneGLES2::get_singleton()->get_scene_pass()) {
+				// Was just allocated, don't kill it so soon, wait a bit.
+				if (p_tick - sarr[j].alloc_tick < shadow_atlas_realloc_tolerance_msec) {
+					continue;
+				}
+
+				if (found_used_idx == -1 || sli->last_scene_pass < min_pass) {
+					found_used_idx = j;
+					min_pass = sli->last_scene_pass;
+				}
+			}
+		}
+
+		if (found_used_idx != -1) {
+			r_quadrant = qidx;
+			r_shadow = found_used_idx;
+
+			return true;
+		}
+	}
+
 	return false;
 }
 
@@ -1077,7 +1609,43 @@ void LightStorage::shadow_atlas_update(RID p_atlas) {
 
 // Create if necessary and clear.
 void LightStorage::update_directional_shadow_atlas() {
-	// TODO(GLES2): Port the GLES3 code.
+	GLES2::TextureStorage *texture_storage = GLES2::TextureStorage::get_singleton();
+
+	if (directional_shadow.depth == 0 && directional_shadow.size > 0) {
+		glGenFramebuffers(1, &directional_shadow.fbo);
+		texture_storage->bind_framebuffer(directional_shadow.fbo);
+
+		glGenTextures(1, &directional_shadow.depth);
+		glActiveTexture(GL_TEXTURE0);
+		glBindTexture(GL_TEXTURE_2D, directional_shadow.depth);
+
+		GLenum format = GL_DEPTH_COMPONENT;
+		GLenum type = directional_shadow.use_16_bits ? GL_UNSIGNED_SHORT : GL_UNSIGNED_INT;
+		if (!directional_shadow.use_16_bits && !GLES2::Config::get_singleton()->support_depth24 && !GLES2::Config::get_singleton()->support_depth32) {
+			type = GL_UNSIGNED_SHORT; // Fallback if 24/32 bits not supported
+		}
+
+		glTexImage2D(GL_TEXTURE_2D, 0, format, directional_shadow.size, directional_shadow.size, 0, GL_DEPTH_COMPONENT, type, nullptr);
+
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+
+		glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, directional_shadow.depth, 0);
+	}
+	glUseProgram(0);
+	glDepthMask(GL_TRUE);
+	if (directional_shadow.fbo != 0) {
+		glBindFramebuffer(GL_FRAMEBUFFER, directional_shadow.fbo);
+		// GLES2 clear depth buffer
+		RasterizerGLES2::clear_depth(0.0f);
+		glClear(GL_DEPTH_BUFFER_BIT);
+	}
+
+	glBindTexture(GL_TEXTURE_2D, 0);
+	texture_storage->bind_framebuffer_system();
+	GL_CHECK_ERROR("GLES2::LightStorage::update_directional_shadow_atlas: glBindFramebuffer");
 }
 
 void LightStorage::directional_shadow_atlas_set_size(int p_size, bool p_16_bits) {

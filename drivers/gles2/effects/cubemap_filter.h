@@ -45,6 +45,8 @@ private:
 	} cubemap_filter;
 
 	static CubemapFilter *singleton;
+	uint32_t ggx_samples = 0;
+	GLuint screen_triangle = 0;
 
 public:
 	static CubemapFilter *get_singleton() {

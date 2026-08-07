@@ -277,6 +277,7 @@ private:
 		HashMap<RID, uint32_t> shadow_owners;
 	};
 
+	uint64_t shadow_atlas_realloc_tolerance_msec = 500;
 	RID_Owner<ShadowAtlas> shadow_atlas_owner;
 
 	void _shadow_atlas_invalidate_shadow(ShadowAtlas::Quadrant::Shadow *p_shadow, RID p_atlas, ShadowAtlas *p_shadow_atlas, uint32_t p_quadrant, uint32_t p_shadow_idx);
@@ -340,56 +341,87 @@ public:
 	virtual RS::LightDirectionalShadowMode light_directional_get_shadow_mode(RID p_light) override;
 	virtual RS::LightOmniShadowMode light_omni_get_shadow_mode(RID p_light) override;
 	virtual RS::LightType light_get_type(RID p_light) const override {
-		return RS::LIGHT_DIRECTIONAL;
+		const Light *light = light_owner.get_or_null(p_light);
+		ERR_FAIL_NULL_V(light, RS::LightType::LIGHT_DIRECTIONAL);
+
+		return light->type;
 	}
 	virtual AABB light_get_aabb(RID p_light) const override;
 
 	virtual float light_get_param(RID p_light, RS::LightParam p_param) override {
-		return 0.0f;
+		const Light *light = light_owner.get_or_null(p_light);
+		ERR_FAIL_NULL_V(light, 0);
+
+		return light->param[p_param];
 	}
 
 	_FORCE_INLINE_ RID light_get_projector(RID p_light) {
-		return RID();
+		const Light *light = light_owner.get_or_null(p_light);
+		ERR_FAIL_NULL_V(light, RID());
+
+		return light->projector;
 	}
 
 	virtual Color light_get_color(RID p_light) override {
-		return Color();
+		const Light *light = light_owner.get_or_null(p_light);
+		ERR_FAIL_NULL_V(light, Color());
+
+		return light->color;
 	}
 
 	_FORCE_INLINE_ bool light_is_distance_fade_enabled(RID p_light) {
-		return false;
+		const Light *light = light_owner.get_or_null(p_light);
+		return light->distance_fade;
 	}
 
 	_FORCE_INLINE_ float light_get_distance_fade_begin(RID p_light) {
-		return false;
+		const Light *light = light_owner.get_or_null(p_light);
+		return light->distance_fade_begin;
 	}
 
 	_FORCE_INLINE_ float light_get_distance_fade_shadow(RID p_light) {
-		return 0.0f;
+		const Light *light = light_owner.get_or_null(p_light);
+		return light->distance_fade_shadow;
 	}
 
 	_FORCE_INLINE_ float light_get_distance_fade_length(RID p_light) {
-		return 0.0f;
+		const Light *light = light_owner.get_or_null(p_light);
+		return light->distance_fade_length;
 	}
 
 	virtual bool light_has_shadow(RID p_light) const override {
-		return false;
+		const Light *light = light_owner.get_or_null(p_light);
+		ERR_FAIL_NULL_V(light, RS::LIGHT_DIRECTIONAL);
+
+		return light->shadow;
 	}
 
 	virtual bool light_has_projector(RID p_light) const override {
-		return false;
+		const Light *light = light_owner.get_or_null(p_light);
+		ERR_FAIL_NULL_V(light, RS::LIGHT_DIRECTIONAL);
+
+		return TextureStorage::get_singleton()->owns_texture(light->projector);
 	}
 
 	_FORCE_INLINE_ bool light_is_negative(RID p_light) const {
-		return false;
+		const Light *light = light_owner.get_or_null(p_light);
+		ERR_FAIL_NULL_V(light, RS::LIGHT_DIRECTIONAL);
+
+		return light->negative;
 	}
 
 	_FORCE_INLINE_ float light_get_transmittance_bias(RID p_light) const {
-		return 0.0f;
+		const Light *light = light_owner.get_or_null(p_light);
+		ERR_FAIL_NULL_V(light, 0.0);
+
+		return light->param[RS::LIGHT_PARAM_TRANSMITTANCE_BIAS];
 	}
 
 	virtual bool light_get_reverse_cull_face_mode(RID p_light) const override {
-		return false;
+		const Light *light = light_owner.get_or_null(p_light);
+		ERR_FAIL_NULL_V(light, false);
+
+		return light->reverse_cull;
 	}
 
 	virtual RS::LightBakeMode light_get_bake_mode(RID p_light) override;
@@ -411,111 +443,214 @@ public:
 	virtual void light_instance_mark_visible(RID p_light_instance) override;
 
 	virtual bool light_instance_is_shadow_visible_at_position(RID p_light_instance, const Vector3 &p_position) const override {
-		return false;
+		const LightInstance *light_instance = light_instance_owner.get_or_null(p_light_instance);
+		ERR_FAIL_NULL_V(light_instance, false);
+		const Light *light = light_owner.get_or_null(light_instance->light);
+		ERR_FAIL_NULL_V(light, false);
+
+		if (!light->shadow) {
+			return false;
+		}
+
+		if (!light->distance_fade) {
+			return true;
+		}
+
+		real_t distance = p_position.distance_to(light_instance->transform.origin);
+
+		if (distance > light->distance_fade_shadow + light->distance_fade_length) {
+			return false;
+		}
+
+		return true;
 	}
 
 	_FORCE_INLINE_ RID light_instance_get_base_light(RID p_light_instance) {
-		return RID();
+		LightInstance *li = light_instance_owner.get_or_null(p_light_instance);
+		ERR_FAIL_NULL_V(li, RID());
+		return li->light;
 	}
 
 	_FORCE_INLINE_ Transform3D light_instance_get_base_transform(RID p_light_instance) {
-		return Transform3D();
+		LightInstance *li = light_instance_owner.get_or_null(p_light_instance);
+		ERR_FAIL_NULL_V(li, Transform3D());
+		return li->transform;
 	}
 
 	_FORCE_INLINE_ AABB light_instance_get_base_aabb(RID p_light_instance) {
-		return AABB();
+		LightInstance *li = light_instance_owner.get_or_null(p_light_instance);
+		ERR_FAIL_NULL_V(li, AABB());
+		return li->aabb;
 	}
 
 	_FORCE_INLINE_ void light_instance_set_cull_mask(RID p_light_instance, uint32_t p_cull_mask) {
+		LightInstance *li = light_instance_owner.get_or_null(p_light_instance);
+		ERR_FAIL_NULL(li);
+		li->cull_mask = p_cull_mask;
 	}
 
 	_FORCE_INLINE_ uint32_t light_instance_get_cull_mask(RID p_light_instance) {
-		return 0;
+		LightInstance *li = light_instance_owner.get_or_null(p_light_instance);
+		ERR_FAIL_NULL_V(li, 0);
+		return li->cull_mask;
 	}
 
 	_FORCE_INLINE_ GLuint light_instance_get_shadow_texture(RID p_light_instance, RID p_shadow_atlas) {
-		return 0;
+#ifdef DEBUG_ENABLED
+		LightInstance *li = light_instance_owner.get_or_null(p_light_instance);
+		ERR_FAIL_COND_V(!li->shadow_atlases.has(p_shadow_atlas), 0);
+#endif
+		ShadowAtlas *shadow_atlas = shadow_atlas_owner.get_or_null(p_shadow_atlas);
+		ERR_FAIL_NULL_V(shadow_atlas, 0);
+#ifdef DEBUG_ENABLED
+		ERR_FAIL_COND_V(!shadow_atlas->shadow_owners.has(p_light_instance), 0);
+#endif
+		uint32_t key = shadow_atlas->shadow_owners[p_light_instance];
+
+		uint32_t quadrant = (key >> QUADRANT_SHIFT) & 0x3;
+		uint32_t shadow = key & SHADOW_INDEX_MASK;
+
+		ERR_FAIL_COND_V(shadow >= (uint32_t)shadow_atlas->quadrants[quadrant].shadows.size(), 0);
+
+		return shadow_atlas_get_quadrant_shadow_texture(p_shadow_atlas, quadrant, shadow);
 	}
 
 	_FORCE_INLINE_ bool light_instance_has_shadow_atlas(RID p_light_instance, RID p_shadow_atlas) {
-		return false;
+		LightInstance *li = light_instance_owner.get_or_null(p_light_instance);
+		ERR_FAIL_NULL_V(li, false);
+		return li->shadow_atlases.has(p_shadow_atlas);
 	}
 
 	_FORCE_INLINE_ float light_instance_get_shadow_texel_size(RID p_light_instance, RID p_shadow_atlas) {
-		return 0.0f;
+#ifdef DEBUG_ENABLED
+		LightInstance *li = light_instance_owner.get_or_null(p_light_instance);
+		ERR_FAIL_COND_V(!li->shadow_atlases.has(p_shadow_atlas), 0);
+#endif
+		ShadowAtlas *shadow_atlas = shadow_atlas_owner.get_or_null(p_shadow_atlas);
+		ERR_FAIL_NULL_V(shadow_atlas, 0);
+#ifdef DEBUG_ENABLED
+		ERR_FAIL_COND_V(!shadow_atlas->shadow_owners.has(p_light_instance), 0);
+#endif
+		uint32_t key = shadow_atlas->shadow_owners[p_light_instance];
+
+		uint32_t quadrant = (key >> QUADRANT_SHIFT) & 0x3;
+
+		uint32_t quadrant_size = shadow_atlas->size >> 1;
+
+		uint32_t shadow_size = (quadrant_size / shadow_atlas->quadrants[quadrant].subdivision);
+
+		return float(1.0) / shadow_size;
 	}
 
 	_FORCE_INLINE_ Projection light_instance_get_shadow_camera(RID p_light_instance, int p_index) {
-		return Projection();
+		LightInstance *li = light_instance_owner.get_or_null(p_light_instance);
+		ERR_FAIL_NULL_V(li, Projection());
+		return li->shadow_transform[p_index].camera;
 	}
 
 	_FORCE_INLINE_ Transform3D light_instance_get_shadow_transform(RID p_light_instance, int p_index) {
-		return Transform3D();
+		LightInstance *li = light_instance_owner.get_or_null(p_light_instance);
+		ERR_FAIL_NULL_V(li, Transform3D());
+		return li->shadow_transform[p_index].transform;
 	}
 	_FORCE_INLINE_ float light_instance_get_shadow_bias_scale(RID p_light_instance, int p_index) {
-		return 0.0f;
+		LightInstance *li = light_instance_owner.get_or_null(p_light_instance);
+		ERR_FAIL_NULL_V(li, 0.0f);
+		return li->shadow_transform[p_index].bias_scale;
 	}
 	_FORCE_INLINE_ float light_instance_get_shadow_range(RID p_light_instance, int p_index) {
-		return 0.0f;
+		LightInstance *li = light_instance_owner.get_or_null(p_light_instance);
+		ERR_FAIL_NULL_V(li, 0.0f);
+		return li->shadow_transform[p_index].farplane;
 	}
 	_FORCE_INLINE_ float light_instance_get_shadow_range_begin(RID p_light_instance, int p_index) {
-		return 0.0f;
+		LightInstance *li = light_instance_owner.get_or_null(p_light_instance);
+		ERR_FAIL_NULL_V(li, 0.0f);
+		return li->shadow_transform[p_index].range_begin;
 	}
 
 	_FORCE_INLINE_ Vector2 light_instance_get_shadow_uv_scale(RID p_light_instance, int p_index) {
-		return Vector2();
+		LightInstance *li = light_instance_owner.get_or_null(p_light_instance);
+		ERR_FAIL_NULL_V(li, Vector2());
+		return li->shadow_transform[p_index].uv_scale;
 	}
 
 	_FORCE_INLINE_ void light_instance_set_directional_shadow_atlas_rect(RID p_light_instance, int p_index, const Rect2 p_atlas_rect) {
-
+		LightInstance *li = light_instance_owner.get_or_null(p_light_instance);
+		ERR_FAIL_NULL(li);
+		li->shadow_transform[p_index].atlas_rect = p_atlas_rect;
 	}
 
 	_FORCE_INLINE_ Rect2 light_instance_get_directional_shadow_atlas_rect(RID p_light_instance, int p_index) {
-		return Rect2();
+		LightInstance *li = light_instance_owner.get_or_null(p_light_instance);
+		ERR_FAIL_NULL_V(li, Rect2());
+		return li->shadow_transform[p_index].atlas_rect;
 	}
 
 	_FORCE_INLINE_ float light_instance_get_directional_shadow_split(RID p_light_instance, int p_index) {
-		return 0.0f;
+		LightInstance *li = light_instance_owner.get_or_null(p_light_instance);
+		ERR_FAIL_NULL_V(li, 0.0f);
+		return li->shadow_transform[p_index].split;
 	}
 
 	_FORCE_INLINE_ float light_instance_get_directional_shadow_texel_size(RID p_light_instance, int p_index) {
-		return 0.0f;
+		LightInstance *li = light_instance_owner.get_or_null(p_light_instance);
+		ERR_FAIL_NULL_V(li, 0.0f);
+		return li->shadow_transform[p_index].shadow_texel_size;
 	}
 
 	_FORCE_INLINE_ void light_instance_set_render_pass(RID p_light_instance, uint64_t p_pass) {
-
+		LightInstance *li = light_instance_owner.get_or_null(p_light_instance);
+		ERR_FAIL_NULL(li);
+		li->last_pass = p_pass;
 	}
 
 	_FORCE_INLINE_ uint64_t light_instance_get_render_pass(RID p_light_instance) {
-		return 0;
+		LightInstance *li = light_instance_owner.get_or_null(p_light_instance);
+		ERR_FAIL_NULL_V(li, 0);
+		return li->last_pass;
 	}
 
 	_FORCE_INLINE_ void light_instance_set_shadow_pass(RID p_light_instance, uint64_t p_pass) {
-
+		LightInstance *li = light_instance_owner.get_or_null(p_light_instance);
+		ERR_FAIL_NULL(li);
+		li->last_scene_shadow_pass = p_pass;
 	}
 
 	_FORCE_INLINE_ uint64_t light_instance_get_shadow_pass(RID p_light_instance) {
-		return 0;
+		LightInstance *li = light_instance_owner.get_or_null(p_light_instance);
+		ERR_FAIL_NULL_V(li, 0);
+		return li->last_scene_shadow_pass;
 	}
 
 	_FORCE_INLINE_ void light_instance_set_directional_rect(RID p_light_instance, const Rect2 &p_directional_rect) {
-
+		LightInstance *li = light_instance_owner.get_or_null(p_light_instance);
+		ERR_FAIL_NULL(li);
+		li->directional_rect = p_directional_rect;
 	}
 
 	_FORCE_INLINE_ Rect2 light_instance_get_directional_rect(RID p_light_instance) {
-		return Rect2();
+		LightInstance *li = light_instance_owner.get_or_null(p_light_instance);
+		ERR_FAIL_NULL_V(li, Rect2());
+		return li->directional_rect;
 	}
 
 	_FORCE_INLINE_ RS::LightType light_instance_get_type(RID p_light_instance) {
-		return RS::LIGHT_DIRECTIONAL;
+		LightInstance *li = light_instance_owner.get_or_null(p_light_instance);
+		ERR_FAIL_NULL_V(li, RS::LightType::LIGHT_DIRECTIONAL);
+		return li->light_type;
 	}
 
 	_FORCE_INLINE_ int32_t light_instance_get_gl_id(RID p_light_instance) {
-		return 0;
+		LightInstance *li = light_instance_owner.get_or_null(p_light_instance);
+		ERR_FAIL_NULL_V(li, 0);
+		return li->gl_id;
 	}
 
 	_FORCE_INLINE_ int32_t light_instance_get_shadow_id(RID p_light_instance) {
-		return 0;
+		LightInstance *li = light_instance_owner.get_or_null(p_light_instance);
+		ERR_FAIL_NULL_V(li, 0);
+		return li->shadow_id;
 	}
 
 	/* PROBE API */
@@ -581,13 +716,22 @@ public:
 	virtual bool reflection_probe_instance_postprocess_step(RID p_instance) override;
 
 	_FORCE_INLINE_ RID reflection_probe_instance_get_probe(RID p_instance) {
-		return RID();
+		ReflectionProbeInstance *rpi = reflection_probe_instance_owner.get_or_null(p_instance);
+		ERR_FAIL_NULL_V(rpi, RID());
+
+		return rpi->probe;
 	}
 	_FORCE_INLINE_ RID reflection_probe_instance_get_atlas(RID p_instance) {
-		return RID();
+		ReflectionProbeInstance *rpi = reflection_probe_instance_owner.get_or_null(p_instance);
+		ERR_FAIL_NULL_V(rpi, RID());
+
+		return rpi->atlas;
 	}
 	Transform3D reflection_probe_instance_get_transform(RID p_instance) {
-		return Transform3D();
+		ReflectionProbeInstance *rpi = reflection_probe_instance_owner.get_or_null(p_instance);
+		ERR_FAIL_NULL_V(rpi, Transform3D());
+
+		return rpi->transform;
 	}
 	GLuint reflection_probe_instance_get_texture(RID p_instance);
 	GLuint reflection_probe_instance_get_framebuffer(RID p_instance, int p_index);
@@ -639,50 +783,122 @@ public:
 	virtual bool shadow_atlas_update_light(RID p_atlas, RID p_light_instance, float p_coverage, uint64_t p_light_version) override;
 
 	_FORCE_INLINE_ bool shadow_atlas_owns_light_instance(RID p_atlas, RID p_light_instance) {
-		return false;
+		ShadowAtlas *atlas = shadow_atlas_owner.get_or_null(p_atlas);
+		ERR_FAIL_NULL_V(atlas, false);
+		return atlas->shadow_owners.has(p_light_instance);
 	}
 	_FORCE_INLINE_ uint32_t shadow_atlas_get_light_instance_key(RID p_atlas, RID p_light_instance) {
-		return 0;
+		ShadowAtlas *atlas = shadow_atlas_owner.get_or_null(p_atlas);
+		ERR_FAIL_NULL_V(atlas, -1);
+		return atlas->shadow_owners[p_light_instance];
 	}
 
 	_FORCE_INLINE_ int shadow_atlas_get_size(RID p_atlas) {
-		return 0;
+		ShadowAtlas *atlas = shadow_atlas_owner.get_or_null(p_atlas);
+		ERR_FAIL_NULL_V(atlas, 0);
+		return atlas->size;
 	}
 
 	_FORCE_INLINE_ GLuint shadow_atlas_get_debug_fb(RID p_atlas) {
-		return 0;
+		ShadowAtlas *atlas = shadow_atlas_owner.get_or_null(p_atlas);
+		ERR_FAIL_NULL_V(atlas, 0);
+
+		if (atlas->debug_fbo != 0) {
+			return atlas->debug_fbo;
+		}
+
+		glGenFramebuffers(1, &atlas->debug_fbo);
+		GLES2::TextureStorage::get_singleton()->bind_framebuffer(atlas->debug_fbo);
+
+		if (atlas->debug_texture == 0) {
+			atlas->debug_texture = shadow_atlas_get_debug_texture(p_atlas);
+		}
+
+		glActiveTexture(GL_TEXTURE0);
+		glBindTexture(GL_TEXTURE_2D, atlas->debug_texture);
+
+		glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, atlas->debug_texture, 0);
+
+		GLES2::TextureStorage::get_singleton()->bind_framebuffer_system();
+		GL_CHECK_ERROR("GLES2::LightStorage::shadow_atlas_get_debug_fb: glBindFramebuffer");
+
+		return atlas->debug_fbo;
 	}
 
 	_FORCE_INLINE_ GLuint shadow_atlas_get_debug_texture(RID p_atlas) {
-		return 0;
+		ShadowAtlas *atlas = shadow_atlas_owner.get_or_null(p_atlas);
+		ERR_FAIL_NULL_V(atlas, 0);
+
+		if (atlas->debug_texture != 0) {
+			return atlas->debug_texture;
+		}
+
+		glGenTextures(1, &atlas->debug_texture);
+		glActiveTexture(GL_TEXTURE0);
+		glBindTexture(GL_TEXTURE_2D, atlas->debug_texture);
+		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, atlas->size, atlas->size, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
+
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+
+		glBindTexture(GL_TEXTURE_2D, 0);
+		GL_CHECK_ERROR("GLES2::LightStorage::shadow_atlas_get_debug_texture: glBindTexture");
+
+		return atlas->debug_texture;
 	}
 
 	_FORCE_INLINE_ int shadow_atlas_get_quadrant_shadows_length(RID p_atlas, uint32_t p_quadrant) {
-		return 0;
+		ShadowAtlas *atlas = shadow_atlas_owner.get_or_null(p_atlas);
+		ERR_FAIL_NULL_V(atlas, 0);
+		ERR_FAIL_UNSIGNED_INDEX_V(p_quadrant, 4, 0);
+		return atlas->quadrants[p_quadrant].shadows.size();
 	}
 
 	_FORCE_INLINE_ uint32_t shadow_atlas_get_quadrant_shadows_allocated(RID p_atlas, uint32_t p_quadrant) {
-		return 0;
+		ShadowAtlas *atlas = shadow_atlas_owner.get_or_null(p_atlas);
+		ERR_FAIL_NULL_V(atlas, 0);
+		ERR_FAIL_UNSIGNED_INDEX_V(p_quadrant, 4, 0);
+		return atlas->quadrants[p_quadrant].textures.size();
 	}
 
 	_FORCE_INLINE_ uint32_t shadow_atlas_get_quadrant_subdivision(RID p_atlas, uint32_t p_quadrant) {
-		return 0;
+		ShadowAtlas *atlas = shadow_atlas_owner.get_or_null(p_atlas);
+		ERR_FAIL_NULL_V(atlas, 0);
+		ERR_FAIL_UNSIGNED_INDEX_V(p_quadrant, 4, 0);
+		return atlas->quadrants[p_quadrant].subdivision;
 	}
 
 	_FORCE_INLINE_ GLuint shadow_atlas_get_quadrant_shadow_texture(RID p_atlas, uint32_t p_quadrant, uint32_t p_shadow) {
-		return 0;
+		ShadowAtlas *atlas = shadow_atlas_owner.get_or_null(p_atlas);
+		ERR_FAIL_NULL_V(atlas, 0);
+		ERR_FAIL_UNSIGNED_INDEX_V(p_quadrant, 4, 0);
+		ERR_FAIL_UNSIGNED_INDEX_V(p_shadow, atlas->quadrants[p_quadrant].textures.size(), 0);
+		return atlas->quadrants[p_quadrant].textures[p_shadow];
 	}
 
 	_FORCE_INLINE_ GLuint shadow_atlas_get_quadrant_shadow_fb(RID p_atlas, uint32_t p_quadrant, uint32_t p_shadow) {
-		return 0;
+		ShadowAtlas *atlas = shadow_atlas_owner.get_or_null(p_atlas);
+		ERR_FAIL_NULL_V(atlas, 0);
+		ERR_FAIL_UNSIGNED_INDEX_V(p_quadrant, 4, 0);
+		ERR_FAIL_UNSIGNED_INDEX_V(p_shadow, atlas->quadrants[p_quadrant].fbos.size(), 0);
+		return atlas->quadrants[p_quadrant].fbos[p_shadow];
 	}
 
 	_FORCE_INLINE_ int shadow_atlas_get_quadrant_shadow_size(RID p_atlas, uint32_t p_quadrant) {
-		return 0;
+		ShadowAtlas *atlas = shadow_atlas_owner.get_or_null(p_atlas);
+		ERR_FAIL_NULL_V(atlas, 0);
+		ERR_FAIL_UNSIGNED_INDEX_V(p_quadrant, 4, 0);
+		return (atlas->size >> 1) / atlas->quadrants[p_quadrant].subdivision;
 	}
 
 	_FORCE_INLINE_ bool shadow_atlas_get_quadrant_shadow_is_omni(RID p_atlas, uint32_t p_quadrant, uint32_t p_shadow) {
-		return false;
+		ShadowAtlas *atlas = shadow_atlas_owner.get_or_null(p_atlas);
+		ERR_FAIL_NULL_V(atlas, false);
+		ERR_FAIL_UNSIGNED_INDEX_V(p_quadrant, 4, false);
+		ERR_FAIL_UNSIGNED_INDEX_V(p_shadow, (uint32_t)atlas->quadrants[p_quadrant].shadows.size(), false);
+		return atlas->quadrants[p_quadrant].shadows[p_shadow].owner_is_omni;
 	}
 
 	virtual void shadow_atlas_update(RID p_atlas) override;

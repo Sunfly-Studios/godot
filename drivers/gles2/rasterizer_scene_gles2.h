@@ -379,6 +379,8 @@ private:
 		INSTANCE_DATA_FLAG_MULTIMESH_HAS_CUSTOM_DATA = 1 << 15,
 	};
 
+	/* INLINE GL HELPERS */
+
 	_FORCE_INLINE_ static uint32_t _gl_indices_to_primitives(GLenum p_primitive, uint32_t p_indices) {
 		switch (p_primitive) {
 			case GL_POINTS:
@@ -396,6 +398,21 @@ private:
 			default:
 				return 0;
 		}
+	}
+
+	_FORCE_INLINE_ void _gl_reconstruct_view_matrix(Transform3D &view_matrix) {
+		view_matrix.basis.rows[0][0] = scene_state.ubo.view_matrix[0];
+		view_matrix.basis.rows[1][0] = scene_state.ubo.view_matrix[1];
+		view_matrix.basis.rows[2][0] = scene_state.ubo.view_matrix[2];
+		view_matrix.basis.rows[0][1] = scene_state.ubo.view_matrix[4];
+		view_matrix.basis.rows[1][1] = scene_state.ubo.view_matrix[5];
+		view_matrix.basis.rows[2][1] = scene_state.ubo.view_matrix[6];
+		view_matrix.basis.rows[0][2] = scene_state.ubo.view_matrix[8];
+		view_matrix.basis.rows[1][2] = scene_state.ubo.view_matrix[9];
+		view_matrix.basis.rows[2][2] = scene_state.ubo.view_matrix[10];
+		view_matrix.origin.x = scene_state.ubo.view_matrix[12];
+		view_matrix.origin.y = scene_state.ubo.view_matrix[13];
+		view_matrix.origin.z = scene_state.ubo.view_matrix[14];
 	}
 
 	static void _geometry_instance_dependency_changed(Dependency::DependencyChangedNotification p_notification, DependencyTracker *p_tracker);
@@ -693,6 +710,7 @@ private:
 	_FORCE_INLINE_ void _render_list_template(RenderListParameters *p_params, const RenderDataGLES2 *p_render_data, uint32_t p_from_element, uint32_t p_to_element, bool p_alpha_pass = false);
 
 	/* Batch API */
+
 	void scene_render_items_implementation(GeometryInstanceSurface **p_surfaces, int p_count, const Transform3D &p_camera_transform, bool p_transparent);
 
 	void _batch_get_hardware_limits(RasterizerSceneBatcherCommon<BatcherAPISceneGLES2>::BatchLimits &r_limits);
@@ -701,14 +719,16 @@ private:
 	uint64_t _batch_get_state_hash(const GeometryInstanceSurface *p_surface);
 	GLES2::SceneMaterialData *_batch_get_material_data(const GeometryInstanceSurface *p_surface);
 
-	void _batch_fill_instance_geometry(const GeometryInstanceSurface *p_surface, RasterizerSceneBatcherCommon<BatcherAPISceneGLES2>::BatchVertex3D *r_bvs, uint16_t *r_inds, uint32_t p_start_vert, bool p_use_hardware_transform);
-	void _batch_fill_multimesh_geometry(const GeometryInstanceSurface *p_surface, RasterizerSceneBatcherCommon<BatcherAPISceneGLES2>::BatchVertex3DInstanced *r_bvs, uint16_t *r_inds, uint32_t p_start_vert, bool p_use_hardware_transform);
+	void _batch_fill_instance_geometry(const GeometryInstanceSurface *p_surface, RasterizerSceneBatcherCommon<BatcherAPISceneGLES2>::BatchVertex3D *r_bvs, uint16_t *r_inds, uint32_t p_start_vert, bool p_use_hardware_transform, uint32_t p_item_index);
+	void _batch_fill_multimesh_geometry(const GeometryInstanceSurface *p_surface, RasterizerSceneBatcherCommon<BatcherAPISceneGLES2>::BatchVertex3DInstanced *r_bvs, uint16_t *r_inds, uint32_t p_start_vert, bool p_use_hardware_transform, uint32_t p_item_index);
 	void _batch_upload_buffers();
-	void _batch_bind_material(GLES2::SceneMaterialData *p_material_data, const Transform3D &p_world_transform);
-	void _batch_render_generic(RS::PrimitiveType p_primitive);
+	void _batch_bind_material(GLES2::SceneMaterialData *p_material_data, const Transform3D &p_world_transform, bool p_transparent);
+	void _batch_render_generic(RS::PrimitiveType p_primitive, uint32_t p_offset = 0, uint32_t p_count = 0, bool p_has_color = true);
+	void _batch_render_items(GLES2::SceneMaterialData *p_material_data, RS::PrimitiveType p_primitive, RasterizerSceneBatcherCommon<BatcherAPISceneGLES2>::Batch3D &p_batch, bool p_transparent);
 
 	void _render_single_item_immediate(const GeometryInstanceSurface *p_surface);
 	void _bind_scene_camera_uniforms(RID p_version, SceneShaderGLES2::ShaderVariant p_variant, uint64_t p_spec_constants);
+	void _bind_sky_directional_lights(RID p_version, SkyShaderGLES2::ShaderVariant p_variant, uint64_t p_spec_constants);
 
 protected:
 	double time;

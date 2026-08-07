@@ -172,12 +172,14 @@ public:
 		BatchVector3 pos;
 		BatchVector3 normal;
 		BatchVector2 uv;
+		BatchVector4 tangent;
 		BatchColor color;
 		BatchVector4 instance_xform0;
 		BatchVector4 instance_xform1;
 		BatchVector4 instance_xform2;
 
-		float pad[3];
+		float matrix_index;
+		float pad[2];
 	};
 
 	// A struct used to simulate instaced rendering for
@@ -186,12 +188,14 @@ public:
 		BatchVector3 pos;
 		BatchVector3 normal;
 		BatchVector2 uv;
+		BatchVector4 tangent;
 		BatchColor color;
 		BatchVector4 instance_xform0;
 		BatchVector4 instance_xform1;
 		BatchVector4 instance_xform2;
 		BatchColor instance_color_custom_data;
-		float pad[2];
+		float matrix_index;
+		float pad[1];
 	};
 
 	// A batch represents a single draw call of aggregated geometry
@@ -332,10 +336,10 @@ protected:
 	bool try_join_item(T_SURFACE *p_surface, RenderItemState3D &r_ris);
 
 	template <class T_SURFACE>
-	bool prefill_joined_item(T_SURFACE *p_surface, bool p_use_hardware_transform);
+	bool prefill_joined_item(T_SURFACE *p_surface, bool p_use_hardware_transform, uint32_t p_item_index = 0);
 
 	template <class T_SURFACE>
-	void flush_render_batches(typename T_API::MaterialData *p_material_data, RS::PrimitiveType p_primitive, Batch3D &p_batch);
+	void flush_render_batches(typename T_API::MaterialData *p_material_data, RS::PrimitiveType p_primitive, Batch3D &p_batch, bool p_transparent);
 
 	template <class T_SURFACE>
 	void render_bypassed_items(bool p_transparent);

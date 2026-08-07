@@ -201,9 +201,47 @@ private:
 	float *rotate_gizmo_ring_verts = nullptr;
 
 	// Draw functions
-	void _draw_editor_lines(const RenderDataGLES1 *p_render_data);
-	void _draw_editor_grid(const RenderDataGLES1 *p_render_data);
-	void _draw_editor_gizmos(const RenderDataGLES1 *p_render_data);
+	void _draw_editor_lines(const RenderDataGLES1 *p_render_data, bool p_flip_y);
+	void _draw_editor_grid(const RenderDataGLES1 *p_render_data, bool p_flip_y);
+	void _draw_editor_gizmos(const RenderDataGLES1 *p_render_data, bool p_flip_y);
+
+	// Setup functions
+	_FORCE_INLINE_ void _gl_setup_editor_state(const RenderDataGLES1 *p_render_data, bool p_flip_y) {
+		scene_state.reset_gl_state();
+
+		glMatrixMode(GL_PROJECTION);
+		glPushMatrix();
+
+		Projection correction;
+		correction.set_depth_correction(p_flip_y, true, false);
+		Projection projection = correction * p_render_data->cam_projection;
+
+		_gl_load_projection(projection);
+
+		glMatrixMode(GL_MODELVIEW);
+		glPushMatrix();
+
+		Transform3D view = p_render_data->inv_cam_transform;
+		_gl_load_transform(view);
+
+		glDisable(GL_LIGHTING);
+		glDisable(GL_TEXTURE_2D);
+		glDisable(GL_FOG);
+
+		glEnable(GL_BLEND);
+		glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+		glEnable(GL_DEPTH_TEST);
+		glDepthFunc(GL_GEQUAL);
+	}
+
+	_FORCE_INLINE_ void _gl_teardown_editor_state() {
+		glMatrixMode(GL_PROJECTION);
+		glPopMatrix();
+		glMatrixMode(GL_MODELVIEW);
+		glPopMatrix();
+
+		glColor4f(1.0f, 1.0f, 1.0f, 1.0f);
+	}
 #endif
 
 	/* LIGHT INSTANCE */
@@ -314,6 +352,7 @@ private:
 
 		PackedVector3Array vertex_cache;
 		PackedVector3Array normal_cache;
+		PackedFloat32Array tangent_cache;
 		PackedVector2Array uv_cache;
 		PackedColorArray color_cache;
 		PackedInt32Array index_cache;
@@ -412,6 +451,8 @@ private:
 		INSTANCE_DATA_FLAG_MULTIMESH_HAS_CUSTOM_DATA = 1 << 15,
 	};
 
+	/* INLINE GL HELPERS */
+
 	_FORCE_INLINE_ static uint32_t _gl_indices_to_primitives(GLenum p_primitive, uint32_t p_indices) {
 		switch (p_primitive) {
 			case GL_POINTS:
@@ -430,6 +471,210 @@ private:
 				return 0;
 		}
 	}
+
+	_FORCE_INLINE_ void _gl_load_transform(const Transform3D &p_transform) {
+		const float m[16] = {
+			p_transform.basis.rows[0][0], p_transform.basis.rows[1][0], p_transform.basis.rows[2][0], 0.0f,
+			p_transform.basis.rows[0][1], p_transform.basis.rows[1][1], p_transform.basis.rows[2][1], 0.0f,
+			p_transform.basis.rows[0][2], p_transform.basis.rows[1][2], p_transform.basis.rows[2][2], 0.0f,
+			p_transform.origin.x, p_transform.origin.y, p_transform.origin.z, 1.0f
+		};
+		glLoadMatrixf(m);
+	}
+
+	_FORCE_INLINE_ void _gl_mult_transform(const Transform3D &p_transform) {
+		const float m[16] = {
+			p_transform.basis.rows[0][0], p_transform.basis.rows[1][0], p_transform.basis.rows[2][0], 0.0f,
+			p_transform.basis.rows[0][1], p_transform.basis.rows[1][1], p_transform.basis.rows[2][1], 0.0f,
+			p_transform.basis.rows[0][2], p_transform.basis.rows[1][2], p_transform.basis.rows[2][2], 0.0f,
+			p_transform.origin.x, p_transform.origin.y, p_transform.origin.z, 1.0f
+		};
+		glMultMatrixf(m);
+	}
+
+	_FORCE_INLINE_ void _gl_load_projection(const Projection &p_proj) {
+		const float m[16] = {
+			p_proj.columns[0][0], p_proj.columns[0][1], p_proj.columns[0][2], p_proj.columns[0][3],
+			p_proj.columns[1][0], p_proj.columns[1][1], p_proj.columns[1][2], p_proj.columns[1][3],
+			p_proj.columns[2][0], p_proj.columns[2][1], p_proj.columns[2][2], p_proj.columns[2][3],
+			p_proj.columns[3][0], p_proj.columns[3][1], p_proj.columns[3][2], p_proj.columns[3][3]
+		};
+		glLoadMatrixf(m);
+	}
+
+	_FORCE_INLINE_ void _gl_mult_projection(const Projection &p_proj) {
+		const float m[16] = {
+			p_proj.columns[0][0], p_proj.columns[0][1], p_proj.columns[0][2], p_proj.columns[0][3],
+			p_proj.columns[1][0], p_proj.columns[1][1], p_proj.columns[1][2], p_proj.columns[1][3],
+			p_proj.columns[2][0], p_proj.columns[2][1], p_proj.columns[2][2], p_proj.columns[2][3],
+			p_proj.columns[3][0], p_proj.columns[3][1], p_proj.columns[3][2], p_proj.columns[3][3]
+		};
+		glMultMatrixf(m);
+	}
+
+	_FORCE_INLINE_ void _gl_reconstruct_view_matrix(Transform3D &view_matrix) {
+		view_matrix.basis.rows[0][0] = scene_state.ubo.view_matrix[0];
+		view_matrix.basis.rows[1][0] = scene_state.ubo.view_matrix[1];
+		view_matrix.basis.rows[2][0] = scene_state.ubo.view_matrix[2];
+		view_matrix.basis.rows[0][1] = scene_state.ubo.view_matrix[4];
+		view_matrix.basis.rows[1][1] = scene_state.ubo.view_matrix[5];
+		view_matrix.basis.rows[2][1] = scene_state.ubo.view_matrix[6];
+		view_matrix.basis.rows[0][2] = scene_state.ubo.view_matrix[8];
+		view_matrix.basis.rows[1][2] = scene_state.ubo.view_matrix[9];
+		view_matrix.basis.rows[2][2] = scene_state.ubo.view_matrix[10];
+		view_matrix.origin.x = scene_state.ubo.view_matrix[12];
+		view_matrix.origin.y = scene_state.ubo.view_matrix[13];
+		view_matrix.origin.z = scene_state.ubo.view_matrix[14];
+	}
+
+	_FORCE_INLINE_ void _gl_setup_material_pass(bool p_is_additive) {
+		constexpr GLfloat mat_diffuse[] = { 1.0f, 1.0f, 1.0f, 1.0f };
+		constexpr GLfloat mat_specular[] = { 0.0f, 0.0f, 0.0f, 1.0f };
+		constexpr GLfloat mat_zero[] = { 0.0f, 0.0f, 0.0f, 1.0f };
+		constexpr GLfloat mat_ambient_base[] = { 1.0f, 1.0f, 1.0f, 1.0f };
+
+		glEnable(GL_COLOR_MATERIAL);
+		glMaterialfv(GL_FRONT_AND_BACK, GL_DIFFUSE, mat_diffuse);
+		glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, mat_specular);
+		glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 0.0f);
+
+		if (p_is_additive) {
+			glMaterialfv(GL_FRONT_AND_BACK, GL_AMBIENT, mat_zero);
+			glMaterialfv(GL_FRONT_AND_BACK, GL_EMISSION, mat_zero);
+		} else {
+			glMaterialfv(GL_FRONT_AND_BACK, GL_AMBIENT, mat_ambient_base);
+			glMaterialfv(GL_FRONT_AND_BACK, GL_EMISSION, mat_zero);
+		}
+	}
+
+	_FORCE_INLINE_ void _gl_setup_light(bool p_two_sided = false) {
+		glEnable(GL_LIGHTING);
+		glEnable(GL_NORMALIZE);
+		glShadeModel(GL_SMOOTH);
+
+		const GLfloat two_side[] = { p_two_sided ? 1.0f : 0.0f };
+		glLightModelfv(GL_LIGHT_MODEL_TWO_SIDE, two_side);
+	}
+
+	_FORCE_INLINE_ void _gl_setup_sky_fill_light(const Color &p_sky_top, const Color &p_ground_bottom) {
+		const GLfloat sky_fill_col[] = {
+			MAX(0.0f, p_sky_top.r - p_ground_bottom.r),
+			MAX(0.0f, p_sky_top.g - p_ground_bottom.g),
+			MAX(0.0f, p_sky_top.b - p_ground_bottom.b),
+			1.0f
+		};
+		const GLfloat top_pos[] = { 0.0f, 1.0f, 0.0f, 0.0f };
+
+		int max_lights = GLES1::Config::get_singleton()->max_lights;
+		int sky_light_idx = GL_LIGHT0 + (max_lights - 1);
+
+		glEnable(sky_light_idx);
+		glLightfv(sky_light_idx, GL_DIFFUSE, sky_fill_col);
+		glLightfv(sky_light_idx, GL_SPECULAR, sky_fill_col);
+		glLightfv(sky_light_idx, GL_POSITION, top_pos);
+
+		GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_gl_setup_sky_fill_light");
+	}
+
+	_FORCE_INLINE_ void _gl_setup_ambient_model(const Color &p_color) {
+		const GLfloat ambient_col[] = { p_color.r, p_color.g, p_color.b, p_color.a };
+		glLightModelfv(GL_LIGHT_MODEL_AMBIENT, ambient_col);
+	}
+
+	_FORCE_INLINE_ void _gl_set_light_chunk_state(int p_active_count) {
+		int max_lights = GLES1::Config::get_singleton()->max_lights;
+		for (int i = 0; i < max_lights - 1; i++) {
+			if (i < p_active_count) {
+				glEnable(GL_LIGHT0 + i);
+			} else {
+				glDisable(GL_LIGHT0 + i);
+			}
+		}
+	}
+
+	_FORCE_INLINE_ void _gl_setup_directional_light(const DirectionalLightData &p_light, int p_light_idx) {
+		int gl_light = GL_LIGHT0 + p_light_idx;
+		const float light_dir[4] = { p_light.direction[0], p_light.direction[1], p_light.direction[2], 0.0f };
+		glLightfv(gl_light, GL_POSITION, light_dir);
+
+		const float light_col[4] = { p_light.color[0], p_light.color[1], p_light.color[2], 1.0f };
+		glLightfv(gl_light, GL_DIFFUSE, light_col);
+		glLightfv(gl_light, GL_SPECULAR, light_col);
+
+		glLightf(gl_light, GL_CONSTANT_ATTENUATION, 1.0f);
+		glLightf(gl_light, GL_LINEAR_ATTENUATION, 0.0f);
+		glLightf(gl_light, GL_QUADRATIC_ATTENUATION, 0.0f);
+		glLightf(gl_light, GL_SPOT_CUTOFF, 180.0f);
+
+		GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_gl_setup_directional_light: setup directional light");
+	}
+
+	_FORCE_INLINE_ void _gl_setup_omni_light(const LightData &p_light, int p_light_idx) {
+		int gl_light = GL_LIGHT0 + p_light_idx;
+		const float light_pos[4] = { p_light.position[0], p_light.position[1], p_light.position[2], 1.0f };
+		glLightfv(gl_light, GL_POSITION, light_pos);
+
+		const float light_col[4] = { p_light.color[0], p_light.color[1], p_light.color[2], 1.0f };
+		glLightfv(gl_light, GL_DIFFUSE, light_col);
+		glLightfv(gl_light, GL_SPECULAR, light_col);
+
+		glLightf(gl_light, GL_CONSTANT_ATTENUATION, 1.0f);
+		glLightf(gl_light, GL_LINEAR_ATTENUATION, p_light.attenuation * p_light.inv_radius);
+		glLightf(gl_light, GL_QUADRATIC_ATTENUATION, 0.0f);
+		glLightf(gl_light, GL_SPOT_CUTOFF, 180.0f);
+
+		GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_gl_setup_omni_light: setup omni light");
+	}
+
+	_FORCE_INLINE_ void _gl_setup_spot_light(const LightData &p_light, int p_light_idx) {
+		int gl_light = GL_LIGHT0 + p_light_idx;
+		const float light_pos[4] = { p_light.position[0], p_light.position[1], p_light.position[2], 1.0f };
+		glLightfv(gl_light, GL_POSITION, light_pos);
+
+		const float spot_dir[3] = { p_light.direction[0], p_light.direction[1], p_light.direction[2] };
+		glLightfv(gl_light, GL_SPOT_DIRECTION, spot_dir);
+
+		const float light_col[4] = { p_light.color[0], p_light.color[1], p_light.color[2], 1.0f };
+		glLightfv(gl_light, GL_DIFFUSE, light_col);
+		glLightfv(gl_light, GL_SPECULAR, light_col);
+
+		glLightf(gl_light, GL_CONSTANT_ATTENUATION, 1.0f);
+		glLightf(gl_light, GL_LINEAR_ATTENUATION, p_light.attenuation * p_light.inv_radius);
+		glLightf(gl_light, GL_QUADRATIC_ATTENUATION, 0.0f);
+
+		const float cutoff = Math::acos(p_light.cos_spot_angle) * (180.0f / Math_PI);
+		glLightf(gl_light, GL_SPOT_CUTOFF, cutoff);
+		glLightf(gl_light, GL_SPOT_EXPONENT, p_light.inv_spot_attenuation * 128.0f);
+
+		GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_gl_setup_spot_light: setup spot light");
+	}
+
+	_FORCE_INLINE_ void _gl_setup_fog(const GLES1::SceneMaterialData *p_material_data) {
+		const GLfloat fog_col[4] = { scene_state.ubo.fog_light_color[0], scene_state.ubo.fog_light_color[1], scene_state.ubo.fog_light_color[2], 1.0f };
+		if (p_material_data && p_material_data->use_distance_fade) {
+			glEnable(GL_FOG);
+			glFogf(GL_FOG_MODE, static_cast<GLfloat>(GL_LINEAR));
+			glFogf(GL_FOG_START, p_material_data->distance_fade_min);
+			glFogf(GL_FOG_END, p_material_data->distance_fade_max);
+
+			glFogfv(GL_FOG_COLOR, fog_col);
+		} else if (scene_state.ubo.fog_enabled) {
+			glEnable(GL_FOG);
+			glFogf(GL_FOG_MODE, static_cast<GLfloat>(GL_EXP));
+			glFogf(GL_FOG_DENSITY, scene_state.ubo.fog_density);
+			glFogfv(GL_FOG_COLOR, fog_col);
+		} else {
+			glDisable(GL_FOG);
+		}
+	}
+
+	// Tracks the chuncked lights
+	struct GlActiveLight {
+		RS::LightType type;
+		uint32_t index;
+	};
+
+	/* REST OF GEOMETRY FUNCTIONS */
 
 	static void _geometry_instance_dependency_changed(Dependency::DependencyChangedNotification p_notification, DependencyTracker *p_tracker);
 	static void _geometry_instance_dependency_deleted(const RID &p_dependency, DependencyTracker *p_tracker);
@@ -631,6 +876,11 @@ private:
 		bool used_screen_texture = false;
 		bool used_normal_texture = false;
 		bool used_depth_texture = false;
+		bool is_additive_pass = false;
+
+		// Default fallback colours
+		Color sky_top_color = Color(0.385, 0.454, 0.55, 1.0);
+		Color ground_bottom_color = Color(0.2, 0.169, 0.133, 1.0);
 
 		LightData *omni_lights = nullptr;
 		LightData *spot_lights = nullptr;
@@ -733,7 +983,11 @@ private:
 	template <PassMode p_pass_mode>
 	_FORCE_INLINE_ void _render_list_template(RenderListParameters *p_params, const RenderDataGLES1 *p_render_data, uint32_t p_from_element, uint32_t p_to_element, bool p_alpha_pass = false);
 
+	template <PassMode p_pass_mode>
+	void _render_additive_light_passes(RenderListParameters *p_params, const RenderDataGLES1 *p_render_data, uint32_t p_element_count, bool p_alpha_pass = false);
+
 	/* Batch API */
+
 	void scene_render_items_implementation(GeometryInstanceSurface **p_surfaces, int p_count, const Transform3D &p_camera_transform, bool p_transparent);
 
 	void _batch_get_hardware_limits(RasterizerSceneBatcherCommon<BatcherAPISceneGLES1>::BatchLimits &r_limits);
@@ -742,14 +996,17 @@ private:
 	uint64_t _batch_get_state_hash(const GeometryInstanceSurface *p_surface);
 	GLES1::SceneMaterialData *_batch_get_material_data(const GeometryInstanceSurface *p_surface);
 
-	void _batch_fill_instance_geometry(const GeometryInstanceSurface *p_surface, RasterizerSceneBatcherCommon<BatcherAPISceneGLES1>::BatchVertex3D *r_bvs, uint16_t *r_inds, uint32_t p_start_vert, bool p_use_hardware_transform);
-	void _batch_fill_multimesh_geometry(const GeometryInstanceSurface *p_surface, RasterizerSceneBatcherCommon<BatcherAPISceneGLES1>::BatchVertex3DInstanced *r_bvs, uint16_t *r_inds, uint32_t p_start_vert, bool p_use_hardware_transform);
+	void _batch_fill_instance_geometry(const GeometryInstanceSurface *p_surface, RasterizerSceneBatcherCommon<BatcherAPISceneGLES1>::BatchVertex3D *r_bvs, uint16_t *r_inds, uint32_t p_start_vert, bool p_use_hardware_transform, uint32_t p_item_index);
+	void _batch_fill_multimesh_geometry(const GeometryInstanceSurface *p_surface, RasterizerSceneBatcherCommon<BatcherAPISceneGLES1>::BatchVertex3DInstanced *r_bvs, uint16_t *r_inds, uint32_t p_start_vert, bool p_use_hardware_transform, uint32_t p_item_index);
 	void _batch_upload_buffers();
-	void _batch_bind_material(GLES1::SceneMaterialData *p_material_data, const Transform3D &p_world_transform);
-	void _batch_render_generic(RS::PrimitiveType p_primitive);
+	void _batch_bind_material(GLES1::SceneMaterialData *p_material_data, const Transform3D &p_world_transform, bool p_transparent);
+	void _batch_render_generic(RS::PrimitiveType p_primitive, uint32_t p_offset = 0, uint32_t p_count = 0, bool p_has_color = true);
+	void _batch_render_items(GLES1::SceneMaterialData *p_material_data, RS::PrimitiveType p_primitive, RasterizerSceneBatcherCommon<BatcherAPISceneGLES1>::Batch3D &p_batch, bool p_transparent);
 
 	void _render_single_item_immediate(const GeometryInstanceSurface *p_surface);
 	void _bind_scene_camera_uniforms(RID p_version, SceneShaderGLES1::ShaderVariant p_variant, uint64_t p_spec_constants);
+	void _bind_sky_directional_lights(RID p_version, SkyShaderGLES1::ShaderVariant p_variant, uint64_t p_spec_constants);
+
 
 protected:
 	double time;
@@ -843,11 +1100,26 @@ protected:
 		int processing_layer = 0;
 		Sky *dirty_list = nullptr;
 		float baked_exposure = 1.0;
+		Color ambient_fallback = Color(0.469, 0.483, 0.505, 1.0);
 
 		//State to track when radiance cubemap needs updating
 		GLES1::SkyMaterialData *prev_material = nullptr;
 		Vector3 prev_position = Vector3(0.0, 0.0, 0.0);
 		float prev_time = 0.0f;
+
+		//Uniform parameters
+		bool material_cache_dirty = true;
+		Color sky_top_color = Color(0.385, 0.454, 0.55, 1.0);
+		Color sky_horizon_color = Color(0.646, 0.656, 0.67, 1.0);
+		float sky_curve = 0.15f;
+		float sky_energy = 1.0f;
+
+		Color ground_bottom_color = Color(0.2, 0.169, 0.133, 1.0);
+		Color ground_horizon_color = Color(0.646, 0.656, 0.67, 1.0);
+		float ground_curve = 0.02f;
+		float ground_energy = 1.0f;
+
+		float exposure = 1.0f;
 	};
 
 	Sky *dirty_sky_list = nullptr;

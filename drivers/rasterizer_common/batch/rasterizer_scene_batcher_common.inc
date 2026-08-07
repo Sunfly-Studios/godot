@@ -113,8 +113,12 @@ void RasterizerSceneBatcherCommon<T_API>::record_items(T_SURFACE **p_surfaces, i
 			continue;
 		}
 
+		// Get total verts counts
+		uint32_t instances = surface->owner->instance_count > 0 ? surface->owner->instance_count : 1;
+		uint32_t total_incoming_verts = base_verts * instances;
+
 		// Do not batch if the base mesh passes the complexity limit
-		if (base_verts > bdata.settings_dynamic_vertex_limit) {
+		if (total_incoming_verts > bdata.settings_dynamic_vertex_limit) {
 			if (!p_transparent) {
 				// Opaque massive models don't need strict sorting. Just dump them in the bypass list.
 				bdata.bypassed_opaque_items.push_back((void*)surface);
@@ -210,9 +214,9 @@ void RasterizerSceneBatcherCommon<T_API>::join_and_flush_sorted_items(bool p_tra
 		for (uint32_t i = 0; i < batch.num_items; i++) {
 			T_SURFACE *surface = static_cast<T_SURFACE *>(bdata.sort_items[batch.first_item_index + i].item);
 
-			if (prefill_joined_item<T_SURFACE>(surface, use_hardware_transform)) {
+			if (prefill_joined_item<T_SURFACE>(surface, use_hardware_transform, i)) {
 				// Buffer full! Flush what we have so far
-				flush_render_batches<T_SURFACE>(material, primitive, batch);
+				flush_render_batches<T_SURFACE>(material, primitive, batch, p_transparent);
 
 				// Reset batch pointers for the remainder
 				batch.first_vert = bdata.total_verts;
@@ -220,12 +224,12 @@ void RasterizerSceneBatcherCommon<T_API>::join_and_flush_sorted_items(bool p_tra
 				batch.num_indices = 0;
 
 				// Retry current item
-				prefill_joined_item<T_SURFACE>(surface, use_hardware_transform);
+				prefill_joined_item<T_SURFACE>(surface, use_hardware_transform, i);
 			}
 		}
 
 		// Flush the batch
-		flush_render_batches<T_SURFACE>(material, primitive, batch);
+		flush_render_batches<T_SURFACE>(material, primitive, batch, p_transparent);
 	}
 }
 
@@ -254,7 +258,7 @@ bool RasterizerSceneBatcherCommon<T_API>::try_join_item(T_SURFACE *p_surface, Re
 
 template <typename T_API>
 template <class T_SURFACE>
-bool RasterizerSceneBatcherCommon<T_API>::prefill_joined_item(T_SURFACE *p_surface, bool p_use_hardware_transform) {
+bool RasterizerSceneBatcherCommon<T_API>::prefill_joined_item(T_SURFACE *p_surface, bool p_use_hardware_transform, uint32_t p_item_index) {
 	uint32_t base_verts = 0;
 	uint32_t base_indices = 0;
 	
@@ -300,11 +304,11 @@ bool RasterizerSceneBatcherCommon<T_API>::prefill_joined_item(T_SURFACE *p_surfa
 
 	if (bvs) {
 		if (is_multimesh) {
-			get_this()->_batch_fill_multimesh_geometry(p_surface, (BatchVertex3DInstanced *)bvs, inds, start_vert, p_use_hardware_transform);
+			get_this()->_batch_fill_multimesh_geometry(p_surface, (BatchVertex3DInstanced *)bvs, inds, start_vert, p_use_hardware_transform, p_item_index);
 		} else {
 			// The driver handles the packing.
 			// Multi-threading dispatch (GLES1), or CPU transforming (GLES2).
-			get_this()->_batch_fill_instance_geometry(p_surface, (BatchVertex3D *)bvs, inds, start_vert, p_use_hardware_transform);
+			get_this()->_batch_fill_instance_geometry(p_surface, (BatchVertex3D *)bvs, inds, start_vert, p_use_hardware_transform, p_item_index);
 		}
 		
 		bdata.total_verts += incoming_verts;
@@ -319,7 +323,7 @@ bool RasterizerSceneBatcherCommon<T_API>::prefill_joined_item(T_SURFACE *p_surfa
 
 template <typename T_API>
 template <class T_SURFACE>
-void RasterizerSceneBatcherCommon<T_API>::flush_render_batches(typename T_API::MaterialData *p_material_data, RS::PrimitiveType p_primitive, Batch3D &p_batch) {
+void RasterizerSceneBatcherCommon<T_API>::flush_render_batches(typename T_API::MaterialData *p_material_data, RS::PrimitiveType p_primitive, Batch3D &p_batch, bool p_transparent) {
 	if (p_batch.num_verts == 0 || p_primitive == RS::PRIMITIVE_MAX) {
 		return;
 	}
@@ -327,17 +331,8 @@ void RasterizerSceneBatcherCommon<T_API>::flush_render_batches(typename T_API::M
 	// Upload batched VBOs
 	get_this()->_batch_upload_buffers();
 
-	// Bind states
-	bool use_hardware_transform = (p_batch.num_items == 1);
-	if (use_hardware_transform) {
-		T_SURFACE *first_surf = static_cast<T_SURFACE*>(bdata.sort_items[p_batch.first_item_index].item);
-		get_this()->_batch_bind_material(p_material_data, first_surf->owner->transform);
-	} else {
-		get_this()->_batch_bind_material(p_material_data, Transform3D());
-	}
-	
-	// Execute draw calls with the correct topology
-	get_this()->_batch_render_generic(p_primitive);
+	// Delegate the API-specific state binding and multi-draw dispatching to the driver
+	get_this()->_batch_render_items(p_material_data, p_primitive, p_batch, p_transparent);
 
 	// Reset VBO cursors
 	bdata.unit_vertices.prepare(bdata.unit_vertices.get_unit_size_bytes());

@@ -61,36 +61,207 @@ static const GLenum _cube_side_enum[6] = {
 TextureStorage::TextureStorage() {
 	singleton = this;
 
-	// Default texture generation
-	Ref<Image> white_img = Image::create_empty(8, 8, false, Image::FORMAT_RGB8);
-	white_img->fill(Color(1, 1, 1, 1));
-	default_gl_textures[DEFAULT_GL_TEXTURE_WHITE] = texture_allocate();
-	texture_2d_initialize(default_gl_textures[DEFAULT_GL_TEXTURE_WHITE], white_img);
+	{ //create default textures
+		{ // White Textures
 
-	Ref<Image> black_img = Image::create_empty(8, 8, false, Image::FORMAT_RGB8);
-	black_img->fill(Color(0, 0, 0, 1));
-	default_gl_textures[DEFAULT_GL_TEXTURE_BLACK] = texture_allocate();
-	texture_2d_initialize(default_gl_textures[DEFAULT_GL_TEXTURE_BLACK], black_img);
+			Ref<Image> image = Image::create_empty(4, 4, true, Image::FORMAT_RGBA8);
+			image->fill(Color(1, 1, 1, 1));
+			image->generate_mipmaps();
 
-	Ref<Image> normal_img = Image::create_empty(8, 8, false, Image::FORMAT_RGB8);
-	normal_img->fill(Color(0.5, 0.5, 1.0, 1));
-	default_gl_textures[DEFAULT_GL_TEXTURE_NORMAL] = texture_allocate();
-	texture_2d_initialize(default_gl_textures[DEFAULT_GL_TEXTURE_NORMAL], normal_img);
+			default_gl_textures[DEFAULT_GL_TEXTURE_WHITE] = texture_allocate();
+			texture_2d_initialize(default_gl_textures[DEFAULT_GL_TEXTURE_WHITE], image);
 
-	Ref<Image> aniso_img = Image::create_empty(8, 8, false, Image::FORMAT_RGB8);
-	aniso_img->fill(Color(1.0, 0.5, 0.0, 1));
-	default_gl_textures[DEFAULT_GL_TEXTURE_ANISO] = texture_allocate();
-	texture_2d_initialize(default_gl_textures[DEFAULT_GL_TEXTURE_ANISO], aniso_img);
+			Vector<Ref<Image>> images;
+			images.push_back(image);
 
-	Ref<Image> transparent_img = Image::create_empty(8, 8, false, Image::FORMAT_RGBA8);
-	transparent_img->fill(Color(0, 0, 0, 0));
-	default_gl_textures[DEFAULT_GL_TEXTURE_TRANSPARENT] = texture_allocate();
-	texture_2d_initialize(default_gl_textures[DEFAULT_GL_TEXTURE_TRANSPARENT], transparent_img);
-	
+			default_gl_textures[DEFAULT_GL_TEXTURE_2D_ARRAY_WHITE] = texture_allocate();
+			texture_2d_layered_initialize(default_gl_textures[DEFAULT_GL_TEXTURE_2D_ARRAY_WHITE], images, RS::TEXTURE_LAYERED_2D_ARRAY);
+
+			for (int i = 0; i < 5; i++) {
+				images.push_back(image);
+			}
+
+			default_gl_textures[DEFAULT_GL_TEXTURE_CUBEMAP_WHITE] = texture_allocate();
+			texture_2d_layered_initialize(default_gl_textures[DEFAULT_GL_TEXTURE_CUBEMAP_WHITE], images, RS::TEXTURE_LAYERED_CUBEMAP);
+		}
+
+		{
+			Ref<Image> image = Image::create_empty(4, 4, false, Image::FORMAT_RGBA8);
+			image->fill(Color(1, 1, 1, 1));
+
+			Vector<Ref<Image>> images;
+			for (int i = 0; i < 4; i++) {
+				images.push_back(image);
+			}
+			default_gl_textures[DEFAULT_GL_TEXTURE_3D_WHITE] = texture_allocate();
+			texture_3d_initialize(default_gl_textures[DEFAULT_GL_TEXTURE_3D_WHITE], image->get_format(), 4, 4, 4, false, images);
+		}
+
+		{ // black
+			Ref<Image> image = Image::create_empty(4, 4, true, Image::FORMAT_RGBA8);
+			image->fill(Color(0, 0, 0, 1));
+			image->generate_mipmaps();
+
+			default_gl_textures[DEFAULT_GL_TEXTURE_BLACK] = texture_allocate();
+			texture_2d_initialize(default_gl_textures[DEFAULT_GL_TEXTURE_BLACK], image);
+
+			Vector<Ref<Image>> images;
+			for (int i = 0; i < 6; i++) {
+				images.push_back(image);
+			}
+			default_gl_textures[DEFAULT_GL_TEXTURE_CUBEMAP_BLACK] = texture_allocate();
+			texture_2d_layered_initialize(default_gl_textures[DEFAULT_GL_TEXTURE_CUBEMAP_BLACK], images, RS::TEXTURE_LAYERED_CUBEMAP);
+		}
+
+		{
+			Ref<Image> image = Image::create_empty(4, 4, false, Image::FORMAT_RGBA8);
+			image->fill(Color());
+
+			Vector<Ref<Image>> images;
+			for (int i = 0; i < 4; i++) {
+				images.push_back(image);
+			}
+			default_gl_textures[DEFAULT_GL_TEXTURE_3D_BLACK] = texture_allocate();
+			texture_3d_initialize(default_gl_textures[DEFAULT_GL_TEXTURE_3D_BLACK], image->get_format(), 4, 4, 4, false, images);
+		}
+
+		{ // transparent black
+			Ref<Image> image = Image::create_empty(4, 4, true, Image::FORMAT_RGBA8);
+			image->fill(Color(0, 0, 0, 0));
+			image->generate_mipmaps();
+
+			default_gl_textures[DEFAULT_GL_TEXTURE_TRANSPARENT] = texture_allocate();
+			texture_2d_initialize(default_gl_textures[DEFAULT_GL_TEXTURE_TRANSPARENT], image);
+		}
+
+		{
+			Ref<Image> image = Image::create_empty(4, 4, true, Image::FORMAT_RGBA8);
+			image->fill(Color(0.5, 0.5, 1, 1));
+			image->generate_mipmaps();
+
+			default_gl_textures[DEFAULT_GL_TEXTURE_NORMAL] = texture_allocate();
+			texture_2d_initialize(default_gl_textures[DEFAULT_GL_TEXTURE_NORMAL], image);
+		}
+
+		{
+			Ref<Image> image = Image::create_empty(4, 4, true, Image::FORMAT_RGBA8);
+			image->fill(Color(1.0, 0.5, 1, 1));
+			image->generate_mipmaps();
+
+			default_gl_textures[DEFAULT_GL_TEXTURE_ANISO] = texture_allocate();
+			texture_2d_initialize(default_gl_textures[DEFAULT_GL_TEXTURE_ANISO], image);
+		}
+
+		{
+			default_gl_textures[DEFAULT_GL_TEXTURE_EXT] = texture_allocate();
+			texture_external_initialize(default_gl_textures[DEFAULT_GL_TEXTURE_EXT], 1, 1, 0);
+		}
+
+		{
+			unsigned char pixel_data[4 * 4 * 4] = {};
+			for (int i = 0; i < 16; i++) {
+				pixel_data[i * 4 + 0] = 0;
+				pixel_data[i * 4 + 1] = 0;
+				pixel_data[i * 4 + 2] = 0;
+				pixel_data[i * 4 + 3] = 0;
+			}
+
+			default_gl_textures[DEFAULT_GL_TEXTURE_2D_UINT] = texture_allocate();
+			Texture texture;
+			texture.width = 4;
+			texture.height = 4;
+			texture.format = Image::FORMAT_RGBA8;
+			texture.type = Texture::TYPE_2D;
+			texture.target = GL_TEXTURE_2D;
+			texture.active = true;
+			glGenTextures(1, &texture.tex_id);
+			texture_owner.initialize_rid(default_gl_textures[DEFAULT_GL_TEXTURE_2D_UINT], texture);
+
+			glBindTexture(GL_TEXTURE_2D, texture.tex_id);
+			glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, 4, 4, 0, GL_RGBA, GL_UNSIGNED_BYTE, pixel_data);
+			GLES2::Utilities::get_singleton()->texture_allocated_data(texture.tex_id, 4 * 4 * 4, "Default uint texture");
+			texture.gl_set_filter(RS::CANVAS_ITEM_TEXTURE_FILTER_NEAREST);
+		}
+		{
+			uint16_t pixel_data[4 * 4] = {};
+			for (int i = 0; i < 16; i++) {
+				pixel_data[i] = Math::make_half_float(1.0f);
+			}
+
+			default_gl_textures[DEFAULT_GL_TEXTURE_DEPTH] = texture_allocate();
+			Texture texture;
+			texture.width = 4;
+			texture.height = 4;
+			texture.format = Image::FORMAT_RGBA8;
+			texture.type = Texture::TYPE_2D;
+			texture.target = GL_TEXTURE_2D;
+			texture.active = true;
+			glGenTextures(1, &texture.tex_id);
+			texture_owner.initialize_rid(default_gl_textures[DEFAULT_GL_TEXTURE_DEPTH], texture);
+
+			glBindTexture(GL_TEXTURE_2D, texture.tex_id);
+			glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT16, 4, 4, 0, GL_DEPTH_COMPONENT, GL_UNSIGNED_SHORT, pixel_data);
+			GLES2::Utilities::get_singleton()->texture_allocated_data(texture.tex_id, 4 * 4 * 2, "Default depth texture");
+			texture.gl_set_filter(RS::CANVAS_ITEM_TEXTURE_FILTER_NEAREST);
+		}
+	}
+
+	glBindTexture(GL_TEXTURE_2D, 0);
+
+	{ // Atlas Texture initialize.
+		uint8_t pixel_data[4 * 4 * 4] = {};
+		for (int i = 0; i < 16; i++) {
+			pixel_data[i * 4 + 0] = 0;
+			pixel_data[i * 4 + 1] = 0;
+			pixel_data[i * 4 + 2] = 0;
+			pixel_data[i * 4 + 3] = 255;
+		}
+
+		glGenTextures(1, &texture_atlas.texture);
+		glBindTexture(GL_TEXTURE_2D, texture_atlas.texture);
+		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, 4, 4, 0, GL_RGBA, GL_UNSIGNED_BYTE, pixel_data);
+		GLES2::Utilities::get_singleton()->texture_allocated_data(texture_atlas.texture, 4 * 4 * 4, "Texture atlas (Default)");
+	}
+
+	glBindTexture(GL_TEXTURE_2D, 0);
+
 	{
 		sdf_shader.shader.initialize();
 		sdf_shader.shader_version = sdf_shader.shader.version_create();
 	}
+
+	// Initialize texture placeholder data for the `texture_*_placeholder_initialize()` methods.
+
+	constexpr int placeholder_size = 4;
+	texture_2d_placeholder = Image::create_empty(placeholder_size, placeholder_size, false, Image::FORMAT_RGBA8);
+	// Draw a magenta/black checkerboard pattern.
+	for (int i = 0; i < placeholder_size * placeholder_size; i++) {
+		const int x = i % placeholder_size;
+		const int y = i / placeholder_size;
+		texture_2d_placeholder->set_pixel(x, y, (x + y) % 2 == 0 ? Color(1, 0, 1) : Color(0, 0, 0));
+	}
+
+	texture_2d_array_placeholder.push_back(texture_2d_placeholder);
+
+	for (int i = 0; i < 6; i++) {
+		cubemap_placeholder.push_back(texture_2d_placeholder);
+	}
+
+	Ref<Image> texture_2d_placeholder_rotated;
+	texture_2d_placeholder_rotated.instantiate();
+	ERR_FAIL_COND(texture_2d_placeholder_rotated.is_null());
+	texture_2d_placeholder_rotated->copy_from(texture_2d_placeholder);
+	texture_2d_placeholder_rotated->rotate_90(CLOCKWISE);
+	for (int i = 0; i < 4; i++) {
+		// Alternate checkerboard pattern on odd layers (by using a copy that is rotated 90 degrees).
+		texture_3d_placeholder.push_back(i % 2 == 0 ? texture_2d_placeholder : texture_2d_placeholder_rotated);
+	}
+
+#ifdef GL_API_ENABLED
+	if (RasterizerGLES2::is_gles_over_gl()) {
+		glEnable(GL_PROGRAM_POINT_SIZE);
+	}
+#endif // GL_API_ENABLED
 }
 
 TextureStorage::~TextureStorage() {
@@ -614,7 +785,7 @@ void TextureStorage::texture_2d_layered_initialize(RID p_texture, const Vector<R
 	texture.active = true;
 	glGenTextures(1, &texture.tex_id);
 
-	ERR_FAIL_COND_MSG(texture.tex_id == 0, "GLES1: Failed to generate layered texture ID. GL Context lost.");
+	ERR_FAIL_COND_MSG(texture.tex_id == 0, "GLES2: Failed to generate layered texture ID. GL Context lost.");
 
 	GLES2::Utilities::get_singleton()->texture_allocated_data(texture.tex_id, texture.total_data_size, "Texture Layered");
 	texture_owner.initialize_rid(p_texture, texture);

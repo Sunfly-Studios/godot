@@ -72,6 +72,9 @@ struct Mesh {
 		uint32_t attribute_buffer_size = 0;
 		uint32_t skin_buffer_size = 0;
 
+		uint32_t uncompressed_stride = 0;
+		Vector<uint8_t> uncompressed_buffer;
+
 		// Cache vertex arrays so they can be created
 		struct Version {
 			uint32_t input_mask = 0;
@@ -249,7 +252,11 @@ private:
 
 	void _mesh_surface_generate_version_for_input_mask(Mesh::Surface::Version &v, Mesh::Surface *s, uint64_t p_input_mask, MeshInstance::Surface *mis = nullptr);
 	void _mesh_surface_clear(Mesh *mesh, int p_surface);
-	void _decompress_surface_data(RS::SurfaceData &r_surface);
+
+	void _decompress_surface_data(RS::SurfaceData &r_surface, Mesh::Surface *s);
+	void _decompress_surface_data_2d(RS::SurfaceData &r_surface, Mesh::Surface *s);
+	void _decompress_surface_data_3d(RS::SurfaceData &r_surface, Mesh::Surface *s);
+	void _decompress_3d_buffer(const uint8_t *p_src, uint8_t *p_dst, uint32_t p_vertex_count, uint64_t p_format, uint32_t p_compressed_stride, uint32_t p_uncompressed_stride, const AABB &p_aabb);
 
 	/* Mesh Instance API */
 
