@@ -128,34 +128,58 @@ private:
 			return 0;
 		}
 
-		// Implement the 1.5x Golden Ratio from upstream
-		// but without any of the shenanigans (exact vs non-exact functions).
+		// Implement the 1.5x Golden Ratio from upstream manually.
 		//
-		// The core problem with upstream implementation is two-fold:
-		// First, it severly complicates the architecture of CowData for
-		// very minimal gain (and regressions).
-		// But second and most important of all: OS memory allocators are not spherical.
+		// ========================================================
+		// The core problem (as stated by upstream's linked blog post) is that
+		// a growth factor of 2x is not recommended for memory reuse, as
+		// it will always be one setp too small to hold the next memory allocation.
+		// Using a 1.5x growth factor eventually makes old blocks add up for
+		// memory reuse.
 		//
-		// The theory linked from upstream by Chris Taylor assumes pristine perfect conditions,
-		// but implementing the pure math (as upstream did), reveals the flaw that OS
-		// fragmentation rarely cooperates. Almost all memory allocators from GLIBC,
-		// UGLIBC, Windows's UCRT, etc, all use bucketing size-classes under
-		// the hood to prevent fragmentation.
-		// Essentially meaning that if you ask for 81 bytes, you'll be in a
-		// 96 or 128 byte bucket anyway.
+		// However, this math is only sound in a vaccum.
+		// 
+		// To calculate the 1.5x curve, upstream does a mathematically perfect:
 		//
-		// To solve all of the above problems without sacrificing both neither
-		// my ISO C++ memory model _and_ the performance overhead from upstream,
-		// the solution is: Binary Buddy + Golden Ratio.
+		// MAX((USize)2, p_previous_capacity + ((1 + p_previous_capacity) >> 1))
 		//
-		// Instead of calculating 1.5 x current on every push, we take advantage
-		// of the fact that CPUs can calculate POT in a single clock cycle. We
-		// then interleave a single "mid-point" bucket exactly 75% of the way
-		// to the next POT.
+		// But this _requires_ the engine to know the previous capacity.
+		// It relies on a relative, indeterministic, object-wise growth factor.
+		// (though, they explicitly accept this).
 		//
-		// The average growth factor is bounded to ~1.414 average, also satisfying
-		// the sweet spot of Simon Frankau's golden ratio theory, AND also aligns
-		// with the expectations of OS page sizes, with O(1) performance "overhead".
+		// The problem however, is that the engine frequently
+		// does bulk operations where the final required size is known up front.
+		// If the engine tells the array, "I need space for 50,000 items," and the array's
+		// previous capacity was 35,000, upstream's 1.5x math might blindly jump
+		// to a "perfect" 52,500 items.
+		//
+		// Also not to mention that OS memory allocations simply do not follow these rules
+		// to prevent memory fragmentation. If you request a "perfect" 81 bytes, you will
+		// be put in a 96 byte bucket anyway.
+		//
+		// This is why the have to bifurbicate and introduce the "_exact" family
+		// of functions. Though, this now shifts the burden into the API user. Either:
+		// 
+		// - Allocate with our fast math but cause possible memory fragmentation.
+		// - Allocate exactly 12 elements but don't you dare add a 13th one.
+		//
+		// This is a false choice and it doesn't have to be this way.
+		//
+		// ========================================================
+		//
+		// To implement this properly with none of the above issues:
+		// 1. Allocate in _bytes_, not elements
+		// 2. Use PO2 to calculate the next size
+		// 3. Calculate the target using step 2 PLUS a 75% midpoint
+		//
+		// This achieves an alternating curve between 1.33x and 1.5x,
+		//              sqrt(1.5 x 1.33) ~= 1.414
+		// This also satisfies the core requirement of the theory
+		// (don't actually use 1.5 explicitly).
+		//
+		// The only caveat is that _more_ allocations will happen because
+		// of this, but because the curve is more closer to how OS memory
+		// allocators operate, it is less likely to have overhead.
 
 		USize req_bytes = p_elements * sizeof(T);
 		USize p2 = next_power_of_2(req_bytes);
