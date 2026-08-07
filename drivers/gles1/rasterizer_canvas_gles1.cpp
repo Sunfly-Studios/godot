@@ -1224,6 +1224,9 @@ void RasterizerCanvasGLES1::canvas_end() {
 	if (max_units > 1) {
 		glActiveTexture(GL_TEXTURE0);
 	}
+
+	// The loop above only disables the TUs for slots 1
+	// or above. This cleans it up for slot 0
 	glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE);
 	glTexEnvf(GL_TEXTURE_ENV, GL_RGB_SCALE, 1.0f);
 	glTexEnvf(GL_TEXTURE_ENV, GL_ALPHA_SCALE, 1.0f);
@@ -1297,6 +1300,12 @@ void RasterizerCanvasGLES1::reset_canvas() {
 	if (max_units > 1) {
 		glActiveTexture(GL_TEXTURE0);
 	}
+
+	// The loop above only disables the ENVs for slots 1
+	// or above. This cleans it up for slot 0.
+	glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE);
+	glTexEnvf(GL_TEXTURE_ENV, GL_RGB_SCALE, 1.0f);
+	glTexEnvf(GL_TEXTURE_ENV, GL_ALPHA_SCALE, 1.0f);
 	if (max_units > 1) {
 		glClientActiveTexture(GL_TEXTURE0);
 	}
