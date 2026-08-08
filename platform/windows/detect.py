@@ -280,6 +280,7 @@ def setup_msvc_manual(env: "SConsEnvironment"):
     """Running from VCVARS environment"""
 
     env_arch = detect_build_env_arch()
+    simd_level = "SSE2"
     if env["arch"] != env_arch:
         print_error(
             "Arch argument (%s) is not matching Native/Cross Compile Tools Prompt/Developer Console (or Visual Studio settings) that is being used to run SCons (%s).\n"
@@ -288,10 +289,20 @@ def setup_msvc_manual(env: "SConsEnvironment"):
         )
         sys.exit(255)
 
-    if env["use_llvm"]:
-        print("Using LLVM/Clang for Windows version %s, arch %s" % (get_clang_version(env), env_arch))
+    if "x86" in env["arch"]:
+        if env["arch"] == "x86_32":
+            if env["sse_level"] == "1":
+                simd_level = "SSE1"
+            elif env["sse_level"] == "0":
+                simd_level = "MMX"
     else:
-        print("Using VCVARS-determined MSVC, arch %s" % (env_arch))
+        # It is mandatory for ARM64 to support NEON on Windows
+        simd_level = "NEON"
+
+    if env["use_llvm"]:
+        print("Using LLVM/Clang for Windows version %s, arch %s (%s)" % (get_clang_version(env), env_arch, simd_level))
+    else:
+        print("Using VCVARS-determined MSVC, arch %s (%s)" % (env_arch, simd_level))
 
 
 def setup_msvc_auto(env: "SConsEnvironment"):
@@ -307,6 +318,7 @@ def setup_msvc_auto(env: "SConsEnvironment"):
     # The rest we don't need to worry about because they are
     # aliases or aren't supported by Godot (itanium & ia64).
     msvc_arch_aliases = {"x86_32": "x86", "arm32": "arm"}
+    simd_level = "SSE2"
     if env["arch"] in msvc_arch_aliases.keys():
         env["TARGET_ARCH"] = msvc_arch_aliases[env["arch"]]
     else:
@@ -332,11 +344,21 @@ def setup_msvc_auto(env: "SConsEnvironment"):
     env.AppendUnique(CFLAGS=env.get("cflags", "").split())
     env.AppendUnique(RCFLAGS=env.get("rcflags", "").split())
 
+    if "x86" in env["arch"]:
+        if env["arch"] == "x86_32":
+            if env["sse_level"] == "1":
+                simd_level = "SSE1"
+            elif env["sse_level"] == "0":
+                simd_level = "MMX"
+    else:
+        # It is mandatory for ARM64 to support NEON on Windows
+        simd_level = "NEON"
+
     # Note: actual compiler version can be found in env['MSVC_VERSION'], e.g. "14.1" for VS2015
     if env["use_llvm"]:
-        print("Using LLVM/Clang for Windows version %s, arch %s" % (get_clang_version(env), env["arch"]))
+        print("Using LLVM/Clang for Windows version %s, arch %s (%s)" % (get_clang_version(env), env["arch"], simd_level))
     else:
-        print("Using SCons-detected MSVC version %s, arch %s" % (env["MSVC_VERSION"], env["arch"]))
+        print("Using SCons-detected MSVC version %s, arch %s (%s)" % (env["MSVC_VERSION"], env["arch"], simd_level))
 
 
 def setup_mingw(env: "SConsEnvironment"):
@@ -363,7 +385,17 @@ def setup_mingw(env: "SConsEnvironment"):
         print_error("No valid compilers found, use MINGW_PREFIX environment variable to set MinGW path.")
         sys.exit(255)
 
-    print("Using MinGW, arch %s" % (env["arch"]))
+    if "x86" in env["arch"]:
+        if env["arch"] == "x86_32":
+            if env["sse_level"] == "1":
+                simd_level = "SSE1"
+            elif env["sse_level"] == "0":
+                simd_level = "MMX"
+    else:
+        # It is mandatory for ARM64 to support NEON on Windows
+        simd_level = "NEON"
+
+    print("Using MinGW, arch %s (%s)" % (env["arch"], simd_level))
 
 
 def configure_msvc(env: "SConsEnvironment", vcvars_msvc_config):
