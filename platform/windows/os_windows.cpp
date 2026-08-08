@@ -937,7 +937,7 @@ bool OS_Windows::get_user_prefers_integrated_gpu() const {
 			}
 		}
 	}
-	if (!is_packaged && GetModuleFileNameW(nullptr, value_name.ptrw(), value_name.size()) >= value_name.size()) {
+	if (!is_packaged && (int64_t)GetModuleFileNameW(nullptr, value_name.ptrw(), value_name.size()) >= value_name.size()) {
 		// Paths should never be longer than 32767, but just in case.
 		return false;
 	}
@@ -2585,11 +2585,11 @@ String OS_Windows::get_temp_path() const {
 			// The maximum possible size is MAX_PATH+1 (261) + terminating null character.
 			temp_path.resize(MAX_PATH + 2);
 			DWORD temp_path_length = GetTempPathW(temp_path.size(), temp_path.ptrw());
-			if (temp_path_length > 0 && temp_path_length < temp_path.size()) {
+			if (temp_path_length > 0 && (int64_t)temp_path_length < temp_path.size()) {
 				temp_path_cache = String::utf16((const char16_t *)temp_path.ptr());
 				// Let's try to get the long path instead of the short path (with tildes ~).
 				DWORD temp_path_long_length = GetLongPathNameW(temp_path.ptr(), temp_path.ptrw(), temp_path.size());
-				if (temp_path_long_length > 0 && temp_path_long_length < temp_path.size()) {
+				if (temp_path_long_length > 0 && (int64_t)temp_path_long_length < temp_path.size()) {
 					temp_path_cache = String::utf16((const char16_t *)temp_path.ptr());
 				}
 			}

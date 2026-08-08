@@ -2844,7 +2844,7 @@ void RasterizerSceneGLES1::_draw_editor_gizmos(const RenderDataGLES1 *p_render_d
 		Color base_albedo = Color(1.0f, 1.0f, 1.0f, 1.0f);
 		RID mat_rid = RID();
 
-		if (surf->owner->data->surface_materials.size() > surf->surface_index) {
+		if ((uint32_t)surf->owner->data->surface_materials.size() > surf->surface_index) {
 			mat_rid = surf->owner->data->surface_materials[surf->surface_index];
 		}
 
@@ -2905,7 +2905,7 @@ void RasterizerSceneGLES1::_draw_editor_gizmos(const RenderDataGLES1 *p_render_d
 
 			if (!surf->index_cache.is_empty()) {
 				surf->gizmo_index_array = memnew_arr(uint16_t, surf->index_cache.size());
-				for (uint32_t ii = 0; ii < surf->index_cache.size(); ii++) {
+				for (uint32_t ii = 0; ii < (uint32_t)surf->index_cache.size(); ii++) {
 					surf->gizmo_index_array[ii] = static_cast<uint16_t>(surf->index_cache[ii]);
 				}
 			}
@@ -3262,7 +3262,7 @@ void RasterizerSceneGLES1::_draw_editor_grid(const RenderDataGLES1 *p_render_dat
 		}
 
 		RID mat_rid = RID();
-		if (surf->owner->data->surface_materials.size() > surf->surface_index) {
+		if ((uint32_t)surf->owner->data->surface_materials.size() > surf->surface_index) {
 			mat_rid = surf->owner->data->surface_materials[surf->surface_index];
 		}
 		if (!mat_rid.is_valid()) {
