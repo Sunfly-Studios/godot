@@ -8221,7 +8221,6 @@ void TextEdit::_adjust_viewport_to_caret_horizontally(int p_caret) {
 	if (get_line_wrapping_mode() != LineWrappingMode::LINE_WRAPPING_NONE) {
 		first_visible_col = 0;
 		h_scroll->set_value(first_visible_col);
-		queue_redraw();
 		return;
 	}
 
@@ -8278,7 +8277,6 @@ void TextEdit::_adjust_viewport_to_caret_horizontally(int p_caret) {
 	}
 
 	h_scroll->set_value(first_visible_col);
-	queue_redraw();
 }
 
 // Minimap
