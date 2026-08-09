@@ -228,7 +228,7 @@
 		#define JPH_DVECTOR_ALIGNMENT 16
 	#else
 		#define JPH_VECTOR_ALIGNMENT 16
-		#define JPH_DVECTOR_ALIGNMENT 8
+		#define JPH_DVECTOR_ALIGNMENT 16
 	#endif
 #elif defined(__loongarch__)
 	// LoongArch CPU architecture
@@ -244,7 +244,7 @@
 		#define JPH_DVECTOR_ALIGNMENT 16
 	#else
 		#define JPH_VECTOR_ALIGNMENT 16
-		#define JPH_DVECTOR_ALIGNMENT 8
+		#define JPH_DVECTOR_ALIGNMENT 16
 	#endif
 #elif defined(__e2k__)
 	// E2K CPU architecture (MCST Elbrus 2000)
@@ -275,7 +275,7 @@
 		#define JPH_DVECTOR_ALIGNMENT 16
 	#else
 		#define JPH_VECTOR_ALIGNMENT 16
-		#define JPH_DVECTOR_ALIGNMENT 8
+		#define JPH_DVECTOR_ALIGNMENT 16
 	#endif
 #elif defined(__mips__) || defined(__mips64)
 	// MIPS CPU architecture
@@ -294,7 +294,7 @@
 		#define JPH_DVECTOR_ALIGNMENT 16
 	#else
 		#define JPH_VECTOR_ALIGNMENT 16
-		#define JPH_DVECTOR_ALIGNMENT 8
+		#define JPH_DVECTOR_ALIGNMENT 16
 	#endif
 #elif defined(__alpha__)
 	// ALPHA CPU architecture
@@ -306,7 +306,7 @@
 		#define JPH_DVECTOR_ALIGNMENT 16
 	#else
 		#define JPH_VECTOR_ALIGNMENT 16
-		#define JPH_DVECTOR_ALIGNMENT 8
+		#define JPH_DVECTOR_ALIGNMENT 16
 	#endif
 #elif defined(__hppa__)
 	// HP PA-RISC architecture
@@ -327,7 +327,7 @@
 		#define JPH_DVECTOR_ALIGNMENT 16
 	#else
 		#define JPH_VECTOR_ALIGNMENT 16
-		#define JPH_DVECTOR_ALIGNMENT 8
+		#define JPH_DVECTOR_ALIGNMENT 16
 	#endif
 #elif defined(__arc__) || defined(__arc64__)
 	// Synopsys ARC Architecture
@@ -343,15 +343,9 @@
 		#define JPH_CPU_BIG_ENDIAN
 	#endif
 
-	// ARC requires strict alignment (16-byte) to avoid unaligned access faults
-	// during vector emulation.
-	#ifdef REAL_T_IS_DOUBLE
-		#define JPH_VECTOR_ALIGNMENT 16
-		#define JPH_DVECTOR_ALIGNMENT 16
-	#else
-		#define JPH_VECTOR_ALIGNMENT 16
-		#define JPH_DVECTOR_ALIGNMENT 8
-	#endif
+	// ARC requires strict alignment
+	#define JPH_VECTOR_ALIGNMENT 16
+	#define JPH_DVECTOR_ALIGNMENT 16
 #else
 	#error Unsupported CPU architecture
 #endif

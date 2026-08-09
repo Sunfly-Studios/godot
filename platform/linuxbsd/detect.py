@@ -82,6 +82,17 @@ def configure(env: "SConsEnvironment"):
     ]
     validate_arch(env["arch"], get_name(), supported_arches)
 
+    ## Centralise OS
+    target_os = platform.system()
+    for flag in env.get("CCFLAGS", []) + env.get("LINKFLAGS", []):
+        if isinstance(flag, str):
+            if "freebsd" in flag.lower():
+                target_os = "FreeBSD"
+            elif "openbsd" in flag.lower():
+                target_os = "OpenBSD"
+            elif "netbsd" in flag.lower():
+                target_os = "NetBSD"
+
     ## Build type
 
     if env.dev_build:
@@ -577,7 +588,7 @@ def configure(env: "SConsEnvironment"):
     else:
         env.Append(CPPDEFINES=["XKB_ENABLED"])
 
-    if platform.system() == "Linux":
+    if target_os == "Linux":
         if env["udev"]:
             if not env["use_sowrap"]:
                 if os.system("pkg-config --exists libudev") == 0:  # 0 means found
@@ -680,7 +691,7 @@ def configure(env: "SConsEnvironment"):
 
         env.Append(CPPDEFINES=["WAYLAND_ENABLED"])
 
-        if platform.system() in ["Linux", "NetBSD"]:
+        if target_os in ["Linux", "NetBSD"]:
             env.Append(LIBS=["rt"])  # Needed by glibc, used by _allocate_shm_file
 
     if env["vulkan"]:
@@ -700,7 +711,7 @@ def configure(env: "SConsEnvironment"):
 
     env.Append(LIBS=["pthread"])
 
-    if platform.system() == "Linux":
+    if target_os == "Linux":
         env.Append(LIBS=["dl"])
     
     libc_info = platform.libc_ver()
@@ -726,22 +737,22 @@ def configure(env: "SConsEnvironment"):
     if env["older_linux"]:
         env.Append(CPPDEFINES=["OLDER_UNIX_ENABLED"])
 
-    if platform.system() == "FreeBSD":
+    if target_os == "FreeBSD":
         env.Append(LINKFLAGS=["-lkvm"])
 
     # Link those statically for portability
     if env["use_static_cpp"]:
-        if env["use_llvm"] and platform.system() in ["FreeBSD", "OpenBSD"]:
+        if env["use_llvm"] and target_os in ["FreeBSD", "OpenBSD"]:
             env.Append(LINKFLAGS=["-nostdlib++"])
             env["LINKCOM"] += " -l:libc++.a"
-            if platform.system() == "OpenBSD":
+            if target_os == "OpenBSD":
                 env["LINKCOM"] += " -l:libc++abi.a"
         else:
-            if not platform.system() in ["NetBSD"]:
+            if not target_os in ["NetBSD"]:
                 env.Append(LINKFLAGS=["-static-libgcc", "-static-libstdc++"])
 
-        if env["use_llvm"] and platform.system() not in ["FreeBSD", "OpenBSD", "NetBSD"]:
+        if env["use_llvm"] and target_os not in ["FreeBSD", "OpenBSD", "NetBSD"]:
             env["LINKCOM"] += " -l:libatomic.a"
     else:
-        if env["use_llvm"] and platform.system() not in ["FreeBSD", "OpenBSD", "NetBSD"]:
+        if env["use_llvm"] and target_os not in ["FreeBSD", "OpenBSD", "NetBSD"]:
             env.Append(LIBS=["atomic"])

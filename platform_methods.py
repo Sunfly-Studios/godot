@@ -163,8 +163,15 @@ def detect_endianness(env):
     import os
 
     # Determine the compiler executable
-    cc = env.get("CC", "gcc")
+    cc = env.subst("$CC")
+    if not cc:
+        cc = "gcc"
+        
     is_msvc = "cl" in os.path.basename(cc).lower()
+
+    # Extract CCFLAGS and CFLAGS where -target and --sysroot are stored
+    # env.subst() evaluates SCons variables into a final string, which we then split
+    extra_flags = env.subst("$CCFLAGS").split() + env.subst("$CFLAGS").split()
 
     # Windows is almost exclusively little-endian, but we can
     # check architecture macros to be sure.
@@ -176,7 +183,7 @@ LITTLE_ENDIAN_DETECTED
 UNKNOWN_ENDIAN
 #endif
         """
-        cpp_cmd = [cc, "/E", "/nologo"]
+        cpp_cmd = [cc, "/E", "/nologo"] + extra_flags
     else:
         test_code = """
 #if __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
@@ -187,7 +194,7 @@ LITTLE_ENDIAN_DETECTED
 UNKNOWN_ENDIAN
 #endif
         """
-        cpp_cmd = [cc, "-E"]
+        cpp_cmd = [cc, "-E"] + extra_flags
 
     test_file = None
     try:
