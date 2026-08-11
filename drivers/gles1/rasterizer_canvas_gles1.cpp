@@ -1284,6 +1284,8 @@ void RasterizerCanvasGLES1::reset_canvas() {
 	for (int i = 1; i < max_units; i++) {
 		glActiveTexture(GL_TEXTURE0 + i);
 		glDisable(GL_TEXTURE_2D);
+		glBindTexture(GL_TEXTURE_2D, 0);
+		glBindTexture(GL_TEXTURE_CUBE_MAP, 0);
 
 		glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE);
 		glTexEnvf(GL_TEXTURE_ENV, GL_RGB_SCALE, 1.0f);
@@ -1303,12 +1305,18 @@ void RasterizerCanvasGLES1::reset_canvas() {
 
 	// The loop above only disables the ENVs for slots 1
 	// or above. This cleans it up for slot 0.
+	glMatrixMode(GL_TEXTURE);
+	glLoadIdentity();
+	glMatrixMode(GL_MODELVIEW);
+
 	glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE);
 	glTexEnvf(GL_TEXTURE_ENV, GL_RGB_SCALE, 1.0f);
 	glTexEnvf(GL_TEXTURE_ENV, GL_ALPHA_SCALE, 1.0f);
 	if (max_units > 1) {
 		glClientActiveTexture(GL_TEXTURE0);
 	}
+	glDisable(GL_TEXTURE_2D);
+	glBindTexture(GL_TEXTURE_CUBE_MAP, 0);
 	GL_CHECK_ERROR("GLES1::Canvas::reset_canvas: disable client states and matrices");
 
 	if (state.transparent_render) {

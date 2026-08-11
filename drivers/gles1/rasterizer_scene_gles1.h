@@ -563,9 +563,13 @@ private:
 			if (GLES1::Config::get_singleton()->max_texture_units > 1) {
 				glActiveTexture(GL_TEXTURE1);
 				glDisable(GL_TEXTURE_2D);
+				glBindTexture(GL_TEXTURE_2D, 0);
+				glBindTexture(GL_TEXTURE_CUBE_MAP, 0);
 				glActiveTexture(GL_TEXTURE0);
 			}
 			glDisable(GL_TEXTURE_2D);
+			glBindTexture(GL_TEXTURE_2D, 0);
+			glBindTexture(GL_TEXTURE_CUBE_MAP, 0);
 		}
 
 		void set_gl_cull_mode(RS::CullMode p_mode) {

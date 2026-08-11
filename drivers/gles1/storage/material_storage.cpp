@@ -1378,10 +1378,69 @@ void CanvasMaterialData::update_parameters(const HashMap<StringName, Variant> &p
 }
 
 void CanvasMaterialData::bind_uniforms() {
+	// We don't use the "generic" binder as it is
+	// meant for 3D only.
 	if (!shader_data || !shader_data->valid) {
 		return;
 	}
-	bind_uniforms_and_textures_generic_gles1(texture_cache, shader_data->texture_uniforms);
+
+	int max_texture_units = GLES1::Config::get_singleton()->max_texture_image_units;
+
+	if (texture_cache.is_empty()) {
+		// We return early for standard items, but we sweep any units
+		// above the engine's reserved units (0=Diffuse, 1=Normal, 2=Specular).
+		for (int i = 3; i < max_texture_units; i++) {
+			glActiveTexture(GL_TEXTURE0 + i);
+			glBindTexture(GL_TEXTURE_2D, 0);
+			glDisable(GL_TEXTURE_2D);
+		}
+		glActiveTexture(GL_TEXTURE0);
+		return;
+	}
+
+	// Bind textures to their active GL_TEXTURE units
+	const RID *textures = texture_cache.ptr();
+	const ShaderCompiler::GeneratedCode::Texture *texture_uniforms = shader_data->texture_uniforms.ptr();
+	int texture_uniform_index = 0;
+	int texture_uniform_count = 0;
+	int ti = 0;
+
+	for (; ti < texture_cache.size(); ti++) {
+		if (unlikely(ti >= max_texture_units)) {
+			ERR_PRINT_ONCE(vformat("GLES1: Custom shader uses too many textures! Hardware limit is %d. Skipping remainder.", max_texture_units));
+			break;
+		}
+
+		glActiveTexture(GL_TEXTURE0 + ti);
+
+		GLES1::Texture *texture = GLES1::TextureStorage::get_singleton()->get_texture(textures[ti]);
+		if (texture && texture->tex_id != 0) {
+			glEnable(GL_TEXTURE_2D);
+			glBindTexture(GL_TEXTURE_2D, texture->tex_id);
+		} else {
+			glBindTexture(GL_TEXTURE_2D, 0);
+			glDisable(GL_TEXTURE_2D);
+		}
+
+		const ShaderCompiler::GeneratedCode::Texture &texture_uniform = texture_uniforms[texture_uniform_index];
+		texture_uniform_count++;
+		if (texture_uniform_count >= texture_uniform.array_size) {
+			texture_uniform_index++;
+			texture_uniform_count = 0;
+		}
+	}
+
+	// Scrub remaining texture units.
+	int scrub_start = MAX(ti, 3);
+	for (int i = scrub_start; i < max_texture_units; i++) {
+		glActiveTexture(GL_TEXTURE0 + i);
+		glBindTexture(GL_TEXTURE_2D, 0);
+		glDisable(GL_TEXTURE_2D);
+	}
+
+	// Reset the active texture
+	glActiveTexture(GL_TEXTURE0);
+	GL_CHECK_ERROR("GLES1::CanvasMaterialData::bind_uniforms: glActiveTexture");
 }
 
 CanvasMaterialData::~CanvasMaterialData() {

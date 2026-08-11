@@ -1184,6 +1184,8 @@ void RasterizerSceneGLES1::_draw_sky(RID p_env, const Projection &p_projection, 
 	// Unbind state
 	if (sky && sky->radiance != 0) {
 		glDisable(GL_TEXTURE_CUBE_MAP);
+		glBindTexture(GL_TEXTURE_CUBE_MAP, 0);
+		GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_draw_sky: unbind cubemap")
 	}
 
 	glDisableClientState(GL_VERTEX_ARRAY);
@@ -1530,6 +1532,9 @@ void RasterizerSceneGLES1::_update_sky_radiance(RID p_env, const Projection &p_p
 			glGenerateMipmapOES(GL_TEXTURE_CUBE_MAP_OES);
 			GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_update_sky_radiance: glGenerateMipmapOES");
 
+			glBindTexture(GL_TEXTURE_CUBE_MAP, 0);
+			GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_update_sky_radiance: unbind cubemap");
+
 			sky->processing_layer = MAX_SKY_PROCESSING_LAYERS + 1;
 			sky->baked_exposure = p_sky_energy_multiplier;
 			sky->reflection_dirty = false;
@@ -1610,6 +1615,9 @@ Ref<Image> RasterizerSceneGLES1::sky_bake_panorama(RID p_sky, float p_energy, bo
 
 	copy_effects->copy_cube_to_panorama(p_bake_irradiance ? float(sky->mipmap_count) : 0.0);
 	GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::sky_bake_panorama: copy_cube_to_panorama");
+
+	glBindTexture(GL_TEXTURE_CUBE_MAP, 0);
+	GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::sky_bake_panorama: unbind cubemap");
 
 	glBindFramebufferOES(GL_FRAMEBUFFER_OES, prev_fbo);
 	glDeleteFramebuffersOES(1, &rad_fbo);
