@@ -93,9 +93,12 @@ private:
 		return hash;
 	}
 
-	static _FORCE_INLINE_ uint32_t _get_probe_length(const uint32_t p_pos, const uint32_t p_hash, const uint32_t p_capacity, const uint64_t p_capacity_inv) {
-		const uint32_t original_pos = fastmod(p_hash, p_capacity_inv, p_capacity);
-		return fastmod(p_pos - original_pos + p_capacity, p_capacity_inv, p_capacity);
+	// Returns true when the probe length from `a` to `p_pos` is LESS THAN the probe length from `b` to `p_pos`.
+	_FORCE_INLINE_ static constexpr bool _probe_length_cmp(const uint32_t p_a, const uint32_t p_b, const uint32_t p_pos) {
+		if (unlikely(p_pos < p_b)) {
+			return likely(p_pos >= p_a) || p_b < p_a;
+		}
+		return p_b < p_a && likely(p_pos >= p_a);
 	}
 
 	bool _lookup_pos(const TKey &p_key, uint32_t &r_pos) const {
@@ -106,25 +109,35 @@ private:
 		const uint32_t capacity = hash_table_size_primes[capacity_index];
 		const uint64_t capacity_inv = hash_table_size_primes_inv[capacity_index];
 		uint32_t hash = _hash(p_key);
-		uint32_t pos = fastmod(hash, capacity_inv, capacity);
-		uint32_t distance = 0;
+		
+		const uint32_t start_pos = fastmod(hash, capacity_inv, capacity);
+		uint32_t pos = start_pos;
+
+		if (hashes[pos] == EMPTY_HASH) {
+			return false;
+		}
+		
+		if (hashes[pos] == hash && Comparator::compare(elements[pos]->data.key, p_key)) {
+			r_pos = pos;
+			return true;
+		}
 
 		while (true) {
+			pos = fastmod((pos + 1), capacity_inv, capacity);
+			
 			if (hashes[pos] == EMPTY_HASH) {
 				return false;
 			}
-
-			if (distance > _get_probe_length(pos, hashes[pos], capacity, capacity_inv)) {
-				return false;
-			}
-
-			if (hashes[pos] == hash && Comparator::compare(elements[pos]->data.key, p_key)) {
+			
+			if (hashes[pos] != hash) {
+				// Stop search if we probed further than this element.
+				if (_probe_length_cmp(fastmod(hashes[pos], capacity_inv, capacity), start_pos, pos)) {
+					return false;
+				}
+			} else if (Comparator::compare(elements[pos]->data.key, p_key)) {
 				r_pos = pos;
 				return true;
 			}
-
-			pos = fastmod((pos + 1), capacity_inv, capacity);
-			distance++;
 		}
 	}
 
@@ -133,29 +146,35 @@ private:
 		const uint64_t capacity_inv = hash_table_size_primes_inv[capacity_index];
 		uint32_t hash = p_hash;
 		HashMapElement<TKey, TValue> *value = p_value;
-		uint32_t distance = 0;
-		uint32_t pos = fastmod(hash, capacity_inv, capacity);
 
+		uint32_t start_pos = fastmod(hash, capacity_inv, capacity);
+		uint32_t pos = start_pos;
+
+		if (hashes[pos] == EMPTY_HASH) {
+			elements[pos] = value;
+			hashes[pos] = hash;
+			num_elements++;
+			return;
+		}
+
+		// Keep going until empty slot found.
 		while (true) {
+			pos = fastmod((pos + 1), capacity_inv, capacity);
+			
 			if (hashes[pos] == EMPTY_HASH) {
 				elements[pos] = value;
 				hashes[pos] = hash;
-
 				num_elements++;
-
 				return;
 			}
 
 			// Not an empty slot, let's check the probing length of the existing one.
-			uint32_t existing_probe_len = _get_probe_length(pos, hashes[pos], capacity, capacity_inv);
-			if (existing_probe_len < distance) {
+			uint32_t new_start_pos = fastmod(hashes[pos], capacity_inv, capacity);
+			if (_probe_length_cmp(new_start_pos, start_pos, pos)) {
 				SWAP(hash, hashes[pos]);
 				SWAP(value, elements[pos]);
-				distance = existing_probe_len;
+				start_pos = new_start_pos;
 			}
-
-			pos = fastmod((pos + 1), capacity_inv, capacity);
-			distance++;
 		}
 	}
 
@@ -364,7 +383,7 @@ public:
 		const uint32_t capacity = hash_table_size_primes[capacity_index];
 		const uint64_t capacity_inv = hash_table_size_primes_inv[capacity_index];
 		uint32_t next_pos = fastmod((pos + 1), capacity_inv, capacity);
-		while (hashes[next_pos] != EMPTY_HASH && _get_probe_length(next_pos, hashes[next_pos], capacity, capacity_inv) != 0) {
+		while (hashes[next_pos] != EMPTY_HASH && next_pos != fastmod(hashes[next_pos], capacity_inv, capacity)) {
 			SWAP(hashes[next_pos], hashes[pos]);
 			SWAP(elements[next_pos], elements[pos]);
 			pos = next_pos;
@@ -411,7 +430,7 @@ public:
 		const uint32_t capacity = hash_table_size_primes[capacity_index];
 		const uint64_t capacity_inv = hash_table_size_primes_inv[capacity_index];
 		uint32_t next_pos = fastmod((pos + 1), capacity_inv, capacity);
-		while (hashes[next_pos] != EMPTY_HASH && _get_probe_length(next_pos, hashes[next_pos], capacity, capacity_inv) != 0) {
+		while (hashes[next_pos] != EMPTY_HASH && next_pos != fastmod(hashes[next_pos], capacity_inv, capacity)) {
 			SWAP(hashes[next_pos], hashes[pos]);
 			SWAP(elements[next_pos], elements[pos]);
 			pos = next_pos;

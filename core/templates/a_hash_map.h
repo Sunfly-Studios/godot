@@ -114,9 +114,12 @@ private:
 		return p_capacity ^ (p_capacity + 1) >> 2; // = get_capacity() * 0.75 - 1; Works only if p_capacity = 2^n - 1.
 	}
 
-	static _FORCE_INLINE_ uint32_t _get_probe_length(uint32_t p_pos, uint32_t p_hash, uint32_t p_local_capacity) {
-		const uint32_t original_pos = p_hash & p_local_capacity;
-		return (p_pos - original_pos + p_local_capacity + 1) & p_local_capacity;
+	// Returns true when the probe length from `a` to `p_pos` is LESS THAN the probe length from `b` to `p_pos`.
+	_FORCE_INLINE_ static constexpr bool _probe_length_cmp(const uint32_t p_a, const uint32_t p_b, const uint32_t p_pos) {
+		if (unlikely(p_pos < p_b)) {
+			return likely(p_pos >= p_a) || p_b < p_a;
+		}
+		return p_b < p_a && likely(p_pos >= p_a);
 	}
 
 	bool _lookup_pos(const TKey &p_key, uint32_t &r_pos, uint32_t &r_hash_pos) const {
@@ -131,7 +134,9 @@ private:
 			return false; // Failed lookups, no elements or number of elements is 0.
 		}
 
-		uint32_t pos = p_hash & capacity;
+		const uint32_t start_pos = p_hash & capacity;
+		uint32_t pos = start_pos;
+		
 		HashMapData data = map_data[pos];
 		if (data.hash == p_hash && Comparator::compare(std::launder(&elements[data.hash_to_key])->key, p_key)) {
 			r_pos = data.hash_to_key;
@@ -144,31 +149,30 @@ private:
 		}
 
 		// A collision occurred.
-		pos = (pos + 1) & capacity;
-		uint32_t distance = 1;
 		while (true) {
+			pos = (pos + 1) & capacity;
 			data = map_data[pos];
-			if (data.hash == p_hash && Comparator::compare(std::launder(&elements[data.hash_to_key])->key, p_key)) {
+			
+			if (data.data == EMPTY_HASH) {
+				return false;
+			}
+			
+			if (data.hash != p_hash) {
+				// Stop search if we probed further than this element.
+				if (_probe_length_cmp(data.hash & capacity, start_pos, pos)) {
+					return false;
+				}
+			} else if (Comparator::compare(std::launder(&elements[data.hash_to_key])->key, p_key)) {
 				r_pos = data.hash_to_key;
 				r_hash_pos = pos;
 				return true;
 			}
-
-			if (data.data == EMPTY_HASH) {
-				return false;
-			}
-
-			if (distance > _get_probe_length(pos, data.hash, capacity)) {
-				return false;
-			}
-
-			pos = (pos + 1) & capacity;
-			distance++;
 		}
 	}
 
 	uint32_t _insert_with_hash(uint32_t p_hash, uint32_t p_index) {
-		uint32_t pos = p_hash & capacity;
+		uint32_t start_pos = p_hash & capacity;
+		uint32_t pos = start_pos;
 
 		if (map_data[pos].data == EMPTY_HASH) {
 			uint64_t data = ((uint64_t)p_index << 32) | p_hash;
@@ -176,7 +180,6 @@ private:
 			return pos;
 		}
 
-		uint32_t distance = 1;
 		pos = (pos + 1) & capacity;
 		HashMapData c_data;
 		c_data.hash = p_hash;
@@ -184,25 +187,18 @@ private:
 
 		while (true) {
 			if (map_data[pos].data == EMPTY_HASH) {
-#ifdef DEV_ENABLED
-				if (unlikely(distance > 12)) {
-					WARN_PRINT("Excessive collision count (" +
-							itos(distance) + "), is the right hash function being used?");
-				}
-#endif
 				map_data[pos] = c_data;
 				return pos;
 			}
 
 			// Not an empty slot, let's check the probing length of the existing one.
-			uint32_t existing_probe_len = _get_probe_length(pos, map_data[pos].hash, capacity);
-			if (existing_probe_len < distance) {
+			uint32_t existing_start = map_data[pos].hash & capacity;
+			if (_probe_length_cmp(existing_start, start_pos, pos)) {
 				SWAP(c_data, map_data[pos]);
-				distance = existing_probe_len;
+				start_pos = existing_start;
 			}
 
 			pos = (pos + 1) & capacity;
-			distance++;
 		}
 	}
 
@@ -370,7 +366,7 @@ public:
 		}
 
 		uint32_t next_pos = (pos + 1) & capacity;
-		while (map_data[next_pos].hash != EMPTY_HASH && _get_probe_length(next_pos, map_data[next_pos].hash, capacity) != 0) {
+		while (map_data[next_pos].hash != EMPTY_HASH && next_pos != (map_data[next_pos].hash & capacity)) {
 			SWAP(map_data[next_pos], map_data[pos]);
 
 			pos = next_pos;
@@ -415,7 +411,7 @@ public:
 		unaligned_construct<MapKeyValue>(&elements[element_pos], MapKeyValue(p_new_key, std::move(val)));
 
 		uint32_t next_pos = (pos + 1) & capacity;
-		while (map_data[next_pos].hash != EMPTY_HASH && _get_probe_length(next_pos, map_data[next_pos].hash, capacity) != 0) {
+		while (map_data[next_pos].hash != EMPTY_HASH && next_pos != (map_data[next_pos].hash & capacity)) {
 			SWAP(map_data[next_pos], map_data[pos]);
 
 			pos = next_pos;
