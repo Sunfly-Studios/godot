@@ -1155,7 +1155,7 @@ bool RasterizerCanvasBatcherCommon<T_API>::_light_scissor_begin(const Rect2 &p_i
 	}
 
 	int y = cliprect.position.y + cliprect.size.y;
-	get_this()->gl_enable_scissor(
+	get_this()->enable_scissor(
 		cliprect.position.x,
 		y,
 		cliprect.size.width,

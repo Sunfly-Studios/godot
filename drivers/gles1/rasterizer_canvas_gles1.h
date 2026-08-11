@@ -461,8 +461,8 @@ private:
 	void _batch_render_generic(const Batch &p_batch, GLES1::CanvasMaterialData *p_material);
 
 	// RasterizerCanvasBatcherGLES1 Template Hooks
-	void gl_enable_scissor(int p_x, int p_y, int p_width, int p_height) const;
-	void gl_disable_scissor() const;
+	void enable_scissor(int p_x, int p_y, int p_width, int p_height) const;
+	void disable_scissor() const;
 
 public:
 	void initialize();

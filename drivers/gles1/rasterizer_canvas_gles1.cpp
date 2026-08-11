@@ -1919,10 +1919,10 @@ void RasterizerCanvasGLES1::canvas_render_items_implementation(Item *p_item_list
 					int y = ris.current_clip->final_clip_rect.position.y;
 					int w = MAX(0, (int)ris.current_clip->final_clip_rect.size.x);
 					int h = MAX(0, (int)ris.current_clip->final_clip_rect.size.y);
-					gl_enable_scissor(x, y, w, h);
+					enable_scissor(x, y, w, h);
 					GL_CHECK_ERROR("GLES1::Canvas::render_items: glScissor setup");
 				} else {
-					gl_disable_scissor();
+					disable_scissor();
 					GL_CHECK_ERROR("GLES1::Canvas::render_items: glScissor disable");
 				}
 				reclip = false;
@@ -1947,7 +1947,7 @@ void RasterizerCanvasGLES1::canvas_render_items_implementation(Item *p_item_list
 			// Clean up light scissor if we hijacked it for this batch
 			if (light_scissor_enabled) {
 				reclip = true;
-				gl_disable_scissor();
+				disable_scissor();
 			}
 		}
 	} else {
@@ -2013,10 +2013,10 @@ void RasterizerCanvasGLES1::canvas_render_items_implementation(Item *p_item_list
 									int y = ris.current_clip->final_clip_rect.position.y;
 									int w = MAX(0, (int)ris.current_clip->final_clip_rect.size.x);
 									int h = MAX(0, (int)ris.current_clip->final_clip_rect.size.y);
-									gl_enable_scissor(x, y, w, h);
+									enable_scissor(x, y, w, h);
 									GL_CHECK_ERROR("GLES2::Canvas::render_items: glScissor setup");
 								} else {
-									gl_disable_scissor();
+									disable_scissor();
 									GL_CHECK_ERROR("GLES2::Canvas::render_items: glScissor disable");
 								}
 								reclip = false;
@@ -2026,7 +2026,7 @@ void RasterizerCanvasGLES1::canvas_render_items_implementation(Item *p_item_list
 
 							if (owner_light_scissor) {
 								reclip = true;
-								gl_disable_scissor();
+								disable_scissor();
 							}
 						}
 					} else if (!backbuffer_cleared) {
@@ -2098,10 +2098,10 @@ void RasterizerCanvasGLES1::canvas_render_items_implementation(Item *p_item_list
 					int y = ris.current_clip->final_clip_rect.position.y;
 					int w = MAX(0, (int)ris.current_clip->final_clip_rect.size.x);
 					int h = MAX(0, (int)ris.current_clip->final_clip_rect.size.y);
-					gl_enable_scissor(x, y, w, h);
+					enable_scissor(x, y, w, h);
 					GL_CHECK_ERROR("GLES1::Canvas::render_items: glScissor setup");
 				} else {
-					gl_disable_scissor();
+					disable_scissor();
 					GL_CHECK_ERROR("GLES1::Canvas::render_items: glScissor disable");
 				}
 				reclip = false;
@@ -2130,7 +2130,7 @@ void RasterizerCanvasGLES1::canvas_render_items_implementation(Item *p_item_list
 
 			if (light_scissor_enabled) {
 				reclip = true;
-				gl_disable_scissor();
+				disable_scissor();
 			}
 
 			ci = ci->next;
@@ -2139,7 +2139,7 @@ void RasterizerCanvasGLES1::canvas_render_items_implementation(Item *p_item_list
 
 	// Clean up scissor test if it was left enabled by a clip
 	if (ris.current_clip && !reclip) {
-		gl_disable_scissor();
+		disable_scissor();
 	}
 
 	if (state.using_shadow) {
@@ -2160,7 +2160,7 @@ void RasterizerCanvasGLES1::canvas_render_items_end() {
 	batch_canvas_render_items_end();
 }
 
-void RasterizerCanvasGLES1::gl_enable_scissor(int p_x, int p_y, int p_width, int p_height) const {
+void RasterizerCanvasGLES1::enable_scissor(int p_x, int p_y, int p_width, int p_height) const {
 	glEnable(GL_SCISSOR_TEST);
 
 	float matrix_y_scale = state.uniforms.projection_matrix.basis[1][1];
@@ -2175,10 +2175,10 @@ void RasterizerCanvasGLES1::gl_enable_scissor(int p_x, int p_y, int p_width, int
 		glScissor(p_x, p_y, p_width, p_height);
 	}
 
-	GL_CHECK_ERROR("GLES1::Canvas::gl_enable_scissor: glScissor");
+	GL_CHECK_ERROR("GLES1::Canvas::enable_scissor: glScissor");
 }
 
-void RasterizerCanvasGLES1::gl_disable_scissor() const {
+void RasterizerCanvasGLES1::disable_scissor() const {
 	glDisable(GL_SCISSOR_TEST);
 }
 
@@ -3434,14 +3434,14 @@ void RasterizerCanvasGLES1::render_batches(Item::Command *const *p_commands, Ite
 							if (p_current_clip) {
 								if (ci->ignore != r_reclip) {
 									if (ci->ignore) {
-										gl_disable_scissor();
+										disable_scissor();
 										r_reclip = true;
 									} else {
 										int x = p_current_clip->final_clip_rect.position.x;
 										int y = p_current_clip->final_clip_rect.position.y;
 										int w = MAX(0, (int)p_current_clip->final_clip_rect.size.x);
 										int h = MAX(0, (int)p_current_clip->final_clip_rect.size.y);
-										gl_enable_scissor(x, y, w, h);
+										enable_scissor(x, y, w, h);
 										GL_CHECK_ERROR("GLES1::Canvas::render_batches: Item::Command::TYPE_CLIP_IGNORE: glScissor");
 										r_reclip = false;
 									}
