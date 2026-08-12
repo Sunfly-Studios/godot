@@ -289,6 +289,12 @@ def generate_scu_files(max_includes_per_scu):
     process_folder(["drivers/gles3/effects"])
     process_folder(["drivers/gles3/storage"])
 
+    process_folder(["drivers/gles2/effects"])
+    process_folder(["drivers/gles2/storage"])
+
+    process_folder(["drivers/gles1/effects"])
+    process_folder(["drivers/gles1/storage"])
+
     process_folder(["editor"], ["file_system_dock", "editor_resource_preview"], 32)
     process_folder(["editor/debugger"])
     process_folder(["editor/debugger/debug_adapter"])
