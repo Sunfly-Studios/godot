@@ -848,7 +848,7 @@ void RenderForwardMobile::_render_scene(RenderDataRD *p_render_data, const Color
 	p_render_data->directional_light_count = directional_light_count;
 
 	// fill our render lists early so we can find out if we use various features
-	_fill_render_list(RENDER_LIST_OPAQUE, p_render_data, PASS_MODE_COLOR);
+	_fill_render_list<RENDER_LIST_OPAQUE, PASS_MODE_COLOR>(p_render_data);
 	render_list[RENDER_LIST_OPAQUE].sort_by_key();
 	render_list[RENDER_LIST_ALPHA].sort_by_reverse_depth_and_priority();
 	_fill_instance_data(RENDER_LIST_OPAQUE);
@@ -1466,10 +1466,18 @@ void RenderForwardMobile::_render_shadow_append(RID p_framebuffer, const PagedAr
 		scene_data.screen_mesh_lod_threshold = p_screen_mesh_lod_threshold;
 	}
 
-	PassMode pass_mode = p_use_dp ? PASS_MODE_SHADOW_DP : PASS_MODE_SHADOW;
+	PassMode pass_mode = PASS_MODE_COLOR;
 
 	uint32_t render_list_from = render_list[RENDER_LIST_SECONDARY].elements.size();
-	_fill_render_list(RENDER_LIST_SECONDARY, &render_data, pass_mode, true);
+
+	if (p_use_dp) {
+		pass_mode = PASS_MODE_SHADOW_DP;
+		_fill_render_list<RENDER_LIST_SECONDARY, PASS_MODE_SHADOW_DP>(&render_data, true);
+	} else {
+		pass_mode = PASS_MODE_SHADOW;
+		_fill_render_list<RENDER_LIST_SECONDARY, PASS_MODE_SHADOW>(&render_data, true);
+	}
+
 	uint32_t render_list_size = render_list[RENDER_LIST_SECONDARY].elements.size() - render_list_from;
 	render_list[RENDER_LIST_SECONDARY].sort_by_key_range(render_list_from, render_list_size);
 	_fill_instance_data(RENDER_LIST_SECONDARY, render_list_from, render_list_size);
@@ -1549,7 +1557,7 @@ void RenderForwardMobile::_render_material(const Transform3D &p_cam_transform, c
 	_setup_environment(&render_data, true, Vector2(1, 1), Color());
 
 	PassMode pass_mode = PASS_MODE_DEPTH_MATERIAL;
-	_fill_render_list(RENDER_LIST_SECONDARY, &render_data, pass_mode);
+	_fill_render_list<RENDER_LIST_SECONDARY, PASS_MODE_DEPTH_MATERIAL>(&render_data);
 	render_list[RENDER_LIST_SECONDARY].sort_by_key();
 	_fill_instance_data(RENDER_LIST_SECONDARY);
 
@@ -1594,7 +1602,7 @@ void RenderForwardMobile::_render_uv2(const PagedArray<RenderGeometryInstance *>
 	_setup_environment(&render_data, true, Vector2(1, 1), Color());
 
 	PassMode pass_mode = PASS_MODE_DEPTH_MATERIAL;
-	_fill_render_list(RENDER_LIST_SECONDARY, &render_data, pass_mode);
+	_fill_render_list<RENDER_LIST_SECONDARY, PASS_MODE_DEPTH_MATERIAL>(&render_data);
 	render_list[RENDER_LIST_SECONDARY].sort_by_key();
 	_fill_instance_data(RENDER_LIST_SECONDARY);
 
@@ -1677,7 +1685,7 @@ void RenderForwardMobile::_render_particle_collider_heightfield(RID p_fb, const 
 
 	PassMode pass_mode = PASS_MODE_SHADOW;
 
-	_fill_render_list(RENDER_LIST_SECONDARY, &render_data, pass_mode);
+	_fill_render_list<RENDER_LIST_SECONDARY, PASS_MODE_SHADOW>(&render_data);
 	render_list[RENDER_LIST_SECONDARY].sort_by_key();
 	_fill_instance_data(RENDER_LIST_SECONDARY);
 
@@ -1909,11 +1917,12 @@ _FORCE_INLINE_ static uint32_t _indices_to_primitives(RS::PrimitiveType p_primit
 	return (p_indices - subtractor[p_primitive]) / divisor[p_primitive];
 }
 
-void RenderForwardMobile::_fill_render_list(RenderListType p_render_list, const RenderDataRD *p_render_data, PassMode p_pass_mode, bool p_append) {
+template <RenderForwardMobile::RenderListType p_render_list, RenderForwardMobile::PassMode p_pass_mode>
+void RenderForwardMobile::_fill_render_list(const RenderDataRD *p_render_data, bool p_append) {
 	ERR_FAIL_NULL(scene_state.lightmap_captures);
 	RendererRD::MeshStorage *mesh_storage = RendererRD::MeshStorage::get_singleton();
 
-	if (p_render_list == RENDER_LIST_OPAQUE) {
+	if constexpr (p_render_list == RENDER_LIST_OPAQUE) {
 		scene_state.used_sss = false;
 		scene_state.used_screen_texture = false;
 		scene_state.used_normal_texture = false;
@@ -1933,7 +1942,7 @@ void RenderForwardMobile::_fill_render_list(RenderListType p_render_list, const 
 
 	if (!p_append) {
 		rl->clear();
-		if (p_render_list == RENDER_LIST_OPAQUE) {
+		if constexpr (p_render_list == RENDER_LIST_OPAQUE) {
 			render_list[RENDER_LIST_ALPHA].clear(); //opaque fills alpha too
 		}
 	}
@@ -1966,7 +1975,7 @@ void RenderForwardMobile::_fill_render_list(RenderListType p_render_list, const 
 		bool uses_lightmap = false;
 		// bool uses_gi = false;
 
-		if (p_render_list == RENDER_LIST_OPAQUE) {
+		if constexpr (p_render_list == RENDER_LIST_OPAQUE) {
 			if (inst->lightmap_instance.is_valid()) {
 				int32_t lightmap_cull_index = -1;
 				for (uint32_t j = 0; j < scene_state.lightmaps_used; j++) {
@@ -2031,9 +2040,9 @@ void RenderForwardMobile::_fill_render_list(RenderListType p_render_list, const 
 				surf->lod_index = mesh_storage->mesh_surface_get_lod(surf->surface, inst->lod_model_scale * inst->lod_bias, lod_distance * p_render_data->scene_data->lod_distance_multiplier, p_render_data->scene_data->screen_mesh_lod_threshold, indices);
 				if (p_render_data->render_info) {
 					indices = _indices_to_primitives(surf->primitive, indices);
-					if (p_render_list == RENDER_LIST_OPAQUE) { //opaque
+					if constexpr (p_render_list == RENDER_LIST_OPAQUE) { //opaque
 						p_render_data->render_info->info[RS::VIEWPORT_RENDER_INFO_TYPE_VISIBLE][RS::VIEWPORT_RENDER_INFO_PRIMITIVES_IN_FRAME] += indices;
-					} else if (p_render_list == RENDER_LIST_SECONDARY) { //shadow
+					} else if constexpr (p_render_list == RENDER_LIST_SECONDARY) { //shadow
 						p_render_data->render_info->info[RS::VIEWPORT_RENDER_INFO_TYPE_SHADOW][RS::VIEWPORT_RENDER_INFO_PRIMITIVES_IN_FRAME] += indices;
 					}
 				}
@@ -2043,16 +2052,16 @@ void RenderForwardMobile::_fill_render_list(RenderListType p_render_list, const 
 					uint32_t to_draw = mesh_storage->mesh_surface_get_vertices_drawn_count(surf->surface);
 					to_draw = _indices_to_primitives(surf->primitive, to_draw);
 					to_draw *= inst->instance_count;
-					if (p_render_list == RENDER_LIST_OPAQUE) { //opaque
+					if constexpr (p_render_list == RENDER_LIST_OPAQUE) { //opaque
 						p_render_data->render_info->info[RS::VIEWPORT_RENDER_INFO_TYPE_VISIBLE][RS::VIEWPORT_RENDER_INFO_PRIMITIVES_IN_FRAME] += to_draw;
-					} else if (p_render_list == RENDER_LIST_SECONDARY) { //shadow
+					} else if constexpr (p_render_list == RENDER_LIST_SECONDARY) { //shadow
 						p_render_data->render_info->info[RS::VIEWPORT_RENDER_INFO_TYPE_SHADOW][RS::VIEWPORT_RENDER_INFO_PRIMITIVES_IN_FRAME] += to_draw;
 					}
 				}
 			}
 
 			// ADD Element
-			if (p_pass_mode == PASS_MODE_COLOR || p_pass_mode == PASS_MODE_COLOR_TRANSPARENT) {
+			if constexpr (p_pass_mode == PASS_MODE_COLOR || p_pass_mode == PASS_MODE_COLOR_TRANSPARENT) {
 #ifdef DEBUG_ENABLED
 				bool force_alpha = unlikely(get_debug_draw_mode() == RS::VIEWPORT_DEBUG_DRAW_OVERDRAW);
 #else
@@ -2083,11 +2092,11 @@ void RenderForwardMobile::_fill_render_list(RenderListType p_render_list, const 
 					scene_state.used_depth_texture = true;
 				}
 
-			} else if (p_pass_mode == PASS_MODE_SHADOW || p_pass_mode == PASS_MODE_SHADOW_DP) {
+			} else if constexpr (p_pass_mode == PASS_MODE_SHADOW || p_pass_mode == PASS_MODE_SHADOW_DP) {
 				if (surf->flags & GeometryInstanceSurfaceDataCache::FLAG_PASS_SHADOW) {
 					rl->add_element(surf);
 				}
-			} else if (p_pass_mode == PASS_MODE_DEPTH_MATERIAL) {
+			} else if constexpr (p_pass_mode == PASS_MODE_DEPTH_MATERIAL) {
 				if (surf->flags & (GeometryInstanceSurfaceDataCache::FLAG_PASS_DEPTH | GeometryInstanceSurfaceDataCache::FLAG_PASS_OPAQUE | GeometryInstanceSurfaceDataCache::FLAG_PASS_ALPHA)) {
 					rl->add_element(surf);
 				}
@@ -2103,8 +2112,10 @@ void RenderForwardMobile::_fill_render_list(RenderListType p_render_list, const 
 		}
 	}
 
-	if (p_render_list == RENDER_LIST_OPAQUE && lightmap_captures_used) {
-		RD::get_singleton()->buffer_update(scene_state.lightmap_capture_buffer, 0, sizeof(LightmapCaptureData) * lightmap_captures_used, scene_state.lightmap_captures);
+	if constexpr (p_render_list == RENDER_LIST_OPAQUE) {
+		if (lightmap_captures_used) {
+			RD::get_singleton()->buffer_update(scene_state.lightmap_capture_buffer, 0, sizeof(LightmapCaptureData) * lightmap_captures_used, scene_state.lightmap_captures);
+		}
 	}
 }
 

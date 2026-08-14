@@ -1875,8 +1875,9 @@ void RasterizerSceneGLES2::_render_single_item_immediate(const GeometryInstanceS
 	}
 }
 
-void RasterizerSceneGLES2::_fill_render_list(RenderListType p_render_list, const RenderDataGLES2 *p_render_data, PassMode p_pass_mode, bool p_append) {
-	if (p_render_list == RENDER_LIST_OPAQUE) {
+template <RasterizerSceneGLES2::RenderListType p_render_list, RasterizerSceneGLES2::PassMode p_pass_mode>
+void RasterizerSceneGLES2::_fill_render_list(const RenderDataGLES2 *p_render_data, bool p_append) {
+	if constexpr (p_render_list == RENDER_LIST_OPAQUE) {
 		scene_state.used_screen_texture = false;
 		scene_state.used_normal_texture = false;
 		scene_state.used_depth_texture = false;
@@ -1894,7 +1895,7 @@ void RasterizerSceneGLES2::_fill_render_list(RenderListType p_render_list, const
 
 	if (!p_append) {
 		rl->clear();
-		if (p_render_list == RENDER_LIST_OPAQUE) {
+		if constexpr (p_render_list == RENDER_LIST_OPAQUE) {
 			render_list[RENDER_LIST_ALPHA].clear();
 		}
 	}
@@ -1921,7 +1922,7 @@ void RasterizerSceneGLES2::_fill_render_list(RenderListType p_render_list, const
 		while (surf) {
 			surf->lod_index = 0; // TODO(GLES2): Simple stub for LOD
 
-			if (p_pass_mode == PASS_MODE_COLOR) {
+			if constexpr (p_pass_mode == PASS_MODE_COLOR) {
 				if (surf->flags & GeometryInstanceSurface::FLAG_PASS_OPAQUE) {
 					rl->add_element(surf);
 				}
@@ -2261,7 +2262,7 @@ void RasterizerSceneGLES2::render_scene(const Ref<RenderSceneBuffers> &p_render_
 
 	_setup_environment(&render_data, false, screen_size, flip_y, clear_color, false);
 
-	_fill_render_list(RENDER_LIST_OPAQUE, &render_data, PASS_MODE_COLOR);
+	_fill_render_list<RENDER_LIST_OPAQUE, PASS_MODE_COLOR>(&render_data);
 	render_list[RENDER_LIST_OPAQUE].sort_by_key();
 	render_list[RENDER_LIST_ALPHA].sort_by_reverse_depth_and_priority();
 

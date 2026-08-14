@@ -903,12 +903,14 @@ _FORCE_INLINE_ static uint32_t _indices_to_primitives(RS::PrimitiveType p_primit
 	static const uint32_t subtractor[RS::PRIMITIVE_MAX] = { 0, 0, 1, 0, 1 };
 	return (p_indices - subtractor[p_primitive]) / divisor[p_primitive];
 }
-void RenderForwardClustered::_fill_render_list(RenderListType p_render_list, const RenderDataRD *p_render_data, PassMode p_pass_mode, bool p_using_sdfgi, bool p_using_opaque_gi, bool p_using_motion_pass, bool p_append) {
+
+template <RenderForwardClustered::RenderListType p_render_list, RenderForwardClustered::PassMode p_pass_mode>
+void RenderForwardClustered::_fill_render_list(const RenderDataRD *p_render_data, bool p_using_sdfgi, bool p_using_opaque_gi, bool p_using_motion_pass, bool p_append) {
 	ERR_FAIL_NULL(scene_state.lightmap_captures);
 	RendererRD::MeshStorage *mesh_storage = RendererRD::MeshStorage::get_singleton();
 	uint64_t frame = RSG::rasterizer->get_frame_number();
 
-	if (p_render_list == RENDER_LIST_OPAQUE) {
+	if constexpr (p_render_list == RENDER_LIST_OPAQUE) {
 		scene_state.used_sss = false;
 		scene_state.used_screen_texture = false;
 		scene_state.used_normal_texture = false;
@@ -926,7 +928,7 @@ void RenderForwardClustered::_fill_render_list(RenderListType p_render_list, con
 
 	if (!p_append) {
 		rl->clear();
-		if (p_render_list == RENDER_LIST_OPAQUE) {
+		if constexpr (p_render_list == RENDER_LIST_OPAQUE) {
 			// Opaque fills motion and alpha lists.
 			render_list[RENDER_LIST_MOTION].clear();
 			render_list[RENDER_LIST_ALPHA].clear();
@@ -976,7 +978,7 @@ void RenderForwardClustered::_fill_render_list(RenderListType p_render_list, con
 
 		flags = (flags & ~INSTANCE_DATA_FLAGS_FADE_MASK) | (uint32_t(fade_alpha * 255.0) << INSTANCE_DATA_FLAGS_FADE_SHIFT);
 
-		if (p_render_list == RENDER_LIST_OPAQUE) {
+		if constexpr (p_render_list == RENDER_LIST_OPAQUE) {
 			// Setup GI
 			if (inst->lightmap_instance.is_valid()) {
 				int32_t lightmap_cull_index = -1;
@@ -1047,7 +1049,7 @@ void RenderForwardClustered::_fill_render_list(RenderListType p_render_list, con
 					inst->gi_offset_cache = 0xFFFFFFFF;
 				}
 			}
-			if (p_pass_mode == PASS_MODE_DEPTH_NORMAL_ROUGHNESS || p_pass_mode == PASS_MODE_DEPTH_NORMAL_ROUGHNESS_VOXEL_GI || p_pass_mode == PASS_MODE_COLOR) {
+			if constexpr (p_pass_mode == PASS_MODE_DEPTH_NORMAL_ROUGHNESS || p_pass_mode == PASS_MODE_DEPTH_NORMAL_ROUGHNESS_VOXEL_GI || p_pass_mode == PASS_MODE_COLOR) {
 				bool transform_changed = inst->prev_transform_change_frame == frame;
 				bool has_mesh_instance = inst->mesh_instance.is_valid();
 				bool uses_particles = inst->base_flags & INSTANCE_DATA_FLAG_PARTICLES;
@@ -1087,9 +1089,9 @@ void RenderForwardClustered::_fill_render_list(RenderListType p_render_list, con
 				surf->sort.lod_index = mesh_storage->mesh_surface_get_lod(surf->surface, inst->lod_model_scale * inst->lod_bias, lod_distance * p_render_data->scene_data->lod_distance_multiplier, p_render_data->scene_data->screen_mesh_lod_threshold, indices);
 				if (p_render_data->render_info) {
 					indices = _indices_to_primitives(surf->primitive, indices);
-					if (p_render_list == RENDER_LIST_OPAQUE) { //opaque
+					if constexpr (p_render_list == RENDER_LIST_OPAQUE) { //opaque
 						p_render_data->render_info->info[RS::VIEWPORT_RENDER_INFO_TYPE_VISIBLE][RS::VIEWPORT_RENDER_INFO_PRIMITIVES_IN_FRAME] += indices;
-					} else if (p_render_list == RENDER_LIST_SECONDARY) { //shadow
+					} else if constexpr (p_render_list == RENDER_LIST_SECONDARY) { //shadow
 						p_render_data->render_info->info[RS::VIEWPORT_RENDER_INFO_TYPE_SHADOW][RS::VIEWPORT_RENDER_INFO_PRIMITIVES_IN_FRAME] += indices;
 					}
 				}
@@ -1100,16 +1102,16 @@ void RenderForwardClustered::_fill_render_list(RenderListType p_render_list, con
 					uint32_t to_draw = mesh_storage->mesh_surface_get_vertices_drawn_count(surf->surface);
 					to_draw = _indices_to_primitives(surf->primitive, to_draw);
 					to_draw *= inst->instance_count;
-					if (p_render_list == RENDER_LIST_OPAQUE) { //opaque
+					if constexpr (p_render_list == RENDER_LIST_OPAQUE) { //opaque
 						p_render_data->render_info->info[RS::VIEWPORT_RENDER_INFO_TYPE_VISIBLE][RS::VIEWPORT_RENDER_INFO_PRIMITIVES_IN_FRAME] += to_draw;
-					} else if (p_render_list == RENDER_LIST_SECONDARY) { //shadow
+					} else if constexpr (p_render_list == RENDER_LIST_SECONDARY) { //shadow
 						p_render_data->render_info->info[RS::VIEWPORT_RENDER_INFO_TYPE_SHADOW][RS::VIEWPORT_RENDER_INFO_PRIMITIVES_IN_FRAME] += to_draw;
 					}
 				}
 			}
 
 			// ADD Element
-			if (p_pass_mode == PASS_MODE_COLOR) {
+			if constexpr (p_pass_mode == PASS_MODE_COLOR) {
 #ifdef DEBUG_ENABLED
 				bool force_alpha = unlikely(get_debug_draw_mode() == RS::VIEWPORT_DEBUG_DRAW_OVERDRAW);
 #else
@@ -1154,11 +1156,11 @@ void RenderForwardClustered::_fill_render_list(RenderListType p_render_list, con
 				if (surf->flags & GeometryInstanceSurfaceDataCache::FLAG_USES_DEPTH_TEXTURE) {
 					scene_state.used_depth_texture = true;
 				}
-			} else if (p_pass_mode == PASS_MODE_SHADOW || p_pass_mode == PASS_MODE_SHADOW_DP) {
+			} else if constexpr (p_pass_mode == PASS_MODE_SHADOW || p_pass_mode == PASS_MODE_SHADOW_DP) {
 				if (surf->flags & GeometryInstanceSurfaceDataCache::FLAG_PASS_SHADOW) {
 					rl->add_element(surf);
 				}
-			} else if (p_pass_mode == PASS_MODE_DEPTH_MATERIAL) {
+			} else if constexpr (p_pass_mode == PASS_MODE_DEPTH_MATERIAL) {
 				if (surf->flags & (GeometryInstanceSurfaceDataCache::FLAG_PASS_DEPTH | GeometryInstanceSurfaceDataCache::FLAG_PASS_OPAQUE | GeometryInstanceSurfaceDataCache::FLAG_PASS_ALPHA)) {
 					rl->add_element(surf);
 				}
@@ -1174,8 +1176,10 @@ void RenderForwardClustered::_fill_render_list(RenderListType p_render_list, con
 		}
 	}
 
-	if (p_render_list == RENDER_LIST_OPAQUE && lightmap_captures_used) {
-		RD::get_singleton()->buffer_update(scene_state.lightmap_capture_buffer, 0, sizeof(LightmapCaptureData) * lightmap_captures_used, scene_state.lightmap_captures);
+	if constexpr (p_render_list == RENDER_LIST_OPAQUE) {
+		if (lightmap_captures_used) {
+			RD::get_singleton()->buffer_update(scene_state.lightmap_capture_buffer, 0, sizeof(LightmapCaptureData) * lightmap_captures_used, scene_state.lightmap_captures);
+		}
 	}
 }
 
@@ -1878,7 +1882,7 @@ void RenderForwardClustered::_render_scene(RenderDataRD *p_render_data, const Co
 	// May have changed due to the above (light buffer enlarged, as an example).
 	_update_render_base_uniform_set();
 
-	_fill_render_list(RENDER_LIST_OPAQUE, p_render_data, PASS_MODE_COLOR, using_sdfgi, using_sdfgi || using_voxelgi, using_motion_pass);
+	_fill_render_list<RENDER_LIST_OPAQUE, PASS_MODE_COLOR>(p_render_data, using_sdfgi, using_sdfgi || using_voxelgi, using_motion_pass);
 	render_list[RENDER_LIST_OPAQUE].sort_by_key();
 	render_list[RENDER_LIST_MOTION].sort_by_key();
 	render_list[RENDER_LIST_ALPHA].sort_by_reverse_depth_and_priority();
@@ -2777,10 +2781,16 @@ void RenderForwardClustered::_render_shadow_append(RID p_framebuffer, const Page
 		scene_data.screen_mesh_lod_threshold = p_screen_mesh_lod_threshold;
 	}
 
-	PassMode pass_mode = p_use_dp ? PASS_MODE_SHADOW_DP : PASS_MODE_SHADOW;
+	PassMode pass_mode = PASS_MODE_MAX;
 
 	uint32_t render_list_from = render_list[RENDER_LIST_SECONDARY].elements.size();
-	_fill_render_list(RENDER_LIST_SECONDARY, &render_data, pass_mode, false, false, false, true);
+	if (p_use_dp) {
+		pass_mode = PASS_MODE_SHADOW_DP;
+		_fill_render_list<RENDER_LIST_SECONDARY, PASS_MODE_SHADOW_DP>(&render_data, false, false, false, true);
+	} else {
+		pass_mode = PASS_MODE_SHADOW;
+		_fill_render_list<RENDER_LIST_SECONDARY, PASS_MODE_SHADOW>(&render_data, false, false, false, true);
+	}
 	uint32_t render_list_size = render_list[RENDER_LIST_SECONDARY].elements.size() - render_list_from;
 	render_list[RENDER_LIST_SECONDARY].sort_by_key_range(render_list_from, render_list_size);
 	_fill_instance_data(RENDER_LIST_SECONDARY, p_render_info ? p_render_info->info[RS::VIEWPORT_RENDER_INFO_TYPE_SHADOW] : (int *)nullptr, render_list_from, render_list_size, false);
@@ -2869,7 +2879,7 @@ void RenderForwardClustered::_render_particle_collider_heightfield(RID p_fb, con
 
 	PassMode pass_mode = PASS_MODE_SHADOW;
 
-	_fill_render_list(RENDER_LIST_SECONDARY, &render_data, pass_mode);
+	_fill_render_list<RENDER_LIST_SECONDARY, PASS_MODE_SHADOW>(&render_data);
 	render_list[RENDER_LIST_SECONDARY].sort_by_key();
 	_fill_instance_data(RENDER_LIST_SECONDARY);
 
@@ -2920,7 +2930,7 @@ void RenderForwardClustered::_render_material(const Transform3D &p_cam_transform
 	uint32_t uniform_buffer_index = _setup_environment(&render_data, true, viewport_size, Color());
 
 	PassMode pass_mode = PASS_MODE_DEPTH_MATERIAL;
-	_fill_render_list(RENDER_LIST_SECONDARY, &render_data, pass_mode);
+	_fill_render_list<RENDER_LIST_SECONDARY, PASS_MODE_DEPTH_MATERIAL>(&render_data);
 	render_list[RENDER_LIST_SECONDARY].sort_by_key();
 	_fill_instance_data(RENDER_LIST_SECONDARY);
 
@@ -2976,7 +2986,7 @@ void RenderForwardClustered::_render_uv2(const PagedArray<RenderGeometryInstance
 	uint32_t uniform_buffer_index = _setup_environment(&render_data, true, viewport_size, Color());
 
 	PassMode pass_mode = PASS_MODE_DEPTH_MATERIAL;
-	_fill_render_list(RENDER_LIST_SECONDARY, &render_data, pass_mode);
+	_fill_render_list<RENDER_LIST_SECONDARY, PASS_MODE_DEPTH_MATERIAL>(&render_data);
 	render_list[RENDER_LIST_SECONDARY].sort_by_key();
 	_fill_instance_data(RENDER_LIST_SECONDARY);
 
@@ -3046,7 +3056,7 @@ void RenderForwardClustered::_render_sdfgi(Ref<RenderSceneBuffersRD> p_render_bu
 	global_pipeline_data_required.use_sdfgi = true;
 
 	PassMode pass_mode = PASS_MODE_SDF;
-	_fill_render_list(RENDER_LIST_SECONDARY, &render_data, pass_mode);
+	_fill_render_list<RENDER_LIST_SECONDARY, PASS_MODE_SDF>(&render_data);
 	render_list[RENDER_LIST_SECONDARY].sort_by_key();
 	_fill_instance_data(RENDER_LIST_SECONDARY);
 

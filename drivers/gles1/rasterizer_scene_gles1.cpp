@@ -2335,8 +2335,9 @@ void RasterizerSceneGLES1::_bind_scene_camera_uniforms(RID p_version, SceneShade
 	material_storage->shaders.scene_shader.version_set_uniform(SceneShaderGLES1::WHITE, scene_state.tonemap_ubo.white, p_version, p_variant, p_spec_constants);
 }
 
-void RasterizerSceneGLES1::_fill_render_list(RenderListType p_render_list, const RenderDataGLES1 *p_render_data, PassMode p_pass_mode, bool p_append) {
-	if (p_render_list == RENDER_LIST_OPAQUE) {
+template <RasterizerSceneGLES1::RenderListType p_render_list, RasterizerSceneGLES1::PassMode p_pass_mode>
+void RasterizerSceneGLES1::_fill_render_list(const RenderDataGLES1 *p_render_data, bool p_append) {
+	if constexpr (p_render_list == RENDER_LIST_OPAQUE) {
 		scene_state.used_screen_texture = false;
 		scene_state.used_normal_texture = false;
 		scene_state.used_depth_texture = false;
@@ -2358,7 +2359,7 @@ void RasterizerSceneGLES1::_fill_render_list(RenderListType p_render_list, const
 
 	if (!p_append) {
 		rl->clear();
-		if (p_render_list == RENDER_LIST_OPAQUE) {
+		if constexpr (p_render_list == RENDER_LIST_OPAQUE) {
 			render_list[RENDER_LIST_ALPHA].clear();
 		}
 	}
@@ -2387,7 +2388,7 @@ void RasterizerSceneGLES1::_fill_render_list(RenderListType p_render_list, const
 		// (Node3DEditorViewport::GIZMO_BASE_LAYER == 27).
 		if (inst->layer_mask & ((1 << 27))) {
 			while (surf) {
-				if (p_pass_mode == PASS_MODE_COLOR) {
+				if constexpr (p_pass_mode == PASS_MODE_COLOR) {
 					render_list[RENDER_LIST_GIZMOS].add_element(surf);
 				}
 				surf = surf->next;
@@ -2399,7 +2400,7 @@ void RasterizerSceneGLES1::_fill_render_list(RenderListType p_render_list, const
 		// (Node3DEditorViewport::GIZMO_GRID_LAYER == 25).
 		if (inst->layer_mask & (1 << 25)) {
 			while (surf) {
-				if (p_pass_mode == PASS_MODE_COLOR) {
+				if constexpr (p_pass_mode == PASS_MODE_COLOR) {
 					render_list[RENDER_LIST_EDITOR_GRID].add_element(surf);
 				}
 				surf = surf->next;
@@ -2411,7 +2412,7 @@ void RasterizerSceneGLES1::_fill_render_list(RenderListType p_render_list, const
 		while (surf) {
 			surf->lod_index = 0; // TODO(GLES1): Simple stub for LOD
 
-			if (p_pass_mode == PASS_MODE_COLOR) {
+			if constexpr (p_pass_mode == PASS_MODE_COLOR) {
 				if (surf->flags & GeometryInstanceSurface::FLAG_PASS_OPAQUE) {
 					rl->add_element(surf);
 				}
@@ -2666,7 +2667,7 @@ void RasterizerSceneGLES1::render_scene(const Ref<RenderSceneBuffers> &p_render_
 
 	_setup_environment(&render_data, false, screen_size, flip_y, clear_color, false);
 
-	_fill_render_list(RENDER_LIST_OPAQUE, &render_data, PASS_MODE_COLOR);
+	_fill_render_list<RENDER_LIST_OPAQUE, PASS_MODE_COLOR>(&render_data);
 	render_list[RENDER_LIST_OPAQUE].sort_by_key();
 	render_list[RENDER_LIST_ALPHA].sort_by_reverse_depth_and_priority();
 

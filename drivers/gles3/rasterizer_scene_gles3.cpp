@@ -1231,11 +1231,13 @@ _FORCE_INLINE_ static uint32_t _indices_to_primitives(RS::PrimitiveType p_primit
 	static const uint32_t subtractor[RS::PRIMITIVE_MAX] = { 0, 0, 1, 0, 1 };
 	return (p_indices - subtractor[p_primitive]) / divisor[p_primitive];
 }
-void RasterizerSceneGLES3::_fill_render_list(RenderListType p_render_list, const RenderDataGLES3 *p_render_data, PassMode p_pass_mode, bool p_append) {
+
+template <RenderListType p_render_list, PassMode p_pass_mode>
+void RasterizerSceneGLES3::_fill_render_list(const RenderDataGLES3 *p_render_data, bool p_append) {
 	GLES3::MeshStorage *mesh_storage = GLES3::MeshStorage::get_singleton();
 	GLES3::LightStorage *light_storage = GLES3::LightStorage::get_singleton();
 
-	if (p_render_list == RENDER_LIST_OPAQUE) {
+	if constexpr (p_render_list == RENDER_LIST_OPAQUE) {
 		scene_state.used_screen_texture = false;
 		scene_state.used_normal_texture = false;
 		scene_state.used_depth_texture = false;
@@ -1255,7 +1257,7 @@ void RasterizerSceneGLES3::_fill_render_list(RenderListType p_render_list, const
 
 	if (!p_append) {
 		rl->clear();
-		if (p_render_list == RENDER_LIST_OPAQUE) {
+		if constexpr (p_render_list == RENDER_LIST_OPAQUE) {
 			render_list[RENDER_LIST_ALPHA].clear(); //opaque fills alpha too
 		}
 	}
@@ -1288,7 +1290,7 @@ void RasterizerSceneGLES3::_fill_render_list(RenderListType p_render_list, const
 		// Sets the index values for lookup in the shader
 		// This has to be done after _setup_lights was called this frame
 
-		if (p_pass_mode == PASS_MODE_COLOR) {
+		if constexpr (p_pass_mode == PASS_MODE_COLOR) {
 			inst->light_passes.clear();
 			inst->spot_light_gl_cache.clear();
 			inst->omni_light_gl_cache.clear();
@@ -1387,9 +1389,9 @@ void RasterizerSceneGLES3::_fill_render_list(RenderListType p_render_list, const
 
 				if (p_render_data->render_info) {
 					indices = _indices_to_primitives(surf->primitive, indices);
-					if (p_render_list == RENDER_LIST_OPAQUE) { //opaque
+					if constexpr (p_render_list == RENDER_LIST_OPAQUE) { //opaque
 						p_render_data->render_info->info[RS::VIEWPORT_RENDER_INFO_TYPE_VISIBLE][RS::VIEWPORT_RENDER_INFO_PRIMITIVES_IN_FRAME] += indices;
-					} else if (p_render_list == RENDER_LIST_SECONDARY) { //shadow
+					} else if constexpr (p_render_list == RENDER_LIST_SECONDARY) { //shadow
 						p_render_data->render_info->info[RS::VIEWPORT_RENDER_INFO_TYPE_SHADOW][RS::VIEWPORT_RENDER_INFO_PRIMITIVES_IN_FRAME] += indices;
 					}
 				}
@@ -1401,16 +1403,16 @@ void RasterizerSceneGLES3::_fill_render_list(RenderListType p_render_list, const
 					uint32_t to_draw = mesh_storage->mesh_surface_get_vertices_drawn_count(surf->surface);
 					to_draw = _indices_to_primitives(surf->primitive, to_draw);
 					to_draw *= inst->instance_count > 0 ? inst->instance_count : 1;
-					if (p_render_list == RENDER_LIST_OPAQUE) { //opaque
+					if constexpr (p_render_list == RENDER_LIST_OPAQUE) { //opaque
 						p_render_data->render_info->info[RS::VIEWPORT_RENDER_INFO_TYPE_VISIBLE][RS::VIEWPORT_RENDER_INFO_PRIMITIVES_IN_FRAME] += to_draw;
-					} else if (p_render_list == RENDER_LIST_SECONDARY) { //shadow
+					} else if constexpr (p_render_list == RENDER_LIST_SECONDARY) { //shadow
 						p_render_data->render_info->info[RS::VIEWPORT_RENDER_INFO_TYPE_SHADOW][RS::VIEWPORT_RENDER_INFO_PRIMITIVES_IN_FRAME] += to_draw;
 					}
 				}
 			}
 
 			// ADD Element
-			if (p_pass_mode == PASS_MODE_COLOR) {
+			if constexpr (p_pass_mode == PASS_MODE_COLOR) {
 #ifdef DEBUG_ENABLED
 				bool force_alpha = unlikely(get_debug_draw_mode() == RS::VIEWPORT_DEBUG_DRAW_OVERDRAW);
 #else
@@ -1433,11 +1435,11 @@ void RasterizerSceneGLES3::_fill_render_list(RenderListType p_render_list, const
 					scene_state.used_depth_texture = true;
 				}
 
-			} else if (p_pass_mode == PASS_MODE_SHADOW) {
+			} else if constexpr (p_pass_mode == PASS_MODE_SHADOW) {
 				if (surf->flags & GeometryInstanceSurface::FLAG_PASS_SHADOW) {
 					rl->add_element(surf);
 				}
-			} else if (p_pass_mode == PASS_MODE_MATERIAL) {
+			} else if constexpr (p_pass_mode == PASS_MODE_MATERIAL) {
 				if (surf->flags & (GeometryInstanceSurface::FLAG_PASS_DEPTH | GeometryInstanceSurface::FLAG_PASS_OPAQUE | GeometryInstanceSurface::FLAG_PASS_ALPHA)) {
 					rl->add_element(surf);
 				}
@@ -2190,7 +2192,7 @@ void RasterizerSceneGLES3::_render_shadow_pass(RID p_light, RID p_shadow_atlas, 
 		render_data.screen_mesh_lod_threshold = p_screen_mesh_lod_threshold;
 	}
 
-	_fill_render_list(RENDER_LIST_SECONDARY, &render_data, PASS_MODE_SHADOW);
+	_fill_render_list<RENDER_LIST_SECONDARY, PASS_MODE_SHADOW>(&render_data);
 	render_list[RENDER_LIST_SECONDARY].sort_by_key();
 
 	glBindFramebuffer(GL_FRAMEBUFFER, shadow_fb);
@@ -2409,7 +2411,7 @@ void RasterizerSceneGLES3::render_scene(const Ref<RenderSceneBuffers> &p_render_
 	_setup_lights(&render_data, true, render_data.directional_light_count, render_data.omni_light_count, render_data.spot_light_count, render_data.directional_shadow_count);
 	_setup_environment(&render_data, is_reflection_probe, screen_size, flip_y, clear_color, false);
 
-	_fill_render_list(RENDER_LIST_OPAQUE, &render_data, PASS_MODE_COLOR);
+	_fill_render_list<RENDER_LIST_OPAQUE, PASS_MODE_COLOR>(&render_data);
 	render_list[RENDER_LIST_OPAQUE].sort_by_key();
 	render_list[RENDER_LIST_ALPHA].sort_by_reverse_depth_and_priority();
 
@@ -3785,9 +3787,7 @@ void RasterizerSceneGLES3::render_particle_collider_heightfield(RID p_collider, 
 
 	_setup_environment(&render_data, true, Vector2(fb_size), true, Color(), false);
 
-	PassMode pass_mode = PASS_MODE_SHADOW;
-
-	_fill_render_list(RENDER_LIST_SECONDARY, &render_data, pass_mode);
+	_fill_render_list<RENDER_LIST_SECONDARY, PASS_MODE_SHADOW>(&render_data);
 	render_list[RENDER_LIST_SECONDARY].sort_by_key();
 
 	RENDER_TIMESTAMP("Render Collider Heightfield");
@@ -3830,9 +3830,7 @@ void RasterizerSceneGLES3::_render_uv2(const PagedArray<RenderGeometryInstance *
 
 	_setup_environment(&render_data, true, Vector2(1, 1), true, Color(), false);
 
-	PassMode pass_mode = PASS_MODE_MATERIAL;
-
-	_fill_render_list(RENDER_LIST_SECONDARY, &render_data, pass_mode);
+	_fill_render_list<RENDER_LIST_SECONDARY, PASS_MODE_MATERIAL>(&render_data);
 	render_list[RENDER_LIST_SECONDARY].sort_by_key();
 
 	RENDER_TIMESTAMP("Render 3D Material");
