@@ -318,9 +318,11 @@ private:
 	void _mark_ysort_dirty(RendererCanvasCull::Item *ysort_owner);
 
 	static constexpr int z_range = RS::CANVAS_ITEM_Z_MAX - RS::CANVAS_ITEM_Z_MIN + 1;
+	static constexpr int z_bitfield_size = (z_range / 64) + 1; // 129 blocks of 64 bits
 
 	RendererCanvasRender::Item **z_list;
 	RendererCanvasRender::Item **z_last_list;
+	uint64_t *z_bitfield;
 
 	Transform2D _current_camera_transform;
 

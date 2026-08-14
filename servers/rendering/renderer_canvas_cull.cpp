@@ -77,6 +77,7 @@ void RendererCanvasCull::_render_canvas_item_tree(RID p_to_render_target, Canvas
 
 	memset(z_list, 0, z_range * sizeof(RendererCanvasRender::Item *));
 	memset(z_last_list, 0, z_range * sizeof(RendererCanvasRender::Item *));
+	memset(z_bitfield, 0, z_bitfield_size * sizeof(uint64_t));
 
 	for (int i = 0; i < p_child_item_count; i++) {
 		_cull_canvas_item(p_child_items[i].item, p_transform, p_clip_rect, Color(1, 1, 1, 1), 0, z_list, z_last_list, nullptr, nullptr, false, p_canvas_cull_mask, Point2(), 1, nullptr);
@@ -85,16 +86,29 @@ void RendererCanvasCull::_render_canvas_item_tree(RID p_to_render_target, Canvas
 	RendererCanvasRender::Item *list = nullptr;
 	RendererCanvasRender::Item *list_end = nullptr;
 
-	for (int i = 0; i < z_range; i++) {
-		if (!z_list[i]) {
-			continue;
+	for (int i = 0; i < z_bitfield_size; i++) {
+		uint64_t mask = z_bitfield[i];
+		if (mask == 0) {
+			continue; // Skip 64 empty layers
 		}
-		if (!list) {
-			list = z_list[i];
-			list_end = z_last_list[i];
-		} else {
-			list_end->next = z_list[i];
-			list_end = z_last_list[i];
+
+		for (int b = 0; b < 64; b++) {
+			if ((mask & (1ULL << b)) == 0) {
+				continue;
+			}
+
+			int zidx = i * 64 + b;
+			if (zidx >= z_range) {
+				break; // Bounds check
+			}
+
+			if (!list) {
+				list = z_list[zidx];
+				list_end = z_last_list[zidx];
+			} else {
+				list_end->next = z_list[zidx];
+				list_end = z_last_list[zidx];
+			}
 		}
 	}
 
@@ -269,6 +283,11 @@ void RendererCanvasCull::_attach_canvas_item_for_draw(RendererCanvasCull::Item *
 			} else {
 				r_z_list[zidx] = ci;
 				r_z_last_list[zidx] = ci;
+
+				// Flag the bit during culling.
+				// Putting it here guarantees this gets tracked
+				// when an item is added to a completely empty Z-layer.
+				z_bitfield[zidx / 64] |= (1ULL << (zidx % 64));
 			}
 
 			ci->z_final = p_z;
@@ -3045,6 +3064,7 @@ RendererCanvasCull::RendererCanvasCull() {
 
 	z_list = (RendererCanvasRender::Item **)memalloc(z_range * sizeof(RendererCanvasRender::Item *));
 	z_last_list = (RendererCanvasRender::Item **)memalloc(z_range * sizeof(RendererCanvasRender::Item *));
+	z_bitfield = (uint64_t *)memalloc(z_bitfield_size * sizeof(uint64_t));
 
 	disable_scale = false;
 
@@ -3055,5 +3075,6 @@ RendererCanvasCull::RendererCanvasCull() {
 RendererCanvasCull::~RendererCanvasCull() {
 	memfree(z_list);
 	memfree(z_last_list);
+	memfree(z_bitfield);
 	_canvas_cull_singleton = nullptr;
 }
