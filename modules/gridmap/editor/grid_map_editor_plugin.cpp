@@ -630,7 +630,7 @@ void GridMapEditor::_set_clipboard_data() {
 				item.instance = RenderingServer::get_singleton()->instance_create2(mesh->get_rid(), get_tree()->get_root()->get_world_3d()->get_scenario());
 
 				if (mesh.is_valid()) {
-					item.instance = RenderingServer::get_singleton()->instance_create2(mesh->get_rid(), scenario);
+					item.instance = RenderingServer::get_singleton()->instance_create2(mesh->get_rid(), get_tree()->get_root()->get_world_3d()->get_scenario());
 				}
 
 				clipboard_items.push_back(item);
