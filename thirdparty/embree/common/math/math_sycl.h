@@ -14,6 +14,8 @@ namespace embree
     return (v > -FLT_LARGE) & (v < +FLT_LARGE);
   }
 
+  // Only supported on clang >= 9 OR GCC >= 11
+#if (defined(__clang__) && __clang_major__ >= 9) || ((defined(__GNUC__) || defined(__GNUG__)) && __GNUC__ >= 11)
   __forceinline int cast_f2i(float f) {
     return __builtin_bit_cast(int,f);
   }
@@ -21,12 +23,39 @@ namespace embree
   __forceinline float cast_i2f(int i) {
     return __builtin_bit_cast(float,i);
   }
+#else
+  __forceinline int cast_f2i(float f) {
+    int i;
+    memcpy(&i, &f, sizeof(float));
+    return i;
+  }
+
+  __forceinline float cast_i2f(int i) {
+    float f;
+    memcpy(&f, &i, sizeof(int));
+    return f;
+  }
+#endif
 
   __forceinline int   toInt  (const float& a) { return int(a); }
   __forceinline float toFloat(const int&   a) { return float(a); }
 
+  // Only supported on clang >= 9 OR GCC >= 11
+#if (defined(__clang__) && __clang_major__ >= 9) || ((defined(__GNUC__) || defined(__GNUG__)) && __GNUC__ >= 11)
   __forceinline float asFloat(const int   a) { return __builtin_bit_cast(float,a); }
   __forceinline int   asInt  (const float a) { return __builtin_bit_cast(int,a); }
+#else
+  __forceinline float asFloat(const int   a) { 
+    float f;
+    memcpy(&f, &a, sizeof(float));
+    return f;
+  }
+  __forceinline int   asInt  (const float a) { 
+    int i;
+    memcpy(&i, &a, sizeof(int));
+    return i;
+  }
+#endif
   
   //__forceinline bool finite ( const float x ) { return _finite(x) != 0; }
   __forceinline float sign ( const float x ) { return x<0?-1.0f:1.0f; }
