@@ -1174,17 +1174,8 @@ class Godot(private val context: Context) {
 		if (durationMs > 0 && requestPermission("VIBRATE")) {
 			try {
 				if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-					if (amplitude <= -1) {
-						val effect = CompatibilityMethodsShim.createOneShot(durationMs.toLong(), 0xffffffff) // -1 DEFAULT_AMPLITUDE
-						CompatibilityMethodsShim.vibrate(vibratorService, effect)
-					} else {
-						CompatibilityMethodsShim.vibrate(
-							CompatibilityMethodsShim.createOneShot(
-								durationMs.toLong(),
-								amplitude
-							)
-						)
-					}
+					val effect = CompatibilityMethodsShim.createOneShot(durationMs.toLong(), amplitude)
+					CompatibilityMethodsShim.vibrate(vibratorService, effect)
 				} else {
 					// deprecated in API 26
 					vibratorService.vibrate(durationMs.toLong())
