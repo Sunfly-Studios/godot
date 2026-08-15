@@ -168,6 +168,8 @@ RS::InstanceType Utilities::get_base_type(RID p_rid) const {
 		return RS::INSTANCE_LIGHTMAP;
 	} else if (GLES1::ParticlesStorage::get_singleton()->owns_particles(p_rid)) {
 		return RS::INSTANCE_PARTICLES;
+	} else if (GLES1::LightStorage::get_singleton()->owns_reflection_probe(p_rid)) {
+		return RS::INSTANCE_REFLECTION_PROBE;
 	} else if (GLES1::ParticlesStorage::get_singleton()->owns_particles_collision(p_rid)) {
 		return RS::INSTANCE_PARTICLES_COLLISION;
 	} else if (owns_visibility_notifier(p_rid)) {
@@ -206,6 +208,15 @@ bool Utilities::free(RID p_rid) {
 		return true;
 	} else if (GLES1::LightStorage::get_singleton()->owns_lightmap(p_rid)) {
 		GLES1::LightStorage::get_singleton()->lightmap_free(p_rid);
+		return true;
+	} else if (GLES1::LightStorage::get_singleton()->owns_reflection_probe(p_rid)) {
+		GLES1::LightStorage::get_singleton()->reflection_probe_free(p_rid);
+		return true;
+	} else if (GLES1::LightStorage::get_singleton()->owns_reflection_atlas(p_rid)) {
+		GLES1::LightStorage::get_singleton()->reflection_atlas_free(p_rid);
+		return true;
+	} else if (GLES1::LightStorage::get_singleton()->owns_reflection_probe_instance(p_rid)) {
+		GLES1::LightStorage::get_singleton()->reflection_probe_instance_free(p_rid);
 		return true;
 	} else if (GLES1::ParticlesStorage::get_singleton()->owns_particles(p_rid)) {
 		GLES1::ParticlesStorage::get_singleton()->particles_free(p_rid);
