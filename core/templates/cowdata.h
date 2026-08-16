@@ -50,12 +50,6 @@ class VMap;
 
 static_assert(std::is_trivially_destructible_v<std::atomic<uint64_t>>);
 
-// Silence a false positive warning (see GH-52119).
-#if defined(__GNUC__) && !defined(__clang__)
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wplacement-new"
-#endif
-
 template <typename T>
 class CowData {
 	template <typename TV>
@@ -611,9 +605,5 @@ CowData<T>::CowData(std::initializer_list<T> p_init) {
 		set(i++, element);
 	}
 }
-
-#if defined(__GNUC__) && !defined(__clang__)
-#pragma GCC diagnostic pop
-#endif
 
 #endif // COWDATA_H

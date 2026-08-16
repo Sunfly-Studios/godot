@@ -320,10 +320,7 @@ void memdelete(T *p_class) {
 	if (!predelete_handler(p_class)) {
 		return; // doesn't want to be deleted
 	}
-	if constexpr (!std::is_trivially_destructible_v<T>) {
-		p_class->~T();
-	}
-
+	unaligned_destroy<T>(p_class);
 	Memory::free_static(p_class, false);
 }
 
@@ -332,10 +329,7 @@ void memdelete_allocator(T *p_class) {
 	if (!predelete_handler(p_class)) {
 		return; // doesn't want to be deleted
 	}
-	if constexpr (!std::is_trivially_destructible_v<T>) {
-		p_class->~T();
-	}
-
+	unaligned_destroy<T>(p_class);
 	A::free(p_class);
 }
 
@@ -373,7 +367,7 @@ T *memnew_arr_template(size_t p_elements) {
 
 		/* call operator new */
 		for (size_t i = 0; i < p_elements; i++) {
-			::new (&elems[i]) T;
+			unaligned_construct<T>(&elems[i]);
 		}
 	}
 
@@ -401,7 +395,7 @@ void memdelete_arr(T *p_class) {
 		uint64_t elem_count = *(_elem_count_ptr);
 
 		for (uint64_t i = 0; i < elem_count; i++) {
-			p_class[i].~T();
+			unaligned_destroy<T>(&p_class[i]);
 		}
 	}
 
