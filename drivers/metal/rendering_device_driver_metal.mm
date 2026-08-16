@@ -1080,13 +1080,13 @@ RDD::FramebufferID RenderingDeviceDriverMetal::framebuffer_create(RenderPassID p
 		textures.write[i] = tex;
 	}
 
-	MDFrameBuffer *fb = new MDFrameBuffer(textures, Size2i(p_width, p_height));
+	MDFrameBuffer *fb = ::new MDFrameBuffer(textures, Size2i(p_width, p_height));
 	return FramebufferID(fb);
 }
 
 void RenderingDeviceDriverMetal::framebuffer_free(FramebufferID p_framebuffer) {
 	MDFrameBuffer *obj = (MDFrameBuffer *)(p_framebuffer.id);
-	delete obj;
+	::delete obj;
 }
 
 #pragma mark - Shader
@@ -2597,7 +2597,7 @@ RDD::ShaderID RenderingDeviceDriverMetal::shader_create_from_bytecode(const Vect
 
 	MDShader *shader = nullptr;
 	if (binary_data.is_compute()) {
-		MDComputeShader *cs = new MDComputeShader(
+		MDComputeShader *cs = ::new MDComputeShader(
 				binary_data.shader_name,
 				uniform_sets,
 				binary_data.uses_argument_buffers(),
@@ -2615,7 +2615,7 @@ RDD::ShaderID RenderingDeviceDriverMetal::shader_create_from_bytecode(const Vect
 #endif
 		shader = cs;
 	} else {
-		MDRenderShader *rs = new MDRenderShader(
+		MDRenderShader *rs = ::new MDRenderShader(
 				binary_data.shader_name,
 				uniform_sets,
 				binary_data.needs_view_mask_buffer(),
@@ -2659,7 +2659,7 @@ RDD::ShaderID RenderingDeviceDriverMetal::shader_create_from_bytecode(const Vect
 
 void RenderingDeviceDriverMetal::shader_free(ShaderID p_shader) {
 	MDShader *obj = (MDShader *)p_shader.id;
-	delete obj;
+	::delete obj;
 }
 
 void RenderingDeviceDriverMetal::shader_destroy_modules(ShaderID p_shader) {
@@ -3048,7 +3048,7 @@ void RenderingDeviceDriverMetal::command_copy_texture_to_buffer(CommandBufferID 
 
 void RenderingDeviceDriverMetal::pipeline_free(PipelineID p_pipeline_id) {
 	MDPipeline *obj = (MDPipeline *)(p_pipeline_id.id);
-	delete obj;
+	::delete obj;
 }
 
 // ----- BINDING -----
@@ -3176,13 +3176,13 @@ RDD::RenderPassID RenderingDeviceDriverMetal::render_pass_create(VectorView<Atta
 			mda.type |= MDAttachmentType::Color;
 		}
 	}
-	MDRenderPass *obj = new MDRenderPass(attachments, subpasses);
+	MDRenderPass *obj = ::new MDRenderPass(attachments, subpasses);
 	return RenderPassID(obj);
 }
 
 void RenderingDeviceDriverMetal::render_pass_free(RenderPassID p_render_pass) {
 	MDRenderPass *obj = (MDRenderPass *)(p_render_pass.id);
-	delete obj;
+	::delete obj;
 }
 
 // ----- COMMANDS -----
@@ -3455,7 +3455,7 @@ RDD::PipelineID RenderingDeviceDriverMetal::render_pipeline_create(
 
 	// Input assembly & tessellation.
 
-	MDRenderPipeline *pipeline = new MDRenderPipeline();
+	MDRenderPipeline *pipeline = ::new MDRenderPipeline();
 
 	switch (p_render_primitive) {
 		case RENDER_PRIMITIVE_POINTS:
@@ -3753,7 +3753,7 @@ RDD::PipelineID RenderingDeviceDriverMetal::compute_pipeline_create(ShaderID p_s
 																				error:&error];
 	ERR_FAIL_COND_V_MSG(error != nil, PipelineID(), ([NSString stringWithFormat:@"error creating pipeline: %@", error.localizedDescription].UTF8String));
 
-	MDComputePipeline *pipeline = new MDComputePipeline(state);
+	MDComputePipeline *pipeline = ::new MDComputePipeline(state);
 	pipeline->compute_state.local = shader->local;
 	pipeline->shader = shader;
 
@@ -4119,7 +4119,7 @@ RenderingDeviceDriverMetal::RenderingDeviceDriverMetal(RenderingContextDriverMet
 
 RenderingDeviceDriverMetal::~RenderingDeviceDriverMetal() {
 	for (MDCommandBuffer *cb : command_buffers) {
-		delete cb;
+		::delete cb;
 	}
 
 	for (KeyValue<SHA256Digest, ShaderCacheEntry *> &kv : _shader_cache) {
