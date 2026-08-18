@@ -816,6 +816,7 @@ Error OS_MacOS::create_process(const String &p_path, const List<String> &p_argum
 #if defined(__x86_64__) && (__MAC_OS_X_VERSION_MIN_REQUIRED < 110000)
 		} else {
 			Error err = ERR_TIMEOUT;
+#if MAC_OS_X_VERSION_MIN_REQUIRED < 110000
 			NSError *error = nullptr;
 			NSDictionary *config = @{
 				NSWorkspaceLaunchConfigurationArguments : arguments,
@@ -831,6 +832,7 @@ Error OS_MacOS::create_process(const String &p_path, const List<String> &p_argum
 				}
 				err = OK;
 			}
+#endif
 			return err;
 		}
 #endif
@@ -864,7 +866,11 @@ String OS_MacOS::get_unique_id() const {
 	static String serial_number;
 
 	if (serial_number.is_empty()) {
+#if MAC_OS_X_VERSION_MIN_REQUIRED < 120000
 		io_service_t platform_expert = IOServiceGetMatchingService(kIOMasterPortDefault, IOServiceMatching("IOPlatformExpertDevice"));
+#else
+		io_service_t platform_expert = IOServiceGetMatchingService(kIOMainPortDefault, IOServiceMatching("IOPlatformExpertDevice"));
+#endif
 		CFStringRef serial_number_cf_string = nullptr;
 		if (platform_expert) {
 			serial_number_cf_string = (CFStringRef)IORegistryEntryCreateCFProperty(platform_expert, CFSTR(kIOPlatformSerialNumberKey), kCFAllocatorDefault, 0);
