@@ -385,6 +385,7 @@ def setup_mingw(env: "SConsEnvironment"):
         print_error("No valid compilers found, use MINGW_PREFIX environment variable to set MinGW path.")
         sys.exit(255)
 
+    simd_level = "SSE2"
     if "x86" in env["arch"]:
         if env["arch"] == "x86_32":
             if env["sse_level"] == "1":
