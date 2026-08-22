@@ -1795,6 +1795,10 @@ public class GLSurfaceView extends SurfaceView implements SurfaceHolder.Callback
 				}
 				mRequestPaused = true;
 				sGLThreadManager.notifyAll();
+				
+				// Prevent ANRs on some buggy android phones
+				long waitStartTime = System.currentTimeMillis();
+				long timeoutMs = 2500;
 
 				// Make sure that Godot is disconnected from the
 				// GPU before Android sends the memory trim signal.
@@ -1802,7 +1806,12 @@ public class GLSurfaceView extends SurfaceView implements SurfaceHolder.Callback
 				// again.
 				while ((!mExited) && (!mPaused)) {
 					try {
-						sGLThreadManager.wait();
+						long timeRemaining = timeoutMs - (System.currentTimeMillis() - waitStartTime);
+						if (timeRemaining <= 0) {
+							Log.e("GLThread", "Timeout waiting for GLThread to pause. Bailing out.");
+							break;
+						}
+						sGLThreadManager.wait(timeRemaining);
 					} catch (InterruptedException ex) {
 						Thread.currentThread().interrupt();
 					}
