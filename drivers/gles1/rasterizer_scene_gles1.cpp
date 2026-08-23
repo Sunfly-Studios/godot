@@ -2988,6 +2988,7 @@ void RasterizerSceneGLES1::_draw_editor_grid(const RenderDataGLES1 *p_render_dat
 	// Each segment has 2 vertices
 	// resulting in (lines * segments * 2) vertices per axis.
 	int max_verts = (num_lines_x * num_segs_z * 2) + (num_lines_z * num_segs_x * 2);
+	max_verts = MIN(max_verts, 65536);
 
 	float *grid_verts = SAFE_ALLOCA_ARRAY(float, max_verts * 3);
 	uint8_t *grid_colors = SAFE_ALLOCA_ARRAY(uint8_t, max_verts * 4);
@@ -3032,6 +3033,9 @@ void RasterizerSceneGLES1::_draw_editor_grid(const RenderDataGLES1 *p_render_dat
 
 			// Push only visible geometry to the stack buffers
 			if (fade1 > 0.0f || fade2 > 0.0f) {
+				if ((v_idx / 3) + 2 > max_verts) {
+					break; // Prevent out-of-bounds writes
+				}
 				grid_verts[v_idx++] = x;
 				grid_verts[v_idx++] = 0;
 				grid_verts[v_idx++] = z1;
@@ -3080,6 +3084,10 @@ void RasterizerSceneGLES1::_draw_editor_grid(const RenderDataGLES1 *p_render_dat
 
 			// Only push visible geometry to the stack buffers
 			if (fade1 > 0.0f || fade2 > 0.0f) {
+				if ((v_idx / 3) + 2 > max_verts) {
+					break; // Prevent out-of-bounds writes
+				}
+
 				grid_verts[v_idx++] = x1;
 				grid_verts[v_idx++] = 0;
 				grid_verts[v_idx++] = z;
