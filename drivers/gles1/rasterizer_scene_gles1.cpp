@@ -2306,7 +2306,6 @@ void RasterizerSceneGLES1::_batch_render_generic(RS::PrimitiveType p_primitive, 
 		glEnableClientState(GL_COLOR_ARRAY);
 	} else {
 		glDisableClientState(GL_COLOR_ARRAY);
-		glColor4f(0.6f, 0.6f, 0.6f, 1.0f);
 	}
 
 	glClientActiveTexture(GL_TEXTURE1);
@@ -2459,23 +2458,14 @@ void RasterizerSceneGLES1::_render_single_item_immediate(const GeometryInstanceS
 	_gl_setup_fog(p_surface->material);
 	GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_render_single_item_immediate: _gl_setup_fog");
 
-	// Upload world transform
+	// Upload and apply world transform to modelview stack
 	Transform3D world_transform = p_surface->owner->transform;
-	material_storage->shaders.scene_shader.version_set_uniform(SceneShaderGLES1::WORLD_TRANSFORM, world_transform, shader->version, SceneShaderGLES1::MODE_COLOR, 0);
-
-	// Apply world transform to modelview stack
 	glMatrixMode(GL_MODELVIEW);
 	glPushMatrix();
 	_gl_mult_transform(world_transform);
 	GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_render_single_item_immediate: glMultMatrixf MODELVIEW");
 
 	mesh_storage->mesh_surface_bind_arrays_gles1(p_surface->surface, shader->vertex_input_mask);
-
-	if (p_surface->color_cache.size() == 0) {
-		// Fallback colour.
-		glColor4f(0.6f, 0.6f, 0.6f, 1.0f);
-	}
-
 	GLuint index_array_gl = mesh_storage->mesh_surface_get_index_buffer(p_surface->surface, p_surface->lod_index);
 	bool use_index_buffer = index_array_gl != 0;
 	if (use_index_buffer) {
@@ -2612,9 +2602,11 @@ void RasterizerSceneGLES1::_draw_editor_gizmos(const RenderDataGLES1 *p_render_d
 		}
 
 		// The rotate gizmo has precisely 384 vertices (128 segments * 3 thickness layers)
-		bool is_rotate_gizmo = (surf->vertex_cache.size() == 384 &&
-				surf->normal_cache.size() == 384 &&
-				surf->primitive == RS::PRIMITIVE_TRIANGLES);
+		bool is_rotate_gizmo = (
+			surf->vertex_cache.size() == 384 &&
+			surf->normal_cache.size() == 384 &&
+			surf->primitive == RS::PRIMITIVE_TRIANGLES
+		);
 		bool is_border = is_rotate_gizmo && (Math::is_equal_approx(base_albedo.r, 0.75f) && Math::is_equal_approx(base_albedo.g, 0.75f) && Math::is_equal_approx(base_albedo.b, 0.75f));
 
 		// Cache standard gizmo vertices if not already cached
@@ -2682,8 +2674,8 @@ void RasterizerSceneGLES1::_draw_editor_gizmos(const RenderDataGLES1 *p_render_d
 
 				// View direction in gizmo's local space
 				Vector3 local_view_dir = final_xform.basis.inverse().xform(
-																			p_render_data->cam_transform.basis.get_column(2))
-												 .normalized();
+					p_render_data->cam_transform.basis.get_column(2)
+				).normalized();
 
 				glColor4f(final_color.r, final_color.g, final_color.b, final_color.a);
 				glDisableClientState(GL_COLOR_ARRAY);
@@ -3547,7 +3539,7 @@ void RasterizerSceneGLES1::_setup_lights(const RenderDataGLES1 *p_render_data, b
 				if (is_using_physical_light_units()) {
 					light_data.energy *= light_storage->light_get_param(base, RS::LIGHT_PARAM_INTENSITY);
 				} else {
-					light_data.energy *= Math_PI;
+					light_data.energy = CLAMP(light_data.energy * Math_PI, 0.0f, 1.0f);
 				}
 
 				if (p_render_data->camera_attributes.is_valid()) {
@@ -3680,7 +3672,7 @@ void RasterizerSceneGLES1::_setup_lights(const RenderDataGLES1 *p_render_data, b
 				energy *= 1.0f / Math_PI;
 			}
 		} else {
-			energy *= Math_PI;
+			energy *= CLAMP(energy * Math_PI, 0.0f, 1.0f);
 		}
 
 		if (p_render_data->camera_attributes.is_valid()) {

@@ -70,9 +70,6 @@ static _FORCE_INLINE_ Vector3 _gles1_decode_octahedral_normal(uint16_t p_x, uint
 	normal.x += normal.x >= 0.0f ? -t : t;
 	normal.y += normal.y >= 0.0f ? -t : t;
 
-	// Clamp the reconstructed Z component before normalisation
-	normal.z = CLAMP(1.0f - ABS(normal.x) - ABS(normal.y), 0.0f, 1.0f);
-
 	return normal.normalized();
 }
 
@@ -93,9 +90,6 @@ static _FORCE_INLINE_ void _gles1_decode_octahedral_tangent(uint16_t p_x, uint16
 	float t = CLAMP(-z, 0.0f, 1.0f);
 	r_tangent.x += r_tangent.x >= 0.0f ? -t : t;
 	r_tangent.y += r_tangent.y >= 0.0f ? -t : t;
-
-	// Clamp the reconstructed Z component before normalisation
-	r_tangent.z = CLAMP(1.0f - ABS(r_tangent.x) - ABS(r_tangent.y), 0.0f, 1.0f);
 
 	r_tangent.normalize();
 }
@@ -341,99 +335,8 @@ void MeshStorage::mesh_add_surface(RID p_mesh, const RS::SurfaceData &p_surface)
 	s->version_count = 1;
 	s->versions = (Mesh::Surface::Version *)memalloc(sizeof(Mesh::Surface::Version));
 	ERR_FAIL_NULL(s->versions);
-	Mesh::Surface::Version *v = &s->versions[0];
-	v->input_mask = s->format;
 
-	for (int i = 0; i < RS::ARRAY_MAX; i++) {
-		v->attribs[i].enabled = false;
-		v->attribs[i].size = 0;
-		v->attribs[i].stride = 0;
-		v->attribs[i].type = 0;
-		v->attribs[i].offset = 0;
-	}
-
-	uint64_t format = surface_data.format;
-
-	// Planar offsets
-	int position_stride = 0;
-	int normal_stride = 0;
-
-	if (format & RS::ARRAY_FORMAT_VERTEX) {
-		v->attribs[RS::ARRAY_VERTEX].enabled = true;
-		v->attribs[RS::ARRAY_VERTEX].size = (format & RS::ARRAY_FLAG_USE_2D_VERTICES) ? 2 : 3;
-		v->attribs[RS::ARRAY_VERTEX].type = GL_FLOAT;
-		position_stride = v->attribs[RS::ARRAY_VERTEX].size * sizeof(float);
-		v->attribs[RS::ARRAY_VERTEX].stride = position_stride;
-		v->attribs[RS::ARRAY_VERTEX].offset = 0;
-	}
-
-	if (format & RS::ARRAY_FORMAT_NORMAL) {
-		v->attribs[RS::ARRAY_NORMAL].enabled = true;
-		v->attribs[RS::ARRAY_NORMAL].size = 3;
-		v->attribs[RS::ARRAY_NORMAL].type = GL_FLOAT;
-		normal_stride = 3 * sizeof(float);
-		v->attribs[RS::ARRAY_NORMAL].stride = normal_stride;
-		v->attribs[RS::ARRAY_NORMAL].offset = position_stride * surface_data.vertex_count;
-	}
-
-	// Interleaved offsets for attribute_buffer
-	int attr_stride = 0;
-
-	if (surface_data.vertex_count > 0 && surface_data.attribute_data.size() > 0) {
-		attr_stride = surface_data.attribute_data.size() / surface_data.vertex_count;
-	}
-
-	int current_attr_offset = 0;
-
-	if (format & RS::ARRAY_FORMAT_COLOR) {
-		v->attribs[RS::ARRAY_COLOR].enabled = true;
-		v->attribs[RS::ARRAY_COLOR].size = 4;
-		v->attribs[RS::ARRAY_COLOR].type = GL_UNSIGNED_BYTE;
-		v->attribs[RS::ARRAY_COLOR].stride = attr_stride;
-		v->attribs[RS::ARRAY_COLOR].offset = current_attr_offset;
-		current_attr_offset += 4;
-	}
-
-	if (format & RS::ARRAY_FORMAT_TEX_UV) {
-		v->attribs[RS::ARRAY_TEX_UV].enabled = true;
-		v->attribs[RS::ARRAY_TEX_UV].size = 2;
-		v->attribs[RS::ARRAY_TEX_UV].type = GL_FLOAT;
-		v->attribs[RS::ARRAY_TEX_UV].stride = attr_stride;
-		v->attribs[RS::ARRAY_TEX_UV].offset = current_attr_offset;
-		current_attr_offset += 8;
-	}
-
-	if (format & RS::ARRAY_FORMAT_TEX_UV2) {
-		v->attribs[RS::ARRAY_TEX_UV2].enabled = true;
-		v->attribs[RS::ARRAY_TEX_UV2].size = 2;
-		v->attribs[RS::ARRAY_TEX_UV2].type = GL_FLOAT;
-		v->attribs[RS::ARRAY_TEX_UV2].stride = attr_stride;
-		v->attribs[RS::ARRAY_TEX_UV2].offset = current_attr_offset;
-		current_attr_offset += 8;
-	}
-
-	// Skinning offsets
-	if (format & RS::ARRAY_FORMAT_BONES) {
-		bool use_8 = format & RS::ARRAY_FLAG_USE_8_BONE_WEIGHTS;
-		int skin_stride = sizeof(uint16_t) * (use_8 ? 16 : 8);
-
-		v->attribs[RS::ARRAY_CUSTOM0].enabled = true;
-		v->attribs[RS::ARRAY_CUSTOM0].size = use_8 ? 8 : 4;
-		v->attribs[RS::ARRAY_CUSTOM0].type = GL_UNSIGNED_SHORT;
-		v->attribs[RS::ARRAY_CUSTOM0].stride = skin_stride;
-		v->attribs[RS::ARRAY_CUSTOM0].offset = 0;
-	}
-
-	if (format & RS::ARRAY_FORMAT_WEIGHTS) {
-		bool use_8 = format & RS::ARRAY_FLAG_USE_8_BONE_WEIGHTS;
-		int skin_stride = sizeof(uint16_t) * (use_8 ? 16 : 8);
-
-		v->attribs[RS::ARRAY_CUSTOM1].enabled = true;
-		v->attribs[RS::ARRAY_CUSTOM1].size = use_8 ? 8 : 4;
-		v->attribs[RS::ARRAY_CUSTOM1].type = GL_UNSIGNED_SHORT;
-		v->attribs[RS::ARRAY_CUSTOM1].stride = skin_stride;
-		v->attribs[RS::ARRAY_CUSTOM1].offset = sizeof(uint16_t) * (use_8 ? 8 : 4);
-	}
+	_mesh_surface_generate_version_for_input_mask(s->versions[0], s, s->format);
 
 	s->vertex_count = surface_data.vertex_count;
 	s->aabb = surface_data.aabb;
@@ -936,6 +839,13 @@ void MeshStorage::mesh_surface_bind_arrays_gles1(void *p_surface, uint64_t p_inp
 
 	// Hijack GL_TEXTURE1 for tangents
 	if (version->attribs[RS::ARRAY_TANGENT].enabled && (use_vbo_vertex || base_ptr_vertex)) {
+		// Restore the vertex buffer binding before evaluating the tangent pointer
+		if (use_vbo_vertex) {
+			glBindBuffer(GL_ARRAY_BUFFER, s->vertex_buffer);
+		} else if (support_vbo) {
+			glBindBuffer(GL_ARRAY_BUFFER, 0);
+		}
+
 		glEnableClientState(GL_TEXTURE_COORD_ARRAY);
 		glTexCoordPointer(
 			version->attribs[RS::ARRAY_TANGENT].size,
@@ -1208,6 +1118,14 @@ void MeshStorage::mesh_clear(RID p_mesh) {
 }
 
 void MeshStorage::_mesh_surface_generate_version_for_input_mask(Mesh::Surface::Version &v, Mesh::Surface *s, uint64_t p_input_mask, MeshInstance::Surface *mis) {
+	if (s->format & RS::ARRAY_FLAG_USE_2D_VERTICES) {
+		_mesh_surface_generate_version_for_input_mask_2d(v, s, p_input_mask, mis);
+	} else {
+		_mesh_surface_generate_version_for_input_mask_3d(v, s, p_input_mask, mis);
+	}
+}
+
+void MeshStorage::_mesh_surface_generate_version_for_input_mask_2d(Mesh::Surface::Version &v, Mesh::Surface *s, uint64_t p_input_mask, MeshInstance::Surface *mis) {
 	int position_stride = 0;
 	int normal_tangent_stride = 0;
 	int attributes_stride = 0;
@@ -1321,6 +1239,111 @@ void MeshStorage::_mesh_surface_generate_version_for_input_mask(Mesh::Surface::V
 			v.attribs[i].stride = skin_stride;
 		} else {
 			v.attribs[i].stride = attributes_stride;
+		}
+	}
+
+	v.input_mask = p_input_mask;
+}
+
+void MeshStorage::_mesh_surface_generate_version_for_input_mask_3d(Mesh::Surface::Version &v, Mesh::Surface *s, uint64_t p_input_mask, MeshInstance::Surface *mis) {
+	int attribute_stride = 0;
+	int skin_stride = 0;
+	int interleaved_offset = 0;
+
+	for (int i = 0; i < RS::ARRAY_INDEX; i++) {
+		v.attribs[i].enabled = false;
+		v.attribs[i].integer = false;
+
+		if (!(s->format & (1ULL << i))) {
+			continue;
+		}
+
+		if ((p_input_mask & (1ULL << i))) {
+			v.attribs[i].enabled = true;
+		}
+
+		switch (i) {
+			case RS::ARRAY_VERTEX: {
+				v.attribs[i].type = GL_FLOAT;
+				v.attribs[i].size = 3;
+				v.attribs[i].normalized = GL_FALSE;
+				v.attribs[i].offset = interleaved_offset;
+				v.attribs[i].stride = s->uncompressed_stride;
+				interleaved_offset += 3 * sizeof(float);
+			} break;
+			case RS::ARRAY_NORMAL: {
+				v.attribs[i].type = GL_FLOAT;
+				v.attribs[i].size = 3;
+				v.attribs[i].normalized = GL_FALSE;
+				v.attribs[i].offset = interleaved_offset;
+				v.attribs[i].stride = s->uncompressed_stride; // Always Interleaved
+				interleaved_offset += 3 * sizeof(float);
+			} break;
+			case RS::ARRAY_TANGENT: {
+				v.attribs[i].type = GL_FLOAT;
+				v.attribs[i].size = 4;
+				v.attribs[i].normalized = GL_FALSE;
+				v.attribs[i].offset = interleaved_offset;
+				v.attribs[i].stride = s->uncompressed_stride; // Always Interleaved
+				interleaved_offset += 4 * sizeof(float);
+			} break;
+			case RS::ARRAY_COLOR: {
+				v.attribs[i].offset = attribute_stride;
+				v.attribs[i].type = GL_UNSIGNED_BYTE;
+				v.attribs[i].size = 4;
+				v.attribs[i].normalized = GL_TRUE;
+				attribute_stride += 4;
+			} break;
+			case RS::ARRAY_TEX_UV:
+			case RS::ARRAY_TEX_UV2: {
+				v.attribs[i].offset = attribute_stride;
+				v.attribs[i].type = GL_FLOAT;
+				v.attribs[i].size = 2;
+				v.attribs[i].normalized = GL_FALSE;
+				attribute_stride += 2 * sizeof(float);
+			} break;
+			case RS::ARRAY_CUSTOM0:
+			case RS::ARRAY_CUSTOM1:
+			case RS::ARRAY_CUSTOM2:
+			case RS::ARRAY_CUSTOM3: {
+				v.attribs[i].offset = attribute_stride;
+				int idx = i - RS::ARRAY_CUSTOM0;
+				uint32_t fmt_shift[RS::ARRAY_CUSTOM_COUNT] = { RS::ARRAY_FORMAT_CUSTOM0_SHIFT, RS::ARRAY_FORMAT_CUSTOM1_SHIFT, RS::ARRAY_FORMAT_CUSTOM2_SHIFT, RS::ARRAY_FORMAT_CUSTOM3_SHIFT };
+				uint32_t fmt = (s->format >> fmt_shift[idx]) & RS::ARRAY_FORMAT_CUSTOM_MASK;
+				uint32_t fmtsize[RS::ARRAY_CUSTOM_MAX] = { 4, 4, 4, 8, 4, 8, 12, 16 };
+				GLenum gl_type[RS::ARRAY_CUSTOM_MAX] = { GL_UNSIGNED_BYTE, GL_BYTE, GL_FLOAT, GL_FLOAT, GL_FLOAT, GL_FLOAT, GL_FLOAT, GL_FLOAT };
+				GLboolean norm[RS::ARRAY_CUSTOM_MAX] = { GL_TRUE, GL_TRUE, GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE };
+				v.attribs[i].type = gl_type[fmt];
+				v.attribs[i].size = fmtsize[fmt] / (gl_type[fmt] == GL_UNSIGNED_BYTE || gl_type[fmt] == GL_BYTE ? 1 : 4);
+				v.attribs[i].normalized = norm[fmt];
+				attribute_stride += fmtsize[fmt];
+			} break;
+			case RS::ARRAY_BONES: {
+				v.attribs[i].offset = skin_stride;
+				v.attribs[i].type = GL_UNSIGNED_SHORT;
+				v.attribs[i].size = (s->format & RS::ARRAY_FLAG_USE_8_BONE_WEIGHTS) ? 8 : 4;
+				v.attribs[i].normalized = GL_FALSE;
+				skin_stride += v.attribs[i].size * sizeof(uint16_t);
+			} break;
+			case RS::ARRAY_WEIGHTS: {
+				v.attribs[i].offset = skin_stride;
+				v.attribs[i].type = GL_UNSIGNED_SHORT;
+				v.attribs[i].size = (s->format & RS::ARRAY_FLAG_USE_8_BONE_WEIGHTS) ? 8 : 4;
+				v.attribs[i].normalized = GL_TRUE;
+				skin_stride += v.attribs[i].size * sizeof(uint16_t);
+			} break;
+		}
+	}
+
+	for (int i = RS::ARRAY_COLOR; i < RS::ARRAY_INDEX; i++) {
+		if (!v.attribs[i].enabled) {
+			continue;
+		}
+
+		if (i >= RS::ARRAY_BONES && i <= RS::ARRAY_WEIGHTS) {
+			v.attribs[i].stride = skin_stride;
+		} else {
+			v.attribs[i].stride = attribute_stride;
 		}
 	}
 
@@ -1456,40 +1479,63 @@ void MeshStorage::_decompress_surface_data_2d(RS::SurfaceData &r_surface, Mesh::
 }
 
 void MeshStorage::_decompress_3d_buffer(const uint8_t *p_src, uint8_t *p_dst, uint32_t p_vertex_count, uint64_t p_format, uint32_t p_compressed_stride, uint32_t p_uncompressed_stride, const AABB &p_aabb) {
+	bool has_vertex = p_format & RS::ARRAY_FORMAT_VERTEX;
 	bool has_normal = p_format & RS::ARRAY_FORMAT_NORMAL;
 	bool has_tangent = p_format & RS::ARRAY_FORMAT_TANGENT;
 
-	// Destination offsets (decompressed, planar layout)
-	uint32_t dst_pos_offset_base = 0;
-	uint32_t dst_norm_offset_base = dst_pos_offset_base + (p_vertex_count * sizeof(float) * 3);
-	uint32_t dst_tang_offset_base = dst_norm_offset_base + (has_normal ? (p_vertex_count * sizeof(float) * 3) : 0);
+	// Source offsets (Planar for position, Interleaved for normals/tangents)
+	uint32_t src_pos_base = 0;
 
-	// Source offsets (compressed, planar layout)
-	uint32_t src_pos_offset_base = 0;
-	uint32_t src_norm_offset_base = src_pos_offset_base + (p_vertex_count * sizeof(float) * 3);
-	uint32_t src_tang_offset_base = src_norm_offset_base + (has_normal ? (p_vertex_count * sizeof(uint16_t) * 2) : 0);
+	// The attribute block starts after the planar position block
+	const uint8_t *src_attr_base = p_src + (has_vertex ? (p_vertex_count * 12) : 0);
+	uint32_t src_attr_stride = (has_normal ? 4 : 0) + (has_tangent ? 4 : 0);
+
+	uint32_t src_norm_offset = 0;
+	uint32_t src_tang_offset = has_normal ? 4 : 0;
+
+	// Destination offsets (uncompressed, fully interleaved layout)
+	uint32_t dst_pos_offset = 0;
+	uint32_t dst_norm_offset = has_vertex ? 12 : 0;
+	uint32_t dst_tang_offset = dst_norm_offset + (has_normal ? 12 : 0);
 
 	for (uint32_t i = 0; i < p_vertex_count; i++) {
-		// Float position (12 bytes)
-		const float *pos_ptr = (const float *)(p_src + src_pos_offset_base + (i * sizeof(float) * 3));
-		memcpy(p_dst + dst_pos_offset_base + (i * sizeof(float) * 3), pos_ptr, sizeof(float) * 3);
+		const uint8_t *src_a = src_attr_base + (i * src_attr_stride);
+		uint8_t *dst_v = p_dst + (i * p_uncompressed_stride);
+
+		if (has_vertex) {
+			// Read from the planar position block
+			const float *pos_src = (const float *)(p_src + src_pos_base + (i * 12));
+			float *pos_dst = (float *)(dst_v + dst_pos_offset);
+
+			pos_dst[0] = pos_src[0];
+			pos_dst[1] = pos_src[1];
+			pos_dst[2] = pos_src[2];
+		}
 
 		if (has_normal) {
-			// Octahedral normal (4 bytes)
-			const uint16_t *normal_ptr = (const uint16_t *)(p_src + src_norm_offset_base + (i * sizeof(uint16_t) * 2));
-			Vector3 normal = _gles1_decode_octahedral_normal(normal_ptr[0], normal_ptr[1]);
-			memcpy(p_dst + dst_norm_offset_base + (i * sizeof(float) * 3), &normal, sizeof(float) * 3);
+			// Read from the compressed interleaved attribute layout
+			const uint16_t *norm_src = (const uint16_t *)(src_a + src_norm_offset);
+			float *norm_dst = (float *)(dst_v + dst_norm_offset);
+
+			Vector3 normal = _gles1_decode_octahedral_normal(norm_src[0], norm_src[1]);
+			norm_dst[0] = normal.x;
+			norm_dst[1] = normal.y;
+			norm_dst[2] = normal.z;
 		}
 
 		if (has_tangent) {
-			// Octahedral tangent (4 bytes)
-			const uint16_t *tangent_ptr = (const uint16_t *)(p_src + src_tang_offset_base + (i * sizeof(uint16_t) * 2));
+			// Read from the compressed interleaved attribute layout
+			const uint16_t *tang_src = (const uint16_t *)(src_a + src_tang_offset);
+			float *tang_dst = (float *)(dst_v + dst_tang_offset);
+
 			Vector3 tangent;
 			float binormal_sign;
-			_gles1_decode_octahedral_tangent(tangent_ptr[0], tangent_ptr[1], tangent, binormal_sign);
+			_gles1_decode_octahedral_tangent(tang_src[0], tang_src[1], tangent, binormal_sign);
 
-			memcpy(p_dst + dst_tang_offset_base + (i * sizeof(float) * 4), &tangent, sizeof(float) * 3);
-			memcpy(p_dst + dst_tang_offset_base + (i * sizeof(float) * 4) + (sizeof(float) * 3), &binormal_sign, sizeof(float));
+			tang_dst[0] = tangent.x;
+			tang_dst[1] = tangent.y;
+			tang_dst[2] = tangent.z;
+			tang_dst[3] = binormal_sign;
 		}
 	}
 }

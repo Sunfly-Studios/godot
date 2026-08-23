@@ -251,6 +251,8 @@ private:
 	mutable RID_Owner<Mesh, true> mesh_owner;
 
 	void _mesh_surface_generate_version_for_input_mask(Mesh::Surface::Version &v, Mesh::Surface *s, uint64_t p_input_mask, MeshInstance::Surface *mis = nullptr);
+	void _mesh_surface_generate_version_for_input_mask_2d(Mesh::Surface::Version &v, Mesh::Surface *s, uint64_t p_input_mask, MeshInstance::Surface *mis = nullptr);
+	void _mesh_surface_generate_version_for_input_mask_3d(Mesh::Surface::Version &v, Mesh::Surface *s, uint64_t p_input_mask, MeshInstance::Surface *mis = nullptr);
 	void _mesh_surface_clear(Mesh *mesh, int p_surface);
 
 	void _decompress_surface_data(RS::SurfaceData &r_surface, Mesh::Surface *s);
