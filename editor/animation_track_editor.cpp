@@ -5765,6 +5765,9 @@ void AnimationTrackEditor::_update_key_edit() {
 }
 
 void AnimationTrackEditor::_update_key_edit_callback() {
+	if (!update_key_edit_pending) {
+		return;
+	}
 	update_key_edit_pending = false;
 
 	_clear_key_edit();
