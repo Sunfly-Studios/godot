@@ -526,6 +526,8 @@ void EditorFileSystem::_scan_filesystem() {
 		first_scan_root_dir = nullptr;
 		memdelete(processed_files);
 	} else {
+		// A local `sd` is created only on non-first scan, otherwise `sd` is not owned by this function.
+		memdelete(sd);
 		//on the first scan this is done from the main thread after re-importing
 		_save_filesystem_cache();
 	}
