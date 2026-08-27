@@ -1602,8 +1602,9 @@ void TextureStorage::_texture_set_data(RID p_texture, const Ref<Image> &p_image,
 	int mipmaps = img->has_mipmaps() ? img->get_mipmap_count() + 1 : 1;
 
 	bool is_npot = (
-		texture->width & (texture->width - 1)
-	) != 0 || (texture->height & (texture->height - 1)) != 0;
+		is_power_of_2<int>(texture->width) &&
+		is_power_of_2<int>(texture->height)
+	);
 	if (is_npot && !GLES2::Config::get_singleton()->support_npot_repeat_mipmap) {
 		mipmaps = 1;
 		texture->mipmaps = 1;
@@ -2968,9 +2969,9 @@ void TextureStorage::render_target_gen_back_buffer_mipmaps(RID p_render_target, 
 	glBindTexture(GL_TEXTURE_2D, rt->backbuffer);
 
 	bool is_npot = (
-		rt->size.width & (rt->size.width - 1)
-	) != 0 || (rt->size.height & (rt->size.height - 1)) != 0;
-
+		is_power_of_2<int>(rt->size.width) &&
+		is_power_of_2<int>(rt->size.height)
+	);
 	if (is_npot && !GLES2::Config::get_singleton()->support_npot_repeat_mipmap) {
 		// Fall back to linear filtering.
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);

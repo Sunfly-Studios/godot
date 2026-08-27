@@ -2636,9 +2636,9 @@ void TextureStorage::render_target_gen_back_buffer_mipmaps(RID p_render_target, 
 	glBindTexture(GL_TEXTURE_2D, rt->backbuffer);
 
 	bool is_npot = (
-		rt->size.width & (rt->size.width - 1)
-	) != 0 || (rt->size.height & (rt->size.height - 1)) != 0;
-
+		is_power_of_2<int>(rt->size.width) &&
+		is_power_of_2<int>(rt->size.height)
+	);
 	if (is_npot && !GLES1::Config::get_singleton()->support_generate_mipmap) {
 		// Fall back to linear filtering.
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);

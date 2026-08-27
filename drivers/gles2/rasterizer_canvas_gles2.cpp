@@ -957,8 +957,9 @@ void RasterizerCanvasGLES2::_bind_canvas_texture(RID p_texture, RS::CanvasItemTe
 		}
 
 		bool is_npot = (
-			texture->alloc_width & (texture->alloc_width - 1)
-		) != 0 || (texture->alloc_height & (texture->alloc_height - 1)) != 0;
+			is_power_of_2<int>(texture->alloc_width) &&
+			is_power_of_2<int>(texture->alloc_height)
+		);
 		if (is_npot && !GLES2::Config::get_singleton()->support_npot_repeat_mipmap) {
 			wrap_s = GL_CLAMP_TO_EDGE;
 			wrap_t = GL_CLAMP_TO_EDGE;
