@@ -39,6 +39,7 @@
 #include "drivers/gles2/shaders/skeleton.glsl.gen.h"
 #include "servers/rendering/storage/mesh_storage.h"
 #include "servers/rendering/storage/utilities.h"
+#include "config.h"
 
 #include "platform_gl.h"
 
@@ -427,9 +428,9 @@ public:
 	}
 
 	// Use this to cache Vertex Array Objects so they are only generated once
-	_FORCE_INLINE_ void mesh_surface_get_vertex_arrays_and_format(void *p_surface, uint64_t p_input_mask, GLuint &r_vertex_array_gl) {
+	_FORCE_INLINE_ Mesh::Surface::Version *mesh_surface_get_vertex_arrays_and_format(void *p_surface, uint64_t p_input_mask, GLuint &r_vertex_array_gl) {
 		Mesh::Surface *s = reinterpret_cast<Mesh::Surface *>(p_surface);
-		ERR_FAIL_NULL(s);
+		ERR_FAIL_NULL_V(s, nullptr);
 
 		s->version_lock.lock();
 
@@ -441,60 +442,109 @@ public:
 			}
 			// We have this version, hooray.
 			r_vertex_array_gl = s->versions[i].vertex_array;
+			Mesh::Surface::Version *v = &s->versions[i];
 			s->version_lock.unlock();
-			return;
+			return v;
 		}
 
 		uint32_t version = s->version_count;
 		s->version_count++;
 		s->versions = (Mesh::Surface::Version *)memrealloc(s->versions, sizeof(Mesh::Surface::Version) * s->version_count);
 
-		ERR_FAIL_NULL(s->versions);
+		ERR_FAIL_NULL_V(s->versions, nullptr);
 
 		::new (&s->versions[version]) Mesh::Surface::Version();
 
 		_mesh_surface_generate_version_for_input_mask(s->versions[version], s, p_input_mask);
 
-		glGenVertexArrays(1, &s->versions[version].vertex_array);
-		glBindVertexArray(s->versions[version].vertex_array);
+		if (GLES2::Config::get_singleton()->support_vao) {
+			glGenVertexArrays(1, &s->versions[version].vertex_array);
+			glBindVertexArray(s->versions[version].vertex_array);
 
+			for (int i = 0; i < RS::ARRAY_INDEX; i++) {
+				if (!s->versions[version].attribs[i].enabled) {
+					glDisableVertexAttribArray(i);
+					continue;
+				}
+
+				// Bind appropriate data buffer for the current attribute
+				if (i <= RS::ARRAY_TANGENT) {
+					glBindBuffer(GL_ARRAY_BUFFER, s->vertex_buffer);
+				} else if (i >= RS::ARRAY_BONES && i <= RS::ARRAY_WEIGHTS) {
+					glBindBuffer(GL_ARRAY_BUFFER, s->skin_buffer);
+				} else {
+					// Usually ARRAY_COLOR, ARRAY_TEX_UV(2), and Custom arrays live in the attribute buffer
+					glBindBuffer(GL_ARRAY_BUFFER, s->attribute_buffer);
+				}
+
+				glEnableVertexAttribArray(i);
+				glVertexAttribPointer(
+					i,
+					s->versions[version].attribs[i].size,
+					s->versions[version].attribs[i].type,
+					s->versions[version].attribs[i].normalized,
+					s->versions[version].attribs[i].stride,
+					(const void *)(uintptr_t)(s->versions[version].attribs[i].offset)
+				);
+			}
+
+			if (s->index_buffer) {
+				glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, s->index_buffer);
+			}
+
+			glBindVertexArray(0);
+			glBindBuffer(GL_ARRAY_BUFFER, 0);
+			glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+		}
+
+		r_vertex_array_gl = s->versions[version].vertex_array;
+		Mesh::Surface::Version *v = &s->versions[version];
+
+		s->version_lock.unlock();
+		return v;
+	}
+
+	_FORCE_INLINE_ void mesh_surface_bind_version(Mesh::Surface::Version *p_version, void *p_surface) {
+		if (GLES2::Config::get_singleton()->support_vao) {
+			glBindVertexArray(p_version->vertex_array);
+			return;
+		}
+
+		Mesh::Surface *s = reinterpret_cast<Mesh::Surface *>(p_surface);
 		for (int i = 0; i < RS::ARRAY_INDEX; i++) {
-			if (!s->versions[version].attribs[i].enabled) {
+			if (!p_version->attribs[i].enabled) {
 				glDisableVertexAttribArray(i);
 				continue;
 			}
-
-			// Bind appropriate data buffer for the current attribute
 			if (i <= RS::ARRAY_TANGENT) {
 				glBindBuffer(GL_ARRAY_BUFFER, s->vertex_buffer);
 			} else if (i >= RS::ARRAY_BONES && i <= RS::ARRAY_WEIGHTS) {
 				glBindBuffer(GL_ARRAY_BUFFER, s->skin_buffer);
 			} else {
-				// Usually ARRAY_COLOR, ARRAY_TEX_UV(2), and Custom arrays live in the attribute buffer
 				glBindBuffer(GL_ARRAY_BUFFER, s->attribute_buffer);
 			}
-
 			glEnableVertexAttribArray(i);
 			glVertexAttribPointer(
 				i,
-				s->versions[version].attribs[i].size,
-				s->versions[version].attribs[i].type,
-				s->versions[version].attribs[i].normalized,
-				s->versions[version].attribs[i].stride,
-				(const void *)(uintptr_t)(s->versions[version].attribs[i].offset)
+				p_version->attribs[i].size,
+				p_version->attribs[i].type,
+				p_version->attribs[i].normalized,
+				p_version->attribs[i].stride,
+				(const void *)(uintptr_t)(p_version->attribs[i].offset)
 			);
 		}
+	}
 
-		if (s->index_buffer) {
-			glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, s->index_buffer);
+	_FORCE_INLINE_ void mesh_surface_unbind_version(Mesh::Surface::Version *p_version) {
+		if (GLES2::Config::get_singleton()->support_vao) {
+			glBindVertexArray(0);
+			return;
 		}
-
-		glBindVertexArray(RS::ARRAY_VERTEX);
-		glBindBuffer(GL_ARRAY_BUFFER, 0);
-
-		r_vertex_array_gl = s->versions[version].vertex_array;
-
-		s->version_lock.unlock();
+		for (int i = 0; i < RS::ARRAY_INDEX; i++) {
+			if (p_version->attribs[i].enabled) {
+				glDisableVertexAttribArray(i);
+			}
+		}
 	}
 
 	/* MESH INSTANCE API */
@@ -512,12 +562,12 @@ public:
 
 	// TODO: considering hashing versions with multimesh buffer RID.
 	// Doing so would allow us to avoid specifying multimesh buffer pointers every frame and may improve performance.
-	_FORCE_INLINE_ void mesh_instance_surface_get_vertex_arrays_and_format(RID p_mesh_instance, uint32_t p_surface_index, uint64_t p_input_mask, GLuint &r_vertex_array_gl) {
+	_FORCE_INLINE_ Mesh::Surface::Version *mesh_instance_surface_get_vertex_arrays_and_format(RID p_mesh_instance, uint32_t p_surface_index, uint64_t p_input_mask, GLuint &r_vertex_array_gl) {
 		MeshInstance *mi = mesh_instance_owner.get_or_null(p_mesh_instance);
-		ERR_FAIL_NULL(mi);
+		ERR_FAIL_NULL_V(mi, nullptr);
 		Mesh *mesh = mi->mesh;
-		ERR_FAIL_NULL(mesh);
-		ERR_FAIL_UNSIGNED_INDEX(p_surface_index, mesh->surface_count);
+		ERR_FAIL_NULL_V(mesh, nullptr);
+		ERR_FAIL_UNSIGNED_INDEX_V(p_surface_index, mesh->surface_count, nullptr);
 
 		MeshInstance::Surface *mis = &mi->surfaces[p_surface_index];
 		Mesh::Surface *s = mesh->surfaces[p_surface_index];
@@ -530,24 +580,34 @@ public:
 			if (mis->versions[i].input_mask != p_input_mask) {
 				continue;
 			}
-			//we have this version, hooray
 			r_vertex_array_gl = mis->versions[i].vertex_array;
+			Mesh::Surface::Version *v = &mis->versions[i];
 			s->version_lock.unlock();
-			return;
+			return v;
 		}
 
 		uint32_t version = mis->version_count;
 		mis->version_count++;
 		mis->versions = (Mesh::Surface::Version *)memrealloc(mis->versions, sizeof(Mesh::Surface::Version) * mis->version_count);
 
-		ERR_FAIL_NULL(mis->versions);
+		ERR_FAIL_NULL_V(mis->versions, nullptr);
+
+		::new (&mis->versions[version]) Mesh::Surface::Version();
 
 		_mesh_surface_generate_version_for_input_mask(mis->versions[version], s, p_input_mask, mis);
 
+		if (GLES2::Config::get_singleton()->support_vao) {
+			glGenVertexArrays(1, &mis->versions[version].vertex_array);
+			// The actual binding is dynamic based on pass (Skeleton/BlendShape),
+			// so the array gets configured on the fly in update_mesh_instances
+		}
+
 		r_vertex_array_gl = mis->versions[version].vertex_array;
+		Mesh::Surface::Version *v = &mis->versions[version];
 
 		s->version_lock.unlock();
-    }
+		return v;
+	}
 
 	/* MULTIMESH API */
 

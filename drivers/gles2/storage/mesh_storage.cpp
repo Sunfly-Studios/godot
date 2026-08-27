@@ -321,9 +321,11 @@ void MeshStorage::mesh_clear(RID p_mesh) {
 
 		if (s->versions) {
 			// Delete VAOs
-			for (uint32_t j = 0; j < s->version_count; j++) {
-				if (s->versions[j].vertex_array != 0) {
-					glDeleteVertexArrays(1, &s->versions[j].vertex_array);
+			if (GLES2::Config::get_singleton()->support_vao) {
+				for (uint32_t j = 0; j < s->version_count; j++) {
+					if (s->versions[j].vertex_array != 0) {
+						glDeleteVertexArrays(1, &s->versions[j].vertex_array);
+					}
 				}
 			}
 			memfree(s->versions);
@@ -357,9 +359,11 @@ void MeshStorage::_mesh_surface_clear(Mesh *mesh, int p_surface) {
 
 	// Clean up VAOs
 	if (s->versions) {
-		for (uint32_t j = 0; j < s->version_count; j++) {
-			if (s->versions[j].vertex_array != 0) {
-				glDeleteVertexArrays(1, &s->versions[j].vertex_array);
+		if (GLES2::Config::get_singleton()->support_vao) {
+			for (uint32_t j = 0; j < s->version_count; j++) {
+				if (s->versions[j].vertex_array != 0) {
+					glDeleteVertexArrays(1, &s->versions[j].vertex_array);
+				}
 			}
 		}
 		memfree(s->versions);
@@ -828,7 +832,13 @@ void MeshStorage::_mesh_surface_generate_version_for_input_mask(Mesh::Surface::V
 				uint32_t fmtsize[RS::ARRAY_CUSTOM_MAX] = { 4, 4, 4, 8, 4, 8, 12, 16 };
 				GLenum gl_type[RS::ARRAY_CUSTOM_MAX] = { GL_UNSIGNED_BYTE, GL_BYTE, GL_HALF_FLOAT_OES, GL_HALF_FLOAT_OES, GL_FLOAT, GL_FLOAT, GL_FLOAT, GL_FLOAT };
 				GLboolean norm[RS::ARRAY_CUSTOM_MAX] = { GL_TRUE, GL_TRUE, GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE };
-				v.attribs[i].type = gl_type[fmt];
+
+				if (!GLES2::Config::get_singleton()->support_vertex_half_float && gl_type[fmt] == GL_HALF_FLOAT_OES) {
+					v.attribs[i].type = GL_FLOAT;
+				} else {
+					v.attribs[i].type = gl_type[fmt];
+				}
+
 				attributes_stride += fmtsize[fmt];
 				v.attribs[i].size = fmtsize[fmt] / sizeof(float);
 				v.attribs[i].normalized = norm[fmt];
@@ -972,9 +982,11 @@ void MeshStorage::mesh_instance_set_blend_shape_weight(RID p_mesh_instance, int 
 
 void MeshStorage::_mesh_instance_clear(MeshInstance *mi) {
 	for (uint32_t i = 0; i < mi->surfaces.size(); i++) {
-		for (uint32_t j = 0; j < mi->surfaces[i].version_count; j++) {
-			if (mi->surfaces[i].versions[j].vertex_array != 0) {
-				glDeleteVertexArrays(1, &mi->surfaces[i].versions[j].vertex_array);
+		if (GLES2::Config::get_singleton()->support_vao) {
+			for (uint32_t j = 0; j < mi->surfaces[i].version_count; j++) {
+				if (mi->surfaces[i].versions[j].vertex_array != 0) {
+					glDeleteVertexArrays(1, &mi->surfaces[i].versions[j].vertex_array);
+				}
 			}
 		}
 
@@ -1042,9 +1054,11 @@ void MeshStorage::_mesh_instance_remove_surface(MeshInstance *mi, int p_surface)
 	ERR_FAIL_UNSIGNED_INDEX((uint32_t)p_surface, mi->surfaces.size());
 
 	// Clean up instance-specific VAOs
-	for (uint32_t j = 0; j < mi->surfaces[p_surface].version_count; j++) {
-		if (mi->surfaces[p_surface].versions[j].vertex_array != 0) {
-			glDeleteVertexArrays(1, &mi->surfaces[p_surface].versions[j].vertex_array);
+	if (GLES2::Config::get_singleton()->support_vao) {
+		for (uint32_t j = 0; j < mi->surfaces[p_surface].version_count; j++) {
+			if (mi->surfaces[p_surface].versions[j].vertex_array != 0) {
+				glDeleteVertexArrays(1, &mi->surfaces[p_surface].versions[j].vertex_array);
+			}
 		}
 	}
 	if (mi->surfaces[p_surface].versions) {
@@ -1282,14 +1296,15 @@ void MeshStorage::update_mesh_instances() {
 				GLuint vertex_array_gl = 0;
 				uint64_t mask = RS::ARRAY_FORMAT_VERTEX | RS::ARRAY_FORMAT_NORMAL | RS::ARRAY_FORMAT_VERTEX;
 				uint64_t format = mi->mesh->surfaces[i]->format & mask;
-				mesh_surface_get_vertex_arrays_and_format(mi->mesh->surfaces[i], format, vertex_array_gl);
+				Mesh::Surface::Version *version = mesh_surface_get_vertex_arrays_and_format(mi->mesh->surfaces[i], format, vertex_array_gl);
 
-				glBindVertexArray(vertex_array_gl);
-				GL_CHECK_ERROR("GLES2::MeshStorage::update_mesh_instances: glBindVertexArray [Base Pass]");
+				mesh_surface_bind_version(version, mi->mesh->surfaces[i]);
+				GL_CHECK_ERROR("GLES2::MeshStorage::update_mesh_instances: mesh_surface_bind_version [Base Pass]");
 
 				variant = SkeletonShaderGLES2::MODE_BLEND_PASS;
 				success = skeleton_shader.shader.version_bind_shader(skeleton_shader.shader_version, variant, specialization);
 				if (!success) {
+					mesh_surface_unbind_version(version);
 					continue;
 				}
 
@@ -1303,8 +1318,10 @@ void MeshStorage::update_mesh_instances() {
 					skeleton_shader.shader.version_set_uniform(SkeletonShaderGLES2::BLEND_WEIGHT, weight, skeleton_shader.shader_version, variant, specialization);
 					skeleton_shader.shader.version_set_uniform(SkeletonShaderGLES2::BLEND_SHAPE_COUNT, float(mi->mesh->blend_shape_count), skeleton_shader.shader_version, variant, specialization);
 
-					glBindVertexArray(mi->mesh->surfaces[i]->blend_shapes[bs].vertex_array);
-					GL_CHECK_ERROR("GLES2::MeshStorage::update_mesh_instances: glBindVertexArray [Mid Blend Pass]");
+					if (GLES2::Config::get_singleton()->support_vao) {
+						glBindVertexArray(mi->mesh->surfaces[i]->blend_shapes[bs].vertex_array);
+					}
+					GL_CHECK_ERROR("GLES2::MeshStorage::update_mesh_instances: VAO Bind [Mid Blend Pass]");
 
 					_blend_shape_bind_mesh_instance_buffer(mi, i);
 
@@ -1314,8 +1331,10 @@ void MeshStorage::update_mesh_instances() {
 				uint32_t bs = mi->mesh->blend_shape_count - 1;
 				float weight = mi->blend_weights[bs];
 
-				glBindVertexArray(mi->mesh->surfaces[i]->blend_shapes[bs].vertex_array);
-				GL_CHECK_ERROR("GLES2::MeshStorage::update_mesh_instances: glBindVertexArray [Final Blend Pass]");
+				if (GLES2::Config::get_singleton()->support_vao) {
+					glBindVertexArray(mi->mesh->surfaces[i]->blend_shapes[bs].vertex_array);
+				}
+				GL_CHECK_ERROR("GLES2::MeshStorage::update_mesh_instances: VAO Bind [Final Blend Pass]");
 
 				_blend_shape_bind_mesh_instance_buffer(mi, i);
 
@@ -1325,6 +1344,7 @@ void MeshStorage::update_mesh_instances() {
 
 				success = skeleton_shader.shader.version_bind_shader(skeleton_shader.shader_version, variant, specialization);
 				if (!success) {
+					mesh_surface_unbind_version(version);
 					continue;
 				}
 
@@ -1347,8 +1367,8 @@ void MeshStorage::update_mesh_instances() {
 					can_use_skeleton = false;
 				}
 
-				glBindVertexArray(RS::ARRAY_VERTEX);
-				GL_CHECK_ERROR("GLES2::MeshStorage::update_mesh_instances: glBindVertexArray(RS::ARRAY_VERTEX) [Post Blend]");
+				mesh_surface_unbind_version(version);
+				GL_CHECK_ERROR("GLES2::MeshStorage::update_mesh_instances: mesh_surface_unbind_version [Post Blend]");
 			}
 
 			if (can_use_skeleton) {
@@ -1386,12 +1406,14 @@ void MeshStorage::update_mesh_instances() {
 				GLuint vertex_array_gl = 0;
 				uint64_t mask = RS::ARRAY_FORMAT_VERTEX | RS::ARRAY_FORMAT_NORMAL | RS::ARRAY_FORMAT_VERTEX;
 				uint64_t format = mi->mesh->surfaces[i]->format & mask;
-				mesh_surface_get_vertex_arrays_and_format(mi->mesh->surfaces[i], format, vertex_array_gl);
+				Mesh::Surface::Version *version = mesh_surface_get_vertex_arrays_and_format(mi->mesh->surfaces[i], format, vertex_array_gl);
 
-				glBindVertexArray(vertex_array_gl);
-				GL_CHECK_ERROR("GLES2::MeshStorage::update_mesh_instances: glBindVertexArray [Skeleton Pass]");
+				mesh_surface_bind_version(version, mi->mesh->surfaces[i]);
+				GL_CHECK_ERROR("GLES2::MeshStorage::update_mesh_instances: mesh_surface_bind_version [Skeleton Pass]");
 
 				_compute_skeleton(mi, sk, i);
+
+				mesh_surface_unbind_version(version);
 			}
 		}
 
@@ -1916,25 +1938,32 @@ void MeshStorage::skeleton_allocate_data(RID p_skeleton, int p_bones, bool p_2d_
 	if (skeleton->size) {
 		skeleton->data.resize(256 * skeleton->height * 4);
 
-		GLint current_texture = 0;
-		glGetIntegerv(GL_TEXTURE_BINDING_2D, &current_texture);
+		if (
+			GLES2::Config::get_singleton()->max_vertex_texture_image_units > 0 &&
+			GLES2::Config::get_singleton()->float_texture_supported
+		) {
+			GLint current_texture = 0;
+			glGetIntegerv(GL_TEXTURE_BINDING_2D, &current_texture);
 
-		glGenTextures(1, &skeleton->transforms_texture);
-		glBindTexture(GL_TEXTURE_2D, skeleton->transforms_texture);
+			glGenTextures(1, &skeleton->transforms_texture);
+			glBindTexture(GL_TEXTURE_2D, skeleton->transforms_texture);
 
-		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, 256, skeleton->height, 0, GL_RGBA, GL_FLOAT, nullptr);
-		GL_CHECK_ERROR("GLES2::MeshStorage::skeleton_allocate_data: glTexImage2D");
+			glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, 256, skeleton->height, 0, GL_RGBA, GL_FLOAT, nullptr);
+			GL_CHECK_ERROR("GLES2::MeshStorage::skeleton_allocate_data: glTexImage2D");
 
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-		glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-		glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-		GL_CHECK_ERROR("GLES2::MeshStorage::skeleton_allocate_data: glTexParameteri");
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+			glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+			glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+			GL_CHECK_ERROR("GLES2::MeshStorage::skeleton_allocate_data: glTexParameteri");
 
-		// Restore state
-		glBindTexture(GL_TEXTURE_2D, current_texture);
+			// Restore state
+			glBindTexture(GL_TEXTURE_2D, current_texture);
 
-		GLES2::Utilities::get_singleton()->texture_allocated_data(skeleton->transforms_texture, skeleton->data.size() * sizeof(float), "Skeleton transforms texture");
+			GLES2::Utilities::get_singleton()->texture_allocated_data(skeleton->transforms_texture, skeleton->data.size() * sizeof(float), "Skeleton transforms texture");
+		} else {
+			skeleton->transforms_texture = 0;
+		}
 
 		memset(skeleton->data.ptr(), 0, skeleton->data.size() * sizeof(float));
 
@@ -2069,7 +2098,7 @@ void MeshStorage::_update_dirty_skeletons() {
 	while (skeleton_dirty_list) {
 		Skeleton *skeleton = skeleton_dirty_list;
 
-		if (skeleton->size) {
+		if (skeleton->size && skeleton->transforms_texture != 0) {
 			glBindTexture(GL_TEXTURE_2D, skeleton->transforms_texture);
 			glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, 256, skeleton->height, 0, GL_RGBA, GL_FLOAT, skeleton->data.ptr());
 			GL_CHECK_ERROR("GLES2::MeshStorage::_update_dirty_skeletons: glTexImage2D");

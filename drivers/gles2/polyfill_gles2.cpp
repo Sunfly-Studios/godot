@@ -38,6 +38,9 @@ PFNGLBEGINTRANSFORMFEEDBACKPROC Polyfill::beginTransformFeedback = nullptr;
 PFNGLENDTRANSFORMFEEDBACKPROC Polyfill::endTransformFeedback = nullptr;
 PFNGLBINDBUFFERRANGEPROC Polyfill::bindBufferRange = nullptr;
 PFNGLTRANSFORMFEEDBACKVARYINGSPROC Polyfill::transformFeedbackVaryings = nullptr;
+PFNGLBINDVERTEXARRAYPROC Polyfill::bindVertexArray = nullptr;
+PFNGLGENVERTEXARRAYSPROC Polyfill::genVertexArrays = nullptr;
+PFNGLDELETEVERTEXARRAYSPROC Polyfill::deleteVertexArrays = nullptr;
 
 #if !defined(WEB_ENABLED)
 PFNGLUNMAPBUFFERPROC Polyfill::unmapBuffer = nullptr;
@@ -52,6 +55,9 @@ Polyfill::Polyfill() {
 	beginTransformFeedback = glBeginTransformFeedback;
 	endTransformFeedback = glEndTransformFeedback;
 	transformFeedbackVaryings = glTransformFeedbackVaryings;
+	bindVertexArray = glBindVertexArray;
+	genVertexArrays = glGenVertexArrays;
+	deleteVertexArrays = glDeleteVertexArrays;
 #else
 	// BindBufferBase
 	if (glBindBufferBase != nullptr) {
@@ -93,6 +99,27 @@ Polyfill::Polyfill() {
 		unmapBuffer = glUnmapBuffer;
 	} else if (glUnmapBufferOES != nullptr) {
 		unmapBuffer = (PFNGLUNMAPBUFFERPROC)glUnmapBufferOES;
+	}
+
+	// BindVertexArray
+	if (glBindVertexArray != nullptr) {
+		bindVertexArray = glBindVertexArray;
+	} else if (glBindVertexArrayOES != nullptr) {
+		bindVertexArray = (PFNGLBINDVERTEXARRAYPROC)glBindVertexArrayOES;
+	}
+
+	// GenVertexArrays
+	if (glGenVertexArrays != nullptr) {
+		genVertexArrays = glGenVertexArrays;
+	} else if (glGenVertexArraysOES != nullptr) {
+		genVertexArrays = (PFNGLGENVERTEXARRAYSPROC)glGenVertexArraysOES;
+	}
+
+	// DeleteVertexArrays
+	if (glDeleteVertexArrays != nullptr) {
+		deleteVertexArrays = glDeleteVertexArrays;
+	} else if (glDeleteVertexArraysOES != nullptr) {
+		deleteVertexArrays = (PFNGLDELETEVERTEXARRAYSPROC)glDeleteVertexArraysOES;
 	}
 
 #endif

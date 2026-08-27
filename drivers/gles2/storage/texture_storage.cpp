@@ -167,20 +167,19 @@ TextureStorage::TextureStorage() {
 			}
 
 			default_gl_textures[DEFAULT_GL_TEXTURE_2D_UINT] = texture_allocate();
-			Texture texture;
-			texture.width = 4;
-			texture.height = 4;
-			texture.format = Image::FORMAT_RGBA8;
-			texture.type = Texture::TYPE_2D;
-			texture.target = GL_TEXTURE_2D;
-			texture.active = true;
-			glGenTextures(1, &texture.tex_id);
-			texture_owner.initialize_rid(default_gl_textures[DEFAULT_GL_TEXTURE_2D_UINT], texture);
+			Texture *texture = texture_owner.get_or_null(default_gl_textures[DEFAULT_GL_TEXTURE_2D_UINT]);
+			texture->width = 4;
+			texture->height = 4;
+			texture->format = Image::FORMAT_RGBA8;
+			texture->type = Texture::TYPE_2D;
+			texture->target = GL_TEXTURE_2D;
+			texture->active = true;
 
-			glBindTexture(GL_TEXTURE_2D, texture.tex_id);
+			glBindTexture(GL_TEXTURE_2D, texture->tex_id);
 			glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, 4, 4, 0, GL_RGBA, GL_UNSIGNED_BYTE, pixel_data);
-			GLES2::Utilities::get_singleton()->texture_allocated_data(texture.tex_id, 4 * 4 * 4, "Default uint texture");
-			texture.gl_set_filter(RS::CANVAS_ITEM_TEXTURE_FILTER_NEAREST);
+			GL_CHECK_ERROR("GLES2::TextureStorage::TextureStorage::glTexImage2D (uint texture)");
+			GLES2::Utilities::get_singleton()->texture_allocated_data(texture->tex_id, 4 * 4 * 4, "Default uint texture");
+			texture->gl_set_filter(RS::CANVAS_ITEM_TEXTURE_FILTER_NEAREST);
 		}
 		{
 			uint16_t pixel_data[4 * 4] = {};
@@ -189,20 +188,20 @@ TextureStorage::TextureStorage() {
 			}
 
 			default_gl_textures[DEFAULT_GL_TEXTURE_DEPTH] = texture_allocate();
-			Texture texture;
-			texture.width = 4;
-			texture.height = 4;
-			texture.format = Image::FORMAT_RGBA8;
-			texture.type = Texture::TYPE_2D;
-			texture.target = GL_TEXTURE_2D;
-			texture.active = true;
-			glGenTextures(1, &texture.tex_id);
-			texture_owner.initialize_rid(default_gl_textures[DEFAULT_GL_TEXTURE_DEPTH], texture);
+			Texture *texture = texture_owner.get_or_null(default_gl_textures[DEFAULT_GL_TEXTURE_DEPTH]);
+			texture->width = 4;
+			texture->height = 4;
+			// Depth textures typically do not have an RGBA8 format internally, but matching the struct
+			texture->format = Image::FORMAT_RGBA8;
+			texture->type = Texture::TYPE_2D;
+			texture->target = GL_TEXTURE_2D;
+			texture->active = true;
 
-			glBindTexture(GL_TEXTURE_2D, texture.tex_id);
-			glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT16, 4, 4, 0, GL_DEPTH_COMPONENT, GL_UNSIGNED_SHORT, pixel_data);
-			GLES2::Utilities::get_singleton()->texture_allocated_data(texture.tex_id, 4 * 4 * 2, "Default depth texture");
-			texture.gl_set_filter(RS::CANVAS_ITEM_TEXTURE_FILTER_NEAREST);
+			glBindTexture(GL_TEXTURE_2D, texture->tex_id);
+			glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT, 4, 4, 0, GL_DEPTH_COMPONENT, GL_UNSIGNED_SHORT, pixel_data);
+			GL_CHECK_ERROR("GLES2::TextureStorage::TextureStorage::glTexImage2D (depth texture)");
+			GLES2::Utilities::get_singleton()->texture_allocated_data(texture->tex_id, 4 * 4 * 2, "Default depth texture");
+			texture->gl_set_filter(RS::CANVAS_ITEM_TEXTURE_FILTER_NEAREST);
 		}
 	}
 
@@ -740,10 +739,7 @@ void TextureStorage::texture_external_initialize(RID p_texture, int p_width, int
 
 void TextureStorage::texture_2d_layered_initialize(RID p_texture, const Vector<Ref<Image>> &p_layers, RS::TextureLayeredType p_layered_type) {
 	ERR_FAIL_COND(p_layers.is_empty());
-
 	ERR_FAIL_COND(p_layered_type == RS::TEXTURE_LAYERED_CUBEMAP && p_layers.size() != 6);
-	ERR_FAIL_COND_MSG(p_layered_type == RS::TEXTURE_LAYERED_CUBEMAP_ARRAY, "Cubemap Arrays are not supported in the GLES2 backend.");
-	ERR_FAIL_COND_MSG(p_layered_type == RS::TEXTURE_LAYERED_2D_ARRAY, "2D Texture Arrays are not supported in the GLES2 backend.");
 
 	const Ref<Image> &image = p_layers[0];
 	{
@@ -769,33 +765,101 @@ void TextureStorage::texture_2d_layered_initialize(RID p_texture, const Vector<R
 		}
 	}
 
-	GLES2::Texture texture;
-	texture.width = image->get_width();
-	texture.height = image->get_height();
-	texture.alloc_width = texture.width;
-	texture.alloc_height = texture.height;
-	texture.mipmaps = image->get_mipmap_count() + 1;
-	texture.format = image->get_format();
-	texture.type = GLES2::Texture::TYPE_LAYERED;
-	texture.layered_type = p_layered_type;
-	texture.target = GL_TEXTURE_CUBE_MAP;
-	texture.layers = p_layers.size();
-	_get_gl_image_and_format(Ref<Image>(), texture.format, texture.real_format, texture.gl_format_cache, texture.gl_internal_format_cache, texture.gl_type_cache, texture.compressed, false);
-	texture.total_data_size = p_layers[0]->get_image_data_size(texture.width, texture.height, texture.format, texture.mipmaps) * texture.layers;
-	texture.active = true;
-	glGenTextures(1, &texture.tex_id);
+	Texture *texture = texture_owner.get_or_null(p_texture);
+	ERR_FAIL_NULL(texture);
 
-	ERR_FAIL_COND_MSG(texture.tex_id == 0, "GLES2: Failed to generate layered texture ID. GL Context lost.");
+	texture->width = image->get_width();
+	texture->height = image->get_height();
+	texture->alloc_width = texture->width;
+	texture->alloc_height = texture->height;
+	texture->mipmaps = image->get_mipmap_count() + 1;
+	texture->format = image->get_format();
+	texture->type = GLES2::Texture::TYPE_LAYERED;
+	texture->layered_type = p_layered_type;
+	texture->layers = p_layers.size();
 
-	GLES2::Utilities::get_singleton()->texture_allocated_data(texture.tex_id, texture.total_data_size, "Texture Layered");
-	texture_owner.initialize_rid(p_texture, texture);
-	for (int i = 0; i < p_layers.size(); i++) {
-		_texture_set_data(p_texture, p_layers[i], i, i == 0);
+	if (p_layered_type == RS::TEXTURE_LAYERED_CUBEMAP) {
+		texture->target = GL_TEXTURE_CUBE_MAP;
+	} else {
+		// Fallback for 2D Arrays: Use a vertical 2D atlas.
+		texture->target = GL_TEXTURE_2D;
+		texture->alloc_height = texture->height * texture->layers;
+	}
+
+	_get_gl_image_and_format(Ref<Image>(), texture->format, texture->real_format, texture->gl_format_cache, texture->gl_internal_format_cache, texture->gl_type_cache, texture->compressed, false);
+	texture->total_data_size = p_layers[0]->get_image_data_size(texture->width, texture->height, texture->format, texture->mipmaps) * texture->layers;
+	texture->active = true;
+
+	if (texture->tex_id == 0) {
+		glGenTextures(1, &texture->tex_id);
+		GL_CHECK_ERROR("GLES2::TextureStorage::texture_2d_layered_initialize: glGenTextures");
+	}
+
+	ERR_FAIL_COND_MSG(texture->tex_id == 0, "GLES2: Failed to generate layered texture ID. GL Context lost.");
+
+	GLES2::Utilities::get_singleton()->texture_allocated_data(texture->tex_id, texture->total_data_size, "Texture Layered");
+
+	if (texture->target == GL_TEXTURE_CUBE_MAP) {
+		for (int i = 0; i < p_layers.size(); i++) {
+			_texture_set_data(p_texture, p_layers[i], i, i == 0);
+		}
+	} else {
+		glBindTexture(GL_TEXTURE_2D, texture->tex_id);
+		if (!texture->compressed) {
+			glTexImage2D(GL_TEXTURE_2D, 0, texture->gl_internal_format_cache, texture->alloc_width, texture->alloc_height, 0, texture->gl_format_cache, texture->gl_type_cache, nullptr);
+			GL_CHECK_ERROR("GLES2::TextureStorage::texture_2d_layered_initialize: glTexImage2D (atlas)");
+			for (int i = 0; i < p_layers.size(); i++) {
+				Vector<uint8_t> layer_data = p_layers[i]->get_data();
+				glTexSubImage2D(GL_TEXTURE_2D, 0, 0, texture->height * i, texture->width, texture->height, texture->gl_format_cache, texture->gl_type_cache, layer_data.ptr());
+			}
+		} else {
+			_texture_set_data(p_texture, p_layers[0], 0, true);
+		}
+		glBindTexture(GL_TEXTURE_2D, 0);
 	}
 }
 
 void TextureStorage::texture_3d_initialize(RID p_texture, Image::Format p_format, int p_width, int p_height, int p_depth, bool p_mipmaps, const Vector<Ref<Image>> &p_data) {
-	WARN_PRINT("Trying to initialize a 3D texture with the GLES2 driver, which doesn't support 3D Textures!");
+	Texture *texture = texture_owner.get_or_null(p_texture);
+	ERR_FAIL_NULL(texture);
+
+	texture->width = p_width;
+	texture->height = p_height;
+	texture->depth = p_depth;
+	texture->alloc_width = p_width;
+	texture->alloc_height = p_height * p_depth; // Vertical atlas fallback
+	texture->mipmaps = p_mipmaps ? p_data[0]->get_mipmap_count() + 1 : 1;
+	texture->format = p_format;
+	texture->type = GLES2::Texture::TYPE_3D;
+	texture->target = GL_TEXTURE_2D;
+	texture->layers = p_depth;
+
+	_get_gl_image_and_format(Ref<Image>(), texture->format, texture->real_format, texture->gl_format_cache, texture->gl_internal_format_cache, texture->gl_type_cache, texture->compressed, false);
+
+	texture->total_data_size = p_data[0]->get_image_data_size(texture->width, texture->height, texture->format, texture->mipmaps) * texture->layers;
+	texture->active = true;
+
+	if (texture->tex_id == 0) {
+		glGenTextures(1, &texture->tex_id);
+		GL_CHECK_ERROR("GLES2::TextureStorage::texture_3d_initialize: glGenTextures");
+	}
+
+	ERR_FAIL_COND_MSG(texture->tex_id == 0, "GLES2: Failed to generate 3D texture ID. GL Context lost.");
+
+	GLES2::Utilities::get_singleton()->texture_allocated_data(texture->tex_id, texture->total_data_size, "Texture 3D (Fallback)");
+
+	glBindTexture(GL_TEXTURE_2D, texture->tex_id);
+	if (!texture->compressed) {
+		glTexImage2D(GL_TEXTURE_2D, 0, texture->gl_internal_format_cache, texture->alloc_width, texture->alloc_height, 0, texture->gl_format_cache, texture->gl_type_cache, nullptr);
+		GL_CHECK_ERROR("GLES2::TextureStorage::texture_3d_initialize: glTexImage2D (atlas)");
+		for (int i = 0; i < p_data.size(); i++) {
+			Vector<uint8_t> layer_data = p_data[i]->get_data();
+			glTexSubImage2D(GL_TEXTURE_2D, 0, 0, texture->height * i, texture->width, texture->height, texture->gl_format_cache, texture->gl_type_cache, layer_data.ptr());
+		}
+	} else {
+		_texture_set_data(p_texture, p_data[0], 0, true);
+	}
+	glBindTexture(GL_TEXTURE_2D, 0);
 }
 
 // Called internally when texture_proxy_create(p_base) is called.
@@ -843,7 +907,21 @@ void TextureStorage::texture_2d_update(RID p_texture, const Ref<Image> &p_image,
 }
 
 void TextureStorage::texture_3d_update(RID p_texture, const Vector<Ref<Image>> &p_data) {
-	WARN_PRINT("Trying to update a 3D texture with the GLES2 driver, which doesn't support 3D Textures!");
+	Texture *texture = texture_owner.get_or_null(p_texture);
+	ERR_FAIL_NULL(texture);
+	ERR_FAIL_COND(texture->type != GLES2::Texture::TYPE_3D);
+
+	glBindTexture(GL_TEXTURE_2D, texture->tex_id);
+	if (!texture->compressed) {
+		for (int i = 0; i < p_data.size(); i++) {
+			Vector<uint8_t> layer_data = p_data[i]->get_data();
+			glTexSubImage2D(GL_TEXTURE_2D, 0, 0, texture->height * i, texture->width, texture->height, texture->gl_format_cache, texture->gl_type_cache, layer_data.ptr());
+		}
+	} else {
+		_texture_set_data(p_texture, p_data[0], 0, false);
+	}
+	glBindTexture(GL_TEXTURE_2D, 0);
+	GL_CHECK_ERROR("GLES2::TextureStorage::texture_3d_update: glTexSubImage2D");
 }
 
 void TextureStorage::texture_external_update(RID p_texture, int p_width, int p_height, uint64_t p_external_buffer) {
@@ -1522,6 +1600,14 @@ void TextureStorage::_texture_set_data(RID p_texture, const Ref<Image> &p_image,
 	GL_CHECK_ERROR("GLES2::TextureStorage::_texture_set_data: glTexParameteri");
 
 	int mipmaps = img->has_mipmaps() ? img->get_mipmap_count() + 1 : 1;
+
+	bool is_npot = (
+		texture->width & (texture->width - 1)
+	) != 0 || (texture->height & (texture->height - 1)) != 0;
+	if (is_npot && !GLES2::Config::get_singleton()->support_npot_repeat_mipmap) {
+		mipmaps = 1;
+		texture->mipmaps = 1;
+	}
 	int w = img->get_width();
 	int h = img->get_height();
 	int tsize = 0;

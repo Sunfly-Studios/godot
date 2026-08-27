@@ -314,6 +314,14 @@ struct Texture {
 		glTexParameteri(target, GL_TEXTURE_MAG_FILTER, pmag);
 		GL_CHECK_ERROR("GLES2::Texture::gl_set_filter: glTexParameteri");
 
+		bool is_npot = (
+			width & (width - 1)
+		) != 0 || (height & (height - 1)) != 0;
+		if (is_npot && !config->support_npot_repeat_mipmap) {
+			pmin = (pmin == GL_NEAREST || pmin == GL_NEAREST_MIPMAP_NEAREST || pmin == GL_NEAREST_MIPMAP_LINEAR) ? GL_NEAREST : GL_LINEAR;
+			glTexParameteri(target, GL_TEXTURE_MIN_FILTER, pmin);
+		}
+
 		if (config->support_anisotropic_filter) {
 			glTexParameterf(target, _GL_TEXTURE_MAX_ANISOTROPY_EXT, anisotropy);
 			GL_CHECK_ERROR("GLES2::Texture::gl_set_filter: glTexParameterf anisotropy");
@@ -343,6 +351,15 @@ struct Texture {
 				return;
 			} break;
 		}
+
+		GLES2::Config *config = GLES2::Config::get_singleton();
+		bool is_npot = (
+			width & (width - 1)
+		) != 0 || (height & (height - 1)) != 0;
+		if (is_npot && !config->support_npot_repeat_mipmap) {
+			prep = GL_CLAMP_TO_EDGE;
+		}
+
 		// Bind texture before modifying parameters
 		GLint prev_tex = 0;
 

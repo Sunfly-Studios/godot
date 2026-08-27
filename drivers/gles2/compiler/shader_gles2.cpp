@@ -167,7 +167,7 @@ void ShaderGLES2::_build_variant_code(StringBuilder &builder, uint32_t p_variant
 	}
 
 	// Hardware extensions
-	if (p_stage_type == STAGE_TYPE_FRAGMENT && GLES2::Config::get_singleton()->support_instancing) {
+	if (p_stage_type == STAGE_TYPE_VERTEX && GLES2::Config::get_singleton()->support_instancing) {
 		builder.append("#extension GL_EXT_draw_instanced : enable\n");
 	}
 	if (p_stage_type == STAGE_TYPE_FRAGMENT && GLES2::Config::get_singleton()->support_frag_depth) {

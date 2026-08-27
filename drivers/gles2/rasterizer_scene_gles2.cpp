@@ -1756,35 +1756,30 @@ void RasterizerSceneGLES2::_batch_bind_material(GLES2::SceneMaterialData *p_mate
 			if (bdata.batches.size() > 0 && _render_item_state.curr_batch) {
 				GeometryInstanceSurface *first_surf = static_cast<GeometryInstanceSurface *>(bdata.sort_items[_render_item_state.curr_batch->first_item_index].item);
 				if (first_surf && first_surf->owner) {
-					GLES2::MaterialStorage::get_singleton()->shaders.scene_shader.version_set_uniform(SceneShaderGLES2::OMNI_LIGHT_COUNT, (int)first_surf->owner->omni_light_gl_cache.size(), p_material_data->shader_data->version, variant, 0);
-					GLES2::MaterialStorage::get_singleton()->shaders.scene_shader.version_set_uniform(SceneShaderGLES2::SPOT_LIGHT_COUNT, (int)first_surf->owner->spot_light_gl_cache.size(), p_material_data->shader_data->version, variant, 0);
-
-					if (first_surf->owner->omni_light_gl_cache.size() > 0) {
-						GLint loc = GLES2::MaterialStorage::get_singleton()->shaders.scene_shader.version_get_uniform(SceneShaderGLES2::OMNI_LIGHT_INDICES, p_material_data->shader_data->version, variant, 0);
-						if (loc >= 0) {
-							GLint indices[8] = {};
-							int count = MIN((int)first_surf->owner->omni_light_gl_cache.size(), 8);
-							for (int i = 0; i < count; i++) {
-								indices[i] = first_surf->owner->omni_light_gl_cache[i];
-							}
-							glUniform1iv(loc, count, indices);
-						}
+					int omni_count = MIN((int)first_surf->owner->omni_light_gl_cache.size(), 8);
+					GLES2::MaterialStorage::get_singleton()->shaders.scene_shader.version_set_uniform(SceneShaderGLES2::OMNI_LIGHT_COUNT, omni_count, p_material_data->shader_data->version, variant, 0);
+					for (int i = 0; i < omni_count; i++) {
+						uint32_t gl_id = first_surf->owner->omni_light_gl_cache[i];
+						int base_idx = SceneShaderGLES2::OMNI_LIGHTS_DATA_0_POSITION_INV_RADIUS + (i * 4);
+						GLES2::MaterialStorage::get_singleton()->shaders.scene_shader.version_set_uniform(SceneShaderGLES2::Uniforms(base_idx + 0), Vector4(scene_state.omni_lights[gl_id].position[0], scene_state.omni_lights[gl_id].position[1], scene_state.omni_lights[gl_id].position[2], scene_state.omni_lights[gl_id].inv_radius), p_material_data->shader_data->version, variant, 0);
+						GLES2::MaterialStorage::get_singleton()->shaders.scene_shader.version_set_uniform(SceneShaderGLES2::Uniforms(base_idx + 1), Vector4(scene_state.omni_lights[gl_id].direction[0], scene_state.omni_lights[gl_id].direction[1], scene_state.omni_lights[gl_id].direction[2], scene_state.omni_lights[gl_id].size), p_material_data->shader_data->version, variant, 0);
+						GLES2::MaterialStorage::get_singleton()->shaders.scene_shader.version_set_uniform(SceneShaderGLES2::Uniforms(base_idx + 2), Vector4(scene_state.omni_lights[gl_id].color[0], scene_state.omni_lights[gl_id].color[1], scene_state.omni_lights[gl_id].color[2], scene_state.omni_lights[gl_id].attenuation), p_material_data->shader_data->version, variant, 0);
+						GLES2::MaterialStorage::get_singleton()->shaders.scene_shader.version_set_uniform(SceneShaderGLES2::Uniforms(base_idx + 3), Vector4(scene_state.omni_lights[gl_id].inv_spot_attenuation, scene_state.omni_lights[gl_id].cos_spot_angle, scene_state.omni_lights[gl_id].specular_amount, scene_state.omni_lights[gl_id].shadow_opacity), p_material_data->shader_data->version, variant, 0);
 					}
 
-					if (first_surf->owner->spot_light_gl_cache.size() > 0) {
-						GLint loc = GLES2::MaterialStorage::get_singleton()->shaders.scene_shader.version_get_uniform(SceneShaderGLES2::SPOT_LIGHT_INDICES, p_material_data->shader_data->version, variant, 0);
-						if (loc >= 0) {
-							GLint indices[8] = {};
-							int count = MIN((int)first_surf->owner->spot_light_gl_cache.size(), 8);
-							for (int i = 0; i < count; i++) {
-								indices[i] = first_surf->owner->spot_light_gl_cache[i];
-							}
-							glUniform1iv(loc, count, indices);
-						}
+					int spot_count = MIN((int)first_surf->owner->spot_light_gl_cache.size(), 8);
+					GLES2::MaterialStorage::get_singleton()->shaders.scene_shader.version_set_uniform(SceneShaderGLES2::SPOT_LIGHT_COUNT, spot_count, p_material_data->shader_data->version, variant, 0);
+					for (int i = 0; i < spot_count; i++) {
+						uint32_t gl_id = first_surf->owner->spot_light_gl_cache[i];
+						int base_idx = SceneShaderGLES2::SPOT_LIGHTS_DATA_0_POSITION_INV_RADIUS + (i * 4);
+						GLES2::MaterialStorage::get_singleton()->shaders.scene_shader.version_set_uniform(SceneShaderGLES2::Uniforms(base_idx + 0), Vector4(scene_state.spot_lights[gl_id].position[0], scene_state.spot_lights[gl_id].position[1], scene_state.spot_lights[gl_id].position[2], scene_state.spot_lights[gl_id].inv_radius), p_material_data->shader_data->version, variant, 0);
+						GLES2::MaterialStorage::get_singleton()->shaders.scene_shader.version_set_uniform(SceneShaderGLES2::Uniforms(base_idx + 1), Vector4(scene_state.spot_lights[gl_id].direction[0], scene_state.spot_lights[gl_id].direction[1], scene_state.spot_lights[gl_id].direction[2], scene_state.spot_lights[gl_id].size), p_material_data->shader_data->version, variant, 0);
+						GLES2::MaterialStorage::get_singleton()->shaders.scene_shader.version_set_uniform(SceneShaderGLES2::Uniforms(base_idx + 2), Vector4(scene_state.spot_lights[gl_id].color[0], scene_state.spot_lights[gl_id].color[1], scene_state.spot_lights[gl_id].color[2], scene_state.spot_lights[gl_id].attenuation), p_material_data->shader_data->version, variant, 0);
+						GLES2::MaterialStorage::get_singleton()->shaders.scene_shader.version_set_uniform(SceneShaderGLES2::Uniforms(base_idx + 3), Vector4(scene_state.spot_lights[gl_id].inv_spot_attenuation, scene_state.spot_lights[gl_id].cos_spot_angle, scene_state.spot_lights[gl_id].specular_amount, scene_state.spot_lights[gl_id].shadow_opacity), p_material_data->shader_data->version, variant, 0);
 					}
 				}
 			}
-			GL_CHECK_ERROR("GLES2::RasterizerSceneGLES2::_batch_bind_material: light indices uniform");
+			GL_CHECK_ERROR("GLES2::RasterizerSceneGLES2::_batch_bind_material: light data upload");
 
 			scene_state.set_gl_cull_mode(p_material_data->shader_data->cull_mode);
 			scene_state.enable_gl_depth_test(p_material_data->shader_data->depth_test == GLES2::SceneShaderData::DEPTH_TEST_ENABLED);
@@ -1925,37 +1920,32 @@ void RasterizerSceneGLES2::_render_single_item_immediate(const GeometryInstanceS
 		}
 
 		if (p_surface->owner) {
-			material_storage->shaders.scene_shader.version_set_uniform(SceneShaderGLES2::OMNI_LIGHT_COUNT, (int)p_surface->owner->omni_light_gl_cache.size(), shader->version, SceneShaderGLES2::MODE_COLOR, 0);
-			material_storage->shaders.scene_shader.version_set_uniform(SceneShaderGLES2::SPOT_LIGHT_COUNT, (int)p_surface->owner->spot_light_gl_cache.size(), shader->version, SceneShaderGLES2::MODE_COLOR, 0);
-
-			if (p_surface->owner->omni_light_gl_cache.size() > 0) {
-				GLint loc = material_storage->shaders.scene_shader.version_get_uniform(SceneShaderGLES2::OMNI_LIGHT_INDICES, shader->version, SceneShaderGLES2::MODE_COLOR, 0);
-				if (loc >= 0) {
-					GLint indices[8] = {};
-					int count = MIN((int)p_surface->owner->omni_light_gl_cache.size(), 8);
-					for (int i = 0; i < count; i++) {
-						indices[i] = p_surface->owner->omni_light_gl_cache[i];
-					}
-					glUniform1iv(loc, count, indices);
-				}
+			int omni_count = MIN((int)p_surface->owner->omni_light_gl_cache.size(), 8);
+			material_storage->shaders.scene_shader.version_set_uniform(SceneShaderGLES2::OMNI_LIGHT_COUNT, omni_count, shader->version, SceneShaderGLES2::MODE_COLOR, 0);
+			for (int i = 0; i < omni_count; i++) {
+				uint32_t gl_id = p_surface->owner->omni_light_gl_cache[i];
+				int base_idx = SceneShaderGLES2::OMNI_LIGHTS_DATA_0_POSITION_INV_RADIUS + (i * 4);
+				material_storage->shaders.scene_shader.version_set_uniform(SceneShaderGLES2::Uniforms(base_idx + 0), Vector4(scene_state.omni_lights[gl_id].position[0], scene_state.omni_lights[gl_id].position[1], scene_state.omni_lights[gl_id].position[2], scene_state.omni_lights[gl_id].inv_radius), shader->version, SceneShaderGLES2::MODE_COLOR, 0);
+				material_storage->shaders.scene_shader.version_set_uniform(SceneShaderGLES2::Uniforms(base_idx + 1), Vector4(scene_state.omni_lights[gl_id].direction[0], scene_state.omni_lights[gl_id].direction[1], scene_state.omni_lights[gl_id].direction[2], scene_state.omni_lights[gl_id].size), shader->version, SceneShaderGLES2::MODE_COLOR, 0);
+				material_storage->shaders.scene_shader.version_set_uniform(SceneShaderGLES2::Uniforms(base_idx + 2), Vector4(scene_state.omni_lights[gl_id].color[0], scene_state.omni_lights[gl_id].color[1], scene_state.omni_lights[gl_id].color[2], scene_state.omni_lights[gl_id].attenuation), shader->version, SceneShaderGLES2::MODE_COLOR, 0);
+				material_storage->shaders.scene_shader.version_set_uniform(SceneShaderGLES2::Uniforms(base_idx + 3), Vector4(scene_state.omni_lights[gl_id].inv_spot_attenuation, scene_state.omni_lights[gl_id].cos_spot_angle, scene_state.omni_lights[gl_id].specular_amount, scene_state.omni_lights[gl_id].shadow_opacity), shader->version, SceneShaderGLES2::MODE_COLOR, 0);
 			}
 
-			if (p_surface->owner->spot_light_gl_cache.size() > 0) {
-				GLint loc = material_storage->shaders.scene_shader.version_get_uniform(SceneShaderGLES2::SPOT_LIGHT_INDICES, shader->version, SceneShaderGLES2::MODE_COLOR, 0);
-				if (loc >= 0) {
-					GLint indices[8] = {};
-					int count = MIN((int)p_surface->owner->spot_light_gl_cache.size(), 8);
-					for (int i = 0; i < count; i++) {
-						indices[i] = p_surface->owner->spot_light_gl_cache[i];
-					}
-					glUniform1iv(loc, count, indices);
-				}
+			int spot_count = MIN((int)p_surface->owner->spot_light_gl_cache.size(), 8);
+			material_storage->shaders.scene_shader.version_set_uniform(SceneShaderGLES2::SPOT_LIGHT_COUNT, spot_count, shader->version, SceneShaderGLES2::MODE_COLOR, 0);
+			for (int i = 0; i < spot_count; i++) {
+				uint32_t gl_id = p_surface->owner->spot_light_gl_cache[i];
+				int base_idx = SceneShaderGLES2::SPOT_LIGHTS_DATA_0_POSITION_INV_RADIUS + (i * 4);
+				material_storage->shaders.scene_shader.version_set_uniform(SceneShaderGLES2::Uniforms(base_idx + 0), Vector4(scene_state.spot_lights[gl_id].position[0], scene_state.spot_lights[gl_id].position[1], scene_state.spot_lights[gl_id].position[2], scene_state.spot_lights[gl_id].inv_radius), shader->version, SceneShaderGLES2::MODE_COLOR, 0);
+				material_storage->shaders.scene_shader.version_set_uniform(SceneShaderGLES2::Uniforms(base_idx + 1), Vector4(scene_state.spot_lights[gl_id].direction[0], scene_state.spot_lights[gl_id].direction[1], scene_state.spot_lights[gl_id].direction[2], scene_state.spot_lights[gl_id].size), shader->version, SceneShaderGLES2::MODE_COLOR, 0);
+				material_storage->shaders.scene_shader.version_set_uniform(SceneShaderGLES2::Uniforms(base_idx + 2), Vector4(scene_state.spot_lights[gl_id].color[0], scene_state.spot_lights[gl_id].color[1], scene_state.spot_lights[gl_id].color[2], scene_state.spot_lights[gl_id].attenuation), shader->version, SceneShaderGLES2::MODE_COLOR, 0);
+				material_storage->shaders.scene_shader.version_set_uniform(SceneShaderGLES2::Uniforms(base_idx + 3), Vector4(scene_state.spot_lights[gl_id].inv_spot_attenuation, scene_state.spot_lights[gl_id].cos_spot_angle, scene_state.spot_lights[gl_id].specular_amount, scene_state.spot_lights[gl_id].shadow_opacity), shader->version, SceneShaderGLES2::MODE_COLOR, 0);
 			}
 		} else {
 			material_storage->shaders.scene_shader.version_set_uniform(SceneShaderGLES2::OMNI_LIGHT_COUNT, 0, shader->version, SceneShaderGLES2::MODE_COLOR, 0);
 			material_storage->shaders.scene_shader.version_set_uniform(SceneShaderGLES2::SPOT_LIGHT_COUNT, 0, shader->version, SceneShaderGLES2::MODE_COLOR, 0);
 		}
-		GL_CHECK_ERROR("GLES2::RasterizerSceneGLES2::_render_single_item_immediate: light indices uniform");
+		GL_CHECK_ERROR("GLES2::RasterizerSceneGLES2::_render_single_item_immediate: light data upload");
 
 		_render_item_state.current_state_hash = item_hash;
 		_render_item_state.current_material_data = p_surface->material;
@@ -2555,44 +2545,10 @@ void RasterizerSceneGLES2::_bind_scene_camera_uniforms(RID p_version, SceneShade
 
 	if (!(p_spec_constants & SceneShaderGLES2::DISABLE_LIGHT_DIRECTIONAL)) {
 		for (uint32_t i = 0; i < scene_state.ubo.directional_light_count && i < 8; i++) {
-			int base_idx = SceneShaderGLES2::DIRECTIONAL_LIGHTS_0_DIRECTION + (i * 5);
-			material_storage->shaders.scene_shader.version_set_uniform(SceneShaderGLES2::Uniforms(base_idx + 0), Vector3(scene_state.directional_lights[i].direction[0], scene_state.directional_lights[i].direction[1], scene_state.directional_lights[i].direction[2]), p_version, p_variant, p_spec_constants);
-			material_storage->shaders.scene_shader.version_set_uniform(SceneShaderGLES2::Uniforms(base_idx + 1), scene_state.directional_lights[i].energy, p_version, p_variant, p_spec_constants);
-			material_storage->shaders.scene_shader.version_set_uniform(SceneShaderGLES2::Uniforms(base_idx + 2), Vector3(scene_state.directional_lights[i].color[0], scene_state.directional_lights[i].color[1], scene_state.directional_lights[i].color[2]), p_version, p_variant, p_spec_constants);
-			material_storage->shaders.scene_shader.version_set_uniform(SceneShaderGLES2::Uniforms(base_idx + 3), scene_state.directional_lights[i].size, p_version, p_variant, p_spec_constants);
-			material_storage->shaders.scene_shader.version_set_uniform(SceneShaderGLES2::Uniforms(base_idx + 4), scene_state.directional_lights[i].specular, p_version, p_variant, p_spec_constants);
-		}
-	}
-
-	if (!(p_spec_constants & SceneShaderGLES2::DISABLE_LIGHT_OMNI)) {
-		for (uint32_t i = 0; i < scene_state.omni_light_count && i < 8; i++) {
-			int base_idx = SceneShaderGLES2::OMNI_LIGHTS_0_POSITION + (i * 10);
-			material_storage->shaders.scene_shader.version_set_uniform(SceneShaderGLES2::Uniforms(base_idx + 0), Vector3(scene_state.omni_lights[i].position[0], scene_state.omni_lights[i].position[1], scene_state.omni_lights[i].position[2]), p_version, p_variant, p_spec_constants);
-			material_storage->shaders.scene_shader.version_set_uniform(SceneShaderGLES2::Uniforms(base_idx + 1), scene_state.omni_lights[i].inv_radius, p_version, p_variant, p_spec_constants);
-			material_storage->shaders.scene_shader.version_set_uniform(SceneShaderGLES2::Uniforms(base_idx + 2), Vector3(scene_state.omni_lights[i].direction[0], scene_state.omni_lights[i].direction[1], scene_state.omni_lights[i].direction[2]), p_version, p_variant, p_spec_constants);
-			material_storage->shaders.scene_shader.version_set_uniform(SceneShaderGLES2::Uniforms(base_idx + 3), scene_state.omni_lights[i].size, p_version, p_variant, p_spec_constants);
-			material_storage->shaders.scene_shader.version_set_uniform(SceneShaderGLES2::Uniforms(base_idx + 4), Vector3(scene_state.omni_lights[i].color[0], scene_state.omni_lights[i].color[1], scene_state.omni_lights[i].color[2]), p_version, p_variant, p_spec_constants);
-			material_storage->shaders.scene_shader.version_set_uniform(SceneShaderGLES2::Uniforms(base_idx + 5), scene_state.omni_lights[i].attenuation, p_version, p_variant, p_spec_constants);
-			material_storage->shaders.scene_shader.version_set_uniform(SceneShaderGLES2::Uniforms(base_idx + 6), scene_state.omni_lights[i].inv_spot_attenuation, p_version, p_variant, p_spec_constants);
-			material_storage->shaders.scene_shader.version_set_uniform(SceneShaderGLES2::Uniforms(base_idx + 7), scene_state.omni_lights[i].cos_spot_angle, p_version, p_variant, p_spec_constants);
-			material_storage->shaders.scene_shader.version_set_uniform(SceneShaderGLES2::Uniforms(base_idx + 8), scene_state.omni_lights[i].specular_amount, p_version, p_variant, p_spec_constants);
-			material_storage->shaders.scene_shader.version_set_uniform(SceneShaderGLES2::Uniforms(base_idx + 9), scene_state.omni_lights[i].shadow_opacity, p_version, p_variant, p_spec_constants);
-		}
-	}
-
-	if (!(p_spec_constants & SceneShaderGLES2::DISABLE_LIGHT_SPOT)) {
-		for (uint32_t i = 0; i < scene_state.spot_light_count && i < 8; i++) {
-			int base_idx = SceneShaderGLES2::SPOT_LIGHTS_0_POSITION + (i * 10);
-			material_storage->shaders.scene_shader.version_set_uniform(SceneShaderGLES2::Uniforms(base_idx + 0), Vector3(scene_state.spot_lights[i].position[0], scene_state.spot_lights[i].position[1], scene_state.spot_lights[i].position[2]), p_version, p_variant, p_spec_constants);
-			material_storage->shaders.scene_shader.version_set_uniform(SceneShaderGLES2::Uniforms(base_idx + 1), scene_state.spot_lights[i].inv_radius, p_version, p_variant, p_spec_constants);
-			material_storage->shaders.scene_shader.version_set_uniform(SceneShaderGLES2::Uniforms(base_idx + 2), Vector3(scene_state.spot_lights[i].direction[0], scene_state.spot_lights[i].direction[1], scene_state.spot_lights[i].direction[2]), p_version, p_variant, p_spec_constants);
-			material_storage->shaders.scene_shader.version_set_uniform(SceneShaderGLES2::Uniforms(base_idx + 3), scene_state.spot_lights[i].size, p_version, p_variant, p_spec_constants);
-			material_storage->shaders.scene_shader.version_set_uniform(SceneShaderGLES2::Uniforms(base_idx + 4), Vector3(scene_state.spot_lights[i].color[0], scene_state.spot_lights[i].color[1], scene_state.spot_lights[i].color[2]), p_version, p_variant, p_spec_constants);
-			material_storage->shaders.scene_shader.version_set_uniform(SceneShaderGLES2::Uniforms(base_idx + 5), scene_state.spot_lights[i].attenuation, p_version, p_variant, p_spec_constants);
-			material_storage->shaders.scene_shader.version_set_uniform(SceneShaderGLES2::Uniforms(base_idx + 6), scene_state.spot_lights[i].inv_spot_attenuation, p_version, p_variant, p_spec_constants);
-			material_storage->shaders.scene_shader.version_set_uniform(SceneShaderGLES2::Uniforms(base_idx + 7), scene_state.spot_lights[i].cos_spot_angle, p_version, p_variant, p_spec_constants);
-			material_storage->shaders.scene_shader.version_set_uniform(SceneShaderGLES2::Uniforms(base_idx + 8), scene_state.spot_lights[i].specular_amount, p_version, p_variant, p_spec_constants);
-			material_storage->shaders.scene_shader.version_set_uniform(SceneShaderGLES2::Uniforms(base_idx + 9), scene_state.spot_lights[i].shadow_opacity, p_version, p_variant, p_spec_constants);
+			int base_idx = SceneShaderGLES2::DIRECTIONAL_LIGHTS_DATA_0_DIRECTION_ENERGY + (i * 3);
+			material_storage->shaders.scene_shader.version_set_uniform(SceneShaderGLES2::Uniforms(base_idx + 0), Vector4(scene_state.directional_lights[i].direction[0], scene_state.directional_lights[i].direction[1], scene_state.directional_lights[i].direction[2], scene_state.directional_lights[i].energy), p_version, p_variant, p_spec_constants);
+			material_storage->shaders.scene_shader.version_set_uniform(SceneShaderGLES2::Uniforms(base_idx + 1), Vector4(scene_state.directional_lights[i].color[0], scene_state.directional_lights[i].color[1], scene_state.directional_lights[i].color[2], scene_state.directional_lights[i].size), p_version, p_variant, p_spec_constants);
+			material_storage->shaders.scene_shader.version_set_uniform(SceneShaderGLES2::Uniforms(base_idx + 2), 1, p_version, p_variant, p_spec_constants);
 		}
 	}
 }

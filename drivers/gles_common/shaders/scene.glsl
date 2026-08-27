@@ -364,11 +364,7 @@ void main() {
 #endif
 #endif // !USE_GLES_OVER_GL
 
-#ifdef GL_ARB_shader_texture_lod
-#extension GL_ARB_shader_texture_lod : enable
-#endif
-
-#if !defined(GL_EXT_shader_texture_lod) && !defined(GL_ARB_shader_texture_lod)
+#if !defined(GL_EXT_shader_texture_lod)
 #define texture2DLod(img, coord, lod) texture2D(img, coord, lod)
 #define textureCubeLod(img, coord, lod) textureCube(img, coord, lod)
 #endif
@@ -505,14 +501,15 @@ uniform float white;
 #ifndef DISABLE_LIGHT_DIRECTIONAL
 
 struct DirectionalLightData {
-	mediump vec3 direction;
-	mediump float energy;
-	mediump vec3 color;
-	mediump float size;
-	mediump float specular;
+	highp vec4 direction_energy;
+	highp vec4 color_size;
+	bool enabled;
 };
 
-uniform DirectionalLightData directional_lights[MAX_DIRECTIONAL_LIGHT_DATA_STRUCTS];
+struct DirectionalLights { 
+	DirectionalLightData data[MAX_DIRECTIONAL_LIGHT_DATA_STRUCTS];
+};
+uniform DirectionalLights directional_lights;
 
 #endif // !DISABLE_LIGHT_DIRECTIONAL
 
@@ -520,30 +517,25 @@ uniform DirectionalLightData directional_lights[MAX_DIRECTIONAL_LIGHT_DATA_STRUC
 #if !defined(DISABLE_LIGHT_OMNI) || !defined(DISABLE_LIGHT_SPOT)
 
 struct LightData { 
-	highp vec3 position;
-	highp float inv_radius;
-
-	mediump vec3 direction;
-	highp float size;
-
-	mediump vec3 color;
-	mediump float attenuation;
-
-	mediump float cone_attenuation;
-	mediump float cone_angle;
-	mediump float specular_amount;
-	mediump float shadow_opacity;
+	highp vec4 position_inv_radius;
+	highp vec4 direction_size;
+	highp vec4 color_attenuation;
+	highp vec4 cone_attenuation_angle_specular_shadow;
 };
 
 #ifndef DISABLE_LIGHT_OMNI
-uniform LightData omni_lights[MAX_LIGHT_DATA_STRUCTS];
-uniform int omni_light_indices[MAX_FORWARD_LIGHTS];
+struct OmniLights {
+	LightData data[MAX_FORWARD_LIGHTS];
+};
+uniform OmniLights omni_lights;
 uniform int omni_light_count;
 #endif
 
 #ifndef DISABLE_LIGHT_SPOT
-uniform LightData spot_lights[MAX_LIGHT_DATA_STRUCTS];
-uniform int spot_light_indices[MAX_FORWARD_LIGHTS];
+struct SpotLights {
+	LightData data[MAX_FORWARD_LIGHTS];
+};
+uniform SpotLights spot_lights;
 uniform int spot_light_count;
 #endif
 
@@ -744,7 +736,7 @@ float get_omni_spot_attenuation(float distance, float inv_range, float decay) {
 }
 
 #ifndef DISABLE_LIGHT_OMNI
-void light_process_omni(int idx, vec3 vertex, vec3 eye_vec, vec3 normal, vec3 f0, float roughness, float metallic, float shadow, vec3 albedo, inout float alpha,
+void light_process_omni(LightData light, vec3 vertex, vec3 eye_vec, vec3 normal, vec3 f0, float roughness, float metallic, float shadow, vec3 albedo, inout float alpha,
 #ifdef LIGHT_BACKLIGHT_USED
 		vec3 backlight,
 #endif
@@ -758,18 +750,18 @@ void light_process_omni(int idx, vec3 vertex, vec3 eye_vec, vec3 normal, vec3 f0
 		vec3 binormal, vec3 tangent, float anisotropy,
 #endif
 		inout vec3 diffuse_light, inout vec3 specular_light) {
-	vec3 light_rel_vec = omni_lights[idx].position - vertex;
+	vec3 light_rel_vec = light.position_inv_radius.xyz - vertex;
 	float light_length = length(light_rel_vec);
-	float omni_attenuation = get_omni_spot_attenuation(light_length, omni_lights[idx].inv_radius, omni_lights[idx].attenuation);
-	vec3 color = omni_lights[idx].color;
+	float omni_attenuation = get_omni_spot_attenuation(light_length, light.position_inv_radius.w, light.color_attenuation.w);
+	vec3 color = light.color_attenuation.xyz;
 	float size_A = 0.0;
 
-	if (omni_lights[idx].size > 0.0) {
-		float t = omni_lights[idx].size / max(0.001, light_length);
+	if (light.direction_size.w > 0.0) {
+		float t = light.direction_size.w / max(0.001, light_length);
 		size_A = max(0.0, 1.0 - 1.0 / sqrt(1.0 + t * t));
 	}
 
-	light_compute(normal, normalize(light_rel_vec), eye_vec, size_A, color, omni_attenuation, f0, roughness, metallic, omni_lights[idx].specular_amount, albedo, alpha,
+	light_compute(normal, normalize(light_rel_vec), eye_vec, size_A, color, omni_attenuation, f0, roughness, metallic, light.cone_attenuation_angle_specular_shadow.z, albedo, alpha,
 #ifdef LIGHT_BACKLIGHT_USED
 			backlight,
 #endif
@@ -788,7 +780,7 @@ void light_process_omni(int idx, vec3 vertex, vec3 eye_vec, vec3 normal, vec3 f0
 #endif // !DISABLE_LIGHT_OMNI
 
 #ifndef DISABLE_LIGHT_SPOT
-void light_process_spot(int idx, vec3 vertex, vec3 eye_vec, vec3 normal, vec3 f0, float roughness, float metallic, float shadow, vec3 albedo, inout float alpha,
+void light_process_spot(LightData light, vec3 vertex, vec3 eye_vec, vec3 normal, vec3 f0, float roughness, float metallic, float shadow, vec3 albedo, inout float alpha,
 #ifdef LIGHT_BACKLIGHT_USED
 		vec3 backlight,
 #endif
@@ -804,23 +796,23 @@ void light_process_spot(int idx, vec3 vertex, vec3 eye_vec, vec3 normal, vec3 f0
 		inout vec3 diffuse_light,
 		inout vec3 specular_light) {
 
-	vec3 light_rel_vec = spot_lights[idx].position - vertex;
+	vec3 light_rel_vec = light.position_inv_radius.xyz - vertex;
 	float light_length = length(light_rel_vec);
-	float spot_attenuation = get_omni_spot_attenuation(light_length, spot_lights[idx].inv_radius, spot_lights[idx].attenuation);
-	vec3 spot_dir = spot_lights[idx].direction;
-	float scos = max(dot(-normalize(light_rel_vec), spot_dir), spot_lights[idx].cone_angle);
-	float spot_rim = max(0.0001, (1.0 - scos) / (1.0 - spot_lights[idx].cone_angle));
-	spot_attenuation *= 1.0 - pow(spot_rim, spot_lights[idx].cone_attenuation);
-	vec3 color = spot_lights[idx].color;
+	float spot_attenuation = get_omni_spot_attenuation(light_length, light.position_inv_radius.w, light.color_attenuation.w);
+	vec3 spot_dir = light.direction_size.xyz;
+	float scos = max(dot(-normalize(light_rel_vec), spot_dir), light.cone_attenuation_angle_specular_shadow.y);
+	float spot_rim = max(0.0001, (1.0 - scos) / (1.0 - light.cone_attenuation_angle_specular_shadow.y));
+	spot_attenuation *= 1.0 - pow(spot_rim, light.cone_attenuation_angle_specular_shadow.x);
+	vec3 color = light.color_attenuation.xyz;
 
 	float size_A = 0.0;
 
-	if (spot_lights[idx].size > 0.0) {
-		float t = spot_lights[idx].size / max(0.001, light_length);
+	if (light.direction_size.w > 0.0) {
+		float t = light.direction_size.w / max(0.001, light_length);
 		size_A = max(0.0, 1.0 - 1.0 / sqrt(1.0 + t * t));
 	}
 
-	light_compute(normal, normalize(light_rel_vec), eye_vec, size_A, color, spot_attenuation, f0, roughness, metallic, spot_lights[idx].specular_amount, albedo, alpha,
+	light_compute(normal, normalize(light_rel_vec), eye_vec, size_A, color, spot_attenuation, f0, roughness, metallic, light.cone_attenuation_angle_specular_shadow.z, albedo, alpha,
 #ifdef LIGHT_BACKLIGHT_USED
 			backlight,
 #endif
@@ -864,9 +856,11 @@ vec4 fog_process(vec3 vertex) {
 		float sun_total = 0.0;
 		vec3 view = normalize(vertex);
 		for (int i = 0; i < MAX_DIRECTIONAL_LIGHT_DATA_STRUCTS; i++) {
-			if (i >= directional_light_count) break;
-			vec3 light_color = directional_lights[i].color * directional_lights[i].energy;
-			float light_amount = pow(max(dot(view, directional_lights[i].direction), 0.0), 8.0);
+			if (i >= directional_light_count) {
+				break;
+			}
+			vec3 light_color = directional_lights.data[i].color_size.xyz * directional_lights.data[i].direction_energy.w;
+			float light_amount = pow(max(dot(view, directional_lights.data[i].direction_energy.xyz), 0.0), 8.0);
 			fog_color += light_color * light_amount * fog_sun_scatter;
 		}
 	}
@@ -1137,10 +1131,8 @@ void main() {
 
 #ifndef DISABLE_LIGHT_DIRECTIONAL
 	for (int i = 0; i < MAX_DIRECTIONAL_LIGHT_DATA_STRUCTS; i++) {
-		if (i >= directional_light_count) {
-			break;
-		}
-		light_compute(normal, normalize(directional_lights[i].direction), normalize(view), directional_lights[i].size, directional_lights[i].color * directional_lights[i].energy, 1.0, f0, roughness, metallic, 1.0, albedo, alpha,
+		if (i < directional_light_count) {
+			light_compute(normal, normalize(directional_lights.data[i].direction_energy.xyz), normalize(view), directional_lights.data[i].color_size.w, directional_lights.data[i].color_size.xyz * directional_lights.data[i].direction_energy.w, 1.0, f0, roughness, metallic, 1.0, albedo, alpha,
 #ifdef LIGHT_BACKLIGHT_USED
 				backlight,
 #endif
@@ -1156,15 +1148,15 @@ void main() {
 #endif
 				diffuse_light,
 				specular_light);
+		}
 	}
 #endif // !DISABLE_LIGHT_DIRECTIONAL
 
 #ifndef DISABLE_LIGHT_OMNI
 	for (int i = 0; i < MAX_FORWARD_LIGHTS; i++) {
-		if (i >= omni_light_count) {
-			break;
-		}
-		light_process_omni(omni_light_indices[i], vertex, view, normal, f0, roughness, metallic, 0.0, albedo, alpha,
+		if (i < omni_light_count) {
+			LightData light = omni_lights.data[i];
+			light_process_omni(light, vertex, view, normal, f0, roughness, metallic, 0.0, albedo, alpha,
 #ifdef LIGHT_BACKLIGHT_USED
 				backlight,
 #endif
@@ -1179,15 +1171,15 @@ void main() {
 				binormal, tangent, anisotropy,
 #endif
 				diffuse_light, specular_light);
+		}
 	}
 #endif // !DISABLE_LIGHT_OMNI
 
 #ifndef DISABLE_LIGHT_SPOT
 	for (int i = 0; i < MAX_FORWARD_LIGHTS; i++) {
-		if (i >= spot_light_count) {
-			break;
-		}
-		light_process_spot(spot_light_indices[i], vertex, view, normal, f0, roughness, metallic, 0.0, albedo, alpha,
+		if (i < spot_light_count) {
+			LightData light = spot_lights.data[i];
+			light_process_spot(light, vertex, view, normal, f0, roughness, metallic, 0.0, albedo, alpha,
 #ifdef LIGHT_BACKLIGHT_USED
 				backlight,
 #endif
@@ -1203,6 +1195,7 @@ void main() {
 				binormal, anisotropy,
 #endif
 				diffuse_light, specular_light);
+		}
 	}
 #endif // !DISABLE_LIGHT_SPOT
 

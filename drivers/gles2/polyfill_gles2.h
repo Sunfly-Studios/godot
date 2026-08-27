@@ -51,6 +51,9 @@ namespace GLES2 {
 		static PFNGLENDTRANSFORMFEEDBACKPROC endTransformFeedback;
 		static PFNGLBINDBUFFERRANGEPROC bindBufferRange;
 		static PFNGLTRANSFORMFEEDBACKVARYINGSPROC transformFeedbackVaryings;
+		static PFNGLBINDVERTEXARRAYPROC bindVertexArray;
+		static PFNGLGENVERTEXARRAYSPROC genVertexArrays;
+		static PFNGLDELETEVERTEXARRAYSPROC deleteVertexArrays;
 
 #if !defined(WEB_ENABLED)
 		static PFNGLUNMAPBUFFERPROC unmapBuffer;
@@ -93,15 +96,15 @@ namespace GLES2 {
 // =========================================
 #undef glBindBufferBaseEXT
 #define glBindBufferBaseEXT(target, index, buffer)                  \
-	do {                                                           \
-		if (likely(GLES2::Polyfill::bindBufferBase))              \
+	do {                                                            \
+		if (likely(GLES2::Polyfill::bindBufferBase))                \
 			GLES2::Polyfill::bindBufferBase(target, index, buffer); \
 	} while (0)
 
 #undef glBeginTransformFeedbackEXT
-#define glBeginTransformFeedbackEXT(primitiveMode) \
+#define glBeginTransformFeedbackEXT(primitiveMode)                      \
 	do {                                                                \
-		if (likely(GLES2::Polyfill::beginTransformFeedback))                    \
+		if (likely(GLES2::Polyfill::beginTransformFeedback))            \
 			GLES2::Polyfill::beginTransformFeedback(primitiveMode);     \
 	} while (0)
 
@@ -126,6 +129,26 @@ namespace GLES2 {
 			GLES2::Polyfill::transformFeedbackVaryings(program, count, varyings, bufferMode); \
 	} while (0)
 
+#undef glBindVertexArray
+#define glBindVertexArray(array)                      \
+	do {                                              \
+		if (likely(GLES2::Polyfill::bindVertexArray)) \
+			GLES2::Polyfill::bindVertexArray(array);  \
+	} while (0)
+
+#undef glGenVertexArrays
+#define glGenVertexArrays(n, arrays)                      \
+	do {                                                  \
+		if (likely(GLES2::Polyfill::genVertexArrays))     \
+			GLES2::Polyfill::genVertexArrays(n, arrays);  \
+	} while (0)
+
+#undef glDeleteVertexArrays
+#define glDeleteVertexArrays(n, arrays)                     \
+	do {                                                    \
+		if (likely(GLES2::Polyfill::deleteVertexArrays))    \
+			GLES2::Polyfill::deleteVertexArrays(n, arrays); \
+	} while (0)
 
 #if !defined(WEB_ENABLED)
 
