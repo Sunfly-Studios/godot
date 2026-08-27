@@ -192,6 +192,15 @@ Config::Config() {
 	glGetIntegerv(GL_MAX_LIGHTS, &result);
 	max_lights = CLAMP(result, 0, 32);
 
+	glGetIntegerv(GL_MAX_VERTEX_UNITS_OES, &result);
+
+	// Guaranteed minimum is 3, some increase up to 4. I set max up to 6 just in case
+	max_vertex_units = CLAMP(result, 3, 6);
+
+	glGetIntegerv(GL_MAX_PALETTE_MATRICES_OES, &result);
+	// Guaranteed minimum is 9, extended implementations up to 32.
+	max_palette_matrices = CLAMP(result, 9, 32);
+
 	_flush_gl_errors();
 	for (int i = 0; i < max_lights; i++) {
 		glEnable(GL_LIGHT0 + i);

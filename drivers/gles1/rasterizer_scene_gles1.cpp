@@ -109,10 +109,12 @@ static constexpr float T_WIDTH = 0.02f;
 #endif
 
 static GLuint _init_radiance_texture_gles1(int p_size, int p_mipmaps, String p_name) {
-	GLint prev_tex = 0;
-	if (GLES1::Config::get_singleton()->support_cubemap) {
-		glGetIntegerv(GL_TEXTURE_BINDING_CUBE_MAP_OES, &prev_tex);
+	if (!GLES1::Config::get_singleton()->support_cubemap) {
+		return 0;
 	}
+
+	GLint prev_tex = 0;
+	glGetIntegerv(GL_TEXTURE_BINDING_CUBE_MAP_OES, &prev_tex);
 
 	GLuint tex;
 	glGenTextures(1, &tex);
@@ -1225,6 +1227,9 @@ void RasterizerSceneGLES1::_draw_sky(RID p_env, const Projection &p_projection, 
 	}
 
 	// Push the matrices before everything.
+	GLint prev_matrix_mode;
+	glGetIntegerv(GL_MATRIX_MODE, &prev_matrix_mode);
+
 	glMatrixMode(GL_PROJECTION);
 	glPushMatrix();
 	glMatrixMode(GL_MODELVIEW);
@@ -1378,7 +1383,7 @@ void RasterizerSceneGLES1::_draw_sky(RID p_env, const Projection &p_projection, 
 		uvw_ptr[i * 3 + 2] = cube_normal.z;
 	}
 
-	if (sky && sky->radiance != 0) {
+	if (sky && sky->radiance != 0 && GLES1::Config::get_singleton()->support_cubemap) {
 		glEnable(GL_TEXTURE_CUBE_MAP);
 		glBindTexture(GL_TEXTURE_CUBE_MAP, sky->radiance);
 		glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE);
@@ -1397,9 +1402,13 @@ void RasterizerSceneGLES1::_draw_sky(RID p_env, const Projection &p_projection, 
 	GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_draw_sky: Sky state setup");
 
 	// Unbind VBOs
-	if (GLES1::Config::get_singleton()->support_vbo) {
-		GLuint uvw_vbo = sky ? sky->sky_uvw_vbo : sky_globals.fallback_sky_uvw_vbo;
+	GLuint uvw_vbo = sky ? sky->sky_uvw_vbo : sky_globals.fallback_sky_uvw_vbo;
 
+	if (
+		GLES1::Config::get_singleton()->support_vbo &&
+		sky_globals.screen_triangle != 0 &&
+		uvw_vbo != 0
+	) {
 		glBindBuffer(GL_ARRAY_BUFFER, uvw_vbo);
 		glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(float) * 12, uvw_ptr);
 		GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_draw_sky: glBufferSubData for UVW");
@@ -1412,7 +1421,6 @@ void RasterizerSceneGLES1::_draw_sky(RID p_env, const Projection &p_projection, 
 		glTexCoordPointer(3, GL_FLOAT, 0, nullptr);
 		GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_draw_sky: glTexCoordPointer VBO");
 	} else {
-		// Unbind VBOs
 		if (GLES1::Config::get_singleton()->support_vbo) {
 			glBindBuffer(GL_ARRAY_BUFFER, 0);
 		}
@@ -1429,10 +1437,10 @@ void RasterizerSceneGLES1::_draw_sky(RID p_env, const Projection &p_projection, 
 	GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_draw_sky: glDrawArrays");
 
 	// Unbind state
-	if (sky && sky->radiance != 0) {
+	if (sky && sky->radiance != 0 && GLES1::Config::get_singleton()->support_cubemap) {
 		glDisable(GL_TEXTURE_CUBE_MAP);
 		glBindTexture(GL_TEXTURE_CUBE_MAP, 0);
-		GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_draw_sky: unbind cubemap")
+		GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_draw_sky: unbind cubemap");
 	}
 
 	glDisableClientState(GL_VERTEX_ARRAY);
@@ -1449,6 +1457,7 @@ void RasterizerSceneGLES1::_draw_sky(RID p_env, const Projection &p_projection, 
 	glPopMatrix();
 	glMatrixMode(GL_MODELVIEW);
 	glPopMatrix();
+	glMatrixMode(prev_matrix_mode);
 	GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_draw_sky: matrix pop");
 
 	glColor4f(1.0f, 1.0f, 1.0f, 1.0f);
@@ -1456,7 +1465,7 @@ void RasterizerSceneGLES1::_draw_sky(RID p_env, const Projection &p_projection, 
 }
 
 void RasterizerSceneGLES1::_update_sky_radiance(RID p_env, const Projection &p_projection, const Transform3D &p_transform, float p_sky_energy_multiplier) {
-	if (!GLES1::Config::get_singleton()->support_fbo) {
+	if (!GLES1::Config::get_singleton()->support_fbo || !GLES1::Config::get_singleton()->support_cubemap) {
 		return;
 	}
 	GLES1::MaterialStorage *material_storage = GLES1::MaterialStorage::get_singleton();
@@ -1552,6 +1561,9 @@ void RasterizerSceneGLES1::_update_sky_radiance(RID p_env, const Projection &p_p
 		GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_update_sky_radiance: glBindFramebufferOES");
 
 		// Protect against uniform matrix leak
+		GLint prev_matrix_mode;
+		glGetIntegerv(GL_MATRIX_MODE, &prev_matrix_mode);
+
 		glMatrixMode(GL_PROJECTION);
 		glPushMatrix();
 		glLoadIdentity();
@@ -1577,10 +1589,8 @@ void RasterizerSceneGLES1::_update_sky_radiance(RID p_env, const Projection &p_p
 			}
 			glDisable(GL_TEXTURE_2D);
 			glBindTexture(GL_TEXTURE_2D, 0);
-			if (GLES1::Config::get_singleton()->support_cubemap) {
-				glDisable(GL_TEXTURE_CUBE_MAP);
-				glBindTexture(GL_TEXTURE_CUBE_MAP, 0);
-			}
+			glDisable(GL_TEXTURE_CUBE_MAP);
+			glBindTexture(GL_TEXTURE_CUBE_MAP, 0);
 			glDisableClientState(GL_TEXTURE_COORD_ARRAY);
 		}
 		if (max_textures > 1) {
@@ -1757,6 +1767,7 @@ void RasterizerSceneGLES1::_update_sky_radiance(RID p_env, const Projection &p_p
 		glPopMatrix();
 		glMatrixMode(GL_MODELVIEW);
 		glPopMatrix();
+		glMatrixMode(prev_matrix_mode);
 		GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_update_sky_radiance: matrix pop");
 
 		glBindFramebufferOES(GL_FRAMEBUFFER_OES, prev_fbo);
@@ -2286,8 +2297,11 @@ void RasterizerSceneGLES1::_batch_render_items(GLES1::SceneMaterialData *p_mater
 	Transform3D view_matrix;
 	_gl_reconstruct_view_matrix(view_matrix);
 
-	// The behaviour here is entirely dependent on overhead
-	if (GLES1::Config::get_singleton()->support_matrix_palette && !use_hardware_transform) {
+	if (
+		GLES1::Config::get_singleton()->support_matrix_palette &&
+		!use_hardware_transform &&
+		p_batch.num_items <= (uint32_t)GLES1::Config::get_singleton()->max_palette_matrices
+	) {
 		// Lots of overhead, lots of stuff to draw.
 		// Do the fast Matrix Palette path if supported.
 		_batch_bind_material(p_material_data, Transform3D(), p_transparent);
@@ -2385,10 +2399,12 @@ void RasterizerSceneGLES1::_batch_render_generic(RS::PrimitiveType p_primitive, 
 		glDisableClientState(GL_COLOR_ARRAY);
 	}
 
-	glClientActiveTexture(GL_TEXTURE1);
-	glEnableClientState(GL_TEXTURE_COORD_ARRAY);
-	GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_batch_render_generic: glClientActiveTexture GL_TEXTURE1 setup");
-	glClientActiveTexture(GL_TEXTURE0);
+	if (GLES1::Config::get_singleton()->max_texture_units > 1) {
+		glClientActiveTexture(GL_TEXTURE1);
+		glEnableClientState(GL_TEXTURE_COORD_ARRAY);
+		GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_batch_render_generic: glClientActiveTexture GL_TEXTURE1 setup");
+		glClientActiveTexture(GL_TEXTURE0);
+	}
 
 	bool use_palette = false;
 	if (GLES1::Config::get_singleton()->support_matrix_palette) {
@@ -2411,12 +2427,14 @@ void RasterizerSceneGLES1::_batch_render_generic(RS::PrimitiveType p_primitive, 
 			glTexCoordPointer(2, GL_FLOAT, stride, (void *)BATCH_INSTANCED_OFFSET_OF(uv));
 			glColorPointer(4, GL_UNSIGNED_BYTE, stride, (void *)BATCH_INSTANCED_OFFSET_OF(color));
 
-			glClientActiveTexture(GL_TEXTURE1);
-			glTexCoordPointer(4, GL_FLOAT, stride, (void *)BATCH_INSTANCED_OFFSET_OF(tangent));
-			glClientActiveTexture(GL_TEXTURE0);
+			if (GLES1::Config::get_singleton()->max_texture_units > 1) {
+				glClientActiveTexture(GL_TEXTURE1);
+				glTexCoordPointer(4, GL_FLOAT, stride, (void *)BATCH_INSTANCED_OFFSET_OF(tangent));
+				glClientActiveTexture(GL_TEXTURE0);
+			}
 
 			if (use_palette) {
-				glMatrixIndexPointerOES(1, GL_FLOAT, stride, (void *)BATCH_INSTANCED_OFFSET_OF(matrix_index));
+				glMatrixIndexPointerOES(1, GL_UNSIGNED_BYTE, stride, (void *)BATCH_INSTANCED_OFFSET_OF(matrix_index));
 			}
 		} else {
 			glVertexPointer(3, GL_FLOAT, stride, (void *)BATCH_OFFSET_OF(pos));
@@ -2424,12 +2442,14 @@ void RasterizerSceneGLES1::_batch_render_generic(RS::PrimitiveType p_primitive, 
 			glTexCoordPointer(2, GL_FLOAT, stride, (void *)BATCH_OFFSET_OF(uv));
 			glColorPointer(4, GL_UNSIGNED_BYTE, stride, (void *)BATCH_OFFSET_OF(color));
 
-			glClientActiveTexture(GL_TEXTURE1);
-			glTexCoordPointer(4, GL_FLOAT, stride, (void *)BATCH_OFFSET_OF(tangent));
-			glClientActiveTexture(GL_TEXTURE0);
+			if (GLES1::Config::get_singleton()->max_texture_units > 1) {
+				glClientActiveTexture(GL_TEXTURE1);
+				glTexCoordPointer(4, GL_FLOAT, stride, (void *)BATCH_OFFSET_OF(tangent));
+				glClientActiveTexture(GL_TEXTURE0);
+			}
 
 			if (use_palette) {
-				glMatrixIndexPointerOES(1, GL_FLOAT, stride, (void *)BATCH_OFFSET_OF(matrix_index));
+				glMatrixIndexPointerOES(1, GL_UNSIGNED_BYTE, stride, (void *)BATCH_OFFSET_OF(matrix_index));
 			}
 		}
 		GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_batch_render_generic: VBO Array setup");
@@ -2444,12 +2464,14 @@ void RasterizerSceneGLES1::_batch_render_generic(RS::PrimitiveType p_primitive, 
 			glTexCoordPointer(2, GL_FLOAT, stride, data_ptr + BATCH_INSTANCED_OFFSET_OF(uv));
 			glColorPointer(4, GL_UNSIGNED_BYTE, stride, data_ptr + BATCH_INSTANCED_OFFSET_OF(color));
 
-			glClientActiveTexture(GL_TEXTURE1);
-			glTexCoordPointer(4, GL_FLOAT, stride, data_ptr + BATCH_INSTANCED_OFFSET_OF(tangent));
-			glClientActiveTexture(GL_TEXTURE0);
+			if (GLES1::Config::get_singleton()->max_texture_units > 1) {
+				glClientActiveTexture(GL_TEXTURE1);
+				glTexCoordPointer(4, GL_FLOAT, stride, (void *)BATCH_INSTANCED_OFFSET_OF(tangent));
+				glClientActiveTexture(GL_TEXTURE0);
+			}
 
 			if (use_palette) {
-				glMatrixIndexPointerOES(1, GL_FLOAT, stride, data_ptr + BATCH_INSTANCED_OFFSET_OF(matrix_index));
+				glMatrixIndexPointerOES(1, GL_UNSIGNED_BYTE, stride, data_ptr + BATCH_INSTANCED_OFFSET_OF(matrix_index));
 			}
 		} else {
 			glVertexPointer(3, GL_FLOAT, stride, data_ptr + BATCH_OFFSET_OF(pos));
@@ -2457,12 +2479,14 @@ void RasterizerSceneGLES1::_batch_render_generic(RS::PrimitiveType p_primitive, 
 			glTexCoordPointer(2, GL_FLOAT, stride, data_ptr + BATCH_OFFSET_OF(uv));
 			glColorPointer(4, GL_UNSIGNED_BYTE, stride, data_ptr + BATCH_OFFSET_OF(color));
 
-			glClientActiveTexture(GL_TEXTURE1);
-			glTexCoordPointer(4, GL_FLOAT, stride, data_ptr + BATCH_OFFSET_OF(tangent));
-			glClientActiveTexture(GL_TEXTURE0);
+			if (GLES1::Config::get_singleton()->max_texture_units > 1) {
+				glClientActiveTexture(GL_TEXTURE1);
+				glTexCoordPointer(4, GL_FLOAT, stride, (void *)BATCH_OFFSET_OF(tangent));
+				glClientActiveTexture(GL_TEXTURE0);
+			}
 
 			if (use_palette) {
-				glMatrixIndexPointerOES(1, GL_FLOAT, stride, data_ptr + BATCH_OFFSET_OF(matrix_index));
+				glMatrixIndexPointerOES(1, GL_UNSIGNED_BYTE, stride, data_ptr + BATCH_OFFSET_OF(matrix_index));
 			}
 		}
 		GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_batch_render_generic: Client Array setup");
@@ -2489,9 +2513,11 @@ void RasterizerSceneGLES1::_batch_render_generic(RS::PrimitiveType p_primitive, 
 	glDisableClientState(GL_TEXTURE_COORD_ARRAY);
 	glDisableClientState(GL_COLOR_ARRAY);
 
-	glClientActiveTexture(GL_TEXTURE1);
-	glDisableClientState(GL_TEXTURE_COORD_ARRAY);
-	glClientActiveTexture(GL_TEXTURE0);
+	if (GLES1::Config::get_singleton()->max_texture_units > 1) {
+		glClientActiveTexture(GL_TEXTURE1);
+		glDisableClientState(GL_TEXTURE_COORD_ARRAY);
+		glClientActiveTexture(GL_TEXTURE0);
+	}
 	GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_batch_render_generic: Texture unit state cleanup");
 
 	if (use_palette) {
@@ -2558,7 +2584,21 @@ void RasterizerSceneGLES1::_render_single_item_immediate(const GeometryInstanceS
 	// Draw
 	if (drawn_count > 0) {
 		if (use_index_buffer) {
-			glDrawElements(primitive_gl, drawn_count, mesh_storage->mesh_surface_get_index_type(p_surface->surface), nullptr);
+			GLenum index_type = mesh_storage->mesh_surface_get_index_type(p_surface->surface);
+
+			// Can't draw if we don't support 32-bit indices.
+			if (index_type == GL_UNSIGNED_INT && !GLES1::Config::get_singleton()->support_32_bits_indices) {
+				mesh_storage->mesh_surface_unbind_arrays_gles1(p_surface->surface);
+				if (GLES1::Config::get_singleton()->support_vbo) {
+					glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+				}
+				glMatrixMode(GL_MODELVIEW);
+				glPopMatrix();
+				glColor4f(1.0f, 1.0f, 1.0f, 1.0f);
+				_gl_setup_fog(nullptr);
+				return;
+			}
+			glDrawElements(primitive_gl, drawn_count, index_type, nullptr);
 			GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_render_single_item_immediate: glDrawElements");
 		} else {
 			glDrawArrays(primitive_gl, 0, drawn_count);

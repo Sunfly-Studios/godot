@@ -77,8 +77,8 @@ public:
 	GLint max_modelview_stack_depth = 0;
 	GLint max_projection_stack_depth = 0;
 	GLint max_texture_stack_depth = 0;
-	GLint max_palette_matrices = 0; // For GL_OES_matrix_palette
-	GLint max_vertex_units = 0; // For GL_OES_matrix_palette
+	GLint max_palette_matrices = 0;
+	GLint max_vertex_units = 0;
 	GLint max_texture_image_units = 0;
 	GLint max_uniform_buffer_size = 0; // Always 0.
 
