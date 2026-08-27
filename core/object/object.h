@@ -41,6 +41,7 @@
 #include "core/templates/list.h"
 #include "core/templates/rb_map.h"
 #include "core/templates/safe_refcount.h"
+#include "core/templates/value_ptr.h"
 #include "core/variant/callable_bind.h"
 #include "core/variant/variant.h"
 #include "core/object/class_temperature.h"
@@ -644,7 +645,7 @@ private:
 			List<Connection>::Element *cE = nullptr;
 		};
 
-		MethodInfo user;
+		ValuePtr<MethodInfo> user_signal_info;
 		HashMap<Callable, Slot, HashableHasher<Callable>> slot_map;
 		bool removable = false;
 	};
