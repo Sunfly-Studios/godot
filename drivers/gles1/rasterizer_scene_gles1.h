@@ -1072,6 +1072,9 @@ protected:
 		GLuint radiance_verts_vbo = 0;
 		GLuint radiance_uvw_vbo = 0;
 		GLuint radiance_colors_vbo = 0;
+
+		float fallback_sky_uvw_cache[12] = {};
+		GLuint fallback_sky_uvw_vbo = 0;
 	} sky_globals;
 
 	struct Sky {
@@ -1120,6 +1123,8 @@ protected:
 		float ground_energy = 1.0f;
 
 		float exposure = 1.0f;
+		float sky_uvw_cache[12];
+		GLuint sky_uvw_vbo = 0;
 	};
 
 	Sky *dirty_sky_list = nullptr;

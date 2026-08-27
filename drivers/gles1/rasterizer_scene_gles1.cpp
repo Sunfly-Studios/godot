@@ -51,7 +51,69 @@ RasterizerSceneGLES1 *RasterizerSceneGLES1::singleton = nullptr;
 
 /* STATIC */
 
+// Shared constants across the driver
+static constexpr float qv_fallback[12] = {
+	-1.0f, -1.0f, -1.0f,
+	1.0f, -1.0f, -1.0f,
+	-1.0f, 1.0f, -1.0f,
+	1.0f, 1.0f, -1.0f
+};
+
+static const Vector3 view_normals[6] = {
+	Vector3(+1, 0, 0), Vector3(-1, 0, 0), Vector3(0, +1, 0),
+	Vector3(0, -1, 0), Vector3(0, 0, +1), Vector3(0, 0, -1)
+};
+static const Vector3 view_up[6] = {
+	Vector3(0, -1, 0), Vector3(0, -1, 0), Vector3(0, 0, +1),
+	Vector3(0, 0, -1), Vector3(0, -1, 0), Vector3(0, -1, 0)
+};
+
+static constexpr int GRID_SIZE = 16;
+static constexpr int NUM_VERTICES = GRID_SIZE * GRID_SIZE * 6;
+static constexpr int MAX_SKY_PROCESSING_LAYERS = 6;
+
+// The 5 GLES1 primitives
+static constexpr GLenum prim[5] = { GL_POINTS, GL_LINES, GL_LINE_STRIP, GL_TRIANGLES, GL_TRIANGLE_STRIP };
+
+#ifdef TOOLS_ENABLED
+// We manually draw the grid X/Y/Z editor lines regardless
+// of the world's opinion.
+// This is because the shader in Node3DEditorPlugin is a ghost
+// shader that exists but cannot be retrieved in anyway.
+// And because I don't want the user to just have a
+// grid + sky and that's it, we do it ourselves then.
+//
+// We don't count the draw calls made by these when
+// reporting rendering data.
+static constexpr float line_verts[] = {
+	0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, // +X Axis
+	0.0f, 0.0f, 0.0f, -1.0f, 0.0f, 0.0f, // -X Axis
+	0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, // +Y Axis
+	0.0f, 0.0f, 0.0f, 0.0f, -1.0f, 0.0f, // -Y Axis
+	0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, // +Z Axis
+	0.0f, 0.0f, 0.0f, 0.0f, 0.0f, -1.0f // -Z Axis
+};
+static constexpr uint8_t line_colors[] = {
+	246, 83, 101, 255, 246, 83, 101, 255, // +X Axis
+	246, 83, 101, 255, 246, 83, 101, 255, // -X Axis
+	139, 216, 67, 255, 139, 216, 67, 255, // +Y Axis
+	139, 216, 67, 255, 139, 216, 67, 255, // -Y Axis
+	57, 156, 237, 255, 57, 156, 237, 255, // +Z Axis
+	57, 156, 237, 255, 57, 156, 237, 255 // -Z Axis
+};
+
+// 3D Gizmos configuration
+static constexpr int BORDER_SEGMENTS = 64;
+static constexpr float B_WIDTH = 0.028f; // Border width
+static constexpr float T_WIDTH = 0.02f;
+#endif
+
 static GLuint _init_radiance_texture_gles1(int p_size, int p_mipmaps, String p_name) {
+	GLint prev_tex = 0;
+	if (GLES1::Config::get_singleton()->support_cubemap) {
+		glGetIntegerv(GL_TEXTURE_BINDING_CUBE_MAP_OES, &prev_tex);
+	}
+
 	GLuint tex;
 	glGenTextures(1, &tex);
 	GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_init_radiance_texture_gles1: glGenTextures");
@@ -60,21 +122,31 @@ static GLuint _init_radiance_texture_gles1(int p_size, int p_mipmaps, String p_n
 
 	int size = p_size;
 	int total_size = 0;
+
+	// Usually we would just fill-in with a `nullptr` buffer
+	// for fast and loose set-up of cubemaps.
+	// But the spec says that valid data must go in,
+	// so we fill them in with 0s
+	Vector<uint8_t> zero_buffer;
+	zero_buffer.resize(p_size * p_size * 4);
+	zero_buffer.fill(0);
+	const uint8_t *zero_ptr = zero_buffer.ptr();
+
 	for (int mip = 0; mip <= p_mipmaps; mip++) {
-		for (int i = 0; i < 6; i++) {
-			glTexImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_X + i, mip, GL_RGBA, size, size, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
+		for (int i = 0; i < MAX_SKY_PROCESSING_LAYERS; i++) {
+			glTexImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_X + i, mip, GL_RGBA, size, size, 0, GL_RGBA, GL_UNSIGNED_BYTE, zero_ptr);
 		}
 		total_size += size * size * 4 * 6;
 		size = MAX(1, size >> 1);
 	}
 	GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_init_radiance_texture_gles1: glTexImage2D");
 
-	glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MIN_FILTER, p_mipmaps > 0 ? GL_LINEAR_MIPMAP_LINEAR : GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
 	glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 	glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
 	glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 
-	glBindTexture(GL_TEXTURE_CUBE_MAP, 0);
+	glBindTexture(GL_TEXTURE_CUBE_MAP, prev_tex);
 
 	GLES1::Utilities::get_singleton()->texture_allocated_data(tex, total_size, p_name);
 
@@ -193,63 +265,6 @@ static _FORCE_INLINE_ void _batch_fill_vertex_instanced(RasterizerSceneBatcherCo
 	r_bv.matrix_index = p_matrix_index;
 }
 
-// Shared constants across the driver
-static constexpr float qv_fallback[12] = {
-	-1.0f, -1.0f, -1.0f,
-	 1.0f, -1.0f, -1.0f,
-	-1.0f,  1.0f, -1.0f,
-	 1.0f,  1.0f, -1.0f
-};
-
-static const Vector3 view_normals[6] = {
-	Vector3(+1, 0, 0), Vector3(-1, 0, 0), Vector3(0, +1, 0),
-	Vector3(0, -1, 0), Vector3(0, 0, +1), Vector3(0, 0, -1)
-};
-static const Vector3 view_up[6] = {
-	Vector3(0, -1, 0), Vector3(0, -1, 0), Vector3(0, 0, +1),
-	Vector3(0, 0, -1), Vector3(0, -1, 0), Vector3(0, -1, 0)
-};
-
-static constexpr int GRID_SIZE = 16;
-static constexpr int NUM_VERTICES = GRID_SIZE * GRID_SIZE * 6;
-static constexpr int MAX_SKY_PROCESSING_LAYERS = 6;
-
-// The 5 GLES1 primitives
-static constexpr GLenum prim[5] = { GL_POINTS, GL_LINES, GL_LINE_STRIP, GL_TRIANGLES, GL_TRIANGLE_STRIP };		
-
-#ifdef TOOLS_ENABLED
-// We manually draw the grid X/Y/Z editor lines regardless
-// of the world's opinion.
-// This is because the shader in Node3DEditorPlugin is a ghost
-// shader that exists but cannot be retrieved in anyway.
-// And because I don't want the user to just have a
-// grid + sky and that's it, we do it ourselves then.
-// 
-// We don't count the draw calls made by these when
-// reporting rendering data.
-static constexpr float line_verts[] = {
-	0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f,   // +X Axis
-	0.0f, 0.0f, 0.0f, -1.0f, 0.0f, 0.0f,  // -X Axis
-	0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f,   // +Y Axis
-	0.0f, 0.0f, 0.0f, 0.0f, -1.0f, 0.0f,  // -Y Axis
-	0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f,   // +Z Axis
-	0.0f, 0.0f, 0.0f, 0.0f, 0.0f, -1.0f   // -Z Axis
-};
-static constexpr uint8_t line_colors[] = {
-	246, 83, 101, 255, 246, 83, 101, 255, // +X Axis
-	246, 83, 101, 255, 246, 83, 101, 255, // -X Axis
-	139, 216, 67, 255, 139, 216, 67, 255, // +Y Axis
-	139, 216, 67, 255, 139, 216, 67, 255, // -Y Axis
-	57, 156, 237, 255, 57, 156, 237, 255, // +Z Axis
-	57, 156, 237, 255, 57, 156, 237, 255  // -Z Axis
-};
-
-// 3D Gizmos configuration
-static constexpr int BORDER_SEGMENTS = 64;
-static constexpr float B_WIDTH = 0.028f; // Border width
-static constexpr float T_WIDTH = 0.02f;
-#endif
-
 void RasterizerSceneGLES1::initialize() {
 	GLES1::MaterialStorage *material_storage = GLES1::MaterialStorage::get_singleton();
 	GLES1::Config *config = GLES1::Config::get_singleton();
@@ -356,14 +371,22 @@ void sky() {
 
 	{
 		sky_globals.screen_triangle = 0;
+		sky_globals.fallback_sky_uvw_vbo = 0;
 
 		if (GLES1::Config::get_singleton()->support_vbo) {
 			glGenBuffers(1, &sky_globals.screen_triangle);
+			glGenBuffers(1, &sky_globals.fallback_sky_uvw_vbo);
 		}
 
 		if (sky_globals.screen_triangle != 0) {
 			glBindBuffer(GL_ARRAY_BUFFER, sky_globals.screen_triangle);
 			glBufferData(GL_ARRAY_BUFFER, sizeof(float) * 12, qv_fallback, GL_STATIC_DRAW);
+			glBindBuffer(GL_ARRAY_BUFFER, 0);
+		}
+
+		if (sky_globals.fallback_sky_uvw_vbo != 0) {
+			glBindBuffer(GL_ARRAY_BUFFER, sky_globals.fallback_sky_uvw_vbo);
+			glBufferData(GL_ARRAY_BUFFER, sizeof(float) * 12, nullptr, GL_DYNAMIC_DRAW);
 			glBindBuffer(GL_ARRAY_BUFFER, 0);
 		}
 
@@ -862,6 +885,10 @@ void RasterizerSceneGLES1::_free_sky_data(Sky *p_sky) {
 			glDeleteFramebuffersOES(1, &p_sky->radiance_framebuffer);
 		}
 		p_sky->radiance_framebuffer = 0;
+		if (GLES1::Config::get_singleton()->support_vbo && p_sky->sky_uvw_vbo != 0) {
+			glDeleteBuffers(1, &p_sky->sky_uvw_vbo);
+			p_sky->sky_uvw_vbo = 0;
+		}
 	}
 }
 
@@ -935,10 +962,17 @@ void RasterizerSceneGLES1::_update_dirty_skys() {
 			sky->mipmap_count = Image::get_image_required_mipmaps(sky->radiance_size, sky->radiance_size, Image::FORMAT_RGBA8) - 1;
 			// Left uninitialized, will attach a texture at render time
 			if (GLES1::Config::get_singleton()->support_fbo) {
-				glGenFramebuffers(1, &sky->radiance_framebuffer);
+				glGenFramebuffersOES(1, &sky->radiance_framebuffer);
 			}
 			sky->radiance = _init_radiance_texture_gles1(sky->radiance_size, sky->mipmap_count, "Sky radiance texture");
 			sky->raw_radiance = _init_radiance_texture_gles1(sky->radiance_size, sky->mipmap_count, "Sky raw radiance texture");
+		}
+
+		if (GLES1::Config::get_singleton()->support_vbo && sky->sky_uvw_vbo == 0) {
+			glGenBuffers(1, &sky->sky_uvw_vbo);
+			glBindBuffer(GL_ARRAY_BUFFER, sky->sky_uvw_vbo);
+			glBufferData(GL_ARRAY_BUFFER, sizeof(float) * 12, nullptr, GL_DYNAMIC_DRAW);
+			glBindBuffer(GL_ARRAY_BUFFER, 0);
 		}
 
 		sky->reflection_dirty = true;
@@ -1147,7 +1181,6 @@ void RasterizerSceneGLES1::_setup_sky(const RenderDataGLES1 *p_render_data, cons
 
 		if (!sky->radiance) {
 			_invalidate_sky(sky);
-			_update_dirty_skys();
 		}
 	}
 }
@@ -1281,28 +1314,37 @@ void RasterizerSceneGLES1::_draw_sky(RID p_env, const Projection &p_projection, 
 	// Disable more client states
 	glDisable(GL_LIGHTING);
 	glDisable(GL_FOG);
-	if (GLES1::Config::get_singleton()->max_texture_units > 1) {
-		glActiveTexture(GL_TEXTURE0);
+
+	int max_textures = GLES1::Config::get_singleton()->max_texture_units;
+	for (int i = 0; i < max_textures; i++) {
+		if (max_textures > 1) {
+			glActiveTexture(GL_TEXTURE0 + i);
+			glClientActiveTexture(GL_TEXTURE0 + i);
+		}
+		glDisable(GL_TEXTURE_2D);
+		glBindTexture(GL_TEXTURE_2D, 0);
+		if (GLES1::Config::get_singleton()->support_cubemap) {
+			glDisable(GL_TEXTURE_CUBE_MAP);
+			glBindTexture(GL_TEXTURE_CUBE_MAP, 0);
+		}
+		glDisableClientState(GL_TEXTURE_COORD_ARRAY);
 	}
-	glDisable(GL_TEXTURE_2D);
-	GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_draw_sky: glDisable GL_LIGHTING, GL_FOG and GL_TEXTURE_2D");
+	if (max_textures > 1) {
+		glActiveTexture(GL_TEXTURE0);
+		glClientActiveTexture(GL_TEXTURE0);
+	}
+	GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_draw_sky: glDisable GL_LIGHTING, GL_FOG and texture unit cleanup");
 
 	glEnableClientState(GL_VERTEX_ARRAY);
 	GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_draw_sky: glEnableClientState GL_VERTEX_ARRAY");
 	glDisableClientState(GL_COLOR_ARRAY);
 	glDisableClientState(GL_NORMAL_ARRAY);
 
-	if (GLES1::Config::get_singleton()->max_texture_units > 1) {
-		glClientActiveTexture(GL_TEXTURE1);
-		glDisableClientState(GL_TEXTURE_COORD_ARRAY);
-		glClientActiveTexture(GL_TEXTURE0);
-	}
-
 	// We need UV coordinates to sample the sky texture.
 	glEnableClientState(GL_TEXTURE_COORD_ARRAY);
 	GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_draw_sky: Client State hardened");
 
-	float sky_uvw[12] = {};
+	float *uvw_ptr = sky ? sky->sky_uvw_cache : sky_globals.fallback_sky_uvw_cache;
 
 	// Replicate the `sky.glsl` shader math manually.
 	// We do the same in `_update_sky_radiance`
@@ -1331,14 +1373,15 @@ void RasterizerSceneGLES1::_draw_sky(RID p_env, const Projection &p_projection, 
 			cube_normal.normalize();
 		}
 
-		sky_uvw[i * 3 + 0] = cube_normal.x;
-		sky_uvw[i * 3 + 1] = cube_normal.y;
-		sky_uvw[i * 3 + 2] = cube_normal.z;
+		uvw_ptr[i * 3 + 0] = cube_normal.x;
+		uvw_ptr[i * 3 + 1] = cube_normal.y;
+		uvw_ptr[i * 3 + 2] = cube_normal.z;
 	}
 
 	if (sky && sky->radiance != 0) {
 		glEnable(GL_TEXTURE_CUBE_MAP);
 		glBindTexture(GL_TEXTURE_CUBE_MAP, sky->radiance);
+		glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE);
 		glColor4f(p_sky_energy_multiplier, p_sky_energy_multiplier, p_sky_energy_multiplier, 1.0f);
 	} else {
 		// Fallback if the radiance map isn't baked/ready
@@ -1355,15 +1398,32 @@ void RasterizerSceneGLES1::_draw_sky(RID p_env, const Projection &p_projection, 
 
 	// Unbind VBOs
 	if (GLES1::Config::get_singleton()->support_vbo) {
-		glBindBuffer(GL_ARRAY_BUFFER, 0);
+		GLuint uvw_vbo = sky ? sky->sky_uvw_vbo : sky_globals.fallback_sky_uvw_vbo;
+
+		glBindBuffer(GL_ARRAY_BUFFER, uvw_vbo);
+		glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(float) * 12, uvw_ptr);
+		GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_draw_sky: glBufferSubData for UVW");
+
+		glBindBuffer(GL_ARRAY_BUFFER, sky_globals.screen_triangle);
+		glVertexPointer(3, GL_FLOAT, 0, nullptr);
+		GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_draw_sky: glVertexPointer VBO");
+
+		glBindBuffer(GL_ARRAY_BUFFER, uvw_vbo);
+		glTexCoordPointer(3, GL_FLOAT, 0, nullptr);
+		GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_draw_sky: glTexCoordPointer VBO");
+	} else {
+		// Unbind VBOs
+		if (GLES1::Config::get_singleton()->support_vbo) {
+			glBindBuffer(GL_ARRAY_BUFFER, 0);
+		}
+
+		// Pass client-side memory for both pointers
+		glVertexPointer(3, GL_FLOAT, 0, qv_fallback);
+		GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_draw_sky: glVertexPointer client array");
+
+		glTexCoordPointer(3, GL_FLOAT, 0, uvw_ptr);
+		GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_draw_sky: glTexCoordPointer client array");
 	}
-
-	// Pass client-side memory for both pointers
-	glVertexPointer(3, GL_FLOAT, 0, qv_fallback);
-	GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_draw_sky: glVertexPointer");
-
-	glTexCoordPointer(3, GL_FLOAT, 0, sky_uvw);
-	GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_draw_sky: glTexCoordPointer client array");
 
 	glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
 	GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_draw_sky: glDrawArrays");
@@ -1508,17 +1568,30 @@ void RasterizerSceneGLES1::_update_sky_radiance(RID p_env, const Projection &p_p
 		scene_state.enable_gl_blend(false);
 
 		glDisable(GL_LIGHTING);
-		glDisable(GL_TEXTURE_2D);
+
+		int max_textures = GLES1::Config::get_singleton()->max_texture_units;
+		for (int i = 0; i < max_textures; i++) {
+			if (max_textures > 1) {
+				glActiveTexture(GL_TEXTURE0 + i);
+				glClientActiveTexture(GL_TEXTURE0 + i);
+			}
+			glDisable(GL_TEXTURE_2D);
+			glBindTexture(GL_TEXTURE_2D, 0);
+			if (GLES1::Config::get_singleton()->support_cubemap) {
+				glDisable(GL_TEXTURE_CUBE_MAP);
+				glBindTexture(GL_TEXTURE_CUBE_MAP, 0);
+			}
+			glDisableClientState(GL_TEXTURE_COORD_ARRAY);
+		}
+		if (max_textures > 1) {
+			glActiveTexture(GL_TEXTURE0);
+			glClientActiveTexture(GL_TEXTURE0);
+		}
 
 		glEnableClientState(GL_VERTEX_ARRAY);
 		glEnableClientState(GL_COLOR_ARRAY);
 		glDisableClientState(GL_NORMAL_ARRAY);
 
-		if (GLES1::Config::get_singleton()->max_texture_units > 1) {
-			glClientActiveTexture(GL_TEXTURE1);
-			glDisableClientState(GL_TEXTURE_COORD_ARRAY);
-			glClientActiveTexture(GL_TEXTURE0);
-		}
 		glEnableClientState(GL_TEXTURE_COORD_ARRAY); // Enable for 3D UVWs
 		GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_update_sky_radiance: Client State hardened");
 
@@ -1666,6 +1739,10 @@ void RasterizerSceneGLES1::_update_sky_radiance(RID p_env, const Projection &p_p
 			glBindTexture(GL_TEXTURE_CUBE_MAP, sky->radiance);
 			glGenerateMipmapOES(GL_TEXTURE_CUBE_MAP_OES);
 			GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_update_sky_radiance: glGenerateMipmapOES");
+
+			if (sky->mipmap_count > 0) {
+				glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+			}
 
 			glBindTexture(GL_TEXTURE_CUBE_MAP, 0);
 			GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_update_sky_radiance: unbind cubemap");
@@ -3706,6 +3783,9 @@ void RasterizerSceneGLES1::_render_shadow_pass(RID p_light, RID p_shadow_atlas, 
 }
 
 void RasterizerSceneGLES1::render_scene(const Ref<RenderSceneBuffers> &p_render_buffers, const CameraData *p_camera_data, const CameraData *p_prev_camera_data, const PagedArray<RenderGeometryInstance *> &p_instances, const PagedArray<RID> &p_lights, const PagedArray<RID> &p_reflection_probes, const PagedArray<RID> &p_voxel_gi_instances, const PagedArray<RID> &p_decals, const PagedArray<RID> &p_lightmaps, const PagedArray<RID> &p_fog_volumes, RID p_environment, RID p_camera_attributes, RID p_compositor, RID p_shadow_atlas, RID p_occluder_debug_tex, RID p_reflection_atlas, RID p_reflection_probe, int p_reflection_probe_pass, float p_screen_mesh_lod_threshold, const RenderShadowData *p_render_shadows, int p_render_shadow_count, const RenderSDFGIData *p_render_sdfgi_regions, int p_render_sdfgi_region_count, const RenderSDFGIUpdateData *p_sdfgi_update_data, RenderingMethod::RenderInfo *r_render_info) {
+	// Execute pending sky initializations cleanly before the rendering pipeline hijacks the GL state.
+	_update_dirty_skys();
+
 	GLES1::TextureStorage *texture_storage = GLES1::TextureStorage::get_singleton();
 	RENDER_TIMESTAMP("Setup 3D Scene");
 
@@ -4294,6 +4374,9 @@ RasterizerSceneGLES1::~RasterizerSceneGLES1() {
 
 	if (sky_globals.screen_triangle != 0) {
 		glDeleteBuffers(1, &sky_globals.screen_triangle);
+	}
+	if (sky_globals.fallback_sky_uvw_vbo != 0) {
+		glDeleteBuffers(1, &sky_globals.fallback_sky_uvw_vbo);
 	}
 
 	if (sky_globals.radiance_verts) {
