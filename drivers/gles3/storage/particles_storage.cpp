@@ -823,7 +823,7 @@ void ParticlesStorage::particles_set_view_axis(RID p_particles, const Vector3 &p
 		particle_array = particle_vector.ptr();
 		godot_webgl2_glGetBufferSubData(GL_ARRAY_BUFFER, 0, particles->amount * sizeof(ParticleInstanceData3D), particle_array);
 #endif
-		SortArray<ParticleInstanceData3D, ParticlesViewSort> sorter;
+		SortArray<ParticleInstanceData3D, ParticlesViewSort> sorter{};
 		sorter.compare.z_dir = axis;
 		sorter.sort(particle_array, particles->amount);
 

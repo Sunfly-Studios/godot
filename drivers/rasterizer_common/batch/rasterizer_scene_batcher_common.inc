@@ -158,10 +158,10 @@ void RasterizerSceneBatcherCommon<T_API>::record_items(T_SURFACE **p_surfaces, i
 template <typename T_API>
 void RasterizerSceneBatcherCommon<T_API>::sort_items(bool p_transparent) {
 	if (p_transparent) {
-		SortArray<BSortItem3D, SortTransparent> sorter;
+		SortArray<BSortItem3D, SortTransparent> sorter{};
 		sorter.sort(&bdata.sort_items[0], bdata.sort_items.size());
 	} else {
-		SortArray<BSortItem3D, SortOpaque> sorter;
+		SortArray<BSortItem3D, SortOpaque> sorter{};
 		sorter.sort(&bdata.sort_items[0], bdata.sort_items.size());
 	}
 }
@@ -354,7 +354,7 @@ void RasterizerSceneBatcherCommon<T_API>::render_bypassed_items(bool p_transpare
 			get_this()->_render_single_item_immediate(static_cast<T_SURFACE*>(bdata.bypassed_opaque_items[i]));
 		}
 	} else {
-		SortArray<BSortItem3D, SortTransparent> sorter;
+		SortArray<BSortItem3D, SortTransparent> sorter{};
 		sorter.sort(bdata.bypassed_transparent_items.ptr(), bdata.bypassed_transparent_items.size());
 
 		for (uint32_t i = 0; i < (uint32_t)bdata.bypassed_transparent_items.size(); i++) {

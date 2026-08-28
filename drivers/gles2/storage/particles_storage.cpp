@@ -930,7 +930,7 @@ void ParticlesStorage::_particles_reverse_lifetime_sort(Particles *particles) {
 		ParticleInstanceData *data = static_cast<ParticleInstanceData *>(sort_data);
 		int amount = particles->amount;
 
-		SortArray<ParticleInstanceData, ParticleInstanceDataSort<ParticleInstanceData>> sorter;
+		SortArray<ParticleInstanceData, ParticleInstanceDataSort<ParticleInstanceData>> sorter{};
 		sorter.sort(data, amount);
 
 		glUnmapBufferOES(GL_ARRAY_BUFFER);

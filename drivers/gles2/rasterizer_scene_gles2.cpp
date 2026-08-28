@@ -2332,12 +2332,12 @@ void RasterizerSceneGLES2::_setup_lights(const RenderDataGLES2 *p_render_data, b
 	}
 
 	if (r_omni_light_count) {
-		SortArray<InstanceSort<GLES2::LightInstance>> sorter;
+		SortArray<InstanceSort<GLES2::LightInstance>> sorter{};
 		sorter.sort(scene_state.omni_light_sort, r_omni_light_count);
 	}
 
 	if (r_spot_light_count) {
-		SortArray<InstanceSort<GLES2::LightInstance>> sorter;
+		SortArray<InstanceSort<GLES2::LightInstance>> sorter{};
 		sorter.sort(scene_state.spot_light_sort, r_spot_light_count);
 	}
 
