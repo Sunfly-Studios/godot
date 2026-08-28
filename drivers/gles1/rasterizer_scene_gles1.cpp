@@ -3073,7 +3073,7 @@ void RasterizerSceneGLES1::_draw_editor_grid(const RenderDataGLES1 *p_render_dat
 	// Each segment has 2 vertices
 	// resulting in (lines * segments * 2) vertices per axis.
 	int max_verts = (num_lines_x * num_segs_z * 2) + (num_lines_z * num_segs_x * 2);
-	max_verts = MIN(max_verts, 65536);
+	max_verts = MIN(max_verts, 16384);
 
 	float *grid_verts = SAFE_ALLOCA_ARRAY(float, max_verts * 3);
 	uint8_t *grid_colors = SAFE_ALLOCA_ARRAY(uint8_t, max_verts * 4);
@@ -4190,6 +4190,10 @@ void RasterizerSceneGLES1::_render_additive_light_passes(RenderListParameters *p
 		scene_state.omni_light_count +
 		scene_state.spot_light_count
 	);
+
+	if (total_lights == 0) {
+		return;
+	}
 
 	GlActiveLight *active_lights = SAFE_ALLOCA_ARRAY(GlActiveLight, total_lights);
 
