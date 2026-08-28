@@ -193,6 +193,7 @@ static _FORCE_INLINE_ void _batch_fill_vertex(RasterizerSceneBatcherCommon<Batch
 	r_bv.matrix_index[1] = 0;
 	r_bv.matrix_index[2] = 0;
 	r_bv.matrix_index[3] = 0;
+	r_bv.pad[0] = 1.0f; // Provide default weight for matrix palette
 }
 
 static _FORCE_INLINE_ void _batch_decode_multimesh_instance(const float *p_data, RS::MultimeshTransformFormat p_format, bool p_uses_colors, uint32_t p_color_offset, Transform3D &r_xform, Color &r_color) {
@@ -271,6 +272,7 @@ static _FORCE_INLINE_ void _batch_fill_vertex_instanced(RasterizerSceneBatcherCo
 	r_bv.matrix_index[1] = 0;
 	r_bv.matrix_index[2] = 0;
 	r_bv.matrix_index[3] = 0;
+	r_bv.pad[0] = 1.0f; // Provide default weight for matrix palette
 }
 
 void RasterizerSceneGLES1::initialize() {
@@ -2395,6 +2397,7 @@ void RasterizerSceneGLES1::_batch_render_generic(RS::PrimitiveType p_primitive, 
 
 	if (use_palette) {
 		glEnableClientState(GL_MATRIX_INDEX_ARRAY_OES);
+		glEnableClientState(GL_WEIGHT_ARRAY_OES);
 		GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_batch_render_generic: glEnableClientState GL_MATRIX_INDEX_ARRAY_OES");
 	}
 
@@ -2417,6 +2420,7 @@ void RasterizerSceneGLES1::_batch_render_generic(RS::PrimitiveType p_primitive, 
 
 			if (use_palette) {
 				glMatrixIndexPointerOES(1, GL_UNSIGNED_BYTE, stride, (void *)BATCH_INSTANCED_OFFSET_OF(matrix_index));
+				glWeightPointerOES(1, GL_FLOAT, stride, (void *)BATCH_INSTANCED_OFFSET_OF(pad));
 			}
 		} else {
 			glVertexPointer(3, GL_FLOAT, stride, (void *)BATCH_OFFSET_OF(pos));
@@ -2432,6 +2436,7 @@ void RasterizerSceneGLES1::_batch_render_generic(RS::PrimitiveType p_primitive, 
 
 			if (use_palette) {
 				glMatrixIndexPointerOES(1, GL_UNSIGNED_BYTE, stride, (void *)BATCH_OFFSET_OF(matrix_index));
+				glWeightPointerOES(1, GL_FLOAT, stride, (void *)BATCH_OFFSET_OF(pad));
 			}
 		}
 		GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_batch_render_generic: VBO Array setup");
@@ -2454,6 +2459,7 @@ void RasterizerSceneGLES1::_batch_render_generic(RS::PrimitiveType p_primitive, 
 
 			if (use_palette) {
 				glMatrixIndexPointerOES(1, GL_UNSIGNED_BYTE, stride, data_ptr + BATCH_INSTANCED_OFFSET_OF(matrix_index));
+				glWeightPointerOES(1, GL_FLOAT, stride, data_ptr + BATCH_INSTANCED_OFFSET_OF(pad));
 			}
 		} else {
 			glVertexPointer(3, GL_FLOAT, stride, data_ptr + BATCH_OFFSET_OF(pos));
@@ -2469,6 +2475,7 @@ void RasterizerSceneGLES1::_batch_render_generic(RS::PrimitiveType p_primitive, 
 
 			if (use_palette) {
 				glMatrixIndexPointerOES(1, GL_UNSIGNED_BYTE, stride, data_ptr + BATCH_OFFSET_OF(matrix_index));
+				glWeightPointerOES(1, GL_FLOAT, stride, data_ptr + BATCH_OFFSET_OF(pad));
 			}
 		}
 		GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_batch_render_generic: Client Array setup");
@@ -2504,6 +2511,7 @@ void RasterizerSceneGLES1::_batch_render_generic(RS::PrimitiveType p_primitive, 
 
 	if (use_palette) {
 		glDisableClientState(GL_MATRIX_INDEX_ARRAY_OES);
+		glDisableClientState(GL_WEIGHT_ARRAY_OES);
 	}
 
 	if (GLES1_CONFIG->support_vbo) {
