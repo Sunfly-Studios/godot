@@ -1025,6 +1025,7 @@ void RasterizerSceneGLES1::_setup_sky(const RenderDataGLES1 *p_render_data, cons
 		if (shader_data->uses_time && time - sky->prev_time > 1.0) {
 			sky->prev_time = time;
 			sky->reflection_dirty = true;
+			sky->processing_layer = 0;
 			RenderingServerDefault::redraw_request();
 		}
 
@@ -1032,56 +1033,30 @@ void RasterizerSceneGLES1::_setup_sky(const RenderDataGLES1 *p_render_data, cons
 			sky->prev_material = material;
 			sky->reflection_dirty = true;
 			sky->material_cache_dirty = true;
+			sky->processing_layer = 0;
 		}
 
 		if (material->uniform_set_updated) {
 			material->uniform_set_updated = false;
 			sky->reflection_dirty = true;
 			sky->material_cache_dirty = true;
+			sky->processing_layer = 0;
 		}
 
 		if (sky->material_cache_dirty) {
 			sky->material_cache_dirty = false;
 			if (sky_material.is_valid()) {
-				Variant v;
-				v = material_storage->material_get_param(sky_material, "sky_top_color");
-				if (v.get_type() == Variant::COLOR) {
-					sky->sky_top_color = v;
-				}
-				v = material_storage->material_get_param(sky_material, "sky_horizon_color");
-				if (v.get_type() == Variant::COLOR) {
-					sky->sky_horizon_color = v;
-				}
-				v = material_storage->material_get_param(sky_material, "sky_curve");
-				if (v.get_type() == Variant::FLOAT) {
-					sky->sky_curve = v;
-				}
-				v = material_storage->material_get_param(sky_material, "sky_energy");
-				if (v.get_type() == Variant::FLOAT) {
-					sky->sky_energy = v;
-				}
+				_sky_fetch_colour(sky_material, "sky_top_color", sky->sky_top_color);
+				_sky_fetch_colour(sky_material, "sky_horizon_color", sky->sky_horizon_color);
+				_sky_fetch_float(sky_material, "sky_curve", StringName(), sky->sky_curve);
+				_sky_fetch_float(sky_material, "sky_energy_multiplier", "sky_energy", sky->sky_energy);
 
-				v = material_storage->material_get_param(sky_material, "ground_bottom_color");
-				if (v.get_type() == Variant::COLOR) {
-					sky->ground_bottom_color = v;
-				}
-				v = material_storage->material_get_param(sky_material, "ground_horizon_color");
-				if (v.get_type() == Variant::COLOR) {
-					sky->ground_horizon_color = v;
-				}
-				v = material_storage->material_get_param(sky_material, "ground_curve");
-				if (v.get_type() == Variant::FLOAT) {
-					sky->ground_curve = v;
-				}
-				v = material_storage->material_get_param(sky_material, "ground_energy");
-				if (v.get_type() == Variant::FLOAT) {
-					sky->ground_energy = v;
-				}
+				_sky_fetch_colour(sky_material, "ground_bottom_color", sky->ground_bottom_color);
+				_sky_fetch_colour(sky_material, "ground_horizon_color", sky->ground_horizon_color);
+				_sky_fetch_float(sky_material, "ground_curve", StringName(), sky->ground_curve);
+				_sky_fetch_float(sky_material, "ground_energy_multiplier", "ground_energy", sky->ground_energy);
 
-				v = material_storage->material_get_param(sky_material, "exposure");
-				if (v.get_type() == Variant::FLOAT) {
-					sky->exposure = v;
-				}
+				_sky_fetch_float(sky_material, "exposure", StringName(), sky->exposure);
 			}
 		}
 
@@ -1178,6 +1153,7 @@ void RasterizerSceneGLES1::_setup_sky(const RenderDataGLES1 *p_render_data, cons
 				}
 				sky_globals.last_frame_directional_light_count = sky_globals.directional_light_count;
 				sky->reflection_dirty = true;
+				sky->processing_layer = 0;
 			}
 		}
 

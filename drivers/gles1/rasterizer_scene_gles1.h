@@ -674,6 +674,29 @@ private:
 		uint32_t index;
 	};
 
+	/* UTILITIES */
+
+	_FORCE_INLINE_ void _sky_fetch_colour(const RID &sky_material, const StringName &p_name, Color &r_prop) {
+		GLES1::MaterialStorage *material_storage = GLES1::MaterialStorage::get_singleton();
+
+		Variant v = material_storage->material_get_param(sky_material, p_name);
+		if (v.get_type() == Variant::COLOR) {
+			r_prop = v;
+		}
+	}
+
+	_FORCE_INLINE_ void _sky_fetch_float(const RID &sky_material, const StringName &p_name, const StringName &p_fallback, float &r_prop) {
+		GLES1::MaterialStorage *material_storage = GLES1::MaterialStorage::get_singleton();
+
+		Variant v = material_storage->material_get_param(sky_material, p_name);
+		if (v.get_type() == Variant::NIL && p_fallback != StringName()) {
+			v = material_storage->material_get_param(sky_material, p_fallback);
+		}
+		if (v.get_type() == Variant::FLOAT) {
+			r_prop = v;
+		}
+	}
+
 	/* REST OF GEOMETRY FUNCTIONS */
 
 	static void _geometry_instance_dependency_changed(Dependency::DependencyChangedNotification p_notification, DependencyTracker *p_tracker);
