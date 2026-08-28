@@ -354,7 +354,7 @@ void RasterizerCanvasGLES1::initialize() {
 	// Quad buffer
 	{
 		data.canvas_quad_vertices = 0;
-		if (GLES1::Config::get_singleton()->support_vbo) {
+		if (GLES1_CONFIG->support_vbo) {
 			glGenBuffers(1, &data.canvas_quad_vertices);
 			GL_CHECK_ERROR("GLES1::Canvas::initialize: glGenBuffers quad");
 		}
@@ -386,7 +386,7 @@ void RasterizerCanvasGLES1::initialize() {
 		poly_size *= 1024;
 
 		data.polygon_buffer = 0;
-		if (GLES1::Config::get_singleton()->support_vbo) {
+		if (GLES1_CONFIG->support_vbo) {
 			glGenBuffers(1, &data.polygon_buffer);
 			GL_CHECK_ERROR("GLES1::Canvas::initialize: glGenBuffers poly");
 		}
@@ -409,7 +409,7 @@ void RasterizerCanvasGLES1::initialize() {
 
 		data.polygon_index_buffer = 0;
 
-		if (GLES1::Config::get_singleton()->support_vbo) {
+		if (GLES1_CONFIG->support_vbo) {
 			glGenBuffers(1, &data.polygon_index_buffer);
 			GL_CHECK_ERROR("GLES1::Canvas::initialize: glGenBuffers poly index");
 		}
@@ -427,7 +427,7 @@ void RasterizerCanvasGLES1::initialize() {
 	{
 		data.ninepatch_vertices = 0;
 
-		if (GLES1::Config::get_singleton()->support_vbo) {
+		if (GLES1_CONFIG->support_vbo) {
 			glGenBuffers(1, &data.ninepatch_vertices);
 			GL_CHECK_ERROR("GLES1::Canvas::initialize: glGenBuffers ninepatch");
 		}
@@ -441,7 +441,7 @@ void RasterizerCanvasGLES1::initialize() {
 
 		data.ninepatch_elements = 0;
 
-		if (GLES1::Config::get_singleton()->support_vbo) {
+		if (GLES1_CONFIG->support_vbo) {
 			glGenBuffers(1, &data.ninepatch_elements);
 			GL_CHECK_ERROR("GLES1::Canvas::initialize: glGenBuffers ninepatch index");
 		}
@@ -515,7 +515,7 @@ void RasterizerCanvasGLES1::initialize() {
 	if (bdata.vertex_buffer_size_bytes && bdata.index_buffer_size_units > 0) {
 		bdata.gl_vertex_buffer = 0;
 
-		if (GLES1::Config::get_singleton()->support_vbo) {
+		if (GLES1_CONFIG->support_vbo) {
 			glGenBuffers(1, &bdata.gl_vertex_buffer);
 			GL_CHECK_ERROR("GLES1::Canvas::initialize: glGenBuffers batcher");
 		}
@@ -533,7 +533,7 @@ void RasterizerCanvasGLES1::initialize() {
 
 		bdata.gl_index_buffer = 0;
 
-		if (GLES1::Config::get_singleton()->support_vbo) {
+		if (GLES1_CONFIG->support_vbo) {
 			glGenBuffers(1, &bdata.gl_index_buffer);
 			GL_CHECK_ERROR("GLES1::Canvas::initialize: glGenBuffers batcher index");
 		}
@@ -703,14 +703,14 @@ void RasterizerCanvasGLES1::_bind_canvas_texture(RID p_texture, RS::CanvasItemTe
 		state.texture_size = Size2i(w, h);
 	}
 
-	GLint max_units = GLES1::Config::get_singleton()->max_texture_units;
+	GLint max_units = GLES1_CONFIG->max_texture_units;
 	bool has_normal = false;
 
 	if (
 		state.using_light &&
 		max_units >= 4 &&
 		ct->normal_map.is_valid() &&
-		GLES1::Config::get_singleton()->support_texture_env_combine
+		GLES1_CONFIG->support_texture_env_combine
 	) {
 		has_normal = true;
 	}
@@ -738,7 +738,7 @@ void RasterizerCanvasGLES1::_bind_canvas_texture(RID p_texture, RS::CanvasItemTe
 			CanvasLight *cl = canvas_light_owner.get_or_null(state.using_light->light_internal);
 			ERR_FAIL_NULL(cl);
 
-			uint32_t current_gen = GLES1::Config::get_singleton()->context_generation;
+			uint32_t current_gen = GLES1_CONFIG->context_generation;
 			if (cl->directional_tex_id == 0 || cl->context_generation != current_gen) {
 				if (cl->directional_tex_id != 0) {
 					glDeleteTextures(1, &cl->directional_tex_id);
@@ -827,7 +827,7 @@ void RasterizerCanvasGLES1::_bind_canvas_texture(RID p_texture, RS::CanvasItemTe
 			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
 			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 
-			if (GLES1::Config::get_singleton()->support_texture_env_combine) {
+			if (GLES1_CONFIG->support_texture_env_combine) {
 				glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_COMBINE);
 				glTexEnvi(GL_TEXTURE_ENV, GL_COMBINE_RGB, GL_MODULATE);
 				glTexEnvi(GL_TEXTURE_ENV, GL_SRC0_RGB, GL_PREVIOUS);
@@ -933,7 +933,7 @@ void RasterizerCanvasGLES1::_set_canvas_uniforms() {
 			state.canvas_shader->version_set_uniform(CanvasShaderGLES1::LIGHT_OUTSIDE_ALPHA, 0.0f, state.shader_version, state.mode_variant, state.specialization);
 
 			// Inject texture matrix projection manually
-			GLint max_units = GLES1::Config::get_singleton()->max_texture_units;
+			GLint max_units = GLES1_CONFIG->max_texture_units;
 			Transform2D canvas_modelview = state.uniforms.modelview_matrix * state.uniforms.extra_matrix;
 
 			Transform2D light_matrix;
@@ -1200,7 +1200,7 @@ void RasterizerCanvasGLES1::canvas_begin(RID p_to_render_target, bool p_to_backb
 void RasterizerCanvasGLES1::canvas_end() {
 	batch_canvas_end();
 
-	if (GLES1::Config::get_singleton()->support_vbo) {
+	if (GLES1_CONFIG->support_vbo) {
 		glBindBuffer(GL_ARRAY_BUFFER, 0);
 		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
 	}
@@ -1211,7 +1211,7 @@ void RasterizerCanvasGLES1::canvas_end() {
 	glDisableClientState(GL_NORMAL_ARRAY);
 
 	// Sterilize secondary TU leak
-	GLint max_units = GLES1::Config::get_singleton()->max_texture_units;
+	GLint max_units = GLES1_CONFIG->max_texture_units;
 	for (int i = 1; i < max_units; i++) {
 		glActiveTexture(GL_TEXTURE0 + i);
 		glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE);
@@ -1280,7 +1280,7 @@ void RasterizerCanvasGLES1::reset_canvas() {
 
 	// Force sterilise secondary texture units
 	// and their matrices
-	GLint max_units = GLES1::Config::get_singleton()->max_texture_units;
+	GLint max_units = GLES1_CONFIG->max_texture_units;
 	for (int i = 1; i < max_units; i++) {
 		glActiveTexture(GL_TEXTURE0 + i);
 		glDisable(GL_TEXTURE_2D);
@@ -1320,13 +1320,13 @@ void RasterizerCanvasGLES1::reset_canvas() {
 	GL_CHECK_ERROR("GLES1::Canvas::reset_canvas: disable client states and matrices");
 
 	if (state.transparent_render) {
-		if (GLES1::Config::get_singleton()->support_blend_func_separate) {
+		if (GLES1_CONFIG->support_blend_func_separate) {
 			glBlendFuncSeparateOES(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
 		} else {
 			glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 		}
 	} else {
-		if (GLES1::Config::get_singleton()->support_blend_func_separate) {
+		if (GLES1_CONFIG->support_blend_func_separate) {
 			glBlendFuncSeparateOES(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_ZERO, GL_ONE);
 		} else {
 			glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
@@ -1334,7 +1334,7 @@ void RasterizerCanvasGLES1::reset_canvas() {
 	}
 	GL_CHECK_ERROR("GLES1::Canvas::reset_canvas: blend func");
 
-	if (GLES1::Config::get_singleton()->support_vbo) {
+	if (GLES1_CONFIG->support_vbo) {
 		glBindBuffer(GL_ARRAY_BUFFER, 0);
 		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
 		GL_CHECK_ERROR("GLES1::Canvas::reset_canvas: unbind buffers");
@@ -2191,7 +2191,7 @@ void RasterizerCanvasGLES1::_bind_quad_buffer() const {
 		glTexCoordPointer(2, GL_FLOAT, 0, nullptr);
 
 		if (state.using_light) {
-			GLint max_units = GLES1::Config::get_singleton()->max_texture_units;
+			GLint max_units = GLES1_CONFIG->max_texture_units;
 			if (state.normal_used && max_units >= 4) {
 				glClientActiveTexture(GL_TEXTURE0 + 1);
 				glEnableClientState(GL_TEXTURE_COORD_ARRAY);
@@ -2229,7 +2229,7 @@ void RasterizerCanvasGLES1::_bind_quad_buffer() const {
 				glClientActiveTexture(GL_TEXTURE0);
 			}
 		} else {
-			GLint max_units = GLES1::Config::get_singleton()->max_texture_units;
+			GLint max_units = GLES1_CONFIG->max_texture_units;
 			for (int i = 1; i < max_units; i++) {
 				glClientActiveTexture(GL_TEXTURE0 + i);
 				glDisableClientState(GL_TEXTURE_COORD_ARRAY);
@@ -2239,7 +2239,7 @@ void RasterizerCanvasGLES1::_bind_quad_buffer() const {
 			}
 		}
 	} else { // data.canvas_quad_vertices != 0
-		if (GLES1::Config::get_singleton()->support_vbo) {
+		if (GLES1_CONFIG->support_vbo) {
 			glBindBuffer(GL_ARRAY_BUFFER, 0);
 			glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
 		}
@@ -2257,7 +2257,7 @@ void RasterizerCanvasGLES1::_bind_quad_buffer() const {
 		glTexCoordPointer(2, GL_FLOAT, 0, qv);
 
 		if (state.using_light) {
-			GLint max_units = GLES1::Config::get_singleton()->max_texture_units;
+			GLint max_units = GLES1_CONFIG->max_texture_units;
 			if (state.normal_used && max_units >= 4) {
 				glClientActiveTexture(GL_TEXTURE0 + 1);
 				glEnableClientState(GL_TEXTURE_COORD_ARRAY);
@@ -2295,7 +2295,7 @@ void RasterizerCanvasGLES1::_bind_quad_buffer() const {
 				glClientActiveTexture(GL_TEXTURE0);
 			}
 		} else {
-			GLint max_units = GLES1::Config::get_singleton()->max_texture_units;
+			GLint max_units = GLES1_CONFIG->max_texture_units;
 			for (int i = 1; i < max_units; i++) {
 				glClientActiveTexture(GL_TEXTURE0 + i);
 				glDisableClientState(GL_TEXTURE_COORD_ARRAY);
@@ -2312,7 +2312,7 @@ _FORCE_INLINE_ bool RasterizerCanvasGLES1::_buffer_orphan_and_upload(unsigned in
 	ERR_FAIL_COND_V((p_offset_bytes + p_data_size_bytes) > p_buffer_size_bytes, false);
 
 	if (!p_optional_orphan) {
-		if (GLES1::Config::get_singleton()->is_android_emulator && p_offset_bytes == 0 && p_buffer_size_bytes == p_data_size_bytes) {
+		if (GLES1_CONFIG->is_android_emulator && p_offset_bytes == 0 && p_buffer_size_bytes == p_data_size_bytes) {
 			// Workaround: Buggy emulators crash or race on standard orphaning.
 			// Passing the exact size and data directly to glBufferData forces a safe internal reallocation.
 			glBufferData(p_target, p_buffer_size_bytes, p_data, p_usage);
@@ -2387,7 +2387,7 @@ void RasterizerCanvasGLES1::_batch_upload_buffers() {
 	}
 
 	uint32_t alloc_size = bdata.vertex_buffer_size_bytes;
-	if (GLES1::Config::get_singleton()->is_android_emulator) {
+	if (GLES1_CONFIG->is_android_emulator) {
 		alloc_size = buffer_bytes; // Emulator workaround: shrink allocation
 	}
 
@@ -2476,7 +2476,7 @@ void RasterizerCanvasGLES1::_batch_render_generic(const Batch &p_batch, GLES1::C
 		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, bdata.gl_index_buffer);
 		GL_CHECK_ERROR("GLES1::Canvas::batch_render_generic: bind VBO/IBO");
 	} else {
-		if (GLES1::Config::get_singleton()->support_vbo) {
+		if (GLES1_CONFIG->support_vbo) {
 			glBindBuffer(GL_ARRAY_BUFFER, 0);
 			glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
 			GL_CHECK_ERROR("GLES1::Canvas::batch_render_generic: bind VBO/IBO");
@@ -2503,7 +2503,7 @@ void RasterizerCanvasGLES1::_batch_render_generic(const Batch &p_batch, GLES1::C
 	glTexCoordPointer(2, GL_FLOAT, sizeof_vert, (const void *)(uintptr_t)(pointer_offset + offsetof(BatchVertex, uv)));
 
 	if (state.using_light) {
-		GLint max_units = GLES1::Config::get_singleton()->max_texture_units;
+		GLint max_units = GLES1_CONFIG->max_texture_units;
 		if (state.normal_used && max_units >= 4) {
 			if (state.using_light->mode == RS::CANVAS_LIGHT_MODE_DIRECTIONAL) {
 				glClientActiveTexture(GL_TEXTURE0 + 1);
@@ -2557,7 +2557,7 @@ void RasterizerCanvasGLES1::_batch_render_generic(const Batch &p_batch, GLES1::C
 		}
 		GL_CHECK_ERROR("GLES1::Canvas::batch_render_generic: light texcoord pointer projection");
 	} else {
-		GLint max_units = GLES1::Config::get_singleton()->max_texture_units;
+		GLint max_units = GLES1_CONFIG->max_texture_units;
 		for (int i = 1; i < max_units; i++) {
 			glClientActiveTexture(GL_TEXTURE0 + i);
 			glDisableClientState(GL_TEXTURE_COORD_ARRAY);
@@ -2638,7 +2638,7 @@ void RasterizerCanvasGLES1::_batch_render_generic(const Batch &p_batch, GLES1::C
 	glDisableClientState(GL_COLOR_ARRAY);
 	glDisable(GL_TEXTURE_2D);
 
-	if (GLES1::Config::get_singleton()->support_vbo) {
+	if (GLES1_CONFIG->support_vbo) {
 		glBindBuffer(GL_ARRAY_BUFFER, 0);
 		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
 	}
@@ -2850,7 +2850,7 @@ void RasterizerCanvasGLES1::render_batches(Item::Command *const *p_commands, Ite
 
 							if (state.using_light) {
 								constexpr GLfloat transpose[16] = { 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1 };
-								GLint max_units = GLES1::Config::get_singleton()->max_texture_units;
+								GLint max_units = GLES1_CONFIG->max_texture_units;
 								if (max_units >= 2) {
 									glActiveTexture(GL_TEXTURE0 + 1);
 									glMatrixMode(GL_TEXTURE);
@@ -2900,7 +2900,7 @@ void RasterizerCanvasGLES1::render_batches(Item::Command *const *p_commands, Ite
 
 							// Cleanup and restore
 							if (state.using_light) {
-								GLint max_units = GLES1::Config::get_singleton()->max_texture_units;
+								GLint max_units = GLES1_CONFIG->max_texture_units;
 								if (max_units >= 2) {
 									glActiveTexture(GL_TEXTURE0 + 1);
 									glMatrixMode(GL_TEXTURE);
@@ -2927,7 +2927,7 @@ void RasterizerCanvasGLES1::render_batches(Item::Command *const *p_commands, Ite
 							glPopMatrix();
 							GL_CHECK_ERROR("GLES1::Canvas::render_batches: TYPE_RECT glPopMatrix");
 
-							if (GLES1::Config::get_singleton()->support_vbo) {
+							if (GLES1_CONFIG->support_vbo) {
 								glBindBuffer(GL_ARRAY_BUFFER, 0);
 							}
 							glDisableClientState(GL_VERTEX_ARRAY);
@@ -3042,7 +3042,7 @@ void RasterizerCanvasGLES1::render_batches(Item::Command *const *p_commands, Ite
 
 								if (state.using_light) {
 									constexpr GLfloat transpose[16] = { 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1 };
-									GLint max_units = GLES1::Config::get_singleton()->max_texture_units;
+									GLint max_units = GLES1_CONFIG->max_texture_units;
 									if (max_units >= 2) {
 										glActiveTexture(GL_TEXTURE0 + 1);
 										glMatrixMode(GL_TEXTURE);
@@ -3090,7 +3090,7 @@ void RasterizerCanvasGLES1::render_batches(Item::Command *const *p_commands, Ite
 
 								// Cleanup and restore per rect
 								if (state.using_light) {
-									GLint max_units = GLES1::Config::get_singleton()->max_texture_units;
+									GLint max_units = GLES1_CONFIG->max_texture_units;
 									if (max_units >= 2) {
 										glActiveTexture(GL_TEXTURE0 + 1);
 										glMatrixMode(GL_TEXTURE);
@@ -3120,7 +3120,7 @@ void RasterizerCanvasGLES1::render_batches(Item::Command *const *p_commands, Ite
 							GL_CHECK_ERROR("GLES1::Canvas::render_batches: TYPE_MULTIRECT glDrawArrays");
 
 							// Cleanup
-							if (GLES1::Config::get_singleton()->support_vbo) {
+							if (GLES1_CONFIG->support_vbo) {
 								glBindBuffer(GL_ARRAY_BUFFER, 0);
 							}
 							glDisableClientState(GL_VERTEX_ARRAY);
@@ -3260,7 +3260,7 @@ void RasterizerCanvasGLES1::render_batches(Item::Command *const *p_commands, Ite
 								glTexCoordPointer(2, GL_FLOAT, 4 * sizeof(float), (const void *)(sizeof(float) * 2));
 
 								if (state.using_light) {
-									GLint max_units = GLES1::Config::get_singleton()->max_texture_units;
+									GLint max_units = GLES1_CONFIG->max_texture_units;
 									if (state.normal_used && max_units >= 4) {
 										if (state.using_light->mode == RS::CANVAS_LIGHT_MODE_DIRECTIONAL) {
 											glClientActiveTexture(GL_TEXTURE0 + 1);
@@ -3313,7 +3313,7 @@ void RasterizerCanvasGLES1::render_batches(Item::Command *const *p_commands, Ite
 										glClientActiveTexture(GL_TEXTURE0);
 									}
 								} else {
-									GLint max_units = GLES1::Config::get_singleton()->max_texture_units;
+									GLint max_units = GLES1_CONFIG->max_texture_units;
 									for (int ii = 1; ii < max_units; ii++) {
 										glClientActiveTexture(GL_TEXTURE0 + ii);
 										glDisableClientState(GL_TEXTURE_COORD_ARRAY);
@@ -3333,7 +3333,7 @@ void RasterizerCanvasGLES1::render_batches(Item::Command *const *p_commands, Ite
 								}
 								GL_CHECK_ERROR("GLES1::Canvas::render_batches: TYPE_NINEPATCH glDrawElements");
 							} else { // data.ninepatch_vertices != 0 && data.ninepatch_elements != 0
-								if (GLES1::Config::get_singleton()->support_vbo) {
+								if (GLES1_CONFIG->support_vbo) {
 									glBindBuffer(GL_ARRAY_BUFFER, 0);
 									glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
 								}
@@ -3346,7 +3346,7 @@ void RasterizerCanvasGLES1::render_batches(Item::Command *const *p_commands, Ite
 								glTexCoordPointer(2, GL_FLOAT, 4 * sizeof(float), buffer + 2);
 
 								if (state.using_light) {
-									GLint max_units = GLES1::Config::get_singleton()->max_texture_units;
+									GLint max_units = GLES1_CONFIG->max_texture_units;
 									if (state.normal_used && max_units >= 4) {
 										if (state.using_light->mode == RS::CANVAS_LIGHT_MODE_DIRECTIONAL) {
 											glClientActiveTexture(GL_TEXTURE0 + 1);
@@ -3398,7 +3398,7 @@ void RasterizerCanvasGLES1::render_batches(Item::Command *const *p_commands, Ite
 										glClientActiveTexture(GL_TEXTURE0);
 									}
 								} else {
-									GLint max_units = GLES1::Config::get_singleton()->max_texture_units;
+									GLint max_units = GLES1_CONFIG->max_texture_units;
 									for (int ii = 1; ii < max_units; ii++) {
 										glClientActiveTexture(GL_TEXTURE0 + ii);
 										glDisableClientState(GL_TEXTURE_COORD_ARRAY);
@@ -3419,7 +3419,7 @@ void RasterizerCanvasGLES1::render_batches(Item::Command *const *p_commands, Ite
 								GL_CHECK_ERROR("GLES1::Canvas::render_batches: TYPE_NINEPATCH glDrawElements (fallback)");
 							}
 
-							if (GLES1::Config::get_singleton()->support_vbo) {
+							if (GLES1_CONFIG->support_vbo) {
 								glBindBuffer(GL_ARRAY_BUFFER, 0);
 								glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
 							}
@@ -3515,8 +3515,8 @@ void RasterizerCanvasGLES1::render_batches(Item::Command *const *p_commands, Ite
 							if (mesh_data) {
 								bool apply_tu1 = (
 									!state.using_light &&
-									GLES1::Config::get_singleton()->max_texture_units >= 2 &&
-									GLES1::Config::get_singleton()->support_texture_env_combine
+									GLES1_CONFIG->max_texture_units >= 2 &&
+									GLES1_CONFIG->support_texture_env_combine
 								);
 								if (apply_tu1) {
 									RID white_tex_rid = GLES1::TextureStorage::get_singleton()->texture_gl_get_default(GLES1::DEFAULT_GL_TEXTURE_WHITE);
@@ -3550,7 +3550,7 @@ void RasterizerCanvasGLES1::render_batches(Item::Command *const *p_commands, Ite
 								// Loop using the double pointer array
 								for (uint32_t j = 0; j < mesh_data->surface_count; j++) {
 									GLES1::Mesh::Surface *s = mesh_data->surfaces[j];
-									uint32_t context_generation = GLES1::Config::get_singleton()->context_generation;
+									uint32_t context_generation = GLES1_CONFIG->context_generation;
 									if (unlikely(!s)) {
 										continue;
 									}
@@ -3686,7 +3686,7 @@ void RasterizerCanvasGLES1::render_batches(Item::Command *const *p_commands, Ite
 									if (s->index_count > 0) {
 										bool needs_32_bit = s->vertex_count >= (1 << 16);
 
-										if (unlikely(needs_32_bit && !GLES1::Config::get_singleton()->support_32_bits_indices)) {
+										if (unlikely(needs_32_bit && !GLES1_CONFIG->support_32_bits_indices)) {
 											ERR_PRINT_ONCE("GLES1: Device does not support 32-bit indices for large 2D meshes. Skipping draw.");
 										} else {
 											GLenum index_type = needs_32_bit ? GL_UNSIGNED_INT : GL_UNSIGNED_SHORT;
@@ -3743,7 +3743,7 @@ void RasterizerCanvasGLES1::render_batches(Item::Command *const *p_commands, Ite
 							state.uniforms.extra_matrix = prev_transform_extra;
 							state.uniforms.final_modulate = prev_colour_module;
 
-							if (GLES1::Config::get_singleton()->support_vbo) {
+							if (GLES1_CONFIG->support_vbo) {
 								glBindBuffer(GL_ARRAY_BUFFER, 0);
 								glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
 							}
@@ -3818,8 +3818,8 @@ void RasterizerCanvasGLES1::render_batches(Item::Command *const *p_commands, Ite
 
 							bool apply_tu1 = (
 								!state.using_light &&
-								GLES1::Config::get_singleton()->max_texture_units >= 2 &&
-								GLES1::Config::get_singleton()->support_texture_env_combine
+								GLES1_CONFIG->max_texture_units >= 2 &&
+								GLES1_CONFIG->support_texture_env_combine
 							);
 							if (apply_tu1) {
 								RID white_tex_rid = GLES1::TextureStorage::get_singleton()->texture_gl_get_default(GLES1::DEFAULT_GL_TEXTURE_WHITE);
@@ -3843,7 +3843,7 @@ void RasterizerCanvasGLES1::render_batches(Item::Command *const *p_commands, Ite
 
 							for (uint32_t j = 0; j < mesh_data->surface_count; j++) {
 								GLES1::Mesh::Surface *s = mesh_data->surfaces[j];
-								uint32_t context_generation = GLES1::Config::get_singleton()->context_generation;
+								uint32_t context_generation = GLES1_CONFIG->context_generation;
 								if (unlikely(!s)) {
 									continue;
 								}
@@ -4060,7 +4060,7 @@ void RasterizerCanvasGLES1::render_batches(Item::Command *const *p_commands, Ite
 									glColor4f(state.uniforms.final_modulate.r, state.uniforms.final_modulate.g, state.uniforms.final_modulate.b, state.uniforms.final_modulate.a);
 
 									if (s->index_count > 0) {
-										if (unlikely(needs_32_bit && !GLES1::Config::get_singleton()->support_32_bits_indices)) {
+										if (unlikely(needs_32_bit && !GLES1_CONFIG->support_32_bits_indices)) {
 											ERR_PRINT_ONCE("GLES1: Device does not support 32-bit indices for large MultiMeshes.");
 										} else {
 											if (use_index_vbo) {
@@ -4126,7 +4126,7 @@ void RasterizerCanvasGLES1::render_batches(Item::Command *const *p_commands, Ite
 								glActiveTexture(GL_TEXTURE0);
 							}
 
-							if (GLES1::Config::get_singleton()->support_vbo) {
+							if (GLES1_CONFIG->support_vbo) {
 								glBindBuffer(GL_ARRAY_BUFFER, 0);
 								glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
 							}
@@ -4226,7 +4226,7 @@ void RasterizerCanvasGLES1::_draw_gui_primitive(int p_points, const Vector2 *p_v
 
 		uint32_t uv_start_offset = offset + vertex_size + color_size;
 		if (state.using_light) {
-			GLint max_units = GLES1::Config::get_singleton()->max_texture_units;
+			GLint max_units = GLES1_CONFIG->max_texture_units;
 			if (state.normal_used && max_units >= 4) {
 				if (state.using_light->mode == RS::CANVAS_LIGHT_MODE_DIRECTIONAL) {
 					glClientActiveTexture(GL_TEXTURE0 + 1);
@@ -4279,7 +4279,7 @@ void RasterizerCanvasGLES1::_draw_gui_primitive(int p_points, const Vector2 *p_v
 				glClientActiveTexture(GL_TEXTURE0);
 			}
 		} else {
-			GLint max_units = GLES1::Config::get_singleton()->max_texture_units;
+			GLint max_units = GLES1_CONFIG->max_texture_units;
 			for (int i = 1; i < max_units; i++) {
 				glClientActiveTexture(GL_TEXTURE0 + i);
 				glDisableClientState(GL_TEXTURE_COORD_ARRAY);
@@ -4334,7 +4334,7 @@ void RasterizerCanvasGLES1::_draw_gui_primitive(int p_points, const Vector2 *p_v
 		}
 		GL_CHECK_ERROR("GLES1::Canvas::_draw_gui_primitive: buffer subdata and pointers");
 	} else { // non-VBO
-		if (GLES1::Config::get_singleton()->support_vbo) {
+		if (GLES1_CONFIG->support_vbo) {
 			glBindBuffer(GL_ARRAY_BUFFER, 0);
 			glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
 		}
@@ -4367,7 +4367,7 @@ void RasterizerCanvasGLES1::_draw_gui_primitive(int p_points, const Vector2 *p_v
 #endif
 
 		if (state.using_light) {
-			GLint max_units = GLES1::Config::get_singleton()->max_texture_units;
+			GLint max_units = GLES1_CONFIG->max_texture_units;
 			if (state.normal_used && max_units >= 4) {
 				if (state.using_light->mode == RS::CANVAS_LIGHT_MODE_DIRECTIONAL) {
 					glClientActiveTexture(GL_TEXTURE0 + 1);
@@ -4420,7 +4420,7 @@ void RasterizerCanvasGLES1::_draw_gui_primitive(int p_points, const Vector2 *p_v
 				glClientActiveTexture(GL_TEXTURE0);
 			}
 		} else {
-			GLint max_units = GLES1::Config::get_singleton()->max_texture_units;
+			GLint max_units = GLES1_CONFIG->max_texture_units;
 			for (int i = 1; i < max_units; i++) {
 				glClientActiveTexture(GL_TEXTURE0 + i);
 				glDisableClientState(GL_TEXTURE_COORD_ARRAY);
@@ -4475,7 +4475,7 @@ void RasterizerCanvasGLES1::_draw_gui_primitive(int p_points, const Vector2 *p_v
 	glDisableClientState(GL_TEXTURE_COORD_ARRAY);
 	glDisableClientState(GL_COLOR_ARRAY);
 	glDisable(GL_TEXTURE_2D);
-	if (GLES1::Config::get_singleton()->support_vbo) {
+	if (GLES1_CONFIG->support_vbo) {
 		glBindBuffer(GL_ARRAY_BUFFER, 0);
 		GL_CHECK_ERROR("GLES1::Canvas::_draw_gui_primitive: glBindBuffer");
 	}
@@ -4594,7 +4594,7 @@ void RasterizerCanvasGLES1::_legacy_draw_polygon(Item::CommandPolygon *p_poly, G
 		uint32_t uv_start_offset = offset + points_size + colors_size;
 
 		if (state.using_light) {
-			GLint max_units = GLES1::Config::get_singleton()->max_texture_units;
+			GLint max_units = GLES1_CONFIG->max_texture_units;
 			if (state.normal_used && max_units >= 4) {
 				if (state.using_light->mode == RS::CANVAS_LIGHT_MODE_DIRECTIONAL) {
 					glClientActiveTexture(GL_TEXTURE0 + 1);
@@ -4647,7 +4647,7 @@ void RasterizerCanvasGLES1::_legacy_draw_polygon(Item::CommandPolygon *p_poly, G
 				glClientActiveTexture(GL_TEXTURE0);
 			}
 		} else {
-			GLint max_units = GLES1::Config::get_singleton()->max_texture_units;
+			GLint max_units = GLES1_CONFIG->max_texture_units;
 			for (int i = 1; i < max_units; i++) {
 				glClientActiveTexture(GL_TEXTURE0 + i);
 				glDisableClientState(GL_TEXTURE_COORD_ARRAY);
@@ -4723,7 +4723,7 @@ void RasterizerCanvasGLES1::_legacy_draw_polygon(Item::CommandPolygon *p_poly, G
 		GL_CHECK_ERROR("GLES1::Canvas::_legacy_draw_polygon: color subdata and pointers");
 	} else { // non-VBO
 		
-		if (GLES1::Config::get_singleton()->support_vbo) {
+		if (GLES1_CONFIG->support_vbo) {
 			glBindBuffer(GL_ARRAY_BUFFER, 0);
 		}
 
@@ -4761,7 +4761,7 @@ void RasterizerCanvasGLES1::_legacy_draw_polygon(Item::CommandPolygon *p_poly, G
 #endif
 
 		if (state.using_light) {
-			GLint max_units = GLES1::Config::get_singleton()->max_texture_units;
+			GLint max_units = GLES1_CONFIG->max_texture_units;
 			if (state.normal_used && max_units >= 4) {
 				if (state.using_light->mode == RS::CANVAS_LIGHT_MODE_DIRECTIONAL) {
 					glClientActiveTexture(GL_TEXTURE0 + 1);
@@ -4814,7 +4814,7 @@ void RasterizerCanvasGLES1::_legacy_draw_polygon(Item::CommandPolygon *p_poly, G
 				glClientActiveTexture(GL_TEXTURE0);
 			}
 		} else {
-			GLint max_units = GLES1::Config::get_singleton()->max_texture_units;
+			GLint max_units = GLES1_CONFIG->max_texture_units;
 			for (int i = 1; i < max_units; i++) {
 				glClientActiveTexture(GL_TEXTURE0 + i);
 				glDisableClientState(GL_TEXTURE_COORD_ARRAY);
@@ -4900,11 +4900,11 @@ void RasterizerCanvasGLES1::_legacy_draw_polygon(Item::CommandPolygon *p_poly, G
 				current_render_info->info[RS::VIEWPORT_RENDER_INFO_TYPE_CANVAS][RS::VIEWPORT_RENDER_INFO_PRIMITIVES_IN_FRAME] += _gl_indices_to_primitives(gl_primitive, index_count);
 				current_render_info->info[RS::VIEWPORT_RENDER_INFO_TYPE_CANVAS][RS::VIEWPORT_RENDER_INFO_DRAW_CALLS_IN_FRAME]++;
 			}
-			if (GLES1::Config::get_singleton()->support_vbo) {
+			if (GLES1_CONFIG->support_vbo) {
 				glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
 			}
 		} else {
-			if (GLES1::Config::get_singleton()->support_vbo) {
+			if (GLES1_CONFIG->support_vbo) {
 				glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
 			}
 			glDrawElements(gl_primitive, index_count, GL_UNSIGNED_SHORT, indices_16);
@@ -4915,7 +4915,7 @@ void RasterizerCanvasGLES1::_legacy_draw_polygon(Item::CommandPolygon *p_poly, G
 			}
 		}
 	} else {
-		if (GLES1::Config::get_singleton()->support_vbo) {
+		if (GLES1_CONFIG->support_vbo) {
 			glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
 		}
 
@@ -4945,7 +4945,7 @@ void RasterizerCanvasGLES1::_legacy_draw_polygon(Item::CommandPolygon *p_poly, G
 	glDisableClientState(GL_TEXTURE_COORD_ARRAY);
 	glDisableClientState(GL_COLOR_ARRAY);
 	glDisable(GL_TEXTURE_2D);
-	if (GLES1::Config::get_singleton()->support_vbo) {
+	if (GLES1_CONFIG->support_vbo) {
 		glBindBuffer(GL_ARRAY_BUFFER, 0);
 	}
 	GL_CHECK_ERROR("GLES1::Canvas::_legacy_draw_polygon: cleanup");
@@ -5005,7 +5005,7 @@ RendererCanvasRender::PolygonID RasterizerCanvasGLES1::request_polygon(const Vec
 	pb.vertex_buffer = 0;
 	pb.index_buffer = 0;
 	pb.count = vertex_count;
-	if (GLES1::Config::get_singleton()->support_vbo) {
+	if (GLES1_CONFIG->support_vbo) {
 		glGenBuffers(1, &pb.vertex_buffer);
 		GL_CHECK_ERROR("GLES1::Canvas::request_polygon: glGenBuffers(pb.vertex_buffer)");
 	}
@@ -5100,7 +5100,7 @@ RendererCanvasRender::PolygonID RasterizerCanvasGLES1::request_polygon(const Vec
 			}
 		}
 
-		if (GLES1::Config::get_singleton()->support_vbo) {
+		if (GLES1_CONFIG->support_vbo) {
 			glGenBuffers(1, &pb.index_buffer);
 			glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, pb.index_buffer);
 		}
@@ -5110,7 +5110,7 @@ RendererCanvasRender::PolygonID RasterizerCanvasGLES1::request_polygon(const Vec
 		pb.count = p_indices.size();
 	}
 
-	if (GLES1::Config::get_singleton()->support_vbo) {
+	if (GLES1_CONFIG->support_vbo) {
 		glBindBuffer(GL_ARRAY_BUFFER, 0);
 		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
 
@@ -5153,7 +5153,7 @@ void RasterizerCanvasGLES1::set_time(double p_time) {
 }
 
 bool RasterizerCanvasGLES1::is_context_lost() const {
-	if (!GLES1::Config::get_singleton()->support_vbo) {
+	if (!GLES1_CONFIG->support_vbo) {
 		return false;
 	}
 
@@ -5197,7 +5197,7 @@ void RasterizerCanvasGLES1::force_context_recovery() {
 	reset_canvas();
 
 	// Broadcast the death of the context globally.
-	GLES1::Config::get_singleton()->context_generation++;
+	GLES1_CONFIG->context_generation++;
 }
 
 RasterizerCanvasGLES1 *RasterizerCanvasGLES1::singleton = nullptr;

@@ -38,7 +38,7 @@
 #include "utilities.h"
 
 #ifdef ANDROID_ENABLED
-#define glFramebufferTextureMultiviewOVR GLES2::Config::get_singleton()->eglFramebufferTextureMultiviewOVR
+#define glFramebufferTextureMultiviewOVR GLES2_CONFIG->eglFramebufferTextureMultiviewOVR
 #endif
 
 using namespace GLES2;
@@ -1605,7 +1605,7 @@ void TextureStorage::_texture_set_data(RID p_texture, const Ref<Image> &p_image,
 		is_power_of_2<int>(texture->width) &&
 		is_power_of_2<int>(texture->height)
 	);
-	if (is_npot && !GLES2::Config::get_singleton()->support_npot_repeat_mipmap) {
+	if (is_npot && !GLES2_CONFIG->support_npot_repeat_mipmap) {
 		mipmaps = 1;
 		texture->mipmaps = 1;
 	}
@@ -2914,7 +2914,7 @@ void TextureStorage::render_target_copy_to_back_buffer(RID p_render_target, cons
 	// Re-bind the backbuffer to the engine's reserved screen_texture unit
 	// so the custom shader can actually read it when drawing
 	// occurs immediately after this.
-	glActiveTexture(GL_TEXTURE0 + GLES2::Config::get_singleton()->max_texture_image_units - 4);
+	glActiveTexture(GL_TEXTURE0 + GLES2_CONFIG->max_texture_image_units - 4);
 	glBindTexture(GL_TEXTURE_2D, rt->backbuffer);
 	glActiveTexture(GL_TEXTURE0);
 	glBindTexture(GL_TEXTURE_2D, previous_tex0);
@@ -2972,7 +2972,7 @@ void TextureStorage::render_target_gen_back_buffer_mipmaps(RID p_render_target, 
 		is_power_of_2<int>(rt->size.width) &&
 		is_power_of_2<int>(rt->size.height)
 	);
-	if (is_npot && !GLES2::Config::get_singleton()->support_npot_repeat_mipmap) {
+	if (is_npot && !GLES2_CONFIG->support_npot_repeat_mipmap) {
 		// Fall back to linear filtering.
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
 	} else {

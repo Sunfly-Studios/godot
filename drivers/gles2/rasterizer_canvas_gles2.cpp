@@ -252,7 +252,7 @@ void RasterizerCanvasGLES2::light_update_shadow(RID p_rid, int p_shadow_index, c
 			if (instance->light_mask & p_light_mask) {
 				OccluderPolygon *occluder = occluder_polygon_owner.get_or_null(instance->occluder);
 				if (occluder && occluder->line_point_count > 0 && occluder->vertex_array != 0) {
-					if (unlikely(occluder->context_generation != GLES2::Config::get_singleton()->context_generation)) {
+					if (unlikely(occluder->context_generation != GLES2_CONFIG->context_generation)) {
 						instance = instance->next;
 						continue; // Zombie VBO, skip drawing
 					}
@@ -412,7 +412,7 @@ void RasterizerCanvasGLES2::light_update_directional_shadow(RID p_rid, int p_sha
 			continue;
 		}
 
-		if (unlikely(occluder->context_generation != GLES2::Config::get_singleton()->context_generation)) {
+		if (unlikely(occluder->context_generation != GLES2_CONFIG->context_generation)) {
 			instance = instance->next;
 			continue; // Zombie VBO, skip drawing
 		}
@@ -485,7 +485,7 @@ void RasterizerCanvasGLES2::occluder_polygon_set_shape(RID p_occluder, const Vec
 		return;
 	}
 
-	uint32_t current_gen = GLES2::Config::get_singleton()->context_generation;
+	uint32_t current_gen = GLES2_CONFIG->context_generation;
 	if (unlikely(oc->context_generation != current_gen)) {
 		oc->vertex_buffer = 0;
 		oc->index_buffer = 0;
@@ -960,7 +960,7 @@ void RasterizerCanvasGLES2::_bind_canvas_texture(RID p_texture, RS::CanvasItemTe
 			is_power_of_2<int>(texture->alloc_width) &&
 			is_power_of_2<int>(texture->alloc_height)
 		);
-		if (is_npot && !GLES2::Config::get_singleton()->support_npot_repeat_mipmap) {
+		if (is_npot && !GLES2_CONFIG->support_npot_repeat_mipmap) {
 			wrap_s = GL_CLAMP_TO_EDGE;
 			wrap_t = GL_CLAMP_TO_EDGE;
 
@@ -989,7 +989,7 @@ void RasterizerCanvasGLES2::_bind_canvas_texture(RID p_texture, RS::CanvasItemTe
 		state.texture_size = Size2i(w, h);
 	}
 
-	GLint max_units = GLES2::Config::get_singleton()->max_texture_image_units;
+	GLint max_units = GLES2_CONFIG->max_texture_image_units;
 
 	// Normal Map
 	glActiveTexture(GL_TEXTURE0 + max_units - 2);
@@ -1883,7 +1883,7 @@ _FORCE_INLINE_ bool RasterizerCanvasGLES2::_buffer_orphan_and_upload(unsigned in
 	ERR_FAIL_COND_V((p_offset_bytes + p_data_size_bytes) > p_buffer_size_bytes, false);
 
 	if (!p_optional_orphan) {
-		if (GLES2::Config::get_singleton()->is_android_emulator && p_offset_bytes == 0 && p_buffer_size_bytes == p_data_size_bytes) {
+		if (GLES2_CONFIG->is_android_emulator && p_offset_bytes == 0 && p_buffer_size_bytes == p_data_size_bytes) {
 			// Workaround: Buggy emulators crash or race on standard orphaning.
 			// Passing the exact size and data directly to glBufferData forces a safe internal reallocation.
 			glBufferData(p_target, p_buffer_size_bytes, p_data, p_usage);
@@ -1957,7 +1957,7 @@ void RasterizerCanvasGLES2::_batch_upload_buffers() {
 	}
 
 	uint32_t alloc_size = bdata.vertex_buffer_size_bytes;
-	if (GLES2::Config::get_singleton()->is_android_emulator) {
+	if (GLES2_CONFIG->is_android_emulator) {
 		alloc_size = buffer_bytes; // Emulator workaround: shrink allocation
 	}
 	_buffer_orphan_and_upload(alloc_size, 0, buffer_bytes, data_ptr, GL_ARRAY_BUFFER, GL_DYNAMIC_DRAW, false);
@@ -2195,7 +2195,7 @@ void RasterizerCanvasGLES2::render_batches(Item::Command *const *p_commands, Ite
 				RS::CanvasLightShadowFilter shadow_filter = state.using_light->shadow_filter;
 
 				// Cap shadow filtering to PCF5 for web or android emulators.
-				if (OS::get_singleton()->has_feature("web") || GLES2::Config::get_singleton()->is_android_emulator) {
+				if (OS::get_singleton()->has_feature("web") || GLES2_CONFIG->is_android_emulator) {
 					if (shadow_filter == RS::CANVAS_LIGHT_FILTER_PCF13) {
 						shadow_filter = RS::CANVAS_LIGHT_FILTER_PCF5;
 					}
@@ -2782,7 +2782,7 @@ void RasterizerCanvasGLES2::render_batches(Item::Command *const *p_commands, Ite
 
 
 									if (s->index_count > 0) {
-										if (unlikely(needs_32_bit && !GLES2::Config::get_singleton()->support_32_bits_indices)) {
+										if (unlikely(needs_32_bit && !GLES2_CONFIG->support_32_bits_indices)) {
 											ERR_PRINT_ONCE("GLES2: Device does not support 32-bit indices for large MultiMeshes.");
 										} else {
 											glDrawElements(gl_primitive, s->index_count, index_type, nullptr);
@@ -2983,7 +2983,7 @@ void RasterizerCanvasGLES2::render_batches(Item::Command *const *p_commands, Ite
 									if (s->index_count > 0) {
 										bool needs_32_bit = s->vertex_count >= (1 << 16);
 
-										if (unlikely(needs_32_bit && !GLES2::Config::get_singleton()->support_32_bits_indices)) {
+										if (unlikely(needs_32_bit && !GLES2_CONFIG->support_32_bits_indices)) {
 											ERR_PRINT_ONCE("GLES2: Device does not support 32-bit indices for large 2D meshes. Skipping draw.");
 										} else {
 											GLenum index_type = needs_32_bit ? GL_UNSIGNED_INT : GL_UNSIGNED_SHORT;
@@ -3429,7 +3429,7 @@ void RasterizerCanvasGLES2::_set_texture_rect_mode(bool p_texture_rect, bool p_l
 			RS::CanvasLightShadowFilter shadow_filter = state.using_light->shadow_filter;
 
 			// Cap shadow filtering to PCF5 for web or android emulators.
-			if (OS::get_singleton()->has_feature("web") || GLES2::Config::get_singleton()->is_android_emulator) {
+			if (OS::get_singleton()->has_feature("web") || GLES2_CONFIG->is_android_emulator) {
 				if (shadow_filter == RS::CANVAS_LIGHT_FILTER_PCF13) {
 					shadow_filter = RS::CANVAS_LIGHT_FILTER_PCF5;
 				}
@@ -3654,7 +3654,7 @@ void RasterizerCanvasGLES2::force_context_recovery() {
 	reset_canvas();
 
 	// Broadcast the death of the context globally.
-	GLES2::Config::get_singleton()->context_generation++;
+	GLES2_CONFIG->context_generation++;
 }
 
 RasterizerCanvasGLES2 *RasterizerCanvasGLES2::singleton = nullptr;

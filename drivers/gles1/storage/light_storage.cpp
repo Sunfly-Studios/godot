@@ -802,7 +802,7 @@ bool LightStorage::reflection_probe_instance_has_reflection(RID p_instance) {
 }
 
 bool LightStorage::reflection_probe_instance_begin_render(RID p_instance, RID p_reflection_atlas) {
-	if (!GLES1::Config::get_singleton()->support_fbo) {
+	if (!GLES1_CONFIG->support_fbo) {
 		return false;
 	}
 
@@ -824,7 +824,7 @@ bool LightStorage::reflection_probe_instance_begin_render(RID p_instance, RID p_
 		atlas->mipmap_count = Image::get_image_required_mipmaps(atlas->size, atlas->size, Image::FORMAT_RGBA8) - 1;
 		atlas->mipmap_count = MIN(atlas->mipmap_count, 8); // No more than 8 please..
 
-		if (GLES1::Config::get_singleton()->max_texture_units > 1) {
+		if (GLES1_CONFIG->max_texture_units > 1) {
 			glActiveTexture(GL_TEXTURE0);
 		}
 
@@ -832,7 +832,7 @@ bool LightStorage::reflection_probe_instance_begin_render(RID p_instance, RID p_
 			glGenRenderbuffersOES(1, &atlas->depth);
 			glBindRenderbufferOES(GL_RENDERBUFFER_OES, atlas->depth);
 
-			GLenum depth_format = GLES1::Config::get_singleton()->support_depth24 ? GL_DEPTH_COMPONENT24_OES : GL_DEPTH_COMPONENT16;
+			GLenum depth_format = GLES1_CONFIG->support_depth24 ? GL_DEPTH_COMPONENT24_OES : GL_DEPTH_COMPONENT16;
 			glRenderbufferStorageOES(GL_RENDERBUFFER_OES, depth_format, atlas->size, atlas->size);
 
 			GLES1::Utilities::get_singleton()->render_buffer_allocated_data(atlas->depth, atlas->size * atlas->size * 3, "Reflection probe atlas (depth)");
@@ -1251,7 +1251,7 @@ void LightStorage::shadow_atlas_set_size(RID p_atlas, int p_size, bool p_16_bits
 	for (uint32_t i = 0; i < 4; i++) {
 		for (uint32_t j = 0; j < shadow_atlas->quadrants[i].textures.size(); j++) {
 			glDeleteTextures(1, &shadow_atlas->quadrants[i].textures[j]);
-			if (GLES1::Config::get_singleton()->support_fbo) {
+			if (GLES1_CONFIG->support_fbo) {
 				glDeleteFramebuffersOES(1, &shadow_atlas->quadrants[i].fbos[j]);
 			}
 		}
@@ -1272,7 +1272,7 @@ void LightStorage::shadow_atlas_set_size(RID p_atlas, int p_size, bool p_16_bits
 		glDeleteTextures(1, &shadow_atlas->debug_texture);
 	}
 
-	if (shadow_atlas->debug_fbo != 0 && GLES1::Config::get_singleton()->support_fbo) {
+	if (shadow_atlas->debug_fbo != 0 && GLES1_CONFIG->support_fbo) {
 		glDeleteFramebuffersOES(1, &shadow_atlas->debug_fbo);
 	}
 
@@ -1311,7 +1311,7 @@ void LightStorage::shadow_atlas_set_quadrant_subdivision(RID p_atlas, int p_quad
 
 	for (uint32_t j = 0; j < shadow_atlas->quadrants[p_quadrant].textures.size(); j++) {
 		glDeleteTextures(1, &shadow_atlas->quadrants[p_quadrant].textures[j]);
-		if (GLES1::Config::get_singleton()->support_fbo) {
+		if (GLES1_CONFIG->support_fbo) {
 			glDeleteFramebuffersOES(1, &shadow_atlas->quadrants[p_quadrant].fbos[j]);
 		}
 	}
@@ -1466,12 +1466,12 @@ bool LightStorage::_shadow_atlas_find_shadow(ShadowAtlas *shadow_atlas, int *p_i
 			glGenTextures(1, &texture_id);
 
 			GLuint fbo_id = 0;
-			if (GLES1::Config::get_singleton()->support_fbo) {
+			if (GLES1_CONFIG->support_fbo) {
 				glGenFramebuffersOES(1, &fbo_id);
 				glBindFramebufferOES(GL_FRAMEBUFFER_OES, fbo_id);
 			}
 
-			if (GLES1::Config::get_singleton()->max_texture_units > 1) {
+			if (GLES1_CONFIG->max_texture_units > 1) {
 				glActiveTexture(GL_TEXTURE0);
 			}
 
@@ -1479,7 +1479,7 @@ bool LightStorage::_shadow_atlas_find_shadow(ShadowAtlas *shadow_atlas, int *p_i
 
 			GLenum format = GL_DEPTH_COMPONENT;
 			GLenum type = shadow_atlas->use_16_bits ? GL_UNSIGNED_SHORT : GL_UNSIGNED_INT;
-			if (!shadow_atlas->use_16_bits && !GLES1::Config::get_singleton()->support_depth24 && !GLES1::Config::get_singleton()->support_depth32) {
+			if (!shadow_atlas->use_16_bits && !GLES1_CONFIG->support_depth24 && !GLES1_CONFIG->support_depth32) {
 				type = GL_UNSIGNED_SHORT; // Fallback
 			}
 
@@ -1494,7 +1494,7 @@ bool LightStorage::_shadow_atlas_find_shadow(ShadowAtlas *shadow_atlas, int *p_i
 				glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
 				glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 
-				if (GLES1::Config::get_singleton()->support_fbo) {
+				if (GLES1_CONFIG->support_fbo) {
 					glFramebufferTexture2DOES(GL_FRAMEBUFFER_OES, GL_DEPTH_ATTACHMENT_OES, GL_TEXTURE_CUBE_MAP_POSITIVE_X, texture_id, 0);
 				}
 				glBindTexture(GL_TEXTURE_CUBE_MAP, 0);
@@ -1508,13 +1508,13 @@ bool LightStorage::_shadow_atlas_find_shadow(ShadowAtlas *shadow_atlas, int *p_i
 				glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
 				glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 
-				if (GLES1::Config::get_singleton()->support_fbo) {
+				if (GLES1_CONFIG->support_fbo) {
 					glFramebufferTexture2DOES(GL_FRAMEBUFFER_OES, GL_DEPTH_ATTACHMENT_OES, GL_TEXTURE_2D, texture_id, 0);
 				}
 				glBindTexture(GL_TEXTURE_2D, 0);
 			}
 
-			if (GLES1::Config::get_singleton()->support_fbo) {
+			if (GLES1_CONFIG->support_fbo) {
 				glBindFramebufferOES(GL_FRAMEBUFFER_OES, GLES1::TextureStorage::system_fbo);
 				GL_CHECK_ERROR("GLES1::LightStorage::_shadow_atlas_find_shadow: glBindFramebufferOES system_fbo");
 			}
@@ -1585,19 +1585,19 @@ void LightStorage::shadow_atlas_update(RID p_atlas) {
 void LightStorage::update_directional_shadow_atlas() {
 	GLES1::TextureStorage *texture_storage = GLES1::TextureStorage::get_singleton();
 
-	if (directional_shadow.depth == 0 && directional_shadow.size > 0 && GLES1::Config::get_singleton()->support_fbo) {
+	if (directional_shadow.depth == 0 && directional_shadow.size > 0 && GLES1_CONFIG->support_fbo) {
 		glGenFramebuffersOES(1, &directional_shadow.fbo);
 		texture_storage->bind_framebuffer(directional_shadow.fbo);
 
 		glGenTextures(1, &directional_shadow.depth);
-		if (GLES1::Config::get_singleton()->max_texture_units > 1) {
+		if (GLES1_CONFIG->max_texture_units > 1) {
 			glActiveTexture(GL_TEXTURE0);
 		}
 		glBindTexture(GL_TEXTURE_2D, directional_shadow.depth);
 
 		GLenum format = GL_DEPTH_COMPONENT;
 		GLenum type = directional_shadow.use_16_bits ? GL_UNSIGNED_SHORT : GL_UNSIGNED_INT;
-		if (!directional_shadow.use_16_bits && !GLES1::Config::get_singleton()->support_depth24 && !GLES1::Config::get_singleton()->support_depth32) {
+		if (!directional_shadow.use_16_bits && !GLES1_CONFIG->support_depth24 && !GLES1_CONFIG->support_depth32) {
 			type = GL_UNSIGNED_SHORT; // Fallback if 24/32 bits not supported
 		}
 
@@ -1612,7 +1612,7 @@ void LightStorage::update_directional_shadow_atlas() {
 	}
 
 	glDepthMask(GL_TRUE);
-	if (directional_shadow.fbo != 0 && GLES1::Config::get_singleton()->support_fbo) {
+	if (directional_shadow.fbo != 0 && GLES1_CONFIG->support_fbo) {
 		glBindFramebufferOES(GL_FRAMEBUFFER_OES, directional_shadow.fbo);
 		// GLES1 clear depth buffer
 		RasterizerGLES1::clear_depth(0.0f);

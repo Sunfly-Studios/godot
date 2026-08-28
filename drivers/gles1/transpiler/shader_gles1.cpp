@@ -304,7 +304,7 @@ void ShaderGLES1::initialize(const String &p_general_defines, int p_base_texture
 
 	_init();
 
-	max_image_units = GLES1::Config::get_singleton()->max_texture_image_units;
+	max_image_units = GLES1_CONFIG->max_texture_image_units;
 }
 
 void ShaderGLES1::set_shader_cache_dir(const String &p_dir) {

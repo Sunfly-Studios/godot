@@ -33,12 +33,13 @@
 
 #ifdef GLES1_ENABLED
 
+#include "drivers/gles_common/error_macros.h"
+#include "drivers/gles_common/common_defines.h"
 #include "core/config/project_settings.h"
 #include "core/io/dir_access.h"
 #include "core/io/image.h"
 #include "core/os/os.h"
 #include "storage/texture_storage.h"
-#include "drivers/gles_common/error_macros.h"
 
 #ifdef ANDROID_ENABLED
 #include <dlfcn.h> // Required for dlopen/dlsym
@@ -822,7 +823,7 @@ void RasterizerGLES1::set_boot_image(const Ref<Image> &p_image, const Color &p_c
 	GLES1::TextureStorage::get_singleton()->bind_framebuffer_system();
 	glViewport(0, 0, win_size.width, win_size.height);
 	glEnable(GL_BLEND);
-	if (GLES1::Config::get_singleton()->support_blend_func_separate) {
+	if (GLES1_CONFIG->support_blend_func_separate) {
 		glBlendFuncSeparateOES(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_ZERO, GL_ONE);
 	} else {
 		glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
@@ -890,7 +891,7 @@ void RasterizerGLES1::set_boot_image(const Ref<Image> &p_image, const Color &p_c
 
 	// Godot's logo has a transparent background.
 	glEnable(GL_BLEND);
-	if (GLES1::Config::get_singleton()->support_blend_func_separate) {
+	if (GLES1_CONFIG->support_blend_func_separate) {
 		glBlendFuncSeparateOES(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_ZERO, GL_ONE);
 	} else {
 		glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);

@@ -153,7 +153,7 @@ void CopyEffects::copy_to_rect(const Rect2 &p_rect) {
 void CopyEffects::copy_to_rect_3d(const Rect2 &p_rect, float p_layer, int p_type, float p_lod) {
 	ERR_FAIL_COND(p_type != Texture::TYPE_LAYERED && p_type != Texture::TYPE_3D);
 
-	if (unlikely(!GLES2::Config::get_singleton()->support_3d_textures)) {
+	if (unlikely(!GLES2_CONFIG->support_3d_textures)) {
 		ERR_PRINT_ONCE("GLES2: 3D and Layered texture copying is not supported on this hardware. Aborting copy_to_rect_3d.");
 		return;
 	}

@@ -807,7 +807,7 @@ public:
 			return atlas->debug_fbo;
 		}
 
-		if (GLES1::Config::get_singleton()->support_fbo) {
+		if (GLES1_CONFIG->support_fbo) {
 			glGenFramebuffersOES(1, &atlas->debug_fbo);
 			GLES1::TextureStorage::get_singleton()->bind_framebuffer(atlas->debug_fbo);
 
@@ -815,7 +815,7 @@ public:
 				atlas->debug_texture = shadow_atlas_get_debug_texture(p_atlas);
 			}
 
-			if (GLES1::Config::get_singleton()->max_texture_units > 1) {
+			if (GLES1_CONFIG->max_texture_units > 1) {
 				glActiveTexture(GL_TEXTURE0);
 			}
 			glBindTexture(GL_TEXTURE_2D, atlas->debug_texture);
@@ -838,7 +838,7 @@ public:
 		}
 
 		glGenTextures(1, &atlas->debug_texture);
-		if (GLES1::Config::get_singleton()->max_texture_units > 1) {
+		if (GLES1_CONFIG->max_texture_units > 1) {
 			glActiveTexture(GL_TEXTURE0);
 		}
 		glBindTexture(GL_TEXTURE_2D, atlas->debug_texture);
@@ -847,8 +847,8 @@ public:
 		GLenum type = atlas->use_16_bits ? GL_UNSIGNED_SHORT : GL_UNSIGNED_INT;
 		if (
 			!atlas->use_16_bits &&
-			!GLES1::Config::get_singleton()->support_depth24 &&
-			!GLES1::Config::get_singleton()->support_depth32
+			!GLES1_CONFIG->support_depth24 &&
+			!GLES1_CONFIG->support_depth32
 		) {
 			type = GL_UNSIGNED_SHORT; // Fallback
 		}

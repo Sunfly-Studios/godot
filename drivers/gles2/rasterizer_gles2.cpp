@@ -34,6 +34,7 @@
 #ifdef GLES2_ENABLED
 
 #include "drivers/gles_common/error_macros.h"
+#include "drivers/gles_common/common_defines.h"
 #include "core/config/project_settings.h"
 #include "core/io/dir_access.h"
 #include "core/io/image.h"

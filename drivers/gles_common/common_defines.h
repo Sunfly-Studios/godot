@@ -31,6 +31,12 @@
 #ifndef COMMON_DEFINES_GLES_COMMON_H
 #define COMMON_DEFINES_GLES_COMMON_H
 
+// Config access
+
+#define GLES1_CONFIG (GLES1::Config::get_singleton())
+#define GLES2_CONFIG (GLES2::Config::get_singleton())
+// The GLES3 driver is left alone
+
 // Constants
 
 #ifndef GL_MAP_READ_BIT_OES

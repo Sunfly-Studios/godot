@@ -828,7 +828,7 @@ bool LightStorage::reflection_probe_instance_begin_render(RID p_instance, RID p_
 			glGenRenderbuffers(1, &atlas->depth);
 			glBindRenderbuffer(GL_RENDERBUFFER, atlas->depth);
 
-			GLenum depth_format = GLES2::Config::get_singleton()->support_depth24 ? GL_DEPTH_COMPONENT24_OES : GL_DEPTH_COMPONENT16;
+			GLenum depth_format = GLES2_CONFIG->support_depth24 ? GL_DEPTH_COMPONENT24_OES : GL_DEPTH_COMPONENT16;
 			glRenderbufferStorage(GL_RENDERBUFFER, depth_format, atlas->size, atlas->size);
 
 			GLES2::Utilities::get_singleton()->render_buffer_allocated_data(atlas->depth, atlas->size * atlas->size * 3, "Reflection probe atlas (depth)");
@@ -1497,7 +1497,7 @@ bool LightStorage::_shadow_atlas_find_shadow(ShadowAtlas *shadow_atlas, int *p_i
 
 			GLenum format = GL_DEPTH_COMPONENT;
 			GLenum type = shadow_atlas->use_16_bits ? GL_UNSIGNED_SHORT : GL_UNSIGNED_INT;
-			if (!shadow_atlas->use_16_bits && !GLES2::Config::get_singleton()->support_depth24 && !GLES2::Config::get_singleton()->support_depth32) {
+			if (!shadow_atlas->use_16_bits && !GLES2_CONFIG->support_depth24 && !GLES2_CONFIG->support_depth32) {
 				type = GL_UNSIGNED_SHORT; // Fallback if 24/32 bits not supported
 			}
 
@@ -1621,7 +1621,7 @@ void LightStorage::update_directional_shadow_atlas() {
 
 		GLenum format = GL_DEPTH_COMPONENT;
 		GLenum type = directional_shadow.use_16_bits ? GL_UNSIGNED_SHORT : GL_UNSIGNED_INT;
-		if (!directional_shadow.use_16_bits && !GLES2::Config::get_singleton()->support_depth24 && !GLES2::Config::get_singleton()->support_depth32) {
+		if (!directional_shadow.use_16_bits && !GLES2_CONFIG->support_depth24 && !GLES2_CONFIG->support_depth32) {
 			type = GL_UNSIGNED_SHORT; // Fallback if 24/32 bits not supported
 		}
 

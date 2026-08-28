@@ -47,7 +47,7 @@ _FORCE_INLINE_ static void bind_uniforms_and_textures_generic_gles1(
 	const Vector<RID> &p_texture_cache,
 	const Vector<ShaderCompiler::GeneratedCode::Texture> &p_texture_uniforms
 ) {
-	int max_texture_units = GLES1::Config::get_singleton()->max_texture_image_units;
+	int max_texture_units = GLES1_CONFIG->max_texture_image_units;
 
 	// Fetch the default white texture to use as a fallback for the combiners
 	RID white_tex_rid = GLES1::TextureStorage::get_singleton()->texture_gl_get_default(GLES1::DEFAULT_GL_TEXTURE_WHITE);
@@ -1384,7 +1384,7 @@ void CanvasMaterialData::bind_uniforms() {
 		return;
 	}
 
-	int max_texture_units = GLES1::Config::get_singleton()->max_texture_image_units;
+	int max_texture_units = GLES1_CONFIG->max_texture_image_units;
 
 	if (texture_cache.is_empty()) {
 		// We return early for standard items, but we sweep any units

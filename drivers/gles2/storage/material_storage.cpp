@@ -764,7 +764,7 @@ _FORCE_INLINE_ static void bind_uniforms_and_textures_generic_gles2(
 	int texture_uniform_index = 0;
 	int texture_uniform_count = 0;
 
-	int max_texture_units = GLES2::Config::get_singleton()->max_texture_image_units;
+	int max_texture_units = GLES2_CONFIG->max_texture_image_units;
 	int max_custom_textures = MAX(1, max_texture_units - 8); // Reserve top 8 for engine
 
 	// Start at 1 to preserve GL_TEXTURE0, which is reserved

@@ -41,6 +41,10 @@
 #include "servers/rendering/storage/utilities.h"
 #include "config.h"
 
+// TODO(GLES2): Why does it not detect?
+// It should by having it on `texture_storage.h`
+#include "drivers/gles_common/common_defines.h"
+
 #include "platform_gl.h"
 
 namespace GLES2 {
@@ -457,7 +461,7 @@ public:
 
 		_mesh_surface_generate_version_for_input_mask(s->versions[version], s, p_input_mask);
 
-		if (GLES2::Config::get_singleton()->support_vao) {
+		if (GLES2_CONFIG->support_vao) {
 			glGenVertexArrays(1, &s->versions[version].vertex_array);
 			glBindVertexArray(s->versions[version].vertex_array);
 
@@ -505,7 +509,7 @@ public:
 	}
 
 	_FORCE_INLINE_ void mesh_surface_bind_version(Mesh::Surface::Version *p_version, void *p_surface) {
-		if (GLES2::Config::get_singleton()->support_vao) {
+		if (GLES2_CONFIG->support_vao) {
 			glBindVertexArray(p_version->vertex_array);
 			return;
 		}
@@ -536,7 +540,7 @@ public:
 	}
 
 	_FORCE_INLINE_ void mesh_surface_unbind_version(Mesh::Surface::Version *p_version) {
-		if (GLES2::Config::get_singleton()->support_vao) {
+		if (GLES2_CONFIG->support_vao) {
 			glBindVertexArray(0);
 			return;
 		}
@@ -596,7 +600,7 @@ public:
 
 		_mesh_surface_generate_version_for_input_mask(mis->versions[version], s, p_input_mask, mis);
 
-		if (GLES2::Config::get_singleton()->support_vao) {
+		if (GLES2_CONFIG->support_vao) {
 			glGenVertexArrays(1, &mis->versions[version].vertex_array);
 			// The actual binding is dynamic based on pass (Skeleton/BlendShape),
 			// so the array gets configured on the fly in update_mesh_instances

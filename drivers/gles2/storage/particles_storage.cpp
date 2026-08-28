@@ -132,7 +132,7 @@ void ParticlesStorage::particles_set_mode(RID p_particles, RS::ParticlesMode p_m
 }
 
 void ParticlesStorage::particles_set_emitting(RID p_particles, bool p_emitting) {
-	ERR_FAIL_COND_MSG(GLES2::Config::get_singleton()->disable_particles_workaround, "Due to driver bugs, GPUParticles are not supported on this device. Please use CPUParticles instead.");
+	ERR_FAIL_COND_MSG(GLES2_CONFIG->disable_particles_workaround, "Due to driver bugs, GPUParticles are not supported on this device. Please use CPUParticles instead.");
 
 	Particles *particles = particles_owner.get_or_null(p_particles);
 	ERR_FAIL_NULL(particles);
@@ -141,7 +141,7 @@ void ParticlesStorage::particles_set_emitting(RID p_particles, bool p_emitting) 
 }
 
 bool ParticlesStorage::particles_get_emitting(RID p_particles) {
-	if (GLES2::Config::get_singleton()->disable_particles_workaround) {
+	if (GLES2_CONFIG->disable_particles_workaround) {
 		return false;
 	}
 
@@ -390,7 +390,7 @@ AABB ParticlesStorage::particles_get_current_aabb(RID p_particles) {
 
 	int total_amount = particles->amount;
 
-	if (total_amount == 0 || !GLES2::Config::get_singleton()->support_mapbuffer) {
+	if (total_amount == 0 || !GLES2_CONFIG->support_mapbuffer) {
 		// Cannot read back from GPU in standard GLES2. Use custom AABB.
 		return particles->custom_aabb;
 	}
@@ -823,7 +823,7 @@ void ParticlesStorage::update_particles() {
 			particles->sort_buffer_filled = false;
 			particles->last_frame_buffer_filled = false;
 #else
-			if (GLES2::Config::get_singleton()->support_mapbuffer) {
+			if (GLES2_CONFIG->support_mapbuffer) {
 				glBindBuffer(GL_ARRAY_BUFFER, particles->back_instance_buffer);
 				// Query standard mapbuffer.
 				void *read_ptr = glMapBufferOES(GL_ARRAY_BUFFER, GL_MAP_READ_BIT_OES);
@@ -896,7 +896,7 @@ void ParticlesStorage::update_particles() {
 		if (particles->draw_order != RS::PARTICLES_DRAW_ORDER_VIEW_DEPTH && particles->transform_align != RS::PARTICLES_TRANSFORM_ALIGN_Z_BILLBOARD && particles->transform_align != RS::PARTICLES_TRANSFORM_ALIGN_Z_BILLBOARD_Y_TO_VELOCITY) {
 			_particles_update_instance_buffer(particles, Vector3(0.0, 0.0, 0.0), Vector3(0.0, 0.0, 0.0));
 
-			if (particles->draw_order == RS::PARTICLES_DRAW_ORDER_REVERSE_LIFETIME && particles->sort_buffer_filled && GLES2::Config::get_singleton()->support_mapbuffer) {
+			if (particles->draw_order == RS::PARTICLES_DRAW_ORDER_REVERSE_LIFETIME && particles->sort_buffer_filled && GLES2_CONFIG->support_mapbuffer) {
 				if (particles->mode == RS::ParticlesMode::PARTICLES_MODE_2D) {
 					_particles_reverse_lifetime_sort<ParticleInstanceData2D>(particles);
 				} else {
@@ -915,7 +915,7 @@ void ParticlesStorage::update_particles() {
 template <typename ParticleInstanceData>
 void ParticlesStorage::_particles_reverse_lifetime_sort(Particles *particles) {
 	if (
-		!GLES2::Config::get_singleton()->support_mapbuffer ||
+		!GLES2_CONFIG->support_mapbuffer ||
 		!particles->sort_buffer_filled ||
 		particles->sort_buffer == 0
 	) {

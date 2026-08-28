@@ -98,7 +98,7 @@ void RenderSceneBuffersGLES1::_rt_attach_textures(GLuint p_color, GLuint p_depth
 }
 
 GLuint RenderSceneBuffersGLES1::_rt_get_cached_fbo(GLuint p_color, GLuint p_depth, GLsizei p_samples, uint32_t p_view_count) {
-	if (!GLES1::Config::get_singleton()->support_fbo) {
+	if (!GLES1_CONFIG->support_fbo) {
 		return 0;
 	}
 
@@ -134,7 +134,7 @@ GLuint RenderSceneBuffersGLES1::_rt_get_cached_fbo(GLuint p_color, GLuint p_dept
 }
 
 void RenderSceneBuffersGLES1::_check_render_buffers() {
-	if (!GLES1::Config::get_singleton()->support_fbo) {
+	if (!GLES1_CONFIG->support_fbo) {
 		return;
 	}
 	GLES1::TextureStorage *texture_storage = GLES1::TextureStorage::get_singleton();
@@ -242,7 +242,7 @@ void RenderSceneBuffersGLES1::_clear_intermediate_buffers() {
 }
 
 void RenderSceneBuffersGLES1::check_backbuffer(bool p_need_color, bool p_need_depth) {
-	if (!GLES1::Config::get_singleton()->support_fbo) {
+	if (!GLES1_CONFIG->support_fbo) {
 		return;
 	}
 	GLES1::TextureStorage *texture_storage = GLES1::TextureStorage::get_singleton();
@@ -323,7 +323,7 @@ void RenderSceneBuffersGLES1::set_apply_color_adjustments_in_post(bool p_apply_i
 }
 
 void RenderSceneBuffersGLES1::check_glow_buffers() {
-	if (!GLES1::Config::get_singleton()->support_fbo) {
+	if (!GLES1_CONFIG->support_fbo) {
 		return;
 	}
 

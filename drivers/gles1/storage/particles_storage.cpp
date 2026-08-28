@@ -131,7 +131,7 @@ void ParticlesStorage::particles_set_mode(RID p_particles, RS::ParticlesMode p_m
 }
 
 void ParticlesStorage::particles_set_emitting(RID p_particles, bool p_emitting) {
-	ERR_FAIL_COND_MSG(GLES1::Config::get_singleton()->disable_particles_workaround, "Due to driver bugs, GPUParticles are not supported on this device. Please use CPUParticles instead.");
+	ERR_FAIL_COND_MSG(GLES1_CONFIG->disable_particles_workaround, "Due to driver bugs, GPUParticles are not supported on this device. Please use CPUParticles instead.");
 
 	Particles *particles = particles_owner.get_or_null(p_particles);
 	ERR_FAIL_NULL(particles);
@@ -140,7 +140,7 @@ void ParticlesStorage::particles_set_emitting(RID p_particles, bool p_emitting) 
 }
 
 bool ParticlesStorage::particles_get_emitting(RID p_particles) {
-	if (GLES1::Config::get_singleton()->disable_particles_workaround) {
+	if (GLES1_CONFIG->disable_particles_workaround) {
 		return false;
 	}
 
@@ -576,7 +576,7 @@ void ParticlesStorage::_particles_update_buffers(Particles *particles) {
 		instance_data.resize_zeroed(particles->instance_buffer_size_cache);
 
 		// Generate buffers
-		if (GLES1::Config::get_singleton()->support_vbo) {
+		if (GLES1_CONFIG->support_vbo) {
 			glGenBuffers(1, &particles->front_process_buffer);
 			GL_CHECK_ERROR("GLES1::ParticlesStorage::_particles_update_buffers: glGenBuffers front_process");
 			glGenBuffers(1, &particles->front_instance_buffer);
@@ -592,7 +592,7 @@ void ParticlesStorage::_particles_update_buffers(Particles *particles) {
 			GLES1::Utilities::get_singleton()->buffer_allocate_data(GL_ARRAY_BUFFER, particles->front_instance_buffer, particles->instance_buffer_size_cache, instance_data.ptr(), GL_DYNAMIC_DRAW, "Particles front instance buffer");
 		}
 
-		if (GLES1::Config::get_singleton()->support_vbo) {
+		if (GLES1_CONFIG->support_vbo) {
 			glGenBuffers(1, &particles->back_process_buffer);
 			GL_CHECK_ERROR("GLES1::ParticlesStorage::_particles_update_buffers: glGenBuffers back_process");
 			glGenBuffers(1, &particles->back_instance_buffer);
@@ -614,7 +614,7 @@ void ParticlesStorage::_particles_update_buffers(Particles *particles) {
 void ParticlesStorage::_particles_allocate_history_buffers(Particles *particles) {
 	ERR_FAIL_NULL(particles);
 	if (particles->sort_buffer == 0) {
-		if (GLES1::Config::get_singleton()->support_vbo) {
+		if (GLES1_CONFIG->support_vbo) {
 			glGenBuffers(1, &particles->last_frame_buffer);
 			GL_CHECK_ERROR("ParticlesStorage::_particles_allocate_history_buffers: glGenBuffers last_frame");
 		}
@@ -624,7 +624,7 @@ void ParticlesStorage::_particles_allocate_history_buffers(Particles *particles)
 			GLES1::Utilities::get_singleton()->buffer_allocate_data(GL_ARRAY_BUFFER, particles->last_frame_buffer, particles->instance_buffer_size_cache, nullptr, GL_DYNAMIC_DRAW, "Particles last frame buffer");
 		}
 
-		if (GLES1::Config::get_singleton()->support_vbo) {
+		if (GLES1_CONFIG->support_vbo) {
 			glGenBuffers(1, &particles->sort_buffer);
 			GL_CHECK_ERROR("ParticlesStorage::_particles_allocate_history_buffers: glGenBuffers sort_buffer");
 		}
@@ -727,7 +727,7 @@ void ParticlesStorage::update_particles() {
 			_particles_allocate_history_buffers(particles);
 			SWAP(particles->last_frame_buffer, particles->sort_buffer);
 
-			if (GLES1::Config::get_singleton()->support_mapbuffer && particles->back_instance_buffer != 0 && particles->last_frame_buffer != 0) {
+			if (GLES1_CONFIG->support_mapbuffer && particles->back_instance_buffer != 0 && particles->last_frame_buffer != 0) {
 				glBindBuffer(GL_ARRAY_BUFFER, particles->back_instance_buffer);
 				// Query standard mapbuffer.
 				void *read_ptr = glMapBufferOES(GL_ARRAY_BUFFER, GL_MAP_READ_BIT_OES);
@@ -799,7 +799,7 @@ void ParticlesStorage::update_particles() {
 		if (particles->draw_order != RS::PARTICLES_DRAW_ORDER_VIEW_DEPTH && particles->transform_align != RS::PARTICLES_TRANSFORM_ALIGN_Z_BILLBOARD && particles->transform_align != RS::PARTICLES_TRANSFORM_ALIGN_Z_BILLBOARD_Y_TO_VELOCITY) {
 			_particles_update_instance_buffer(particles, Vector3(0.0, 0.0, 0.0), Vector3(0.0, 0.0, 0.0));
 
-			if (particles->draw_order == RS::PARTICLES_DRAW_ORDER_REVERSE_LIFETIME && particles->sort_buffer_filled && GLES1::Config::get_singleton()->support_mapbuffer) {
+			if (particles->draw_order == RS::PARTICLES_DRAW_ORDER_REVERSE_LIFETIME && particles->sort_buffer_filled && GLES1_CONFIG->support_mapbuffer) {
 				if (particles->mode == RS::ParticlesMode::PARTICLES_MODE_2D) {
 					_particles_reverse_lifetime_sort<ParticleInstanceData2D>(particles);
 				} else {
@@ -816,7 +816,7 @@ void ParticlesStorage::update_particles() {
 template <typename ParticleInstanceData>
 void ParticlesStorage::_particles_reverse_lifetime_sort(Particles *particles) {
 	if (
-		!GLES1::Config::get_singleton()->support_mapbuffer ||
+		!GLES1_CONFIG->support_mapbuffer ||
 		!particles->sort_buffer_filled ||
 		particles->sort_buffer == 0
 	) {

@@ -312,8 +312,8 @@ public:
 	) {
 		glEnable(GL_BLEND);
 
-		bool support_subtract = GLES1::Config::get_singleton()->support_blend_subtract;
-		bool support_separate = GLES1::Config::get_singleton()->support_blend_func_separate;
+		bool support_subtract = GLES1_CONFIG->support_blend_subtract;
+		bool support_separate = GLES1_CONFIG->support_blend_func_separate;
 
 		switch (blend_mode) {
 			case GLES1::CanvasShaderData::BLEND_MODE_DISABLED: {

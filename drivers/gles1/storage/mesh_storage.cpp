@@ -191,7 +191,7 @@ void MeshStorage::mesh_add_surface(RID p_mesh, const RS::SurfaceData &p_surface)
 	GLint prev_element_buffer = 0;
 
 	// Bind our buffers
-	if (GLES1::Config::get_singleton()->support_vbo) {
+	if (GLES1_CONFIG->support_vbo) {
 		glGetIntegerv(GL_ARRAY_BUFFER_BINDING, &prev_array_buffer);
 		GL_CHECK_ERROR("GLES1::MeshStorage::mesh_add_surface: glGetIntegerv GL_ARRAY_BUFFER_BINDING");
 		glGetIntegerv(GL_ELEMENT_ARRAY_BUFFER_BINDING, &prev_element_buffer);
@@ -200,7 +200,7 @@ void MeshStorage::mesh_add_surface(RID p_mesh, const RS::SurfaceData &p_surface)
 
 	// Vertex buffer
 	if (surface_data.vertex_data.size()) {
-		if (GLES1::Config::get_singleton()->support_vbo) {
+		if (GLES1_CONFIG->support_vbo) {
 			glGenBuffers(1, &s->vertex_buffer);
 			GL_CHECK_ERROR("GLES1::MeshStorage::mesh_add_surface: glGenBuffers (vertex buffer)");
 		}
@@ -229,7 +229,7 @@ void MeshStorage::mesh_add_surface(RID p_mesh, const RS::SurfaceData &p_surface)
 
 	// Attribute buffer
 	if (surface_data.attribute_data.size()) {
-		if (GLES1::Config::get_singleton()->support_vbo) {
+		if (GLES1_CONFIG->support_vbo) {
 			glGenBuffers(1, &s->attribute_buffer);
 			GL_CHECK_ERROR("GLES1::MeshStorage::mesh_add_surface: glGenBuffers (attributes buffer)");
 		}
@@ -258,7 +258,7 @@ void MeshStorage::mesh_add_surface(RID p_mesh, const RS::SurfaceData &p_surface)
 
 	// Index buffer
 	if (surface_data.index_count) {
-		if (GLES1::Config::get_singleton()->support_vbo) {
+		if (GLES1_CONFIG->support_vbo) {
 			glGenBuffers(1, &s->index_buffer);
 			GL_CHECK_ERROR("GLES1::MeshStorage::mesh_add_surface: glGenBuffers (indices buffer)");
 		}
@@ -288,7 +288,7 @@ void MeshStorage::mesh_add_surface(RID p_mesh, const RS::SurfaceData &p_surface)
 
 	// Skin buffer
 	if (surface_data.skin_data.size()) {
-		if (GLES1::Config::get_singleton()->support_vbo) {
+		if (GLES1_CONFIG->support_vbo) {
 			glGenBuffers(1, &s->skin_buffer);
 			GL_CHECK_ERROR("GLES1::MeshStorage::mesh_add_surface: glGenBuffers (skin buffer)");
 		}
@@ -315,7 +315,7 @@ void MeshStorage::mesh_add_surface(RID p_mesh, const RS::SurfaceData &p_surface)
 	}
 
 	// Restore bindings
-	if (GLES1::Config::get_singleton()->support_vbo) {
+	if (GLES1_CONFIG->support_vbo) {
 		glBindBuffer(GL_ARRAY_BUFFER, prev_array_buffer);
 		GL_CHECK_ERROR("GLES1::MeshStorage::mesh_add_surface: restore prev GL_ARRAY_BUFFER");
 		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, prev_element_buffer);
@@ -754,7 +754,7 @@ void MeshStorage::mesh_surface_bind_arrays_gles1(void *p_surface, uint64_t p_inp
 
 	s->version_lock.unlock();
 
-	bool support_vbo = GLES1::Config::get_singleton()->support_vbo;
+	bool support_vbo = GLES1_CONFIG->support_vbo;
 
 	// Vertex data (positions, normals)
 	bool use_vbo_vertex = support_vbo && s->vertex_buffer != 0;
@@ -877,7 +877,7 @@ void MeshStorage::mesh_surface_unbind_arrays_gles1(void *p_surface) {
 	glClientActiveTexture(GL_TEXTURE0);
 	glDisableClientState(GL_TEXTURE_COORD_ARRAY);
 
-	if (GLES1::Config::get_singleton()->support_vbo) {
+	if (GLES1_CONFIG->support_vbo) {
 		glBindBuffer(GL_ARRAY_BUFFER, 0);
 	}
 	GL_CHECK_ERROR("GLES1::MeshStorage::mesh_surface_unbind_arrays_gles1: pointers unbound");
@@ -1657,7 +1657,7 @@ void MeshStorage::mesh_instance_set_blend_shape_weight(RID p_mesh_instance, int 
 
 void MeshStorage::_mesh_instance_clear(MeshInstance *mi) {
 	for (uint32_t i = 0; i < mi->surfaces.size(); i++) {
-		if (GLES1::Config::get_singleton()->support_vbo) {
+		if (GLES1_CONFIG->support_vbo) {
 			if (mi->surfaces[i].vertex_buffer != 0) {
 				GLES1::Utilities::get_singleton()->buffer_free_data(mi->surfaces[i].vertex_buffer);
 			}
@@ -1715,7 +1715,7 @@ void MeshStorage::_mesh_instance_add_surface(MeshInstance *mi, Mesh *mesh, uint3
 		int buffer_size = s.vertex_stride_cache * mesh->surfaces[p_surface]->vertex_count;
 
 		// Buffer to be used for rendering. Final output of skeleton and blend shapes.
-		if (GLES1::Config::get_singleton()->support_vbo) {
+		if (GLES1_CONFIG->support_vbo) {
 			glGenBuffers(1, &s.vertex_buffer);
 			glBindBuffer(GL_ARRAY_BUFFER, s.vertex_buffer);
 			GLES1::Utilities::get_singleton()->buffer_allocate_data(GL_ARRAY_BUFFER, s.vertex_buffer, buffer_size, nullptr, GL_DYNAMIC_DRAW, "MeshInstance vertex buffer");
@@ -1743,7 +1743,7 @@ void MeshStorage::_mesh_instance_add_surface(MeshInstance *mi, Mesh *mesh, uint3
 void MeshStorage::_mesh_instance_remove_surface(MeshInstance *mi, int p_surface) {
 	ERR_FAIL_UNSIGNED_INDEX((uint32_t)p_surface, mi->surfaces.size());
 
-	if (GLES1::Config::get_singleton()->support_vbo) {
+	if (GLES1_CONFIG->support_vbo) {
 		if (mi->surfaces[p_surface].vertex_buffer != 0) {
 			GLES1::Utilities::get_singleton()->buffer_free_data(mi->surfaces[p_surface].vertex_buffer);
 		}
@@ -1802,7 +1802,7 @@ void MeshStorage::_compute_skeleton(MeshInstance *p_mi, Skeleton *p_sk, uint32_t
 	Vector<uint8_t> src_vertices;
 	Vector<uint8_t> src_skin;
 
-	if (GLES1::Config::get_singleton()->support_vbo) {
+	if (GLES1_CONFIG->support_vbo) {
 		if (s->vertex_buffer != 0) {
 			src_vertices = GLES1::Utilities::get_singleton()->buffer_get_data(GL_ARRAY_BUFFER, s->vertex_buffer, s->vertex_buffer_size);
 		}
@@ -1906,7 +1906,7 @@ void MeshStorage::_compute_skeleton(MeshInstance *p_mi, Skeleton *p_sk, uint32_t
 		}
 	}
 
-	if (GLES1::Config::get_singleton()->support_vbo && p_mi->surfaces[p_surface].vertex_buffer != 0) {
+	if (GLES1_CONFIG->support_vbo && p_mi->surfaces[p_surface].vertex_buffer != 0) {
 		glBindBuffer(GL_ARRAY_BUFFER, p_mi->surfaces[p_surface].vertex_buffer);
 		GLES1::Utilities::get_singleton()->buffer_update_data(
 			GL_ARRAY_BUFFER,
@@ -1997,7 +1997,7 @@ void MeshStorage::update_mesh_instances() {
 								skeleton_shader.shader.version_set_uniform(SkeletonShaderGLES1::INVERSE_TRANSFORM_Y, inverse_transform[1], skeleton_shader.shader_version, variant, specialization);
 								skeleton_shader.shader.version_set_uniform(SkeletonShaderGLES1::INVERSE_TRANSFORM_OFFSET, inverse_transform[2], skeleton_shader.shader_version, variant, specialization);
 
-								bool hw_skinning = GLES1::Config::get_singleton()->support_matrix_palette && !use_8_weights;
+								bool hw_skinning = GLES1_CONFIG->support_matrix_palette && !use_8_weights;
 								if (!hw_skinning) {
 									_compute_skeleton(mi, sk, i);
 								}
@@ -2028,7 +2028,7 @@ void MeshStorage::update_mesh_instances() {
 					skeleton_shader.shader.version_set_uniform(SkeletonShaderGLES1::INVERSE_TRANSFORM_Y, inverse_transform[1], skeleton_shader.shader_version, variant, specialization);
 					skeleton_shader.shader.version_set_uniform(SkeletonShaderGLES1::INVERSE_TRANSFORM_OFFSET, inverse_transform[2], skeleton_shader.shader_version, variant, specialization);
 
-					bool hw_skinning = GLES1::Config::get_singleton()->support_matrix_palette && !use_8_weights;
+					bool hw_skinning = GLES1_CONFIG->support_matrix_palette && !use_8_weights;
 					if (!hw_skinning) {
 						_compute_skeleton(mi, sk, i);
 					}
@@ -2056,7 +2056,7 @@ void MeshStorage::_multimesh_initialize(RID p_rid) {
 	ERR_FAIL_NULL(multimesh);
 	multimesh->buffer = 0;
 
-	if (GLES1::Config::get_singleton()->support_vbo) {
+	if (GLES1_CONFIG->support_vbo) {
 		// Create a backing GL buffer just in case it's used for 3D later.
 		glGenBuffers(1, &multimesh->buffer);
 	}

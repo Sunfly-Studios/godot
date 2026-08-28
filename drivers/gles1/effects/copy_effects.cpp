@@ -68,7 +68,7 @@ CopyEffects::CopyEffects() {
 	copy.shader.version_bind_shader(copy.shader_version, CopyShaderGLES1::MODE_DEFAULT);
 
 	// Screen Triangle VBO
-	if (GLES1::Config::get_singleton()->support_vbo) {
+	if (GLES1_CONFIG->support_vbo) {
 		glGenBuffers(1, &screen_triangle);
 	}
 
@@ -86,7 +86,7 @@ CopyEffects::CopyEffects() {
 	}
 
 	// Screen Quad VBO
-	if (GLES1::Config::get_singleton()->support_vbo) {
+	if (GLES1_CONFIG->support_vbo) {
 		glGenBuffers(1, &quad);
 	}
 
@@ -212,7 +212,7 @@ void CopyEffects::copy_to_rect(const Rect2 &p_rect) {
 void CopyEffects::copy_to_rect_3d(const Rect2 &p_rect, float p_layer, int p_type, float p_lod) {
 	ERR_FAIL_COND(p_type != Texture::TYPE_LAYERED && p_type != Texture::TYPE_3D);
 
-	if (unlikely(!GLES1::Config::get_singleton()->support_3d_textures)) {
+	if (unlikely(!GLES1_CONFIG->support_3d_textures)) {
 		ERR_PRINT_ONCE("GLES1: 3D and Layered texture copying is not supported on this hardware. Aborting copy_to_rect_3d.");
 		return;
 	}

@@ -2139,7 +2139,7 @@ void RasterizerSceneGLES2::_setup_environment(const RenderDataGLES2 *p_render_da
 	if (is_environment(p_render_data->environment)) {
 		Sky *sky = sky_owner.get_or_null(environment_get_sky(p_render_data->environment));
 
-		glActiveTexture(GL_TEXTURE0 + GLES2::Config::get_singleton()->max_texture_image_units - 2);
+		glActiveTexture(GL_TEXTURE0 + GLES2_CONFIG->max_texture_image_units - 2);
 		if (sky && sky->radiance != 0) {
 			glBindTexture(GL_TEXTURE_CUBE_MAP, sky->radiance);
 		} else {
@@ -2204,7 +2204,7 @@ void RasterizerSceneGLES2::_setup_environment(const RenderDataGLES2 *p_render_da
 			scene_state.ubo.use_reflection_cubemap = 0;
 		}
 	} else {
-		glActiveTexture(GL_TEXTURE0 + GLES2::Config::get_singleton()->max_texture_image_units - 2);
+		glActiveTexture(GL_TEXTURE0 + GLES2_CONFIG->max_texture_image_units - 2);
 		glBindTexture(GL_TEXTURE_CUBE_MAP, GLES2::TextureStorage::get_singleton()->texture_get_texid(GLES2::TextureStorage::get_singleton()->texture_gl_get_default(GLES2::DEFAULT_GL_TEXTURE_CUBEMAP_BLACK)));
 		glActiveTexture(GL_TEXTURE0);
 
@@ -2767,7 +2767,7 @@ void RasterizerSceneGLES2::render_scene(const Ref<RenderSceneBuffers> &p_render_
 	scene_state.reset_gl_state();
 	glBindBuffer(GL_ARRAY_BUFFER, 0);
 	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
-	if (GLES2::Config::get_singleton()->support_vao) {
+	if (GLES2_CONFIG->support_vao) {
 		glBindVertexArray(0);
 	}
 	GLES2::TextureStorage::get_singleton()->bind_framebuffer_system();

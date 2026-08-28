@@ -167,21 +167,21 @@ void ShaderGLES2::_build_variant_code(StringBuilder &builder, uint32_t p_variant
 	}
 
 	// Hardware extensions
-	if (p_stage_type == STAGE_TYPE_VERTEX && GLES2::Config::get_singleton()->support_instancing) {
+	if (p_stage_type == STAGE_TYPE_VERTEX && GLES2_CONFIG->support_instancing) {
 		builder.append("#extension GL_EXT_draw_instanced : enable\n");
 	}
-	if (p_stage_type == STAGE_TYPE_FRAGMENT && GLES2::Config::get_singleton()->support_frag_depth) {
+	if (p_stage_type == STAGE_TYPE_FRAGMENT && GLES2_CONFIG->support_frag_depth) {
 		builder.append("#extension GL_EXT_frag_depth : enable\n");
 	}
-	if (p_stage_type == STAGE_TYPE_FRAGMENT && GLES2::Config::get_singleton()->texture_lod_supported) {
+	if (p_stage_type == STAGE_TYPE_FRAGMENT && GLES2_CONFIG->texture_lod_supported) {
 		builder.append("#extension GL_EXT_shader_texture_lod : enable\n");
 	}
-	if (p_stage_type == STAGE_TYPE_VERTEX && GLES2::Config::get_singleton()->support_transform_feedback) {
+	if (p_stage_type == STAGE_TYPE_VERTEX && GLES2_CONFIG->support_transform_feedback) {
 		if (!RasterizerGLES2::is_gles_over_gl()) {
 			builder.append("#extension GL_EXT_transform_feedback : enable\n");
 		}
 	}
-	if (GLES2::Config::get_singleton()->support_transform_feedback) {
+	if (GLES2_CONFIG->support_transform_feedback) {
 		// Only require the EXT extension if we are on mobile/web GLES.
 		if (!RasterizerGLES2::is_gles_over_gl()) {
 			builder.append("#extension GL_EXT_transform_feedback : enable\n");
@@ -197,7 +197,7 @@ void ShaderGLES2::_build_variant_code(StringBuilder &builder, uint32_t p_variant
 	if (p_version->uniforms.length() > 0) {
 		builder.append("#define MATERIAL_UNIFORMS_USED\n");
 	}
-	if (GLES2::Config::get_singleton()->max_vertex_texture_image_units == 0) {
+	if (GLES2_CONFIG->max_vertex_texture_image_units == 0) {
 		builder.append("#define USE_SKELETON_UNIFORM\n");
 	}
 
@@ -208,13 +208,13 @@ void ShaderGLES2::_build_variant_code(StringBuilder &builder, uint32_t p_variant
 	builder.append("\n"); // make sure defines begin at newline
 
 	// Polyfills
-	if (p_stage_type == STAGE_TYPE_VERTEX && GLES2::Config::get_singleton()->support_instancing) {
+	if (p_stage_type == STAGE_TYPE_VERTEX && GLES2_CONFIG->support_instancing) {
 		builder.append("#define gl_InstanceID gl_InstanceIDEXT\n");
 	}
-	if (p_stage_type == STAGE_TYPE_FRAGMENT && GLES2::Config::get_singleton()->support_frag_depth) {
+	if (p_stage_type == STAGE_TYPE_FRAGMENT && GLES2_CONFIG->support_frag_depth) {
 		builder.append("#define gl_FragDepth gl_FragDepthEXT\n");
 	}
-	if (GLES2::Config::get_singleton()->support_transform_feedback) {
+	if (GLES2_CONFIG->support_transform_feedback) {
 		builder.append("#define USE_TRANSFORM_FEEDBACK\n");
 	}
 
@@ -573,7 +573,7 @@ void ShaderGLES2::_compile_specialization(Version::Specialization &spec, uint32_
 	GL_CHECK_ERROR("ShaderGLES2::_compile_specialization: glBindAttribLocation");
 
 	// Bind transform feedback varyings before linking
-	if (feedback_count > 0 && GLES2::Config::get_singleton()->support_transform_feedback) {
+	if (feedback_count > 0 && GLES2_CONFIG->support_transform_feedback) {
 		LocalVector<const char *> feedback_names;
 		for (int i = 0; i < feedback_count; i++) {
 			if (feedbacks[i].specialization == 0 || (p_specialization & feedbacks[i].specialization)) {
@@ -820,7 +820,7 @@ void ShaderGLES2::initialize(const String &p_general_defines, int p_base_texture
 
 	_init();
 
-	max_image_units = GLES2::Config::get_singleton()->max_texture_image_units;
+	max_image_units = GLES2_CONFIG->max_texture_image_units;
 }
 
 void ShaderGLES2::set_shader_cache_dir(const String &p_dir) {

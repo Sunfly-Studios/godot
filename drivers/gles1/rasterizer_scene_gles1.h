@@ -565,7 +565,7 @@ private:
 		};
 		const GLfloat top_pos[] = { 0.0f, 1.0f, 0.0f, 0.0f };
 
-		int max_lights = GLES1::Config::get_singleton()->max_lights;
+		int max_lights = GLES1_CONFIG->max_lights;
 		int sky_light_idx = GL_LIGHT0 + (max_lights - 1);
 
 		glEnable(sky_light_idx);
@@ -582,7 +582,7 @@ private:
 	}
 
 	_FORCE_INLINE_ void _gl_set_light_chunk_state(int p_active_count) {
-		int max_lights = GLES1::Config::get_singleton()->max_lights;
+		int max_lights = GLES1_CONFIG->max_lights;
 		for (int i = 0; i < max_lights - 1; i++) {
 			if (i < p_active_count) {
 				glEnable(GL_LIGHT0 + i);
@@ -781,10 +781,10 @@ private:
 
 		void reset_gl_state() {
 			glDisable(GL_BLEND);
-			if (GLES1::Config::get_singleton()->support_blend_subtract) {
+			if (GLES1_CONFIG->support_blend_subtract) {
 				glBlendEquationOES(GL_FUNC_ADD_OES);
 			}
-			if (GLES1::Config::get_singleton()->support_blend_func_separate) {
+			if (GLES1_CONFIG->support_blend_func_separate) {
 				glBlendFuncSeparateOES(GL_ONE, GL_ZERO, GL_ONE, GL_ZERO);
 			} else {
 				glBlendFunc(GL_ONE, GL_ZERO);
@@ -805,18 +805,18 @@ private:
 
 			glDisable(GL_FOG);
 
-			if (GLES1::Config::get_singleton()->max_texture_units > 1) {
+			if (GLES1_CONFIG->max_texture_units > 1) {
 				glActiveTexture(GL_TEXTURE1);
 				glDisable(GL_TEXTURE_2D);
 				glBindTexture(GL_TEXTURE_2D, 0);
-				if (GLES1::Config::get_singleton()->support_cubemap) {
+				if (GLES1_CONFIG->support_cubemap) {
 					glBindTexture(GL_TEXTURE_CUBE_MAP, 0);
 				}
 				glActiveTexture(GL_TEXTURE0);
 			}
 			glDisable(GL_TEXTURE_2D);
 			glBindTexture(GL_TEXTURE_2D, 0);
-			if (GLES1::Config::get_singleton()->support_cubemap) {
+			if (GLES1_CONFIG->support_cubemap) {
 				glBindTexture(GL_TEXTURE_CUBE_MAP, 0);
 			}
 		}

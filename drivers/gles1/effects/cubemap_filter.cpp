@@ -131,7 +131,7 @@ static Color sample_cubemap(const LocalVector<uint8_t> *faces, int base_size, Ve
 }
 
 void CubemapFilter::filter_radiance(GLuint p_source_cubemap, GLuint p_dest_cubemap, GLuint p_dest_framebuffer, int p_source_size, int p_mipmap_count, int p_layer) {
-	if (!GLES1::Config::get_singleton()->support_fbo) {
+	if (!GLES1_CONFIG->support_fbo) {
 		return;
 	}
 	GLES1::TextureStorage *texture_storage = GLES1::TextureStorage::get_singleton();
@@ -150,7 +150,7 @@ void CubemapFilter::filter_radiance(GLuint p_source_cubemap, GLuint p_dest_cubem
 			glTexSubImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_X + i, 0, 0, 0, p_source_size, p_source_size, GL_RGBA, GL_UNSIGNED_BYTE, pixels.ptr());
 		}
 
-		if (GLES1::Config::get_singleton()->support_generate_mipmap) {
+		if (GLES1_CONFIG->support_generate_mipmap) {
 			glBindTexture(GL_TEXTURE_CUBE_MAP, p_dest_cubemap);
 			glGenerateMipmapOES(GL_TEXTURE_CUBE_MAP_OES);
 			GL_CHECK_ERROR("GLES1::CubemapFilter::filter_radiance: glGenerateMipmapOES");

@@ -38,7 +38,7 @@
 #include "utilities.h"
 
 #ifdef ANDROID_ENABLED
-#define glFramebufferTextureMultiviewOVR GLES1::Config::get_singleton()->eglFramebufferTextureMultiviewOVR
+#define glFramebufferTextureMultiviewOVR GLES1_CONFIG->eglFramebufferTextureMultiviewOVR
 #endif
 
 using namespace GLES1;
@@ -479,7 +479,7 @@ RID TextureStorage::texture_allocate() {
 	texture.total_data_size = 0;
 	texture.target = GL_TEXTURE_2D;
 
-	texture.context_generation = GLES1::Config::get_singleton()->context_generation;
+	texture.context_generation = GLES1_CONFIG->context_generation;
 
 	texture.type = Texture::TYPE_2D;
 	texture.width = 0;
@@ -595,7 +595,7 @@ void TextureStorage::texture_2d_initialize(RID p_texture, const Ref<Image> &p_im
 	// Always force NPOT textures to be POT for 1.3,
 	// while letting the higher versions handle it
 	// gracefully.
-	if (!config->support_npot_repeat_mipmap || GLES1::Config::get_singleton()->gl_minor_version < 4) {
+	if (!config->support_npot_repeat_mipmap || GLES1_CONFIG->gl_minor_version < 4) {
 		int po2_width = next_power_of_2(texture->width);
 		int po2_height = next_power_of_2(texture->height);
 
@@ -1517,9 +1517,9 @@ void TextureStorage::texture_bind(RID p_texture, uint32_t p_texture_no) {
 GLES1::Texture *TextureStorage::texture_bind_and_validate(RID p_texture, GLenum p_texture_unit, RS::CanvasItemTextureFilter p_filter, RS::CanvasItemTextureRepeat p_repeat) {
 	Texture *texture = get_texture(p_texture);
 
-	if (texture && texture->context_generation != GLES1::Config::get_singleton()->context_generation) {
+	if (texture && texture->context_generation != GLES1_CONFIG->context_generation) {
 		texture->tex_id = 0; // Handle is dead/stolen by the new context
-		texture->context_generation = GLES1::Config::get_singleton()->context_generation;
+		texture->context_generation = GLES1_CONFIG->context_generation;
 	}
 
 	if (texture && texture->tex_id == 0 && texture->active) {
@@ -1555,10 +1555,10 @@ GLES1::Texture *TextureStorage::texture_bind_and_validate(RID p_texture, GLenum 
 		// Ensure the fallback itself isn't tainted.
 		if (
 			texture &&
-			texture->context_generation != GLES1::Config::get_singleton()->context_generation
+			texture->context_generation != GLES1_CONFIG->context_generation
 		) {
 			texture->tex_id = 0;
-			texture->context_generation = GLES1::Config::get_singleton()->context_generation;
+			texture->context_generation = GLES1_CONFIG->context_generation;
 			glGenTextures(1, &texture->tex_id);
 			Ref<Image> white_img = Image::create_empty(8, 8, false, Image::FORMAT_RGB8);
 			white_img->fill(Color(1, 1, 1, 1));
@@ -1567,7 +1567,7 @@ GLES1::Texture *TextureStorage::texture_bind_and_validate(RID p_texture, GLenum 
 	}
 
 	if (likely(texture && texture->tex_id != 0)) {
-		if (GLES1::Config::get_singleton()->max_texture_units > 1) {
+		if (GLES1_CONFIG->max_texture_units > 1) {
 			glActiveTexture(p_texture_unit);
 		}
 
@@ -1579,7 +1579,7 @@ GLES1::Texture *TextureStorage::texture_bind_and_validate(RID p_texture, GLenum 
 		glBindTexture(texture->target, texture->tex_id);
 		GL_CHECK_ERROR("GLES1::TextureStorage::texture_bind_and_validate: glBindTexture");
 
-		if (GLES1::Config::get_singleton()->support_texture_env_combine) {
+		if (GLES1_CONFIG->support_texture_env_combine) {
 			if (texture->gl_internal_format_cache == GL_ALPHA || texture->gl_internal_format_cache == GL_LUMINANCE_ALPHA) {
 				// Bypass desktop emulator bug where GL_ALPHA RGB is treated as 0.0
 				glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_COMBINE);
@@ -2639,11 +2639,11 @@ void TextureStorage::render_target_gen_back_buffer_mipmaps(RID p_render_target, 
 		is_power_of_2<int>(rt->size.width) &&
 		is_power_of_2<int>(rt->size.height)
 	);
-	if (is_npot && !GLES1::Config::get_singleton()->support_generate_mipmap) {
+	if (is_npot && !GLES1_CONFIG->support_generate_mipmap) {
 		// Fall back to linear filtering.
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
 	} else {
-		if (GLES1::Config::get_singleton()->support_generate_mipmap) {
+		if (GLES1_CONFIG->support_generate_mipmap) {
 			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
 			glGenerateMipmapOES(GL_TEXTURE_2D);
 			GL_CHECK_ERROR("GLES1::TextureStorage::render_target_gen_back_buffer_mipmaps: glGenerateMipmapOES");

@@ -321,7 +321,7 @@ void MeshStorage::mesh_clear(RID p_mesh) {
 
 		if (s->versions) {
 			// Delete VAOs
-			if (GLES2::Config::get_singleton()->support_vao) {
+			if (GLES2_CONFIG->support_vao) {
 				for (uint32_t j = 0; j < s->version_count; j++) {
 					if (s->versions[j].vertex_array != 0) {
 						glDeleteVertexArrays(1, &s->versions[j].vertex_array);
@@ -359,7 +359,7 @@ void MeshStorage::_mesh_surface_clear(Mesh *mesh, int p_surface) {
 
 	// Clean up VAOs
 	if (s->versions) {
-		if (GLES2::Config::get_singleton()->support_vao) {
+		if (GLES2_CONFIG->support_vao) {
 			for (uint32_t j = 0; j < s->version_count; j++) {
 				if (s->versions[j].vertex_array != 0) {
 					glDeleteVertexArrays(1, &s->versions[j].vertex_array);
@@ -833,7 +833,7 @@ void MeshStorage::_mesh_surface_generate_version_for_input_mask(Mesh::Surface::V
 				GLenum gl_type[RS::ARRAY_CUSTOM_MAX] = { GL_UNSIGNED_BYTE, GL_BYTE, GL_HALF_FLOAT_OES, GL_HALF_FLOAT_OES, GL_FLOAT, GL_FLOAT, GL_FLOAT, GL_FLOAT };
 				GLboolean norm[RS::ARRAY_CUSTOM_MAX] = { GL_TRUE, GL_TRUE, GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE };
 
-				if (!GLES2::Config::get_singleton()->support_vertex_half_float && gl_type[fmt] == GL_HALF_FLOAT_OES) {
+				if (!GLES2_CONFIG->support_vertex_half_float && gl_type[fmt] == GL_HALF_FLOAT_OES) {
 					v.attribs[i].type = GL_FLOAT;
 				} else {
 					v.attribs[i].type = gl_type[fmt];
@@ -982,7 +982,7 @@ void MeshStorage::mesh_instance_set_blend_shape_weight(RID p_mesh_instance, int 
 
 void MeshStorage::_mesh_instance_clear(MeshInstance *mi) {
 	for (uint32_t i = 0; i < mi->surfaces.size(); i++) {
-		if (GLES2::Config::get_singleton()->support_vao) {
+		if (GLES2_CONFIG->support_vao) {
 			for (uint32_t j = 0; j < mi->surfaces[i].version_count; j++) {
 				if (mi->surfaces[i].versions[j].vertex_array != 0) {
 					glDeleteVertexArrays(1, &mi->surfaces[i].versions[j].vertex_array);
@@ -1054,7 +1054,7 @@ void MeshStorage::_mesh_instance_remove_surface(MeshInstance *mi, int p_surface)
 	ERR_FAIL_UNSIGNED_INDEX((uint32_t)p_surface, mi->surfaces.size());
 
 	// Clean up instance-specific VAOs
-	if (GLES2::Config::get_singleton()->support_vao) {
+	if (GLES2_CONFIG->support_vao) {
 		for (uint32_t j = 0; j < mi->surfaces[p_surface].version_count; j++) {
 			if (mi->surfaces[p_surface].versions[j].vertex_array != 0) {
 				glDeleteVertexArrays(1, &mi->surfaces[p_surface].versions[j].vertex_array);
@@ -1318,7 +1318,7 @@ void MeshStorage::update_mesh_instances() {
 					skeleton_shader.shader.version_set_uniform(SkeletonShaderGLES2::BLEND_WEIGHT, weight, skeleton_shader.shader_version, variant, specialization);
 					skeleton_shader.shader.version_set_uniform(SkeletonShaderGLES2::BLEND_SHAPE_COUNT, float(mi->mesh->blend_shape_count), skeleton_shader.shader_version, variant, specialization);
 
-					if (GLES2::Config::get_singleton()->support_vao) {
+					if (GLES2_CONFIG->support_vao) {
 						glBindVertexArray(mi->mesh->surfaces[i]->blend_shapes[bs].vertex_array);
 					}
 					GL_CHECK_ERROR("GLES2::MeshStorage::update_mesh_instances: VAO Bind [Mid Blend Pass]");
@@ -1331,7 +1331,7 @@ void MeshStorage::update_mesh_instances() {
 				uint32_t bs = mi->mesh->blend_shape_count - 1;
 				float weight = mi->blend_weights[bs];
 
-				if (GLES2::Config::get_singleton()->support_vao) {
+				if (GLES2_CONFIG->support_vao) {
 					glBindVertexArray(mi->mesh->surfaces[i]->blend_shapes[bs].vertex_array);
 				}
 				GL_CHECK_ERROR("GLES2::MeshStorage::update_mesh_instances: VAO Bind [Final Blend Pass]");
@@ -1939,8 +1939,8 @@ void MeshStorage::skeleton_allocate_data(RID p_skeleton, int p_bones, bool p_2d_
 		skeleton->data.resize(256 * skeleton->height * 4);
 
 		if (
-			GLES2::Config::get_singleton()->max_vertex_texture_image_units > 0 &&
-			GLES2::Config::get_singleton()->float_texture_supported
+			GLES2_CONFIG->max_vertex_texture_image_units > 0 &&
+			GLES2_CONFIG->float_texture_supported
 		) {
 			GLint current_texture = 0;
 			glGetIntegerv(GL_TEXTURE_BINDING_2D, &current_texture);

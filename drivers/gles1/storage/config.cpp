@@ -34,6 +34,7 @@
 
 #include "drivers/gles1/rasterizer_gles1.h"
 #include "drivers/gles_common/error_macros.h"
+#include "drivers/gles_common/common_defines.h"
 
 #ifdef WEB_ENABLED
 #include <emscripten/html5_webgl.h>
@@ -42,32 +43,6 @@
 using namespace GLES1;
 
 #define _GL_MAX_TEXTURE_MAX_ANISOTROPY_EXT 0x84FF
-
-// Legacy Limits
-#ifndef GL_MAX_TEXTURE_UNITS
-#define GL_MAX_TEXTURE_UNITS 0x84E2
-#endif
-#ifndef GL_MAX_LIGHTS
-#define GL_MAX_LIGHTS 0x0D31
-#endif
-#ifndef GL_MAX_CLIP_PLANES
-#define GL_MAX_CLIP_PLANES 0x0D32
-#endif
-#ifndef GL_MAX_MODELVIEW_STACK_DEPTH
-#define GL_MAX_MODELVIEW_STACK_DEPTH 0x0D36
-#endif
-#ifndef GL_MAX_PROJECTION_STACK_DEPTH
-#define GL_MAX_PROJECTION_STACK_DEPTH 0x0D38
-#endif
-#ifndef GL_MAX_TEXTURE_STACK_DEPTH
-#define GL_MAX_TEXTURE_STACK_DEPTH 0x0D39
-#endif
-#ifndef GL_MAX_PALETTE_MATRICES_OES
-#define GL_MAX_PALETTE_MATRICES_OES 0x8842
-#endif
-#ifndef GL_MAX_VERTEX_UNITS_OES
-#define GL_MAX_VERTEX_UNITS_OES 0x86A4
-#endif
 
 Config *Config::singleton = nullptr;
 
