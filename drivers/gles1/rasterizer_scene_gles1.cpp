@@ -189,7 +189,10 @@ static _FORCE_INLINE_ void _batch_fill_vertex(RasterizerSceneBatcherCommon<Batch
 		r_bv.color.set_white();
 	}
 
-	r_bv.matrix_index = p_matrix_index;
+	r_bv.matrix_index[0] = static_cast<uint8_t>(p_matrix_index);
+	r_bv.matrix_index[1] = 0;
+	r_bv.matrix_index[2] = 0;
+	r_bv.matrix_index[3] = 0;
 }
 
 static _FORCE_INLINE_ void _batch_decode_multimesh_instance(const float *p_data, RS::MultimeshTransformFormat p_format, bool p_uses_colors, uint32_t p_color_offset, Transform3D &r_xform, Color &r_color) {
@@ -264,7 +267,10 @@ static _FORCE_INLINE_ void _batch_fill_vertex_instanced(RasterizerSceneBatcherCo
 		r_bv.color.set(p_inst_color);
 	}
 
-	r_bv.matrix_index = p_matrix_index;
+	r_bv.matrix_index[0] = static_cast<uint8_t>(p_matrix_index);
+	r_bv.matrix_index[1] = 0;
+	r_bv.matrix_index[2] = 0;
+	r_bv.matrix_index[3] = 0;
 }
 
 void RasterizerSceneGLES1::initialize() {

@@ -253,6 +253,18 @@ bool RasterizerSceneBatcherCommon<T_API>::try_join_item(T_SURFACE *p_surface, Re
 		return false;
 	}
 
+	// Primitives that are either triangle strips OR
+	// line strips always break batches
+	if (p_surface->primitive == RS::PRIMITIVE_TRIANGLE_STRIP || p_surface->primitive == RS::PRIMITIVE_LINE_STRIP) {
+		return false;
+	}
+
+	// 2 or more items that differ in primitives
+	// always breaks batches
+	if (r_ris.curr_batch && r_ris.curr_batch->num_items > 0 && p_surface->primitive != r_ris.current_primitive) {
+		return false;
+	}
+
 	return (item_hash == r_ris.current_state_hash);
 }
 

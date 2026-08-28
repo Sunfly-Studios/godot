@@ -178,7 +178,7 @@ public:
 		BatchVector4 instance_xform1;
 		BatchVector4 instance_xform2;
 
-		float matrix_index;
+		uint8_t matrix_index[4];
 		float pad[2];
 	};
 
@@ -194,7 +194,7 @@ public:
 		BatchVector4 instance_xform1;
 		BatchVector4 instance_xform2;
 		BatchColor instance_color_custom_data;
-		float matrix_index;
+		uint8_t matrix_index[4];
 		float pad[1];
 	};
 
