@@ -52,6 +52,11 @@ HashMap<int, Char16String> TTS_Android::ids;
 void TTS_Android::setup(jobject p_tts) {
 	bool tts_enabled = GLOBAL_GET("audio/general/text_to_speech");
 	if (tts_enabled) {
+		if (!p_tts) {
+			// Sometimes, some devices may return null for the TTS object
+			// indicating its not available
+			return; 
+		}
 		JNIEnv *env = get_jni_env();
 		ERR_FAIL_NULL(env);
 
