@@ -755,7 +755,11 @@ void RasterizerCanvasBatcherCommon<T_API>::flush_render_batches(RendererCanvasRe
 	switch (bdata.fvf) {
 		case BatcherEnums::FVF_UNBATCHED:
 		case BatcherEnums::FVF_REGULAR:
-		case BatcherEnums::FVF_INSTANCED: // Only used for 3D batching
+			break;
+		// Only used for 3D batching and to silence compiler warnings
+		case BatcherEnums::FVF_INSTANCED:
+		case BatcherEnums::FVF_DEPTH_ONLY:
+		case BatcherEnums::FVF_DEPTH_ALPHA:
 			break;
 		case BatcherEnums::FVF_COLOR: {
 			bool contains_non_polygons = (p_sequence_batch_type_flags & ~BatcherEnums::BTF_POLY) != 0;

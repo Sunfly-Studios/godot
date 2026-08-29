@@ -3629,7 +3629,6 @@ void RasterizerSceneGLES1::_setup_lights(const RenderDataGLES1 *p_render_data, b
 	GLES1::LightStorage *light_storage = GLES1::LightStorage::get_singleton();
 	GLES1::Config *config = GLES1::Config::get_singleton();
 
-	const Transform3D inverse_transform = p_render_data->inv_cam_transform;
 	const PagedArray<RID> &lights = *p_render_data->lights;
 
 	r_directional_light_count = 0;
