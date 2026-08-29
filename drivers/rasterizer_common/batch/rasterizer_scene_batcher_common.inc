@@ -71,7 +71,7 @@ void RasterizerSceneBatcherCommon<T_API>::batch_scene_end() {
 
 template <typename T_API>
 template <class T_SURFACE>
-void RasterizerSceneBatcherCommon<T_API>::batch_scene_render_items(T_SURFACE **p_surfaces, int p_count, const Transform3D &p_camera_transform, bool p_transparent) {
+void RasterizerSceneBatcherCommon<T_API>::batch_scene_render_items(T_SURFACE **p_surfaces, int p_count, const Transform3D &p_camera_transform, bool p_transparent, typename BatcherEnums::PassMode p_pass_mode) {
 	if (!bdata.settings_use_batching || p_count == 0) {
 		get_this()->scene_render_items_implementation(p_surfaces, p_count, p_camera_transform, p_transparent);
 		return;
@@ -79,6 +79,7 @@ void RasterizerSceneBatcherCommon<T_API>::batch_scene_render_items(T_SURFACE **p
 
 	bdata.reset_scene();
 	_render_item_state.reset();
+	bdata.pass_mode = p_pass_mode;
 
 	// Separate batchable small props from unbatchable meshes
 	record_items<T_SURFACE>(p_surfaces, p_count, p_camera_transform, p_transparent);
@@ -216,12 +217,20 @@ void RasterizerSceneBatcherCommon<T_API>::join_and_flush_sorted_items(bool p_tra
 
 			if (prefill_joined_item<T_SURFACE>(surface, use_hardware_transform, i)) {
 				// Buffer full! Flush what we have so far
+				uint32_t original_num_items = batch.num_items;
+				batch.num_items = i;
+
 				flush_render_batches<T_SURFACE>(material, primitive, batch, p_transparent);
 
 				// Reset batch pointers for the remainder
+				batch.first_item_index += i;
+				batch.num_items = original_num_items - i;
 				batch.first_vert = bdata.total_verts;
 				batch.num_verts = 0;
 				batch.num_indices = 0;
+
+				// Reset index for the new sliced batch context
+				i = 0;
 
 				// Retry current item
 				prefill_joined_item<T_SURFACE>(surface, use_hardware_transform, i);
@@ -295,7 +304,17 @@ bool RasterizerSceneBatcherCommon<T_API>::prefill_joined_item(T_SURFACE *p_surfa
 	// Only prepare when this is the first item in the batch.
 	// Subsequent items don't need to override.
 	if (bdata.total_verts == 0) {
-		if (is_multimesh) {
+		// TODO(BATCHER): Could this also be done as constexpr?
+		if (bdata.pass_mode == BatcherEnums::PassMode::PASS_MODE_SHADOW || bdata.pass_mode == BatcherEnums::PassMode::PASS_MODE_DEPTH) {
+			bool uses_alpha_clip = p_surface->material && p_surface->material->shader_data && p_surface->material->shader_data->uses_alpha_clip;
+			if (uses_alpha_clip) {
+				bdata.fvf = BatcherEnums::FVF_DEPTH_ALPHA;
+				bdata.unit_vertices.prepare(sizeof(BatchVertex3DDepthAlpha));
+			} else {
+				bdata.fvf = BatcherEnums::FVF_DEPTH_ONLY;
+				bdata.unit_vertices.prepare(sizeof(BatchVertex3DDepth));
+			}
+		} else if (is_multimesh) {
 			bdata.fvf = BatcherEnums::FVF_INSTANCED;
 			bdata.unit_vertices.prepare(sizeof(BatchVertex3DInstanced));
 		} else {

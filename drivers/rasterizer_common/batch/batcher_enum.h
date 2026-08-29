@@ -43,6 +43,16 @@ public:
 		FVF_MODULATED,
 		FVF_LARGE,
 		FVF_INSTANCED,
+		FVF_DEPTH_ONLY,
+		FVF_DEPTH_ALPHA,
+	};
+
+	enum PassMode {
+		PASS_MODE_COLOR,
+		PASS_MODE_COLOR_TRANSPARENT,
+		PASS_MODE_SHADOW,
+		PASS_MODE_DEPTH,
+		PASS_MODE_MATERIAL,
 	};
 
 	// these flags are specifically for batching

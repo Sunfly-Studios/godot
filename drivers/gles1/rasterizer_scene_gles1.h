@@ -129,13 +129,12 @@ public:
 		RENDER_LIST_MAX
 	};
 
-	enum PassMode {
-		PASS_MODE_COLOR,
-		PASS_MODE_COLOR_TRANSPARENT,
-		PASS_MODE_SHADOW,
-		PASS_MODE_DEPTH,
-		PASS_MODE_MATERIAL,
-	};
+	using PassMode = BatcherEnums::PassMode;
+	static constexpr PassMode PASS_MODE_COLOR = BatcherEnums::PASS_MODE_COLOR;
+	static constexpr PassMode PASS_MODE_COLOR_TRANSPARENT = BatcherEnums::PASS_MODE_COLOR_TRANSPARENT;
+	static constexpr PassMode PASS_MODE_SHADOW = BatcherEnums::PASS_MODE_SHADOW;
+	static constexpr PassMode PASS_MODE_DEPTH = BatcherEnums::PASS_MODE_DEPTH;
+	static constexpr PassMode PASS_MODE_MATERIAL = BatcherEnums::PASS_MODE_MATERIAL;
 
 	// These should share as much as possible with SkyUniform Location
 	enum SceneUniformLocation {
@@ -675,6 +674,16 @@ private:
 	};
 
 	/* UTILITIES */
+
+	struct MultiMeshInstanceData {
+		const float *data = nullptr;
+		uint32_t stride = 0;
+		uint32_t color_offset = 0;
+		bool uses_colors = false;
+		RS::MultimeshTransformFormat format = RS::MULTIMESH_TRANSFORM_3D;
+	};
+
+	MultiMeshInstanceData _get_multimesh_data(const GeometryInstanceSurface *p_surface);
 
 	_FORCE_INLINE_ void _sky_fetch_colour(const RID &sky_material, const StringName &p_name, Color &r_prop) {
 		GLES1::MaterialStorage *material_storage = GLES1::MaterialStorage::get_singleton();

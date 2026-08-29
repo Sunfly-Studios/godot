@@ -669,6 +669,21 @@ void RasterizerSceneGLES1::GeometryInstanceGLES1::set_lightmap_capture(const Col
 
 }
 
+RasterizerSceneGLES1::MultiMeshInstanceData RasterizerSceneGLES1::_get_multimesh_data(const GeometryInstanceSurface *p_surface) {
+	MultiMeshInstanceData mm;
+	if (p_surface->owner && p_surface->owner->data->base_type == RS::INSTANCE_MULTIMESH) {
+		GLES1::MultiMesh *multimesh = GLES1::MeshStorage::get_singleton()->get_multimesh(p_surface->owner->data->base);
+		if (multimesh) {
+			mm.data = multimesh->data_cache.ptr();
+			mm.stride = multimesh->stride_cache;
+			mm.color_offset = multimesh->color_offset_cache;
+			mm.uses_colors = multimesh->uses_colors;
+			mm.format = multimesh->xform_format;
+		}
+	}
+	return mm;
+}
+
 void RasterizerSceneGLES1::_update_dirty_geometry_instances() {
 	while (geometry_instance_dirty_list.first()) {
 		_geometry_instance_update(geometry_instance_dirty_list.first()->self());
@@ -2066,27 +2081,43 @@ float RasterizerSceneGLES1::_batch_get_item_depth(const GeometryInstanceSurface 
 uint64_t RasterizerSceneGLES1::_batch_get_state_hash(const GeometryInstanceSurface *p_surface) {
 	uint64_t hash = 0;
 
+	// Bits 63-52:
+	// - Cull mode
+	// - Depth test
+	// - Shader version ID + state mask
+	// Overall 12 bits
 	uint64_t cull_mode = p_surface->shader ? p_surface->shader->cull_mode : 0;
-	hash |= (cull_mode & 0x3) << 62; // Bits 63-62: Cull Mode
-
 	uint64_t depth_test = 0;
-
 	if (p_surface->shader && p_surface->shader->depth_test == GLES1::SceneShaderData::DEPTH_TEST_ENABLED) {
 		depth_test = 1;
 	}
-	hash |= (depth_test & 0x1) << 61; // Bit 61: Depth Test
-
-	// Bits 60-48: Shader version
 	uint64_t shader_id = p_surface->shader ? p_surface->shader->version.get_id() : 0;
-	hash |= (shader_id & 0x1FFF) << 48;
 
-	// Bits 47-16: Material ID
+	hash |= (cull_mode & 0x3) << 62; // Cull Mode
+	hash |= (depth_test & 0x1) << 61; // Depth Test
+	hash |= (shader_id & 0x1FF) << 52; // Shader ID + state mask
+
+	// Bits 51-32: Material ID (texture bindings, uniform blocks, 20 bits)
 	uint64_t mat_id = p_surface->material ? static_cast<uint64_t>((uintptr_t)p_surface->material >> 4) : 0;
-	hash |= (mat_id & 0xFFFFFFFF) << 16;
+	hash |= (mat_id & 0xFFFFF) << 32;
 
-	// Bits 15-0: Mesh surface ID / FVF Profile
+	// Bits 31-16: Combined light cache hash (16 bits)
+	if (p_surface->owner && bdata.pass_mode == PASS_MODE_COLOR) {
+		uint64_t light_hash = 0;
+		for (uint32_t i = 0; i < p_surface->owner->omni_light_gl_cache.size(); i++) {
+			light_hash = (light_hash * 31) + p_surface->owner->omni_light_gl_cache[i];
+		}
+		for (uint32_t i = 0; i < p_surface->owner->spot_light_gl_cache.size(); i++) {
+			light_hash = (light_hash * 31) + p_surface->owner->spot_light_gl_cache[i];
+		}
+		hash |= (light_hash & 0xFFFF) << 16;
+	}
+
+	// Bits 15-0: Mesh surface ID / primitive topology (16 bits)
 	uint64_t surface_id = p_surface->surface_index;
-	hash |= (surface_id & 0xFFFF);
+	uint64_t primitive = p_surface->primitive;
+	hash |= ((surface_id & 0xFF) << 8); // Surface ID in 15-8
+	hash |= (primitive & 0xFF); // Primitive type in 7-0
 
 	return hash;
 }
@@ -2156,35 +2187,17 @@ void RasterizerSceneGLES1::_batch_fill_multimesh_geometry(const GeometryInstance
 	const Color *col_ptr = colors.size() > 0 ? colors.ptr() : nullptr;
 
 	int instances = p_surface->owner->instance_count;
-	RID base_rid = p_surface->owner->data->base;
-
-	Vector<float> mm_buffer;
-	const float *mm_data = nullptr;
-	uint32_t mm_stride = 0;
-	uint32_t mm_color_offset = 0;
-	bool uses_colors = false;
-	RS::MultimeshTransformFormat format = RS::MULTIMESH_TRANSFORM_3D;
-
-	if (p_surface->owner->data->base_type == RS::INSTANCE_MULTIMESH) {
-		GLES1::MultiMesh *multimesh = GLES1::MeshStorage::get_singleton()->get_multimesh(base_rid);
-		if (multimesh) {
-			mm_data = multimesh->data_cache.ptr();
-			mm_stride = multimesh->stride_cache;
-			mm_color_offset = multimesh->color_offset_cache;
-			uses_colors = multimesh->uses_colors;
-			format = multimesh->xform_format;
-		}
-	}
+	MultiMeshInstanceData mm = _get_multimesh_data(p_surface);
 
 	uint32_t bvs_idx = 0;
 	Transform3D owner_transform = p_surface->owner->transform;
 
+	Color inst_color = Color(1, 1, 1, 1);
 	for (int inst = 0; inst < instances; inst++) {
 		Transform3D xform;
-		Color inst_color = Color(1, 1, 1, 1);
 
-		if (p_surface->owner->data->base_type == RS::INSTANCE_MULTIMESH && mm_data) {
-			_batch_decode_multimesh_instance(mm_data + (inst * mm_stride), format, uses_colors, mm_color_offset, xform, inst_color);
+		if (p_surface->owner->data->base_type == RS::INSTANCE_MULTIMESH && mm.data) {
+			_batch_decode_multimesh_instance(mm.data + (inst * mm.stride), mm.format, mm.uses_colors, mm.color_offset, xform, inst_color);
 		}
 
 		Transform3D world_xform = owner_transform * xform;
@@ -2551,13 +2564,6 @@ void RasterizerSceneGLES1::_render_single_item_immediate(const GeometryInstanceS
 	_gl_setup_fog(p_surface->material);
 	GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_render_single_item_immediate: _gl_setup_fog");
 
-	// Upload and apply world transform to modelview stack
-	Transform3D world_transform = p_surface->owner->transform;
-	glMatrixMode(GL_MODELVIEW);
-	glPushMatrix();
-	_gl_mult_transform(world_transform);
-	GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_render_single_item_immediate: glMultMatrixf MODELVIEW");
-
 	mesh_storage->mesh_surface_bind_arrays_gles1(p_surface->surface, shader->vertex_input_mask);
 	GLuint index_array_gl = mesh_storage->mesh_surface_get_index_buffer(p_surface->surface, p_surface->lod_index);
 	bool use_index_buffer = index_array_gl != 0;
@@ -2571,28 +2577,50 @@ void RasterizerSceneGLES1::_render_single_item_immediate(const GeometryInstanceS
 	GLenum primitive_gl = prim[int(p_surface->primitive)];
 	int drawn_count = mesh_storage->mesh_surface_get_vertices_drawn_count(p_surface->surface);
 
+	int instances = p_surface->owner->instance_count > 0 ? p_surface->owner->instance_count : 1;
+	bool is_multimesh = p_surface->owner->data->base_type == RS::INSTANCE_MULTIMESH;
+
+	MultiMeshInstanceData mm = _get_multimesh_data(p_surface);
+	Transform3D owner_transform = p_surface->owner->transform;
+
 	// Draw
 	if (drawn_count > 0) {
-		if (use_index_buffer) {
-			GLenum index_type = mesh_storage->mesh_surface_get_index_type(p_surface->surface);
+		for (int inst = 0; inst < instances; inst++) {
+			Transform3D xform;
+			Color inst_color(1.0f, 1.0f, 1.0f, 1.0f);
 
-			// Can't draw if we don't support 32-bit indices.
-			if (index_type == GL_UNSIGNED_INT && !GLES1_CONFIG->support_32_bits_indices) {
-				mesh_storage->mesh_surface_unbind_arrays_gles1(p_surface->surface);
-				if (GLES1_CONFIG->support_vbo) {
-					glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
-				}
-				glMatrixMode(GL_MODELVIEW);
-				glPopMatrix();
-				glColor4f(1.0f, 1.0f, 1.0f, 1.0f);
-				_gl_setup_fog(nullptr);
-				return;
+			if (is_multimesh && mm.data) {
+				_batch_decode_multimesh_instance(mm.data + (inst * mm.stride), mm.format, mm.uses_colors, mm.color_offset, xform, inst_color);
+			} else if (p_surface->owner->data->base_type == RS::INSTANCE_PARTICLES) {
+				xform = Transform3D();
 			}
-			glDrawElements(primitive_gl, drawn_count, index_type, nullptr);
-			GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_render_single_item_immediate: glDrawElements");
-		} else {
-			glDrawArrays(primitive_gl, 0, drawn_count);
-			GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_render_single_item_immediate: glDrawArrays");
+
+			Transform3D final_xform = owner_transform * xform;
+
+			glMatrixMode(GL_MODELVIEW);
+			glPushMatrix();
+			_gl_mult_transform(final_xform);
+
+			if (mm.uses_colors) {
+				glColor4f(inst_color.r, inst_color.g, inst_color.b, inst_color.a);
+			}
+
+			if (use_index_buffer) {
+				GLenum index_type = mesh_storage->mesh_surface_get_index_type(p_surface->surface);
+
+				// Can't draw if we don't support 32-bit indices.
+				if (index_type == GL_UNSIGNED_INT && !GLES1_CONFIG->support_32_bits_indices) {
+					glPopMatrix();
+					break;
+				}
+				glDrawElements(primitive_gl, drawn_count, index_type, nullptr);
+				GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_render_single_item_immediate: glDrawElements");
+			} else {
+				glDrawArrays(primitive_gl, 0, drawn_count);
+				GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_render_single_item_immediate: glDrawArrays");
+			}
+
+			glPopMatrix();
 		}
 	}
 
@@ -2603,10 +2631,6 @@ void RasterizerSceneGLES1::_render_single_item_immediate(const GeometryInstanceS
 	}
 
 	// Restore state
-	glMatrixMode(GL_MODELVIEW);
-	glPopMatrix();
-	GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_render_single_item_immediate: glPopMatrix modelview");
-
 	glColor4f(1.0f, 1.0f, 1.0f, 1.0f);
 
 	// Disables fog
@@ -4271,7 +4295,7 @@ void RasterizerSceneGLES1::_render_list_template(RenderListParameters *p_params,
 	GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_render_list_template: glFrontFace");
 
 	// Kick off the batched draw pipeline
-	batch_scene_render_items(surfaces, count, p_render_data->cam_transform, p_alpha_pass);
+	batch_scene_render_items(surfaces, count, p_render_data->cam_transform, p_alpha_pass, p_pass_mode);
 
 	// Clean-up
 	glFrontFace(GL_CCW);

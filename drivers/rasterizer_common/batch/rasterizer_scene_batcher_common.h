@@ -51,15 +51,16 @@
  * operations in the lower bits. This is done to exploit standard `<` operator in the opaque sort for speed.
  * Placing the most expensive state changes in the highest bits natively groups identical configurations and prevents state thrashin.
  * 
- *  63                    48 47                    16 15                 0
- *  +----------------------+----------------------+----------------------+
- *  |  Shader / Prog ID    |  Material / Tex ID   |  FVF / Mesh ID       |
- *  +----------------------+----------------------+----------------------+
+ *  63          52 51                  32 31                  16 15                 0
+ *  +-------------+----------------------+----------------------+-------------------+
+ *  |  Shader ID  |      Material ID     |      Light Cache     | Surface/Primitive |
+ *  +-------------+----------------------+----------------------+-------------------+
  *
- * - Bits 63-48: Shader/Program ID.
- *   Note: For GLES1, this maps to its state mask (texture environment modes, hardware lighting state).
- * - Bits 47-16: Material/Texture ID
- * - Bits 15-0: Flexible Vertex Format (FVF) type or Mesh ID.
+ * - Bits 63-52: Shader version ID / state mask (12 bits).
+ *   Note: For GLES1, this includes cull modes and depth testing.
+ * - Bits 51-32: Material ID (texture bindings, uniform blocks) (20 bits).
+ * - Bits 31-16: Combined light cache hash (16 bits) (0 if in shadow/depth pass).
+ * - Bits 15-0: Surface index & primitive topology (16 bits).
  *
  * To guarantee optimal vertex fetching speeds, the FVF definitions intentionally pad these byte arrays to 16-byte boundaries.
  *
@@ -198,6 +199,23 @@ public:
 		float pad[1];
 	};
 
+	// 3D shadow/depth FVF (Position + Instance Matrix)
+	struct BatchVertex3DDepth {
+		BatchVector3 pos;
+		BatchVector4 instance_xform0;
+		BatchVector4 instance_xform1;
+		BatchVector4 instance_xform2;
+	};
+
+	// 3D alpha-tested shadow FVF (Position + UV + Instance Matrix)
+	struct BatchVertex3DDepthAlpha {
+		BatchVector3 pos;
+		BatchVector2 uv;
+		BatchVector4 instance_xform0;
+		BatchVector4 instance_xform1;
+		BatchVector4 instance_xform2;
+	};
+
 	// A batch represents a single draw call of aggregated geometry
 	struct Batch3D {
 		uint32_t first_item_index;
@@ -276,6 +294,8 @@ public:
 
 		uint32_t total_verts;
 		uint32_t total_indices;
+
+		BatcherEnums::PassMode pass_mode;
 	} bdata;
 
 	struct RenderItemState3D {
@@ -307,7 +327,7 @@ protected:
 	void batch_scene_end();
 
 	template <class T_SURFACE>
-	void batch_scene_render_items(T_SURFACE **p_surfaces, int p_count, const Transform3D &p_camera_transform, bool p_transparent);
+	void batch_scene_render_items(T_SURFACE **p_surfaces, int p_count, const Transform3D &p_camera_transform, bool p_transparent, BatcherEnums::PassMode p_pass_mode);
 
 	template <class T_SURFACE>
 	void record_items(T_SURFACE **p_surfaces, int p_count, const Transform3D &p_camera_transform, bool p_transparent);
@@ -361,10 +381,6 @@ public:
 			*batch = Batch3D();
 		}
 		return batch;
-	}
-
-	BatchVertex3D *_batch_vertex_request_new() {
-		return bdata.vertices.request();
 	}
 };
 
