@@ -81,6 +81,11 @@ Patches:
 - `0003-external-tinyexr.patch` (GH-97582)
 - `0004-remove-tinydds-qoi.patch` (GH-97582)
 - `0005-silence-clang-windows-warning.patch`
+- `0006-enable-bit-endian-patch.patch`
+- `0007-allow-strict-aliasing.patch`
+- `0008-fix-mips-compile.patch`
+- `0009-stupid-fix-fast-solution.patch`
+- `0010-mcmodel-medium-section-conflict.patch` (GH-123001)
 
 
 ## brotli
