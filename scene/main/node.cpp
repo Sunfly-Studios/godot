@@ -2080,6 +2080,9 @@ bool Node::is_ancestor_of(const Node *p_node) const {
 	ERR_FAIL_NULL_V(p_node, false);
 
 	const Node *n = p_node;
+	if (n == this) {
+		return false;
+	}
 
 	if (is_inside_tree() && p_node->data.tree == data.tree) {
 		const int depth = data.depth;
