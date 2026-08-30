@@ -120,15 +120,27 @@ if env["builtin_sdl"]:
     # Platform specific sources.
 
     if env["platform"] == "linuxbsd":
+        target_platform = sys.platform
+        
+        # Detect cross-compilation for BSDs
+        for flag in env.get("CCFLAGS", []) + env.get("LINKFLAGS", []):
+            if isinstance(flag, str):
+                if "netbsd" in flag.lower():
+                    target_platform = "netbsd"
+                elif "freebsd" in flag.lower():
+                    target_platform = "freebsd"
+                elif "openbsd" in flag.lower():
+                    target_platform = "openbsd"
+
         if (
-            sys.platform.startswith("dragonfly")
-            or sys.platform.startswith("freebsd")
-            or sys.platform.startswith("netbsd")
-            or sys.platform.startswith("openbsd")
+            target_platform.startswith("dragonfly")
+            or target_platform.startswith("freebsd")
+            or target_platform.startswith("netbsd")
+            or target_platform.startswith("openbsd")
         ):
             env_sdl.Append(CPPDEFINES=["SDL_PLATFORM_BSD"])
 
-            if sys.platform.startswith("freebsd"):
+            if target_platform.startswith("freebsd"):
                 # FreeBSD has these libraries
                 env.Append(LIBS=["usbhid", "kvm", "procstat"])
 
