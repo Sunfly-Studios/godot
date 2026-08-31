@@ -1478,41 +1478,21 @@ bool LightStorage::_shadow_atlas_find_shadow(ShadowAtlas *shadow_atlas, int *p_i
 			int size = (shadow_atlas->size >> 1) / shadow_atlas->quadrants[qidx].subdivision;
 
 			GLenum format = GL_DEPTH_COMPONENT;
-			GLenum type = shadow_atlas->use_16_bits ? GL_UNSIGNED_SHORT : GL_UNSIGNED_INT;
-			if (!shadow_atlas->use_16_bits && !GLES1_CONFIG->support_depth24 && !GLES1_CONFIG->support_depth32) {
-				type = GL_UNSIGNED_SHORT; // Fallback
+			GLenum type = GLES1_CONFIG->support_depth24 ? GL_UNSIGNED_INT : GL_UNSIGNED_SHORT;
+
+			glBindTexture(GL_TEXTURE_2D, texture_id);
+
+			glTexImage2D(GL_TEXTURE_2D, 0, format, size, size, 0, format, type, nullptr);
+
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+
+			if (GLES1_CONFIG->support_fbo) {
+				glFramebufferTexture2DOES(GL_FRAMEBUFFER_OES, GL_DEPTH_ATTACHMENT_OES, GL_TEXTURE_2D, texture_id, 0);
 			}
-
-			if (is_omni) {
-				glBindTexture(GL_TEXTURE_CUBE_MAP, texture_id);
-				for (int id = 0; id < 6; id++) {
-					glTexImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_X + id, 0, format, size / 2, size / 2, 0, GL_DEPTH_COMPONENT, type, nullptr);
-				}
-
-				glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-				glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-				glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-				glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-
-				if (GLES1_CONFIG->support_fbo) {
-					glFramebufferTexture2DOES(GL_FRAMEBUFFER_OES, GL_DEPTH_ATTACHMENT_OES, GL_TEXTURE_CUBE_MAP_POSITIVE_X, texture_id, 0);
-				}
-				glBindTexture(GL_TEXTURE_CUBE_MAP, 0);
-			} else {
-				glBindTexture(GL_TEXTURE_2D, texture_id);
-
-				glTexImage2D(GL_TEXTURE_2D, 0, format, size, size, 0, GL_DEPTH_COMPONENT, type, nullptr);
-
-				glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-				glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-				glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-				glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-
-				if (GLES1_CONFIG->support_fbo) {
-					glFramebufferTexture2DOES(GL_FRAMEBUFFER_OES, GL_DEPTH_ATTACHMENT_OES, GL_TEXTURE_2D, texture_id, 0);
-				}
-				glBindTexture(GL_TEXTURE_2D, 0);
-			}
+			glBindTexture(GL_TEXTURE_2D, 0);
 
 			if (GLES1_CONFIG->support_fbo) {
 				glBindFramebufferOES(GL_FRAMEBUFFER_OES, GLES1::TextureStorage::system_fbo);
@@ -1597,11 +1577,8 @@ void LightStorage::update_directional_shadow_atlas() {
 
 		GLenum format = GL_DEPTH_COMPONENT;
 		GLenum type = directional_shadow.use_16_bits ? GL_UNSIGNED_SHORT : GL_UNSIGNED_INT;
-		if (!directional_shadow.use_16_bits && !GLES1_CONFIG->support_depth24 && !GLES1_CONFIG->support_depth32) {
-			type = GL_UNSIGNED_SHORT; // Fallback if 24/32 bits not supported
-		}
 
-		glTexImage2D(GL_TEXTURE_2D, 0, format, directional_shadow.size, directional_shadow.size, 0, GL_DEPTH_COMPONENT, type, nullptr);
+		glTexImage2D(GL_TEXTURE_2D, 0, format, directional_shadow.size, directional_shadow.size, 0, format, type, nullptr);
 
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
@@ -1614,9 +1591,9 @@ void LightStorage::update_directional_shadow_atlas() {
 	glDepthMask(GL_TRUE);
 	if (directional_shadow.fbo != 0 && GLES1_CONFIG->support_fbo) {
 		glBindFramebufferOES(GL_FRAMEBUFFER_OES, directional_shadow.fbo);
-		// GLES1 clear depth buffer
-		RasterizerGLES1::clear_depth(0.0f);
-		glClear(GL_DEPTH_BUFFER_BIT);
+		// Clear the new color texture to white
+		glClearColor(1.0f, 1.0f, 1.0f, 1.0f);
+		glClear(GL_COLOR_BUFFER_BIT);
 	}
 
 	glBindTexture(GL_TEXTURE_2D, 0);

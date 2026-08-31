@@ -348,6 +348,26 @@ def include_file_in_gles_header(filename: str, header_data: GLESHeaderStruct, de
             struct_name = line_stripped.replace("struct ", "").split("{")[0].strip()
             header_data.structs[struct_name] = []
             header_data.current_struct = struct_name
+            if "}" in line_stripped:
+                header_data.current_struct = None
+                content = line_stripped[line_stripped.find("{") + 1:line_stripped.rfind("}")].strip()
+                if content.endswith(";"):
+                    member_line = content.replace(";", "").strip()
+                    parts = member_line.split()
+                    if len(parts) >= 2:
+                        m_type = parts[-2]
+                        m_name = parts[-1]
+                        m_arr_size = 0
+                        if "[" in m_name:
+                            size_str = m_name[m_name.find("[")+1:m_name.find("]")]
+                            m_name = m_name[:m_name.find("[")]
+                            if size_str in header_data.constants:
+                                size_str = header_data.constants[size_str]
+                            try:
+                                m_arr_size = int(size_str)
+                            except ValueError:
+                                m_arr_size = 1
+                        header_data.structs[struct_name].append((m_type, m_name, m_arr_size))
         elif header_data.current_struct is not None:
             if line_stripped.startswith("}"):
                 header_data.current_struct = None
@@ -510,17 +530,26 @@ def include_file_in_gles_header(filename: str, header_data: GLESHeaderStruct, de
                             arr_size = 1
                             
                     if type_name in header_data.structs:
-                        def unroll_struct(s_type, prefix, s_dict, out_uniforms):
+                        def unroll_struct(s_type, prefix, s_dict, out_uniforms, visited=None):
+                            if visited is None:
+                                visited = set()
+                            if s_type in visited:
+                                return
+                            visited.add(s_type)
+                            
                             if s_type not in s_dict:
                                 if prefix not in out_uniforms:
                                     out_uniforms.append(prefix)
+                                visited.remove(s_type)
                                 return
+                                
                             for m_type, m_name, m_size in s_dict[s_type]:
                                 if m_size > 0:
                                     for i in range(m_size):
-                                        unroll_struct(m_type, f"{prefix}.{m_name}[{i}]", s_dict, out_uniforms)
+                                        unroll_struct(m_type, f"{prefix}.{m_name}[{i}]", s_dict, out_uniforms, visited)
                                 else:
-                                    unroll_struct(m_type, f"{prefix}.{m_name}", s_dict, out_uniforms)
+                                    unroll_struct(m_type, f"{prefix}.{m_name}", s_dict, out_uniforms, visited)
+                            visited.remove(s_type)
                         
                         if arr_size > 0:
                             for i in range(arr_size):

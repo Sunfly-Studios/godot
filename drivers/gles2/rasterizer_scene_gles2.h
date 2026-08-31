@@ -380,6 +380,9 @@ private:
 
 	/* INLINE GL HELPERS */
 
+	// Forward the structs;
+	struct MultiMeshInstanceData;
+
 	_FORCE_INLINE_ static uint32_t _gl_indices_to_primitives(GLenum p_primitive, uint32_t p_indices) {
 		switch (p_primitive) {
 			case GL_POINTS:
@@ -414,6 +417,37 @@ private:
 		view_matrix.origin.z = scene_state.ubo.view_matrix[14];
 	}
 
+	static _FORCE_INLINE_ void _gl_batch_decode_multimesh_instance(const float *p_data, RS::MultimeshTransformFormat p_format, bool p_uses_colors, uint32_t p_color_offset, Transform3D &r_xform, Color &r_color) {
+		if (p_format == RS::MULTIMESH_TRANSFORM_3D) {
+			r_xform.basis.rows[0][0] = p_data[0];
+			r_xform.basis.rows[0][1] = p_data[1];
+			r_xform.basis.rows[0][2] = p_data[2];
+			r_xform.origin.x = p_data[3];
+			r_xform.basis.rows[1][0] = p_data[4];
+			r_xform.basis.rows[1][1] = p_data[5];
+			r_xform.basis.rows[1][2] = p_data[6];
+			r_xform.origin.y = p_data[7];
+			r_xform.basis.rows[2][0] = p_data[8];
+			r_xform.basis.rows[2][1] = p_data[9];
+			r_xform.basis.rows[2][2] = p_data[10];
+			r_xform.origin.z = p_data[11];
+		} else {
+			r_xform.basis.rows[0][0] = p_data[0];
+			r_xform.basis.rows[0][1] = p_data[1];
+			r_xform.origin.x = p_data[3];
+			r_xform.basis.rows[1][0] = p_data[4];
+			r_xform.basis.rows[1][1] = p_data[5];
+			r_xform.origin.y = p_data[7];
+		}
+
+		if (p_uses_colors) {
+			const float *cdata = p_data + p_color_offset;
+			r_color = Color(cdata[0], cdata[1], cdata[2], cdata[3]);
+		} else {
+			r_color = Color(1.0, 1.0, 1.0, 1.0);
+		}
+	}
+
 	/* UTILITIES */
 	struct MultiMeshInstanceData {
 		const float *data = nullptr;
@@ -424,6 +458,14 @@ private:
 	};
 	MultiMeshInstanceData _get_multimesh_data(const GeometryInstanceSurface *p_surface);
 
+	bool _promote_batch_to_instancing(BatcherEnums::FVF fvf, const Transform3D& p_world_transform) {
+		return (
+			bdata.fvf == BatcherEnums::FVF_INSTANCED ||
+			bdata.fvf == BatcherEnums::FVF_DEPTH_ONLY ||
+			bdata.fvf == BatcherEnums::FVF_DEPTH_ALPHA ||
+			(bdata.fvf == BatcherEnums::FVF_REGULAR && p_world_transform == Transform3D())
+		);
+	}
 
 	/* REST OF GEOMETRY FUNCTIONS */
 
@@ -608,6 +650,7 @@ private:
 		bool used_screen_texture = false;
 		bool used_normal_texture = false;
 		bool used_depth_texture = false;
+		uint64_t current_spec_constants = 0;
 
 		LightData *omni_lights = nullptr;
 		LightData *spot_lights = nullptr;
@@ -720,6 +763,9 @@ private:
 
 	template <PassMode p_pass_mode>
 	_FORCE_INLINE_ void _render_list_template(RenderListParameters *p_params, const RenderDataGLES2 *p_render_data, uint32_t p_from_element, uint32_t p_to_element, bool p_alpha_pass = false);
+
+	template <bool p_is_batch>
+	_FORCE_INLINE_ void _render_additive_light_passes(const GeometryInstanceSurface *p_surf, GLES2::SceneMaterialData *p_material, uint64_t p_spec_constants, bool p_instancing, const Transform3D &p_world_xform, RS::PrimitiveType p_primitive, int p_instances = 1, const MultiMeshInstanceData *p_mm = nullptr, const Transform3D *p_owner_transform = nullptr, bool p_use_index_buffer = false, GLenum p_primitive_gl = 0, int p_drawn_count = 0, GLenum p_index_type = 0);
 
 	/* Batch API */
 

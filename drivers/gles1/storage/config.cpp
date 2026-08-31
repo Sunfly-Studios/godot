@@ -242,7 +242,9 @@ Config::Config() {
 	support_texture_env_add = extensions.has("GL_OES_texture_env_add") || extensions.has("GL_EXT_texture_env_add") || extensions.has("GL_ARB_texture_env_add");
 	support_texture_env_dot3 = extensions.has("GL_OES_texture_env_dot3") || extensions.has("GL_EXT_texture_env_dot3") || extensions.has("GL_ARB_texture_env_dot3");
 	support_point_size_array = extensions.has("GL_OES_point_size_array");
-
+	support_depth_texture = extensions.has("GL_OES_depth_texture") || extensions.has("GL_EXT_depth_texture") || extensions.has("GL_ARB_depth_texture");
+	support_shadow = extensions.has("GL_ARB_shadow") || extensions.has("GL_OES_shadow") || extensions.has("GL_EXT_shadow");
+	
 	// Just because the extension exists doesn't
 	// mean the GLES1 wrapper accepts GL_COMBINE.
 	support_texture_env_combine = extensions.has("GL_OES_texture_env_crossbar") || extensions.has("GL_ARB_texture_env_combine") || extensions.has("GL_EXT_texture_env_combine");

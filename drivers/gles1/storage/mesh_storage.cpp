@@ -877,6 +877,11 @@ void MeshStorage::mesh_surface_unbind_arrays_gles1(void *p_surface) {
 	glClientActiveTexture(GL_TEXTURE0);
 	glDisableClientState(GL_TEXTURE_COORD_ARRAY);
 
+	if (GLES1_CONFIG->support_matrix_palette) {
+		glDisableClientState(GL_MATRIX_INDEX_ARRAY_OES);
+		glDisableClientState(GL_WEIGHT_ARRAY_OES);
+	}
+
 	if (GLES1_CONFIG->support_vbo) {
 		glBindBuffer(GL_ARRAY_BUFFER, 0);
 	}

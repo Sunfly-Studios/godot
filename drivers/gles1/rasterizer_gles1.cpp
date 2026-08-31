@@ -150,6 +150,36 @@ void RasterizerGLES1::clear_depth(float p_depth) {
 #endif // GLES_API_ENABLED
 }
 
+void RasterizerGLES1::clip_plane(GLenum plane_enum, const GLfloat *plane_eqs) {
+#ifdef GL_API_ENABLED
+	if (is_gles_over_gl()) {
+		// In desktop, for some reason glClipPlane wants double values
+		// while the spec only specifies float values.
+		// Must be converted manually.
+
+		// OpenGL clip planes always have 4 coefficients
+		const int size = 4;
+		GLdouble *double_ptr = SAFE_ALLOCA_ARRAY(GLdouble, size);
+		if (!double_ptr) {
+			return;
+		}
+
+		for (int i = 0; i < size; i++) {
+			double_ptr[i] = static_cast<GLdouble>(plane_eqs[i]);
+		}
+
+		glClipPlane(plane_enum, double_ptr);
+		GL_CHECK_ERROR("GLES1::RasterizerGLES1::glClearDepth");
+	}
+#endif // GL_API_ENABLED
+#ifdef GLES_API_ENABLED
+	if (!is_gles_over_gl()) {
+		glClipPlanef(plane_enum, plane_eqs);
+		GL_CHECK_ERROR("GLES1::RasterizerGLES1::glClearDepthf");
+	}
+#endif // GLES_API_ENABLED
+}
+
 #ifdef CAN_DEBUG
 static void GLAPIENTRY _gl_debug_print(GLenum source, GLenum type, GLuint id, GLenum severity, GLsizei length, const GLchar *message, const GLvoid *userParam) {
 	// These are ultimately annoying, so removing for now.

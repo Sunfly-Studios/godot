@@ -39,14 +39,6 @@
 
 #include "platform_gl.h"
 
-#ifdef ANDROID_ENABLED
-typedef void (*PFNGLFRAMEBUFFERTEXTUREMULTIVIEWOVRPROC)(GLenum, GLenum, GLuint, GLint, GLint, GLsizei);
-typedef void (*PFNGLTEXSTORAGE3DMULTISAMPLEPROC)(GLenum, GLsizei, GLenum, GLsizei, GLsizei, GLsizei, GLboolean);
-typedef void (*PFNGLFRAMEBUFFERTEXTURE2DMULTISAMPLEEXTPROC)(GLenum, GLenum, GLenum, GLuint, GLint, GLsizei);
-typedef void (*PFNGLFRAMEBUFFERTEXTUREMULTISAMPLEMULTIVIEWOVRPROC)(GLenum, GLenum, GLuint, GLint, GLsizei, GLint, GLsizei);
-typedef void (*PFNEGLIMAGETARGETTEXTURE2DOESPROC)(GLenum, void *);
-#endif
-
 namespace GLES1 {
 
 class Config {
@@ -113,6 +105,8 @@ public:
 	bool support_mirrored_repeat = false; // GL_OES_texture_mirrored_repeat
 	bool support_anisotropic_filter = false; // GL_EXT_texture_filter_anisotropic
 	bool support_mapbuffer = false; // GL_OES_mapbuffer
+	bool support_depth_texture = false; // GL_OES_depth_texture
+	bool support_shadow = false; // GL_ARB_shadow
 
 	// 3D
 	bool support_vertex_half_float = false; // GL_OES_vertex_half_float

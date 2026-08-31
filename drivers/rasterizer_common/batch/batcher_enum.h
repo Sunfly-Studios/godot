@@ -53,6 +53,9 @@ public:
 		PASS_MODE_SHADOW,
 		PASS_MODE_DEPTH,
 		PASS_MODE_MATERIAL,
+
+		// Specifically for FFP multi-pass shadows architecture
+		PASS_MODE_SHADOW_PROJECTION,
 	};
 
 	// these flags are specifically for batching

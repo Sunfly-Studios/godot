@@ -135,6 +135,7 @@ public:
 	static constexpr PassMode PASS_MODE_SHADOW = BatcherEnums::PASS_MODE_SHADOW;
 	static constexpr PassMode PASS_MODE_DEPTH = BatcherEnums::PASS_MODE_DEPTH;
 	static constexpr PassMode PASS_MODE_MATERIAL = BatcherEnums::PASS_MODE_MATERIAL;
+	static constexpr PassMode PASS_MODE_SHADOW_PROJECTION = BatcherEnums::PASS_MODE_SHADOW_PROJECTION;
 
 	// These should share as much as possible with SkyUniform Location
 	enum SceneUniformLocation {
@@ -562,7 +563,7 @@ private:
 			MAX(0.0f, p_sky_top.b - p_ground_bottom.b),
 			1.0f
 		};
-		const GLfloat top_pos[] = { 0.0f, 1.0f, 0.0f, 0.0f };
+		constexpr GLfloat top_pos[] = { 0.0f, 1.0f, 0.0f, 0.0f };
 
 		int max_lights = GLES1_CONFIG->max_lights;
 		int sky_light_idx = GL_LIGHT0 + (max_lights - 1);
@@ -641,7 +642,7 @@ private:
 		glLightf(gl_light, GL_LINEAR_ATTENUATION, p_light.attenuation * p_light.inv_radius);
 		glLightf(gl_light, GL_QUADRATIC_ATTENUATION, 0.0f);
 
-		const float cutoff = Math::acos(p_light.cos_spot_angle) * (180.0f / Math_PI);
+		const float cutoff = Math::rad_to_deg(Math::acos(p_light.cos_spot_angle));
 		glLightf(gl_light, GL_SPOT_CUTOFF, cutoff);
 		glLightf(gl_light, GL_SPOT_EXPONENT, p_light.inv_spot_attenuation * 128.0f);
 
@@ -669,8 +670,8 @@ private:
 
 	// Tracks the chuncked lights
 	struct GlActiveLight {
-		RS::LightType type;
-		uint32_t index;
+		RS::LightType type = RS::LIGHT_DIRECTIONAL;
+		uint32_t index = 0;
 	};
 
 	/* UTILITIES */
@@ -914,6 +915,10 @@ private:
 		bool used_depth_texture = false;
 		bool is_additive_pass = false;
 
+		GLuint current_shadow_texture = 0;
+		float current_shadow_matrix[16] = {};
+		GLuint z_bound_texture = 0;
+
 		// Default fallback colours
 		Color sky_top_color = Color(0.385, 0.454, 0.55, 1.0);
 		Color ground_bottom_color = Color(0.2, 0.169, 0.133, 1.0);
@@ -1021,6 +1026,9 @@ private:
 
 	template <PassMode p_pass_mode>
 	void _render_additive_light_passes(RenderListParameters *p_params, const RenderDataGLES1 *p_render_data, uint32_t p_element_count, bool p_alpha_pass = false);
+
+	template <PassMode p_pass_mode>
+	void _render_light_shadows(RenderListParameters *p_params, const RenderDataGLES1 *p_render_data, uint32_t p_element_count, bool p_alpha_pass, const GlActiveLight &p_light);
 
 	/* Batch API */
 
