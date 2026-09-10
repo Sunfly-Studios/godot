@@ -41,11 +41,13 @@ int GLAD_GL_ES_VERSION_3_0 = 0;
 int GLAD_GL_ES_VERSION_3_1 = 0;
 int GLAD_GL_ES_VERSION_3_2 = 0;
 int GLAD_GL_ARB_debug_output = 0;
+int GLAD_GL_ARB_depth_texture = 0;
 int GLAD_GL_ARB_framebuffer_object = 0;
 int GLAD_GL_ARB_framebuffer_sRGB = 0;
 int GLAD_GL_ARB_matrix_palette = 0;
 int GLAD_GL_ARB_multitexture = 0;
 int GLAD_GL_ARB_point_sprite = 0;
+int GLAD_GL_ARB_shadow = 0;
 int GLAD_GL_ARB_texture_cube_map = 0;
 int GLAD_GL_ARB_texture_env_add = 0;
 int GLAD_GL_ARB_texture_env_dot3 = 0;
@@ -2725,11 +2727,13 @@ static int glad_gl_find_extensions_gl(void) {
     if (!glad_gl_get_extensions(&exts, &exts_i)) return 0;
 
     GLAD_GL_ARB_debug_output = glad_gl_has_extension(exts, exts_i, "GL_ARB_debug_output");
+    GLAD_GL_ARB_depth_texture = glad_gl_has_extension(exts, exts_i, "GL_ARB_depth_texture");
     GLAD_GL_ARB_framebuffer_object = glad_gl_has_extension(exts, exts_i, "GL_ARB_framebuffer_object");
     GLAD_GL_ARB_framebuffer_sRGB = glad_gl_has_extension(exts, exts_i, "GL_ARB_framebuffer_sRGB");
     GLAD_GL_ARB_matrix_palette = glad_gl_has_extension(exts, exts_i, "GL_ARB_matrix_palette");
     GLAD_GL_ARB_multitexture = glad_gl_has_extension(exts, exts_i, "GL_ARB_multitexture");
     GLAD_GL_ARB_point_sprite = glad_gl_has_extension(exts, exts_i, "GL_ARB_point_sprite");
+    GLAD_GL_ARB_shadow = glad_gl_has_extension(exts, exts_i, "GL_ARB_shadow");
     GLAD_GL_ARB_texture_cube_map = glad_gl_has_extension(exts, exts_i, "GL_ARB_texture_cube_map");
     GLAD_GL_ARB_texture_env_add = glad_gl_has_extension(exts, exts_i, "GL_ARB_texture_env_add");
     GLAD_GL_ARB_texture_env_dot3 = glad_gl_has_extension(exts, exts_i, "GL_ARB_texture_env_dot3");
