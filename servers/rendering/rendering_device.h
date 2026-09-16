@@ -1142,6 +1142,8 @@ public:
 
 	void update_pipeline_cache(bool p_closing = false);
 
+	_FORCE_INLINE_ bool is_pipeline_cache_enabled() const { return pipeline_cache_enabled; }
+
 private:
 	/****************/
 	/**** SCREEN ****/
