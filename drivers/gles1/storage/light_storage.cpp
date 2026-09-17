@@ -1251,11 +1251,13 @@ void LightStorage::shadow_atlas_set_size(RID p_atlas, int p_size, bool p_16_bits
 	for (uint32_t i = 0; i < 4; i++) {
 		for (uint32_t j = 0; j < shadow_atlas->quadrants[i].textures.size(); j++) {
 			glDeleteTextures(1, &shadow_atlas->quadrants[i].textures[j]);
+			glDeleteTextures(1, &shadow_atlas->quadrants[i].color_textures[j]);
 			if (GLES1_CONFIG->support_fbo) {
 				glDeleteFramebuffersOES(1, &shadow_atlas->quadrants[i].fbos[j]);
 			}
 		}
 		shadow_atlas->quadrants[i].textures.clear();
+		shadow_atlas->quadrants[i].color_textures.clear();
 		shadow_atlas->quadrants[i].fbos.clear();
 
 		shadow_atlas->quadrants[i].shadows.clear();
@@ -1270,10 +1272,17 @@ void LightStorage::shadow_atlas_set_size(RID p_atlas, int p_size, bool p_16_bits
 
 	if (shadow_atlas->debug_texture != 0) {
 		glDeleteTextures(1, &shadow_atlas->debug_texture);
+		shadow_atlas->debug_texture = 0;
+	}
+
+	if (shadow_atlas->debug_color_texture != 0) {
+		glDeleteTextures(1, &shadow_atlas->debug_color_texture);
+		shadow_atlas->debug_color_texture = 0;
 	}
 
 	if (shadow_atlas->debug_fbo != 0 && GLES1_CONFIG->support_fbo) {
 		glDeleteFramebuffersOES(1, &shadow_atlas->debug_fbo);
+		shadow_atlas->debug_fbo = 0;
 	}
 
 	shadow_atlas->shadow_owners.clear();
@@ -1311,12 +1320,14 @@ void LightStorage::shadow_atlas_set_quadrant_subdivision(RID p_atlas, int p_quad
 
 	for (uint32_t j = 0; j < shadow_atlas->quadrants[p_quadrant].textures.size(); j++) {
 		glDeleteTextures(1, &shadow_atlas->quadrants[p_quadrant].textures[j]);
+		glDeleteTextures(1, &shadow_atlas->quadrants[p_quadrant].color_textures[j]);
 		if (GLES1_CONFIG->support_fbo) {
 			glDeleteFramebuffersOES(1, &shadow_atlas->quadrants[p_quadrant].fbos[j]);
 		}
 	}
 
 	shadow_atlas->quadrants[p_quadrant].textures.clear();
+	shadow_atlas->quadrants[p_quadrant].color_textures.clear();
 	shadow_atlas->quadrants[p_quadrant].fbos.clear();
 
 	shadow_atlas->quadrants[p_quadrant].shadows.clear();
@@ -1465,6 +1476,9 @@ bool LightStorage::_shadow_atlas_find_shadow(ShadowAtlas *shadow_atlas, int *p_i
 			GLuint texture_id = 0;
 			glGenTextures(1, &texture_id);
 
+			GLuint color_texture_id = 0;
+			glGenTextures(1, &color_texture_id);
+
 			GLuint fbo_id = 0;
 			if (GLES1_CONFIG->support_fbo) {
 				glGenFramebuffersOES(1, &fbo_id);
@@ -1480,6 +1494,19 @@ bool LightStorage::_shadow_atlas_find_shadow(ShadowAtlas *shadow_atlas, int *p_i
 			GLenum format = GL_DEPTH_COMPONENT;
 			GLenum type = GLES1_CONFIG->support_depth24 ? GL_UNSIGNED_INT : GL_UNSIGNED_SHORT;
 
+			// Color texture attachment for FBO completeness
+			glBindTexture(GL_TEXTURE_2D, color_texture_id);
+			glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, size, size, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+
+			if (GLES1_CONFIG->support_fbo) {
+				glFramebufferTexture2DOES(GL_FRAMEBUFFER_OES, GL_COLOR_ATTACHMENT0_OES, GL_TEXTURE_2D, color_texture_id, 0);
+			}
+
+			// Depth texture attachment
 			glBindTexture(GL_TEXTURE_2D, texture_id);
 
 			glTexImage2D(GL_TEXTURE_2D, 0, format, size, size, 0, format, type, nullptr);
@@ -1503,6 +1530,7 @@ bool LightStorage::_shadow_atlas_find_shadow(ShadowAtlas *shadow_atlas, int *p_i
 			r_shadow = shadow_atlas->quadrants[qidx].textures.size();
 
 			shadow_atlas->quadrants[qidx].textures.push_back(texture_id);
+			shadow_atlas->quadrants[qidx].color_textures.push_back(color_texture_id);
 			shadow_atlas->quadrants[qidx].fbos.push_back(fbo_id);
 
 			return true;
@@ -1570,9 +1598,21 @@ void LightStorage::update_directional_shadow_atlas() {
 		texture_storage->bind_framebuffer(directional_shadow.fbo);
 
 		glGenTextures(1, &directional_shadow.depth);
+		glGenTextures(1, &directional_shadow.color);
 		if (GLES1_CONFIG->max_texture_units > 1) {
 			glActiveTexture(GL_TEXTURE0);
 		}
+
+		// Dummy color texture to satisfy FBO completeness
+		glBindTexture(GL_TEXTURE_2D, directional_shadow.color);
+		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, directional_shadow.size, directional_shadow.size, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+		glFramebufferTexture2DOES(GL_FRAMEBUFFER_OES, GL_COLOR_ATTACHMENT0_OES, GL_TEXTURE_2D, directional_shadow.color, 0);
+
+		// Depth texture
 		glBindTexture(GL_TEXTURE_2D, directional_shadow.depth);
 
 		GLenum format = GL_DEPTH_COMPONENT;
@@ -1614,6 +1654,8 @@ void LightStorage::directional_shadow_atlas_set_size(int p_size, bool p_16_bits)
 	if (directional_shadow.depth != 0) {
 		glDeleteTextures(1, &directional_shadow.depth);
 		directional_shadow.depth = 0;
+		glDeleteTextures(1, &directional_shadow.color);
+		directional_shadow.color = 0;
 		glDeleteFramebuffersOES(1, &directional_shadow.fbo);
 		directional_shadow.fbo = 0;
 	}

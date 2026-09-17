@@ -259,6 +259,7 @@ private:
 
 			Vector<Shadow> shadows;
 			LocalVector<GLuint> textures;
+			LocalVector<GLuint> color_textures;
 			LocalVector<GLuint> fbos;
 
 			Quadrant() {}
@@ -272,6 +273,7 @@ private:
 		bool use_16_bits = true;
 
 		GLuint debug_texture = 0;
+		GLuint debug_color_texture = 0;
 		GLuint debug_fbo = 0;
 
 		HashMap<RID, uint32_t> shadow_owners;
@@ -287,6 +289,7 @@ private:
 
 	struct DirectionalShadow {
 		GLuint depth = 0;
+		GLuint color = 0;
 		GLuint fbo = 0;
 
 		int light_count = 0;
@@ -815,12 +818,26 @@ public:
 				atlas->debug_texture = shadow_atlas_get_debug_texture(p_atlas);
 			}
 
+			if (atlas->debug_color_texture == 0) {
+				glGenTextures(1, &atlas->debug_color_texture);
+				if (GLES1_CONFIG->max_texture_units > 1) {
+					glActiveTexture(GL_TEXTURE0);
+				}
+				glBindTexture(GL_TEXTURE_2D, atlas->debug_color_texture);
+				glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, atlas->size, atlas->size, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
+				glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+				glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+				glBindTexture(GL_TEXTURE_2D, 0);
+			}
+
 			if (GLES1_CONFIG->max_texture_units > 1) {
 				glActiveTexture(GL_TEXTURE0);
 			}
-			glBindTexture(GL_TEXTURE_2D, atlas->debug_texture);
 
-			glFramebufferTexture2DOES(GL_FRAMEBUFFER_OES, GL_COLOR_ATTACHMENT0_OES, GL_TEXTURE_2D, atlas->debug_texture, 0);
+			// Dummy color texture for FBO completeness
+			glFramebufferTexture2DOES(GL_FRAMEBUFFER_OES, GL_COLOR_ATTACHMENT0_OES, GL_TEXTURE_2D, atlas->debug_color_texture, 0);
+			// Correct attachment point for the depth texture
+			glFramebufferTexture2DOES(GL_FRAMEBUFFER_OES, GL_DEPTH_ATTACHMENT_OES, GL_TEXTURE_2D, atlas->debug_texture, 0);
 
 			GLES1::TextureStorage::get_singleton()->bind_framebuffer_system();
 			GL_CHECK_ERROR("GLES1::LightStorage::shadow_atlas_get_debug_fb: glBindFramebufferOES");

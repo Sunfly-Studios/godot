@@ -4401,8 +4401,10 @@ void RasterizerSceneGLES1::_render_shadow_pass(RID p_light, RID p_shadow_atlas, 
 	correction.set_depth_correction(false, true, false);
 
 	glMatrixMode(GL_PROJECTION);
+	glPushMatrix();
 	_gl_load_projection(correction * render_data.cam_projection);
 	glMatrixMode(GL_MODELVIEW);
+	glPushMatrix();
 	_gl_load_transform(render_data.inv_cam_transform);
 
 	// Disable lighting and setup pure flat pass for shadow generation
@@ -4430,6 +4432,11 @@ void RasterizerSceneGLES1::_render_shadow_pass(RID p_light, RID p_shadow_atlas, 
 
 	glDisable(GL_POLYGON_OFFSET_FILL);
 	scene_state.enable_gl_scissor_test(false);
+
+	glMatrixMode(GL_PROJECTION);
+	glPopMatrix();
+	glMatrixMode(GL_MODELVIEW);
+	glPopMatrix();
 
 	glColor4f(1.0f, 1.0f, 1.0f, 1.0f);
 	scene_state.enable_gl_depth_test(false);
