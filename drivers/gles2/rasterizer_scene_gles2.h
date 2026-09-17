@@ -762,7 +762,7 @@ private:
 	void _render_post_processing(const RenderDataGLES2 *p_render_data);
 
 	template <PassMode p_pass_mode>
-	_FORCE_INLINE_ void _render_list_template(RenderListParameters *p_params, const RenderDataGLES2 *p_render_data, uint32_t p_from_element, uint32_t p_to_element, bool p_alpha_pass = false);
+	_FORCE_INLINE_ void _render_list_template(RenderListParameters *p_params, const RenderDataGLES2 *p_render_data, uint32_t p_from_element, uint32_t p_to_element, bool p_alpha_pass = false, bool p_replay = false);
 
 	template <bool p_is_batch>
 	_FORCE_INLINE_ void _render_additive_light_passes(const GeometryInstanceSurface *p_surf, GLES2::SceneMaterialData *p_material, uint64_t p_spec_constants, bool p_instancing, const Transform3D &p_world_xform, RS::PrimitiveType p_primitive, int p_instances = 1, const MultiMeshInstanceData *p_mm = nullptr, const Transform3D *p_owner_transform = nullptr, bool p_use_index_buffer = false, GLenum p_primitive_gl = 0, int p_drawn_count = 0, GLenum p_index_type = 0);
@@ -779,7 +779,7 @@ private:
 
 	void _batch_fill_instance_geometry(const GeometryInstanceSurface *p_surface, RasterizerSceneBatcherCommon<BatcherAPISceneGLES2>::BatchVertex3D *r_bvs, uint16_t *r_inds, uint32_t p_start_vert, bool p_use_hardware_transform, uint32_t p_item_index);
 	void _batch_fill_multimesh_geometry(const GeometryInstanceSurface *p_surface, RasterizerSceneBatcherCommon<BatcherAPISceneGLES2>::BatchVertex3DInstanced *r_bvs, uint16_t *r_inds, uint32_t p_start_vert, bool p_use_hardware_transform, uint32_t p_item_index);
-	void _batch_upload_buffers();
+	void _batch_upload_buffers(RasterizerSceneBatcherCommon<BatcherAPISceneGLES2>::Batch3D &r_batch);
 	void _batch_bind_material(GLES2::SceneMaterialData *p_material_data, const Transform3D &p_world_transform, bool p_transparent);
 	void _batch_render_generic(RS::PrimitiveType p_primitive, uint32_t p_offset = 0, uint32_t p_count = 0, bool p_has_color = true);
 	void _batch_render_items(GLES2::SceneMaterialData *p_material_data, RS::PrimitiveType p_primitive, RasterizerSceneBatcherCommon<BatcherAPISceneGLES2>::Batch3D &p_batch, bool p_transparent);

@@ -1506,11 +1506,9 @@ void RasterizerSceneGLES2::scene_render_items_implementation(GeometryInstanceSur
 }
 
 void RasterizerSceneGLES2::_batch_get_hardware_limits(RasterizerSceneBatcherCommon<BatcherAPISceneGLES2>::BatchLimits &r_limits) {
-	GLint max_vectors = 0;
-	glGetIntegerv(GL_MAX_VERTEX_UNIFORM_VECTORS, &max_vectors);
-	GL_CHECK_ERROR("GLES2::RasterizerSceneGLES2::_batch_get_hardware_limits: glGetIntegerv GL_MAX_VERTEX_UNIFORM_VECTORS");
-	r_limits.max_matrix_palette_vectors = max_vectors > 0 ? max_vectors : 256;
-
+	// In GLES2, we use vertex attributes for instancing.
+	// So we set this to a high value so we don't prematurely flush.
+	r_limits.max_matrix_palette_vectors = 0xFFFFFF;
 	r_limits.max_vertices_per_buffer = 65536;
 	r_limits.max_indices_per_buffer = 65536 * 2;
 }
@@ -1554,23 +1552,13 @@ uint64_t RasterizerSceneGLES2::_batch_get_state_hash(const GeometryInstanceSurfa
 	uint64_t mat_id = p_surface->material ? static_cast<uint64_t>((uintptr_t)p_surface->material >> 4) : 0;
 	hash |= (mat_id & 0xFFFFF) << 32;
 
+	// Bits 31-16: Unused (TODO)
+
 	// Bits 15-0: Mesh surface ID / primitive topology (16 bits)
 	uint64_t surface_id = p_surface->surface_index;
 	uint64_t primitive = p_surface->primitive;
 	hash |= ((surface_id & 0xFF) << 8); // Surface ID in 15-8
 	hash |= (primitive & 0xFF); // Primitive type in 7-0
-
-	// Bits 31-16: Combined light cache hash (16 bits)
-	if (p_surface->owner && bdata.pass_mode == PASS_MODE_COLOR) {
-		uint64_t light_hash = 0;
-		for (uint32_t i = 0; i < p_surface->owner->omni_light_gl_cache.size(); i++) {
-			light_hash = (light_hash * 31) + p_surface->owner->omni_light_gl_cache[i];
-		}
-		for (uint32_t i = 0; i < p_surface->owner->spot_light_gl_cache.size(); i++) {
-			light_hash = (light_hash * 31) + p_surface->owner->spot_light_gl_cache[i];
-		}
-		hash |= (light_hash & 0xFFFF) << 16;
-	}
 
 	return hash;
 }
@@ -1620,14 +1608,17 @@ void RasterizerSceneGLES2::_batch_fill_instance_geometry(const GeometryInstanceS
 	Transform3D world_xform = p_surface->owner->transform;
 	Transform3D write_xform = p_use_hardware_transform ? Transform3D() : world_xform;
 
+#define BATCH_TYPE_VERTEX_3D_DEPTH RasterizerSceneBatcherCommon<BatcherAPISceneGLES2>::BatchVertex3DDepth
+#define BATCH_TYPE_VERTEX_3D_ALPHA RasterizerSceneBatcherCommon<BatcherAPISceneGLES2>::BatchVertex3DDepthAlpha
+
 	if (bdata.fvf == BatcherEnums::FVF_DEPTH_ONLY) {
-		RasterizerSceneBatcherCommon<BatcherAPISceneGLES2>::BatchVertex3DDepth *bvs_depth = (RasterizerSceneBatcherCommon<BatcherAPISceneGLES2>::BatchVertex3DDepth *)r_bvs;
+		BATCH_TYPE_VERTEX_3D_DEPTH *bvs_depth = (BATCH_TYPE_VERTEX_3D_DEPTH *)r_bvs;
 		for (uint32_t i = 0; i < vertex_count; i++) {
 			const uint8_t *p_ptr = v_read_pos + i * pos_stride;
 			_batch_fill_vertex_depth(bvs_depth[i], p_ptr, format, is_2d, write_xform);
 		}
 	} else if (bdata.fvf == BatcherEnums::FVF_DEPTH_ALPHA) {
-		RasterizerSceneBatcherCommon<BatcherAPISceneGLES2>::BatchVertex3DDepthAlpha *bvs_alpha = (RasterizerSceneBatcherCommon<BatcherAPISceneGLES2>::BatchVertex3DDepthAlpha *)r_bvs;
+		BATCH_TYPE_VERTEX_3D_ALPHA *bvs_alpha = (BATCH_TYPE_VERTEX_3D_ALPHA *)r_bvs;
 		for (uint32_t i = 0; i < vertex_count; i++) {
 			const uint8_t *p_ptr = v_read_pos + i * pos_stride;
 			const uint8_t *a_ptr = a_read ? (a_read + i * attr_stride) : nullptr;
@@ -1642,6 +1633,9 @@ void RasterizerSceneGLES2::_batch_fill_instance_geometry(const GeometryInstanceS
 			_batch_fill_vertex(r_bvs[i], p_ptr, n_ptr, a_ptr, format, is_2d, is_compressed, write_xform);
 		}
 	}
+
+#undef BATCH_TYPE_VERTEX_3D_DEPTH
+#undef BATCH_TYPE_VERTEX_3D_ALPHA
 
 	if (r_inds && index_count > 0 && !i_data.is_empty()) {
 		bool is_16 = vertex_count <= 65536;
@@ -1703,8 +1697,11 @@ void RasterizerSceneGLES2::_batch_fill_multimesh_geometry(const GeometryInstance
 	uint32_t bvs_idx = 0;
 	Transform3D owner_transform = p_surface->owner->transform;
 
+#define BATCH_TYPE_VERTEX_3D_DEPTH RasterizerSceneBatcherCommon<BatcherAPISceneGLES2>::BatchVertex3DDepth
+#define BATCH_TYPE_VERTEX_3D_ALPHA RasterizerSceneBatcherCommon<BatcherAPISceneGLES2>::BatchVertex3DDepthAlpha
+
 	if (bdata.fvf == BatcherEnums::FVF_DEPTH_ONLY) {
-		RasterizerSceneBatcherCommon<BatcherAPISceneGLES2>::BatchVertex3DDepth *bvs_depth = (RasterizerSceneBatcherCommon<BatcherAPISceneGLES2>::BatchVertex3DDepth *)r_bvs;
+		BATCH_TYPE_VERTEX_3D_DEPTH *bvs_depth = (BATCH_TYPE_VERTEX_3D_DEPTH *)r_bvs;
 		for (int inst = 0; inst < instances; inst++) {
 			Transform3D xform;
 			Color inst_color = Color(1, 1, 1, 1);
@@ -1721,7 +1718,7 @@ void RasterizerSceneGLES2::_batch_fill_multimesh_geometry(const GeometryInstance
 			}
 		}
 	} else if (bdata.fvf == BatcherEnums::FVF_DEPTH_ALPHA) {
-		RasterizerSceneBatcherCommon<BatcherAPISceneGLES2>::BatchVertex3DDepthAlpha *bvs_alpha = (RasterizerSceneBatcherCommon<BatcherAPISceneGLES2>::BatchVertex3DDepthAlpha *)r_bvs;
+		BATCH_TYPE_VERTEX_3D_ALPHA *bvs_alpha = (BATCH_TYPE_VERTEX_3D_ALPHA *)r_bvs;
 		for (int inst = 0; inst < instances; inst++) {
 			Transform3D xform;
 			Color inst_color = Color(1, 1, 1, 1);
@@ -1762,6 +1759,9 @@ void RasterizerSceneGLES2::_batch_fill_multimesh_geometry(const GeometryInstance
 		}
 	}
 
+#undef BATCH_TYPE_VERTEX_3D_DEPTH
+#undef BATCH_TYPE_VERTEX_3D_ALPHA
+
 	if (r_inds && index_count > 0 && !i_data.is_empty()) {
 		bool is_16 = vertex_count <= 65536;
 		const uint8_t *i_read = i_data.ptr();
@@ -1784,28 +1784,32 @@ void RasterizerSceneGLES2::_batch_fill_multimesh_geometry(const GeometryInstance
 	}
 }
 
-void RasterizerSceneGLES2::_batch_upload_buffers() {
-	if (!bdata.gl_vertex_buffer) {
-		glGenBuffers(1, &bdata.gl_vertex_buffer);
-		glGenBuffers(1, &bdata.gl_instanced_vertex_buffer);
-		glGenBuffers(1, &bdata.gl_index_buffer);
+void RasterizerSceneGLES2::_batch_upload_buffers(RasterizerSceneBatcherCommon<BatcherAPISceneGLES2>::Batch3D &r_batch) {
+	if (bdata.current_vbo_index >= bdata.vbo_pool.size()) {
+		RasterizerSceneBatcherCommon<BatcherAPISceneGLES2>::VBOPool new_pool;
+		glGenBuffers(1, &new_pool.gl_vertex_buffer);
+		glGenBuffers(1, &new_pool.gl_index_buffer);
+		bdata.vbo_pool.push_back(new_pool);
 	}
+
+	r_batch.vbo_index = bdata.current_vbo_index;
+	RasterizerSceneBatcherCommon<BatcherAPISceneGLES2>::VBOPool &pool = bdata.vbo_pool[bdata.current_vbo_index];
 
 	int bytes_to_upload = bdata.total_verts * bdata.unit_vertices.get_unit_size_bytes();
 
-	if (bdata.fvf == BatcherEnums::FVF_INSTANCED) {
-		glBindBuffer(GL_ARRAY_BUFFER, bdata.gl_instanced_vertex_buffer);
-		glBufferData(GL_ARRAY_BUFFER, bytes_to_upload, bdata.unit_vertices.get_data(), GL_DYNAMIC_DRAW);
-		GL_CHECK_ERROR("GLES2::RasterizerSceneGLES2::_batch_upload_buffers: glBufferData ARRAY_BUFFER INSTANCED");
-	} else {
-		glBindBuffer(GL_ARRAY_BUFFER, bdata.gl_vertex_buffer);
-		glBufferData(GL_ARRAY_BUFFER, bytes_to_upload, bdata.unit_vertices.get_data(), GL_DYNAMIC_DRAW);
-		GL_CHECK_ERROR("GLES2::RasterizerSceneGLES2::_batch_upload_buffers: glBufferData ARRAY_BUFFER");
-	}
+	glBindBuffer(GL_ARRAY_BUFFER, pool.gl_vertex_buffer);
+	// Orphan the vertex buffer
+	glBufferData(GL_ARRAY_BUFFER, bdata.unit_vertices.max_size() * bdata.unit_vertices.get_unit_size_bytes(), nullptr, GL_DYNAMIC_DRAW);
+	glBufferSubData(GL_ARRAY_BUFFER, 0, bytes_to_upload, bdata.unit_vertices.get_data());
+	GL_CHECK_ERROR("GLES2::RasterizerSceneGLES2::_batch_upload_buffers: glBufferSubData ARRAY_BUFFER");
 
-	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, bdata.gl_index_buffer);
-	glBufferData(GL_ELEMENT_ARRAY_BUFFER, bdata.total_indices * sizeof(uint16_t), bdata.indices.get_data(), GL_DYNAMIC_DRAW);
-	GL_CHECK_ERROR("GLES2::RasterizerSceneGLES2::_batch_upload_buffers: glBufferData ELEMENT_ARRAY_BUFFER");
+	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, pool.gl_index_buffer);
+	// Orphan the index buffer
+	glBufferData(GL_ELEMENT_ARRAY_BUFFER, bdata.indices.max_size() * sizeof(uint16_t), nullptr, GL_DYNAMIC_DRAW);
+	glBufferSubData(GL_ELEMENT_ARRAY_BUFFER, 0, bdata.total_indices * sizeof(uint16_t), bdata.indices.get_data());
+	GL_CHECK_ERROR("GLES2::RasterizerSceneGLES2::_batch_upload_buffers: glBufferSubData ELEMENT_ARRAY_BUFFER");
+
+	bdata.current_vbo_index++;
 }
 
 void RasterizerSceneGLES2::_batch_bind_material(GLES2::SceneMaterialData *p_material_data, const Transform3D &p_world_transform, bool p_transparent) {
@@ -1881,7 +1885,7 @@ void RasterizerSceneGLES2::_batch_render_items(GLES2::SceneMaterialData *p_mater
 	// Base pass (directional, ambien, IBL)
 	// =====================================
 	_batch_bind_material(p_material_data, world_xform, p_transparent);
-	_batch_render_generic(p_primitive, 0, bdata.total_indices, true);
+	_batch_render_generic(p_primitive, 0, p_batch.num_indices, true);
 	GL_CHECK_ERROR("GLES2::RasterizerSceneGLES2::_batch_render_items: glDrawElements BASE_PASS");
 
 	// =====================================
@@ -1899,12 +1903,20 @@ void RasterizerSceneGLES2::_batch_render_items(GLES2::SceneMaterialData *p_mater
 }
 
 void RasterizerSceneGLES2::_batch_render_generic(RS::PrimitiveType p_primitive, uint32_t p_offset, uint32_t p_count, bool p_has_color) {
-	if (bdata.indices.size() == 0) {
+	uint32_t vbo_idx = _render_item_state.curr_batch ? _render_item_state.curr_batch->vbo_index : 0;
+	uint32_t gl_vbo = bdata.vbo_pool.size() > vbo_idx ? bdata.vbo_pool[vbo_idx].gl_vertex_buffer : 0;
+	uint32_t gl_ibo = bdata.vbo_pool.size() > vbo_idx ? bdata.vbo_pool[vbo_idx].gl_index_buffer : 0;
+
+	if (gl_ibo == 0 && bdata.indices.size() == 0) {
 		return;
 	}
 
 	if (p_count == 0) {
-		p_count = bdata.indices.size();
+		if (gl_ibo != 0) {
+			p_count = _render_item_state.curr_batch->num_indices;
+		} else {
+			p_count = bdata.indices.size();
+		}
 	}
 
 	bool is_instanced = bdata.fvf == BatcherEnums::FVF_INSTANCED;
@@ -1913,7 +1925,7 @@ void RasterizerSceneGLES2::_batch_render_generic(RS::PrimitiveType p_primitive, 
 
 	uint32_t stride = bdata.unit_vertices.get_unit_size_bytes();
 
-	glBindBuffer(GL_ARRAY_BUFFER, is_instanced ? bdata.gl_instanced_vertex_buffer : bdata.gl_vertex_buffer);
+	glBindBuffer(GL_ARRAY_BUFFER, gl_vbo);
 	GL_CHECK_ERROR("GLES2::RasterizerSceneGLES2::_batch_render_generic: glBindBuffer ARRAY_BUFFER");
 
 #define BATCH_INSTANCED_OFFSET_OF(pointer) offsetof(RasterizerSceneBatcherCommon<BatcherAPISceneGLES2>::BatchVertex3DInstanced, pointer)
@@ -1974,7 +1986,7 @@ void RasterizerSceneGLES2::_batch_render_generic(RS::PrimitiveType p_primitive, 
 	}
 	GL_CHECK_ERROR("GLES2::RasterizerSceneGLES2::_batch_render_generic: glVertexAttribPointers setup");
 
-	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, bdata.gl_index_buffer);
+	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, gl_ibo);
 	GL_CHECK_ERROR("GLES2::RasterizerSceneGLES2::_batch_render_generic: glBindBuffer ELEMENT_ARRAY_BUFFER");
 
 	GLenum primitive_gl = prim[int(p_primitive)];
@@ -3398,7 +3410,7 @@ void RasterizerSceneGLES2::_render_post_processing(const RenderDataGLES2 *p_rend
 }
 
 template <RasterizerSceneGLES2::PassMode p_pass_mode>
-void RasterizerSceneGLES2::_render_list_template(RenderListParameters *p_params, const RenderDataGLES2 *p_render_data, uint32_t p_from_element, uint32_t p_to_element, bool p_alpha_pass) {
+void RasterizerSceneGLES2::_render_list_template(RenderListParameters *p_params, const RenderDataGLES2 *p_render_data, uint32_t p_from_element, uint32_t p_to_element, bool p_alpha_pass, bool p_replay) {
 	if (p_from_element >= p_to_element) {
 		return;
 	}
@@ -3413,7 +3425,7 @@ void RasterizerSceneGLES2::_render_list_template(RenderListParameters *p_params,
 	scene_state.current_spec_constants = p_params->spec_constant_base_flags;
 
 	// Dispatch batch processor or immediate drawer
-	batch_scene_render_items(surfaces, count, p_render_data->cam_transform, p_alpha_pass, p_pass_mode);
+	batch_scene_render_items(surfaces, count, p_render_data->cam_transform, p_alpha_pass, p_pass_mode, p_replay);
 
 	// Clean-up
 	glFrontFace(GL_CCW);
@@ -3458,7 +3470,7 @@ void RasterizerSceneGLES2::_render_additive_light_passes(const GeometryInstanceS
 
 		if constexpr (p_is_batch) {
 			material_storage->shaders.scene_shader.version_set_uniform(SceneShaderGLES2::WORLD_TRANSFORM, p_world_xform, shader->version, additive_variant, omni_spec);
-			_batch_render_generic(p_primitive, 0, bdata.total_indices, true);
+			_batch_render_generic(p_primitive, 0, 0, true);
 		} else {
 			Color inst_color(1.0f, 1.0f, 1.0f, 1.0f);
 			bool is_multimesh = p_surf->owner->data->base_type == RS::INSTANCE_MULTIMESH;
@@ -3500,7 +3512,7 @@ void RasterizerSceneGLES2::_render_additive_light_passes(const GeometryInstanceS
 
 		if constexpr (p_is_batch) {
 			material_storage->shaders.scene_shader.version_set_uniform(SceneShaderGLES2::WORLD_TRANSFORM, p_world_xform, shader->version, additive_variant, spot_spec);
-			_batch_render_generic(p_primitive, 0, bdata.total_indices, true);
+			_batch_render_generic(p_primitive, 0, 0, true);
 		} else {
 			Color inst_color(1.0f, 1.0f, 1.0f, 1.0f);
 			bool is_multimesh = p_surf->owner->data->base_type == RS::INSTANCE_MULTIMESH;
@@ -3632,8 +3644,12 @@ RasterizerSceneGLES2::RasterizerSceneGLES2() {
 RasterizerSceneGLES2::~RasterizerSceneGLES2() {
 	singleton = nullptr;
 
-	if (scene_state.ubo_buffer != 0) {
-		GLES2::Utilities::get_singleton()->buffer_free_data(scene_state.ubo_buffer);
+	// 3D batcher VBO pools
+	for (uint32_t i = 0; i < bdata.vbo_pool.size(); i++) {
+		if (bdata.vbo_pool[i].gl_vertex_buffer != 0) {
+			glDeleteBuffers(1, &bdata.vbo_pool[i].gl_vertex_buffer);
+			glDeleteBuffers(1, &bdata.vbo_pool[i].gl_index_buffer);
+		}
 	}
 
 	// Scene Shader
@@ -3662,6 +3678,11 @@ RasterizerSceneGLES2::~RasterizerSceneGLES2() {
 	RSG::material_storage->shader_free(sky_globals.fog_shader);
 	memdelete_arr(sky_globals.directional_lights);
 	memdelete_arr(sky_globals.last_frame_directional_lights);
+
+	// Buffers
+	if (scene_state.ubo_buffer != 0) {
+		GLES2::Utilities::get_singleton()->buffer_free_data(scene_state.ubo_buffer);
+	}
 
 	if (sky_globals.screen_triangle != 0) {
 		glDeleteBuffers(1, &sky_globals.screen_triangle);

@@ -53,13 +53,13 @@
  * 
  *  63          52 51                  32 31                  16 15                 0
  *  +-------------+----------------------+----------------------+-------------------+
- *  |  Shader ID  |      Material ID     |      Light Cache     | Surface/Primitive |
+ *  |  Shader ID  |      Material ID     |     Unused (TODO)    | Surface/Primitive |
  *  +-------------+----------------------+----------------------+-------------------+
  *
  * - Bits 63-52: Shader version ID / state mask (12 bits).
  *   Note: For GLES1, this includes cull modes and depth testing.
  * - Bits 51-32: Material ID (texture bindings, uniform blocks) (20 bits).
- * - Bits 31-16: Combined light cache hash (16 bits) (0 if in shadow/depth pass).
+ * - Bits 31-16: Unused (TODO)
  * - Bits 15-0: Surface index & primitive topology (16 bits).
  *
  * To guarantee optimal vertex fetching speeds, the FVF definitions intentionally pad these byte arrays to 16-byte boundaries.
@@ -223,6 +223,8 @@ public:
 		uint32_t first_vert;
 		uint32_t num_verts;
 		uint32_t num_indices;
+		uint32_t vbo_index;
+		BatcherEnums::FVF fvf;
 	};
 
 	struct BSortItem3D {
@@ -236,18 +238,22 @@ public:
 		uint64_t state_hash;
 	};
 
+	// Limits for the 3D batcher
 	struct BatchLimits {
 		uint32_t max_matrix_palette_vectors;
 		uint32_t max_vertices_per_buffer;
 		uint32_t max_indices_per_buffer;
 	};
 
+	// Tracker for VBOs
+	struct VBOPool {
+		uint32_t gl_vertex_buffer = 0;
+		uint32_t gl_index_buffer = 0;
+	};
+
 	struct BatchData3D {
 		BatchData3D() {
 			reset_scene();
-			gl_vertex_buffer = 0;
-			gl_instanced_vertex_buffer = 0;
-			gl_index_buffer = 0;
 			settings_use_batching = true;
 			settings_dynamic_vertex_limit = 1024;
 		}
@@ -260,6 +266,7 @@ public:
 			bypassed_transparent_items.clear();
 			sort_items.reset();
 			fvf = BatcherEnums::FVF_REGULAR;
+			current_vbo_index = 0; // Reset pool cursor at the start of a new pass
 		}
 
 		void reset_flush() {
@@ -271,10 +278,8 @@ public:
 			total_verts = 0;
 			total_indices = 0;
 		}
-
-		uint32_t gl_vertex_buffer;
-		uint32_t gl_instanced_vertex_buffer;
-		uint32_t gl_index_buffer;
+		LocalVector<VBOPool> vbo_pool;
+		uint32_t current_vbo_index = 0;
 
 		uint32_t max_vertices;
 		uint32_t max_indices;
@@ -327,7 +332,7 @@ protected:
 	void batch_scene_end();
 
 	template <class T_SURFACE>
-	void batch_scene_render_items(T_SURFACE **p_surfaces, int p_count, const Transform3D &p_camera_transform, bool p_transparent, BatcherEnums::PassMode p_pass_mode);
+	void batch_scene_render_items(T_SURFACE **p_surfaces, int p_count, const Transform3D &p_camera_transform, bool p_transparent, BatcherEnums::PassMode p_pass_mode, bool p_replay = false);
 
 	template <class T_SURFACE>
 	void record_items(T_SURFACE **p_surfaces, int p_count, const Transform3D &p_camera_transform, bool p_transparent);

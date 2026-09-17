@@ -71,9 +71,32 @@ void RasterizerSceneBatcherCommon<T_API>::batch_scene_end() {
 
 template <typename T_API>
 template <class T_SURFACE>
-void RasterizerSceneBatcherCommon<T_API>::batch_scene_render_items(T_SURFACE **p_surfaces, int p_count, const Transform3D &p_camera_transform, bool p_transparent, typename BatcherEnums::PassMode p_pass_mode) {
+void RasterizerSceneBatcherCommon<T_API>::batch_scene_render_items(T_SURFACE **p_surfaces, int p_count, const Transform3D &p_camera_transform, bool p_transparent, typename BatcherEnums::PassMode p_pass_mode, bool p_replay) {
 	if (!bdata.settings_use_batching || p_count == 0) {
 		get_this()->scene_render_items_implementation(p_surfaces, p_count, p_camera_transform, p_transparent);
+		return;
+	}
+
+	if (p_replay) {
+		// During additive light or shadow passes, we can bypass the CPU overhead of 
+		// sorting and packing geometry. The VBOs were already populated during the 
+		// base opaque pass, so we just iterate over the established batch list and 
+		// re-issue the draw calls with the new pass state.
+		bdata.pass_mode = p_pass_mode;
+		_render_item_state.reset();
+		for (uint32_t b = 0; b < (uint32_t)bdata.batches.size(); b++) {
+			Batch3D &batch = bdata.batches[b];
+			T_SURFACE *first_surface = static_cast<T_SURFACE *>(bdata.sort_items[batch.first_item_index].item);
+			typename T_API::MaterialData *material = get_this()->_batch_get_material_data(first_surface);
+			RS::PrimitiveType primitive = first_surface->primitive;
+			
+			// Restore the FVF state for this specific batch so the driver knows 
+			// how to correctly interpret the VBO layout and apply transforms.
+			bdata.fvf = batch.fvf;
+			_render_item_state.curr_batch = &batch;
+			get_this()->_batch_render_items(material, primitive, batch, p_transparent);
+		}
+		render_bypassed_items<T_SURFACE>(p_transparent);
 		return;
 	}
 
@@ -179,7 +202,32 @@ void RasterizerSceneBatcherCommon<T_API>::join_and_flush_sorted_items(bool p_tra
 	for (uint32_t i = 0; i < (uint32_t)bdata.sort_items.size(); i++) {
 		T_SURFACE *surface = static_cast<T_SURFACE *>(bdata.sort_items[i].item);
 
-		if (!try_join_item<T_SURFACE>(surface, _render_item_state) || !_render_item_state.curr_batch) {
+		uint32_t base_verts = 0;
+		uint32_t base_indices = 0;
+
+		// Determine capacity beforehand
+		get_this()->_batch_get_instance_geometry_capacity(surface, base_verts, base_indices);
+
+		uint32_t instances = surface->owner->instance_count > 0 ? surface->owner->instance_count : 1;
+		uint32_t incoming_verts = base_verts * instances;
+		uint32_t incoming_indices = base_indices * instances;
+		uint32_t incoming_uniform_vectors = instances * 3;
+
+		bool capacity_full = false;
+		if (_render_item_state.curr_batch) {
+			// A batch must be broken and flushed if appending the new item would exceed:
+			// - The maximum allocated vertex buffer size.
+			// - The maximum allocated index buffer size.
+			// - The maximum number of uniforms available on the hardware for matrix palettes.
+			if ((_render_item_state.curr_batch->num_verts + incoming_verts > (uint32_t)bdata.unit_vertices.max_size()) ||
+				(_render_item_state.curr_batch->num_indices + incoming_indices > (uint32_t)bdata.indices.max_size()) ||
+				(_render_item_state.consumed_uniform_vectors + incoming_uniform_vectors > bdata.hardware_limits.max_matrix_palette_vectors)) {
+				capacity_full = true;
+			}
+		}
+
+		if (capacity_full || !try_join_item<T_SURFACE>(surface, _render_item_state) || !_render_item_state.curr_batch) {
+			// Request and fill the new batch
 			_render_item_state.curr_batch = _batch_request_new();
 			if (!_render_item_state.curr_batch) {
 				break;
@@ -194,9 +242,13 @@ void RasterizerSceneBatcherCommon<T_API>::join_and_flush_sorted_items(bool p_tra
 			_render_item_state.current_state_hash = bdata.sort_items[i].state_hash;
 			_render_item_state.current_material_data = get_this()->_batch_get_material_data(surface);
 			_render_item_state.current_primitive = surface->primitive;
+			_render_item_state.consumed_uniform_vectors = 0;
 		}
 
 		_render_item_state.curr_batch->num_items++;
+		_render_item_state.curr_batch->num_verts += incoming_verts;
+		_render_item_state.curr_batch->num_indices += incoming_indices;
+		_render_item_state.consumed_uniform_vectors += incoming_uniform_vectors;
 	}
 	
 	// =========================
@@ -211,30 +263,16 @@ void RasterizerSceneBatcherCommon<T_API>::join_and_flush_sorted_items(bool p_tra
 		bool use_hardware_transform = (batch.num_items == 1);
 
 		_render_item_state.curr_batch = &batch;
+		_render_item_state.consumed_uniform_vectors = 0;
+
+		// Reset accumulated sizes so we correctly track them during VBO population
+		batch.num_verts = 0;
+		batch.num_indices = 0;
 
 		for (uint32_t i = 0; i < batch.num_items; i++) {
 			T_SURFACE *surface = static_cast<T_SURFACE *>(bdata.sort_items[batch.first_item_index + i].item);
-
-			if (prefill_joined_item<T_SURFACE>(surface, use_hardware_transform, i)) {
-				// Buffer full! Flush what we have so far
-				uint32_t original_num_items = batch.num_items;
-				batch.num_items = i;
-
-				flush_render_batches<T_SURFACE>(material, primitive, batch, p_transparent);
-
-				// Reset batch pointers for the remainder
-				batch.first_item_index += i;
-				batch.num_items = original_num_items - i;
-				batch.first_vert = bdata.total_verts;
-				batch.num_verts = 0;
-				batch.num_indices = 0;
-
-				// Reset index for the new sliced batch context
-				i = 0;
-
-				// Retry current item
-				prefill_joined_item<T_SURFACE>(surface, use_hardware_transform, i);
-			}
+			// Retry current item
+			prefill_joined_item<T_SURFACE>(surface, use_hardware_transform, i);
 		}
 
 		// Flush the batch
@@ -304,7 +342,6 @@ bool RasterizerSceneBatcherCommon<T_API>::prefill_joined_item(T_SURFACE *p_surfa
 	// Only prepare when this is the first item in the batch.
 	// Subsequent items don't need to override.
 	if (bdata.total_verts == 0) {
-		// TODO(BATCHER): Could this also be done as constexpr?
 		if (bdata.pass_mode == BatcherEnums::PassMode::PASS_MODE_SHADOW || bdata.pass_mode == BatcherEnums::PassMode::PASS_MODE_DEPTH) {
 			bool uses_alpha_clip = p_surface->material && p_surface->material->shader_data && p_surface->material->shader_data->uses_alpha_clip;
 			if (uses_alpha_clip) {
@@ -321,6 +358,7 @@ bool RasterizerSceneBatcherCommon<T_API>::prefill_joined_item(T_SURFACE *p_surfa
 			bdata.fvf = BatcherEnums::FVF_REGULAR;
 			bdata.unit_vertices.prepare(sizeof(BatchVertex3D));
 		}
+		_render_item_state.curr_batch->fvf = bdata.fvf;
 	}
 
 	// Validate VBO bounds against the dynamic unit cursor
@@ -360,7 +398,7 @@ void RasterizerSceneBatcherCommon<T_API>::flush_render_batches(typename T_API::M
 	}
 
 	// Upload batched VBOs
-	get_this()->_batch_upload_buffers();
+	get_this()->_batch_upload_buffers(p_batch);
 
 	// Delegate the API-specific state binding and multi-draw dispatching to the driver
 	get_this()->_batch_render_items(p_material_data, p_primitive, p_batch, p_transparent);

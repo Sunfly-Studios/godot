@@ -2180,17 +2180,7 @@ uint64_t RasterizerSceneGLES1::_batch_get_state_hash(const GeometryInstanceSurfa
 	uint64_t mat_id = p_surface->material ? static_cast<uint64_t>((uintptr_t)p_surface->material >> 4) : 0;
 	hash |= (mat_id & 0xFFFFF) << 32;
 
-	// Bits 31-16: Combined light cache hash (16 bits)
-	if (p_surface->owner && bdata.pass_mode == PASS_MODE_COLOR) {
-		uint64_t light_hash = 0;
-		for (uint32_t i = 0; i < p_surface->owner->omni_light_gl_cache.size(); i++) {
-			light_hash = (light_hash * 31) + p_surface->owner->omni_light_gl_cache[i];
-		}
-		for (uint32_t i = 0; i < p_surface->owner->spot_light_gl_cache.size(); i++) {
-			light_hash = (light_hash * 31) + p_surface->owner->spot_light_gl_cache[i];
-		}
-		hash |= (light_hash & 0xFFFF) << 16;
-	}
+	// Bits 31-16: Unused (TODO)
 
 	// Bits 15-0: Mesh surface ID / primitive topology (16 bits)
 	uint64_t surface_id = p_surface->surface_index;
@@ -2224,21 +2214,77 @@ void RasterizerSceneGLES1::_batch_fill_instance_geometry(const GeometryInstanceS
 	const Vector2 *uv_ptr = uvs.size() > 0 ? uvs.ptr() : nullptr;
 	const Color *col_ptr = colors.size() > 0 ? colors.ptr() : nullptr;
 
-	if (bdata.fvf == BatcherEnums::FVF_DEPTH_ONLY) {
-		RasterizerSceneBatcherCommon::BatchVertex3DDepth *bvs_depth = (RasterizerSceneBatcherCommon::BatchVertex3DDepth *)r_bvs;
-		for (uint32_t i = 0; i < v_count; i++) {
-			_batch_fill_vertex_depth(bvs_depth[i], pos_ptr, i, (float)p_item_index);
-		}
-	} else if (bdata.fvf == BatcherEnums::FVF_DEPTH_ALPHA) {
-		RasterizerSceneBatcherCommon::BatchVertex3DDepthAlpha *bvs_depth_alpha = (RasterizerSceneBatcherCommon::BatchVertex3DDepthAlpha *)r_bvs;
-		for (uint32_t i = 0; i < v_count; i++) {
-			_batch_fill_vertex_depth_alpha(bvs_depth_alpha[i], pos_ptr, uv_ptr, i, (float)p_item_index);
+#define BATCH_TYPE_3D_DEPTH RasterizerSceneBatcherCommon::BatchVertex3DDepth
+#define BATCH_TYPE_3D_DEPTH_ALPHA RasterizerSceneBatcherCommon ::BatchVertex3DDepthAlpha
+
+	if (p_use_hardware_transform) {
+		if (bdata.fvf == BatcherEnums::FVF_DEPTH_ONLY) {
+			BATCH_TYPE_3D_DEPTH *bvs_depth = (BATCH_TYPE_3D_DEPTH *)r_bvs;
+			for (uint32_t i = 0; i < v_count; i++) {
+				_batch_fill_vertex_depth(bvs_depth[i], pos_ptr, i, (float)p_item_index);
+			}
+		} else if (bdata.fvf == BatcherEnums::FVF_DEPTH_ALPHA) {
+			BATCH_TYPE_3D_DEPTH_ALPHA *bvs_depth_alpha = (BATCH_TYPE_3D_DEPTH_ALPHA *)r_bvs;
+			for (uint32_t i = 0; i < v_count; i++) {
+				_batch_fill_vertex_depth_alpha(bvs_depth_alpha[i], pos_ptr, uv_ptr, i, (float)p_item_index);
+			}
+		} else {
+			for (uint32_t i = 0; i < v_count; i++) {
+				_batch_fill_vertex(r_bvs[i], pos_ptr, norm_ptr, tan_ptr, uv_ptr, col_ptr, i, (float)p_item_index);
+			}
 		}
 	} else {
-		for (uint32_t i = 0; i < v_count; i++) {
-			_batch_fill_vertex(r_bvs[i], pos_ptr, norm_ptr, tan_ptr, uv_ptr, col_ptr, i, (float)p_item_index);
+		Transform3D world_xform = p_surface->owner->transform;
+
+		if (bdata.fvf == BatcherEnums::FVF_DEPTH_ONLY) {
+			BATCH_TYPE_3D_DEPTH *bvs_depth = (BATCH_TYPE_3D_DEPTH *)r_bvs;
+			for (uint32_t i = 0; i < v_count; i++) {
+				_batch_fill_vertex_depth(bvs_depth[i], pos_ptr, i, (float)p_item_index);
+				bvs_depth[i].pos.set(world_xform.xform(pos_ptr[i]));
+			}
+		} else if (bdata.fvf == BatcherEnums::FVF_DEPTH_ALPHA) {
+			BATCH_TYPE_3D_DEPTH_ALPHA *bvs_depth_alpha = (BATCH_TYPE_3D_DEPTH_ALPHA *)r_bvs;
+			for (uint32_t i = 0; i < v_count; i++) {
+				_batch_fill_vertex_depth_alpha(bvs_depth_alpha[i], pos_ptr, uv_ptr, i, (float)p_item_index);
+				bvs_depth_alpha[i].pos.set(world_xform.xform(pos_ptr[i]));
+			}
+		} else {
+			Basis normal_basis;
+			normal_basis.set_column(0, world_xform.basis.get_column(1).cross(world_xform.basis.get_column(2)));
+			normal_basis.set_column(1, world_xform.basis.get_column(2).cross(world_xform.basis.get_column(0)));
+			normal_basis.set_column(2, world_xform.basis.get_column(0).cross(world_xform.basis.get_column(1)));
+
+			for (uint32_t i = 0; i < v_count; i++) {
+				_batch_fill_vertex(r_bvs[i], pos_ptr, norm_ptr, tan_ptr, uv_ptr, col_ptr, i, (float)p_item_index);
+
+				r_bvs[i].pos.set(world_xform.xform(pos_ptr[i]));
+
+				if (norm_ptr) {
+					Vector3 n = normal_basis.xform(norm_ptr[i]);
+					if (n.length_squared() > 0.0f) {
+						n.normalize();
+					} else {
+						n = Vector3(0, 1, 0);
+					}
+					r_bvs[i].normal.set(n);
+				}
+
+				if (tan_ptr) {
+					Vector3 t = normal_basis.xform(
+							Vector3(tan_ptr[i * 4 + 0], tan_ptr[i * 4 + 1], tan_ptr[i * 4 + 2]));
+					if (t.length_squared() > 0.0f) {
+						t.normalize();
+					} else {
+						t = Vector3(1, 0, 0);
+					}
+					r_bvs[i].tangent.set(t.x, t.y, t.z, tan_ptr[i * 4 + 3]);
+				}
+			}
 		}
 	}
+
+#undef BATCH_TYPE_3D_DEPTH
+#undef BATCH_TYPE_3D_DEPTH_ALPHA
 
 	if (r_inds && indices.size() > 0) {
 		uint32_t i_count = indices.size();
@@ -2341,26 +2387,35 @@ void RasterizerSceneGLES1::_batch_fill_multimesh_geometry(const GeometryInstance
 	}
 }
 
-void RasterizerSceneGLES1::_batch_upload_buffers() {
-	if (!bdata.gl_vertex_buffer) {
+void RasterizerSceneGLES1::_batch_upload_buffers(RasterizerSceneBatcherCommon<BatcherAPISceneGLES1>::Batch3D &r_batch) {
+	if (bdata.current_vbo_index >= bdata.vbo_pool.size()) {
+		RasterizerSceneBatcherCommon<BatcherAPISceneGLES1>::VBOPool new_pool;
 		if (GLES1_CONFIG->support_vbo) {
-			glGenBuffers(1, &bdata.gl_vertex_buffer);
-			glGenBuffers(1, &bdata.gl_index_buffer);
-		} else {
-			bdata.gl_vertex_buffer = 0;
-			bdata.gl_index_buffer = 0;
+			glGenBuffers(1, &new_pool.gl_vertex_buffer);
+			glGenBuffers(1, &new_pool.gl_index_buffer);
 		}
+		bdata.vbo_pool.push_back(new_pool);
 	}
 
-	if (bdata.gl_vertex_buffer != 0) {
-		glBindBuffer(GL_ARRAY_BUFFER, bdata.gl_vertex_buffer);
-		glBufferData(GL_ARRAY_BUFFER, bdata.unit_vertices.size() * bdata.unit_vertices.get_unit_size_bytes(), bdata.unit_vertices.get_data(), GL_DYNAMIC_DRAW);
-		GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_batch_upload_buffers: glBufferData ARRAY_BUFFER");
+	r_batch.vbo_index = bdata.current_vbo_index;
+	RasterizerSceneBatcherCommon<BatcherAPISceneGLES1>::VBOPool &pool = bdata.vbo_pool[bdata.current_vbo_index];
 
-		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, bdata.gl_index_buffer);
-		glBufferData(GL_ELEMENT_ARRAY_BUFFER, bdata.indices.size() * sizeof(uint16_t), bdata.indices.get_data(), GL_DYNAMIC_DRAW);
-		GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_batch_upload_buffers: glBufferData ELEMENT_ARRAY_BUFFER");
+	if (pool.gl_vertex_buffer != 0) {
+		glBindBuffer(GL_ARRAY_BUFFER, pool.gl_vertex_buffer);
+
+		// Orphan the vertex buffer
+		glBufferData(GL_ARRAY_BUFFER, bdata.unit_vertices.max_size() * bdata.unit_vertices.get_unit_size_bytes(), nullptr, GL_DYNAMIC_DRAW);
+		glBufferSubData(GL_ARRAY_BUFFER, 0, bdata.unit_vertices.size() * bdata.unit_vertices.get_unit_size_bytes(), bdata.unit_vertices.get_data());
+		GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_batch_upload_buffers: glBufferSubData ARRAY_BUFFER");
+
+		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, pool.gl_index_buffer);
+		// Orphan the index buffer
+		glBufferData(GL_ELEMENT_ARRAY_BUFFER, bdata.indices.max_size() * sizeof(uint16_t), nullptr, GL_DYNAMIC_DRAW);
+		glBufferSubData(GL_ELEMENT_ARRAY_BUFFER, 0, bdata.indices.size() * sizeof(uint16_t), bdata.indices.get_data());
+		GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_batch_upload_buffers: glBufferSubData ELEMENT_ARRAY_BUFFER");
 	}
+
+	bdata.current_vbo_index++;
 }
 
 void RasterizerSceneGLES1::_batch_bind_material(GLES1::SceneMaterialData *p_material_data, const Transform3D &p_world_transform, bool p_transparent) {
@@ -2415,10 +2470,18 @@ void RasterizerSceneGLES1::_batch_bind_material(GLES1::SceneMaterialData *p_mate
 	}
 
 	if (bdata.pass_mode == PASS_MODE_SHADOW_PROJECTION && GLES1_CONFIG->max_texture_units > 2) {
+		// TU1
 		glActiveTexture(GL_TEXTURE1);
 		glEnable(GL_TEXTURE_2D);
 		glBindTexture(GL_TEXTURE_2D, scene_state.current_shadow_texture);
 		glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE);
+
+		// TU2
+		glActiveTexture(GL_TEXTURE2);
+		glEnable(GL_TEXTURE_2D);
+		glBindTexture(GL_TEXTURE_2D, scene_state.z_bound_texture);
+		glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE);
+		GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_batch_bind_material: GL_TEXTURE2 projective texture restore");
 
 		glActiveTexture(GL_TEXTURE0);
 	}
@@ -2431,77 +2494,24 @@ void RasterizerSceneGLES1::_batch_render_items(GLES1::SceneMaterialData *p_mater
 	Transform3D view_matrix;
 	_gl_reconstruct_view_matrix(view_matrix);
 
-	if (
-		GLES1_CONFIG->support_matrix_palette &&
-		!use_hardware_transform &&
-		p_batch.num_items <= (uint32_t)GLES1_CONFIG->max_palette_matrices &&
-		bdata.pass_mode != PASS_MODE_SHADOW_PROJECTION
-	) {
-		// Lots of overhead, lots of stuff to draw.
-		// Do the fast Matrix Palette path if supported.
-		_batch_bind_material(p_material_data, Transform3D(), p_transparent);
-
-		glEnable(GL_MATRIX_PALETTE_OES);
-		glMatrixMode(GL_MATRIX_PALETTE_OES);
-
-		for (uint32_t i = 0; i < p_batch.num_items; i++) {
-			GeometryInstanceSurface *surf = static_cast<GeometryInstanceSurface *>(bdata.sort_items[p_batch.first_item_index + i].item);
-			Transform3D world_xform = surf->owner->transform;
-			Transform3D model_view;
-
-			if (bdata.fvf == BatcherEnums::FVF::FVF_INSTANCED) {
-				model_view = view_matrix;
-			} else {
-				model_view = (view_matrix * world_xform);
-			}
-
-			glCurrentPaletteMatrixOES(i);
-			_gl_load_transform(model_view);
-		}
-
-		glMatrixMode(GL_MODELVIEW);
-
-		GeometryInstanceSurface *first_surf = static_cast<GeometryInstanceSurface *>(bdata.sort_items[p_batch.first_item_index].item);
-		bool has_color = first_surf->color_cache.size() > 0;
-		_batch_render_generic(p_primitive, 0, 0, has_color);
-
-		glDisable(GL_MATRIX_PALETTE_OES);
-		GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_batch_render_items: Option 1 Matrix Palette");
-	} else if (!use_hardware_transform) {
+	if (!use_hardware_transform) {
 		// State-only multi-draw fallback
 		_batch_bind_material(p_material_data, Transform3D(), p_transparent);
 
-		uint32_t current_index_offset = 0;
+		glMatrixMode(GL_MODELVIEW);
+		glPushMatrix();
 
-		for (uint32_t i = 0; i < p_batch.num_items; i++) {
-			GeometryInstanceSurface *surf = static_cast<GeometryInstanceSurface *>(bdata.sort_items[p_batch.first_item_index + i].item);
-			Transform3D world_xform = surf->owner->transform;
-			Transform3D model_view;
+		// Only supply the camera view matrix
+		_gl_load_transform(view_matrix);
+		GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_batch_render_items: Option 2 glPushMatrix and Load view_matrix");
 
-			if (bdata.fvf == BatcherEnums::FVF::FVF_INSTANCED) {
-				model_view = view_matrix;
-			} else {
-				model_view = (view_matrix * world_xform);
-			}
+		GeometryInstanceSurface *first_surf = static_cast<GeometryInstanceSurface *>(bdata.sort_items[p_batch.first_item_index].item);
+		bool has_color = first_surf->color_cache.size() > 0;
 
-			glMatrixMode(GL_MODELVIEW);
-			glPushMatrix();
-			_gl_load_transform(model_view);
-			GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_batch_render_items: Option 2 glPushMatrix and Load");
+		_batch_render_generic(p_primitive, 0, p_batch.num_indices, has_color);
 
-			uint32_t item_verts = 0;
-			uint32_t item_indices = 0;
-			_batch_get_instance_geometry_capacity(surf, item_verts, item_indices);
-
-			bool has_color = surf->color_cache.size() > 0;
-			_batch_render_generic(p_primitive, current_index_offset, item_indices, has_color);
-
-			glPopMatrix();
-			GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_batch_render_items: Option 2 glPopMatrix");
-
-			current_index_offset += item_indices;
-		}
-		GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_batch_render_items: Option 2 Multi-Draw");
+		glPopMatrix();
+		GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_batch_render_items: Option 2 glPopMatrix single draw");
 	} else {
 		// Single-item fallback
 		// Usually if there is no overhead to save when drawing
@@ -2524,7 +2534,7 @@ void RasterizerSceneGLES1::_batch_render_items(GLES1::SceneMaterialData *p_mater
 		GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_batch_render_items: glLoadMatrixf MODELVIEW single-item");
 
 		bool has_color = first_surf->color_cache.size() > 0;
-		_batch_render_generic(p_primitive, 0, 0, has_color);
+		_batch_render_generic(p_primitive, 0, p_batch.num_indices, has_color);
 
 		glPopMatrix();
 		GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_batch_render_items: Option 3 Single-Item glPopMatrix");
@@ -2532,12 +2542,20 @@ void RasterizerSceneGLES1::_batch_render_items(GLES1::SceneMaterialData *p_mater
 }
 
 void RasterizerSceneGLES1::_batch_render_generic(RS::PrimitiveType p_primitive, uint32_t p_offset, uint32_t p_count, bool p_has_color) {
-	if (bdata.indices.size() == 0) {
+	uint32_t vbo_idx = _render_item_state.curr_batch ? _render_item_state.curr_batch->vbo_index : 0;
+	uint32_t gl_vbo = bdata.vbo_pool.size() > vbo_idx ? bdata.vbo_pool[vbo_idx].gl_vertex_buffer : 0;
+	uint32_t gl_ibo = bdata.vbo_pool.size() > vbo_idx ? bdata.vbo_pool[vbo_idx].gl_index_buffer : 0;
+
+	if (gl_ibo == 0 && bdata.indices.size() == 0) {
 		return;
 	}
 
 	if (p_count == 0) {
-		p_count = bdata.indices.size();
+		if (gl_ibo != 0) {
+			p_count = _render_item_state.curr_batch->num_indices;
+		} else {
+			p_count = bdata.indices.size();
+		}
 	}
 
 	uint32_t stride = bdata.unit_vertices.get_unit_size_bytes();
@@ -2556,7 +2574,11 @@ void RasterizerSceneGLES1::_batch_render_generic(RS::PrimitiveType p_primitive, 
 		glEnableClientState(GL_NORMAL_ARRAY);
 		glEnableClientState(GL_TEXTURE_COORD_ARRAY);
 
-		if (p_has_color && bdata.pass_mode != PASS_MODE_SHADOW) {
+		if (
+			p_has_color &&
+			bdata.pass_mode != PASS_MODE_SHADOW &&
+			bdata.pass_mode != PASS_MODE_SHADOW_PROJECTION
+		) {
 			glEnableClientState(GL_COLOR_ARRAY);
 		} else {
 			glDisableClientState(GL_COLOR_ARRAY);
@@ -2595,8 +2617,8 @@ void RasterizerSceneGLES1::_batch_render_generic(RS::PrimitiveType p_primitive, 
 #define BATCH_DEPTH_OFFSET_OF(pointer) offsetof(RasterizerSceneBatcherCommon<BatcherAPISceneGLES1>::BatchVertex3DDepth, pointer)
 #define BATCH_DEPTH_ALPHA_OFFSET_OF(pointer) offsetof(RasterizerSceneBatcherCommon<BatcherAPISceneGLES1>::BatchVertex3DDepthAlpha, pointer)
 
-	if (bdata.gl_vertex_buffer != 0) {
-		glBindBuffer(GL_ARRAY_BUFFER, bdata.gl_vertex_buffer);
+	if (gl_vbo != 0) {
+		glBindBuffer(GL_ARRAY_BUFFER, gl_vbo);
 		if (bdata.fvf == BatcherEnums::FVF_INSTANCED) {
 			glVertexPointer(3, GL_FLOAT, stride, (void *)BATCH_INSTANCED_OFFSET_OF(pos));
 			glNormalPointer(GL_FLOAT, stride, (void *)BATCH_INSTANCED_OFFSET_OF(normal));
@@ -2707,8 +2729,8 @@ void RasterizerSceneGLES1::_batch_render_generic(RS::PrimitiveType p_primitive, 
 #undef BATCH_DEPTH_OFFSET_OF
 #undef BATCH_DEPTH_ALPHA_OFFSET_OF
 
-	if (bdata.gl_index_buffer != 0) {
-		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, bdata.gl_index_buffer);
+	if (gl_ibo != 0) {
+		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, gl_ibo);
 		glDrawElements(prim[int(p_primitive)], p_count, GL_UNSIGNED_SHORT, (void *)(p_offset * sizeof(uint16_t)));
 		GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_batch_render_generic: glDrawElements VBO");
 	} else {
@@ -2742,7 +2764,7 @@ void RasterizerSceneGLES1::_batch_render_generic(RS::PrimitiveType p_primitive, 
 		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
 	}
 
-	if (bdata.pass_mode != PASS_MODE_SHADOW) {
+	if (bdata.pass_mode != PASS_MODE_SHADOW && bdata.pass_mode != PASS_MODE_SHADOW_PROJECTION) {
 		glColor4f(1.0f, 1.0f, 1.0f, 1.0f);
 	}
 	GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_batch_render_generic: Unbind state");
@@ -2793,15 +2815,22 @@ void RasterizerSceneGLES1::_render_single_item_immediate(const GeometryInstanceS
 	}
 	scene_state.enable_gl_depth_test(shader->depth_test == GLES1::SceneShaderData::DEPTH_TEST_ENABLED);
 
-	// Clean-up the first texture if it was used for shadows
+	// Clean-up the texture units if it was used for shadows
 	if (
 		bdata.pass_mode == PASS_MODE_SHADOW_PROJECTION &&
-		GLES1_CONFIG->max_texture_units  >  2 &&
+		GLES1_CONFIG->max_texture_units > 2 &&
 		scene_state.current_shadow_texture != 0
 	) {
 		glActiveTexture(GL_TEXTURE1);
 		glEnable(GL_TEXTURE_2D);
 		glBindTexture(GL_TEXTURE_2D, scene_state.current_shadow_texture);
+		glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE);
+
+		glActiveTexture(GL_TEXTURE2);
+		glEnable(GL_TEXTURE_2D);
+		glBindTexture(GL_TEXTURE_2D, scene_state.z_bound_texture);
+		glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE);
+		GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_render_single_item_immediate: GL_TEXTURE2 projective texture restore");
 
 		glActiveTexture(GL_TEXTURE0);
 	}
@@ -2843,7 +2872,11 @@ void RasterizerSceneGLES1::_render_single_item_immediate(const GeometryInstanceS
 			glPushMatrix();
 			_gl_mult_transform(final_xform);
 
-			if (mm.uses_colors && bdata.pass_mode != PASS_MODE_SHADOW) {
+			if (
+				mm.uses_colors &&
+				bdata.pass_mode != PASS_MODE_SHADOW &&
+				bdata.pass_mode != PASS_MODE_SHADOW_PROJECTION
+			) {
 				glColor4f(inst_color.r, inst_color.g, inst_color.b, inst_color.a);
 			}
 
@@ -2873,7 +2906,7 @@ void RasterizerSceneGLES1::_render_single_item_immediate(const GeometryInstanceS
 	}
 
 	// Restore state
-	if (bdata.pass_mode != PASS_MODE_SHADOW) {
+	if (bdata.pass_mode != PASS_MODE_SHADOW && bdata.pass_mode != PASS_MODE_SHADOW_PROJECTION) {
 		glColor4f(1.0f, 1.0f, 1.0f, 1.0f);
 
 		// Disables fog
@@ -4874,7 +4907,9 @@ void RasterizerSceneGLES1::_render_additive_light_passes(RenderListParameters *p
 				}
 			}
 
-			_render_list_template<p_pass_mode>(p_params, p_render_data, 0, p_element_count, p_alpha_pass);
+			// We flag this as a replay pass so the batcher bypasses geometry repacking
+			// and uses the VBO offsets calculated during the base pass.
+			_render_list_template<p_pass_mode>(p_params, p_render_data, 0, p_element_count, p_alpha_pass, true);
 			GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_render_additive_light_passes: chunk boundary end");
 		}
 	}
@@ -5078,7 +5113,7 @@ void RasterizerSceneGLES1::_render_light_shadows(RenderListParameters *p_params,
 			glPopMatrix();
 		}
 
-		_render_list_template<p_pass_mode>(p_params, p_render_data, 0, p_element_count, p_alpha_pass);
+		_render_list_template<p_pass_mode>(p_params, p_render_data, 0, p_element_count, p_alpha_pass, true);
 
 		if (p_light.type == RS::LIGHT_DIRECTIONAL && max_clip_planes > 1) {
 			glDisable(GL_CLIP_PLANE0);
@@ -5136,7 +5171,7 @@ void RasterizerSceneGLES1::_render_light_shadows(RenderListParameters *p_params,
 }
 
 template <RasterizerSceneGLES1::PassMode p_pass_mode>
-void RasterizerSceneGLES1::_render_list_template(RenderListParameters *p_params, const RenderDataGLES1 *p_render_data, uint32_t p_from_element, uint32_t p_to_element, bool p_alpha_pass) {
+void RasterizerSceneGLES1::_render_list_template(RenderListParameters *p_params, const RenderDataGLES1 *p_render_data, uint32_t p_from_element, uint32_t p_to_element, bool p_alpha_pass, bool p_replay) {
 	if (p_from_element >= p_to_element) {
 		return;
 	}
@@ -5148,7 +5183,7 @@ void RasterizerSceneGLES1::_render_list_template(RenderListParameters *p_params,
 	GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_render_list_template: glFrontFace");
 
 	// Kick off the batched draw pipeline
-	batch_scene_render_items(surfaces, count, p_render_data->cam_transform, p_alpha_pass, p_pass_mode);
+	batch_scene_render_items(surfaces, count, p_render_data->cam_transform, p_alpha_pass, p_pass_mode, p_replay);
 
 	// Clean-up
 	glFrontFace(GL_CCW);
@@ -5255,6 +5290,14 @@ RasterizerSceneGLES1::RasterizerSceneGLES1() {
 
 RasterizerSceneGLES1::~RasterizerSceneGLES1() {
 	singleton = nullptr;
+
+	// 3D batcher VBO pools
+	for (uint32_t i = 0; i < bdata.vbo_pool.size(); i++) {
+		if (bdata.vbo_pool[i].gl_vertex_buffer != 0) {
+			glDeleteBuffers(1, &bdata.vbo_pool[i].gl_vertex_buffer);
+			glDeleteBuffers(1, &bdata.vbo_pool[i].gl_index_buffer);
+		}
+	}
 
 	// Scene Shader
 	GLES1::MaterialStorage::get_singleton()->shaders.scene_shader.version_free(scene_globals.shader_default_version);
