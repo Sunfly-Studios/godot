@@ -2183,7 +2183,10 @@ uint64_t RasterizerSceneGLES1::_batch_get_state_hash(const GeometryInstanceSurfa
 	uint64_t mat_id = p_surface->material ? static_cast<uint64_t>((uintptr_t)p_surface->material >> 4) : 0;
 	hash |= (mat_id & 0xFFFFF) << 32;
 
-	// Bits 31-16: Unused (TODO)
+	// Bits 31-16: Source mesh surface ID (16 bits)
+	// Groups identical source geometry
+	uint64_t mesh_id = p_surface->surface ? static_cast<uint64_t>((uintptr_t)p_surface->surface >> 4) : 0;
+	hash |= (mesh_id & 0xFFFF) << 16;
 
 	// Bits 15-0: Mesh surface ID / primitive topology (16 bits)
 	uint64_t surface_id = p_surface->surface_index;

@@ -30,10 +30,10 @@
 
 /*
  * CORE PIPELINE:
- * [ Incoming Surface ] -> Exceeds dynamic limits? -> [ Bypass queue (Direct immediate render) ]
+ * [ Incoming Surface ]   -> Exceeds dynamic limits? -> [ Bypass queue (Direct immediate render) ]
  *          | (No)
  *          v
- * [   Hash & Depth   ] -> Driver calculates a planar depth by projecting the instance's bounds onto the camera's forward vecto.
+ * [   Hash & Depth   ]   -> Driver calculates a planar depth by projecting the instance's bounds onto the camera's forward vecto.
  *          |                Eliminates issues regarding distortion artifacts.
  *          v
  * [    Sort Queue    ]   -> Opaque items are FTB (Front-to-Back) sorted to maximise early-Z rejection.
@@ -43,7 +43,7 @@
  * [    Pack VBOs     ]   -> Transforms instances and packs them into a RasterizerUnitArray.
  *          |                Forces a batch break if it exceeds the device's uniform vector's limit.
  *          v
- * [   Flush to GPU   ]   -> Triggers the draw call. VBOs and index buffers are reset via reset_flush().
+ * [   Flush to GPU   ]   -> Triggers the draw call. VBOs are retained in a memory pool for pass reuse (such as on additive lights/shadows).
  *                           Bypass queues are intentionally omitted here so multiple flushes don't break, and are only cleared by reset_scene().
  *
  * 64-BIT STATE HASHING:
@@ -51,15 +51,15 @@
  * operations in the lower bits. This is done to exploit standard `<` operator in the opaque sort for speed.
  * Placing the most expensive state changes in the highest bits natively groups identical configurations and prevents state thrashin.
  * 
- *  63          52 51                  32 31                  16 15                 0
- *  +-------------+----------------------+----------------------+-------------------+
- *  |  Shader ID  |      Material ID     |     Unused (TODO)    | Surface/Primitive |
- *  +-------------+----------------------+----------------------+-------------------+
+ *  63          52 51                  32 31                    16 15                 0
+ *  +-------------+----------------------+------------------------+-------------------+
+ *  |  Shader ID  |      Material ID     | Source mesh surface ID | Surface/Primitive |
+ *  +-------------+----------------------+------------------------+-------------------+
  *
  * - Bits 63-52: Shader version ID / state mask (12 bits).
  *   Note: For GLES1, this includes cull modes and depth testing.
  * - Bits 51-32: Material ID (texture bindings, uniform blocks) (20 bits).
- * - Bits 31-16: Unused (TODO)
+ * - Bits 31-16: Source mesh surface ID (groups identical source geometry).
  * - Bits 15-0: Surface index & primitive topology (16 bits).
  *
  * To guarantee optimal vertex fetching speeds, the FVF definitions intentionally pad these byte arrays to 16-byte boundaries.
