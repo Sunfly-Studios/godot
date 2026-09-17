@@ -49,6 +49,7 @@
 #include "storage/material_storage.h"
 #include "storage/render_scene_buffers_gles1.h"
 #include "storage/utilities.h"
+#include "function_router_gles1.h"
 
 struct RenderDataGLES1 {
 	Ref<RenderSceneBuffersGLES1> render_buffers;
@@ -513,18 +514,128 @@ private:
 	}
 
 	_FORCE_INLINE_ void _gl_reconstruct_view_matrix(Transform3D &view_matrix) {
-		view_matrix.basis.rows[0][0] = scene_state.ubo.view_matrix[0];
-		view_matrix.basis.rows[1][0] = scene_state.ubo.view_matrix[1];
-		view_matrix.basis.rows[2][0] = scene_state.ubo.view_matrix[2];
-		view_matrix.basis.rows[0][1] = scene_state.ubo.view_matrix[4];
-		view_matrix.basis.rows[1][1] = scene_state.ubo.view_matrix[5];
-		view_matrix.basis.rows[2][1] = scene_state.ubo.view_matrix[6];
-		view_matrix.basis.rows[0][2] = scene_state.ubo.view_matrix[8];
-		view_matrix.basis.rows[1][2] = scene_state.ubo.view_matrix[9];
-		view_matrix.basis.rows[2][2] = scene_state.ubo.view_matrix[10];
-		view_matrix.origin.x = scene_state.ubo.view_matrix[12];
-		view_matrix.origin.y = scene_state.ubo.view_matrix[13];
-		view_matrix.origin.z = scene_state.ubo.view_matrix[14];
+		const float *m = scene_state.ubo.view_matrix;
+		view_matrix.basis.set_column(0, Vector3(m[0], m[1], m[2]));
+		view_matrix.basis.set_column(1, Vector3(m[4], m[5], m[6]));
+		view_matrix.basis.set_column(2, Vector3(m[8], m[9], m[10]));
+		view_matrix.origin = Vector3(m[12], m[13], m[14]);
+	}
+
+	// RAII like data structures to manage these matrix
+	// stacks a bit easier.
+	struct GLMatrixScope {
+		bool active = false;
+		GLenum mode = GL_INVALID_ENUM;
+		_FORCE_INLINE_ GLMatrixScope(GLenum p_mode, bool p_active = true) {
+			active = p_active;
+			if (!active) {
+				return;
+			}
+			mode = p_mode;
+			glMatrixMode(mode);
+			glPushMatrix();
+		}
+		_FORCE_INLINE_ ~GLMatrixScope() {
+			if (!active) {
+				return;
+			}
+			glMatrixMode(mode);
+			glPopMatrix();
+		}
+	};
+
+	struct GLProjectiveTextureScope {
+		bool active = false;
+		GLenum texture_unit = GL_INVALID_ENUM;
+		_FORCE_INLINE_ GLProjectiveTextureScope(bool p_active, GLenum p_texture_unit) {
+			active = p_active;
+			if (!active) {
+				return;
+			}
+			texture_unit = p_texture_unit;
+			glActiveTexture(texture_unit);
+			glClientActiveTexture(texture_unit);
+			glEnable(GL_TEXTURE_2D);
+
+			glMatrixMode(GL_TEXTURE);
+			glPushMatrix();
+		}
+		_FORCE_INLINE_ ~GLProjectiveTextureScope() {
+			if (!active) {
+				return;
+			}
+			glActiveTexture(texture_unit);
+			glClientActiveTexture(texture_unit);
+
+			glDisable(GL_TEXTURE_GEN_S);
+			glDisable(GL_TEXTURE_GEN_T);
+			glDisable(GL_TEXTURE_GEN_R);
+			glDisable(GL_TEXTURE_GEN_Q);
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_COMPARE_MODE, GL_NONE);
+
+			glMatrixMode(GL_TEXTURE);
+			glPopMatrix();
+
+			glBindTexture(GL_TEXTURE_2D, 0);
+			glDisable(GL_TEXTURE_2D);
+
+			glMatrixMode(GL_MODELVIEW);
+			glActiveTexture(GL_TEXTURE0);
+			glClientActiveTexture(GL_TEXTURE0);
+		}
+	};
+
+	struct GLClipPlaneScope {
+		bool active = false;
+		_FORCE_INLINE_ GLClipPlaneScope(bool p_active, const GLfloat *p_near, const GLfloat *p_far) {
+			active = p_active;
+			if (active) {
+				glEnable(GL_CLIP_PLANE0);
+				glEnable(GL_CLIP_PLANE1);
+
+				GLES1::Router::clip_plane(GL_CLIP_PLANE0, p_near);
+				GLES1::Router::clip_plane(GL_CLIP_PLANE1, p_far);
+			}
+		}
+		_FORCE_INLINE_ ~GLClipPlaneScope() {
+			if (active) {
+				glDisable(GL_CLIP_PLANE0);
+				glDisable(GL_CLIP_PLANE1);
+			}
+		}
+	};
+
+	enum GLClientStateFlags {
+		GL_CLIENT_STATE_VERTEX = 1 << 0,
+		GL_CLIENT_STATE_COLOR = 1 << 1,
+		GL_CLIENT_STATE_NORMAL = 1 << 2,
+		GL_CLIENT_STATE_TEXCOORD = 1 << 3,
+	};
+
+	_FORCE_INLINE_ void _gl_set_client_states(uint32_t p_flags) {
+		if (p_flags & GL_CLIENT_STATE_VERTEX) {
+			glEnableClientState(GL_VERTEX_ARRAY);
+		} else {
+			glDisableClientState(GL_VERTEX_ARRAY);
+		}
+		
+		if (p_flags & GL_CLIENT_STATE_COLOR) {
+			glEnableClientState(GL_COLOR_ARRAY);
+		} else {
+			glDisableClientState(GL_COLOR_ARRAY);
+		}
+
+		if (p_flags & GL_CLIENT_STATE_NORMAL) {
+			glEnableClientState(GL_NORMAL_ARRAY);
+		} else {
+			glDisableClientState(GL_NORMAL_ARRAY);
+		}
+
+		if (p_flags & GL_CLIENT_STATE_TEXCOORD) {
+			glEnableClientState(GL_TEXTURE_COORD_ARRAY);
+		} else {
+			glDisableClientState(GL_TEXTURE_COORD_ARRAY);
+		}
 	}
 
 	_FORCE_INLINE_ void _gl_setup_material_pass(bool p_is_additive) {
@@ -605,6 +716,7 @@ private:
 		glLightf(gl_light, GL_LINEAR_ATTENUATION, 0.0f);
 		glLightf(gl_light, GL_QUADRATIC_ATTENUATION, 0.0f);
 		glLightf(gl_light, GL_SPOT_CUTOFF, 180.0f);
+		glLightf(gl_light, GL_SPOT_EXPONENT, 0.0f);
 
 		GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_gl_setup_directional_light: setup directional light");
 	}
@@ -622,6 +734,7 @@ private:
 		glLightf(gl_light, GL_LINEAR_ATTENUATION, p_light.attenuation * p_light.inv_radius);
 		glLightf(gl_light, GL_QUADRATIC_ATTENUATION, 0.0f);
 		glLightf(gl_light, GL_SPOT_CUTOFF, 180.0f);
+		glLightf(gl_light, GL_SPOT_EXPONENT, 0.0f);
 
 		GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_gl_setup_omni_light: setup omni light");
 	}
@@ -834,7 +947,11 @@ private:
 			glDepthMask(GL_FALSE);
 			current_depth_draw_enabled = false;
 			glDisable(GL_DEPTH_TEST);
+			glDepthFunc(GL_GEQUAL);
 			current_depth_test_enabled = false;
+
+			glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+			glPolygonOffset(0.0f, 0.0f);
 
 			glDisable(GL_FOG);
 

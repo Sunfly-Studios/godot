@@ -1354,9 +1354,9 @@ Ref<Image> RasterizerSceneGLES2::sky_bake_panorama(RID p_sky, float p_energy, bo
 		for (int i = 0; i < p_size.width; i++) {
 			for (int j = 0; j < p_size.height; j++) {
 				Color c = img->get_pixel(i, j);
-				c.r *= p_energy;
-				c.g *= p_energy;
-				c.b *= p_energy;
+				float a = c.a;
+				c *= p_energy;
+				c.a = a;
 				img->set_pixel(i, j, c);
 			}
 		}
@@ -1424,9 +1424,9 @@ Ref<Image> RasterizerSceneGLES2::environment_bake_panorama(RID p_env, bool p_bak
 		const float ambient_energy = environment_get_ambient_light_energy(p_env);
 		ambient_color = environment_get_ambient_light(p_env);
 		ambient_color = ambient_color.srgb_to_linear();
-		ambient_color.r *= ambient_energy;
-		ambient_color.g *= ambient_energy;
-		ambient_color.b *= ambient_energy;
+		float a = ambient_color.a;
+		ambient_color *= ambient_energy;
+		ambient_color.a = a;
 	}
 
 	if (use_cube_map) {
@@ -1443,9 +1443,9 @@ Ref<Image> RasterizerSceneGLES2::environment_bake_panorama(RID p_env, bool p_bak
 		const float bg_energy_multiplier = environment_get_bg_energy_multiplier(p_env);
 		Color panorama_color = ((environment_background == RS::ENV_BG_CLEAR_COLOR) ? RSG::texture_storage->get_default_clear_color() : environment_get_bg_color(p_env));
 		panorama_color = panorama_color.srgb_to_linear();
-		panorama_color.r *= bg_energy_multiplier;
-		panorama_color.g *= bg_energy_multiplier;
-		panorama_color.b *= bg_energy_multiplier;
+		float p_a = panorama_color.a;
+		panorama_color *= bg_energy_multiplier;
+		panorama_color.a = p_a;
 
 		if (use_ambient_light) {
 			panorama_color = ambient_color.lerp(panorama_color, ambient_color_sky_mix);
@@ -2392,18 +2392,7 @@ void RasterizerSceneGLES2::_setup_environment(const RenderDataGLES2 *p_render_da
 
 			Basis sky_transform = environment_get_sky_orientation(p_render_data->environment);
 			sky_transform = sky_transform.inverse() * p_render_data->cam_transform.basis;
-			scene_state.ubo.radiance_inverse_xform[0] = sky_transform.rows[0][0];
-			scene_state.ubo.radiance_inverse_xform[1] = sky_transform.rows[1][0];
-			scene_state.ubo.radiance_inverse_xform[2] = sky_transform.rows[2][0];
-			scene_state.ubo.radiance_inverse_xform[3] = 0.0;
-			scene_state.ubo.radiance_inverse_xform[4] = sky_transform.rows[0][1];
-			scene_state.ubo.radiance_inverse_xform[5] = sky_transform.rows[1][1];
-			scene_state.ubo.radiance_inverse_xform[6] = sky_transform.rows[2][1];
-			scene_state.ubo.radiance_inverse_xform[7] = 0.0;
-			scene_state.ubo.radiance_inverse_xform[8] = sky_transform.rows[0][2];
-			scene_state.ubo.radiance_inverse_xform[9] = sky_transform.rows[1][2];
-			scene_state.ubo.radiance_inverse_xform[10] = sky_transform.rows[2][2];
-			scene_state.ubo.radiance_inverse_xform[11] = 0.0;
+			_gl_basis_to_array(sky_transform, scene_state.ubo.radiance_inverse_xform);
 
 			scene_state.ubo.use_ambient_cubemap = ((ambient_src == RS::ENV_AMBIENT_SOURCE_BG && env_bg == RS::ENV_BG_SKY) || ambient_src == RS::ENV_AMBIENT_SOURCE_SKY) ? 1 : 0;
 			scene_state.ubo.use_ambient_light = (scene_state.ubo.use_ambient_cubemap || ambient_src == RS::ENV_AMBIENT_SOURCE_COLOR) ? 1 : 0;
@@ -2975,19 +2964,8 @@ void RasterizerSceneGLES2::_bind_sky_directional_lights(RID p_version, SkyShader
 void RasterizerSceneGLES2::_bind_scene_camera_uniforms(RID p_version, SceneShaderGLES2::ShaderVariant p_variant, uint64_t p_spec_constants) {
 	GLES2::MaterialStorage *material_storage = GLES2::MaterialStorage::get_singleton();
 
-	Projection proj;
-	for (int i = 0; i < 4; i++) {
-		for (int j = 0; j < 4; j++) {
-			proj.columns[i][j] = scene_state.ubo.projection_matrix[i * 4 + j];
-		}
-	}
-
-	Projection inv_proj;
-	for (int i = 0; i < 4; i++) {
-		for (int j = 0; j < 4; j++) {
-			inv_proj.columns[i][j] = scene_state.ubo.inv_projection_matrix[i * 4 + j];
-		}
-	}
+	Projection proj = _gl_array_to_projection(scene_state.ubo.projection_matrix);
+	Projection inv_proj = _gl_array_to_projection(scene_state.ubo.inv_projection_matrix);
 
 	Transform3D view;
 	_gl_reconstruct_view_matrix(view);
@@ -3015,16 +2993,7 @@ void RasterizerSceneGLES2::_bind_scene_camera_uniforms(RID p_version, SceneShade
 	material_storage->shaders.scene_shader.version_set_uniform(SceneShaderGLES2::USE_REFLECTION_CUBEMAP, (bool)scene_state.ubo.use_reflection_cubemap, p_version, p_variant, p_spec_constants);
 	material_storage->shaders.scene_shader.version_set_uniform(SceneShaderGLES2::USE_REFLECTION_CUBEMAP, (bool)scene_state.ubo.use_reflection_cubemap, p_version, p_variant, p_spec_constants);
 
-	Basis radiance_inverse_xform;
-	radiance_inverse_xform.rows[0][0] = scene_state.ubo.radiance_inverse_xform[0];
-	radiance_inverse_xform.rows[1][0] = scene_state.ubo.radiance_inverse_xform[1];
-	radiance_inverse_xform.rows[2][0] = scene_state.ubo.radiance_inverse_xform[2];
-	radiance_inverse_xform.rows[0][1] = scene_state.ubo.radiance_inverse_xform[4];
-	radiance_inverse_xform.rows[1][1] = scene_state.ubo.radiance_inverse_xform[5];
-	radiance_inverse_xform.rows[2][1] = scene_state.ubo.radiance_inverse_xform[6];
-	radiance_inverse_xform.rows[0][2] = scene_state.ubo.radiance_inverse_xform[8];
-	radiance_inverse_xform.rows[1][2] = scene_state.ubo.radiance_inverse_xform[9];
-	radiance_inverse_xform.rows[2][2] = scene_state.ubo.radiance_inverse_xform[10];
+	Basis radiance_inverse_xform = _gl_array_to_basis(scene_state.ubo.radiance_inverse_xform);
 
 	material_storage->shaders.scene_shader.version_set_uniform(SceneShaderGLES2::RADIANCE_INVERSE_XFORM, radiance_inverse_xform, p_version, p_variant, p_spec_constants);
 	material_storage->shaders.scene_shader.version_set_uniform(SceneShaderGLES2::DIRECTIONAL_LIGHT_COUNT, (int)scene_state.ubo.directional_light_count, p_version, p_variant, p_spec_constants);
@@ -3070,37 +3039,10 @@ void RasterizerSceneGLES2::_bind_scene_camera_uniforms(RID p_version, SceneShade
 			material_storage->shaders.scene_shader.version_set_uniform(SceneShaderGLES2::DIRECTIONAL_SHADOW_NORMAL_BIAS, Vector4(shadow_data.shadow_normal_bias[0], shadow_data.shadow_normal_bias[1], shadow_data.shadow_normal_bias[2], shadow_data.shadow_normal_bias[3]), p_version, p_variant, p_spec_constants);
 			material_storage->shaders.scene_shader.version_set_uniform(SceneShaderGLES2::DIRECTIONAL_SHADOW_SPLIT_OFFSETS, Vector4(shadow_data.shadow_split_offsets[0], shadow_data.shadow_split_offsets[1], shadow_data.shadow_split_offsets[2], shadow_data.shadow_split_offsets[3]), p_version, p_variant, p_spec_constants);
 
-			Projection matrix1;
-			for (int i = 0; i < 4; i++) {
-				for (int j = 0; j < 4; j++) {
-					matrix1.columns[i][j] = shadow_data.shadow_matrices[0][i * 4 + j];
-				}
-			}
-			material_storage->shaders.scene_shader.version_set_uniform(SceneShaderGLES2::DIRECTIONAL_SHADOW_MATRIX1, matrix1, p_version, p_variant, p_spec_constants);
-
-			Projection matrix2;
-			for (int i = 0; i < 4; i++) {
-				for (int j = 0; j < 4; j++) {
-					matrix2.columns[i][j] = shadow_data.shadow_matrices[1][i * 4 + j];
-				}
-			}
-			material_storage->shaders.scene_shader.version_set_uniform(SceneShaderGLES2::DIRECTIONAL_SHADOW_MATRIX2, matrix2, p_version, p_variant, p_spec_constants);
-
-			Projection matrix3;
-			for (int i = 0; i < 4; i++) {
-				for (int j = 0; j < 4; j++) {
-					matrix3.columns[i][j] = shadow_data.shadow_matrices[2][i * 4 + j];
-				}
-			}
-			material_storage->shaders.scene_shader.version_set_uniform(SceneShaderGLES2::DIRECTIONAL_SHADOW_MATRIX3, matrix3, p_version, p_variant, p_spec_constants);
-
-			Projection matrix4;
-			for (int i = 0; i < 4; i++) {
-				for (int j = 0; j < 4; j++) {
-					matrix4.columns[i][j] = shadow_data.shadow_matrices[3][i * 4 + j];
-				}
-			}
-			material_storage->shaders.scene_shader.version_set_uniform(SceneShaderGLES2::DIRECTIONAL_SHADOW_MATRIX4, matrix4, p_version, p_variant, p_spec_constants);
+			material_storage->shaders.scene_shader.version_set_uniform(SceneShaderGLES2::DIRECTIONAL_SHADOW_MATRIX1, _gl_array_to_projection(shadow_data.shadow_matrices[0]), p_version, p_variant, p_spec_constants);
+			material_storage->shaders.scene_shader.version_set_uniform(SceneShaderGLES2::DIRECTIONAL_SHADOW_MATRIX2, _gl_array_to_projection(shadow_data.shadow_matrices[1]), p_version, p_variant, p_spec_constants);
+			material_storage->shaders.scene_shader.version_set_uniform(SceneShaderGLES2::DIRECTIONAL_SHADOW_MATRIX3, _gl_array_to_projection(shadow_data.shadow_matrices[2]), p_version, p_variant, p_spec_constants);
+			material_storage->shaders.scene_shader.version_set_uniform(SceneShaderGLES2::DIRECTIONAL_SHADOW_MATRIX4, _gl_array_to_projection(shadow_data.shadow_matrices[3]), p_version, p_variant, p_spec_constants);
 
 			material_storage->shaders.scene_shader.version_set_uniform(SceneShaderGLES2::DIRECTIONAL_SHADOW_FADE_FROM, shadow_data.fade_from, p_version, p_variant, p_spec_constants);
 			material_storage->shaders.scene_shader.version_set_uniform(SceneShaderGLES2::DIRECTIONAL_SHADOW_FADE_TO, shadow_data.fade_to, p_version, p_variant, p_spec_constants);
@@ -3187,9 +3129,9 @@ void RasterizerSceneGLES2::render_scene(const Ref<RenderSceneBuffers> &p_render_
 
 		switch (bg_mode) {
 			case RS::ENV_BG_CLEAR_COLOR: {
-				clear_color.r *= bg_energy_multiplier;
-				clear_color.g *= bg_energy_multiplier;
-				clear_color.b *= bg_energy_multiplier;
+				float c_a = clear_color.a;
+				clear_color *= bg_energy_multiplier;
+				clear_color.a = c_a;
 				if (environment_get_fog_enabled(render_data.environment)) {
 					draw_sky_fog_only = true;
 					GLES2::MaterialStorage::get_singleton()->material_set_param(sky_globals.fog_material, "clear_color", Variant(clear_color));
@@ -3197,9 +3139,9 @@ void RasterizerSceneGLES2::render_scene(const Ref<RenderSceneBuffers> &p_render_
 			} break;
 			case RS::ENV_BG_COLOR: {
 				clear_color = environment_get_bg_color(render_data.environment);
-				clear_color.r *= bg_energy_multiplier;
-				clear_color.g *= bg_energy_multiplier;
-				clear_color.b *= bg_energy_multiplier;
+				float c_a = clear_color.a;
+				clear_color *= bg_energy_multiplier;
+				clear_color.a = c_a;
 				if (environment_get_fog_enabled(render_data.environment)) {
 					draw_sky_fog_only = true;
 					GLES2::MaterialStorage::get_singleton()->material_set_param(sky_globals.fog_material, "clear_color", Variant(clear_color));

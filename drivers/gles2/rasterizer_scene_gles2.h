@@ -403,40 +403,57 @@ private:
 	}
 
 	_FORCE_INLINE_ void _gl_reconstruct_view_matrix(Transform3D &view_matrix) {
-		view_matrix.basis.rows[0][0] = scene_state.ubo.view_matrix[0];
-		view_matrix.basis.rows[1][0] = scene_state.ubo.view_matrix[1];
-		view_matrix.basis.rows[2][0] = scene_state.ubo.view_matrix[2];
-		view_matrix.basis.rows[0][1] = scene_state.ubo.view_matrix[4];
-		view_matrix.basis.rows[1][1] = scene_state.ubo.view_matrix[5];
-		view_matrix.basis.rows[2][1] = scene_state.ubo.view_matrix[6];
-		view_matrix.basis.rows[0][2] = scene_state.ubo.view_matrix[8];
-		view_matrix.basis.rows[1][2] = scene_state.ubo.view_matrix[9];
-		view_matrix.basis.rows[2][2] = scene_state.ubo.view_matrix[10];
-		view_matrix.origin.x = scene_state.ubo.view_matrix[12];
-		view_matrix.origin.y = scene_state.ubo.view_matrix[13];
-		view_matrix.origin.z = scene_state.ubo.view_matrix[14];
+		const float *m = scene_state.ubo.view_matrix;
+		view_matrix.basis.rows[0] = Vector3(m[0], m[4], m[8]);
+		view_matrix.basis.rows[1] = Vector3(m[1], m[5], m[9]);
+		view_matrix.basis.rows[2] = Vector3(m[2], m[6], m[10]);
+		view_matrix.origin = Vector3(m[12], m[13], m[14]);
+	}
+
+	_FORCE_INLINE_ Projection _gl_array_to_projection(const float *p_array) {
+		Projection proj;
+		memcpy(proj.columns, p_array, sizeof(float) * 16);
+		return proj;
+	}
+
+	_FORCE_INLINE_ Basis _gl_array_to_basis(const float *p_array) {
+		Basis basis;
+		basis.set_column(0, Vector3(p_array[0], p_array[1], p_array[2]));
+		basis.set_column(1, Vector3(p_array[4], p_array[5], p_array[6]));
+		basis.set_column(2, Vector3(p_array[8], p_array[9], p_array[10]));
+		return basis;
+	}
+
+	_FORCE_INLINE_ void _gl_basis_to_array(const Basis &p_basis, float *r_array) {
+		Vector3 col0 = p_basis.get_column(0);
+		Vector3 col1 = p_basis.get_column(1);
+		Vector3 col2 = p_basis.get_column(2);
+		r_array[0] = col0.x;
+		r_array[1] = col0.y;
+		r_array[2] = col0.z;
+		r_array[3] = 0.0f;
+		r_array[4] = col1.x;
+		r_array[5] = col1.y;
+		r_array[6] = col1.z;
+		r_array[7] = 0.0f;
+		r_array[8] = col2.x;
+		r_array[9] = col2.y;
+		r_array[10] = col2.z;
+		r_array[11] = 0.0f;
 	}
 
 	static _FORCE_INLINE_ void _gl_batch_decode_multimesh_instance(const float *p_data, RS::MultimeshTransformFormat p_format, bool p_uses_colors, uint32_t p_color_offset, Transform3D &r_xform, Color &r_color) {
 		if (p_format == RS::MULTIMESH_TRANSFORM_3D) {
-			r_xform.basis.rows[0][0] = p_data[0];
-			r_xform.basis.rows[0][1] = p_data[1];
-			r_xform.basis.rows[0][2] = p_data[2];
+			r_xform.basis.rows[0] = Vector3(p_data[0], p_data[1], p_data[2]);
 			r_xform.origin.x = p_data[3];
-			r_xform.basis.rows[1][0] = p_data[4];
-			r_xform.basis.rows[1][1] = p_data[5];
-			r_xform.basis.rows[1][2] = p_data[6];
+			r_xform.basis.rows[1] = Vector3(p_data[4], p_data[5], p_data[6]);
 			r_xform.origin.y = p_data[7];
-			r_xform.basis.rows[2][0] = p_data[8];
-			r_xform.basis.rows[2][1] = p_data[9];
-			r_xform.basis.rows[2][2] = p_data[10];
+			r_xform.basis.rows[2] = Vector3(p_data[8], p_data[9], p_data[10]);
 			r_xform.origin.z = p_data[11];
 		} else {
-			r_xform.basis.rows[0][0] = p_data[0];
-			r_xform.basis.rows[0][1] = p_data[1];
+			r_xform.basis.rows[0] = Vector3(p_data[0], p_data[1], 0.0f);
 			r_xform.origin.x = p_data[3];
-			r_xform.basis.rows[1][0] = p_data[4];
-			r_xform.basis.rows[1][1] = p_data[5];
+			r_xform.basis.rows[1] = Vector3(p_data[4], p_data[5], 0.0f);
 			r_xform.origin.y = p_data[7];
 		}
 
@@ -444,7 +461,7 @@ private:
 			const float *cdata = p_data + p_color_offset;
 			r_color = Color(cdata[0], cdata[1], cdata[2], cdata[3]);
 		} else {
-			r_color = Color(1.0, 1.0, 1.0, 1.0);
+			r_color = Color(1.0f, 1.0f, 1.0f, 1.0f);
 		}
 	}
 

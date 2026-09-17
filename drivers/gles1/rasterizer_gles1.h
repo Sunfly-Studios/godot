@@ -116,9 +116,7 @@ public:
 	}
 
 	static bool is_gles_over_gl() { return gles_over_gl; }
-	static void clear_depth(float p_depth);
-	static void clip_plane(GLenum plane_enum, const GLfloat *plane_eqs);
-
+	
 	static void make_current(bool p_gles_over_gl) {
 		gles_over_gl = p_gles_over_gl;
 		OS::get_singleton()->set_gles_over_gl(gles_over_gl);

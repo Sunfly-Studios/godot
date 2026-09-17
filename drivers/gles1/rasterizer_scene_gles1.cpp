@@ -260,12 +260,7 @@ static _FORCE_INLINE_ void _batch_fill_vertex_instanced(BATCH_TYPE::BatchVertex3
 
 	if (p_norm) {
 		Vector3 n = p_normal_basis.xform(p_norm[p_index]);
-		if (n.length_squared() > 0.0f) {
-			n.normalize();
-		} else {
-			n = Vector3(0, 1, 0);
-		}
-		r_bv.normal.set(n);
+		r_bv.normal.set(n.length_squared() > 0.0f ? n.normalized() : Vector3(0, 1, 0));
 	} else {
 		r_bv.normal.set(0, 1, 0);
 	}
@@ -274,11 +269,7 @@ static _FORCE_INLINE_ void _batch_fill_vertex_instanced(BATCH_TYPE::BatchVertex3
 		Vector3 t = p_normal_basis.xform(
 			Vector3(p_tan[p_index * 4 + 0], p_tan[p_index * 4 + 1], p_tan[p_index * 4 + 2])
 		);
-		if (t.length_squared() > 0.0f) {
-			t.normalize();
-		} else {
-			t = Vector3(1, 0, 0);
-		}
+		t = t.length_squared() > 0.0f ? t.normalized() : Vector3(1, 0, 0);
 		r_bv.tangent.set(t.x, t.y, t.z, p_tan[p_index * 4 + 3]);
 	} else {
 		r_bv.tangent.set(1, 0, 0, 1);
@@ -1304,13 +1295,8 @@ void RasterizerSceneGLES1::_draw_sky(RID p_env, const Projection &p_projection, 
 	}
 
 	// Push the matrices before everything.
-	GLint prev_matrix_mode;
-	glGetIntegerv(GL_MATRIX_MODE, &prev_matrix_mode);
-
-	glMatrixMode(GL_PROJECTION);
-	glPushMatrix();
-	glMatrixMode(GL_MODELVIEW);
-	glPushMatrix();
+	GLMatrixScope proj_scope(GL_PROJECTION);
+	GLMatrixScope mod_scope(GL_MODELVIEW);
 
 	uint64_t sky_spec = 0;
 	if (p_flip_y) {
@@ -1322,11 +1308,6 @@ void RasterizerSceneGLES1::_draw_sky(RID p_env, const Projection &p_projection, 
 
 	bool success = material_storage->shaders.sky_shader.version_bind_shader(shader_data->version, SkyShaderGLES1::MODE_BACKGROUND, sky_spec);
 	if (!success) {
-		// Pop the matrices
-		glMatrixMode(GL_PROJECTION);
-		glPopMatrix();
-		glMatrixMode(GL_MODELVIEW);
-		glPopMatrix();
 		return;
 	}
 
@@ -1417,13 +1398,8 @@ void RasterizerSceneGLES1::_draw_sky(RID p_env, const Projection &p_projection, 
 	}
 	GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_draw_sky: glDisable GL_LIGHTING, GL_FOG and texture unit cleanup");
 
-	glEnableClientState(GL_VERTEX_ARRAY);
-	GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_draw_sky: glEnableClientState GL_VERTEX_ARRAY");
-	glDisableClientState(GL_COLOR_ARRAY);
-	glDisableClientState(GL_NORMAL_ARRAY);
-
 	// We need UV coordinates to sample the sky texture.
-	glEnableClientState(GL_TEXTURE_COORD_ARRAY);
+	_gl_set_client_states(GL_CLIENT_STATE_VERTEX | GL_CLIENT_STATE_TEXCOORD);
 	GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_draw_sky: Client State hardened");
 
 	float *uvw_ptr = sky ? sky->sky_uvw_cache : sky_globals.fallback_sky_uvw_cache;
@@ -1519,9 +1495,7 @@ void RasterizerSceneGLES1::_draw_sky(RID p_env, const Projection &p_projection, 
 		glBindTexture(GL_TEXTURE_CUBE_MAP, 0);
 		GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_draw_sky: unbind cubemap");
 	}
-
-	glDisableClientState(GL_VERTEX_ARRAY);
-	glDisableClientState(GL_TEXTURE_COORD_ARRAY);
+	_gl_set_client_states(0);
 	GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_draw_sky: glDisableClientState cleanup");
 
 	if (GLES1_CONFIG->support_vbo) {
@@ -1530,13 +1504,6 @@ void RasterizerSceneGLES1::_draw_sky(RID p_env, const Projection &p_projection, 
 	}
 
 	// Restore state
-	glMatrixMode(GL_PROJECTION);
-	glPopMatrix();
-	glMatrixMode(GL_MODELVIEW);
-	glPopMatrix();
-	glMatrixMode(prev_matrix_mode);
-	GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_draw_sky: matrix pop");
-
 	glColor4f(1.0f, 1.0f, 1.0f, 1.0f);
 	GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_draw_sky: glColor4f restore");
 }
@@ -1623,14 +1590,6 @@ void RasterizerSceneGLES1::_update_sky_radiance(RID p_env, const Projection &p_p
 		material_storage->shaders.sky_shader.version_set_uniform(SkyShaderGLES1::DIRECTIONAL_LIGHT_COUNT, (int)sky_globals.directional_light_count, shader_data->version, SkyShaderGLES1::MODE_CUBEMAP, sky_spec);
 		_bind_sky_directional_lights(shader_data->version, SkyShaderGLES1::MODE_CUBEMAP, sky_spec);
 
-		GLint prev_viewport[4] = {};
-		glGetIntegerv(GL_VIEWPORT, prev_viewport);
-		GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_update_sky_radiance: glGetIntegerv GL_VIEWPORT");
-
-		GLint prev_fbo;
-		glGetIntegerv(GL_FRAMEBUFFER_BINDING_OES, &prev_fbo);
-		GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_update_sky_radiance: glGetIntegerv GL_FRAMEBUFFER_BINDING_OES");
-
 		glViewport(0, 0, sky->radiance_size, sky->radiance_size);
 		GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_update_sky_radiance: glViewport");
 
@@ -1638,18 +1597,12 @@ void RasterizerSceneGLES1::_update_sky_radiance(RID p_env, const Projection &p_p
 		GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_update_sky_radiance: glBindFramebufferOES");
 
 		// Protect against uniform matrix leak
-		GLint prev_matrix_mode;
-		glGetIntegerv(GL_MATRIX_MODE, &prev_matrix_mode);
-
-		glMatrixMode(GL_PROJECTION);
-		glPushMatrix();
+		GLMatrixScope proj_scope(GL_PROJECTION);
 		glLoadIdentity();
-		GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_update_sky_radiance: glMatrixMode projection push");
 
-		glMatrixMode(GL_MODELVIEW);
-		glPushMatrix();
+		GLMatrixScope mod_scope(GL_MODELVIEW);
 		glLoadIdentity();
-		GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_update_sky_radiance: glMatrixMode modelview push");
+		GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_update_sky_radiance: matrix push scopes");
 
 		// Reset state
 		scene_state.reset_gl_state();
@@ -1675,11 +1628,8 @@ void RasterizerSceneGLES1::_update_sky_radiance(RID p_env, const Projection &p_p
 			glClientActiveTexture(GL_TEXTURE0);
 		}
 
-		glEnableClientState(GL_VERTEX_ARRAY);
-		glEnableClientState(GL_COLOR_ARRAY);
-		glDisableClientState(GL_NORMAL_ARRAY);
-
-		glEnableClientState(GL_TEXTURE_COORD_ARRAY); // Enable for 3D UVWs
+		// Enable for 3D UVWs
+		_gl_set_client_states(GL_CLIENT_STATE_VERTEX | GL_CLIENT_STATE_COLOR | GL_CLIENT_STATE_TEXCOORD);
 		GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_update_sky_radiance: Client State hardened");
 
 		// Pull sky parameters
@@ -1702,30 +1652,12 @@ void RasterizerSceneGLES1::_update_sky_radiance(RID p_env, const Projection &p_p
 		if (sky->processing_layer == 0) {
 			// Average the sky colour
 
-			Color sky_top = sky_top_color;
-			sky_top.r *= sky_energy;
-			sky_top.g *= sky_energy;
-			sky_top.b *= sky_energy;
+			Color sky_top = sky_top_color * sky_energy;
+			Color sky_horizon = sky_horizon_color * sky_energy;
+			Color ground_horizon = ground_horizon_color * ground_energy;
+			Color ground_bottom = ground_bottom_color * ground_energy;
 
-			Color sky_horizon = sky_horizon_color;
-			sky_horizon.r *= sky_energy;
-			sky_horizon.g *= sky_energy;
-			sky_horizon.b *= sky_energy;
-
-			Color ground_horizon = ground_horizon_color;
-			ground_horizon.r *= ground_energy;
-			ground_horizon.g *= ground_energy;
-			ground_horizon.b *= ground_energy;
-
-			Color ground_bottom = ground_bottom_color;
-			ground_bottom.r *= ground_energy;
-			ground_bottom.g *= ground_energy;
-			ground_bottom.b *= ground_energy;
-
-			sky->ambient_fallback = (sky_top + sky_horizon + ground_horizon + ground_bottom) * 0.25f;
-			sky->ambient_fallback.r *= exposure;
-			sky->ambient_fallback.g *= exposure;
-			sky->ambient_fallback.b *= exposure;
+			sky->ambient_fallback = (sky_top + sky_horizon + ground_horizon + ground_bottom) * (0.25f * exposure);
 
 			for (int i = 0; i < MAX_SKY_PROCESSING_LAYERS; i++) {
 				for (int v = 0; v < NUM_VERTICES; v++) {
@@ -1740,22 +1672,14 @@ void RasterizerSceneGLES1::_update_sky_radiance(RID p_env, const Projection &p_p
 					if (cube_normal.y >= 0.0f) {
 						float c_val = 1.0f - (v_angle / (Math_PI * 0.5f));
 						float blend = CLAMP(1.0f - Math::pow(1.0f - c_val, 1.0f / sky_curve), 0.0f, 1.0f);
-						c = sky_horizon_color.lerp(sky_top_color, blend);
-						c.r *= sky_energy;
-						c.g *= sky_energy;
-						c.b *= sky_energy;
+						c = sky_horizon_color.lerp(sky_top_color, blend) * sky_energy;
 					} else {
 						float c_val = (v_angle - (Math_PI * 0.5f)) / (Math_PI * 0.5f);
 						float blend = CLAMP(1.0f - Math::pow(1.0f - c_val, 1.0f / ground_curve), 0.0f, 1.0f);
-						c = ground_horizon_color.lerp(ground_bottom_color, blend);
-						c.r *= ground_energy;
-						c.g *= ground_energy;
-						c.b *= ground_energy;
+						c = ground_horizon_color.lerp(ground_bottom_color, blend) * ground_energy;
 					}
 
-					c.r *= exposure;
-					c.g *= exposure;
-					c.b *= exposure;
+					c *= exposure;
 
 					int color_offset = (i * NUM_VERTICES + v) * 4;
 					sky_globals.radiance_colors[color_offset + 0] = uint8_t(CLAMP(c.r * 255.0f, 0.0f, 255.0f));
@@ -1804,9 +1728,7 @@ void RasterizerSceneGLES1::_update_sky_radiance(RID p_env, const Projection &p_p
 			}
 		}
 
-		glDisableClientState(GL_VERTEX_ARRAY);
-		glDisableClientState(GL_TEXTURE_COORD_ARRAY);
-		glDisableClientState(GL_COLOR_ARRAY);
+		_gl_set_client_states(0);
 		if (GLES1_CONFIG->support_vbo) {
 			glBindBuffer(GL_ARRAY_BUFFER, 0);
 		}
@@ -1839,16 +1761,8 @@ void RasterizerSceneGLES1::_update_sky_radiance(RID p_env, const Projection &p_p
 			sky->reflection_dirty = false;
 		}
 
-		// Restore matrix stack
-		glMatrixMode(GL_PROJECTION);
-		glPopMatrix();
-		glMatrixMode(GL_MODELVIEW);
-		glPopMatrix();
-		glMatrixMode(prev_matrix_mode);
-		GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_update_sky_radiance: matrix pop");
-
-		glBindFramebufferOES(GL_FRAMEBUFFER_OES, prev_fbo);
-		glViewport(prev_viewport[0], prev_viewport[1], prev_viewport[2], prev_viewport[3]);
+		// Restore
+		GLES1::TextureStorage::get_singleton()->bind_framebuffer_system();
 		GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_update_sky_radiance: restore GL state");
 
 	} else {
@@ -1962,11 +1876,7 @@ Ref<Image> RasterizerSceneGLES1::sky_bake_panorama(RID p_sky, float p_energy, bo
 	if (img.is_valid()) {
 		for (int i = 0; i < p_size.width; i++) {
 			for (int j = 0; j < p_size.height; j++) {
-				Color c = img->get_pixel(i, j);
-				c.r *= p_energy;
-				c.g *= p_energy;
-				c.b *= p_energy;
-				img->set_pixel(i, j, c);
+				img->set_pixel(i, j, img->get_pixel(i, j) * p_energy);
 			}
 		}
 	}
@@ -2031,11 +1941,7 @@ Ref<Image> RasterizerSceneGLES1::environment_bake_panorama(RID p_env, bool p_bak
 	if (use_ambient_light) {
 		ambient_color_sky_mix = environment_get_ambient_sky_contribution(p_env);
 		const float ambient_energy = environment_get_ambient_light_energy(p_env);
-		ambient_color = environment_get_ambient_light(p_env);
-		ambient_color = ambient_color.srgb_to_linear();
-		ambient_color.r *= ambient_energy;
-		ambient_color.g *= ambient_energy;
-		ambient_color.b *= ambient_energy;
+		ambient_color = environment_get_ambient_light(p_env).srgb_to_linear() * ambient_energy;
 	}
 
 	if (use_cube_map) {
@@ -2051,10 +1957,7 @@ Ref<Image> RasterizerSceneGLES1::environment_bake_panorama(RID p_env, bool p_bak
 	} else {
 		const float bg_energy_multiplier = environment_get_bg_energy_multiplier(p_env);
 		Color panorama_color = ((environment_background == RS::ENV_BG_CLEAR_COLOR) ? RSG::texture_storage->get_default_clear_color() : environment_get_bg_color(p_env));
-		panorama_color = panorama_color.srgb_to_linear();
-		panorama_color.r *= bg_energy_multiplier;
-		panorama_color.g *= bg_energy_multiplier;
-		panorama_color.b *= bg_energy_multiplier;
+		panorama_color = panorama_color.srgb_to_linear() * bg_energy_multiplier;
 
 		if (use_ambient_light) {
 			panorama_color = ambient_color.lerp(panorama_color, ambient_color_sky_mix);
@@ -2260,23 +2163,14 @@ void RasterizerSceneGLES1::_batch_fill_instance_geometry(const GeometryInstanceS
 
 				if (norm_ptr) {
 					Vector3 n = normal_basis.xform(norm_ptr[i]);
-					if (n.length_squared() > 0.0f) {
-						n.normalize();
-					} else {
-						n = Vector3(0, 1, 0);
-					}
-					r_bvs[i].normal.set(n);
+					r_bvs[i].normal.set(n.length_squared() > 0.0f ? n.normalized() : Vector3(0, 1, 0));
 				}
 
 				if (tan_ptr) {
 					Vector3 t = normal_basis.xform(
 						Vector3(tan_ptr[i * 4 + 0], tan_ptr[i * 4 + 1], tan_ptr[i * 4 + 2])
 					);
-					if (t.length_squared() > 0.0f) {
-						t.normalize();
-					} else {
-						t = Vector3(1, 0, 0);
-					}
+					t = t.length_squared() > 0.0f ? t.normalized() : Vector3(1, 0, 0);
 					r_bvs[i].tangent.set(t.x, t.y, t.z, tan_ptr[i * 4 + 3]);
 				}
 			}
@@ -2493,24 +2387,20 @@ void RasterizerSceneGLES1::_batch_render_items(GLES1::SceneMaterialData *p_mater
 		// State-only multi-draw fallback
 		_batch_bind_material(p_material_data, Transform3D(), p_transparent);
 
-		glMatrixMode(GL_MODELVIEW);
-		glPushMatrix();
+		GLMatrixScope mod_scope(GL_MODELVIEW);
 
 		// Only supply the camera view matrix
 		_gl_load_transform(view_matrix);
-		GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_batch_render_items: Option 1 glPushMatrix and Load view_matrix");
+		GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_batch_render_items: Option 1 Load view_matrix");
 
 		GeometryInstanceSurface *first_surf = static_cast<GeometryInstanceSurface *>(bdata.sort_items[p_batch.first_item_index].item);
 		bool has_color = first_surf->color_cache.size() > 0;
 
 		_batch_render_generic(p_primitive, 0, p_batch.num_indices, has_color);
 
-		glPopMatrix();
-		GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_batch_render_items: Option 1 glPopMatrix multi draw");
+		GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_batch_render_items: Option 1 multi draw");
 	} else {
 		// Single-item fallback
-		// Usually if there is no overhead to save when drawing
-		// few items.
 		GeometryInstanceSurface *first_surf = static_cast<GeometryInstanceSurface *>(bdata.sort_items[p_batch.first_item_index].item);
 		Transform3D world_xform = first_surf->owner->transform;
 		Transform3D model_view;
@@ -2523,16 +2413,14 @@ void RasterizerSceneGLES1::_batch_render_items(GLES1::SceneMaterialData *p_mater
 
 		_batch_bind_material(p_material_data, world_xform, p_transparent);
 
-		glMatrixMode(GL_MODELVIEW);
-		glPushMatrix();
+		GLMatrixScope mod_scope(GL_MODELVIEW);
 		_gl_load_transform(model_view);
 		GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_batch_render_items: glLoadMatrixf MODELVIEW single-item");
 
 		bool has_color = first_surf->color_cache.size() > 0;
 		_batch_render_generic(p_primitive, 0, p_batch.num_indices, has_color);
 
-		glPopMatrix();
-		GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_batch_render_items: Option 3 single-item glPopMatrix");
+		GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_batch_render_items: Option 2 single-item");
 	}
 }
 
@@ -2554,31 +2442,23 @@ void RasterizerSceneGLES1::_batch_render_generic(RS::PrimitiveType p_primitive, 
 	}
 
 	uint32_t stride = bdata.unit_vertices.get_unit_size_bytes();
+	uint32_t flags = GL_CLIENT_STATE_VERTEX;
+	bool use_color = (
+		p_has_color &&
+		bdata.pass_mode != PASS_MODE_SHADOW &&
+		bdata.pass_mode != PASS_MODE_SHADOW_PROJECTION
+	);
 
-	glEnableClientState(GL_VERTEX_ARRAY);
-
-	if (bdata.fvf == BatcherEnums::FVF_DEPTH_ONLY) {
-		glDisableClientState(GL_NORMAL_ARRAY);
-		glDisableClientState(GL_TEXTURE_COORD_ARRAY);
-		glDisableClientState(GL_COLOR_ARRAY);
-	} else if (bdata.fvf == BatcherEnums::FVF_DEPTH_ALPHA) {
-		glDisableClientState(GL_NORMAL_ARRAY);
-		glEnableClientState(GL_TEXTURE_COORD_ARRAY);
-		glDisableClientState(GL_COLOR_ARRAY);
-	} else {
-		glEnableClientState(GL_NORMAL_ARRAY);
-		glEnableClientState(GL_TEXTURE_COORD_ARRAY);
-
-		if (
-			p_has_color &&
-			bdata.pass_mode != PASS_MODE_SHADOW &&
-			bdata.pass_mode != PASS_MODE_SHADOW_PROJECTION
-		) {
-			glEnableClientState(GL_COLOR_ARRAY);
-		} else {
-			glDisableClientState(GL_COLOR_ARRAY);
+	if (bdata.fvf == BatcherEnums::FVF_DEPTH_ALPHA) {
+		flags |= GL_CLIENT_STATE_TEXCOORD;
+	} else if (bdata.fvf != BatcherEnums::FVF_DEPTH_ONLY) {
+		flags |= GL_CLIENT_STATE_TEXCOORD | GL_CLIENT_STATE_NORMAL;
+		if (use_color) {
+			flags |= GL_CLIENT_STATE_COLOR;
 		}
 	}
+
+	_gl_set_client_states(flags);
 
 	if (GLES1_CONFIG->max_texture_units > 1) {
 		glClientActiveTexture(GL_TEXTURE1);
@@ -2737,10 +2617,7 @@ void RasterizerSceneGLES1::_batch_render_generic(RS::PrimitiveType p_primitive, 
 	}
 
 	// Clean up
-	glDisableClientState(GL_VERTEX_ARRAY);
-	glDisableClientState(GL_NORMAL_ARRAY);
-	glDisableClientState(GL_TEXTURE_COORD_ARRAY);
-	glDisableClientState(GL_COLOR_ARRAY);
+	_gl_set_client_states(0);
 
 	if (GLES1_CONFIG->max_texture_units > 1) {
 		glClientActiveTexture(GL_TEXTURE1);
@@ -2863,8 +2740,7 @@ void RasterizerSceneGLES1::_render_single_item_immediate(const GeometryInstanceS
 
 			Transform3D final_xform = owner_transform * xform;
 
-			glMatrixMode(GL_MODELVIEW);
-			glPushMatrix();
+			GLMatrixScope mod_scope(GL_MODELVIEW);
 			_gl_mult_transform(final_xform);
 
 			if (
@@ -2880,7 +2756,6 @@ void RasterizerSceneGLES1::_render_single_item_immediate(const GeometryInstanceS
 
 				// Can't draw if we don't support 32-bit indices.
 				if (index_type == GL_UNSIGNED_INT && !GLES1_CONFIG->support_32_bits_indices) {
-					glPopMatrix();
 					break;
 				}
 				glDrawElements(primitive_gl, drawn_count, index_type, nullptr);
@@ -2889,8 +2764,6 @@ void RasterizerSceneGLES1::_render_single_item_immediate(const GeometryInstanceS
 				glDrawArrays(primitive_gl, 0, drawn_count);
 				GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_render_single_item_immediate: glDrawArrays");
 			}
-
-			glPopMatrix();
 		}
 	}
 
@@ -2906,15 +2779,6 @@ void RasterizerSceneGLES1::_render_single_item_immediate(const GeometryInstanceS
 
 		// Disables fog
 		_gl_setup_fog(nullptr);
-	}
-
-	if (bdata.pass_mode == PASS_MODE_SHADOW_PROJECTION && GLES1_CONFIG->max_texture_units > 2) {
-		glActiveTexture(GL_TEXTURE1);
-		glEnable(GL_TEXTURE_2D);
-		glBindTexture(GL_TEXTURE_2D, scene_state.current_shadow_texture);
-		glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE);
-
-		glActiveTexture(GL_TEXTURE0);
 	}
 
 	GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_render_single_item_immediate: teardown");
@@ -2939,10 +2803,7 @@ void RasterizerSceneGLES1::_draw_editor_gizmos(const RenderDataGLES1 *p_render_d
 		glBindBuffer(GL_ARRAY_BUFFER, 0);
 		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
 	}
-
-	glEnableClientState(GL_VERTEX_ARRAY);
-	glDisableClientState(GL_NORMAL_ARRAY);
-	glDisableClientState(GL_TEXTURE_COORD_ARRAY);
+	_gl_set_client_states(GL_CLIENT_STATE_VERTEX);
 
 	for (uint32_t i = 0; i < render_list[RENDER_LIST_GIZMOS].elements.size(); i++) {
 		GeometryInstanceSurface *surf = render_list[RENDER_LIST_GIZMOS].elements[i];
@@ -3222,8 +3083,7 @@ void RasterizerSceneGLES1::_draw_editor_gizmos(const RenderDataGLES1 *p_render_d
 	// Clean up
 	glLineWidth(1.0f);
 	glPointSize(1.0f);
-	glDisableClientState(GL_VERTEX_ARRAY);
-	glDisableClientState(GL_COLOR_ARRAY);
+	_gl_set_client_states(0);
 
 	if (GLES1_CONFIG->support_vbo) {
 		glBindBuffer(GL_ARRAY_BUFFER, 0);
@@ -3268,10 +3128,7 @@ void RasterizerSceneGLES1::_draw_editor_lines(const RenderDataGLES1 *p_render_da
 	glLineWidth(3.0f);
 	GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_draw_editor_lines: setup");
 
-	glEnableClientState(GL_VERTEX_ARRAY);
-	glEnableClientState(GL_COLOR_ARRAY);
-	glDisableClientState(GL_NORMAL_ARRAY);
-	glDisableClientState(GL_TEXTURE_COORD_ARRAY);
+	_gl_set_client_states(GL_CLIENT_STATE_VERTEX | GL_CLIENT_STATE_COLOR);
 
 	if (GLES1_CONFIG->support_vbo && editor_lines_vbo != 0) {
 		glBindBuffer(GL_ARRAY_BUFFER, editor_lines_vbo);
@@ -3320,10 +3177,8 @@ void RasterizerSceneGLES1::_draw_editor_lines(const RenderDataGLES1 *p_render_da
 	GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_draw_editor_lines: glDrawArrays");
 
 	// Reset states
+	_gl_set_client_states(0);
 	glLineWidth(1.0f); // Default value
-
-	glDisableClientState(GL_VERTEX_ARRAY);
-	glDisableClientState(GL_COLOR_ARRAY);
 	glDisable(GL_BLEND);
 
 	if (GLES1_CONFIG->support_vbo) {
@@ -3527,11 +3382,7 @@ void RasterizerSceneGLES1::_draw_editor_grid(const RenderDataGLES1 *p_render_dat
 		glBindBuffer(GL_ARRAY_BUFFER, 0);
 		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
 	}
-
-	glEnableClientState(GL_VERTEX_ARRAY);
-	glEnableClientState(GL_COLOR_ARRAY);
-	glDisableClientState(GL_NORMAL_ARRAY);
-	glDisableClientState(GL_TEXTURE_COORD_ARRAY);
+	_gl_set_client_states(GL_CLIENT_STATE_VERTEX | GL_CLIENT_STATE_COLOR);
 
 	if (v_idx > 0) {
 		glVertexPointer(3, GL_FLOAT, 0, grid_verts);
@@ -3540,8 +3391,7 @@ void RasterizerSceneGLES1::_draw_editor_grid(const RenderDataGLES1 *p_render_dat
 		glDrawArrays(GL_LINES, 0, v_idx / 3);
 	}
 
-	glDisableClientState(GL_VERTEX_ARRAY);
-	glDisableClientState(GL_COLOR_ARRAY);
+	_gl_set_client_states(0);
 	glDisable(GL_BLEND);
 	glDepthMask(GL_TRUE);
 
@@ -3592,18 +3442,10 @@ void RasterizerSceneGLES1::_bind_scene_camera_uniforms(RID p_version, SceneShade
 	GLES1::MaterialStorage *material_storage = GLES1::MaterialStorage::get_singleton();
 
 	Projection proj;
-	for (int i = 0; i < 4; i++) {
-		for (int j = 0; j < 4; j++) {
-			proj.columns[i][j] = scene_state.ubo.projection_matrix[i * 4 + j];
-		}
-	}
+	memcpy(&proj, scene_state.ubo.projection_matrix, sizeof(float) * 16);
 
 	Projection inv_proj;
-	for (int i = 0; i < 4; i++) {
-		for (int j = 0; j < 4; j++) {
-			inv_proj.columns[i][j] = scene_state.ubo.inv_projection_matrix[i * 4 + j];
-		}
-	}
+	memcpy(&inv_proj, scene_state.ubo.inv_projection_matrix, sizeof(float) * 16);
 
 	Transform3D view;
 	_gl_reconstruct_view_matrix(view);
@@ -4390,6 +4232,9 @@ void RasterizerSceneGLES1::_render_shadow_pass(RID p_light, RID p_shadow_atlas, 
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 	GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_render_shadow_pass: glClear");
 
+	// Disable color writes to save memory bandwidth since FBO colour is a dummy
+	glColorMask(GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE);
+
 	// Add insets on the sides for the shadow comparison functions
 	GLint arx = atlas_rect.position.x + 1;
 	GLint ary = atlas_rect.position.y + 1;
@@ -4400,11 +4245,9 @@ void RasterizerSceneGLES1::_render_shadow_pass(RID p_light, RID p_shadow_atlas, 
 	Projection correction;
 	correction.set_depth_correction(false, true, false);
 
-	glMatrixMode(GL_PROJECTION);
-	glPushMatrix();
+	GLMatrixScope proj_scope(GL_PROJECTION);
 	_gl_load_projection(correction * render_data.cam_projection);
-	glMatrixMode(GL_MODELVIEW);
-	glPushMatrix();
+	GLMatrixScope mod_scope(GL_MODELVIEW);
 	_gl_load_transform(render_data.inv_cam_transform);
 
 	// Disable lighting and setup pure flat pass for shadow generation
@@ -4433,10 +4276,7 @@ void RasterizerSceneGLES1::_render_shadow_pass(RID p_light, RID p_shadow_atlas, 
 	glDisable(GL_POLYGON_OFFSET_FILL);
 	scene_state.enable_gl_scissor_test(false);
 
-	glMatrixMode(GL_PROJECTION);
-	glPopMatrix();
-	glMatrixMode(GL_MODELVIEW);
-	glPopMatrix();
+	glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
 
 	glColor4f(1.0f, 1.0f, 1.0f, 1.0f);
 	scene_state.enable_gl_depth_test(false);
@@ -4613,11 +4453,11 @@ void RasterizerSceneGLES1::render_scene(const Ref<RenderSceneBuffers> &p_render_
 	if (!keep_color) {
 		glClearColor(clear_color.r, clear_color.g, clear_color.b, clear_color.a);
 		// Reverse-Z, far clipping plane is 0.0
-		RasterizerGLES1::clear_depth(0.0f);
+		GLES1::Router::clear_depth(0.0f);
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 		GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::render_scene: glClear");
 	} else {
-		RasterizerGLES1::clear_depth(0.0f);
+		GLES1::Router::clear_depth(0.0f);
 		glClear(GL_DEPTH_BUFFER_BIT);
 		GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::render_scene: glClear");
 	}
@@ -4682,13 +4522,14 @@ void RasterizerSceneGLES1::render_scene(const Ref<RenderSceneBuffers> &p_render_
 		glPolygonOffset(1.0f, 1.0f);
 		GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::render_scene: setup opaque additive blend");
 
-		glMatrixMode(GL_MODELVIEW);
-		glPushMatrix();
-		_gl_load_transform(render_data.inv_cam_transform);
+		{
+			// The state machine will be automatically cleaned after
+			// we escape this scope.
+			GLMatrixScope mod_scope(GL_MODELVIEW);
+			_gl_load_transform(render_data.inv_cam_transform);
 
-		_render_additive_light_passes<PASS_MODE_COLOR>(&render_list_params, &render_data, render_list[RENDER_LIST_OPAQUE].elements.size(), false);
-
-		glPopMatrix();
+			_render_additive_light_passes<PASS_MODE_COLOR>(&render_list_params, &render_data, render_list[RENDER_LIST_OPAQUE].elements.size(), false);
+		}
 
 		glDisable(GL_POLYGON_OFFSET_FILL);
 		glDepthFunc(GL_GEQUAL); // Restore depth test for following passes
@@ -4759,13 +4600,14 @@ void RasterizerSceneGLES1::render_scene(const Ref<RenderSceneBuffers> &p_render_
 		glPolygonOffset(1.0f, 1.0f);
 		GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::render_scene: setup alpha additive blend");
 
-		glMatrixMode(GL_MODELVIEW);
-		glPushMatrix();
-		_gl_load_transform(render_data.inv_cam_transform);
+		{
+			// The state machine will be automatically cleaned after
+			// we escape this scope.
+			GLMatrixScope mod_scope(GL_MODELVIEW);
+			_gl_load_transform(render_data.inv_cam_transform);
 
-		_render_additive_light_passes<PASS_MODE_COLOR_TRANSPARENT>(&render_list_params_alpha, &render_data, render_list[RENDER_LIST_ALPHA].elements.size(), true);
-
-		glPopMatrix();
+			_render_additive_light_passes<PASS_MODE_COLOR_TRANSPARENT>(&render_list_params_alpha, &render_data, render_list[RENDER_LIST_ALPHA].elements.size(), true);
+		}
 
 		glDisable(GL_POLYGON_OFFSET_FILL);
 		glDepthFunc(GL_GEQUAL); // Restore depth test
@@ -4992,9 +4834,6 @@ void RasterizerSceneGLES1::_render_light_shadows(RenderListParameters *p_params,
 	constexpr float plane_r[] = { 0.0f, 0.0f, 1.0f, 0.0f };
 	constexpr float plane_q[] = { 0.0f, 0.0f, 0.0f, 1.0f };
 
-	GLint prev_matrix_mode;
-	glGetIntegerv(GL_MATRIX_MODE, &prev_matrix_mode);
-
 	// Begin the splits
 	for (int split = 0; split < num_splits; split++) {
 		GLuint shadow_texture = 0;
@@ -5002,15 +4841,11 @@ void RasterizerSceneGLES1::_render_light_shadows(RenderListParameters *p_params,
 
 		if (p_light.type == RS::LIGHT_DIRECTIONAL) {
 			shadow_texture = GLES1::LightStorage::get_singleton()->directional_shadow_get_texture();
-			for (int m = 0; m < MAX_CHUNK_SHADOWS; m++) {
-				shadow_matrix[m] = scene_state.directional_shadows[shadow_idx].shadow_matrices[split][m];
-			}
+			memcpy(shadow_matrix, scene_state.directional_shadows[shadow_idx].shadow_matrices[split], sizeof(float) * MAX_CHUNK_SHADOWS);
 		} else {
 			GLES1::LightInstance *li = (p_light.type == RS::LIGHT_OMNI) ? scene_state.omni_light_sort[p_light.index].instance : scene_state.spot_light_sort[p_light.index].instance;
 			shadow_texture = GLES1::LightStorage::get_singleton()->light_instance_get_shadow_texture(li->self, p_render_data->shadow_atlas);
-			for (int m = 0; m < MAX_CHUNK_SHADOWS; m++) {
-				shadow_matrix[m] = scene_state.positional_shadows[shadow_idx].shadow_matrix[m];
-			}
+			memcpy(shadow_matrix, scene_state.positional_shadows[shadow_idx].shadow_matrix, sizeof(float) * MAX_CHUNK_SHADOWS);
 		}
 
 		if (shadow_texture == 0) {
@@ -5018,17 +4853,13 @@ void RasterizerSceneGLES1::_render_light_shadows(RenderListParameters *p_params,
 		}
 
 		scene_state.current_shadow_texture = shadow_texture;
-		for (int m = 0; m < MAX_CHUNK_SHADOWS; m++) {
-			scene_state.current_shadow_matrix[m] = shadow_matrix[m];
-		}
+		memcpy(scene_state.current_shadow_matrix, shadow_matrix, sizeof(float) * MAX_CHUNK_SHADOWS);
 
-		// Setup projective texturing
-		if (GLES1_CONFIG->max_texture_units > 2) {
-			// TU1: FBO silhouette
-			glActiveTexture(GL_TEXTURE1);
-			glClientActiveTexture(GL_TEXTURE1);
-			glEnable(GL_TEXTURE_2D);
+		bool use_proj_tex = GLES1_CONFIG->max_texture_units > 2;
 
+		// TU1: FBO silhouette
+		GLProjectiveTextureScope tu1_scope(use_proj_tex, GL_TEXTURE1);
+		if (use_proj_tex) {
 			glBindTexture(GL_TEXTURE_2D, shadow_texture);
 
 			// GL_EYE_LINEAR generates texture coordinates based on the Eye/View space coordinates
@@ -5052,16 +4883,13 @@ void RasterizerSceneGLES1::_render_light_shadows(RenderListParameters *p_params,
 			glEnable(GL_TEXTURE_GEN_R);
 			glEnable(GL_TEXTURE_GEN_Q);
 
-			glMatrixMode(GL_TEXTURE);
-			glPushMatrix();
 			glLoadMatrixf(shadow_matrix);
-
 			glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE);
+		}
 
-			// TU2: Z-Bound gradient
-			glActiveTexture(GL_TEXTURE2);
-			glClientActiveTexture(GL_TEXTURE2);
-			glEnable(GL_TEXTURE_2D);
+		// TU2: Z-Bound gradient
+		GLProjectiveTextureScope tu2_scope(use_proj_tex, GL_TEXTURE2);
+		if (use_proj_tex) {
 			glBindTexture(GL_TEXTURE_2D, scene_state.z_bound_texture);
 
 			glTexGeni(GL_S, GL_TEXTURE_GEN_MODE, GL_EYE_LINEAR);
@@ -5079,8 +4907,6 @@ void RasterizerSceneGLES1::_render_light_shadows(RenderListParameters *p_params,
 			glEnable(GL_TEXTURE_GEN_R);
 			glEnable(GL_TEXTURE_GEN_Q);
 
-			glMatrixMode(GL_TEXTURE);
-			glPushMatrix();
 			const float z_to_t_mat[MAX_CHUNK_SHADOWS] = {
 				1.0f, 0.0f, 0.0f, 0.0f,
 				0.0f, 0.0f, 1.0f, 0.0f,
@@ -5098,79 +4924,38 @@ void RasterizerSceneGLES1::_render_light_shadows(RenderListParameters *p_params,
 		}
 
 		int max_clip_planes = GLES1_CONFIG->max_clip_planes;
-		if (p_light.type == RS::LIGHT_DIRECTIONAL && max_clip_planes > 1) {
-			glMatrixMode(GL_MODELVIEW);
-			glPushMatrix();
-			glLoadIdentity();
+		bool use_clip_planes = p_light.type == RS::LIGHT_DIRECTIONAL && max_clip_planes > 1;
 
+		GLfloat plane_near[4] = { 0.0f, 0.0f, -1.0f, 0.0f };
+		GLfloat plane_far[4] = { 0.0f, 0.0f, 1.0f, 0.0f };
+
+		if (use_clip_planes) {
 			const float split_near = split == 0 ? p_render_data->z_near : scene_state.directional_shadows[shadow_idx].shadow_split_offsets[split - 1];
 			const float split_far = scene_state.directional_shadows[shadow_idx].shadow_split_offsets[split];
 
-			const GLfloat plane_near[4] = { 0.0f, 0.0f, -1.0f, -split_near };
-			const GLfloat plane_far[4] = { 0.0f, 0.0f, 1.0f, split_far };
+			plane_near[3] = -split_near;
+			plane_far[3] = split_far;
+		}
 
-			RasterizerGLES1::clip_plane(GL_CLIP_PLANE0, plane_near);
-			RasterizerGLES1::clip_plane(GL_CLIP_PLANE1, plane_far);
-			glEnable(GL_CLIP_PLANE0);
-			glEnable(GL_CLIP_PLANE1);
+		GLMatrixScope mod_scope(GL_MODELVIEW, use_clip_planes);
+		if (use_clip_planes) {
+			glLoadIdentity();
+		}
+
+		GLClipPlaneScope clip_scope(use_clip_planes, plane_near, plane_far);
+		if (use_clip_planes) {
 			GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_render_light_shadows: glClipPlanef bound splits");
-
-			glPopMatrix();
 		}
 
 		_render_list_template<p_pass_mode>(p_params, p_render_data, 0, p_element_count, p_alpha_pass, true);
 
-		if (p_light.type == RS::LIGHT_DIRECTIONAL && max_clip_planes > 1) {
-			glDisable(GL_CLIP_PLANE0);
-			glDisable(GL_CLIP_PLANE1);
-		}
-
-		// Teardown projective texturing
-		if (GLES1_CONFIG->max_texture_units > 2) {
-			// TU2
-			glActiveTexture(GL_TEXTURE2);
-			glClientActiveTexture(GL_TEXTURE2);
-
-			glDisable(GL_TEXTURE_GEN_S);
-			glDisable(GL_TEXTURE_GEN_T);
-			glDisable(GL_TEXTURE_GEN_R);
-			glDisable(GL_TEXTURE_GEN_Q);
-
-			glMatrixMode(GL_TEXTURE);
-			glPopMatrix();
-
-			glBindTexture(GL_TEXTURE_2D, 0);
-			glDisable(GL_TEXTURE_2D);
-
-			GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_render_light_shadows: projective texturing teardown TU2");
-
-			// TU1
-			glActiveTexture(GL_TEXTURE1);
-			glClientActiveTexture(GL_TEXTURE1);
-
-			glDisable(GL_TEXTURE_GEN_S);
-			glDisable(GL_TEXTURE_GEN_T);
-			glDisable(GL_TEXTURE_GEN_R);
-			glDisable(GL_TEXTURE_GEN_Q);
-
-			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_COMPARE_MODE, GL_NONE);
-
-			glMatrixMode(GL_TEXTURE);
-			glPopMatrix();
-
-			glBindTexture(GL_TEXTURE_2D, 0);
-			glDisable(GL_TEXTURE_2D);
-
-			glMatrixMode(GL_MODELVIEW);
-			glActiveTexture(GL_TEXTURE0);
-			glClientActiveTexture(GL_TEXTURE0);
-
-			GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_render_light_shadows: projective texturing teardown TU1");
+		if (use_proj_tex) {
+			GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_render_light_shadows: projective texturing execution");
 		}
 	}
 
 	// Clean up
-	glMatrixMode(prev_matrix_mode);
+	glMatrixMode(GL_MODELVIEW);
 
 	_gl_set_light_chunk_state(0);
 }

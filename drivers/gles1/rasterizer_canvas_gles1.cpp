@@ -1123,7 +1123,7 @@ void RasterizerCanvasGLES1::canvas_begin(RID p_to_render_target, bool p_to_backb
 	if (render_target && render_target->clear_requested) {
 		const Color &col = render_target->clear_color;
 		glClearColor(col.r, col.g, col.b, render_target->is_transparent ? col.a : 1.0f);
-		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
+		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 		GL_CHECK_ERROR("GLES1::Canvas::canvas_begin: clear requested");
 		render_target->clear_requested = false;
 	}
@@ -1746,7 +1746,7 @@ void RasterizerCanvasGLES1::canvas_render_items_implementation(Item *p_item_list
 				glEnable(GL_DEPTH_TEST);
 				glDepthMask(GL_TRUE);
 				glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
-				RasterizerGLES1::clear_depth(1.0f);
+				GLES1::Router::clear_depth(1.0f);
 				glClear(GL_DEPTH_BUFFER_BIT);
 
 				// Only write into the depth buffer, squash Z closer to near plane

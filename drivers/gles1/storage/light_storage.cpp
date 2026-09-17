@@ -1492,7 +1492,13 @@ bool LightStorage::_shadow_atlas_find_shadow(ShadowAtlas *shadow_atlas, int *p_i
 			int size = (shadow_atlas->size >> 1) / shadow_atlas->quadrants[qidx].subdivision;
 
 			GLenum format = GL_DEPTH_COMPONENT;
-			GLenum type = GLES1_CONFIG->support_depth24 ? GL_UNSIGNED_INT : GL_UNSIGNED_SHORT;
+			GLenum type = GL_INVALID_ENUM;
+
+			if (!shadow_atlas->use_16_bits && (GLES1_CONFIG->support_depth24 || GLES1_CONFIG->support_depth32)) {
+				type = GL_UNSIGNED_INT;
+			} else {
+				type = GL_UNSIGNED_SHORT;
+			}
 
 			// Color texture attachment for FBO completeness
 			glBindTexture(GL_TEXTURE_2D, color_texture_id);
