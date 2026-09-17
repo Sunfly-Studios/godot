@@ -206,8 +206,7 @@ static _FORCE_INLINE_ void _batch_fill_vertex_depth(BATCH_TYPE::BatchVertex3DDep
 	m_idx[1] = 0;
 	m_idx[2] = 0;
 	m_idx[3] = 0;
-	float *weight = (float *)(&r_bv.instance_xform0.y);
-	weight[0] = 1.0f;
+	unaligned_write<float>(&r_bv.instance_xform0.y, 1.0f);
 }
 
 static _FORCE_INLINE_ void _batch_fill_vertex_depth_alpha(BATCH_TYPE::BatchVertex3DDepthAlpha &r_bv, const Vector3 *p_pos, const Vector2 *p_uv, uint32_t p_index, float p_matrix_index) {
@@ -222,8 +221,7 @@ static _FORCE_INLINE_ void _batch_fill_vertex_depth_alpha(BATCH_TYPE::BatchVerte
 	m_idx[1] = 0;
 	m_idx[2] = 0;
 	m_idx[3] = 0;
-	float *weight = (float *)(&r_bv.instance_xform0.y);
-	weight[0] = 1.0f;
+	unaligned_write<float>(&r_bv.instance_xform0.y, 1.0f);
 }
 
 static _FORCE_INLINE_ void _batch_decode_multimesh_instance(const float *p_data, RS::MultimeshTransformFormat p_format, bool p_uses_colors, uint32_t p_color_offset, Transform3D &r_xform, Color &r_color) {
@@ -312,8 +310,7 @@ static _FORCE_INLINE_ void _batch_fill_vertex_depth_instanced(BATCH_TYPE::BatchV
 	m_idx[1] = 0;
 	m_idx[2] = 0;
 	m_idx[3] = 0;
-	float *weight = (float *)(&r_bv.instance_xform0.y);
-	weight[0] = 1.0f;
+	unaligned_write<float>(&r_bv.instance_xform0.y, 1.0f);
 }
 
 static _FORCE_INLINE_ void _batch_fill_vertex_depth_alpha_instanced(BATCH_TYPE::BatchVertex3DDepthAlpha &r_bv, const Vector3 *p_pos, const Vector2 *p_uv, uint32_t p_index, const Transform3D &p_world_xform, float p_matrix_index) {
@@ -328,8 +325,7 @@ static _FORCE_INLINE_ void _batch_fill_vertex_depth_alpha_instanced(BATCH_TYPE::
 	m_idx[1] = 0;
 	m_idx[2] = 0;
 	m_idx[3] = 0;
-	float *weight = (float *)(&r_bv.instance_xform0.y);
-	weight[0] = 1.0f;
+	unaligned_write<float>(&r_bv.instance_xform0.y, 1.0f);
 }
 
 void RasterizerSceneGLES1::initialize() {
