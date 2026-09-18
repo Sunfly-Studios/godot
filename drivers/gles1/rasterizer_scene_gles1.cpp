@@ -3441,11 +3441,8 @@ void RasterizerSceneGLES1::_bind_sky_directional_lights(RID p_version, SkyShader
 void RasterizerSceneGLES1::_bind_scene_camera_uniforms(RID p_version, SceneShaderGLES1::ShaderVariant p_variant, uint64_t p_spec_constants) {
 	GLES1::MaterialStorage *material_storage = GLES1::MaterialStorage::get_singleton();
 
-	Projection proj;
-	memcpy(&proj, scene_state.ubo.projection_matrix, sizeof(float) * 16);
-
-	Projection inv_proj;
-	memcpy(&inv_proj, scene_state.ubo.inv_projection_matrix, sizeof(float) * 16);
+	Projection proj = _gl_array_to_projection(scene_state.ubo.projection_matrix);
+	Projection inv_proj = _gl_array_to_projection(scene_state.ubo.inv_projection_matrix);
 
 	Transform3D view;
 	_gl_reconstruct_view_matrix(view);
@@ -3760,7 +3757,6 @@ void RasterizerSceneGLES1::_setup_lights(const RenderDataGLES1 *p_render_data, b
 	GLES1::LightStorage *light_storage = GLES1::LightStorage::get_singleton();
 	GLES1::Config *config = GLES1::Config::get_singleton();
 
-	const Transform3D inverse_transform = p_render_data->inv_cam_transform;
 	const PagedArray<RID> &lights = *p_render_data->lights;
 
 	r_directional_light_count = 0;

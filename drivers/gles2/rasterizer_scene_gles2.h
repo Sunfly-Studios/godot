@@ -412,7 +412,10 @@ private:
 
 	_FORCE_INLINE_ Projection _gl_array_to_projection(const float *p_array) {
 		Projection proj;
-		memcpy(proj.columns, p_array, sizeof(float) * 16);
+		proj.columns[0] = Vector4(p_array[0], p_array[1], p_array[2], p_array[3]);
+		proj.columns[1] = Vector4(p_array[4], p_array[5], p_array[6], p_array[7]);
+		proj.columns[2] = Vector4(p_array[8], p_array[9], p_array[10], p_array[11]);
+		proj.columns[3] = Vector4(p_array[12], p_array[13], p_array[14], p_array[15]);
 		return proj;
 	}
 
