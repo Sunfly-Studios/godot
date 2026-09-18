@@ -574,14 +574,22 @@ RS::SurfaceData MeshStorage::mesh_get_surface(RID p_mesh, int p_surface) const {
 	sd.primitive = s.primitive;
 
 	if (sd.index_count) {
-		sd.index_data = GLES1::Utilities::get_singleton()->buffer_get_data(GL_ELEMENT_ARRAY_BUFFER, s.index_buffer, s.index_buffer_size);
+		if (s.index_buffer != 0) {
+			sd.index_data = GLES1::Utilities::get_singleton()->buffer_get_data(GL_ELEMENT_ARRAY_BUFFER, s.index_buffer, s.index_buffer_size);
+		} else {
+			sd.index_data = s.index_buffer_fallback;
+		}
 	}
 
 	sd.aabb = s.aabb;
 	for (uint32_t i = 0; i < s.lod_count; i++) {
 		RS::SurfaceData::LOD lod;
 		lod.edge_length = s.lods[i].edge_length;
-		lod.index_data = GLES1::Utilities::get_singleton()->buffer_get_data(GL_ELEMENT_ARRAY_BUFFER, s.lods[i].index_buffer, s.lods[i].index_buffer_size);
+		if (s.lods[i].index_buffer != 0) {
+			lod.index_data = GLES1::Utilities::get_singleton()->buffer_get_data(GL_ELEMENT_ARRAY_BUFFER, s.lods[i].index_buffer, s.lods[i].index_buffer_size);
+		} else {
+			lod.index_data = s.lods[i].index_buffer_fallback;
+		}
 		sd.lods.push_back(lod);
 	}
 
@@ -591,7 +599,11 @@ RS::SurfaceData MeshStorage::mesh_get_surface(RID p_mesh, int p_surface) const {
 	if (mesh->blend_shape_count) {
 		sd.blend_shape_data = Vector<uint8_t>();
 		for (uint32_t i = 0; i < mesh->blend_shape_count; i++) {
-			sd.blend_shape_data.append_array(GLES1::Utilities::get_singleton()->buffer_get_data(GL_ARRAY_BUFFER, s.blend_shapes[i].vertex_buffer, s.vertex_buffer_size));
+			if (s.blend_shapes[i].vertex_buffer != 0) {
+				sd.blend_shape_data.append_array(GLES1::Utilities::get_singleton()->buffer_get_data(GL_ARRAY_BUFFER, s.blend_shapes[i].vertex_buffer, s.vertex_buffer_size));
+			} else {
+				sd.blend_shape_data.append_array(s.blend_shapes[i].vertex_buffer_fallback);
+			}
 		}
 	}
 
@@ -820,7 +832,10 @@ void MeshStorage::mesh_surface_bind_arrays_gles1(void *p_surface, uint64_t p_inp
 	} else {
 		glDisableClientState(GL_COLOR_ARRAY);
 	}
-	glClientActiveTexture(GL_TEXTURE0);
+
+	if (GLES1_CONFIG->max_texture_units > 1) {
+		glClientActiveTexture(GL_TEXTURE0);
+	}
 
 	// tex_uv
 	if (version->attribs[RS::ARRAY_TEX_UV].enabled && (use_vbo_attrib || base_ptr_attrib)) {
@@ -835,33 +850,35 @@ void MeshStorage::mesh_surface_bind_arrays_gles1(void *p_surface, uint64_t p_inp
 		glDisableClientState(GL_TEXTURE_COORD_ARRAY);
 	}
 
-	glClientActiveTexture(GL_TEXTURE1);
+	if (GLES1_CONFIG->max_texture_units > 1) {
+		glClientActiveTexture(GL_TEXTURE1);
 
-	// Hijack GL_TEXTURE1 for tangents
-	if (version->attribs[RS::ARRAY_TANGENT].enabled && (use_vbo_vertex || base_ptr_vertex)) {
-		// Restore the vertex buffer binding before evaluating the tangent pointer
-		if (use_vbo_vertex) {
-			glBindBuffer(GL_ARRAY_BUFFER, s->vertex_buffer);
-		} else if (support_vbo) {
-			glBindBuffer(GL_ARRAY_BUFFER, 0);
+		// Hijack GL_TEXTURE1 for tangents
+		if (version->attribs[RS::ARRAY_TANGENT].enabled && (use_vbo_vertex || base_ptr_vertex)) {
+			// Restore the vertex buffer binding before evaluating the tangent pointer
+			if (use_vbo_vertex) {
+				glBindBuffer(GL_ARRAY_BUFFER, s->vertex_buffer);
+			} else if (support_vbo) {
+				glBindBuffer(GL_ARRAY_BUFFER, 0);
+			}
+
+			glEnableClientState(GL_TEXTURE_COORD_ARRAY);
+			glTexCoordPointer(
+				version->attribs[RS::ARRAY_TANGENT].size,
+				version->attribs[RS::ARRAY_TANGENT].type,
+				version->attribs[RS::ARRAY_TANGENT].stride,
+				GL_OFFSET_PTR_VERTEX(version->attribs[RS::ARRAY_TANGENT].offset)
+			);
+		} else {
+			glDisableClientState(GL_TEXTURE_COORD_ARRAY);
 		}
 
-		glEnableClientState(GL_TEXTURE_COORD_ARRAY);
-		glTexCoordPointer(
-			version->attribs[RS::ARRAY_TANGENT].size,
-			version->attribs[RS::ARRAY_TANGENT].type,
-			version->attribs[RS::ARRAY_TANGENT].stride,
-			GL_OFFSET_PTR_VERTEX(version->attribs[RS::ARRAY_TANGENT].offset)
-		);
-	} else {
-		glDisableClientState(GL_TEXTURE_COORD_ARRAY);
+		// Reset active client texture state for subsequent operations
+		glClientActiveTexture(GL_TEXTURE0);
 	}
 
 #undef GL_OFFSET_PTR_ATTRIB
 #undef GL_OFFSET_PTR_VERTEX
-
-	// Reset active client texture state for subsequent operations
-	glClientActiveTexture(GL_TEXTURE0);
 
 	GL_CHECK_ERROR("GLES1::MeshStorage::mesh_surface_bind_arrays_gles1: pointers bound");
 }
@@ -871,10 +888,12 @@ void MeshStorage::mesh_surface_unbind_arrays_gles1(void *p_surface) {
 	glDisableClientState(GL_NORMAL_ARRAY);
 	glDisableClientState(GL_COLOR_ARRAY);
 
-	glClientActiveTexture(GL_TEXTURE1);
-	glDisableClientState(GL_TEXTURE_COORD_ARRAY);
+	if (GLES1_CONFIG->max_texture_units > 1) {
+		glClientActiveTexture(GL_TEXTURE1);
+		glDisableClientState(GL_TEXTURE_COORD_ARRAY);
 
-	glClientActiveTexture(GL_TEXTURE0);
+		glClientActiveTexture(GL_TEXTURE0);
+	}
 	glDisableClientState(GL_TEXTURE_COORD_ARRAY);
 
 	if (GLES1_CONFIG->support_matrix_palette) {
@@ -2491,7 +2510,7 @@ int MeshStorage::_multimesh_get_visible_instances(RID p_multimesh) const {
 }
 
 MeshStorage::MultiMeshInterpolator *MeshStorage::_multimesh_get_interpolator(RID p_multimesh) const {
-    return nullptr;
+	return nullptr;
 }
 
 void MeshStorage::_update_dirty_multimeshes() {

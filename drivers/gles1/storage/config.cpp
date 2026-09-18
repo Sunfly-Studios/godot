@@ -99,73 +99,36 @@ bool Config::_probe_texture_envi(GLenum p_target, GLenum p_pname, GLint p_param)
 Config::Config() {
 	singleton = this;
 
-#ifdef WEB_ENABLED
-	{
-		char *extension_array_string = emscripten_webgl_get_supported_extensions();
-		PackedStringArray extension_array = String((const char *)extension_array_string).split(" ");
-		extensions.reserve(extension_array.size() * 2);
-		for (const String &s : extension_array) {
-			extensions.insert(s);
-			extensions.insert("GL_" + s);
-		}
-		free(extension_array_string);
-	}
-#else
+	// Flush any lingering errors before we start probing
+	_flush_gl_errors();
+
 	const GLubyte *extension_string = glGetString(GL_EXTENSIONS);
 	GL_CHECK_ERROR("GLES1::Config::setup: glGetString(GL_EXTENSIONS)");
-	if (extension_string != nullptr) {
-		const GLubyte *start = extension_string;
-		const GLubyte *end = extension_string + strlen((const char *)extension_string);
-		const GLubyte *current = start;
-
-		while (current < end) {
-			if (*current == ' ' || *current == '\0') {
-				extensions.insert(String((const char *)start, (int)(current - start)));
-				start = current + 1;
-			}
-			current++;
+	if (extension_string) {
+		PackedStringArray ext_array = String((const char *)extension_string).split(" ", false);
+		for (int i = 0; i < ext_array.size(); i++) {
+			extensions.insert(ext_array[i]);
 		}
 	}
-#endif
 
 	// Fixed-Function / Context Limitations
 	GLint result = 0;
 	GLint result_2[2] = { 0, 0 };
 
 	glGetIntegerv(GL_MAX_TEXTURE_UNITS, &result);
-	max_texture_units = CLAMP(result, 1, 32);
 
-	// Probe the reported limit to detect lying drivers (e.g., Android Emulators)
-	_flush_gl_errors();
-	for (int i = 0; i < max_texture_units; i++) {
-		glActiveTexture(GL_TEXTURE0 + i);
-		if (glGetError() == GL_INVALID_ENUM) {
-			max_texture_units = i;
-			break;
-		}
-
-		glClientActiveTexture(GL_TEXTURE0 + i);
-		if (glGetError() == GL_INVALID_ENUM) {
-			max_texture_units = i;
-			break;
-		}
-	}
-	glActiveTexture(GL_TEXTURE0);
-	glClientActiveTexture(GL_TEXTURE0);
-	_flush_gl_errors();
-
-	max_texture_units = MAX(max_texture_units, 2); // Minimum 2 texture units required by spec
+	max_texture_units = MAX(result, 2); // Minimum 2 texture units required by spec
 	max_texture_image_units = max_texture_units;
 
 	glGetIntegerv(GL_MAX_TEXTURE_SIZE, &result);
-	max_texture_size = (result >= 64) ? result : 1024;
+	max_texture_size = MAX(result, 1024);
 
 	glGetIntegerv(GL_MAX_VIEWPORT_DIMS, result_2);
-	max_viewport_size[0] = (result_2[0] >= 64) ? result_2[0] : 1024;
-	max_viewport_size[1] = (result_2[1] >= 64) ? result_2[1] : 1024;
+	max_viewport_size[0] = MAX(result_2[0], 1024);
+	max_viewport_size[1] = MAX(result_2[1], 1024);
 
 	glGetIntegerv(GL_MAX_LIGHTS, &result);
-	max_lights = CLAMP(result, 0, 32);
+	max_lights = MAX(result, 1); // Minimum 1 light guaranteed by spec.
 
 	glGetIntegerv(GL_MAX_VERTEX_UNITS_OES, &result);
 
@@ -173,46 +136,26 @@ Config::Config() {
 	max_vertex_units = CLAMP(result, 3, 6);
 
 	glGetIntegerv(GL_MAX_PALETTE_MATRICES_OES, &result);
+
 	// Guaranteed minimum is 9, extended implementations up to 32.
 	max_palette_matrices = CLAMP(result, 9, 32);
 
-	_flush_gl_errors();
-	for (int i = 0; i < max_lights; i++) {
-		glEnable(GL_LIGHT0 + i);
-		if (glGetError() == GL_INVALID_ENUM) {
-			max_lights = i;
-			break;
-		}
-		glDisable(GL_LIGHT0 + i); // Keep state clean during probe
-	}
-	_flush_gl_errors();
-	max_lights = MAX(max_lights, 8); // Minimum 8 lights required by spec
-
 	glGetIntegerv(GL_MAX_CLIP_PLANES, &result);
-	max_clip_planes = CLAMP(result, 0, 32);
-
-	_flush_gl_errors();
-	for (int i = 0; i < max_clip_planes; i++) {
-		glEnable(GL_CLIP_PLANE0 + i);
-		if (glGetError() == GL_INVALID_ENUM) {
-			max_clip_planes = i;
-			break;
-		}
-		glDisable(GL_CLIP_PLANE0 + i); // Keep state clean during probe
-	}
-	_flush_gl_errors();
-	max_clip_planes = MAX(max_clip_planes, 6); // Minimum 6 clip planes required by spec
+	max_clip_planes = MAX(result, 1); // Minimum 1 clip plane guaranteed by spec.
 
 	glGetIntegerv(GL_MAX_MODELVIEW_STACK_DEPTH, &result);
-	max_modelview_stack_depth = (result >= 0) ? result : 16;
+	max_modelview_stack_depth = MAX(result, 16);
 
 	glGetIntegerv(GL_MAX_PROJECTION_STACK_DEPTH, &result);
-	max_projection_stack_depth = (result >= 0) ? result : 2;
+	max_projection_stack_depth = MAX(result, 2);
 
 	glGetIntegerv(GL_MAX_TEXTURE_STACK_DEPTH, &result);
-	max_texture_stack_depth = (result >= 0) ? result : 2;
+	max_texture_stack_depth = MAX(result, 2);
 
 	GL_CHECK_ERROR("GLES1::Config::setup: Base glGetIntegerv limits");
+
+	// Clean up all the errors generated.
+	_flush_gl_errors();
 
 	// GLES1 doesn't support UBOs
 	max_uniform_buffer_size = 0;
@@ -237,21 +180,16 @@ Config::Config() {
 	support_mapbuffer = extensions.has("GL_OES_mapbuffer") || extensions.has("GL_NV_copy_buffer") || extensions.has("GL_ARB_map_buffer_range");
 	srgb_framebuffer_supported = extensions.has("GL_ARB_framebuffer_sRGB") || extensions.has("GL_EXT_framebuffer_sRGB");
 
-	// 3D
+	// 3D Extensions
 	support_vertex_half_float = extensions.has("GL_OES_vertex_half_float") || extensions.has("GL_ARB_half_float_pixel");
 	support_texture_env_add = extensions.has("GL_OES_texture_env_add") || extensions.has("GL_EXT_texture_env_add") || extensions.has("GL_ARB_texture_env_add");
 	support_texture_env_dot3 = extensions.has("GL_OES_texture_env_dot3") || extensions.has("GL_EXT_texture_env_dot3") || extensions.has("GL_ARB_texture_env_dot3");
 	support_point_size_array = extensions.has("GL_OES_point_size_array");
 	support_depth_texture = extensions.has("GL_OES_depth_texture") || extensions.has("GL_EXT_depth_texture") || extensions.has("GL_ARB_depth_texture");
 	support_shadow = extensions.has("GL_ARB_shadow") || extensions.has("GL_OES_shadow") || extensions.has("GL_EXT_shadow");
-	
-	// Just because the extension exists doesn't
-	// mean the GLES1 wrapper accepts GL_COMBINE.
 	support_texture_env_combine = extensions.has("GL_OES_texture_env_crossbar") || extensions.has("GL_ARB_texture_env_combine") || extensions.has("GL_EXT_texture_env_combine");
+
 	if (support_texture_env_combine) {
-#ifndef GL_COMBINE
-#define GL_COMBINE 0x8570
-#endif
 		if (!_probe_texture_envi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_COMBINE)) {
 			support_texture_env_combine = false;
 		}
@@ -344,7 +282,7 @@ Config::Config() {
 		support_vbo = false;
 	}
 
-	if (OS::get_singleton()->get_current_rendering_driver_name() == "opengl1_angle" || OS::get_singleton()->has_feature("web")) {
+	if (OS::get_singleton()->get_current_rendering_driver_name() == "opengl1_angle") {
 		polyfill_half2float = false;
 	}
 
@@ -358,8 +296,8 @@ Config::Config() {
 		PackedStringArray gl_ver_parts = gl_ver.split(".");
 		
 		if (gl_ver_parts.size() >= 2) {
-			int major = gl_ver_parts[0].to_int();
-			int minor = gl_ver_parts[1].to_int();
+			int major = MIN(gl_ver_parts[0].to_int(), 1);
+			int minor = MIN(gl_ver_parts[1].to_int(), 5);
 			
 			if (major < 1 || (major == 1 && minor < 5)) {
 				if (support_fbo) {

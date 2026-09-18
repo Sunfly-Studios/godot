@@ -53,10 +53,12 @@ RasterizerSceneGLES1 *RasterizerSceneGLES1::singleton = nullptr;
 
 // Shared constants across the driver
 static constexpr float qv_fallback[12] = {
-	-1.0f, -1.0f, -1.0f,
-	1.0f, -1.0f, -1.0f,
-	-1.0f, 1.0f, -1.0f,
-	1.0f, 1.0f, -1.0f
+	// -0.99 is for some drivers that have strict
+	// frustum culling.
+	-1.0f, -1.0f, -0.999999f,
+	1.0f, -1.0f, -0.999999f,
+	-1.0f, 1.0f, -0.999999f,
+	1.0f, 1.0f, -0.999999f
 };
 
 static const Vector3 view_normals[6] = {
@@ -584,21 +586,6 @@ void fragment() {
 		rotate_gizmo_ring_verts[k * 6 + 3] = -Math::sin(angle);
 		rotate_gizmo_ring_verts[k * 6 + 4] = Math::cos(angle);
 		rotate_gizmo_ring_verts[k * 6 + 5] = 0.0f;
-	}
-
-	// Editor origin lines
-	if (GLES1_CONFIG->support_vbo) {
-		// Prebake the editor origin lines directly to VRAM.
-		glGenBuffers(1, &editor_lines_vbo);
-		glBindBuffer(GL_ARRAY_BUFFER, editor_lines_vbo);
-		glBufferData(GL_ARRAY_BUFFER, sizeof(line_verts), line_verts, GL_STATIC_DRAW);
-
-		glGenBuffers(1, &editor_lines_color_vbo);
-		glBindBuffer(GL_ARRAY_BUFFER, editor_lines_color_vbo);
-		glBufferData(GL_ARRAY_BUFFER, sizeof(line_colors), line_colors, GL_STATIC_DRAW);
-
-		glBindBuffer(GL_ARRAY_BUFFER, 0);
-		GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::initialize: TOOLS_ENABLED editor lines prebake");
 	}
 #endif
 
@@ -1436,7 +1423,7 @@ void RasterizerSceneGLES1::_draw_sky(RID p_env, const Projection &p_projection, 
 		uvw_ptr[i * 3 + 2] = cube_normal.z;
 	}
 
-	if (sky && sky->radiance != 0 && GLES1_CONFIG->support_cubemap) {
+	if (sky && sky->radiance != 0 && GLES1_CONFIG->support_cubemap && GLES1_CONFIG->support_fbo) {
 		glEnable(GL_TEXTURE_CUBE_MAP);
 		glBindTexture(GL_TEXTURE_CUBE_MAP, sky->radiance);
 		glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE);
@@ -1490,7 +1477,7 @@ void RasterizerSceneGLES1::_draw_sky(RID p_env, const Projection &p_projection, 
 	GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_draw_sky: glDrawArrays");
 
 	// Unbind state
-	if (sky && sky->radiance != 0 && GLES1_CONFIG->support_cubemap) {
+	if (sky && sky->radiance != 0 && GLES1_CONFIG->support_cubemap && GLES1_CONFIG->support_fbo) {
 		glDisable(GL_TEXTURE_CUBE_MAP);
 		glBindTexture(GL_TEXTURE_CUBE_MAP, 0);
 		GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_draw_sky: unbind cubemap");
@@ -1619,8 +1606,10 @@ void RasterizerSceneGLES1::_update_sky_radiance(RID p_env, const Projection &p_p
 			}
 			glDisable(GL_TEXTURE_2D);
 			glBindTexture(GL_TEXTURE_2D, 0);
-			glDisable(GL_TEXTURE_CUBE_MAP);
-			glBindTexture(GL_TEXTURE_CUBE_MAP, 0);
+			if (GLES1_CONFIG->support_cubemap) {
+				glDisable(GL_TEXTURE_CUBE_MAP);
+				glBindTexture(GL_TEXTURE_CUBE_MAP, 0);
+			}
 			glDisableClientState(GL_TEXTURE_COORD_ARRAY);
 		}
 		if (max_textures > 1) {
@@ -2708,8 +2697,11 @@ void RasterizerSceneGLES1::_render_single_item_immediate(const GeometryInstanceS
 	}
 
 	mesh_storage->mesh_surface_bind_arrays_gles1(p_surface->surface, shader->vertex_input_mask);
+	uint32_t index_count = mesh_storage->mesh_surface_get_index_count(p_surface->surface, p_surface->lod_index);
+	bool has_indices = index_count > 0;
 	GLuint index_array_gl = mesh_storage->mesh_surface_get_index_buffer(p_surface->surface, p_surface->lod_index);
 	bool use_index_buffer = index_array_gl != 0;
+
 	if (use_index_buffer) {
 		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, index_array_gl);
 		GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_render_single_item_immediate: glBindBuffer GL_ELEMENT_ARRAY_BUFFER");
@@ -2751,14 +2743,20 @@ void RasterizerSceneGLES1::_render_single_item_immediate(const GeometryInstanceS
 				glColor4f(inst_color.r, inst_color.g, inst_color.b, inst_color.a);
 			}
 
-			if (use_index_buffer) {
+			if (has_indices) {
 				GLenum index_type = mesh_storage->mesh_surface_get_index_type(p_surface->surface);
 
 				// Can't draw if we don't support 32-bit indices.
 				if (index_type == GL_UNSIGNED_INT && !GLES1_CONFIG->support_32_bits_indices) {
 					break;
 				}
-				glDrawElements(primitive_gl, drawn_count, index_type, nullptr);
+				
+				if (use_index_buffer) {
+					glDrawElements(primitive_gl, drawn_count, index_type, nullptr);
+				} else {
+					const uint8_t *index_ptr = mesh_storage->mesh_surface_get_index_array(p_surface->surface, p_surface->lod_index);
+					glDrawElements(primitive_gl, drawn_count, index_type, index_ptr);
+				}
 				GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_render_single_item_immediate: glDrawElements");
 			} else {
 				glDrawArrays(primitive_gl, 0, drawn_count);
@@ -3043,6 +3041,9 @@ void RasterizerSceneGLES1::_draw_editor_gizmos(const RenderDataGLES1 *p_render_d
 					if (surf->gizmo_index_buffer != 0) {
 						glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, surf->gizmo_index_buffer);
 						glDrawElements(primitive_gl, surf->index_cache.size(), GL_UNSIGNED_SHORT, nullptr);
+					} else if (surf->gizmo_index_array) {
+						glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+						glDrawElements(primitive_gl, surf->index_cache.size(), GL_UNSIGNED_SHORT, surf->gizmo_index_array);
 					} else {
 						glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
 						glDrawArrays(primitive_gl, 0, surf->vertex_cache.size());
@@ -3108,11 +3109,14 @@ void RasterizerSceneGLES1::_draw_editor_lines(const RenderDataGLES1 *p_render_da
 	_gl_setup_editor_state(p_render_data, p_flip_y);
 
 	float max_dist = p_render_data->cam_transform.origin.length() + p_render_data->z_far;
+	if (Math::is_nan(max_dist) || Math::is_inf(max_dist)) {
+		max_dist = 4096.0f;
+	}
 
 	// GLES1 doesn't like long distances (it starts
 	// to jitter when drawing these long lines).
 	// 2^12 stretches it far enough into "infinity"
-	max_dist = MAX(max_dist, 4096.0f);
+	max_dist = CLAMP(max_dist, 4096.0f, 1048576.0f);
 
 	glScalef(max_dist, max_dist, max_dist);
 	GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_draw_editor_lines: glScalef");
@@ -3130,28 +3134,14 @@ void RasterizerSceneGLES1::_draw_editor_lines(const RenderDataGLES1 *p_render_da
 
 	_gl_set_client_states(GL_CLIENT_STATE_VERTEX | GL_CLIENT_STATE_COLOR);
 
-	if (GLES1_CONFIG->support_vbo && editor_lines_vbo != 0) {
-		glBindBuffer(GL_ARRAY_BUFFER, editor_lines_vbo);
-		glVertexPointer(3, GL_FLOAT, 0, nullptr);
-
-		glBindBuffer(GL_ARRAY_BUFFER, editor_lines_color_vbo);
-		glColorPointer(4, GL_UNSIGNED_BYTE, 0, nullptr);
-	} else {
-		if (GLES1_CONFIG->support_vbo) {
-			glBindBuffer(GL_ARRAY_BUFFER, 0);
-		}
-		glVertexPointer(3, GL_FLOAT, 0, line_verts);
-		glColorPointer(4, GL_UNSIGNED_BYTE, 0, line_colors);
+	if (GLES1_CONFIG->support_vbo) {
+		glBindBuffer(GL_ARRAY_BUFFER, 0);
 	}
 
-	// Draw each of the axis lines individually.
-	// This allows for customising each line
-	// individually if needed.
+	// Locally duplicate the colors so we can bake the dynamic Y-fade
+	uint8_t dynamic_colors[48] = {};
+	memcpy(dynamic_colors, line_colors, sizeof(line_colors));
 
-	// X axis
-	glDrawArrays(GL_LINES, 0, 4);
-
-	// Y axis
 	// Fade the alpha to 0 as the camera looks directly down the Y-axis.
 	Vector3 view_dir = p_render_data->cam_transform.basis.get_column(2).normalized();
 	constexpr float MAX_FADE = 0.5f;
@@ -3163,27 +3153,25 @@ void RasterizerSceneGLES1::_draw_editor_lines(const RenderDataGLES1 *p_render_da
 		alpha_factor = CLAMP(1.0f - ((y_dot - MAX_FADE) / FADE_RANGE), 0.0f, 1.0f);
 	}
 
-	glDisableClientState(GL_COLOR_ARRAY);
-	glColor4f(line_colors[16] / 255.0f, line_colors[17] / 255.0f, line_colors[18] / 255.0f, alpha_factor);
+	uint8_t alpha_byte = static_cast<uint8_t>(alpha_factor * 255.0f);
 
-	glPushMatrix();
-	glDrawArrays(GL_LINES, 4, 4);
-	glPopMatrix();
+	// Apply alpha to the Y-axis vertices (indices 4, 5, 6, 7 -> byte offsets + 3)
+	dynamic_colors[4 * 4 + 3] = alpha_byte;
+	dynamic_colors[5 * 4 + 3] = alpha_byte;
+	dynamic_colors[6 * 4 + 3] = alpha_byte;
+	dynamic_colors[7 * 4 + 3] = alpha_byte;
 
-	glEnableClientState(GL_COLOR_ARRAY);
+	glVertexPointer(3, GL_FLOAT, 0, line_verts);
+	glColorPointer(4, GL_UNSIGNED_BYTE, 0, dynamic_colors);
 
-	// Z axis
-	glDrawArrays(GL_LINES, 8, 4);
+	// Draw all 3 axies
+	glDrawArrays(GL_LINES, 0, 12);
 	GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_draw_editor_lines: glDrawArrays");
 
 	// Reset states
 	_gl_set_client_states(0);
 	glLineWidth(1.0f); // Default value
 	glDisable(GL_BLEND);
-
-	if (GLES1_CONFIG->support_vbo) {
-		glBindBuffer(GL_ARRAY_BUFFER, 0);
-	}
 
 	_gl_teardown_editor_state();
 	GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_draw_editor_lines: cleanup");
@@ -4347,6 +4335,13 @@ void RasterizerSceneGLES1::render_scene(const Ref<RenderSceneBuffers> &p_render_
 		// We're probably rendering directly to an XR device.
 		flip_y = false;
 	}
+
+	if (GLES1_CONFIG->gl_minor_version < 5 && rt && rt->direct_to_screen) {
+		// For OpenGL < 1.5, we must not flip as these expect
+		// normal Y-up coordinates.
+		flip_y = false;
+	}
+
 	if (!flip_y) {
 		reverse_cull = !reverse_cull;
 	}
@@ -5140,12 +5135,6 @@ RasterizerSceneGLES1::~RasterizerSceneGLES1() {
 	}
 
 #ifdef TOOLS_ENABLED
-	if (editor_lines_vbo != 0) {
-		glDeleteBuffers(1, &editor_lines_vbo);
-	}
-	if (editor_lines_color_vbo != 0) {
-		glDeleteBuffers(1, &editor_lines_color_vbo);
-	}
 	if (rotate_gizmo_border_vbo != 0) {
 		glDeleteBuffers(1, &rotate_gizmo_border_vbo);
 	}

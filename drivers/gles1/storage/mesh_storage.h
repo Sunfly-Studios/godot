@@ -105,6 +105,7 @@ struct Mesh {
 			uint32_t index_count = 0;
 			uint32_t index_buffer_size = 0;
 			GLuint index_buffer = 0;
+			Vector<uint8_t> index_buffer_fallback;
 		};
 
 		LOD *lods = nullptr;
@@ -123,6 +124,7 @@ struct Mesh {
 		struct BlendShape {
 			GLuint vertex_buffer = 0;
 			GLuint vertex_array = 0;
+			Vector<uint8_t> vertex_buffer_fallback;
 		};
 
 		BlendShape *blend_shapes = nullptr;
@@ -413,7 +415,7 @@ public:
 			r_index_count = s->lods[current_lod].index_count;
 			return current_lod + 1;
 		}
-    }
+	}
 
 	_FORCE_INLINE_ GLuint mesh_surface_get_index_buffer(void *p_surface, uint32_t p_lod) const {
 		Mesh::Surface *s = reinterpret_cast<Mesh::Surface *>(p_surface);
@@ -424,7 +426,7 @@ public:
 		} else {
 			return s->lods[p_lod - 1].index_buffer;
 		}
-    }
+	}
 
 	_FORCE_INLINE_ GLuint mesh_surface_get_index_buffer_wireframe(void *p_surface) const {
 		Mesh::Surface *s = reinterpret_cast<Mesh::Surface *>(p_surface);
@@ -435,6 +437,26 @@ public:
 		}
 
 		return 0;
+	}
+
+	_FORCE_INLINE_ uint32_t mesh_surface_get_index_count(void *p_surface, uint32_t p_lod) const {
+		Mesh::Surface *s = reinterpret_cast<Mesh::Surface *>(p_surface);
+		ERR_FAIL_NULL_V(s, 0);
+		if (p_lod == 0) {
+			return s->index_count;
+		} else {
+			return s->lods[p_lod - 1].index_count;
+		}
+	}
+
+	_FORCE_INLINE_ const uint8_t *mesh_surface_get_index_array(void *p_surface, uint32_t p_lod) const {
+		Mesh::Surface *s = reinterpret_cast<Mesh::Surface *>(p_surface);
+		ERR_FAIL_NULL_V(s, nullptr);
+		if (p_lod == 0) {
+			return s->index_buffer_fallback.ptr();
+		} else {
+			return s->lods[p_lod - 1].index_buffer_fallback.ptr();
+		}
 	}
 
 	_FORCE_INLINE_ GLenum mesh_surface_get_index_type(void *p_surface) const {
@@ -474,7 +496,7 @@ public:
 		r_vertex_array_gl = s->versions[version].vertex_array;
 
 		s->version_lock.unlock();
-    }
+	}
 
 	/* MESH INSTANCE API */
 
@@ -526,7 +548,7 @@ public:
 		r_vertex_array_gl = mis->versions[version].vertex_array;
 
 		s->version_lock.unlock();
-    }
+	}
 
 	/* MULTIMESH API */
 

@@ -192,10 +192,6 @@ private:
 	} scene_globals;
 
 #ifdef TOOLS_ENABLED
-	// Editor lines
-	GLuint editor_lines_vbo = 0;
-	GLuint editor_lines_color_vbo = 0;
-
 	// 3D Gizmos
 	GLuint rotate_gizmo_border_vbo = 0;
 	float *rotate_gizmo_border_verts = nullptr;
