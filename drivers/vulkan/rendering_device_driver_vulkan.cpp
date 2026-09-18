@@ -49,6 +49,16 @@
 
 #define PRINT_NATIVE_COMMANDS 0
 
+#define POWERVR_ROGUE_SHADER_CRASH_WORKAROUND_MUTEX_LOCK \
+	if (powervr_rogue_shader_crash_workaround_mutex) { \
+		powervr_rogue_shader_crash_workaround_mutex->lock(); \
+	}
+
+#define POWERVR_ROGUE_SHADER_CRASH_WORKAROUND_MUTEX_UNLOCK \
+	if (powervr_rogue_shader_crash_workaround_mutex) { \
+		powervr_rogue_shader_crash_workaround_mutex->unlock(); \
+	}
+
 /*****************/
 /**** GENERIC ****/
 /*****************/
@@ -685,6 +695,11 @@ void RenderingDeviceDriverVulkan::_check_driver_workarounds(const VkPhysicalDevi
 
 	// Workaround for a bug in NVIDIA drivers where submitting a render pass with no bound pipeline and an attachment using the "Don't Care" store operation causes a crash.
 	driver_workarounds.avoid_store_op_dont_care_in_draw_list_with_no_bound_pipeline = (p_device_properties.vendorID == RenderingContextDriver::Vendor::VENDOR_NVIDIA);
+
+	// Workaround for shader compilers ("libufwriter.so") in PowerVR Rogue GPUs where creating shader modules or pipelines concurrently causes a crash.
+	if (p_device_properties.vendorID == RenderingContextDriver::Vendor::VENDOR_IMGTEC && strstr(p_device_properties.deviceName, "Rogue") != nullptr) {
+		powervr_rogue_shader_crash_workaround_mutex = memnew(BinaryMutex); // Non-null mutex pointer enables the workaround.
+	}
 }
 
 void RenderingDeviceDriverVulkan::_get_device_properties() {
@@ -3876,7 +3891,9 @@ RDD::ShaderID RenderingDeviceDriverVulkan::shader_create_from_bytecode(const Vec
 		shader_module_create_info.pCode = (const uint32_t *)stages_spirv[i].ptr();
 
 		VkShaderModule vk_module = VK_NULL_HANDLE;
+		POWERVR_ROGUE_SHADER_CRASH_WORKAROUND_MUTEX_LOCK
 		VkResult res = vkCreateShaderModule(vk_device, &shader_module_create_info, VKC::get_allocation_callbacks(VK_OBJECT_TYPE_SHADER_MODULE), &vk_module);
+		POWERVR_ROGUE_SHADER_CRASH_WORKAROUND_MUTEX_UNLOCK
 		if (res) {
 			error_text = "Error (" + itos(res) + ") creating shader module for stage: " + String(SHADER_STAGE_NAMES[r_shader_desc.stages[i]]);
 			break;
@@ -5350,7 +5367,10 @@ RDD::PipelineID RenderingDeviceDriverVulkan::render_pipeline_create(
 	// ---
 
 	VkPipeline vk_pipeline = VK_NULL_HANDLE;
+
+	POWERVR_ROGUE_SHADER_CRASH_WORKAROUND_MUTEX_LOCK
 	VkResult err = vkCreateGraphicsPipelines(vk_device, pipelines_cache.vk_cache, 1, &pipeline_create_info, VKC::get_allocation_callbacks(VK_OBJECT_TYPE_PIPELINE), &vk_pipeline);
+	POWERVR_ROGUE_SHADER_CRASH_WORKAROUND_MUTEX_UNLOCK
 
 	// Don't print error for VK_ERROR_UNKNOWN on Adreno 660.
 	if (unlikely(err == VK_ERROR_UNKNOWN && driver_workarounds.dont_print_on_render_pipeline_creation_failure)) {
@@ -5434,7 +5454,11 @@ RDD::PipelineID RenderingDeviceDriverVulkan::compute_pipeline_create(ShaderID p_
 	}
 
 	VkPipeline vk_pipeline = VK_NULL_HANDLE;
+
+	POWERVR_ROGUE_SHADER_CRASH_WORKAROUND_MUTEX_LOCK
 	VkResult err = vkCreateComputePipelines(vk_device, pipelines_cache.vk_cache, 1, &pipeline_create_info, VKC::get_allocation_callbacks(VK_OBJECT_TYPE_PIPELINE), &vk_pipeline);
+	POWERVR_ROGUE_SHADER_CRASH_WORKAROUND_MUTEX_UNLOCK
+	
 	ERR_FAIL_COND_V_MSG(err, PipelineID(), "vkCreateComputePipelines failed with error " + itos(err) + ".");
 
 	return PipelineID(vk_pipeline);
@@ -6116,6 +6140,8 @@ RenderingDeviceDriverVulkan::~RenderingDeviceDriverVulkan() {
 		buffer_free(breadcrumb_buffer);
 	}
 #endif
+
+	memdelete(powervr_rogue_shader_crash_workaround_mutex);
 
 	while (small_allocs_pools.size()) {
 		HashMap<uint32_t, VmaPool>::Iterator E = small_allocs_pools.begin();
