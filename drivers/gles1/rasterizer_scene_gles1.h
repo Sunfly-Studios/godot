@@ -572,11 +572,9 @@ private:
 			glActiveTexture(texture_unit);
 			glClientActiveTexture(texture_unit);
 
-			glDisable(GL_TEXTURE_GEN_S);
-			glDisable(GL_TEXTURE_GEN_T);
-			glDisable(GL_TEXTURE_GEN_R);
-			glDisable(GL_TEXTURE_GEN_Q);
-			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_COMPARE_MODE, GL_NONE);
+			if (GLES1_CONFIG->support_shadow) {
+				glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_COMPARE_MODE, GL_NONE);
+			}
 
 			glMatrixMode(GL_TEXTURE);
 			glPopMatrix();

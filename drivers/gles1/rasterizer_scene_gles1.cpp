@@ -2481,8 +2481,40 @@ void RasterizerSceneGLES1::_batch_render_items(GLES1::SceneMaterialData *p_mater
 		_gl_load_transform(model_view);
 		GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_batch_render_items: glLoadMatrixf MODELVIEW single-item");
 
+		if (bdata.pass_mode == PASS_MODE_SHADOW_PROJECTION) {
+			if (GLES1_CONFIG->max_texture_units > 1) {
+				glActiveTexture(GL_TEXTURE1);
+				glMatrixMode(GL_TEXTURE);
+				glPushMatrix();
+				_gl_mult_transform(world_xform);
+			}
+			if (GLES1_CONFIG->max_texture_units > 2) {
+				glActiveTexture(GL_TEXTURE2);
+				glMatrixMode(GL_TEXTURE);
+				glPushMatrix();
+				_gl_mult_transform(world_xform);
+			}
+			glActiveTexture(GL_TEXTURE0);
+			glMatrixMode(GL_MODELVIEW);
+		}
+
 		bool has_color = first_surf->color_cache.size() > 0;
 		_batch_render_generic(p_primitive, 0, p_batch.num_indices, has_color);
+
+		if (bdata.pass_mode == PASS_MODE_SHADOW_PROJECTION) {
+			if (GLES1_CONFIG->max_texture_units > 1) {
+				glActiveTexture(GL_TEXTURE1);
+				glMatrixMode(GL_TEXTURE);
+				glPopMatrix();
+			}
+			if (GLES1_CONFIG->max_texture_units > 2) {
+				glActiveTexture(GL_TEXTURE2);
+				glMatrixMode(GL_TEXTURE);
+				glPopMatrix();
+			}
+			glActiveTexture(GL_TEXTURE0);
+			glMatrixMode(GL_MODELVIEW);
+		}
 
 		GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_batch_render_items: Option 2 single-item");
 	}
@@ -2526,17 +2558,28 @@ void RasterizerSceneGLES1::_batch_render_generic(RS::PrimitiveType p_primitive, 
 
 	if (GLES1_CONFIG->max_texture_units > 1) {
 		glClientActiveTexture(GL_TEXTURE1);
-		if (
+		if (bdata.pass_mode == PASS_MODE_SHADOW_PROJECTION) {
+			glEnableClientState(GL_TEXTURE_COORD_ARRAY);
+		} else if (
 			bdata.fvf != BatcherEnums::FVF_DEPTH_ONLY &&
 			bdata.fvf != BatcherEnums::FVF_DEPTH_ALPHA &&
-			bdata.pass_mode != PASS_MODE_SHADOW &&
-			bdata.pass_mode != PASS_MODE_SHADOW_PROJECTION
+			bdata.pass_mode != PASS_MODE_SHADOW
 		) {
 			glEnableClientState(GL_TEXTURE_COORD_ARRAY);
 		} else {
 			glDisableClientState(GL_TEXTURE_COORD_ARRAY);
 		}
 		GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_batch_render_generic: glClientActiveTexture GL_TEXTURE1 setup");
+
+		if (GLES1_CONFIG->max_texture_units > 2) {
+			glClientActiveTexture(GL_TEXTURE2);
+			if (bdata.pass_mode == PASS_MODE_SHADOW_PROJECTION) {
+				glEnableClientState(GL_TEXTURE_COORD_ARRAY);
+			} else {
+				glDisableClientState(GL_TEXTURE_COORD_ARRAY);
+			}
+		}
+
 		glClientActiveTexture(GL_TEXTURE0);
 	}
 
@@ -2564,7 +2607,17 @@ void RasterizerSceneGLES1::_batch_render_generic(RS::PrimitiveType p_primitive, 
 			glTexCoordPointer(2, GL_FLOAT, stride, (void *)BATCH_INSTANCED_OFFSET_OF(uv));
 			glColorPointer(4, GL_UNSIGNED_BYTE, stride, (void *)BATCH_INSTANCED_OFFSET_OF(color));
 
-			if (GLES1_CONFIG->max_texture_units > 1) {
+			if (bdata.pass_mode == PASS_MODE_SHADOW_PROJECTION) {
+				if (GLES1_CONFIG->max_texture_units > 1) {
+					glClientActiveTexture(GL_TEXTURE1);
+					glTexCoordPointer(3, GL_FLOAT, stride, (void *)BATCH_INSTANCED_OFFSET_OF(pos));
+				}
+				if (GLES1_CONFIG->max_texture_units > 2) {
+					glClientActiveTexture(GL_TEXTURE2);
+					glTexCoordPointer(3, GL_FLOAT, stride, (void *)BATCH_INSTANCED_OFFSET_OF(pos));
+				}
+				glClientActiveTexture(GL_TEXTURE0);
+			} else if (GLES1_CONFIG->max_texture_units > 1) {
 				glClientActiveTexture(GL_TEXTURE1);
 				glTexCoordPointer(4, GL_FLOAT, stride, (void *)BATCH_INSTANCED_OFFSET_OF(tangent));
 				glClientActiveTexture(GL_TEXTURE0);
@@ -2577,6 +2630,18 @@ void RasterizerSceneGLES1::_batch_render_generic(RS::PrimitiveType p_primitive, 
 		} else if (bdata.fvf == BatcherEnums::FVF_DEPTH_ONLY) {
 			glVertexPointer(3, GL_FLOAT, stride, (void *)BATCH_DEPTH_OFFSET_OF(pos));
 
+			if (bdata.pass_mode == PASS_MODE_SHADOW_PROJECTION) {
+				if (GLES1_CONFIG->max_texture_units > 1) {
+					glClientActiveTexture(GL_TEXTURE1);
+					glTexCoordPointer(3, GL_FLOAT, stride, (void *)BATCH_DEPTH_OFFSET_OF(pos));
+				}
+				if (GLES1_CONFIG->max_texture_units > 2) {
+					glClientActiveTexture(GL_TEXTURE2);
+					glTexCoordPointer(3, GL_FLOAT, stride, (void *)BATCH_DEPTH_OFFSET_OF(pos));
+				}
+				glClientActiveTexture(GL_TEXTURE0);
+			}
+
 			if (use_palette) {
 				glMatrixIndexPointerOES(1, GL_UNSIGNED_BYTE, stride, (void *)BATCH_DEPTH_OFFSET_OF(instance_xform0));
 				glWeightPointerOES(1, GL_FLOAT, stride, (void *)(BATCH_DEPTH_OFFSET_OF(instance_xform0) + 4));
@@ -2584,6 +2649,18 @@ void RasterizerSceneGLES1::_batch_render_generic(RS::PrimitiveType p_primitive, 
 		} else if (bdata.fvf == BatcherEnums::FVF_DEPTH_ALPHA) {
 			glVertexPointer(3, GL_FLOAT, stride, (void *)BATCH_DEPTH_ALPHA_OFFSET_OF(pos));
 			glTexCoordPointer(2, GL_FLOAT, stride, (void *)BATCH_DEPTH_ALPHA_OFFSET_OF(uv));
+
+			if (bdata.pass_mode == PASS_MODE_SHADOW_PROJECTION) {
+				if (GLES1_CONFIG->max_texture_units > 1) {
+					glClientActiveTexture(GL_TEXTURE1);
+					glTexCoordPointer(3, GL_FLOAT, stride, (void *)BATCH_DEPTH_ALPHA_OFFSET_OF(pos));
+				}
+				if (GLES1_CONFIG->max_texture_units > 2) {
+					glClientActiveTexture(GL_TEXTURE2);
+					glTexCoordPointer(3, GL_FLOAT, stride, (void *)BATCH_DEPTH_ALPHA_OFFSET_OF(pos));
+				}
+				glClientActiveTexture(GL_TEXTURE0);
+			}
 
 			if (use_palette) {
 				glMatrixIndexPointerOES(1, GL_UNSIGNED_BYTE, stride, (void *)BATCH_DEPTH_ALPHA_OFFSET_OF(instance_xform0));
@@ -2595,7 +2672,17 @@ void RasterizerSceneGLES1::_batch_render_generic(RS::PrimitiveType p_primitive, 
 			glTexCoordPointer(2, GL_FLOAT, stride, (void *)BATCH_OFFSET_OF(uv));
 			glColorPointer(4, GL_UNSIGNED_BYTE, stride, (void *)BATCH_OFFSET_OF(color));
 
-			if (GLES1_CONFIG->max_texture_units > 1) {
+			if (bdata.pass_mode == PASS_MODE_SHADOW_PROJECTION) {
+				if (GLES1_CONFIG->max_texture_units > 1) {
+					glClientActiveTexture(GL_TEXTURE1);
+					glTexCoordPointer(3, GL_FLOAT, stride, (void *)BATCH_OFFSET_OF(pos));
+				}
+				if (GLES1_CONFIG->max_texture_units > 2) {
+					glClientActiveTexture(GL_TEXTURE2);
+					glTexCoordPointer(3, GL_FLOAT, stride, (void *)BATCH_OFFSET_OF(pos));
+				}
+				glClientActiveTexture(GL_TEXTURE0);
+			} else if (GLES1_CONFIG->max_texture_units > 1) {
 				glClientActiveTexture(GL_TEXTURE1);
 				glTexCoordPointer(4, GL_FLOAT, stride, (void *)BATCH_OFFSET_OF(tangent));
 				glClientActiveTexture(GL_TEXTURE0);
@@ -2618,7 +2705,17 @@ void RasterizerSceneGLES1::_batch_render_generic(RS::PrimitiveType p_primitive, 
 			glTexCoordPointer(2, GL_FLOAT, stride, data_ptr + BATCH_INSTANCED_OFFSET_OF(uv));
 			glColorPointer(4, GL_UNSIGNED_BYTE, stride, data_ptr + BATCH_INSTANCED_OFFSET_OF(color));
 
-			if (GLES1_CONFIG->max_texture_units > 1) {
+			if (bdata.pass_mode == PASS_MODE_SHADOW_PROJECTION) {
+				if (GLES1_CONFIG->max_texture_units > 1) {
+					glClientActiveTexture(GL_TEXTURE1);
+					glTexCoordPointer(3, GL_FLOAT, stride, data_ptr + BATCH_INSTANCED_OFFSET_OF(pos));
+				}
+				if (GLES1_CONFIG->max_texture_units > 2) {
+					glClientActiveTexture(GL_TEXTURE2);
+					glTexCoordPointer(3, GL_FLOAT, stride, data_ptr + BATCH_INSTANCED_OFFSET_OF(pos));
+				}
+				glClientActiveTexture(GL_TEXTURE0);
+			} else if (GLES1_CONFIG->max_texture_units > 1) {
 				glClientActiveTexture(GL_TEXTURE1);
 				glTexCoordPointer(4, GL_FLOAT, stride, data_ptr + BATCH_INSTANCED_OFFSET_OF(tangent));
 				glClientActiveTexture(GL_TEXTURE0);
@@ -2631,6 +2728,18 @@ void RasterizerSceneGLES1::_batch_render_generic(RS::PrimitiveType p_primitive, 
 		} else if (bdata.fvf == BatcherEnums::FVF_DEPTH_ONLY) {
 			glVertexPointer(3, GL_FLOAT, stride, data_ptr + BATCH_DEPTH_OFFSET_OF(pos));
 
+			if (bdata.pass_mode == PASS_MODE_SHADOW_PROJECTION) {
+				if (GLES1_CONFIG->max_texture_units > 1) {
+					glClientActiveTexture(GL_TEXTURE1);
+					glTexCoordPointer(3, GL_FLOAT, stride, data_ptr + BATCH_DEPTH_OFFSET_OF(pos));
+				}
+				if (GLES1_CONFIG->max_texture_units > 2) {
+					glClientActiveTexture(GL_TEXTURE2);
+					glTexCoordPointer(3, GL_FLOAT, stride, data_ptr + BATCH_DEPTH_OFFSET_OF(pos));
+				}
+				glClientActiveTexture(GL_TEXTURE0);
+			}
+
 			if (use_palette) {
 				glMatrixIndexPointerOES(1, GL_UNSIGNED_BYTE, stride, data_ptr + BATCH_DEPTH_OFFSET_OF(instance_xform0));
 				glWeightPointerOES(1, GL_FLOAT, stride, data_ptr + BATCH_DEPTH_OFFSET_OF(instance_xform0) + 4);
@@ -2638,6 +2747,18 @@ void RasterizerSceneGLES1::_batch_render_generic(RS::PrimitiveType p_primitive, 
 		} else if (bdata.fvf == BatcherEnums::FVF_DEPTH_ALPHA) {
 			glVertexPointer(3, GL_FLOAT, stride, data_ptr + BATCH_DEPTH_ALPHA_OFFSET_OF(pos));
 			glTexCoordPointer(2, GL_FLOAT, stride, data_ptr + BATCH_DEPTH_ALPHA_OFFSET_OF(uv));
+
+			if (bdata.pass_mode == PASS_MODE_SHADOW_PROJECTION) {
+				if (GLES1_CONFIG->max_texture_units > 1) {
+					glClientActiveTexture(GL_TEXTURE1);
+					glTexCoordPointer(3, GL_FLOAT, stride, data_ptr + BATCH_DEPTH_ALPHA_OFFSET_OF(pos));
+				}
+				if (GLES1_CONFIG->max_texture_units > 2) {
+					glClientActiveTexture(GL_TEXTURE2);
+					glTexCoordPointer(3, GL_FLOAT, stride, data_ptr + BATCH_DEPTH_ALPHA_OFFSET_OF(pos));
+				}
+				glClientActiveTexture(GL_TEXTURE0);
+			}
 
 			if (use_palette) {
 				glMatrixIndexPointerOES(1, GL_UNSIGNED_BYTE, stride, data_ptr + BATCH_DEPTH_ALPHA_OFFSET_OF(instance_xform0));
@@ -2649,7 +2770,17 @@ void RasterizerSceneGLES1::_batch_render_generic(RS::PrimitiveType p_primitive, 
 			glTexCoordPointer(2, GL_FLOAT, stride, data_ptr + BATCH_OFFSET_OF(uv));
 			glColorPointer(4, GL_UNSIGNED_BYTE, stride, data_ptr + BATCH_OFFSET_OF(color));
 
-			if (GLES1_CONFIG->max_texture_units > 1) {
+			if (bdata.pass_mode == PASS_MODE_SHADOW_PROJECTION) {
+				if (GLES1_CONFIG->max_texture_units > 1) {
+					glClientActiveTexture(GL_TEXTURE1);
+					glTexCoordPointer(3, GL_FLOAT, stride, data_ptr + BATCH_OFFSET_OF(pos));
+				}
+				if (GLES1_CONFIG->max_texture_units > 2) {
+					glClientActiveTexture(GL_TEXTURE2);
+					glTexCoordPointer(3, GL_FLOAT, stride, data_ptr + BATCH_OFFSET_OF(pos));
+				}
+				glClientActiveTexture(GL_TEXTURE0);
+			} else if (GLES1_CONFIG->max_texture_units > 1) {
 				glClientActiveTexture(GL_TEXTURE1);
 				glTexCoordPointer(4, GL_FLOAT, stride, data_ptr + BATCH_OFFSET_OF(tangent));
 				glClientActiveTexture(GL_TEXTURE0);
@@ -2772,6 +2903,24 @@ void RasterizerSceneGLES1::_render_single_item_immediate(const GeometryInstanceS
 	}
 
 	mesh_storage->mesh_surface_bind_arrays_gles1(p_surface->surface, shader->vertex_input_mask);
+
+	if (bdata.pass_mode == PASS_MODE_SHADOW_PROJECTION) {
+		if (GLES1_CONFIG->support_vbo) {
+			glBindBuffer(GL_ARRAY_BUFFER, 0);
+		}
+		if (GLES1_CONFIG->max_texture_units > 1) {
+			glClientActiveTexture(GL_TEXTURE1);
+			glEnableClientState(GL_TEXTURE_COORD_ARRAY);
+			glTexCoordPointer(3, GL_FLOAT, sizeof(Vector3), p_surface->vertex_cache.ptr());
+		}
+		if (GLES1_CONFIG->max_texture_units > 2) {
+			glClientActiveTexture(GL_TEXTURE2);
+			glEnableClientState(GL_TEXTURE_COORD_ARRAY);
+			glTexCoordPointer(3, GL_FLOAT, sizeof(Vector3), p_surface->vertex_cache.ptr());
+		}
+		glClientActiveTexture(GL_TEXTURE0);
+	}
+
 	uint32_t index_count = mesh_storage->mesh_surface_get_index_count(p_surface->surface, p_surface->lod_index);
 	bool has_indices = index_count > 0;
 	GLuint index_array_gl = mesh_storage->mesh_surface_get_index_buffer(p_surface->surface, p_surface->lod_index);
@@ -2810,6 +2959,23 @@ void RasterizerSceneGLES1::_render_single_item_immediate(const GeometryInstanceS
 			GLMatrixScope mod_scope(GL_MODELVIEW);
 			_gl_mult_transform(final_xform);
 
+			if (bdata.pass_mode == PASS_MODE_SHADOW_PROJECTION) {
+				if (GLES1_CONFIG->max_texture_units > 1) {
+					glActiveTexture(GL_TEXTURE1);
+					glMatrixMode(GL_TEXTURE);
+					glPushMatrix();
+					_gl_mult_transform(final_xform);
+				}
+				if (GLES1_CONFIG->max_texture_units > 2) {
+					glActiveTexture(GL_TEXTURE2);
+					glMatrixMode(GL_TEXTURE);
+					glPushMatrix();
+					_gl_mult_transform(final_xform);
+				}
+				glActiveTexture(GL_TEXTURE0);
+				glMatrixMode(GL_MODELVIEW);
+			}
+
 			if (
 				mm.uses_colors &&
 				bdata.pass_mode != PASS_MODE_SHADOW &&
@@ -2837,11 +3003,39 @@ void RasterizerSceneGLES1::_render_single_item_immediate(const GeometryInstanceS
 				glDrawArrays(primitive_gl, 0, drawn_count);
 				GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_render_single_item_immediate: glDrawArrays");
 			}
+
+			if (bdata.pass_mode == PASS_MODE_SHADOW_PROJECTION) {
+				if (GLES1_CONFIG->max_texture_units > 1) {
+					glActiveTexture(GL_TEXTURE1);
+					glMatrixMode(GL_TEXTURE);
+					glPopMatrix();
+				}
+				if (GLES1_CONFIG->max_texture_units > 2) {
+					glActiveTexture(GL_TEXTURE2);
+					glMatrixMode(GL_TEXTURE);
+					glPopMatrix();
+				}
+				glActiveTexture(GL_TEXTURE0);
+				glMatrixMode(GL_MODELVIEW);
+			}
 		}
 	}
 
 	// Unbind state
 	mesh_storage->mesh_surface_unbind_arrays_gles1(p_surface->surface);
+
+	if (bdata.pass_mode == PASS_MODE_SHADOW_PROJECTION) {
+		if (GLES1_CONFIG->max_texture_units > 1) {
+			glClientActiveTexture(GL_TEXTURE1);
+			glDisableClientState(GL_TEXTURE_COORD_ARRAY);
+		}
+		if (GLES1_CONFIG->max_texture_units > 2) {
+			glClientActiveTexture(GL_TEXTURE2);
+			glDisableClientState(GL_TEXTURE_COORD_ARRAY);
+		}
+		glClientActiveTexture(GL_TEXTURE0);
+	}
+
 	if (use_index_buffer && GLES1_CONFIG->support_vbo) {
 		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
 	}
@@ -4898,12 +5092,6 @@ void RasterizerSceneGLES1::_render_light_shadows(RenderListParameters *p_params,
 		_gl_setup_spot_light(scene_state.spot_lights[p_light.index], 0);
 	}
 
-	// Eye planes
-	constexpr float plane_s[] = { 1.0f, 0.0f, 0.0f, 0.0f };
-	constexpr float plane_t[] = { 0.0f, 1.0f, 0.0f, 0.0f };
-	constexpr float plane_r[] = { 0.0f, 0.0f, 1.0f, 0.0f };
-	constexpr float plane_q[] = { 0.0f, 0.0f, 0.0f, 1.0f };
-
 	// Begin the splits
 	for (int split = 0; split < num_splits; split++) {
 		GLuint shadow_texture = 0;
@@ -4932,27 +5120,12 @@ void RasterizerSceneGLES1::_render_light_shadows(RenderListParameters *p_params,
 		if (use_proj_tex) {
 			glBindTexture(GL_TEXTURE_2D, shadow_texture);
 
-			// GL_EYE_LINEAR generates texture coordinates based on the Eye/View space coordinates
-			glTexGeni(GL_S, GL_TEXTURE_GEN_MODE, GL_EYE_LINEAR);
-			glTexGeni(GL_T, GL_TEXTURE_GEN_MODE, GL_EYE_LINEAR);
-			glTexGeni(GL_R, GL_TEXTURE_GEN_MODE, GL_EYE_LINEAR);
-			glTexGeni(GL_Q, GL_TEXTURE_GEN_MODE, GL_EYE_LINEAR);
+			if (GLES1_CONFIG->support_shadow) {
+				glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_COMPARE_MODE, GL_COMPARE_R_TO_TEXTURE);
+				glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_COMPARE_FUNC, GL_GEQUAL);
+			}
 
-			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_COMPARE_MODE, GL_COMPARE_R_TO_TEXTURE);
-			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_COMPARE_FUNC, GL_GEQUAL);
-
-			// Allow GL_EYE_PLANE to inherit the active CameraWorldToEye matrix
-			// so they generate coordinates in World Space directly.
-			glTexGenfv(GL_S, GL_EYE_PLANE, plane_s);
-			glTexGenfv(GL_T, GL_EYE_PLANE, plane_t);
-			glTexGenfv(GL_R, GL_EYE_PLANE, plane_r);
-			glTexGenfv(GL_Q, GL_EYE_PLANE, plane_q);
-
-			glEnable(GL_TEXTURE_GEN_S);
-			glEnable(GL_TEXTURE_GEN_T);
-			glEnable(GL_TEXTURE_GEN_R);
-			glEnable(GL_TEXTURE_GEN_Q);
-
+			// Project the vertex positions via the texture matrix.
 			glLoadMatrixf(shadow_matrix);
 			glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE);
 		}
@@ -4962,22 +5135,7 @@ void RasterizerSceneGLES1::_render_light_shadows(RenderListParameters *p_params,
 		if (use_proj_tex) {
 			glBindTexture(GL_TEXTURE_2D, scene_state.z_bound_texture);
 
-			glTexGeni(GL_S, GL_TEXTURE_GEN_MODE, GL_EYE_LINEAR);
-			glTexGeni(GL_T, GL_TEXTURE_GEN_MODE, GL_EYE_LINEAR);
-			glTexGeni(GL_R, GL_TEXTURE_GEN_MODE, GL_EYE_LINEAR);
-			glTexGeni(GL_Q, GL_TEXTURE_GEN_MODE, GL_EYE_LINEAR);
-
-			glTexGenfv(GL_S, GL_EYE_PLANE, plane_s);
-			glTexGenfv(GL_T, GL_EYE_PLANE, plane_t);
-			glTexGenfv(GL_R, GL_EYE_PLANE, plane_r);
-			glTexGenfv(GL_Q, GL_EYE_PLANE, plane_q);
-
-			glEnable(GL_TEXTURE_GEN_S);
-			glEnable(GL_TEXTURE_GEN_T);
-			glEnable(GL_TEXTURE_GEN_R);
-			glEnable(GL_TEXTURE_GEN_Q);
-
-			const float z_to_t_mat[MAX_CHUNK_SHADOWS] = {
+			constexpr float z_to_t_mat[MAX_CHUNK_SHADOWS] = {
 				1.0f, 0.0f, 0.0f, 0.0f,
 				0.0f, 0.0f, 1.0f, 0.0f,
 				0.0f, 1.0f, 0.0f, 0.0f,
