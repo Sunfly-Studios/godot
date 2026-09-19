@@ -162,7 +162,7 @@ Dictionary GDScriptSyntaxHighlighter::_get_line_syntax_highlighting_impl(int p_l
 						// "#region" and "#endregion" only highlighted if they're the first region on the line.
 						if (c_color_region.type == ColorRegion::TYPE_CODE_REGION) {
 							if (!code_region_start_checked) {
-								const Vector<String> str_stripped_split = str.strip_edges(true, false).split_spaces(1);
+								Vector<String> str_stripped_split = str.strip_edges(true, false).split_spaces();
 								code_region_not_at_start = !str_stripped_split.is_empty() &&
 										str_stripped_split[0] != "#region" &&
 										str_stripped_split[0] != "#endregion";
