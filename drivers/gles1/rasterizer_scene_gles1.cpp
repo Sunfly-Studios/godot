@@ -3316,12 +3316,11 @@ void RasterizerSceneGLES1::_draw_editor_grid(const RenderDataGLES1 *p_render_dat
 	int max_verts = (num_lines_x * num_segs_z * 2) + (num_lines_z * num_segs_x * 2);
 	max_verts = MIN(max_verts, 16384);
 
-	float *grid_verts = SAFE_ALLOCA_ARRAY(float, max_verts * 3);
-	uint8_t *grid_colors = SAFE_ALLOCA_ARRAY(uint8_t, max_verts * 4);
+	LocalVector<float> grid_verts;
+	LocalVector<uint8_t> grid_colours;
 
-	if (!grid_verts || !grid_colors) {
-		return;
-	}
+	grid_verts.resize(max_verts * 3);
+	grid_colours.resize(max_verts * 4);
 
 	int v_idx = 0;
 	int c_idx = 0;
@@ -3369,14 +3368,14 @@ void RasterizerSceneGLES1::_draw_editor_grid(const RenderDataGLES1 *p_render_dat
 				grid_verts[v_idx++] = 0;
 				grid_verts[v_idx++] = z2;
 
-				grid_colors[c_idx++] = r;
-				grid_colors[c_idx++] = g;
-				grid_colors[c_idx++] = b;
-				grid_colors[c_idx++] = static_cast<uint8_t>(CLAMP(base_a * fade1, 0.0f, 255.0f));
-				grid_colors[c_idx++] = r;
-				grid_colors[c_idx++] = g;
-				grid_colors[c_idx++] = b;
-				grid_colors[c_idx++] = static_cast<uint8_t>(CLAMP(base_a * fade2, 0.0f, 255.0f));
+				grid_colours[c_idx++] = r;
+				grid_colours[c_idx++] = g;
+				grid_colours[c_idx++] = b;
+				grid_colours[c_idx++] = static_cast<uint8_t>(CLAMP(base_a * fade1, 0.0f, 255.0f));
+				grid_colours[c_idx++] = r;
+				grid_colours[c_idx++] = g;
+				grid_colours[c_idx++] = b;
+				grid_colours[c_idx++] = static_cast<uint8_t>(CLAMP(base_a * fade2, 0.0f, 255.0f));
 			}
 		}
 	}
@@ -3421,14 +3420,14 @@ void RasterizerSceneGLES1::_draw_editor_grid(const RenderDataGLES1 *p_render_dat
 				grid_verts[v_idx++] = 0;
 				grid_verts[v_idx++] = z;
 
-				grid_colors[c_idx++] = r;
-				grid_colors[c_idx++] = g;
-				grid_colors[c_idx++] = b;
-				grid_colors[c_idx++] = static_cast<uint8_t>(CLAMP(base_a * fade1, 0.0f, 255.0f));
-				grid_colors[c_idx++] = r;
-				grid_colors[c_idx++] = g;
-				grid_colors[c_idx++] = b;
-				grid_colors[c_idx++] = static_cast<uint8_t>(CLAMP(base_a * fade2, 0.0f, 255.0f));
+				grid_colours[c_idx++] = r;
+				grid_colours[c_idx++] = g;
+				grid_colours[c_idx++] = b;
+				grid_colours[c_idx++] = static_cast<uint8_t>(CLAMP(base_a * fade1, 0.0f, 255.0f));
+				grid_colours[c_idx++] = r;
+				grid_colours[c_idx++] = g;
+				grid_colours[c_idx++] = b;
+				grid_colours[c_idx++] = static_cast<uint8_t>(CLAMP(base_a * fade2, 0.0f, 255.0f));
 			}
 		}
 	}
@@ -3448,8 +3447,8 @@ void RasterizerSceneGLES1::_draw_editor_grid(const RenderDataGLES1 *p_render_dat
 	_gl_set_client_states(GL_CLIENT_STATE_VERTEX | GL_CLIENT_STATE_COLOR);
 
 	if (v_idx > 0) {
-		glVertexPointer(3, GL_FLOAT, 0, grid_verts);
-		glColorPointer(4, GL_UNSIGNED_BYTE, 0, grid_colors);
+		glVertexPointer(3, GL_FLOAT, 0, grid_verts.ptr());
+		glColorPointer(4, GL_UNSIGNED_BYTE, 0, grid_colours.ptr());
 
 		glDrawArrays(GL_LINES, 0, v_idx / 3);
 	}
@@ -4762,12 +4761,11 @@ void RasterizerSceneGLES1::_render_additive_light_passes(RenderListParameters *p
 		scene_state.spot_light_count
 	);
 
-	GlActiveLight *active_lights = SAFE_ALLOCA_ARRAY(GlActiveLight, total_lights);
-	GlActiveLight *shadow_lights = SAFE_ALLOCA_ARRAY(GlActiveLight, total_lights);
+	LocalVector<GlActiveLight> active_lights;
+	LocalVector<GlActiveLight> shadow_lights;
 
-	if (!active_lights || !shadow_lights) {
-		return;
-	}
+	active_lights.resize(total_lights);
+	shadow_lights.resize(total_lights);
 
 	int active_light_idx = 0;
 	int shadow_light_idx = 0;
@@ -4775,23 +4773,29 @@ void RasterizerSceneGLES1::_render_additive_light_passes(RenderListParameters *p
 	// Split active lights into chunkable (unshadowed) and isolated (shadowed) queues
 	for (uint32_t i = 0; i < scene_state.ubo.directional_light_count; i++) {
 		if (scene_state.directional_lights[i].shadow_opacity <= 0.0f) {
-			active_lights[active_light_idx++] = { RS::LIGHT_DIRECTIONAL, i };
+			active_lights.push_back({ RS::LIGHT_DIRECTIONAL, i });
+			active_light_idx++;
 		} else {
-			shadow_lights[shadow_light_idx++] = { RS::LIGHT_DIRECTIONAL, i };
+			shadow_lights.push_back({ RS::LIGHT_DIRECTIONAL, i });
+			shadow_light_idx++;
 		}
 	}
 	for (uint32_t i = 0; i < scene_state.omni_light_count; i++) {
 		if (scene_state.omni_lights[i].shadow_opacity <= 0.0f) {
-			active_lights[active_light_idx++] = { RS::LIGHT_OMNI, i };
+			active_lights.push_back({ RS::LIGHT_OMNI, i });
+			active_light_idx++;
 		} else {
-			shadow_lights[shadow_light_idx++] = { RS::LIGHT_OMNI, i };
+			shadow_lights.push_back({ RS::LIGHT_OMNI, i });
+			shadow_light_idx++;
 		}
 	}
 	for (uint32_t i = 0; i < scene_state.spot_light_count; i++) {
 		if (scene_state.spot_lights[i].shadow_opacity <= 0.0f) {
-			active_lights[active_light_idx++] = { RS::LIGHT_SPOT, i };
+			active_lights.push_back({ RS::LIGHT_SPOT, i });
+			active_light_idx++;
 		} else {
-			shadow_lights[shadow_light_idx++] = { RS::LIGHT_SPOT, i };
+			shadow_lights.push_back({ RS::LIGHT_SPOT, i });
+			shadow_light_idx++;
 		}
 	}
 
