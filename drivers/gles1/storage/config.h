@@ -136,14 +136,6 @@ public:
 	// (Nexus 5 API 19 and similar).
 	bool is_android_emulator = false;
 
-#ifdef ANDROID_ENABLED
-	PFNGLFRAMEBUFFERTEXTUREMULTIVIEWOVRPROC eglFramebufferTextureMultiviewOVR = nullptr;
-	PFNGLTEXSTORAGE3DMULTISAMPLEPROC eglTexStorage3DMultisample = nullptr;
-	PFNGLFRAMEBUFFERTEXTURE2DMULTISAMPLEEXTPROC eglFramebufferTexture2DMultisampleEXT = nullptr;
-	PFNGLFRAMEBUFFERTEXTUREMULTISAMPLEMULTIVIEWOVRPROC eglFramebufferTextureMultisampleMultiviewOVR = nullptr;
-	PFNEGLIMAGETARGETTEXTURE2DOESPROC eglEGLImageTargetTexture2DOES = nullptr;
-#endif
-
 	static Config *get_singleton() { return singleton; }
 
 	Config();

@@ -36,10 +36,6 @@
 #include "drivers/gles_common/error_macros.h"
 #include "drivers/gles_common/common_defines.h"
 
-#ifdef WEB_ENABLED
-#include <emscripten/html5_webgl.h>
-#endif
-
 using namespace GLES1;
 
 #define _GL_MAX_TEXTURE_MAX_ANISOTROPY_EXT 0x84FF
