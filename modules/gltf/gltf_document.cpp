@@ -8169,14 +8169,14 @@ Error GLTFDocument::_serialize_file(Ref<GLTFState> p_state, const String p_path)
 		const int32_t chunk_header_size = 8;
 		CharString cs = json.utf8();
 		const uint32_t text_data_length = cs.length();
-		const uint32_t text_chunk_length = ((text_data_length + 3) & (~3));
+		const uint32_t text_chunk_length = ((text_data_length + 3) & (~(uint64_t)3));
 		const uint32_t text_chunk_type = 0x4E4F534A; //JSON
 
 		uint32_t binary_data_length = 0;
 		if (p_state->buffers.size() > 0) {
 			binary_data_length = p_state->buffers[0].size();
 		}
-		const uint32_t binary_chunk_length = ((binary_data_length + 3) & (~3));
+		const uint32_t binary_chunk_length = ((binary_data_length + 3) & (~(uint64_t)3));
 		const uint32_t binary_chunk_type = 0x004E4942; //BIN
 
 		file->create(FileAccess::ACCESS_RESOURCES);
