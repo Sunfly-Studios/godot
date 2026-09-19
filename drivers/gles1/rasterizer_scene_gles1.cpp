@@ -1385,96 +1385,162 @@ void RasterizerSceneGLES1::_draw_sky(RID p_env, const Projection &p_projection, 
 	}
 	GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_draw_sky: glDisable GL_LIGHTING, GL_FOG and texture unit cleanup");
 
-	// We need UV coordinates to sample the sky texture.
-	_gl_set_client_states(GL_CLIENT_STATE_VERTEX | GL_CLIENT_STATE_TEXCOORD);
+	// We need UV coordinates to sample the sky texture, and colors for fallback.
+	_gl_set_client_states(GL_CLIENT_STATE_VERTEX | GL_CLIENT_STATE_TEXCOORD | GL_CLIENT_STATE_COLOR);
 	GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_draw_sky: Client State hardened");
 
-	float *uvw_ptr = sky ? sky->sky_uvw_cache : sky_globals.fallback_sky_uvw_cache;
+	bool use_fbo = sky && sky->radiance != 0 && GLES1_CONFIG->support_cubemap && GLES1_CONFIG->support_fbo;
 
-	// Replicate the `sky.glsl` shader math manually.
-	// We do the same in `_update_sky_radiance`
-	for (int i = 0; i < 4; i++) {
-		Vector2 uv_interp = Vector2(qv_fallback[i * 3], qv_fallback[i * 3 + 1]);
-		if (!p_flip_y) {
-			uv_interp.y *= -1.0f;
-		}
+	if (use_fbo || !sky) {
+		// We need UV coordinates to sample the sky texture, and colors for fallback.
+		_gl_set_client_states(GL_CLIENT_STATE_VERTEX | GL_CLIENT_STATE_TEXCOORD | GL_CLIENT_STATE_COLOR);
+		GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_draw_sky: Client State hardened (Quad)");
 
-		Vector3 cube_normal;
-		cube_normal.z = -1.0f;
-		if (camera.columns[0][0] != 0.0f) {
-			cube_normal.x = (uv_interp.x - camera.columns[2][0]) / camera.columns[0][0];
-		} else {
-			cube_normal.x = 0.0f;
-		}
+		float *uvw_ptr = sky ? sky->sky_uvw_cache : sky_globals.fallback_sky_uvw_cache;
+		uint8_t quad_colors[16] = {};
 
-		if (camera.columns[1][1] != 0.0f) {
-			cube_normal.y = (uv_interp.y - camera.columns[2][1]) / camera.columns[1][1];
-		} else {
-			cube_normal.y = 0.0f;
-		}
-
-		cube_normal = sky_transform.xform(cube_normal);
-		if (cube_normal.length_squared() > 0.0f) {
-			cube_normal.normalize();
-		}
-
-		uvw_ptr[i * 3 + 0] = cube_normal.x;
-		uvw_ptr[i * 3 + 1] = cube_normal.y;
-		uvw_ptr[i * 3 + 2] = cube_normal.z;
-	}
-
-	if (sky && sky->radiance != 0 && GLES1_CONFIG->support_cubemap && GLES1_CONFIG->support_fbo) {
-		glEnable(GL_TEXTURE_CUBE_MAP);
-		glBindTexture(GL_TEXTURE_CUBE_MAP, sky->radiance);
-		glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE);
-		glColor4f(p_sky_energy_multiplier, p_sky_energy_multiplier, p_sky_energy_multiplier, 1.0f);
-	} else {
-		// Fallback if the radiance map isn't baked/ready
-		Color sky_color = Color(0.3, 0.3, 0.3, 1.0);
-		if (sky_material.is_valid()) {
-			Variant v = material_storage->material_get_param(sky_material, "clear_color");
-			if (v.get_type() == Variant::COLOR) {
-				sky_color = v;
+		// Replicate the `sky.glsl` shader math manually.
+		for (int i = 0; i < 4; i++) {
+			Vector2 uv_interp = Vector2(qv_fallback[i * 3], qv_fallback[i * 3 + 1]);
+			if (!p_flip_y) {
+				uv_interp.y *= -1.0f;
 			}
+
+			Vector3 cube_normal;
+			cube_normal.z = -1.0f;
+			if (camera.columns[0][0] != 0.0f) {
+				cube_normal.x = (uv_interp.x - camera.columns[2][0]) / camera.columns[0][0];
+			} else {
+				cube_normal.x = 0.0f;
+			}
+
+			if (camera.columns[1][1] != 0.0f) {
+				cube_normal.y = (uv_interp.y - camera.columns[2][1]) / camera.columns[1][1];
+			} else {
+				cube_normal.y = 0.0f;
+			}
+
+			cube_normal = sky_transform.xform(cube_normal);
+			if (cube_normal.length_squared() > 0.0f) {
+				cube_normal.normalize();
+			}
+
+			uvw_ptr[i * 3 + 0] = cube_normal.x;
+			uvw_ptr[i * 3 + 1] = cube_normal.y;
+			uvw_ptr[i * 3 + 2] = cube_normal.z;
+
+			Color v_color;
+			if (use_fbo) {
+				v_color = Color(p_sky_energy_multiplier, p_sky_energy_multiplier, p_sky_energy_multiplier, 1.0f);
+			} else {
+				// Fallback
+				Color sky_color = Color(0.3, 0.3, 0.3, 1.0);
+				if (sky_material.is_valid()) {
+					Variant v = material_storage->material_get_param(sky_material, "clear_color");
+					if (v.get_type() == Variant::COLOR) {
+						sky_color = v;
+					}
+				}
+				v_color = sky_color * p_sky_energy_multiplier;
+			}
+
+			quad_colors[i * 4 + 0] = static_cast<uint8_t>(CLAMP(v_color.r * 255.0f, 0.0f, 255.0f));
+			quad_colors[i * 4 + 1] = static_cast<uint8_t>(CLAMP(v_color.g * 255.0f, 0.0f, 255.0f));
+			quad_colors[i * 4 + 2] = static_cast<uint8_t>(CLAMP(v_color.b * 255.0f, 0.0f, 255.0f));
+			quad_colors[i * 4 + 3] = 255;
 		}
-		glColor4f(sky_color.r, sky_color.g, sky_color.b, sky_color.a);
-	}
-	GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_draw_sky: Sky state setup");
 
-	// Unbind VBOs
-	GLuint uvw_vbo = sky ? sky->sky_uvw_vbo : sky_globals.fallback_sky_uvw_vbo;
+		if (use_fbo) {
+			glEnable(GL_TEXTURE_CUBE_MAP);
+			glBindTexture(GL_TEXTURE_CUBE_MAP, sky->radiance);
+			glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE);
+		}
+		GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_draw_sky: Sky state setup (Quad)");
 
-	if (
-		GLES1_CONFIG->support_vbo &&
-		sky_globals.screen_triangle != 0 &&
-		uvw_vbo != 0
-	) {
-		glBindBuffer(GL_ARRAY_BUFFER, uvw_vbo);
-		glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(float) * 12, uvw_ptr);
-		GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_draw_sky: glBufferSubData for UVW");
+		// Unbind VBOs
+		GLuint uvw_vbo = sky ? sky->sky_uvw_vbo : sky_globals.fallback_sky_uvw_vbo;
 
-		glBindBuffer(GL_ARRAY_BUFFER, sky_globals.screen_triangle);
-		glVertexPointer(3, GL_FLOAT, 0, nullptr);
-		GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_draw_sky: glVertexPointer VBO");
+		if (
+			GLES1_CONFIG->support_vbo &&
+			sky_globals.screen_triangle != 0 &&
+			uvw_vbo != 0
+		) {
+			glBindBuffer(GL_ARRAY_BUFFER, uvw_vbo);
+			glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(float) * 12, uvw_ptr);
+			GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_draw_sky: glBufferSubData for UVW");
 
-		glBindBuffer(GL_ARRAY_BUFFER, uvw_vbo);
-		glTexCoordPointer(3, GL_FLOAT, 0, nullptr);
-		GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_draw_sky: glTexCoordPointer VBO");
-	} else {
-		if (GLES1_CONFIG->support_vbo) {
+			glBindBuffer(GL_ARRAY_BUFFER, sky_globals.screen_triangle);
+			glVertexPointer(3, GL_FLOAT, 0, nullptr);
+			GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_draw_sky: glVertexPointer VBO");
+
+			glBindBuffer(GL_ARRAY_BUFFER, uvw_vbo);
+			glTexCoordPointer(3, GL_FLOAT, 0, nullptr);
+			GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_draw_sky: glTexCoordPointer VBO");
+
 			glBindBuffer(GL_ARRAY_BUFFER, 0);
+			glColorPointer(4, GL_UNSIGNED_BYTE, 0, quad_colors);
+			GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_draw_sky: glColorPointer client array mix");
+		} else {
+			if (GLES1_CONFIG->support_vbo) {
+				glBindBuffer(GL_ARRAY_BUFFER, 0);
+			}
+
+			glVertexPointer(3, GL_FLOAT, 0, qv_fallback);
+			GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_draw_sky: glVertexPointer client array");
+
+			glTexCoordPointer(3, GL_FLOAT, 0, uvw_ptr);
+			GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_draw_sky: glTexCoordPointer client array");
+
+			glColorPointer(4, GL_UNSIGNED_BYTE, 0, quad_colors);
+			GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_draw_sky: glColorPointer client array");
 		}
 
-		// Pass client-side memory for both pointers
-		glVertexPointer(3, GL_FLOAT, 0, qv_fallback);
-		GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_draw_sky: glVertexPointer client array");
+		glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+		GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_draw_sky: glDrawArrays (Quad)");
 
-		glTexCoordPointer(3, GL_FLOAT, 0, uvw_ptr);
-		GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_draw_sky: glTexCoordPointer client array");
+	} else {
+		// Draw the pre-calculated CPU sky dome (16x16 grid sphere) for the fallback sky
+		// We only need the vertices (radiance_uvw) and colors (radiance_colors)
+		_gl_set_client_states(GL_CLIENT_STATE_VERTEX | GL_CLIENT_STATE_COLOR);
+		GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_draw_sky: Client State hardened (Dome)");
+
+		GLMatrixScope proj_scope_dome(GL_PROJECTION);
+		_gl_load_projection(camera);
+
+		GLMatrixScope mod_scope_dome(GL_MODELVIEW);
+		Transform3D sky_matrix;
+
+		sky_matrix.basis = sky_transform.inverse();
+
+		// Scale the sphere to fit inside the camera's far clipping plane
+		float z_scale = p_projection.get_z_far() * 0.95f;
+		sky_matrix.basis.scale(Vector3(z_scale, z_scale, z_scale));
+		_gl_load_transform(sky_matrix);
+		GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_draw_sky: Sky matrix setup (Dome)");
+
+		if (
+			GLES1_CONFIG->support_vbo &&
+			sky_globals.radiance_uvw_vbo != 0 &&
+			sky_globals.radiance_colors_vbo != 0
+		) {
+			glBindBuffer(GL_ARRAY_BUFFER, sky_globals.radiance_uvw_vbo);
+			glVertexPointer(3, GL_FLOAT, 0, nullptr);
+
+			glBindBuffer(GL_ARRAY_BUFFER, sky_globals.radiance_colors_vbo);
+			glColorPointer(4, GL_UNSIGNED_BYTE, 0, nullptr);
+
+			glBindBuffer(GL_ARRAY_BUFFER, 0);
+		} else {
+			if (GLES1_CONFIG->support_vbo) {
+				glBindBuffer(GL_ARRAY_BUFFER, 0);
+			}
+			glVertexPointer(3, GL_FLOAT, 0, sky_globals.radiance_uvw);
+			glColorPointer(4, GL_UNSIGNED_BYTE, 0, sky_globals.radiance_colors);
+		}
+
+		glDrawArrays(GL_TRIANGLES, 0, NUM_VERTICES * MAX_SKY_PROCESSING_LAYERS);
+		GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_draw_sky: glDrawArrays (Dome)");
 	}
-
-	glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
-	GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_draw_sky: glDrawArrays");
 
 	// Unbind state
 	if (sky && sky->radiance != 0 && GLES1_CONFIG->support_cubemap && GLES1_CONFIG->support_fbo) {
@@ -1496,9 +1562,6 @@ void RasterizerSceneGLES1::_draw_sky(RID p_env, const Projection &p_projection, 
 }
 
 void RasterizerSceneGLES1::_update_sky_radiance(RID p_env, const Projection &p_projection, const Transform3D &p_transform, float p_sky_energy_multiplier) {
-	if (!GLES1_CONFIG->support_fbo || !GLES1_CONFIG->support_cubemap) {
-		return;
-	}
 	GLES1::MaterialStorage *material_storage = GLES1::MaterialStorage::get_singleton();
 	if (!is_environment(p_env)) {
 		return;
@@ -1555,71 +1618,77 @@ void RasterizerSceneGLES1::_update_sky_radiance(RID p_env, const Projection &p_p
 	}
 
 	if (sky->reflection_dirty && sky->processing_layer <= MAX_SKY_PROCESSING_LAYERS) {
-		Projection cm;
-		cm.set_perspective(90, 1, 0.01, 10.0);
-		Projection correction;
-		correction.set_depth_correction(true, true, false);
-		cm = correction * cm;
+		bool use_fbo = GLES1_CONFIG->support_fbo && GLES1_CONFIG->support_cubemap;
 
-		uint64_t sky_spec = 0;
-		bool success = material_storage->shaders.sky_shader.version_bind_shader(shader_data->version, SkyShaderGLES1::MODE_CUBEMAP, sky_spec);
-		if (!success) {
-			return;
-		}
+		GLMatrixScope proj_scope(GL_PROJECTION, use_fbo);
+		GLMatrixScope mod_scope(GL_MODELVIEW, use_fbo);
 
-		material_data->bind_uniforms();
+		if (use_fbo) {
+			Projection cm;
+			cm.set_perspective(90, 1, 0.01, 10.0);
+			Projection correction;
+			correction.set_depth_correction(true, true, false);
+			cm = correction * cm;
 
-		material_storage->shaders.sky_shader.version_set_uniform(SkyShaderGLES1::POSITION, p_transform.origin, shader_data->version, SkyShaderGLES1::MODE_CUBEMAP, sky_spec);
-		material_storage->shaders.sky_shader.version_set_uniform(SkyShaderGLES1::TIME, (float)time, shader_data->version, SkyShaderGLES1::MODE_CUBEMAP, sky_spec);
-		material_storage->shaders.sky_shader.version_set_uniform(SkyShaderGLES1::PROJECTION, cm.columns[2][0], cm.columns[0][0], cm.columns[2][1], cm.columns[1][1], shader_data->version, SkyShaderGLES1::MODE_CUBEMAP, sky_spec);
-		material_storage->shaders.sky_shader.version_set_uniform(SkyShaderGLES1::LUMINANCE_MULTIPLIER, p_sky_energy_multiplier, shader_data->version, SkyShaderGLES1::MODE_CUBEMAP, sky_spec);
+			uint64_t sky_spec = 0;
+			bool success = material_storage->shaders.sky_shader.version_bind_shader(shader_data->version, SkyShaderGLES1::MODE_CUBEMAP, sky_spec);
+			if (!success) {
+				return;
+			}
 
-		material_storage->shaders.sky_shader.version_set_uniform(SkyShaderGLES1::DIRECTIONAL_LIGHT_COUNT, (int)sky_globals.directional_light_count, shader_data->version, SkyShaderGLES1::MODE_CUBEMAP, sky_spec);
-		_bind_sky_directional_lights(shader_data->version, SkyShaderGLES1::MODE_CUBEMAP, sky_spec);
+			material_data->bind_uniforms();
 
-		glViewport(0, 0, sky->radiance_size, sky->radiance_size);
-		GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_update_sky_radiance: glViewport");
+			material_storage->shaders.sky_shader.version_set_uniform(SkyShaderGLES1::POSITION, p_transform.origin, shader_data->version, SkyShaderGLES1::MODE_CUBEMAP, sky_spec);
+			material_storage->shaders.sky_shader.version_set_uniform(SkyShaderGLES1::TIME, (float)time, shader_data->version, SkyShaderGLES1::MODE_CUBEMAP, sky_spec);
+			material_storage->shaders.sky_shader.version_set_uniform(SkyShaderGLES1::PROJECTION, cm.columns[2][0], cm.columns[0][0], cm.columns[2][1], cm.columns[1][1], shader_data->version, SkyShaderGLES1::MODE_CUBEMAP, sky_spec);
+			material_storage->shaders.sky_shader.version_set_uniform(SkyShaderGLES1::LUMINANCE_MULTIPLIER, p_sky_energy_multiplier, shader_data->version, SkyShaderGLES1::MODE_CUBEMAP, sky_spec);
 
-		glBindFramebufferOES(GL_FRAMEBUFFER_OES, sky->radiance_framebuffer);
-		GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_update_sky_radiance: glBindFramebufferOES");
+			material_storage->shaders.sky_shader.version_set_uniform(SkyShaderGLES1::DIRECTIONAL_LIGHT_COUNT, (int)sky_globals.directional_light_count, shader_data->version, SkyShaderGLES1::MODE_CUBEMAP, sky_spec);
+			_bind_sky_directional_lights(shader_data->version, SkyShaderGLES1::MODE_CUBEMAP, sky_spec);
 
-		// Protect against uniform matrix leak
-		GLMatrixScope proj_scope(GL_PROJECTION);
-		glLoadIdentity();
+			glViewport(0, 0, sky->radiance_size, sky->radiance_size);
+			GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_update_sky_radiance: glViewport");
 
-		GLMatrixScope mod_scope(GL_MODELVIEW);
-		glLoadIdentity();
-		GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_update_sky_radiance: matrix push scopes");
+			glBindFramebufferOES(GL_FRAMEBUFFER_OES, sky->radiance_framebuffer);
+			GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_update_sky_radiance: glBindFramebufferOES");
 
-		// Reset state
-		scene_state.reset_gl_state();
-		scene_state.set_gl_cull_mode(RS::CULL_MODE_DISABLED);
-		scene_state.enable_gl_blend(false);
+			glMatrixMode(GL_PROJECTION);
+			glLoadIdentity();
 
-		glDisable(GL_LIGHTING);
+			glMatrixMode(GL_MODELVIEW);
+			glLoadIdentity();
+			GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_update_sky_radiance: matrix setup");
 
-		int max_textures = GLES1_CONFIG->max_texture_units;
-		for (int i = 0; i < max_textures; i++) {
+			// Reset state
+			scene_state.reset_gl_state();
+			scene_state.set_gl_cull_mode(RS::CULL_MODE_DISABLED);
+			scene_state.enable_gl_blend(false);
+
+			glDisable(GL_LIGHTING);
+
+			int max_textures = GLES1_CONFIG->max_texture_units;
+			for (int i = 0; i < max_textures; i++) {
+				if (max_textures > 1) {
+					glActiveTexture(GL_TEXTURE0 + i);
+					glClientActiveTexture(GL_TEXTURE0 + i);
+				}
+				glDisable(GL_TEXTURE_2D);
+				glBindTexture(GL_TEXTURE_2D, 0);
+				if (GLES1_CONFIG->support_cubemap) {
+					glDisable(GL_TEXTURE_CUBE_MAP);
+					glBindTexture(GL_TEXTURE_CUBE_MAP, 0);
+				}
+				glDisableClientState(GL_TEXTURE_COORD_ARRAY);
+			}
 			if (max_textures > 1) {
-				glActiveTexture(GL_TEXTURE0 + i);
-				glClientActiveTexture(GL_TEXTURE0 + i);
+				glActiveTexture(GL_TEXTURE0);
+				glClientActiveTexture(GL_TEXTURE0);
 			}
-			glDisable(GL_TEXTURE_2D);
-			glBindTexture(GL_TEXTURE_2D, 0);
-			if (GLES1_CONFIG->support_cubemap) {
-				glDisable(GL_TEXTURE_CUBE_MAP);
-				glBindTexture(GL_TEXTURE_CUBE_MAP, 0);
-			}
-			glDisableClientState(GL_TEXTURE_COORD_ARRAY);
-		}
-		if (max_textures > 1) {
-			glActiveTexture(GL_TEXTURE0);
-			glClientActiveTexture(GL_TEXTURE0);
-		}
 
-		// Enable for 3D UVWs
-		_gl_set_client_states(GL_CLIENT_STATE_VERTEX | GL_CLIENT_STATE_COLOR | GL_CLIENT_STATE_TEXCOORD);
-		GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_update_sky_radiance: Client State hardened");
+			// Enable for 3D UVWs
+			_gl_set_client_states(GL_CLIENT_STATE_VERTEX | GL_CLIENT_STATE_COLOR | GL_CLIENT_STATE_TEXCOORD);
+			GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_update_sky_radiance: Client State hardened");
+		}
 
 		// Pull sky parameters
 		Color sky_top_color = sky->sky_top_color;
@@ -1685,74 +1754,80 @@ void RasterizerSceneGLES1::_update_sky_radiance(RID p_env, const Projection &p_p
 			}
 		}
 
-		int first_face = 0;
-		int last_face = 5;
+		if (use_fbo) {
+			int first_face = 0;
+			int last_face = 5;
 
-		if (!update_single_frame) {
-			first_face = sky->processing_layer;
-			last_face = sky->processing_layer;
-		}
-
-		if (sky->processing_layer < MAX_SKY_PROCESSING_LAYERS) {
-			for (int i = first_face; i <= last_face; i++) {
-				if (GLES1_CONFIG->support_vbo) {
-					glBindBuffer(GL_ARRAY_BUFFER, sky_globals.radiance_verts_vbo);
-					glVertexPointer(2, GL_FLOAT, 0, (void *)(uintptr_t)(i * NUM_VERTICES * 2 * sizeof(float)));
-
-					glBindBuffer(GL_ARRAY_BUFFER, sky_globals.radiance_uvw_vbo);
-					glTexCoordPointer(3, GL_FLOAT, 0, (void *)(uintptr_t)(i * NUM_VERTICES * 3 * sizeof(float)));
-
-					glBindBuffer(GL_ARRAY_BUFFER, sky_globals.radiance_colors_vbo);
-					glColorPointer(4, GL_UNSIGNED_BYTE, 0, (void *)(uintptr_t)(i * NUM_VERTICES * 4 * sizeof(uint8_t)));
-				} else {
-					glVertexPointer(2, GL_FLOAT, 0, sky_globals.radiance_verts + (i * NUM_VERTICES * 2));
-					glTexCoordPointer(3, GL_FLOAT, 0, sky_globals.radiance_uvw + (i * NUM_VERTICES * 3));
-					glColorPointer(4, GL_UNSIGNED_BYTE, 0, sky_globals.radiance_colors + (i * NUM_VERTICES * 4));
-				}
-
-				glFramebufferTexture2DOES(GL_FRAMEBUFFER_OES, GL_COLOR_ATTACHMENT0_OES, GL_TEXTURE_CUBE_MAP_POSITIVE_X + i, sky->radiance, 0);
-				GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_update_sky_radiance: glFramebufferTexture2DOES");
-				glDrawArrays(GL_TRIANGLES, 0, NUM_VERTICES);
-				GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_update_sky_radiance: glDrawArrays");
+			if (!update_single_frame) {
+				first_face = sky->processing_layer;
+				last_face = sky->processing_layer;
 			}
-		}
 
-		_gl_set_client_states(0);
-		if (GLES1_CONFIG->support_vbo) {
-			glBindBuffer(GL_ARRAY_BUFFER, 0);
-		}
-		GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_update_sky_radiance: VBO cleanup");
+			if (sky->processing_layer < MAX_SKY_PROCESSING_LAYERS) {
+				for (int i = first_face; i <= last_face; i++) {
+					if (GLES1_CONFIG->support_vbo) {
+						glBindBuffer(GL_ARRAY_BUFFER, sky_globals.radiance_verts_vbo);
+						glVertexPointer(2, GL_FLOAT, 0, (void *)(uintptr_t)(i * NUM_VERTICES * 2 * sizeof(float)));
 
-		if (update_single_frame) {
+						glBindBuffer(GL_ARRAY_BUFFER, sky_globals.radiance_uvw_vbo);
+						glTexCoordPointer(3, GL_FLOAT, 0, (void *)(uintptr_t)(i * NUM_VERTICES * 3 * sizeof(float)));
+
+						glBindBuffer(GL_ARRAY_BUFFER, sky_globals.radiance_colors_vbo);
+						glColorPointer(4, GL_UNSIGNED_BYTE, 0, (void *)(uintptr_t)(i * NUM_VERTICES * 4 * sizeof(uint8_t)));
+					} else {
+						glVertexPointer(2, GL_FLOAT, 0, sky_globals.radiance_verts + (i * NUM_VERTICES * 2));
+						glTexCoordPointer(3, GL_FLOAT, 0, sky_globals.radiance_uvw + (i * NUM_VERTICES * 3));
+						glColorPointer(4, GL_UNSIGNED_BYTE, 0, sky_globals.radiance_colors + (i * NUM_VERTICES * 4));
+					}
+
+					glFramebufferTexture2DOES(GL_FRAMEBUFFER_OES, GL_COLOR_ATTACHMENT0_OES, GL_TEXTURE_CUBE_MAP_POSITIVE_X + i, sky->radiance, 0);
+					GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_update_sky_radiance: glFramebufferTexture2DOES");
+					glDrawArrays(GL_TRIANGLES, 0, NUM_VERTICES);
+					GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_update_sky_radiance: glDrawArrays");
+				}
+			}
+
+			_gl_set_client_states(0);
+			if (GLES1_CONFIG->support_vbo) {
+				glBindBuffer(GL_ARRAY_BUFFER, 0);
+			}
+			GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_update_sky_radiance: VBO cleanup");
+		} // end use_fbo
+
+		if (update_single_frame || !use_fbo) {
 			sky->processing_layer = MAX_SKY_PROCESSING_LAYERS;
 		} else {
 			sky->processing_layer++;
 		}
 
 		if (sky->processing_layer >= MAX_SKY_PROCESSING_LAYERS) {
-			// Native cubemap LODs
-			if (GLES1_CONFIG->max_texture_units > 1) {
-				glActiveTexture(GL_TEXTURE0);
-			}
-			glBindTexture(GL_TEXTURE_CUBE_MAP, sky->radiance);
-			glGenerateMipmapOES(GL_TEXTURE_CUBE_MAP_OES);
-			GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_update_sky_radiance: glGenerateMipmapOES");
+			if (use_fbo) {
+				// Native cubemap LODs
+				if (GLES1_CONFIG->max_texture_units > 1) {
+					glActiveTexture(GL_TEXTURE0);
+				}
+				glBindTexture(GL_TEXTURE_CUBE_MAP, sky->radiance);
+				glGenerateMipmapOES(GL_TEXTURE_CUBE_MAP_OES);
+				GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_update_sky_radiance: glGenerateMipmapOES");
 
-			if (sky->mipmap_count > 0) {
-				glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
-			}
+				if (sky->mipmap_count > 0) {
+					glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+				}
 
-			glBindTexture(GL_TEXTURE_CUBE_MAP, 0);
-			GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_update_sky_radiance: unbind cubemap");
+				glBindTexture(GL_TEXTURE_CUBE_MAP, 0);
+				GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_update_sky_radiance: unbind cubemap");
+			}
 
 			sky->processing_layer = MAX_SKY_PROCESSING_LAYERS + 1;
 			sky->baked_exposure = p_sky_energy_multiplier;
 			sky->reflection_dirty = false;
 		}
 
-		// Restore
-		GLES1::TextureStorage::get_singleton()->bind_framebuffer_system();
-		GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_update_sky_radiance: restore GL state");
+		if (use_fbo) {
+			// Restore
+			GLES1::TextureStorage::get_singleton()->bind_framebuffer_system();
+			GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_update_sky_radiance: restore GL state");
+		}
 
 	} else {
 		if (sky_mode == RS::SKY_MODE_INCREMENTAL && sky->processing_layer < MAX_SKY_PROCESSING_LAYERS) {
