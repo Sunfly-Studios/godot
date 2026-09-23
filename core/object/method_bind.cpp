@@ -112,7 +112,8 @@ void MethodBind::_generate_argument_types(int p_count) {
 	argument_types = argt;
 }
 
-MethodBind::MethodBind() {
+MethodBind::MethodBind(const MethodBindVTable *p_vtable) :
+		vtable(p_vtable) {
 	static int last_id = 0;
 	method_id = last_id++;
 }

@@ -67,75 +67,85 @@ class GDExtensionMethodBind : public MethodBind {
 #endif
 
 protected:
-	virtual Variant::Type _gen_argument_type(int p_arg) const override {
+	static Variant::Type _gen_argument_type_bind(const MethodBind *p_bind, int p_arg) {
+		const GDExtensionMethodBind *self = static_cast<const GDExtensionMethodBind *>(p_bind);
 		if (p_arg < 0) {
-			return return_value_info.type;
+			return self->return_value_info.type;
 		} else {
-			return arguments_info.get(p_arg).type;
+			return self->arguments_info.get(p_arg).type;
 		}
 	}
-	virtual PropertyInfo _gen_argument_type_info(int p_arg) const override {
+
+	static PropertyInfo _gen_argument_type_info_bind(const MethodBind *p_bind, int p_arg) {
+		const GDExtensionMethodBind *self = static_cast<const GDExtensionMethodBind *>(p_bind);
 		if (p_arg < 0) {
-			return return_value_info;
+			return self->return_value_info;
 		} else {
-			return arguments_info.get(p_arg);
+			return self->arguments_info.get(p_arg);
 		}
 	}
 
 public:
 #ifdef TOOLS_ENABLED
-	virtual bool is_valid() const override { return valid; }
+	static bool _is_valid_bind(const MethodBind *p_bind) {
+		const GDExtensionMethodBind *self = static_cast<const GDExtensionMethodBind *>(p_bind);
+		return self->valid;
+	}
 #endif
 
 #ifdef DEBUG_METHODS_ENABLED
-	virtual GodotTypeInfo::Metadata get_argument_meta(int p_arg) const override {
+	static GodotTypeInfo::Metadata _get_argument_meta_bind(const MethodBind *p_bind, int p_arg) {
+		const GDExtensionMethodBind *self = static_cast<const GDExtensionMethodBind *>(p_bind);
 		if (p_arg < 0) {
-			return return_value_metadata;
+			return self->return_value_metadata;
 		} else {
-			return arguments_metadata.get(p_arg);
+			return self->arguments_metadata.get(p_arg);
 		}
 	}
 #endif
 
-	virtual Variant call(Object *p_object, const Variant **p_args, int p_arg_count, Callable::CallError &r_error) const override {
+	static Variant _call_bind(const MethodBind *p_bind, Object *p_object, const Variant **p_args, int p_arg_count, Callable::CallError &r_error) {
+		const GDExtensionMethodBind *self = static_cast<const GDExtensionMethodBind *>(p_bind);
 #ifdef TOOLS_ENABLED
-		ERR_FAIL_COND_V_MSG(!valid, Variant(), vformat("Cannot call invalid GDExtension method bind '%s'. It's probably cached - you may need to restart Godot.", name));
-		ERR_FAIL_COND_V_MSG(p_object && p_object->is_extension_placeholder(), Variant(), vformat("Cannot call GDExtension method bind '%s' on placeholder instance.", name));
+		ERR_FAIL_COND_V_MSG(!self->valid, Variant(), vformat("Cannot call invalid GDExtension method bind '%s'. It's probably cached - you may need to restart Godot.", self->name));
+		ERR_FAIL_COND_V_MSG(p_object && p_object->is_extension_placeholder(), Variant(), vformat("Cannot call GDExtension method bind '%s' on placeholder instance.", self->name));
 #endif
 		Variant ret;
-		GDExtensionClassInstancePtr extension_instance = is_static() ? nullptr : p_object->_get_extension_instance();
+		GDExtensionClassInstancePtr extension_instance = self->is_static() ? nullptr : p_object->_get_extension_instance();
 		GDExtensionCallError ce{ GDEXTENSION_CALL_OK, 0, 0 };
-		call_func(method_userdata, extension_instance, reinterpret_cast<GDExtensionConstVariantPtr *>(p_args), p_arg_count, (GDExtensionVariantPtr)&ret, &ce);
+		self->call_func(self->method_userdata, extension_instance, reinterpret_cast<GDExtensionConstVariantPtr *>(p_args), p_arg_count, (GDExtensionVariantPtr)&ret, &ce);
 		r_error.error = Callable::CallError::Error(ce.error);
 		r_error.argument = ce.argument;
 		r_error.expected = ce.expected;
 		return ret;
 	}
-	virtual void validated_call(Object *p_object, const Variant **p_args, Variant *r_ret) const override {
-#ifdef TOOLS_ENABLED
-		ERR_FAIL_COND_MSG(!valid, vformat("Cannot call invalid GDExtension method bind '%s'. It's probably cached - you may need to restart Godot.", name));
-		ERR_FAIL_COND_MSG(p_object && p_object->is_extension_placeholder(), vformat("Cannot call GDExtension method bind '%s' on placeholder instance.", name));
-#endif
-		ERR_FAIL_COND_MSG(vararg, "Vararg methods don't have validated call support. This is most likely an engine bug.");
-		GDExtensionClassInstancePtr extension_instance = is_static() ? nullptr : p_object->_get_extension_instance();
 
-		if (validated_call_func) {
+	static void _validated_call_bind(const MethodBind *p_bind, Object *p_object, const Variant **p_args, Variant *r_ret) {
+		const GDExtensionMethodBind *self = static_cast<const GDExtensionMethodBind *>(p_bind);
+#ifdef TOOLS_ENABLED
+		ERR_FAIL_COND_MSG(!self->valid, vformat("Cannot call invalid GDExtension method bind '%s'. It's probably cached - you may need to restart Godot.", self->name));
+		ERR_FAIL_COND_MSG(p_object && p_object->is_extension_placeholder(), vformat("Cannot call GDExtension method bind '%s' on placeholder instance.", self->name));
+#endif
+		ERR_FAIL_COND_MSG(self->vararg, "Vararg methods don't have validated call support. This is most likely an engine bug.");
+		GDExtensionClassInstancePtr extension_instance = self->is_static() ? nullptr : p_object->_get_extension_instance();
+
+		if (self->validated_call_func) {
 			// This is added here, but it's unlikely to be provided by most extensions.
-			validated_call_func(method_userdata, extension_instance, reinterpret_cast<GDExtensionConstVariantPtr *>(p_args), (GDExtensionVariantPtr)r_ret);
+			self->validated_call_func(self->method_userdata, extension_instance, reinterpret_cast<GDExtensionConstVariantPtr *>(p_args), (GDExtensionVariantPtr)r_ret);
 		} else {
 			// If not provided, go via ptrcall, which is faster than resorting to regular call.
-			const void **argptrs = SAFE_ALLOCA_ARRAY(const void *, argument_count);
-			for (uint32_t i = 0; i < argument_count; i++) {
+			const void **argptrs = SAFE_ALLOCA_ARRAY(const void *, self->argument_count);
+			for (uint32_t i = 0; i < self->argument_count; i++) {
 				argptrs[i] = VariantInternal::get_opaque_pointer(p_args[i]);
 			}
 
 			void *ret_opaque = nullptr;
 			if (r_ret) {
-				VariantInternal::initialize(r_ret, return_value_info.type);
+				VariantInternal::initialize(r_ret, self->return_value_info.type);
 				ret_opaque = r_ret->get_type() == Variant::NIL ? r_ret : VariantInternal::get_opaque_pointer(r_ret);
 			}
 
-			ptrcall_func(method_userdata, extension_instance, reinterpret_cast<GDExtensionConstTypePtr *>(argptrs), (GDExtensionTypePtr)ret_opaque);
+			self->ptrcall_func(self->method_userdata, extension_instance, reinterpret_cast<GDExtensionConstTypePtr *>(argptrs), (GDExtensionTypePtr)ret_opaque);
 
 			if (r_ret && r_ret->get_type() == Variant::OBJECT) {
 				VariantInternal::update_object_id(r_ret);
@@ -143,18 +153,20 @@ public:
 		}
 	}
 
-	virtual void ptrcall(Object *p_object, const void **p_args, void *r_ret) const override {
+	static void _ptrcall_bind(const MethodBind *p_bind, Object *p_object, const void **p_args, void *r_ret) {
+		const GDExtensionMethodBind *self = static_cast<const GDExtensionMethodBind *>(p_bind);
 #ifdef TOOLS_ENABLED
-		ERR_FAIL_COND_MSG(!valid, vformat("Cannot call invalid GDExtension method bind '%s'. It's probably cached - you may need to restart Godot.", name));
-		ERR_FAIL_COND_MSG(p_object && p_object->is_extension_placeholder(), vformat("Cannot call GDExtension method bind '%s' on placeholder instance.", name));
+		ERR_FAIL_COND_MSG(!self->valid, vformat("Cannot call invalid GDExtension method bind '%s'. It's probably cached - you may need to restart Godot.", self->name));
+		ERR_FAIL_COND_MSG(p_object && p_object->is_extension_placeholder(), vformat("Cannot call GDExtension method bind '%s' on placeholder instance.", self->name));
 #endif
-		ERR_FAIL_COND_MSG(vararg, "Vararg methods don't have ptrcall support. This is most likely an engine bug.");
-		GDExtensionClassInstancePtr extension_instance = is_static() ? nullptr : p_object->_get_extension_instance();
-		ptrcall_func(method_userdata, extension_instance, reinterpret_cast<GDExtensionConstTypePtr *>(p_args), (GDExtensionTypePtr)r_ret);
+		ERR_FAIL_COND_MSG(self->vararg, "Vararg methods don't have ptrcall support. This is most likely an engine bug.");
+		GDExtensionClassInstancePtr extension_instance = self->is_static() ? nullptr : p_object->_get_extension_instance();
+		self->ptrcall_func(self->method_userdata, extension_instance, reinterpret_cast<GDExtensionConstTypePtr *>(p_args), (GDExtensionTypePtr)r_ret);
 	}
 
-	virtual bool is_vararg() const override {
-		return vararg;
+	static bool _is_vararg_bind(const MethodBind *p_bind) {
+		const GDExtensionMethodBind *self = static_cast<const GDExtensionMethodBind *>(p_bind);
+		return self->vararg;
 	}
 
 #ifdef TOOLS_ENABLED
@@ -233,9 +245,27 @@ public:
 		set_default_arguments(defargs);
 	}
 
-	explicit GDExtensionMethodBind(const GDExtensionClassMethodInfo *p_method_info) {
+	static const MethodBindVTable dispatcher;
+
+	explicit GDExtensionMethodBind(const GDExtensionClassMethodInfo *p_method_info) :
+			MethodBind(&dispatcher) {
 		update(p_method_info);
 	}
+};
+
+const MethodBindVTable GDExtensionMethodBind::dispatcher = {
+	&GDExtensionMethodBind::_call_bind,
+	&GDExtensionMethodBind::_validated_call_bind,
+	&GDExtensionMethodBind::_ptrcall_bind,
+	&GDExtensionMethodBind::_gen_argument_type_bind,
+	&GDExtensionMethodBind::_gen_argument_type_info_bind,
+#ifdef DEBUG_METHODS_ENABLED
+	&GDExtensionMethodBind::_get_argument_meta_bind,
+#endif
+#ifdef TOOLS_ENABLED
+	&GDExtensionMethodBind::_is_valid_bind,
+#endif
+	&GDExtensionMethodBind::_is_vararg_bind
 };
 
 #ifndef DISABLE_DEPRECATED

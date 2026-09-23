@@ -334,8 +334,8 @@ public:
 		using return_type = R;
 	};
 
-	template <typename N, typename M, typename... VarArgs>
-	static MethodBind *bind_method(N p_method_name, M p_method, VarArgs... p_args) {
+	template <typename M, M m_method, typename N, typename... VarArgs>
+	static MethodBind *bind_method_impl(N p_method_name, VarArgs... p_args) {
 		Variant args[sizeof...(p_args) + 1] = { p_args..., Variant() }; // +1 makes sure zero sized arrays are also supported.
 		const Variant *argptrs[sizeof...(p_args) + 1] = {};
 
@@ -344,15 +344,15 @@ public:
 				argptrs[i] = &args[i];
 			}
 		}
-		MethodBind *bind = create_method_bind(p_method);
+		MethodBind *bind = create_method_bind_static<M, m_method>();
 		if constexpr (std::is_same_v<typename member_function_traits<M>::return_type, Object *>) {
 			bind->set_return_type_is_raw_object_ptr(true);
 		}
 		return bind_methodfi(METHOD_FLAGS_DEFAULT, bind, false, p_method_name, sizeof...(p_args) == 0 ? nullptr : (const Variant **)argptrs, sizeof...(p_args));
 	}
 
-	template <typename N, typename M, typename... VarArgs>
-	static MethodBind *bind_static_method(const StringName &p_class, N p_method_name, M p_method, VarArgs... p_args) {
+	template <typename M, M m_method, typename N, typename... VarArgs>
+	static MethodBind *bind_static_method_impl(const StringName &p_class, N p_method_name, VarArgs... p_args) {
 		Variant args[sizeof...(p_args) + 1] = { p_args..., Variant() }; // +1 makes sure zero sized arrays are also supported.
 		const Variant *argptrs[sizeof...(p_args) + 1] = {};
 		if constexpr (sizeof...(p_args) > 0) {
@@ -360,7 +360,7 @@ public:
 				argptrs[i] = &args[i];
 			}
 		}
-		MethodBind *bind = create_static_method_bind(p_method);
+		MethodBind *bind = create_static_method_bind_static<M, m_method>();
 		bind->set_instance_class(p_class);
 		if constexpr (std::is_same_v<typename member_function_traits<M>::return_type, Object *>) {
 			bind->set_return_type_is_raw_object_ptr(true);
@@ -368,8 +368,8 @@ public:
 		return bind_methodfi(METHOD_FLAGS_DEFAULT, bind, false, p_method_name, sizeof...(p_args) == 0 ? nullptr : (const Variant **)argptrs, sizeof...(p_args));
 	}
 
-	template <typename N, typename M, typename... VarArgs>
-	static MethodBind *bind_compatibility_method(N p_method_name, M p_method, VarArgs... p_args) {
+	template <typename M, M m_method, typename N, typename... VarArgs>
+	static MethodBind *bind_compatibility_method_impl(N p_method_name, VarArgs... p_args) {
 		Variant args[sizeof...(p_args) + 1] = { p_args..., Variant() }; // +1 makes sure zero sized arrays are also supported.
 		const Variant *argptrs[sizeof...(p_args) + 1] = {};
 		if constexpr (sizeof...(p_args) > 0) {
@@ -377,15 +377,15 @@ public:
 				argptrs[i] = &args[i];
 			}
 		}
-		MethodBind *bind = create_method_bind(p_method);
+		MethodBind *bind = create_method_bind_static<M, m_method>();
 		if constexpr (std::is_same_v<typename member_function_traits<M>::return_type, Object *>) {
 			bind->set_return_type_is_raw_object_ptr(true);
 		}
 		return bind_methodfi(METHOD_FLAGS_DEFAULT, bind, true, p_method_name, sizeof...(p_args) == 0 ? nullptr : (const Variant **)argptrs, sizeof...(p_args));
 	}
 
-	template <typename N, typename M, typename... VarArgs>
-	static MethodBind *bind_compatibility_static_method(const StringName &p_class, N p_method_name, M p_method, VarArgs... p_args) {
+	template <typename M, M m_method, typename N, typename... VarArgs>
+	static MethodBind *bind_compatibility_static_method_impl(const StringName &p_class, N p_method_name, VarArgs... p_args) {
 		Variant args[sizeof...(p_args) + 1] = { p_args..., Variant() }; // +1 makes sure zero sized arrays are also supported.
 		const Variant *argptrs[sizeof...(p_args) + 1] = {};
 		if constexpr (sizeof...(p_args) > 0) {
@@ -393,7 +393,7 @@ public:
 				argptrs[i] = &args[i];
 			}
 		}
-		MethodBind *bind = create_static_method_bind(p_method);
+		MethodBind *bind = create_static_method_bind_static<M, m_method>();
 		bind->set_instance_class(p_class);
 		if constexpr (std::is_same_v<typename member_function_traits<M>::return_type, Object *>) {
 			bind->set_return_type_is_raw_object_ptr(true);
@@ -511,6 +511,20 @@ public:
 	static String get_native_struct_code(const StringName &p_name);
 	static uint64_t get_native_struct_size(const StringName &p_name); // Used for asserting
 };
+
+// Take advantage that macros can intercept
+// tokens to maintain the front-end API intact.
+#define bind_method(m_name, m_method, ...) \
+	bind_method_impl<decltype(m_method), m_method>(m_name, ##__VA_ARGS__)
+
+#define bind_static_method(m_class, m_name, m_method, ...) \
+	bind_static_method_impl<decltype(m_method), m_method>(m_class, m_name, ##__VA_ARGS__)
+
+#define bind_compatibility_method(m_name, m_method, ...) \
+	bind_compatibility_method_impl<decltype(m_method), m_method>(m_name, ##__VA_ARGS__)
+
+#define bind_compatibility_static_method(m_class, m_name, m_method, ...) \
+	bind_compatibility_static_method_impl<decltype(m_method), m_method>(m_class, m_name, ##__VA_ARGS__)
 
 #define BIND_ENUM_CONSTANT(m_constant) \
 	::ClassDB::bind_integer_constant(get_class_static(), __constant_get_enum_name(m_constant, #m_constant), #m_constant, m_constant);

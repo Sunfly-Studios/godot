@@ -1642,6 +1642,12 @@ StringName Variant::get_enum_for_enumeration(Variant::Type p_type, const StringN
 	return (enum_name == nullptr) ? StringName() : *enum_name;
 }
 
+// Undef the ClassDB overwrite macros
+#undef bind_method
+#undef bind_static_method
+#undef bind_compatibility_method
+#undef bind_compatibility_static_method
+
 #ifdef DEBUG_METHODS_ENABLED
 #define bind_method(m_type, m_method, m_arg_names, m_default_args) \
 	METHOD_CLASS(m_type, m_method, &m_type::m_method);             \
