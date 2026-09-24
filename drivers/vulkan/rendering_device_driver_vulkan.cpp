@@ -6141,7 +6141,9 @@ RenderingDeviceDriverVulkan::~RenderingDeviceDriverVulkan() {
 	}
 #endif
 
-	memdelete(powervr_rogue_shader_crash_workaround_mutex);
+	if (powervr_rogue_shader_crash_workaround_mutex) {
+		memdelete(powervr_rogue_shader_crash_workaround_mutex);
+	}
 
 	while (small_allocs_pools.size()) {
 		HashMap<uint32_t, VmaPool>::Iterator E = small_allocs_pools.begin();
