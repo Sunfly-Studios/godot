@@ -433,30 +433,30 @@ protected:
 	virtual void reset_state() override;
 
 public:
-	virtual void set_base_font(const Ref<Font> &p_font);
-	virtual Ref<Font> get_base_font() const;
-	virtual Ref<Font> _get_base_font_or_default() const;
+	void set_base_font(const Ref<Font> &p_font);
+	Ref<Font> get_base_font() const;
+	Ref<Font> _get_base_font_or_default() const;
 
-	virtual void set_variation_opentype(const Dictionary &p_coords);
-	virtual Dictionary get_variation_opentype() const;
+	void set_variation_opentype(const Dictionary &p_coords);
+	Dictionary get_variation_opentype() const;
 
-	virtual void set_variation_embolden(float p_strength);
-	virtual float get_variation_embolden() const;
+	void set_variation_embolden(float p_strength);
+	float get_variation_embolden() const;
 
-	virtual void set_variation_transform(Transform2D p_transform);
-	virtual Transform2D get_variation_transform() const;
+	void set_variation_transform(Transform2D p_transform);
+	Transform2D get_variation_transform() const;
 
-	virtual void set_variation_face_index(int p_face_index);
-	virtual int get_variation_face_index() const;
+	void set_variation_face_index(int p_face_index);
+	int get_variation_face_index() const;
 
-	virtual void set_opentype_features(const Dictionary &p_features);
+	void set_opentype_features(const Dictionary &p_features);
 	virtual Dictionary get_opentype_features() const override;
 
-	virtual void set_spacing(TextServer::SpacingType p_spacing, int p_value);
+	void set_spacing(TextServer::SpacingType p_spacing, int p_value);
 	virtual int get_spacing(TextServer::SpacingType p_spacing) const override;
 
-	virtual float get_baseline_offset() const;
-	virtual void set_baseline_offset(float p_baseline_offset);
+	float get_baseline_offset() const;
+	void set_baseline_offset(float p_baseline_offset);
 
 	// Output.
 	virtual RID find_variation(const Dictionary &p_variation_coordinates, int p_face_index = 0, float p_strength = 0.0, Transform2D p_transform = Transform2D(), int p_spacing_top = 0, int p_spacing_bottom = 0, int p_spacing_space = 0, int p_spacing_glyph = 0, float p_baseline_offset = 0.0) const override;
