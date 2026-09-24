@@ -67,6 +67,9 @@ void UniformSetCacheRD::_invalidate(Cache *p_cache) {
 	cache_instances_used--;
 }
 void UniformSetCacheRD::_uniform_set_invalidation_callback(void *p_userdata) {
+	if (!singleton) {
+		return;
+	}
 	singleton->_invalidate(reinterpret_cast<Cache *>(p_userdata));
 }
 
@@ -79,4 +82,5 @@ UniformSetCacheRD::~UniformSetCacheRD() {
 	if (cache_instances_used > 0) {
 		ERR_PRINT("At exit: " + itos(cache_instances_used) + " uniform set cache instance(s) still in use.");
 	}
+	singleton = nullptr;
 }
