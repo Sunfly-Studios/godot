@@ -57,6 +57,19 @@ struct MethodBindVTable {
 	bool (*is_vararg)(const MethodBind *);
 };
 
+template <typename>
+struct MethodBindInstanceType;
+
+template <typename R, typename T, typename... Args >
+struct MethodBindInstanceType<R (T::*)(Args...)> {
+	using type = T;
+};
+
+template < typename R, typename T, typename... Args >
+struct MethodBindInstanceType<R (T::*)(Args...) const> {
+	using type = T;
+};
+
 class MethodBind {
 	const MethodBindVTable *vtable = nullptr;
 	int method_id;
@@ -374,6 +387,10 @@ template <typename T, auto m_method, typename... P>
 template <auto m_method, typename... P>
 #endif
 class MethodBindStaticT : public MethodBind {
+#ifndef TYPED_METHOD_BIND
+	using T = typename MethodBindInstanceType<decltype(m_method)>::type;
+#endif
+
 	static Variant::Type _gen_argument_type_bind(const MethodBind *p_bind, int p_arg) {
 		if (p_arg >= 0 && p_arg < (int)sizeof...(P)) {
 			return call_get_argument_type<P...>(p_arg);
@@ -398,11 +415,7 @@ class MethodBindStaticT : public MethodBind {
 #ifdef TOOLS_ENABLED
 		ERR_FAIL_COND_V_MSG(p_object && p_object->is_extension_placeholder() && p_object->get_class_name() == p_bind->get_instance_class(), Variant(), vformat("Cannot call method bind '%s' on placeholder instance.", p_bind->get_name()));
 #endif
-#ifdef TYPED_METHOD_BIND
 		call_with_variant_args_dv(static_cast<T *>(p_object), m_method, p_args, p_arg_count, r_error, p_bind->get_default_arguments());
-#else
-		call_with_variant_args_dv(reinterpret_cast<MB_T *>(p_object), m_method, p_args, p_arg_count, r_error, p_bind->get_default_arguments());
-#endif
 		return Variant();
 	}
 
@@ -410,22 +423,14 @@ class MethodBindStaticT : public MethodBind {
 #ifdef TOOLS_ENABLED
 		ERR_FAIL_COND_MSG(p_object && p_object->is_extension_placeholder() && p_object->get_class_name() == p_bind->get_instance_class(), vformat("Cannot call method bind '%s' on placeholder instance.", p_bind->get_name()));
 #endif
-#ifdef TYPED_METHOD_BIND
 		call_with_validated_object_instance_args(static_cast<T *>(p_object), m_method, p_args);
-#else
-		call_with_validated_object_instance_args(reinterpret_cast<MB_T *>(p_object), m_method, p_args);
-#endif
 	}
-
+	
 	static void _ptrcall_bind(const MethodBind *p_bind, Object *p_object, const void **p_args, void *r_ret) {
 #ifdef TOOLS_ENABLED
 		ERR_FAIL_COND_MSG(p_object && p_object->is_extension_placeholder() && p_object->get_class_name() == p_bind->get_instance_class(), vformat("Cannot call method bind '%s' on placeholder instance.", p_bind->get_name()));
 #endif
-#ifdef TYPED_METHOD_BIND
 		call_with_ptr_args<T, P...>(static_cast<T *>(p_object), m_method, p_args);
-#else
-		call_with_ptr_args<MB_T, P...>(reinterpret_cast<MB_T *>(p_object), m_method, p_args);
-#endif
 	}
 
 	static bool _is_vararg_bind(const MethodBind *p_bind) { return false; }
@@ -469,6 +474,10 @@ template <typename T, auto m_method, typename... P>
 template <auto m_method, typename... P>
 #endif
 class MethodBindStaticTC : public MethodBind {
+#ifndef TYPED_METHOD_BIND
+	using T = typename MethodBindInstanceType<decltype(m_method)>::type;
+#endif
+
 	static Variant::Type _gen_argument_type_bind(const MethodBind *p_bind, int p_arg) {
 		if (p_arg >= 0 && p_arg < (int)sizeof...(P)) {
 			return call_get_argument_type<P...>(p_arg);
@@ -493,34 +502,22 @@ class MethodBindStaticTC : public MethodBind {
 #ifdef TOOLS_ENABLED
 		ERR_FAIL_COND_V_MSG(p_object && p_object->is_extension_placeholder() && p_object->get_class_name() == p_bind->get_instance_class(), Variant(), vformat("Cannot call method bind '%s' on placeholder instance.", p_bind->get_name()));
 #endif
-#ifdef TYPED_METHOD_BIND
 		call_with_variant_argsc_dv(static_cast<T *>(p_object), m_method, p_args, p_arg_count, r_error, p_bind->get_default_arguments());
-#else
-		call_with_variant_argsc_dv(reinterpret_cast<MB_T *>(p_object), m_method, p_args, p_arg_count, r_error, p_bind->get_default_arguments());
-#endif
 		return Variant();
 	}
-
+	
 	static void _validated_call_bind(const MethodBind *p_bind, Object *p_object, const Variant **p_args, Variant *r_ret) {
 #ifdef TOOLS_ENABLED
 		ERR_FAIL_COND_MSG(p_object && p_object->is_extension_placeholder() && p_object->get_class_name() == p_bind->get_instance_class(), vformat("Cannot call method bind '%s' on placeholder instance.", p_bind->get_name()));
 #endif
-#ifdef TYPED_METHOD_BIND
 		call_with_validated_object_instance_argsc(static_cast<T *>(p_object), m_method, p_args);
-#else
-		call_with_validated_object_instance_argsc(reinterpret_cast<MB_T *>(p_object), m_method, p_args);
-#endif
 	}
-
+	
 	static void _ptrcall_bind(const MethodBind *p_bind, Object *p_object, const void **p_args, void *r_ret) {
 #ifdef TOOLS_ENABLED
 		ERR_FAIL_COND_MSG(p_object && p_object->is_extension_placeholder() && p_object->get_class_name() == p_bind->get_instance_class(), vformat("Cannot call method bind '%s' on placeholder instance.", p_bind->get_name()));
 #endif
-#ifdef TYPED_METHOD_BIND
 		call_with_ptr_argsc<T, P...>(static_cast<T *>(p_object), m_method, p_args);
-#else
-		call_with_ptr_argsc<MB_T, P...>(reinterpret_cast<MB_T *>(p_object), m_method, p_args);
-#endif
 	}
 
 	static bool _is_vararg_bind(const MethodBind *p_bind) { return false; }
@@ -564,6 +561,10 @@ template <typename T, auto m_method, typename R, typename... P>
 template <auto m_method, typename R, typename... P>
 #endif
 class MethodBindStaticTR : public MethodBind {
+#ifndef TYPED_METHOD_BIND
+	using T = typename MethodBindInstanceType<decltype(m_method)>::type;
+#endif
+
 	static Variant::Type _gen_argument_type_bind(const MethodBind *p_bind, int p_arg) {
 		if (p_arg >= 0 && p_arg < (int)sizeof...(P)) {
 			return call_get_argument_type<P...>(p_arg);
@@ -597,11 +598,7 @@ class MethodBindStaticTR : public MethodBind {
 #ifdef TOOLS_ENABLED
 		ERR_FAIL_COND_V_MSG(p_object && p_object->is_extension_placeholder() && p_object->get_class_name() == p_bind->get_instance_class(), ret, vformat("Cannot call method bind '%s' on placeholder instance.", p_bind->get_name()));
 #endif
-#ifdef TYPED_METHOD_BIND
 		call_with_variant_args_ret_dv(static_cast<T *>(p_object), m_method, p_args, p_arg_count, ret, r_error, p_bind->get_default_arguments());
-#else
-		call_with_variant_args_ret_dv(reinterpret_cast<MB_T *>(p_object), m_method, p_args, p_arg_count, ret, r_error, p_bind->get_default_arguments());
-#endif
 		return ret;
 	}
 
@@ -609,22 +606,14 @@ class MethodBindStaticTR : public MethodBind {
 #ifdef TOOLS_ENABLED
 		ERR_FAIL_COND_MSG(p_object && p_object->is_extension_placeholder() && p_object->get_class_name() == p_bind->get_instance_class(), vformat("Cannot call method bind '%s' on placeholder instance.", p_bind->get_name()));
 #endif
-#ifdef TYPED_METHOD_BIND
 		call_with_validated_object_instance_args_ret(static_cast<T *>(p_object), m_method, p_args, r_ret);
-#else
-		call_with_validated_object_instance_args_ret(reinterpret_cast<MB_T *>(p_object), m_method, p_args, r_ret);
-#endif
 	}
 
 	static void _ptrcall_bind(const MethodBind *p_bind, Object *p_object, const void **p_args, void *r_ret) {
 #ifdef TOOLS_ENABLED
 		ERR_FAIL_COND_MSG(p_object && p_object->is_extension_placeholder() && p_object->get_class_name() == p_bind->get_instance_class(), vformat("Cannot call method bind '%s' on placeholder instance.", p_bind->get_name()));
 #endif
-#ifdef TYPED_METHOD_BIND
 		call_with_ptr_args_ret<T, R, P...>(static_cast<T *>(p_object), m_method, p_args, r_ret);
-#else
-		call_with_ptr_args_ret<MB_T, R, P...>(reinterpret_cast<MB_T *>(p_object), m_method, p_args, r_ret);
-#endif
 	}
 
 	static bool _is_vararg_bind(const MethodBind *p_bind) { return false; }
@@ -668,6 +657,10 @@ template <typename T, auto m_method, typename R, typename... P>
 template <auto m_method, typename R, typename... P>
 #endif
 class MethodBindStaticTRC : public MethodBind {
+#ifndef TYPED_METHOD_BIND
+	using T = typename MethodBindInstanceType<decltype(m_method)>::type;
+#endif
+
 	static Variant::Type _gen_argument_type_bind(const MethodBind *p_bind, int p_arg) {
 		if (p_arg >= 0 && p_arg < (int)sizeof...(P)) {
 			return call_get_argument_type<P...>(p_arg);
@@ -701,11 +694,7 @@ class MethodBindStaticTRC : public MethodBind {
 #ifdef TOOLS_ENABLED
 		ERR_FAIL_COND_V_MSG(p_object && p_object->is_extension_placeholder() && p_object->get_class_name() == p_bind->get_instance_class(), ret, vformat("Cannot call method bind '%s' on placeholder instance.", p_bind->get_name()));
 #endif
-#ifdef TYPED_METHOD_BIND
-		call_with_variant_args_retc_dv(static_cast<T *>(p_object), m_method, p_args, p_arg_count, ret, r_error, p_bind->get_default_arguments());
-#else
-		call_with_variant_args_retc_dv(reinterpret_cast<MB_T *>(p_object), m_method, p_args, p_arg_count, ret, r_error, p_bind->get_default_arguments());
-#endif
+		call_with_variant_args_retc_dv(static_cast<T* >(p_object), m_method, p_args, p_arg_count, ret, r_error, p_bind->get_default_arguments());
 		return ret;
 	}
 
@@ -713,22 +702,14 @@ class MethodBindStaticTRC : public MethodBind {
 #ifdef TOOLS_ENABLED
 		ERR_FAIL_COND_MSG(p_object && p_object->is_extension_placeholder() && p_object->get_class_name() == p_bind->get_instance_class(), vformat("Cannot call method bind '%s' on placeholder instance.", p_bind->get_name()));
 #endif
-#ifdef TYPED_METHOD_BIND
-		call_with_validated_object_instance_args_retc(static_cast<T *>(p_object), m_method, p_args, r_ret);
-#else
-		call_with_validated_object_instance_args_retc(reinterpret_cast<MB_T *>(p_object), m_method, p_args, r_ret);
-#endif
+		call_with_validated_object_instance_args_retc(static_cast<T* >(p_object), m_method, p_args, r_ret);
 	}
 
 	static void _ptrcall_bind(const MethodBind *p_bind, Object *p_object, const void **p_args, void *r_ret) {
 #ifdef TOOLS_ENABLED
 		ERR_FAIL_COND_MSG(p_object && p_object->is_extension_placeholder() && p_object->get_class_name() == p_bind->get_instance_class(), vformat("Cannot call method bind '%s' on placeholder instance.", p_bind->get_name()));
 #endif
-#ifdef TYPED_METHOD_BIND
-		call_with_ptr_args_retc<T, R, P...>(static_cast<T *>(p_object), m_method, p_args, r_ret);
-#else
-		call_with_ptr_args_retc<MB_T, R, P...>(reinterpret_cast<MB_T *>(p_object), m_method, p_args, r_ret);
-#endif
+		call_with_ptr_args_retc<T, R, P...>(static_cast<T* >(p_object), m_method, p_args, r_ret);
 	}
 
 	static bool _is_vararg_bind(const MethodBind *p_bind) { return false; }
