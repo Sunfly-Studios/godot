@@ -287,13 +287,28 @@ Config::Config() {
 	// and OpenGL 1.2 for runtime (games) support (at the expense of no SubViewport nodes or similar VBO/FBO functionality)
 	// Legacy contexts may advertise these extensions but lack proper functional support.
 	if (RasterizerGLES1::is_gles_over_gl()) {
-		// Extract "1.4" from strings like "1.4 Mesa 7.7.1-DEVEL" or "4.6.0 NVIDIA..."
-		String gl_ver = version_string.get_slice(" ", 0);
+		// Extract the version numbers
+		int version_start = 0;
+		for (int i = 0; i < version_string.length(); i++) {
+			if (version_string[i] >= '0' && version_string[i] <= '9') {
+				version_start = i;
+				break;
+			}
+		}
+
+		String gl_ver = version_string.substr(version_start).get_slice(" ", 0);
 		PackedStringArray gl_ver_parts = gl_ver.split(".");
 		
 		if (gl_ver_parts.size() >= 2) {
-			int major = MIN(gl_ver_parts[0].to_int(), 1);
-			int minor = MIN(gl_ver_parts[1].to_int(), 5);
+			int major = gl_ver_parts[0].to_int();
+			int minor = gl_ver_parts[1].to_int();
+			
+			// If the driver returns a higher number (e.g., 2.1, 3.0),
+			// it's a Compatibility Context. Treat it as fully supporting 1.5 capabilities.
+			if (major >= 2) {
+				major = 1;
+				minor = 5;
+			}
 			
 			if (major < 1 || (major == 1 && minor < 5)) {
 				if (support_fbo) {
