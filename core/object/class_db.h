@@ -335,7 +335,7 @@ public:
 	};
 
 	template <typename M, M m_method, typename N, typename... VarArgs>
-	static MethodBind *bind_method_impl(N p_method_name, VarArgs... p_args) {
+	_NO_INLINE_ static MethodBind *bind_method_impl(N p_method_name, VarArgs... p_args) {
 		Variant args[sizeof...(p_args) + 1] = { p_args..., Variant() }; // +1 makes sure zero sized arrays are also supported.
 		const Variant *argptrs[sizeof...(p_args) + 1] = {};
 
@@ -352,7 +352,7 @@ public:
 	}
 
 	template <typename M, M m_method, typename N, typename... VarArgs>
-	static MethodBind *bind_static_method_impl(const StringName &p_class, N p_method_name, VarArgs... p_args) {
+	_NO_INLINE_ static MethodBind *bind_static_method_impl(const StringName &p_class, N p_method_name, VarArgs... p_args) {
 		Variant args[sizeof...(p_args) + 1] = { p_args..., Variant() }; // +1 makes sure zero sized arrays are also supported.
 		const Variant *argptrs[sizeof...(p_args) + 1] = {};
 		if constexpr (sizeof...(p_args) > 0) {
@@ -369,7 +369,7 @@ public:
 	}
 
 	template <typename M, M m_method, typename N, typename... VarArgs>
-	static MethodBind *bind_compatibility_method_impl(N p_method_name, VarArgs... p_args) {
+	_NO_INLINE_ static MethodBind *bind_compatibility_method_impl(N p_method_name, VarArgs... p_args) {
 		Variant args[sizeof...(p_args) + 1] = { p_args..., Variant() }; // +1 makes sure zero sized arrays are also supported.
 		const Variant *argptrs[sizeof...(p_args) + 1] = {};
 		if constexpr (sizeof...(p_args) > 0) {
@@ -385,7 +385,7 @@ public:
 	}
 
 	template <typename M, M m_method, typename N, typename... VarArgs>
-	static MethodBind *bind_compatibility_static_method_impl(const StringName &p_class, N p_method_name, VarArgs... p_args) {
+	_NO_INLINE_ static MethodBind *bind_compatibility_static_method_impl(const StringName &p_class, N p_method_name, VarArgs... p_args) {
 		Variant args[sizeof...(p_args) + 1] = { p_args..., Variant() }; // +1 makes sure zero sized arrays are also supported.
 		const Variant *argptrs[sizeof...(p_args) + 1] = {};
 		if constexpr (sizeof...(p_args) > 0) {
