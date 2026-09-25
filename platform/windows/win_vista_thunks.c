@@ -55,6 +55,7 @@ static BOOL WINAPI VistaInternal_GetLogicalProcessorInformationEx(int Relationsh
 static BOOL WINAPI VistaInternal_GetThreadGroupAffinity(HANDLE hThread, void* GroupAffinity);
 static BOOL WINAPI VistaInternal_SetThreadGroupAffinity(HANDLE hThread, const void* GroupAffinity, void* PreviousGroupAffinity);
 static BOOL WINAPI VistaInternal_K32EnumProcessModules(HANDLE hProcess, HMODULE* lphModule, DWORD cb, LPDWORD lpcbNeeded);
+static HRESULT WINAPI VistaInternal_SetThreadDescription(HANDLE hThread, PCWSTR lpThreadDescription);
 
 /* =========================================================================== */
 /* Linker exports & explicit intercept pointers                                */
@@ -79,6 +80,7 @@ BOOL (WINAPI *__imp_GetLogicalProcessorInformationEx)(int, void*, PDWORD) __asm_
 BOOL (WINAPI *__imp_GetThreadGroupAffinity)(HANDLE, void*) __asm__("__imp__GetThreadGroupAffinity@8") = VistaInternal_GetThreadGroupAffinity;
 BOOL (WINAPI *__imp_SetThreadGroupAffinity)(HANDLE, const void*, void*) __asm__("__imp__SetThreadGroupAffinity@12") = VistaInternal_SetThreadGroupAffinity;
 BOOL (WINAPI *__imp_K32EnumProcessModules)(HANDLE, HMODULE*, DWORD, LPDWORD) __asm__("__imp__K32EnumProcessModules@16") = VistaInternal_K32EnumProcessModules;
+HRESULT (WINAPI *__imp_SetThreadDescription)(HANDLE, PCWSTR) __asm__("__imp__SetThreadDescription@8") = VistaInternal_SetThreadDescription;
 
 #else
 
@@ -93,6 +95,7 @@ BOOL (WINAPI *imp_GetLogicalProcessorInformationEx_ptr)(int, void*, PDWORD) = Vi
 BOOL (WINAPI *imp_GetThreadGroupAffinity_ptr)(HANDLE, void*) = VistaInternal_GetThreadGroupAffinity;
 BOOL (WINAPI *imp_SetThreadGroupAffinity_ptr)(HANDLE, const void*, void*) = VistaInternal_SetThreadGroupAffinity;
 BOOL (WINAPI *imp_K32EnumProcessModules_ptr)(HANDLE, HMODULE*, DWORD, LPDWORD) = VistaInternal_K32EnumProcessModules;
+HRESULT (WINAPI *imp_SetThreadDescription_ptr)(HANDLE, PCWSTR) = VistaInternal_SetThreadDescription;
 
 #pragma comment(linker, "/alternatename:__imp__TryAcquireSRWLockExclusive@4=_imp_TryAcquireSRWLockExclusive_ptr")
 #pragma comment(linker, "/alternatename:__imp__TryAcquireSRWLockShared@4=_imp_TryAcquireSRWLockShared_ptr")
@@ -104,6 +107,7 @@ BOOL (WINAPI *imp_K32EnumProcessModules_ptr)(HANDLE, HMODULE*, DWORD, LPDWORD) =
 #pragma comment(linker, "/alternatename:__imp__GetThreadGroupAffinity@8=_imp_GetThreadGroupAffinity_ptr")
 #pragma comment(linker, "/alternatename:__imp__SetThreadGroupAffinity@12=_imp_SetThreadGroupAffinity_ptr")
 #pragma comment(linker, "/alternatename:__imp__K32EnumProcessModules@16=_imp_K32EnumProcessModules_ptr")
+#pragma comment(linker, "/alternatename:__imp__SetThreadDescription@8=_imp_SetThreadDescription_ptr")
 
 #endif // __clang__
 
@@ -120,6 +124,7 @@ BOOL (WINAPI *imp_K32EnumProcessModules_ptr)(HANDLE, HMODULE*, DWORD, LPDWORD) =
 #pragma comment(linker, "/export:GetThreadGroupAffinity=_GetThreadGroupAffinity@8")
 #pragma comment(linker, "/export:SetThreadGroupAffinity=_SetThreadGroupAffinity@12")
 #pragma comment(linker, "/export:K32EnumProcessModules=_K32EnumProcessModules@16")
+#pragma comment(linker, "/export:SetThreadDescription=_SetThreadDescription@8")
 
 #else
 
@@ -133,6 +138,7 @@ BOOL (WINAPI *imp_K32EnumProcessModules_ptr)(HANDLE, HMODULE*, DWORD, LPDWORD) =
 #pragma comment(linker, "/export:GetThreadGroupAffinity=_Godot_GetThreadGroupAffinity@8")
 #pragma comment(linker, "/export:SetThreadGroupAffinity=_Godot_SetThreadGroupAffinity@12")
 #pragma comment(linker, "/export:K32EnumProcessModules=_Godot_K32EnumProcessModules@16")
+#pragma comment(linker, "/export:SetThreadDescription=_Godot_SetThreadDescription@8")
 
 #endif // __clang__
 
@@ -148,6 +154,7 @@ BOOL (WINAPI *__imp_GetLogicalProcessorInformationEx)(int, void*, PDWORD) = Vist
 BOOL (WINAPI *__imp_GetThreadGroupAffinity)(HANDLE, void*) = VistaInternal_GetThreadGroupAffinity;
 BOOL (WINAPI *__imp_SetThreadGroupAffinity)(HANDLE, const void*, void*) = VistaInternal_SetThreadGroupAffinity;
 BOOL (WINAPI *__imp_K32EnumProcessModules)(HANDLE, HMODULE*, DWORD, LPDWORD) = VistaInternal_K32EnumProcessModules;
+HRESULT (WINAPI *__imp_SetThreadDescription)(HANDLE, PCWSTR) = VistaInternal_SetThreadDescription;
 
 #if defined(__clang__)
 
@@ -161,6 +168,7 @@ BOOL (WINAPI *__imp_K32EnumProcessModules)(HANDLE, HMODULE*, DWORD, LPDWORD) = V
 #pragma comment(linker, "/export:GetThreadGroupAffinity")
 #pragma comment(linker, "/export:SetThreadGroupAffinity")
 #pragma comment(linker, "/export:K32EnumProcessModules")
+#pragma comment(linker, "/export:SetThreadDescription")
 
 #else // Native MSVC
 
@@ -174,6 +182,7 @@ BOOL (WINAPI *__imp_K32EnumProcessModules)(HANDLE, HMODULE*, DWORD, LPDWORD) = V
 #pragma comment(linker, "/export:GetThreadGroupAffinity=Godot_GetThreadGroupAffinity")
 #pragma comment(linker, "/export:SetThreadGroupAffinity=Godot_SetThreadGroupAffinity")
 #pragma comment(linker, "/export:K32EnumProcessModules=Godot_K32EnumProcessModules")
+#pragma comment(linker, "/export:SetThreadDescription=Godot_SetThreadDescription")
 
 // Map direct 64-bit calls to our local implementations
 #pragma comment(linker, "/alternatename:TryAcquireSRWLockExclusive=Godot_TryAcquireSRWLockExclusive")
@@ -186,6 +195,7 @@ BOOL (WINAPI *__imp_K32EnumProcessModules)(HANDLE, HMODULE*, DWORD, LPDWORD) = V
 #pragma comment(linker, "/alternatename:GetThreadGroupAffinity=Godot_GetThreadGroupAffinity")
 #pragma comment(linker, "/alternatename:SetThreadGroupAffinity=Godot_SetThreadGroupAffinity")
 #pragma comment(linker, "/alternatename:K32EnumProcessModules=Godot_K32EnumProcessModules")
+#pragma comment(linker, "/alternatename:SetThreadDescription=Godot_SetThreadDescription")
 
 #endif // __clang__
 
@@ -209,6 +219,7 @@ BOOL WINAPI Godot_GetLogicalProcessorInformationEx(int RelationshipType, void * 
 BOOL WINAPI Godot_GetThreadGroupAffinity(HANDLE hThread, void * GroupAffinity) __asm__("_GetThreadGroupAffinity@8");
 BOOL WINAPI Godot_SetThreadGroupAffinity(HANDLE hThread, const void * GroupAffinity, void * PreviousGroupAffinity) __asm__("_SetThreadGroupAffinity@12");
 BOOL WINAPI Godot_K32EnumProcessModules(HANDLE hProcess, HMODULE * lphModule, DWORD cb, LPDWORD lpcbNeeded) __asm__("_K32EnumProcessModules@16");
+HRESULT WINAPI Godot_SetThreadDescription(HANDLE hThread, PCWSTR lpThreadDescription) __asm__("_SetThreadDescription@8");
 
 // Definitions
 BOOL WINAPI Godot_K32EnumProcessModulesEx(HANDLE hProcess, HMODULE * lphModule, DWORD cb, LPDWORD lpcbNeeded, DWORD dwFilterFlag) {
@@ -240,6 +251,9 @@ BOOL WINAPI Godot_SetThreadGroupAffinity(HANDLE hThread, const void * GroupAffin
 }
 BOOL WINAPI Godot_K32EnumProcessModules(HANDLE hProcess, HMODULE * lphModule, DWORD cb, LPDWORD lpcbNeeded) {
     return VistaInternal_K32EnumProcessModules(hProcess, lphModule, cb, lpcbNeeded);
+}
+HRESULT WINAPI Godot_SetThreadDescription(HANDLE hThread, PCWSTR lpThreadDescription) {
+    return VistaInternal_SetThreadDescription(hThread, lpThreadDescription);
 }
 
 #else
@@ -255,6 +269,7 @@ BOOL WINAPI Godot_GetLogicalProcessorInformationEx(int RelationshipType, void * 
 BOOL WINAPI Godot_GetThreadGroupAffinity(HANDLE hThread, void * GroupAffinity) __asm__("GetThreadGroupAffinity");
 BOOL WINAPI Godot_SetThreadGroupAffinity(HANDLE hThread, const void * GroupAffinity, void * PreviousGroupAffinity) __asm__("SetThreadGroupAffinity");
 BOOL WINAPI Godot_K32EnumProcessModules(HANDLE hProcess, HMODULE * lphModule, DWORD cb, LPDWORD lpcbNeeded) __asm__("K32EnumProcessModules");
+HRESULT WINAPI Godot_SetThreadDescription(HANDLE hThread, PCWSTR lpThreadDescription) __asm__("SetThreadDescription");
 
 // Definitions
 BOOL WINAPI Godot_K32EnumProcessModulesEx(HANDLE hProcess, HMODULE * lphModule, DWORD cb, LPDWORD lpcbNeeded, DWORD dwFilterFlag) {
@@ -286,6 +301,9 @@ BOOL WINAPI Godot_SetThreadGroupAffinity(HANDLE hThread, const void * GroupAffin
 }
 BOOL WINAPI Godot_K32EnumProcessModules(HANDLE hProcess, HMODULE * lphModule, DWORD cb, LPDWORD lpcbNeeded) {
     return VistaInternal_K32EnumProcessModules(hProcess, lphModule, cb, lpcbNeeded);
+}
+HRESULT WINAPI Godot_SetThreadDescription(HANDLE hThread, PCWSTR lpThreadDescription) {
+    return VistaInternal_SetThreadDescription(hThread, lpThreadDescription);
 }
 
 #endif // M_IX86 || __i386__
@@ -323,6 +341,9 @@ BOOL WINAPI Godot_SetThreadGroupAffinity(HANDLE hThread, const void * GroupAffin
 BOOL WINAPI Godot_K32EnumProcessModules(HANDLE hProcess, HMODULE * lphModule, DWORD cb, LPDWORD lpcbNeeded) {
     return VistaInternal_K32EnumProcessModules(hProcess, lphModule, cb, lpcbNeeded);
 }
+HRESULT WINAPI Godot_SetThreadDescription(HANDLE hThread, PCWSTR lpThreadDescription) {
+    return VistaInternal_SetThreadDescription(hThread, lpThreadDescription);
+}
 
 #endif // __clang__
 
@@ -339,6 +360,7 @@ typedef BOOL (WINAPI *PFN_GetLogicalProcessorInformationEx)(int, void*, PDWORD);
 typedef BOOL (WINAPI *PFN_GetThreadGroupAffinity)(HANDLE, void*);
 typedef BOOL (WINAPI *PFN_SetThreadGroupAffinity)(HANDLE, const void*, void*);
 typedef BOOL (WINAPI *PFN_EnumProcessModules)(HANDLE, HMODULE*, DWORD, LPDWORD);
+typedef HRESULT (WINAPI *PFN_SetThreadDescription)(HANDLE, PCWSTR);
 
 static BOOLEAN WINAPI VistaInternal_TryAcquireSRWLockExclusive(PSRWLOCK SRWLock) {
 	static PFN_TryAcquireSRWLock pRealFunc = NULL;
@@ -534,6 +556,18 @@ static BOOL WINAPI VistaInternal_K32EnumProcessModules(HANDLE hProcess, HMODULE*
 		return pFallbackFunc(hProcess, lphModule, cb, lpcbNeeded);
 	}
 	return FALSE;
+}
+
+static HRESULT WINAPI VistaInternal_SetThreadDescription(HANDLE hThread, PCWSTR lpThreadDescription) {
+	static PFN_SetThreadDescription pRealFunc = NULL;
+	if (!pRealFunc) {
+		pRealFunc = (PFN_SetThreadDescription)GetProcAddress(GetModuleHandleW(L"kernel32.dll"), "SetThreadDescription");
+	}
+	if (pRealFunc) {
+		return pRealFunc(hThread, lpThreadDescription);
+	}
+	
+	return E_NOTIMPL;
 }
 
 #endif // defined(WINVER) && WINVER < 0x0601
