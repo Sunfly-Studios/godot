@@ -1374,9 +1374,9 @@ bool DisplayServer::is_rendering_device_supported() {
 	if (rcd != nullptr) {
 		err = rcd->initialize();
 		if (err == OK) {
-			RenderingDevice *rd = memnew(RenderingDevice);
+			RenderingDevice *rd = memnew_allocator(RenderingDevice, RenderingDeviceAllocator);
 			err = rd->initialize(rcd);
-			memdelete(rd);
+			memdelete_allocator<RenderingDevice, RenderingDeviceAllocator>(rd);
 			rd = nullptr;
 			if (err == OK) {
 				// Creating a RenderingDevice is quite slow.
@@ -1457,9 +1457,9 @@ bool DisplayServer::can_create_rendering_device() {
 	if (rcd != nullptr) {
 		err = rcd->initialize();
 		if (err == OK) {
-			RenderingDevice *rd = memnew(RenderingDevice);
+			RenderingDevice *rd = memnew_allocator(RenderingDevice, RenderingDeviceAllocator);
 			err = rd->initialize(rcd);
-			memdelete(rd);
+			memdelete_allocator<RenderingDevice, RenderingDeviceAllocator>(rd);
 			rd = nullptr;
 			if (err == OK) {
 				// Creating a RenderingDevice is quite slow.

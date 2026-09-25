@@ -92,12 +92,12 @@ void BetsyCompressor::_init() {
 #if defined(RD_ENABLED)
 #if defined(METAL_ENABLED)
 		rcd = memnew(RenderingContextDriverMetal);
-		rd = memnew(RenderingDevice);
+		rd = memnew_allocator(RenderingDevice, RenderingDeviceAllocator);
 #endif
 #if defined(VULKAN_ENABLED)
 		if (rcd == nullptr) {
 			rcd = memnew(RenderingContextDriverVulkan);
-			rd = memnew(RenderingDevice);
+			rd = memnew_allocator(RenderingDevice, RenderingDeviceAllocator);
 		}
 #endif
 #endif
@@ -108,7 +108,7 @@ void BetsyCompressor::_init() {
 			}
 
 			if (err != OK) {
-				memdelete(rd);
+				memdelete_allocator<RenderingDevice, RenderingDeviceAllocator>(rd);
 				memdelete(rcd);
 				rd = nullptr;
 				rcd = nullptr;

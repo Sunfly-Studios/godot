@@ -2803,9 +2803,9 @@ bool OS_Windows::_test_create_rendering_device(const String &p_display_driver) c
 	if (rcd != nullptr) {
 		err = rcd->initialize();
 		if (err == OK) {
-			RenderingDevice *rd = memnew(RenderingDevice);
+			RenderingDevice *rd = memnew_allocator(RenderingDevice, RenderingDeviceAllocator);
 			err = rd->initialize(rcd);
-			memdelete(rd);
+			memdelete_allocator<RenderingDevice, RenderingDeviceAllocator>(rd);
 			rd = nullptr;
 			if (err == OK) {
 				ok = true;

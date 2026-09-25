@@ -1676,6 +1676,18 @@ private:
 	void _compute_list_set_push_constant(ComputeListID p_list, const Vector<uint8_t> &p_data, uint32_t p_data_size);
 };
 
+// Makes sure that RD is in an aligned
+// boundary.
+struct RenderingDeviceAllocator {
+	static void *alloc(size_t p_size) {
+		return Memory::alloc_aligned_static(p_size, alignof(RenderingDevice));
+	}
+
+	static void free(void *p_ptr) {
+		Memory::free_aligned_static(p_ptr);
+	}
+};
+
 VARIANT_ENUM_CAST(RenderingDevice::DeviceType)
 VARIANT_ENUM_CAST(RenderingDevice::DriverResource)
 VARIANT_ENUM_CAST(RenderingDevice::ShaderStage)

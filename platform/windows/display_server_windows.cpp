@@ -7361,7 +7361,7 @@ DisplayServerWindows::DisplayServerWindows(const String &p_rendering_driver, Win
 				}
 
 				if (_create_rendering_context_window(MAIN_WINDOW_ID) == OK) {
-					rendering_device = memnew(RenderingDevice);
+					rendering_device = memnew_allocator(RenderingDevice, RenderingDeviceAllocator);
 					if (rendering_device->initialize(rendering_context, MAIN_WINDOW_ID) == OK) {
 #ifdef VULKAN_ENABLED
 						if (rendering_driver == "vulkan" && tested_rendering_driver == "d3d12") {
@@ -7379,7 +7379,7 @@ DisplayServerWindows::DisplayServerWindows(const String &p_rendering_driver, Win
 						break;
 					}
 
-					memdelete(rendering_device);
+					memdelete_allocator<RenderingDevice, RenderingDeviceAllocator>(rendering_device);
 					rendering_device = nullptr;
 
 					_destroy_rendering_context_window(MAIN_WINDOW_ID);
@@ -8290,7 +8290,7 @@ DisplayServerWindows::~DisplayServerWindows() {
 
 #ifdef RD_ENABLED
 	if (rendering_device) {
-		memdelete(rendering_device);
+		memdelete_allocator<RenderingDevice, RenderingDeviceAllocator>(rendering_device);
 		rendering_device = nullptr;
 	}
 

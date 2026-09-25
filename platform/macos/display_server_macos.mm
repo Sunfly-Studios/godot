@@ -4501,7 +4501,7 @@ DisplayServerMacOS::DisplayServerMacOS(const String &p_rendering_driver, WindowM
 #endif
 #if defined(RD_ENABLED)
 	if (rendering_context) {
-		rendering_device = memnew(RenderingDevice);
+		rendering_device = memnew_allocator(RenderingDevice, RenderingDeviceAllocator);
 		rendering_device->initialize(rendering_context, MAIN_WINDOW_ID);
 		rendering_device->screen_create(MAIN_WINDOW_ID);
 
@@ -4556,7 +4556,7 @@ DisplayServerMacOS::~DisplayServerMacOS() {
 #endif
 #if defined(RD_ENABLED)
 	if (rendering_device) {
-		memdelete(rendering_device);
+		memdelete_allocator<RenderingDevice, RenderingDeviceAllocator>(rendering_device);
 		rendering_device = nullptr;
 	}
 

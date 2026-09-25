@@ -207,9 +207,9 @@ DisplayServerOpenHarmony::DisplayServerOpenHarmony(const String &p_rendering_dri
 		rendering_context->window_set_size(MAIN_WINDOW_ID, display_size.width, display_size.height);
 		rendering_context->window_set_vsync_mode(MAIN_WINDOW_ID, p_vsync_mode);
 	
-		rendering_device = memnew(RenderingDevice);
+		rendering_device = memnew_allocator(RenderingDevice, RenderingDeviceAllocator);
 		if (rendering_device->initialize(rendering_context, MAIN_WINDOW_ID) != OK) {
-			memdelete(rendering_device);
+			memdelete_allocator<RenderingDevice, RenderingDeviceAllocator>(rendering_device);
 			rendering_device = nullptr;
 			memdelete(rendering_context);
 			rendering_context = nullptr;
@@ -243,7 +243,7 @@ DisplayServerOpenHarmony::DisplayServerOpenHarmony(const String &p_rendering_dri
 DisplayServerOpenHarmony::~DisplayServerOpenHarmony() {
 #if defined(RD_ENABLED)
 	if (rendering_device) {
-		memdelete(rendering_device);
+		memdelete_allocator<RenderingDevice, RenderingDeviceAllocator>(rendering_device);
 		rendering_device = nullptr;
 	}
 

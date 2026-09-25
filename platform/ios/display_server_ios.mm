@@ -167,9 +167,9 @@ DisplayServerIOS::DisplayServerIOS(const String &p_rendering_driver, WindowMode 
 		rendering_context->window_set_size(MAIN_WINDOW_ID, size.width, size.height);
 		rendering_context->window_set_vsync_mode(MAIN_WINDOW_ID, p_vsync_mode);
 
-		rendering_device = memnew(RenderingDevice);
+		rendering_device = memnew_allocator(RenderingDevice, RenderingDeviceAllocator);
 		if (rendering_device->initialize(rendering_context, MAIN_WINDOW_ID) != OK) {
-			memdelete(rendering_device);
+			memdelete_allocator<RenderingDevice, RenderingDeviceAllocator>(rendering_device);
 			rendering_device = nullptr;
 			memdelete(rendering_context);
 			rendering_context = nullptr;
@@ -235,7 +235,7 @@ DisplayServerIOS::~DisplayServerIOS() {
 #if defined(RD_ENABLED)
 	if (rendering_device) {
 		rendering_device->screen_free(MAIN_WINDOW_ID);
-		memdelete(rendering_device);
+		memdelete_allocator<RenderingDevice, RenderingDeviceAllocator>(rendering_device);
 		rendering_device = nullptr;
 	}
 
