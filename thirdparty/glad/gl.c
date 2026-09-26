@@ -88,6 +88,8 @@ int GLAD_GL_OES_texture_cube_map = 0;
 int GLAD_GL_OES_texture_mirrored_repeat = 0;
 int GLAD_GL_OES_texture_npot = 0;
 int GLAD_GL_OES_vertex_array_object = 0;
+int GLAD_GL_ANGLE_depth_texture = 0;
+int GLAD_GL_OES_depth_texture = 0;
 int GLAD_GL_OES_texture_3D = 0;
 int GLAD_GL_OES_vertex_half_float = 0;
 
@@ -2953,6 +2955,8 @@ static int glad_gl_find_extensions_gles2(void) {
     GLAD_GL_OES_packed_depth_stencil = glad_gl_has_extension(exts, exts_i, "GL_OES_packed_depth_stencil");
     GLAD_GL_OES_texture_npot = glad_gl_has_extension(exts, exts_i, "GL_OES_texture_npot");
     GLAD_GL_OES_vertex_array_object = glad_gl_has_extension(exts, exts_i, "GL_OES_vertex_array_object");
+    GLAD_GL_ANGLE_depth_texture = glad_gl_has_extension(exts, exts_i, "GL_ANGLE_depth_texture");
+    GLAD_GL_OES_depth_texture = glad_gl_has_extension(exts, exts_i, "GL_OES_depth_texture");
     GLAD_GL_OES_texture_3D = glad_gl_has_extension(exts, exts_i, "GL_OES_texture_3D");
     GLAD_GL_OES_vertex_half_float = glad_gl_has_extension(exts, exts_i, "GL_OES_vertex_half_float");
 
