@@ -182,11 +182,6 @@ TextureStorage::TextureStorage() {
 			texture->gl_set_filter(RS::CANVAS_ITEM_TEXTURE_FILTER_NEAREST);
 		}
 		{
-			uint16_t pixel_data[4 * 4] = {};
-			for (int i = 0; i < 16; i++) {
-				pixel_data[i] = Math::make_half_float(1.0f);
-			}
-
 			default_gl_textures[DEFAULT_GL_TEXTURE_DEPTH] = texture_allocate();
 			Texture *texture = texture_owner.get_or_null(default_gl_textures[DEFAULT_GL_TEXTURE_DEPTH]);
 			texture->width = 4;
@@ -198,9 +193,18 @@ TextureStorage::TextureStorage() {
 			texture->active = true;
 
 			glBindTexture(GL_TEXTURE_2D, texture->tex_id);
-			glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT, 4, 4, 0, GL_DEPTH_COMPONENT, GL_UNSIGNED_SHORT, pixel_data);
-			GL_CHECK_ERROR("GLES2::TextureStorage::TextureStorage::glTexImage2D (depth texture)");
-			GLES2::Utilities::get_singleton()->texture_allocated_data(texture->tex_id, 4 * 4 * 2, "Default depth texture");
+
+			if (GLES2::Config::get_singleton()->support_depth_texture) {
+				glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT, 4, 4, 0, GL_DEPTH_COMPONENT, GL_UNSIGNED_SHORT, nullptr);
+				GL_CHECK_ERROR("GLES2::TextureStorage::TextureStorage::glTexImage2D (depth texture)");
+				GLES2::Utilities::get_singleton()->texture_allocated_data(texture->tex_id, 4 * 4 * 2, "Default depth texture");
+			} else {
+				uint32_t pixel_data[4 * 4] = {};
+				glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, 4, 4, 0, GL_RGBA, GL_UNSIGNED_BYTE, pixel_data);
+				GL_CHECK_ERROR("GLES2::TextureStorage::TextureStorage::glTexImage2D (depth texture fallback)");
+				GLES2::Utilities::get_singleton()->texture_allocated_data(texture->tex_id, 4 * 4 * 4, "Default depth texture (fallback)");
+			}
+			
 			texture->gl_set_filter(RS::CANVAS_ITEM_TEXTURE_FILTER_NEAREST);
 		}
 	}

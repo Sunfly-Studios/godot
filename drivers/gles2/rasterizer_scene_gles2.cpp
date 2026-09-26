@@ -2838,7 +2838,11 @@ void RasterizerSceneGLES2::_render_shadow_pass(RID p_light, RID p_shadow_atlas, 
 				GLES2::TextureStorage::get_singleton()->bind_framebuffer(shadow_fb);
 				GL_CHECK_ERROR("GLES2::RasterizerSceneGLES2::_render_shadow_pass: glBindFramebuffer (omni)");
 
-				glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, cube_map_faces[p_pass], shadow_texture, 0);
+				if (GLES2_CONFIG->support_depth_texture) {
+					glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, cube_map_faces[p_pass], shadow_texture, 0);
+				} else {
+					glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, cube_map_faces[p_pass], shadow_texture, 0);
+				}
 				GL_CHECK_ERROR("GLES2::RasterizerSceneGLES2::_render_shadow_pass: glFramebufferTexture2D (omni)");
 
 				light_projection = light_storage->light_instance_get_shadow_camera(p_light, p_pass);
@@ -2891,14 +2895,23 @@ void RasterizerSceneGLES2::_render_shadow_pass(RID p_light, RID p_shadow_atlas, 
 	scene_state.enable_gl_depth_draw(true);
 	glDepthFunc(GL_GREATER);
 
-	glColorMask(GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE);
+	if (GLES2_CONFIG->support_depth_texture) {
+		glColorMask(GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE);
+	} else {
+		glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+	}
 	RasterizerGLES2::clear_depth(0.0f);
 
 	scene_state.enable_gl_scissor_test(true);
 	glScissor(atlas_rect.position.x, atlas_rect.position.y, atlas_rect.size.x, atlas_rect.size.y);
 	GL_CHECK_ERROR("GLES2::RasterizerSceneGLES2::_render_shadow_pass: glScissor");
 
-	glClear(GL_DEPTH_BUFFER_BIT);
+	if (GLES2_CONFIG->support_depth_texture) {
+		glClear(GL_DEPTH_BUFFER_BIT);
+	} else {
+		glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
+		glClear(GL_DEPTH_BUFFER_BIT | GL_COLOR_BUFFER_BIT);
+	}
 	GL_CHECK_ERROR("GLES2::RasterizerSceneGLES2::_render_shadow_pass: glClear");
 
 	scene_state.enable_gl_scissor_test(false);
@@ -3535,7 +3548,7 @@ void RasterizerSceneGLES2::sub_surface_scattering_set_scale(float p_scale, float
 }
 
 TypedArray<Image> RasterizerSceneGLES2::bake_render_uv2(RID p_base, const TypedArray<RID> &p_material_overrides, const Size2i &p_image_size) {
-    return TypedArray<Image>();
+	return TypedArray<Image>();
 }
 
 bool RasterizerSceneGLES2::free(RID p_rid) {

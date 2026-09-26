@@ -260,6 +260,7 @@ private:
 			Vector<Shadow> shadows;
 			LocalVector<GLuint> textures;
 			LocalVector<GLuint> fbos;
+			LocalVector<GLuint> depth_rbs;
 
 			Quadrant() {}
 		} quadrants[4];
@@ -288,6 +289,7 @@ private:
 	struct DirectionalShadow {
 		GLuint depth = 0;
 		GLuint fbo = 0;
+		GLuint depth_rb = 0;
 
 		int light_count = 0;
 		int size = 0;

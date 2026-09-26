@@ -57,6 +57,7 @@ private:
 	void _flush_gl_errors();
 	bool _probe_texture_parameterf(GLenum p_target, GLenum p_pname, GLfloat p_param);
 	bool _probe_texture_parameteri(GLenum p_target, GLenum p_pname, GLint p_param);
+	bool _probe_depth_texture_support();
 
 public:
 	bool use_nearest_mip_filter = false;
@@ -122,6 +123,7 @@ public:
 	bool support_vertex_half_float = false; // GL_OES_vertex_half_float
 	bool support_depth24 = false; // GL_OES_depth24
 	bool support_depth32 = false; // GL_OES_depth32
+	bool support_depth_texture = false; // GL_OES_depth_texture / GL_ARB_depth_texture
 	bool support_packed_depth_stencil = false; // GL_OES_packed_depth_stencil
 	bool support_blend_equation_separate = false; // GL_OES_blend_equation_separate
 	bool support_draw_buffers = false; // GL_EXT_draw_buffers

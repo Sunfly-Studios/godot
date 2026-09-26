@@ -85,6 +85,23 @@ bool Config::_probe_texture_parameteri(GLenum p_target, GLenum p_pname, GLint p_
 	return supported;
 }
 
+bool Config::_probe_depth_texture_support() {
+	_flush_gl_errors();
+
+	GLuint dummy_tex;
+	glGenTextures(1, &dummy_tex);
+	glBindTexture(GL_TEXTURE_2D, dummy_tex);
+
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT, 4, 4, 0, GL_DEPTH_COMPONENT, GL_UNSIGNED_SHORT, nullptr);
+	bool supported = (glGetError() == GL_NO_ERROR);
+
+	glBindTexture(GL_TEXTURE_2D, 0);
+	glDeleteTextures(1, &dummy_tex);
+
+	_flush_gl_errors();
+	return supported;
+}
+
 Config::Config() {
 	singleton = this;
 
@@ -135,6 +152,11 @@ Config::Config() {
 	support_depth32 = extensions.has("GL_OES_depth32");
 	support_packed_depth_stencil = extensions.has("GL_OES_packed_depth_stencil");
 	support_blend_equation_separate = extensions.has("GL_OES_blend_equation_separate");
+	support_depth_texture = (
+		extensions.has("GL_OES_depth_texture") ||
+		extensions.has("GL_ARB_depth_texture") ||
+		extensions.has("GL_ANGLE_depth_texture")
+	) && _probe_depth_texture_support();
 	support_draw_buffers = extensions.has("GL_EXT_draw_buffers");
 	support_texture_rg = extensions.has("GL_EXT_texture_rg");
 	external_texture_supported = extensions.has("GL_OES_EGL_image_external");
@@ -153,6 +175,7 @@ Config::Config() {
 		support_depth24 = true;
 		support_packed_depth_stencil = true;
 		support_blend_equation_separate = true;
+		support_depth_texture = true;
 		support_draw_buffers = true;
 		support_mapbuffer = true;
 	} else {
@@ -215,13 +238,9 @@ Config::Config() {
 	}
 
 	// Cache 3D texture support
-	support_3d_textures = extensions.has("GL_OES_texture_3D");
-
-	if (!support_3d_textures) {
-		// Some drivers expose it under the ARB or
-		// standard GL string if they are desktop wrappers
-		support_3d_textures = extensions.has("GL_EXT_texture3D") || extensions.has("GL_ARB_texture3D");
-	}
+	// Some drivers expose it under the ARB or
+	// standard GL string if they are desktop wrappers
+	support_3d_textures = extensions.has("GL_OES_texture_3D") || extensions.has("GL_EXT_texture3D") || extensions.has("GL_ARB_texture3D");
 
 #ifdef WEB_ENABLED
 	msaa_supported = false;
@@ -275,11 +294,19 @@ Config::Config() {
 		float_texture_supported = false;
 	}
 
+	bool depth_support_blacklist = (
+		rendering_device_name.contains("VMware")
+	);
+	if (rendering_device_name.contains("ANGLE") && depth_support_blacklist) {
+		// "Technically supported" in the front-end,
+		// usually not in the back-end.
+		support_depth_texture = false;
+	}
+
 	is_android_emulator = (
 		rendering_device_name.contains("Android Emulator") ||
 		rendering_device_name.contains("SwiftShader") ||
-		rendering_device_name.contains("Goldfish") ||
-		rendering_device_name.contains("ANGLE")
+		rendering_device_name.contains("Goldfish")
 	);
 	
 	if (OS::get_singleton()->get_current_rendering_driver_name() == "opengl2_angle" || OS::get_singleton()->has_feature("web")) {
