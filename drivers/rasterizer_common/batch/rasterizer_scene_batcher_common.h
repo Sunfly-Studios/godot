@@ -256,6 +256,10 @@ public:
 			reset_scene();
 			settings_use_batching = true;
 			settings_dynamic_vertex_limit = 1024;
+			dynamic_upload_accumulator = 0;
+			dynamic_upload_threshold_bytes = 0;
+			draw_call_accumulator = 0;
+			max_batch_draw_call_count = 0;
 		}
 
 		BatchLimits hardware_limits;
@@ -286,6 +290,11 @@ public:
 
 		uint32_t settings_dynamic_vertex_limit;
 		bool settings_use_batching;
+
+		uint32_t dynamic_upload_accumulator;
+		uint32_t dynamic_upload_threshold_bytes;
+		uint32_t draw_call_accumulator;
+		uint32_t max_batch_draw_call_count;
 
 		BatcherEnums::FVF fvf;
 		RasterizerUnitArray<uint8_t> unit_vertices;

@@ -1166,6 +1166,7 @@ private:
 	void _batch_bind_material(GLES1::SceneMaterialData *p_material_data, const Transform3D &p_world_transform, bool p_transparent);
 	void _batch_render_generic(RS::PrimitiveType p_primitive, uint32_t p_offset = 0, uint32_t p_count = 0, bool p_has_color = true);
 	void _batch_render_items(GLES1::SceneMaterialData *p_material_data, RS::PrimitiveType p_primitive, RasterizerSceneBatcherCommon<BatcherAPISceneGLES1>::Batch3D &p_batch, bool p_transparent);
+	void _batch_threshold_flush();
 
 	void _render_single_item_immediate(const GeometryInstanceSurface *p_surface);
 	void _bind_scene_camera_uniforms(RID p_version, SceneShaderGLES1::ShaderVariant p_variant, uint64_t p_spec_constants);

@@ -2345,7 +2345,16 @@ void RasterizerSceneGLES1::_batch_upload_buffers(BATCH_TYPE::Batch3D &r_batch) {
 		BATCH_TYPE::VBOPool new_pool;
 		if (GLES1_CONFIG->support_vbo) {
 			glGenBuffers(1, &new_pool.gl_vertex_buffer);
+			glBindBuffer(GL_ARRAY_BUFFER, new_pool.gl_vertex_buffer);
+			glBufferData(GL_ARRAY_BUFFER, bdata.unit_vertices.max_size() * sizeof(BATCH_TYPE::BatchVertex3DInstanced), nullptr, GL_DYNAMIC_DRAW);
+
 			glGenBuffers(1, &new_pool.gl_index_buffer);
+			glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, new_pool.gl_index_buffer);
+			glBufferData(GL_ELEMENT_ARRAY_BUFFER, bdata.indices.max_size() * sizeof(uint16_t), nullptr, GL_DYNAMIC_DRAW);
+
+			glBindBuffer(GL_ARRAY_BUFFER, 0);
+			glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+			GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_batch_upload_buffers: pool initialization");
 		}
 		bdata.vbo_pool.push_back(new_pool);
 	}
@@ -2354,17 +2363,21 @@ void RasterizerSceneGLES1::_batch_upload_buffers(BATCH_TYPE::Batch3D &r_batch) {
 	BATCH_TYPE::VBOPool &pool = bdata.vbo_pool[bdata.current_vbo_index];
 
 	if (pool.gl_vertex_buffer != 0) {
-		glBindBuffer(GL_ARRAY_BUFFER, pool.gl_vertex_buffer);
+		int bytes_to_upload = bdata.total_verts * bdata.unit_vertices.get_unit_size_bytes();
+		int indices_bytes_to_upload = bdata.total_indices * sizeof(uint16_t);
 
 		// Orphan the vertex buffer
-		glBufferData(GL_ARRAY_BUFFER, bdata.unit_vertices.max_size() * bdata.unit_vertices.get_unit_size_bytes(), nullptr, GL_DYNAMIC_DRAW);
-		glBufferSubData(GL_ARRAY_BUFFER, 0, bdata.unit_vertices.size() * bdata.unit_vertices.get_unit_size_bytes(), bdata.unit_vertices.get_data());
+		glBindBuffer(GL_ARRAY_BUFFER, pool.gl_vertex_buffer);
+		glBufferData(GL_ARRAY_BUFFER, bdata.unit_vertices.max_size() * sizeof(BATCH_TYPE::BatchVertex3DInstanced), nullptr, GL_DYNAMIC_DRAW);
+		glBufferSubData(GL_ARRAY_BUFFER, 0, bytes_to_upload, bdata.unit_vertices.get_data());
 		GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_batch_upload_buffers: glBufferSubData ARRAY_BUFFER");
 
-		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, pool.gl_index_buffer);
 		// Orphan the index buffer
-		glBufferData(GL_ELEMENT_ARRAY_BUFFER, bdata.indices.max_size() * sizeof(uint16_t), nullptr, GL_DYNAMIC_DRAW);
-		glBufferSubData(GL_ELEMENT_ARRAY_BUFFER, 0, bdata.indices.size() * sizeof(uint16_t), bdata.indices.get_data());
+		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, pool.gl_index_buffer);
+		if (indices_bytes_to_upload > 0) {
+			glBufferData(GL_ELEMENT_ARRAY_BUFFER, bdata.indices.max_size() * sizeof(uint16_t), nullptr, GL_DYNAMIC_DRAW);
+			glBufferSubData(GL_ELEMENT_ARRAY_BUFFER, 0, indices_bytes_to_upload, bdata.indices.get_data());
+		}
 		GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_batch_upload_buffers: glBufferSubData ELEMENT_ARRAY_BUFFER");
 	}
 
@@ -2438,6 +2451,11 @@ void RasterizerSceneGLES1::_batch_bind_material(GLES1::SceneMaterialData *p_mate
 
 		glActiveTexture(GL_TEXTURE0);
 	}
+}
+
+void RasterizerSceneGLES1::_batch_threshold_flush() {
+	glFlush();
+	GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_batch_threshold_flush: glFlush");
 }
 
 void RasterizerSceneGLES1::_batch_render_items(GLES1::SceneMaterialData *p_material_data, RS::PrimitiveType p_primitive, BATCH_TYPE::Batch3D &p_batch, bool p_transparent) {

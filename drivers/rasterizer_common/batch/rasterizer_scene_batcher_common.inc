@@ -45,8 +45,10 @@ void RasterizerSceneBatcherCommon<T_API>::batch_constructor() {
 
 template <typename T_API>
 void RasterizerSceneBatcherCommon<T_API>::batch_initialize() {
-	bdata.settings_use_batching = GLOBAL_GET("rendering/batching/use_batching");
+bdata.settings_use_batching = GLOBAL_GET("rendering/batching/use_batching");
 	bdata.settings_dynamic_vertex_limit = GLOBAL_GET("rendering/limits/opengl/max_dynamic_vertex_limit");
+	bdata.dynamic_upload_threshold_bytes = static_cast<uint32_t>(GLOBAL_GET("rendering/limits/opengl/dynamic_buffer_flush_threshold_kb")) * 1024;
+	bdata.max_batch_draw_call_count = static_cast<uint32_t>(GLOBAL_GET("rendering/limits/opengl/max_batch_draw_call_count"));
 
 	// Driver-specific hardware capabilities
 	get_this()->_batch_get_hardware_limits(bdata.hardware_limits);
@@ -67,6 +69,8 @@ void RasterizerSceneBatcherCommon<T_API>::batch_scene_begin() {
 template <typename T_API>
 void RasterizerSceneBatcherCommon<T_API>::batch_scene_end() {
 	bdata.reset_scene();
+	bdata.dynamic_upload_accumulator = 0;
+	bdata.draw_call_accumulator = 0;
 }
 
 template <typename T_API>
@@ -93,6 +97,15 @@ void RasterizerSceneBatcherCommon<T_API>::batch_scene_render_items(T_SURFACE **p
 			// Restore the FVF state for this specific batch so the driver knows 
 			// how to correctly interpret the VBO layout and apply transforms.
 			bdata.fvf = batch.fvf;
+			if (batch.fvf == BatcherEnums::FVF_DEPTH_ONLY) {
+				bdata.unit_vertices.prepare(sizeof(BatchVertex3DDepth));
+			} else if (batch.fvf == BatcherEnums::FVF_DEPTH_ALPHA) {
+				bdata.unit_vertices.prepare(sizeof(BatchVertex3DDepthAlpha));
+			} else if (batch.fvf == BatcherEnums::FVF_INSTANCED) {
+				bdata.unit_vertices.prepare(sizeof(BatchVertex3DInstanced));
+			} else {
+				bdata.unit_vertices.prepare(sizeof(BatchVertex3D));
+			}
 			_render_item_state.curr_batch = &batch;
 			get_this()->_batch_render_items(material, primitive, batch, p_transparent);
 		}
@@ -402,6 +415,24 @@ void RasterizerSceneBatcherCommon<T_API>::flush_render_batches(typename T_API::M
 
 	// Delegate the API-specific state binding and multi-draw dispatching to the driver
 	get_this()->_batch_render_items(p_material_data, p_primitive, p_batch, p_transparent);
+
+	// Calculate the cost of this call
+	// and verify if we can keep it in the GPU "inventory"
+	bdata.dynamic_upload_accumulator += (
+		p_batch.num_verts * bdata.unit_vertices.get_unit_size_bytes()
+	) + (p_batch.num_indices * sizeof(uint16_t));
+	bdata.draw_call_accumulator++;
+
+	if (
+		(bdata.dynamic_upload_threshold_bytes > 0 && bdata.dynamic_upload_accumulator >= bdata.dynamic_upload_threshold_bytes) ||
+		(bdata.max_batch_draw_call_count > 0 && bdata.draw_call_accumulator >= bdata.max_batch_draw_call_count)
+	) {
+		// It is safer to manually flush and drop
+		// the inventory from the GPU than to keep it.
+		get_this()->_batch_threshold_flush();
+		bdata.dynamic_upload_accumulator = 0;
+		bdata.draw_call_accumulator = 0;
+	}
 
 	// Reset VBO cursors
 	bdata.unit_vertices.prepare(bdata.unit_vertices.get_unit_size_bytes());

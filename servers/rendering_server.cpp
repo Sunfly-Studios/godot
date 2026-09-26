@@ -3768,6 +3768,8 @@ void RenderingServer::init() {
 	GLOBAL_DEF_RST(PropertyInfo(Variant::INT, "rendering/limits/opengl/max_renderable_elements", PROPERTY_HINT_RANGE, "1024,65536,1"), 65536);
 	GLOBAL_DEF_RST(PropertyInfo(Variant::INT, "rendering/limits/opengl/max_renderable_lights", PROPERTY_HINT_RANGE, "2,256,1"), 32);
 	GLOBAL_DEF_RST(PropertyInfo(Variant::INT, "rendering/limits/opengl/max_lights_per_object", PROPERTY_HINT_RANGE, "2,1024,1"), 8);
+	GLOBAL_DEF_RST(PropertyInfo(Variant::INT, "rendering/limits/opengl/max_batch_draw_call_count", PROPERTY_HINT_ENUM, "128:128,256:256,512:512,1024:1024"), 256);
+	GLOBAL_DEF_RST(PropertyInfo(Variant::INT, "rendering/limits/opengl/dynamic_buffer_flush_threshold_kb", PROPERTY_HINT_ENUM, "1024:1024,2048:2048,4096:4096,8192:8192"), 4096);
 
 	// Used by the 3D batcher
 	GLOBAL_DEF_RST(PropertyInfo(Variant::INT, "rendering/limits/opengl/max_dynamic_vertex_limit", PROPERTY_HINT_RANGE, "2,2048,1"), 1024);
