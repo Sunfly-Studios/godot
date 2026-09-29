@@ -735,7 +735,7 @@ if env["arch"] == "x86_32":
             # -mfpmath=sse allows GCC to use XMM registers for scalar floats.
             # It will automatically fallback to 387 for doubles (since SSE1 can't handle them).
             # But be explicit never hurts anyway.
-            env.Append(CCFLAGS=["-msse", "-mno-sse2", "-mfpmath=sse,387"])
+            env.Append(CCFLAGS=["-msse", "-mno-sse2", "-mstackrealign", "-mfpmath=sse,387"])
         
         env.Append(CPPDEFINES=[("__SSE_LEVEL__", "1")])
     else: # MMX
