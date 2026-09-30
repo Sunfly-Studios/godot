@@ -38,11 +38,6 @@
 
 #include <initializer_list>
 
-template <typename T>
-struct _HashMapSlabPool {
-	static inline ThreadSafeSlabAllocator<T> allocator;
-};
-
 /*
  * Special wrapper for the allocator that falls back to page
  * allocator if the size of the class is too big.
@@ -52,14 +47,14 @@ struct _HashMapElementAllocatorWrapper {
 	template <typename... Args>
 	static T *alloc(Allocator &p_fallback, Args &&...p_args) {
 		if constexpr (sizeof(T) <= 512) {
-			return _HashMapSlabPool<T>::allocator.alloc(std::forward<Args>(p_args)...);
+			return ThreadSafeSlabAllocator<T>().alloc(std::forward<Args>(p_args)...);
 		} else {
 			return p_fallback.new_allocation(std::forward<Args>(p_args)...);
 		}
 	}
 	static void free(Allocator &p_fallback, T *p_ptr) {
 		if constexpr (sizeof(T) <= 512) {
-			_HashMapSlabPool<T>::allocator.free(p_ptr);
+			ThreadSafeSlabAllocator<T>().free(p_ptr);
 		} else {
 			p_fallback.delete_allocation(p_ptr);
 		}

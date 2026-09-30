@@ -38,11 +38,6 @@
 
 #include <initializer_list>
 
-template <typename T>
-struct _ListSlabPool {
-	static inline ThreadSafeSlabAllocator<T> allocator;
-};
-
 /*
  * Special wrapper for the allocator that falls back to page
  * allocator if the size of the class is too big.
@@ -52,7 +47,7 @@ struct _ListElementAllocatorWrapper {
 	template <typename... Args>
 	static T *alloc(Args &&...p_args) {
 		if constexpr (sizeof(T) <= 512) {
-			return _ListSlabPool<T>::allocator.alloc(std::forward<Args>(p_args)...);
+			return ThreadSafeSlabAllocator<T>().alloc(std::forward<Args>(p_args)...);
 		} else {
 			void *mem = A::alloc(sizeof(T));
 			ERR_FAIL_NULL_V(mem, nullptr);
@@ -61,7 +56,7 @@ struct _ListElementAllocatorWrapper {
 	}
 	static void free(T *p_ptr) {
 		if constexpr (sizeof(T) <= 512) {
-			_ListSlabPool<T>::allocator.free(p_ptr);
+			ThreadSafeSlabAllocator<T>().free(p_ptr);
 		} else {
 			p_ptr->~T();
 			A::free(p_ptr);

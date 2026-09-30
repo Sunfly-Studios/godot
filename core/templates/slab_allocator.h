@@ -157,7 +157,6 @@ class ThreadSafeSlabAllocator {
 	inline static Slab *global_usable_slabs = nullptr;
 	inline static SpinLock alloc_spin_lock;
 	inline static SpinLock usable_spin_lock;
-	inline static std::atomic<size_t> allocator_count = 0;
 
 	Slab *allocate_slab() {
 		// Not under lock, guessing.
@@ -187,7 +186,7 @@ class ThreadSafeSlabAllocator {
 		return slab;
 	}
 
-	bool _check_used() {
+	static bool _check_used() {
 		Slab *current = global_slabs;
 		while (current) {
 			Slab *next = current->next;
@@ -229,34 +228,28 @@ public:
 		slab->deallocate(p_mem, index);
 	}
 
-	ThreadSafeSlabAllocator() {
-		allocator_count.fetch_add(1, std::memory_order_relaxed);
-	}
-
-	~ThreadSafeSlabAllocator() {
-		if (allocator_count.fetch_sub(1, std::memory_order_acq_rel) == 1) {
-			alloc_spin_lock.lock();
-			usable_spin_lock.lock();
-			bool leaked = _check_used();
-			if (leaked) {
-				if (CoreGlobals::leak_reporting_enabled) {
-					ERR_PRINT(String("Slabs in use at exit in ThreadSafeSlabAllocator: ") + String(typeid(T).name()));
-				}
-			} else {
-				Slab *current = global_slabs;
-				while (current) {
-					Slab *next = current->next;
-					current->~Slab(); // Destroy SpinLock
-					Memory::free_aligned_static(current);
-					current = next;
-				}
-				global_slabs = nullptr;
-				global_usable_slabs = nullptr;
+	static void cleanup() {
+		alloc_spin_lock.lock();
+		usable_spin_lock.lock();
+		bool leaked = _check_used();
+		if (leaked) {
+			if (CoreGlobals::leak_reporting_enabled) {
+				ERR_PRINT(String("Slabs in use at exit in ThreadSafeSlabAllocator: ") + String(typeid(T).name()));
 			}
-			local_slab = nullptr;
-			usable_spin_lock.unlock();
-			alloc_spin_lock.unlock();
+		} else {
+			Slab *current = global_slabs;
+			while (current) {
+				Slab *next = current->next;
+				current->~Slab(); // Destroy SpinLock
+				Memory::free_aligned_static(current);
+				current = next;
+			}
+			global_slabs = nullptr;
+			global_usable_slabs = nullptr;
 		}
+		local_slab = nullptr;
+		usable_spin_lock.unlock();
+		alloc_spin_lock.unlock();
 	}
 };
 
