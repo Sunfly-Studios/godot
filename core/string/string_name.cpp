@@ -123,7 +123,7 @@ void StringName::cleanup() {
 			}
 
 			_table[i] = _table[i]->next;
-			memdelete(d);
+			data_allocator.free(d);
 		}
 	}
 	if (lost_strings) {
@@ -354,8 +354,7 @@ StringName::StringName(const StaticCString &p_static_string, bool p_static) {
 		return;
 	}
 
-	_data = memnew(_Data);
-
+	_data = data_allocator.alloc();
 	_data->refcount.init();
 	_data->static_count.set(p_static ? 1 : 0);
 	_data->hash = hash;
