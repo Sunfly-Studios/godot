@@ -239,7 +239,7 @@ _ALWAYS_INLINE_ bool predelete_handler(void *) {
 template <typename T>
 _FORCE_INLINE_ T unaligned_read(const void *p_ptr) {
 	if constexpr (std::is_trivially_copyable_v<T>) {
-		T local;
+		T local{};
 		memcpy(&local, p_ptr, sizeof(T));
 		return local;
 	} else {
@@ -285,7 +285,7 @@ _FORCE_INLINE_ void unaligned_construct(void *p_ptr, Args &&...p_args) {
 			::new (p_ptr) ConstructT(std::forward<Args>(p_args)...);
 		} else {
 			if constexpr (sizeof...(Args) == 0) {
-				ConstructT local;
+				ConstructT local{};
 				memcpy(p_ptr, &local, sizeof(ConstructT));
 			} else {
 				ConstructT local(std::forward<Args>(p_args)...);

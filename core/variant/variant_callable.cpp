@@ -31,6 +31,9 @@
 #include "variant_callable.h"
 
 #include "core/templates/hashfuncs.h"
+#include "core/templates/slab_allocator.h"
+
+static ThreadSafeSlabAllocator<VariantCallable> variant_callable_allocator;
 
 bool VariantCallable::compare_equal(const CallableCustom *p_a, const CallableCustom *p_b) {
 	return p_a->hash() == p_b->hash();
@@ -80,6 +83,14 @@ int VariantCallable::get_argument_count(bool &r_is_valid) const {
 void VariantCallable::call(const Variant **p_arguments, int p_argcount, Variant &r_return_value, Callable::CallError &r_call_error) const {
 	Variant v = variant;
 	v.callp(method, p_arguments, p_argcount, r_return_value, r_call_error);
+}
+
+void VariantCallable::free_custom() {
+	variant_callable_allocator.free(this);
+}
+
+VariantCallable *VariantCallable::create(const Variant &p_variant, const StringName &p_method) {
+	return variant_callable_allocator.alloc(p_variant, p_method);
 }
 
 VariantCallable::VariantCallable(const Variant &p_variant, const StringName &p_method) {

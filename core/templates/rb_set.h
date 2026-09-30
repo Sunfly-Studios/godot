@@ -33,8 +33,40 @@
 
 #include "core/os/memory.h"
 #include "core/typedefs.h"
+#include "core/templates/slab_allocator.h"
 
 #include <initializer_list>
+
+template <typename T>
+struct _RBSetSlabPool {
+	static inline ThreadSafeSlabAllocator<T> allocator;
+};
+
+/*
+ * Special wrapper for the allocator that falls back to page
+ * allocator if the size of the class is too big.
+ */
+template <typename T, typename A>
+struct _RBSetElementAllocatorWrapper {
+	template <typename... Args>
+	static T *alloc(Args &&...p_args) {
+		if constexpr (sizeof(T) <= 512) {
+			return _RBSetSlabPool<T>::allocator.alloc(std::forward<Args>(p_args)...);
+		} else {
+			void *mem = A::alloc(sizeof(T));
+			ERR_FAIL_NULL_V(mem, nullptr);
+			return ::new (mem) T(std::forward<Args>(p_args)...);
+		}
+	}
+	static void free(T *p_ptr) {
+		if constexpr (sizeof(T) <= 512) {
+			_RBSetSlabPool<T>::allocator.free(p_ptr);
+		} else {
+			p_ptr->~T();
+			A::free(p_ptr);
+		}
+	}
+};
 
 // based on the very nice implementation of rb-trees by:
 // https://web.archive.org/web/20120507164830/https://web.mit.edu/~emin/www/source_code/red_black_tree/index.html
@@ -165,6 +197,9 @@ public:
 	}
 #endif
 private:
+	// Shared pool for all instances
+	using _ElementAlloc = _RBSetElementAllocatorWrapper<Element, A>;
+
 	struct _Data {
 		Element *_root = nullptr;
 		Element *_nil = nullptr;
@@ -173,7 +208,7 @@ private:
 		_FORCE_INLINE_ _Data() {
 #ifdef GLOBALNIL_DISABLED
 			if (_nil == nullptr) {
-				_nil = memnew_allocator(Element, A);
+				_nil = _ElementAlloc::alloc();
 				_nil->parent = _nil->left = _nil->right = _nil;
 				_nil->color = BLACK;
 			}
@@ -186,21 +221,21 @@ private:
 			// Lazily initialize _nil if the static constructor hasn't run yet.
 			if (_nil == nullptr) {
 #ifdef GLOBALNIL_DISABLED
-				_nil = memnew_allocator(Element, A);
+				_nil = _ElementAlloc::alloc();
 				_nil->parent = _nil->left = _nil->right = _nil;
 				_nil->color = BLACK;
 #else
 				_nil = (Element *)&_GlobalNilClass::_nil;
 #endif
 			}
-			_root = memnew_allocator(Element, A);
+			_root = _ElementAlloc::alloc();
 			_root->parent = _root->left = _root->right = _nil;
 			_root->color = BLACK;
 		}
 
 		void _free_root() {
 			if (_root) {
-				memdelete_allocator<Element, A>(_root);
+				_ElementAlloc::free(_root);
 				_root = nullptr;
 			}
 		}
@@ -209,7 +244,7 @@ private:
 			_free_root();
 
 #ifdef GLOBALNIL_DISABLED
-			memdelete_allocator<Element, A>(_nil);
+			_ElementAlloc::free(_nil);
 #endif
 		}
 	};
@@ -407,7 +442,7 @@ private:
 			}
 		}
 
-		Element *new_node = memnew_allocator(Element, A);
+		Element *new_node = _ElementAlloc::alloc();
 		new_node->parent = new_parent;
 		new_node->right = _data._nil;
 		new_node->left = _data._nil;
@@ -543,7 +578,7 @@ private:
 			p_node->_prev->_next = p_node->_next;
 		}
 
-		memdelete_allocator<Element, A>(p_node);
+		_ElementAlloc::free(p_node);
 		_data.size_cache--;
 		ERR_FAIL_COND(_data._nil->color == RED);
 	}
@@ -568,7 +603,7 @@ private:
 
 		_cleanup_tree(p_element->left);
 		_cleanup_tree(p_element->right);
-		memdelete_allocator<Element, A>(p_element);
+		_ElementAlloc::free(p_element);
 	}
 
 	void _copy_from(const RBSet &p_set) {

@@ -52,6 +52,9 @@ public:
 	ObjectID get_object() const override;
 	int get_argument_count(bool &r_is_valid) const override;
 	void call(const Variant **p_arguments, int p_argcount, Variant &r_return_value, Callable::CallError &r_call_error) const override;
+	virtual void free_custom() override;
+
+	static VariantCallable *create(const Variant &p_variant, const StringName &p_method);
 
 	VariantCallable(const Variant &p_variant, const StringName &p_method);
 };

@@ -34,8 +34,38 @@
 #include "core/os/memory.h"
 #include "core/templates/hashfuncs.h"
 #include "core/templates/pair.h"
+#include "core/templates/slab_allocator.h"
 
 #include <initializer_list>
+
+template <typename T>
+struct _HashMapSlabPool {
+	static inline ThreadSafeSlabAllocator<T> allocator;
+};
+
+/*
+ * Special wrapper for the allocator that falls back to page
+ * allocator if the size of the class is too big.
+ */
+template <typename T, typename Allocator>
+struct _HashMapElementAllocatorWrapper {
+	template <typename... Args>
+	static T *alloc(Allocator &p_fallback, Args &&...p_args) {
+		if constexpr (sizeof(T) <= 512) {
+			return _HashMapSlabPool<T>::allocator.alloc(std::forward<Args>(p_args)...);
+		} else {
+			return p_fallback.new_allocation(std::forward<Args>(p_args)...);
+		}
+	}
+	static void free(Allocator &p_fallback, T *p_ptr) {
+		if constexpr (sizeof(T) <= 512) {
+			_HashMapSlabPool<T>::allocator.free(p_ptr);
+		} else {
+			p_fallback.delete_allocation(p_ptr);
+		}
+	}
+};
+
 
 /**
  * A HashMap implementation that uses open addressing with Robin Hood hashing.
@@ -74,7 +104,8 @@ public:
 	static constexpr uint32_t EMPTY_HASH = 0;
 
 private:
-	Allocator element_alloc;
+	using _ElementAlloc = _HashMapElementAllocatorWrapper< HashMapElement< TKey, TValue >, Allocator >;
+	Allocator element_alloc; // Ignored but kept for binary signatures
 	HashMapElement<TKey, TValue> **elements = nullptr;
 	uint32_t *hashes = nullptr;
 	HashMapElement<TKey, TValue> *head_element = nullptr;
@@ -241,7 +272,7 @@ private:
 				_resize_and_rehash(capacity_index + 1);
 			}
 
-			HashMapElement<TKey, TValue> *elem = element_alloc.new_allocation(p_key, p_value);
+			HashMapElement<TKey, TValue> *elem = _ElementAlloc::alloc(element_alloc, p_key, p_value);
 
 			if (tail_element == nullptr) {
 				head_element = elem;
@@ -283,7 +314,7 @@ public:
 			}
 
 			hashes[i] = EMPTY_HASH;
-			element_alloc.delete_allocation(elements[i]);
+			_ElementAlloc::free(element_alloc, elements[i]);
 			elements[i] = nullptr;
 		}
 
@@ -408,7 +439,7 @@ public:
 			elements[pos]->next->prev = elements[pos]->prev;
 		}
 
-		element_alloc.delete_allocation(elements[pos]);
+		_ElementAlloc::free(element_alloc, elements[pos]);
 		elements[pos] = nullptr;
 
 		num_elements--;

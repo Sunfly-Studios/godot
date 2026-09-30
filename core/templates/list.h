@@ -34,8 +34,40 @@
 #include "core/error/error_macros.h"
 #include "core/os/memory.h"
 #include "core/templates/sort_array.h"
+#include "core/templates/slab_allocator.h"
 
 #include <initializer_list>
+
+template <typename T>
+struct _ListSlabPool {
+	static inline ThreadSafeSlabAllocator<T> allocator;
+};
+
+/*
+ * Special wrapper for the allocator that falls back to page
+ * allocator if the size of the class is too big.
+ */
+template <typename T, typename A>
+struct _ListElementAllocatorWrapper {
+	template <typename... Args>
+	static T *alloc(Args &&...p_args) {
+		if constexpr (sizeof(T) <= 512) {
+			return _ListSlabPool<T>::allocator.alloc(std::forward<Args>(p_args)...);
+		} else {
+			void *mem = A::alloc(sizeof(T));
+			ERR_FAIL_NULL_V(mem, nullptr);
+			return ::new (mem) T(std::forward<Args>(p_args)...);
+		}
+	}
+	static void free(T *p_ptr) {
+		if constexpr (sizeof(T) <= 512) {
+			_ListSlabPool<T>::allocator.free(p_ptr);
+		} else {
+			p_ptr->~T();
+			A::free(p_ptr);
+		}
+	}
+};
 
 /**
  * Generic Templatized Linked List Implementation.
@@ -50,6 +82,7 @@ class List {
 	struct _Data;
 
 public:
+
 	class Element {
 	private:
 		friend class List<T, A>;
@@ -148,6 +181,9 @@ public:
 		_FORCE_INLINE_ explicit Element(Args &&...p_args) :
 				value(std::forward<Args>(p_args)...) {}
 	};
+
+	using _ElementAlloc = _ListElementAllocatorWrapper< Element, A >;
+	static inline ThreadSafeSlabAllocator<_Data> _data_allocator;
 
 	typedef T ValueType;
 
@@ -257,8 +293,7 @@ private:
 			}
 
 			// Invoke the destructor and free memory
-			p_I->~Element();
-			A::free(p_I);
+			_ElementAlloc::free(p_I);
 			size_cache--;
 
 			return true;
@@ -299,16 +334,14 @@ public:
 	template <typename... Args>
 	Element *emplace_back(Args &&...p_args) {
 		if (!_data) {
-			_data = memnew_allocator(_Data, A);
+			_data = _data_allocator.alloc();
 			_data->first = nullptr;
 			_data->last = nullptr;
 			_data->size_cache = 0;
 		}
 
 		// Allocate raw memory and formally begin lifetime with forwarded args.
-		void *mem = A::alloc(sizeof(Element));
-		ERR_FAIL_NULL_V(mem, nullptr);
-		Element *n = ::new (mem) Element(std::forward<Args>(p_args)...);
+		Element *n = _ElementAlloc::alloc(std::forward<Args>(p_args)...);
 
 		n->prev_ptr = _data->last;
 		n->next_ptr = nullptr;
@@ -344,15 +377,13 @@ public:
 	template <typename... Args>
 	Element *emplace_front(Args &&...p_args) {
 		if (!_data) {
-			_data = memnew_allocator(_Data, A);
+			_data = _data_allocator.alloc();
 			_data->first = nullptr;
 			_data->last = nullptr;
 			_data->size_cache = 0;
 		}
 
-		void *mem = A::alloc(sizeof(Element));
-		ERR_FAIL_NULL_V(mem, nullptr);
-		Element *n = ::new (mem) Element(std::forward<Args>(p_args)...);
+		Element *n = _ElementAlloc::alloc(std::forward<Args>(p_args)...);
 
 		n->prev_ptr = nullptr;
 		n->next_ptr = _data->first;
@@ -390,7 +421,7 @@ public:
 			return push_back(p_value);
 		}
 
-		Element *n = memnew_allocator(Element, A);
+		Element *n = _ElementAlloc::alloc();
 		n->value = (T &)p_value;
 		n->prev_ptr = p_element;
 		n->next_ptr = p_element->next_ptr;
@@ -416,7 +447,7 @@ public:
 			return push_back(p_value);
 		}
 
-		Element *n = memnew_allocator(Element, A);
+		Element *n = _ElementAlloc::alloc();
 		n->value = (T &)p_value;
 		n->prev_ptr = p_element->prev_ptr;
 		n->next_ptr = p_element;
@@ -459,7 +490,7 @@ public:
 			bool ret = _data->erase(p_I);
 
 			if (_data->size_cache == 0) {
-				memdelete_allocator<_Data, A>(_data);
+				_data_allocator.free(_data);
 				_data = nullptr;
 			}
 
@@ -824,7 +855,7 @@ public:
 		clear();
 		if (_data) {
 			ERR_FAIL_COND(_data->size_cache);
-			memdelete_allocator<_Data, A>(_data);
+			_data_allocator.free(_data);
 		}
 	}
 };
@@ -850,7 +881,7 @@ void List<T, A>::Element::transfer_to_back(List<T, A> *p_dst_list) {
 	// Attach to the back of the new one.
 
 	if (!p_dst_list->_data) {
-		p_dst_list->_data = memnew_allocator(_Data, A);
+		p_dst_list->_data = _data_allocator.alloc();
 		p_dst_list->_data->first = this;
 		p_dst_list->_data->last = nullptr;
 		p_dst_list->_data->size_cache = 0;

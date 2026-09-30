@@ -29,6 +29,10 @@
 /**************************************************************************/
 
 #include "callable_bind.h"
+#include "core/templates/slab_allocator.h"
+
+static ThreadSafeSlabAllocator<CallableCustomBind> bind_allocator;
+static ThreadSafeSlabAllocator<CallableCustomUnbind> unbind_allocator;
 
 //////////////////////////////////
 
@@ -162,6 +166,14 @@ Error CallableCustomBind::rpc(int p_peer_id, const Variant **p_arguments, int p_
 	return callable.rpcp(p_peer_id, args, p_argcount + binds.size(), r_call_error);
 }
 
+void CallableCustomBind::free_custom() {
+	bind_allocator.free(this);
+}
+
+CallableCustomBind *CallableCustomBind::create(const Callable &p_callable, const Vector<Variant> &p_binds) {
+	return bind_allocator.alloc(p_callable, p_binds);
+}
+
 CallableCustomBind::CallableCustomBind(const Callable &p_callable, const Vector<Variant> &p_binds) {
 	callable = p_callable;
 	binds = p_binds;
@@ -267,6 +279,14 @@ Error CallableCustomUnbind::rpc(int p_peer_id, const Variant **p_arguments, int 
 		return ERR_UNCONFIGURED;
 	}
 	return callable.rpcp(p_peer_id, p_arguments, p_argcount - argcount, r_call_error);
+}
+
+void CallableCustomUnbind::free_custom() {
+	unbind_allocator.free(this);
+}
+
+CallableCustomUnbind *CallableCustomUnbind::create(const Callable &p_callable, int p_argcount) {
+	return unbind_allocator.alloc(p_callable, p_argcount);
 }
 
 CallableCustomUnbind::CallableCustomUnbind(const Callable &p_callable, int p_argcount) {

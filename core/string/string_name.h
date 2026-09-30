@@ -34,6 +34,7 @@
 #include "core/os/mutex.h"
 #include "core/string/ustring.h"
 #include "core/templates/safe_refcount.h"
+#include "core/templates/slab_allocator.h"
 
 #define UNIQUE_NODE_PREFIX "%"
 
@@ -81,6 +82,7 @@ class StringName {
 	friend void unregister_core_types();
 	friend class Main;
 	static inline Mutex mutex;
+	static inline SlabAllocator<_Data> data_allocator;
 	static void setup();
 	static void cleanup();
 	static uint32_t get_empty_hash();

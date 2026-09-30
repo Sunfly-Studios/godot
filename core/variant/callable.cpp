@@ -130,7 +130,7 @@ Callable Callable::bindp(const Variant **p_arguments, int p_argcount) const {
 	for (int i = 0; i < p_argcount; i++) {
 		args.write[i] = *p_arguments[i];
 	}
-	return Callable(memnew(CallableCustomBind(*this, args)));
+	return Callable(CallableCustomBind::create(*this, args));
 }
 
 Callable Callable::bindv(const Array &p_arguments) {
@@ -143,12 +143,12 @@ Callable Callable::bindv(const Array &p_arguments) {
 	for (int i = 0; i < p_arguments.size(); i++) {
 		args.write[i] = p_arguments[i];
 	}
-	return Callable(memnew(CallableCustomBind(*this, args)));
+	return Callable(CallableCustomBind::create(*this, args));
 }
 
 Callable Callable::unbind(int p_argcount) const {
 	ERR_FAIL_COND_V_MSG(p_argcount <= 0, Callable(*this), "Amount of unbind() arguments must be 1 or greater.");
-	return Callable(memnew(CallableCustomUnbind(*this, p_argcount)));
+	return Callable(CallableCustomUnbind::create(*this, p_argcount));
 }
 
 bool Callable::is_valid() const {
@@ -346,7 +346,7 @@ void Callable::operator=(const Callable &p_callable) {
 	}
 
 	if (cleanup_ref != nullptr && cleanup_ref->ref_count.unref()) {
-		memdelete(cleanup_ref);
+		cleanup_ref->free_custom();
 	}
 	cleanup_ref = nullptr;
 }
@@ -386,7 +386,7 @@ Callable Callable::create(const Variant &p_variant, const StringName &p_method) 
 		case Variant::OBJECT:
 			return Callable(p_variant.operator ObjectID(), p_method);
 		default:
-			return Callable(memnew(VariantCallable(p_variant, p_method)));
+			return Callable(VariantCallable::create(p_variant, p_method));
 	}
 }
 
@@ -441,7 +441,7 @@ Callable::Callable(const Callable &p_callable) {
 Callable::~Callable() {
 	if (is_custom()) {
 		if (custom->ref_count.unref()) {
-			memdelete(custom);
+			custom->free_custom();
 			custom = nullptr;
 		}
 	}

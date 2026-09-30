@@ -163,6 +163,7 @@ public:
 	virtual int get_bound_arguments_count() const;
 	virtual void get_bound_arguments(Vector<Variant> &r_arguments) const;
 	virtual int get_unbound_arguments_count() const;
+	virtual void free_custom() { memdelete(this); }
 
 	CallableCustom();
 	virtual ~CallableCustom() {}

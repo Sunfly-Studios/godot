@@ -39,6 +39,7 @@
 #include "core/object/object.h"
 #include "core/variant/type_info.h"
 #include "core/variant/variant_internal.h"
+#include "core/templates/slab_allocator.h"
 
 struct DictionaryPrivate {
 	SafeRefCount refcount;
@@ -48,6 +49,8 @@ struct DictionaryPrivate {
 	ContainerTypeValidate typed_value;
 	Variant *typed_fallback = nullptr; // Allows a typed dictionary to return dummy values when attempting an invalid access.
 };
+
+static ThreadSafeSlabAllocator<DictionaryPrivate> dictionary_private_allocator;
 
 void Dictionary::get_key_list(List<Variant> *p_keys) const {
 	if (_p->variant_map.is_empty()) {
@@ -327,7 +330,7 @@ void Dictionary::_unref() const {
 		if (_p->typed_fallback) {
 			memdelete(_p->typed_fallback);
 		}
-		memdelete(_p);
+		dictionary_private_allocator.free(_p);
 	}
 	_p = nullptr;
 }
@@ -697,7 +700,7 @@ const void *Dictionary::id() const {
 }
 
 Dictionary::Dictionary(const Dictionary &p_base, uint32_t p_key_type, const StringName &p_key_class_name, const Variant &p_key_script, uint32_t p_value_type, const StringName &p_value_class_name, const Variant &p_value_script) {
-	_p = memnew(DictionaryPrivate);
+	_p = dictionary_private_allocator.alloc();
 	_p->refcount.init();
 	set_typed(p_key_type, p_key_class_name, p_key_script, p_value_type, p_value_class_name, p_value_script);
 	assign(p_base);
@@ -709,12 +712,12 @@ Dictionary::Dictionary(const Dictionary &p_from) {
 }
 
 Dictionary::Dictionary() {
-	_p = memnew(DictionaryPrivate);
+	_p = dictionary_private_allocator.alloc();
 	_p->refcount.init();
 }
 
 Dictionary::Dictionary(std::initializer_list<KeyValue<Variant, Variant>> p_init) {
-	_p = memnew(DictionaryPrivate);
+	_p = dictionary_private_allocator.alloc();
 	_p->refcount.init();
 
 	for (const KeyValue<Variant, Variant> &E : p_init) {

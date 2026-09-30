@@ -57,8 +57,11 @@ public:
 	virtual int get_bound_arguments_count() const override;
 	virtual void get_bound_arguments(Vector<Variant> &r_arguments) const override;
 	virtual int get_unbound_arguments_count() const override;
+	virtual void free_custom() override;
 	Callable get_callable() { return callable; }
 	Vector<Variant> get_binds() { return binds; }
+
+	static CallableCustomBind *create(const Callable &p_callable, const Vector<Variant> &p_binds);
 
 	CallableCustomBind(const Callable &p_callable, const Vector<Variant> &p_binds);
 	virtual ~CallableCustomBind();
@@ -87,9 +90,12 @@ public:
 	virtual int get_bound_arguments_count() const override;
 	virtual void get_bound_arguments(Vector<Variant> &r_arguments) const override;
 	virtual int get_unbound_arguments_count() const override;
+	virtual void free_custom() override;
 
 	Callable get_callable() { return callable; }
 	int get_unbinds() { return argcount; }
+
+	static CallableCustomUnbind *create(const Callable &p_callable, int p_argcount);
 
 	CallableCustomUnbind(const Callable &p_callable, int p_argcount);
 	virtual ~CallableCustomUnbind();

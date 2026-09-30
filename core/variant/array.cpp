@@ -39,6 +39,7 @@
 #include "core/variant/callable.h"
 #include "core/variant/dictionary.h"
 #include "core/variant/variant.h"
+#include "core/templates/slab_allocator.h"
 
 struct ArrayPrivate {
 	SafeRefCount refcount;
@@ -46,6 +47,8 @@ struct ArrayPrivate {
 	Variant *read_only = nullptr; // If enabled, a pointer is used to a temporary value that is used to return read-only values.
 	ContainerTypeValidate typed;
 };
+
+static ThreadSafeSlabAllocator<ArrayPrivate> array_private_allocator;
 
 void Array::_ref(const Array &p_from) const {
 	ArrayPrivate *_fp = p_from._p;
@@ -74,7 +77,7 @@ void Array::_unref() const {
 		if (_p->read_only) {
 			memdelete(_p->read_only);
 		}
-		memdelete(_p);
+		array_private_allocator.free(_p);
 	}
 	_p = nullptr;
 }
@@ -842,7 +845,7 @@ const void *Array::id() const {
 }
 
 Array::Array(const Array &p_from, uint32_t p_type, const StringName &p_class_name, const Variant &p_script) {
-	_p = memnew(ArrayPrivate);
+	_p = array_private_allocator.alloc();
 	_p->refcount.init();
 	set_typed(p_type, p_class_name, p_script);
 	assign(p_from);
@@ -921,7 +924,7 @@ Array::Array(const Array &p_from) {
 }
 
 Array::Array() {
-	_p = memnew(ArrayPrivate);
+	_p = array_private_allocator.alloc();
 	_p->refcount.init();
 }
 
