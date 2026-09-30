@@ -279,7 +279,7 @@ public:
 		uint32_t primitive_points = 0;
 
 		uint32_t flags = 0;
-		uint32_t specular_shininess = 0.0;
+		uint32_t specular_shininess = 0;
 
 		bool lights_disabled = false;
 	};
