@@ -188,9 +188,9 @@ public:
 		reference = nullptr;
 	}
 
-	template <typename... VarArgs>
-	void instantiate(VarArgs... p_params) {
-		ref(memnew(T(p_params...)));
+	template <typename... Args>
+	void instantiate(Args &&...p_params) {
+		ref(memnew(T(std::forward<Args>(p_params)...)));
 	}
 
 	Ref() = default;
