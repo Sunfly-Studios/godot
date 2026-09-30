@@ -191,7 +191,7 @@ public:
 
 	uint32_t get_hash() const;
 
-	MethodBind(const MethodBindVTable *p_vtable);
+	_NO_INLINE_ MethodBind(const MethodBindVTable *p_vtable);
 	virtual ~MethodBind();
 };
 
