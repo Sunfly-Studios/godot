@@ -120,7 +120,7 @@ int EGLManager::_get_gldisplay_id(void *p_display) {
 		new_gldisplay.egl_display = eglGetPlatformDisplayEXT(_get_platform_extension_enum(), new_gldisplay.display, (attribs.size() > 0) ? attribs.ptr() : nullptr);
 #endif // EGL_EXT_platform_base
 	} else {
-		NativeDisplayType native_display_type = (NativeDisplayType)new_gldisplay.display;
+		NativeDisplayType native_display_type = (NativeDisplayType)(uintptr_t)new_gldisplay.display;
 		new_gldisplay.egl_display = eglGetDisplay(native_display_type);
 	}
 
