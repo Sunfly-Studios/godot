@@ -312,7 +312,7 @@ DisplayServerIOS::DisplayServerIOS(const String &p_rendering_driver, WindowMode 
 
 						rendering_device = memnew_allocator(RenderingDevice, RenderingDeviceAllocator);
 						if (rendering_device->initialize(rendering_context, MAIN_WINDOW_ID) != OK) {
-							memdelete_allocator(rendering_device);
+							memdelete_allocator<RenderingDevice, RenderingDeviceAllocator>(rendering_device);
 							rendering_device = nullptr;
 							rendering_context->window_destroy(MAIN_WINDOW_ID);
 							memdelete(rendering_context);
