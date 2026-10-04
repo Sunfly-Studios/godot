@@ -49,21 +49,43 @@
 #include <intrin.h>
 #endif
 
-// Branchless De Brujin sequence
-_ALWAYS_INLINE_ static uint8_t find_first_trailing_set_bit64(uint64_t p_word) {
+// Copied from `cowdata.h`
+#if defined(IS_32_BIT)
+typedef int32_t Size;
+typedef uint32_t USize;
+static constexpr USize MAX_INT = INT32_MAX;
+static constexpr USize BITMAP_FULL = 0xFFFFFFFFU;
+static constexpr size_t OBJECTS_PER_SLAB = 32;
+#else
+typedef int64_t Size;
+typedef uint64_t USize;
+static constexpr USize MAX_INT = INT64_MAX;
+static constexpr USize BITMAP_FULL = 0xFFFFFFFFFFFFFFFFULL;
+static constexpr size_t OBJECTS_PER_SLAB = 64;
+#endif
+
+// Branchless De Brujin sequences
+#if defined(IS_32_BIT)
+_ALWAYS_INLINE_ static uint8_t find_first_trailing_set_bit(USize p_word) {
+	static const uint8_t debruijn32[32] = {
+		0, 1, 28, 2, 29, 14, 24, 3, 30, 22, 20, 15, 25, 17, 4, 8,
+		31, 27, 13, 23, 21, 19, 16, 7, 26, 12, 18, 6, 11, 5, 10, 9
+	};
+	USize isolated_lowest_bit = p_word & (~p_word + 1U);
+	return debruijn32[(isolated_lowest_bit * 0x077CB531U) >> 27];
+}
+#else
+_ALWAYS_INLINE_ static uint8_t find_first_trailing_set_bit(USize p_word) {
 	static const uint8_t debruijn64[64] = {
 		0, 1, 2, 53, 3, 7, 54, 27, 4, 38, 41, 8, 34, 55, 48, 28,
 		62, 5, 39, 46, 44, 42, 22, 9, 24, 35, 59, 56, 49, 18, 29, 11,
 		63, 52, 6, 26, 37, 40, 33, 47, 61, 45, 43, 21, 23, 58, 17, 10,
 		51, 25, 36, 32, 60, 20, 57, 16, 50, 31, 19, 15, 30, 14, 13, 12,
 	};
-
-	// Manually perform two's complement.
-	uint64_t isolated_lowest_bit = p_word & (~p_word + 1ULL);
+	USize isolated_lowest_bit = p_word & (~p_word + 1ULL);
 	return debruijn64[(isolated_lowest_bit * 0x022FDD63CC95386DULL) >> 58];
 }
-
-static constexpr size_t OBJECTS_PER_SLAB = 64;
+#endif
 
 static constexpr size_t _slab_next_power_of_2(size_t v) {
 	size_t result = 1;
@@ -77,75 +99,57 @@ template <typename T>
 class ThreadSafeSlabAllocator {
 	static_assert(sizeof(T) <= 512, "Size of class too big for ThreadSafeSlabAllocator, use PagedAllocator");
 
-	static constexpr uint8_t REUSE_LOW_WATERMARK = sizeof(T) > 128 ? 32 : 16;
+	static constexpr uint8_t REUSE_LOW_WATERMARK = sizeof(T) > 128 ? (OBJECTS_PER_SLAB / 2) : (OBJECTS_PER_SLAB / 4);
 
 	struct Slab {
-		enum slabstate {
-			IN_USE,
-			UNUSED,
-			IN_USABLE,
-		};
-
 		alignas(T) uint8_t objects[OBJECTS_PER_SLAB * sizeof(T)];
-		uint64_t bitmap = UINT64_MAX;
-		SpinLock lock;
-		Slab *next = nullptr;
-		Slab *next_available = nullptr;
-		slabstate state = IN_USE;
-		uint8_t free_count = OBJECTS_PER_SLAB;
+
+		std::atomic<USize> bitmap{ BITMAP_FULL };
+		std::atomic<Slab *> next{ nullptr };
+		std::atomic<Slab *> next_available{ nullptr };
+		std::atomic<uint8_t> free_count{ OBJECTS_PER_SLAB };
+		std::atomic<bool> in_usable_list{ false }; // Prevents duplicate Treiber stack pushes
 
 		template <typename... Args>
 		T *allocate(Args &&...p_args) {
-			lock.lock();
-			// Under lock, nobody else is writing. Locking/unlocking is a barrier.
-			if (likely(bitmap != 0)) {
-				uint8_t index = find_first_trailing_set_bit64(bitmap);
-				bitmap &= ~(1ULL << index);
-				free_count--;
-				lock.unlock();
-				
-				T *ptr = reinterpret_cast<T *>(&objects[index * sizeof(T)]);
-				unaligned_construct<T>(ptr, std::forward<Args>(p_args)...);
-				return std::launder(ptr);
+			USize current_bitmap = bitmap.load(std::memory_order_acquire);
+
+			// Under lock, nobody else is writing.
+			while (current_bitmap != 0) {
+				uint8_t index = find_first_trailing_set_bit(current_bitmap);
+				USize new_bitmap = current_bitmap & ~(static_cast<USize>(1) << index);
+
+				// CAS loop
+				if (likely(bitmap.compare_exchange_weak(current_bitmap, new_bitmap, std::memory_order_acquire, std::memory_order_relaxed))) {
+					free_count.fetch_sub(1, std::memory_order_relaxed);
+
+					T *ptr = reinterpret_cast<T *>(&objects[index * sizeof(T)]);
+					unaligned_construct<T>(ptr, std::forward<Args>(p_args)...);
+					return std::launder(ptr);
+				}
 			}
-			// We're about to replace our slab.
-			state = UNUSED;
-			lock.unlock();
 			return nullptr;
 		}
 
 		void deallocate(T *p_ptr, uint8_t index) {
 			unaligned_destroy<T>(p_ptr);
-			
-			lock.lock();
-			bitmap |= (1ULL << index);
-			// state cannot change while we're under lock.
-			free_count++;
+			bitmap.fetch_or(static_cast<USize>(1) << index, std::memory_order_release);
 
-			if (unlikely(state == UNUSED && free_count <= REUSE_LOW_WATERMARK)) {
-				state = IN_USABLE;
-				// It is safe to unlock now. We won't be reconsidered for adding to the usable pool.
-				// And we can't yet be taken out of the free pool because the usable pool's head has.
-				// not yet been changed.
-				lock.unlock();
+			uint8_t prev_count = free_count.fetch_add(1, std::memory_order_relaxed);
 
-				usable_spin_lock.lock();
-				// Under lock, nobody else is writing. Locking/unlocking is a barrier.
-				Slab *global = global_usable_slabs;
-				next_available = global;
-				global_usable_slabs = this;
-				usable_spin_lock.unlock();
-
-				// We could now be reconsidered for allocation.
-				return;
+			// Re-evaluating usable pool condition against watermark
+			if (unlikely(prev_count + 1 <= REUSE_LOW_WATERMARK)) {
+				bool expected = false;
+				if (in_usable_list.compare_exchange_strong(expected, true, std::memory_order_acquire)) {
+					// We won't be reconsidered for adding to the usable pool.
+					// And we can't yet be taken out of the free pool because the usable pool's head has.
+					// not yet been changed.
+					Slab *usable_head = global_usable_slabs.load(std::memory_order_relaxed);
+					do {
+						next_available.store(usable_head, std::memory_order_relaxed);
+					} while (!global_usable_slabs.compare_exchange_weak(usable_head, this, std::memory_order_release, std::memory_order_relaxed));
+				}
 			}
-			lock.unlock();
-		}
-
-		void claim() {
-			lock.lock();
-			state = IN_USE;
-			lock.unlock();
 		}
 	};
 
@@ -153,44 +157,36 @@ class ThreadSafeSlabAllocator {
 	static constexpr uintptr_t SLAB_MASK = ~(SLAB_ALIGNMENT - 1);
 
 	inline static thread_local Slab *local_slab = nullptr;
-	inline static Slab *global_slabs = nullptr;
-	inline static Slab *global_usable_slabs = nullptr;
-	inline static SpinLock alloc_spin_lock;
-	inline static SpinLock usable_spin_lock;
+	inline static std::atomic<Slab *> global_slabs{ nullptr };
+	inline static std::atomic<Slab *> global_usable_slabs{ nullptr };
 
 	Slab *allocate_slab() {
 		// Not under lock, guessing.
-		if (global_usable_slabs) {
-			usable_spin_lock.lock();
-			// Under lock, nobody else is writing. Locking/unlocking is a barrier.
-			if (global_usable_slabs) {
-				Slab *new_slab = global_usable_slabs;
-				Slab *next_global_usable = global_usable_slabs->next_available;
-				global_usable_slabs = next_global_usable;
-				usable_spin_lock.unlock();
-
-				new_slab->claim();
-				return new_slab;
+		Slab *usable = global_usable_slabs.load(std::memory_order_acquire);
+		while (usable) {
+			Slab *next_usable = usable->next_available.load(std::memory_order_relaxed);
+			if (global_usable_slabs.compare_exchange_weak(usable, next_usable, std::memory_order_acquire, std::memory_order_relaxed)) {
+				usable->in_usable_list.store(false, std::memory_order_release);
+				return usable;
 			}
-			usable_spin_lock.unlock();
 		}
 
 		void *raw = Memory::alloc_aligned_static(sizeof(Slab), SLAB_ALIGNMENT);
 		Slab *slab = ::new (raw) Slab();
 
-		alloc_spin_lock.lock();
-		slab->next = global_slabs;
-		global_slabs = slab;
-		alloc_spin_lock.unlock();
+		Slab *global_head = global_slabs.load(std::memory_order_relaxed);
+		do {
+			slab->next.store(global_head, std::memory_order_relaxed);
+		} while (!global_slabs.compare_exchange_weak(global_head, slab, std::memory_order_release, std::memory_order_relaxed));
 
 		return slab;
 	}
 
 	static bool _check_used() {
-		Slab *current = global_slabs;
+		Slab *current = global_slabs.load(std::memory_order_acquire);
 		while (current) {
-			Slab *next = current->next;
-			if (current->bitmap != UINT64_MAX) {
+			Slab *next = current->next.load(std::memory_order_relaxed);
+			if (current->bitmap.load(std::memory_order_acquire) != BITMAP_FULL) {
 				return true;
 			}
 			current = next;
@@ -211,8 +207,7 @@ public:
 				return result;
 			}
 
-			Slab *new_slab = allocate_slab();
-			local_slab = new_slab;
+			local_slab = allocate_slab();
 		}
 	}
 
@@ -229,27 +224,23 @@ public:
 	}
 
 	static void cleanup() {
-		alloc_spin_lock.lock();
-		usable_spin_lock.lock();
 		bool leaked = _check_used();
 		if (leaked) {
 			if (CoreGlobals::leak_reporting_enabled) {
 				ERR_PRINT(String("Slabs in use at exit in ThreadSafeSlabAllocator: ") + String(typeid(T).name()));
 			}
 		} else {
-			Slab *current = global_slabs;
+			Slab *current = global_slabs.load(std::memory_order_acquire);
 			while (current) {
-				Slab *next = current->next;
-				current->~Slab(); // Destroy SpinLock
+				Slab *next = current->next.load(std::memory_order_relaxed);
+				current->~Slab();
 				Memory::free_aligned_static(current);
 				current = next;
 			}
-			global_slabs = nullptr;
-			global_usable_slabs = nullptr;
+			global_slabs.store(nullptr, std::memory_order_release);
+			global_usable_slabs.store(nullptr, std::memory_order_release);
 		}
 		local_slab = nullptr;
-		usable_spin_lock.unlock();
-		alloc_spin_lock.unlock();
 	}
 };
 
@@ -257,7 +248,7 @@ template <typename T>
 class SlabAllocator {
 	static_assert(sizeof(T) <= 512, "Size of class too big for SlabAllocator, use PagedAllocator");
 
-	static constexpr uint8_t REUSE_LOW_WATERMARK = sizeof(T) > 128 ? 32 : 16;
+	static constexpr uint8_t REUSE_LOW_WATERMARK = sizeof(T) > 128 ? (OBJECTS_PER_SLAB / 2) : (OBJECTS_PER_SLAB / 4);
 
 	struct Slab {
 		enum slabstate {
@@ -267,7 +258,7 @@ class SlabAllocator {
 		};
 
 		alignas(T) uint8_t objects[OBJECTS_PER_SLAB * sizeof(T)];
-		uint64_t bitmap = UINT64_MAX;
+		uint64_t bitmap = BITMAP_FULL;
 		Slab *next = nullptr;
 		Slab *next_available = nullptr;
 		slabstate state = IN_USE;
@@ -276,10 +267,10 @@ class SlabAllocator {
 		template <typename... Args>
 		T *allocate(Args &&...p_args) {
 			// Bitmap already checked in SlabAllocator::alloc().
-			uint8_t index = find_first_trailing_set_bit64(bitmap);
-			bitmap &= ~(1ULL << index);
+			uint8_t index = find_first_trailing_set_bit(bitmap);
+			bitmap &= ~(static_cast<USize>(1) << index);
 			free_count--;
-			
+
 			T *ptr = reinterpret_cast<T *>(&objects[index * sizeof(T)]);
 			unaligned_construct<T>(ptr, std::forward<Args>(p_args)...);
 			return std::launder(ptr);
@@ -287,7 +278,7 @@ class SlabAllocator {
 
 		void deallocate(T *p_ptr, uint8_t index) {
 			unaligned_destroy<T>(p_ptr);
-			bitmap |= (1ULL << index);
+			bitmap |= (static_cast<USize>(1) << index);
 			free_count++;
 		}
 	};
