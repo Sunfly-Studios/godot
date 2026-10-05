@@ -765,6 +765,14 @@ detect_and_set_32_bit_arch(env)
 is_production = env.get("production", False)
 is_strict_target = env["target"] in ["editor", "template_release"]
 
+if env["sse_level"] != "2" and not env["target"] in ["template_debug", "template_release"]:
+    print_error(
+        "The editor requires SSE2 features to function.\n"
+        "SSE1 and MMX are only available for template builds.\n"
+        "Change target to `template_debug` or `template_release`, or set `sse_level=2`."
+    )
+    Exit(255)
+
 # Agressive optimisation sections.
 
 if is_production and is_strict_target:
