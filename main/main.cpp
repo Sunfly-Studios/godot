@@ -2364,22 +2364,56 @@ Error Main::setup(const char *execpath, int argc, char *argv[], bool p_second_ph
 
 		// Intel Extreme Legacy (Pre-HD Series)
 		BLOCK_DEVICE("Intel", "GMA");
+		BLOCK_DEVICE("0x8086", "0x2582"); // GMA 900
+		BLOCK_DEVICE("0x8086", "0x2592"); // GMA 900 (Mobile)
+		BLOCK_DEVICE("0x8086", "0x2772"); // GMA 950
+		BLOCK_DEVICE("0x8086", "0x27A2"); // GMA 950 (Mobile)
+		BLOCK_DEVICE("0x8086", "0x29C2"); // GMA 3100 (G33/G31)
+		BLOCK_DEVICE("0x8086", "0x29B2"); // GMA 3100 (Q35)
+		BLOCK_DEVICE("0x8086", "0x29D2"); // GMA 3100 (Q33)
+		BLOCK_DEVICE("0x8086", "0xA001"); // GMA 3150 (Atom D4xx)
+		BLOCK_DEVICE("0x8086", "0xA011"); // GMA 3150 (Atom N4xx)
+
 		BLOCK_DEVICE("Intel", "G41");
+		BLOCK_DEVICE("0x8086", "0x2E32"); // G41 Express
 		BLOCK_DEVICE("Intel", "G45");
+		BLOCK_DEVICE("0x8086", "0x2E22"); // G45/G43 Express
 		BLOCK_DEVICE("Intel", "Q45");
 		BLOCK_DEVICE("Intel", "Q43");
+		BLOCK_DEVICE("0x8086", "0x2E12"); // Q45/Q43 Express
+		
 		BLOCK_DEVICE("Intel", "Mobile Intel(R) 4 Series");
+		BLOCK_DEVICE("0x8086", "0x2A42"); // Mobile 4 Series (GM45/GS45/GL40)
+		BLOCK_DEVICE("0x8086", "0x2A43"); // Mobile 4 Series
 		BLOCK_DEVICE("Intel", "Mobile Intel(R) 965");
+		BLOCK_DEVICE("0x8086", "0x2A02"); // Mobile 965 (GM965/GL960)
+		BLOCK_DEVICE("0x8086", "0x2A03"); // Mobile 965
 		BLOCK_DEVICE("Intel", "Intel(R) 82945G");
+		// 82945G shares ID 0x2772 with GMA 950
 
-		// (Older) NVIDIA GPUs
+		// NVIDIA GPUs
 
 		// NVIDIA Pre-Kepler (Legacy/EoL drivers)
 		BLOCK_DEVICE("NVIDIA", "GeForce 6"); // 6000 series
+		BLOCK_DEVICE("0x10DE", "0x00F1"); // GeForce 6600
+		BLOCK_DEVICE("0x10DE", "0x0140"); // GeForce 6600 GT
+		BLOCK_DEVICE("0x10DE", "0x0141"); // GeForce 6600 (NV43)
+
 		BLOCK_DEVICE("NVIDIA", "GeForce 7"); // 7000 series
+		BLOCK_DEVICE("0x10DE", "0x02E1"); // GeForce 7600
+		BLOCK_DEVICE("0x10DE", "0x0391"); // GeForce 7600 GT
+		BLOCK_DEVICE("0x10DE", "0x0392"); // GeForce 7600 GS
+
 		BLOCK_DEVICE("NVIDIA", "GeForce 8"); // 8000 series
+		BLOCK_DEVICE("0x10DE", "0x0400"); // GeForce 8600 GTS
+		BLOCK_DEVICE("0x10DE", "0x0402"); // GeForce 8600 GT
+		BLOCK_DEVICE("0x10DE", "0x0421"); // GeForce 8500 GT
+		BLOCK_DEVICE("0x10DE", "0x0611"); // GeForce 8800 GT
+
 		BLOCK_DEVICE("NVIDIA", "GeForce 9"); // 9000 series
-		
+		BLOCK_DEVICE("0x10DE", "0x0622"); // GeForce 9600 GT
+		BLOCK_DEVICE("0x10DE", "0x0640"); // GeForce 9500 GT
+
 		// NVIDIA Tesla Architecture (100, 200, 300 series)
 		BLOCK_DEVICE("NVIDIA", "GeForce G 1"); 
 		BLOCK_DEVICE("NVIDIA", "GeForce GT 1");
@@ -2388,30 +2422,47 @@ Error Main::setup(const char *execpath, int argc, char *argv[], bool p_second_ph
 		BLOCK_DEVICE("NVIDIA", "GeForce GT 2"); 
 		BLOCK_DEVICE("NVIDIA", "GeForce GTS 2"); 
 		BLOCK_DEVICE("NVIDIA", "GeForce GTX 2");
+		BLOCK_DEVICE("0x10DE", "0x05E1"); // GeForce GTX 280
+		BLOCK_DEVICE("0x10DE", "0x05E2"); // GeForce GTX 260
+		BLOCK_DEVICE("0x10DE", "0x0CA3"); // GeForce GT 240
 		BLOCK_DEVICE("NVIDIA", "GeForce 3"); 
 		BLOCK_DEVICE("NVIDIA", "GeForce G 3"); 
 		BLOCK_DEVICE("NVIDIA", "GeForce GT 3"); 
 		BLOCK_DEVICE("NVIDIA", "GeForce GTS 3"); 
-		
+		BLOCK_DEVICE("0x10DE", "0x0CA5"); // GeForce GT 320
+
 		// NVIDIA Fermi Architecture (400, 500 series)
 		BLOCK_DEVICE("NVIDIA", "GeForce 4"); 
 		BLOCK_DEVICE("NVIDIA", "GeForce GT 4"); 
 		BLOCK_DEVICE("NVIDIA", "GeForce GTS 4"); 
 		BLOCK_DEVICE("NVIDIA", "GeForce GTX 4");
+		BLOCK_DEVICE("0x10DE", "0x06C0"); // GeForce GTX 480
+		BLOCK_DEVICE("0x10DE", "0x06C4"); // GeForce GTX 460
+		BLOCK_DEVICE("0x10DE", "0x0DC0"); // GeForce GTS 450
 		BLOCK_DEVICE("NVIDIA", "GeForce 5"); 
 		BLOCK_DEVICE("NVIDIA", "GeForce GT 5"); 
 		BLOCK_DEVICE("NVIDIA", "GeForce GTX 5");
-		
+		BLOCK_DEVICE("0x10DE", "0x1080"); // GeForce GTX 580
+		BLOCK_DEVICE("0x10DE", "0x1200"); // GeForce GTX 560 Ti
+		BLOCK_DEVICE("0x10DE", "0x1244"); // GeForce GTX 550 Ti
+
 		// NVIDIA Kepler Architecture (600, 700 series mostly EoL)
 		BLOCK_DEVICE("NVIDIA", "GeForce 605"); 
 		BLOCK_DEVICE("NVIDIA", "GeForce GT 6"); 
 		BLOCK_DEVICE("NVIDIA", "GeForce GTX 6"); 
-		BLOCK_DEVICE("NVIDIA", "GeForce GT 7"); // Most GT 7xx are Kepler/Fermi rebrands
-		
+		BLOCK_DEVICE("0x10DE", "0x1180"); // GeForce GTX 680
+		BLOCK_DEVICE("0x10DE", "0x1184"); // GeForce GTX 670
+		BLOCK_DEVICE("0x10DE", "0x11C0"); // GeForce GTX 660
+		BLOCK_DEVICE("NVIDIA", "GeForce GT 7"); 
+		BLOCK_DEVICE("0x10DE", "0x0F00"); // GeForce GTX 780 (Kepler)
+		BLOCK_DEVICE("0x10DE", "0x1188"); // GeForce GTX 770 (Kepler)
+
 		// Legacy NVIDIA Professional / Integrated
 		BLOCK_DEVICE("NVIDIA", "Quadro FX");
 		BLOCK_DEVICE("NVIDIA", "Quadro NVS");
 		BLOCK_DEVICE("NVIDIA", "ION");
+		BLOCK_DEVICE("0x10DE", "0x087D"); // ION
+		BLOCK_DEVICE("0x10DE", "0x087F"); // ION LE
 
 #undef BLOCK_DEVICE
 
