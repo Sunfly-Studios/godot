@@ -1858,7 +1858,7 @@ void RasterizerSceneGLES2::_batch_bind_material(GLES2::SceneMaterialData *p_mate
 				bdata.batches.size() > 0 &&
 				_render_item_state.curr_batch
 			) {
-				// Base pass ensures directional, omni and spot counts are disabled/zeroed
+				// Base pass ensures omni and spot counts are disabled/zeroed
 				GLES2::MaterialStorage::get_singleton()->shaders.scene_shader.version_set_uniform(SceneShaderGLES2::OMNI_LIGHT_COUNT, 0, p_material_data->shader_data->version, variant, spec_constants);
 				GLES2::MaterialStorage::get_singleton()->shaders.scene_shader.version_set_uniform(SceneShaderGLES2::SPOT_LIGHT_COUNT, 0, p_material_data->shader_data->version, variant, spec_constants);
 			}
@@ -1908,12 +1908,11 @@ void RasterizerSceneGLES2::_batch_render_items(GLES2::SceneMaterialData *p_mater
 
 		_render_additive_light_passes<true>(first_surf, p_material_data, scene_state.current_spec_constants, promote_to_instancing, world_xform, p_primitive);
 
-		// TODO (GLES2): This if is comically long.
-		// Must simplify.
-		if (
-			scene_state.ubo.directional_light_count > 0 ||
-			(first_surf && first_surf->owner && (first_surf->owner->omni_light_gl_cache.size() > 0 || first_surf->owner->spot_light_gl_cache.size() > 0))
-		) {
+		bool has_directional_light = scene_state.ubo.directional_light_count > 0;
+		bool has_omni_light = first_surf->owner->omni_light_gl_cache.size() > 0;
+		bool has_spot_light = first_surf->owner->spot_light_gl_cache.size() > 0;
+
+		if (has_directional_light || has_omni_light || has_spot_light) {
 			_render_item_state.current_state_hash = 0;
 		}
 	}
@@ -2171,14 +2170,11 @@ void RasterizerSceneGLES2::_render_single_item_immediate(const GeometryInstanceS
 			index_type
 		);
 
-		// TODO (GLES2): This if is comically long.
-		// Must simplify.
-		if (
-			scene_state.ubo.directional_light_count > 0 ||
-			(p_surface->owner &&
-			(p_surface->owner->omni_light_gl_cache.size() > 0 ||
-				p_surface->owner->spot_light_gl_cache.size() > 0))
-		) {
+		bool has_directional_light = scene_state.ubo.directional_light_count > 0;
+		bool has_omni_light = p_surface->owner->omni_light_gl_cache.size() > 0;
+		bool has_spot_light = p_surface->owner->spot_light_gl_cache.size() > 0;
+
+		if (has_directional_light || has_omni_light || has_spot_light) {
 			_render_item_state.current_state_hash = 0;
 		}
 	}
@@ -2969,13 +2965,8 @@ void RasterizerSceneGLES2::_bind_sky_directional_lights(RID p_version, SkyShader
 	GLES2::MaterialStorage *material_storage = GLES2::MaterialStorage::get_singleton();
 
 	material_storage->shaders.sky_shader.version_set_uniform(SkyShaderGLES2::DIRECTIONAL_LIGHT_COUNT, (int)sky_globals.directional_light_count, p_version, p_variant, p_spec_constants);
-	for (uint32_t i = 0; i < sky_globals.directional_light_count; i++) {
-		// TODO (GLES2): Simplify all of this since we now only have 1 maximum
-		// directional light.
-		if (i > 0) {
-			continue;
-		}
-		const DirectionalLightData &light = sky_globals.directional_lights[i];
+	if (sky_globals.directional_light_count > 0) {
+		const DirectionalLightData &light = sky_globals.directional_lights[0];
 		Vector4 dir_energy(light.direction[0], light.direction[1], light.direction[2], light.energy);
 		Vector4 col_size(light.color[0], light.color[1], light.color[2], light.size);
 		int32_t enabled = light.enabled ? 1 : 0;
