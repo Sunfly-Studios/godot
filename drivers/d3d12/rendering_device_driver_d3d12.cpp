@@ -4606,10 +4606,14 @@ void RenderingDeviceDriverD3D12::command_clear_buffer(CommandBufferID p_cmd_buff
 
 	// due to alignment rules the UAV is sometimes bigger than the area we want to clear, limit the clear
 	D3D12_RECT clear_rect = {};
-	clear_rect.left = LONG((p_offset - view_offset) / 4);
-	clear_rect.right = LONG(clear_rect.left + p_size / 4);
-	clear_rect.top = 0;
-	clear_rect.bottom = 1;
+	bool clear_full_uav = view_offset == p_offset;
+
+	if (!clear_full_uav) {
+		clear_rect.left = LONG((p_offset - view_offset) / 4);
+		clear_rect.right = LONG(clear_rect.left + p_size / 4);
+		clear_rect.top = 0;
+		clear_rect.bottom = 1;
+	}
 
 	static const UINT values[4] = {};
 	cmd_buf_info->cmd_list->ClearUnorderedAccessViewUint(
@@ -4617,8 +4621,8 @@ void RenderingDeviceDriverD3D12::command_clear_buffer(CommandBufferID p_cmd_buff
 			frames[frame_idx].desc_heap_walkers.aux.get_curr_cpu_handle(),
 			buf_info->resource,
 			values,
-			1,
-			&clear_rect);
+			clear_full_uav ? 0 : 1,
+			clear_full_uav ? nullptr : &clear_rect);
 	
 	frames[frame_idx].desc_heap_walkers.resources.advance();
 	frames[frame_idx].desc_heap_walkers.aux.advance();
