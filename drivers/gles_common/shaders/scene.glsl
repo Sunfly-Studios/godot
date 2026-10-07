@@ -6,6 +6,8 @@ mode_color_instancing = #define BASE_PASS \n#define USE_INSTANCING
 mode_color_matrix_palette = #define BASE_PASS \n#define USE_FAT_VERTEX
 mode_additive = #define USE_ADDITIVE_LIGHTING
 mode_additive_instancing = #define USE_ADDITIVE_LIGHTING \n#define USE_INSTANCING
+mode_additive_directional = #define USE_ADDITIVE_LIGHTING \n#define ADDITIVE_DIRECTIONAL
+mode_additive_directional_instancing = #define USE_ADDITIVE_LIGHTING \n#define ADDITIVE_DIRECTIONAL \n#define USE_INSTANCING
 mode_depth = #define MODE_RENDER_DEPTH
 mode_depth_instancing = #define MODE_RENDER_DEPTH \n#define USE_INSTANCING
 
@@ -19,9 +21,7 @@ DISABLE_FOG = false
 USE_RADIANCE_MAP = true
 RENDER_SHADOWS = false
 SHADOW_MODE_PCF_5 = false
-SHADOW_MODE_PCF_13 = false
 LIGHT_USE_PSSM2 = false
-LIGHT_USE_PSSM4 = false
 LIGHT_USE_PSSM_BLEND = false
 BASE_PASS = true
 USE_ADDITIVE_LIGHTING = false
@@ -159,15 +159,13 @@ uniform highp float positional_shadow_normal_bias;
 uniform highp float positional_shadow_atlas_pixel_size;
 #endif
 
-#if defined(BASE_PASS)
+#if defined(USE_ADDITIVE_LIGHTING) && defined(ADDITIVE_DIRECTIONAL)
 uniform highp vec3 directional_shadow_direction;
 uniform highp float directional_shadow_atlas_pixel_size;
 uniform highp vec4 directional_shadow_normal_bias;
 uniform highp vec4 directional_shadow_split_offsets;
 uniform highp mat4 directional_shadow_matrix1;
 uniform highp mat4 directional_shadow_matrix2;
-uniform highp mat4 directional_shadow_matrix3;
-uniform highp mat4 directional_shadow_matrix4;
 #endif
 
 uniform mat3 radiance_inverse_xform;
@@ -220,14 +218,10 @@ varying vec3 tangent_interp;
 varying vec3 binormal_interp;
 #endif
 
-#if defined(USE_ADDITIVE_LIGHTING) || defined(BASE_PASS)
+#if defined(USE_ADDITIVE_LIGHTING)
 varying highp vec4 shadow_coord;
-#if defined(LIGHT_USE_PSSM2) || defined(LIGHT_USE_PSSM4)
+#if defined(LIGHT_USE_PSSM2)
 varying highp vec4 shadow_coord2;
-#endif
-#ifdef LIGHT_USE_PSSM4
-varying highp vec4 shadow_coord3;
-varying highp vec4 shadow_coord4;
 #endif
 #endif
 
@@ -392,7 +386,7 @@ void main() {
 #endif
 #endif
 
-#if defined(BASE_PASS)
+#if defined(USE_ADDITIVE_LIGHTING) && defined(ADDITIVE_DIRECTIONAL)
 #ifdef NORMAL_USED
 	vec3 base_normal_bias = normalize(normal) * (1.0 - max(0.0, dot(directional_shadow_direction, -normalize(normal))));
 	vec3 normal_offset = base_normal_bias * directional_shadow_normal_bias.x;
@@ -400,18 +394,12 @@ void main() {
 	vec3 base_normal_bias = vec3(0.0);
 	vec3 normal_offset = vec3(0.0);
 #endif
+
 	shadow_coord = directional_shadow_matrix1 * vec4(vertex_interp + normal_offset, 1.0);
 
-#if defined(LIGHT_USE_PSSM2) || defined(LIGHT_USE_PSSM4)
+#if defined(LIGHT_USE_PSSM2)
 	normal_offset = base_normal_bias * directional_shadow_normal_bias.y;
 	shadow_coord2 = directional_shadow_matrix2 * vec4(vertex_interp + normal_offset, 1.0);
-#endif
-
-#ifdef LIGHT_USE_PSSM4
-	normal_offset = base_normal_bias * directional_shadow_normal_bias.z;
-	shadow_coord3 = directional_shadow_matrix3 * vec4(vertex_interp + normal_offset, 1.0);
-	normal_offset = base_normal_bias * directional_shadow_normal_bias.w;
-	shadow_coord4 = directional_shadow_matrix4 * vec4(vertex_interp + normal_offset, 1.0);
 #endif
 #endif
 
@@ -513,17 +501,13 @@ varying vec3 normal_interp;
 
 varying highp vec3 vertex_interp;
 
-#if defined(USE_ADDITIVE_LIGHTING) || defined(BASE_PASS)
+#if defined(USE_ADDITIVE_LIGHTING)
 varying highp vec4 shadow_coord;
 
-#if defined(LIGHT_USE_PSSM2) || defined(LIGHT_USE_PSSM4)
+#if defined(LIGHT_USE_PSSM2)
 varying highp vec4 shadow_coord2;
 #endif
 
-#ifdef LIGHT_USE_PSSM4
-varying highp vec4 shadow_coord3;
-varying highp vec4 shadow_coord4;
-#endif
 #endif
 
 #ifdef USE_RADIANCE_MAP
@@ -581,15 +565,13 @@ uniform highp float positional_shadow_normal_bias;
 uniform highp float positional_shadow_atlas_pixel_size;
 #endif
 
-#if defined(BASE_PASS)
+#if defined(USE_ADDITIVE_LIGHTING) && defined(ADDITIVE_DIRECTIONAL)
 uniform highp vec3 directional_shadow_direction;
 uniform highp float directional_shadow_atlas_pixel_size;
 uniform highp vec4 directional_shadow_normal_bias;
 uniform highp vec4 directional_shadow_split_offsets;
 uniform highp mat4 directional_shadow_matrix1;
 uniform highp mat4 directional_shadow_matrix2;
-uniform highp mat4 directional_shadow_matrix3;
-uniform highp mat4 directional_shadow_matrix4;
 #endif
 
 uniform mat3 radiance_inverse_xform;
@@ -651,15 +633,10 @@ vec4 fog_process(vec3 vertex) {
 
 #ifndef DISABLE_LIGHT_DIRECTIONAL
 	if (fog_sun_scatter > 0.001) {
-		vec4 sun_scatter = vec4(0.0);
-		float sun_total = 0.0;
 		vec3 view = normalize(vertex);
-		for (int i = 0; i < MAX_DIRECTIONAL_LIGHT_DATA_STRUCTS; i++) {
-			if (i >= directional_light_count) {
-				break;
-			}
-			vec3 light_color = directional_lights.data[i].color_size.xyz * directional_lights.data[i].direction_energy.w;
-			float light_amount = pow(max(dot(view, directional_lights.data[i].direction_energy.xyz), 0.0), 8.0);
+		if (directional_light_count > 0) {
+			vec3 light_color = directional_lights.data[0].color_size.xyz * directional_lights.data[0].direction_energy.w;
+			float light_amount = pow(max(dot(view, directional_lights.data[0].direction_energy.xyz), 0.0), 8.0);
 			fog_color += light_color * light_amount * fog_sun_scatter;
 		}
 	}
@@ -913,52 +890,33 @@ void main() {
 
 		// scales the specular reflections, needs to be be computed before lighting happens,
 		// but after environment, GI, and reflection probes are added
-		// Environment brdf approximation (Lazarov 2013)
-		// see https://www.unrealengine.com/en-US/blog/physically-based-shading-on-mobile
-		const vec4 c0 = vec4(-1.0, -0.0275, -0.572, 0.022);
-		const vec4 c1 = vec4(1.0, 0.0425, 1.04, -0.04);
-		vec4 r = roughness * c0 + c1;
+		// BRDF Fallback simplified for GLES2
 		float ndotv = clamp(dot(normal, view), 0.0, 1.0);
-
-		float a004 = min(r.x * r.x, exp2(-9.28 * ndotv)) * r.x + r.y;
-		vec2 env = vec2(-1.04, 1.04) * a004 + r.zw;
-		specular_light *= env.x * f0 + env.y * clamp(50.0 * f0.g, metallic, 1.0);
+		vec3 env_F = f0 + (max(vec3(1.0 - roughness), f0) - f0) * pow(1.0 - ndotv, 5.0);
+		specular_light *= env_F;
 #endif
 	}
 
 #endif // BASE_PASS
 
 #ifndef DISABLE_LIGHT_DIRECTIONAL
-#if defined(BASE_PASS)
+#if defined(USE_ADDITIVE_LIGHTING) && defined(ADDITIVE_DIRECTIONAL)
 	if (directional_light_count > 0) {
 		float directional_shadow = 1.0;
-#if !defined(LIGHT_USE_PSSM2) && !defined(LIGHT_USE_PSSM4)
+#if !defined(LIGHT_USE_PSSM2)
 		directional_shadow = sample_shadow(directional_shadow_atlas, directional_shadow_atlas_pixel_size, shadow_coord);
 #endif
 #ifdef LIGHT_USE_PSSM2
 		float depth_z = -vertex.z;
 		directional_shadow = depth_z < directional_shadow_split_offsets.x ? sample_shadow(directional_shadow_atlas, directional_shadow_atlas_pixel_size, shadow_coord) : sample_shadow(directional_shadow_atlas, directional_shadow_atlas_pixel_size, shadow_coord2);
 #endif
-#ifdef LIGHT_USE_PSSM4
-		float depth_z = -vertex.z;
-		float shadow1 = sample_shadow(directional_shadow_atlas, directional_shadow_atlas_pixel_size, shadow_coord);
-		float shadow2 = sample_shadow(directional_shadow_atlas, directional_shadow_atlas_pixel_size, shadow_coord2);
-		float shadow3 = sample_shadow(directional_shadow_atlas, directional_shadow_atlas_pixel_size, shadow_coord3);
-		float shadow4 = sample_shadow(directional_shadow_atlas, directional_shadow_atlas_pixel_size, shadow_coord4);
-		if (depth_z < directional_shadow_split_offsets.w) {
-			if (depth_z < directional_shadow_split_offsets.y) {
-				directional_shadow = depth_z < directional_shadow_split_offsets.x ? shadow1 : shadow2;
-			} else {
-				directional_shadow = depth_z < directional_shadow_split_offsets.z ? shadow3 : shadow4;
-			}
-		}
-#endif
+
 		directional_shadow = mix(directional_shadow, 1.0, 1.0 - smoothstep(directional_shadow_fade_to, directional_shadow_fade_from, vertex.z));
 		directional_shadow = mix(1.0, directional_shadow, directional_lights.data[0].extended_data.z);
 
 		light_compute(normal, normalize(directional_lights.data[0].direction_energy.xyz), normalize(view), directional_lights.data[0].color_size.w, directional_lights.data[0].color_size.xyz * directional_lights.data[0].direction_energy.w * directional_shadow, 1.0, f0, roughness, metallic, 1.0, albedo, alpha, diffuse_light, specular_light);
 	}
-#endif // BASE_PASS
+#endif // USE_ADDITIVE_LIGHTING && ADDITIVE_DIRECTIONAL
 #endif // !DISABLE_LIGHT_DIRECTIONAL
 
 #ifndef DISABLE_LIGHT_OMNI
@@ -1016,7 +974,11 @@ void main() {
 #else // !MODE_RENDER_DEPTH
 
 #ifdef MODE_UNSHADED
+#if defined(USE_ADDITIVE_LIGHTING)
+	discard;
+#else
 	frag_color = vec4(albedo, alpha);
+#endif
 #else
 
 	diffuse_light *= albedo;

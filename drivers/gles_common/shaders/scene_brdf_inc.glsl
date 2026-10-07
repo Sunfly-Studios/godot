@@ -3,35 +3,6 @@ vec3 F0(float metallic, float specular, vec3 albedo) {
 	return mix(vec3(dielectric), albedo, vec3(metallic));
 }
 
-float D_GGX(float cos_theta_m, float alpha) {
-	float a = cos_theta_m * alpha;
-	float k = alpha / (1.0 - cos_theta_m * cos_theta_m + a * a);
-	return k * k * (1.0 / M_PI);
-}
-
-float V_GGX(float NdotL, float NdotV, float alpha) {
-	return 0.5 / mix(2.0 * NdotL * NdotV, NdotL + NdotV, alpha);
-}
-
-float D_GGX_anisotropic(float cos_theta_m, float alpha_x, float alpha_y, float cos_phi, float sin_phi) {
-	float alpha2 = alpha_x * alpha_y;
-	highp vec3 v = vec3(alpha_y * cos_phi, alpha_x * sin_phi, alpha2 * cos_theta_m);
-	float w2 = alpha2 / dot(v, v);
-	return alpha2 * w2 * w2 * (1.0 / M_PI);
-}
-
-float V_GGX_anisotropic(float alpha_x, float alpha_y, float TdotV, float TdotL, float BdotV, float BdotL, float NdotV, float NdotL) {
-	float Lambda_V = NdotL * length(vec3(alpha_x * TdotV, alpha_y * BdotV, NdotV));
-	float Lambda_L = NdotV * length(vec3(alpha_x * TdotL, alpha_y * BdotL, NdotL));
-	return 0.5 / (Lambda_V + Lambda_L);
-}
-
-float SchlickFresnel(float u) {
-	float m = 1.0 - u;
-	float m2 = m * m;
-	return m2 * m2 * m; 
-}
-
 float get_omni_spot_attenuation(float distance, float inv_range, float decay) {
 	float nd = max(1.0 - pow(distance * inv_range, 4.0), 0.0);
 	return (nd * nd) * pow(max(distance, 0.0001), -decay);
@@ -67,12 +38,18 @@ void light_compute(vec3 N, vec3 L, vec3 V, float A, vec3 light_color, float atte
 		diffuse_light += light_color * cNdotL * (1.0 / M_PI) * attenuation;
 	}
 
-	if (roughness > 0.0) { 
-		float alpha_ggx = roughness * roughness;
-		float D = D_GGX(cNdotH, alpha_ggx);
-		float G = V_GGX(cNdotL, cNdotV, alpha_ggx);
-		vec3 F = f0 + (clamp(50.0 * f0.g, 0.0, 1.0) - f0) * SchlickFresnel(cLdotH);
-		specular_light += cNdotL * D * F * G * light_color * attenuation * specular_amount;
+	if (roughness > 0.0) {
+		float shininess = exp2(15.0 * (1.0 - roughness) + 1.0) * 0.25;
+		float blinn = pow(cNdotH, shininess);
+		blinn *= (shininess + 8.0) * (1.0 / (8.0 * M_PI));
+
+		float m = 1.0 - cLdotH;
+		float m2 = m * m;
+		float schlick = m2 * m2 * m;
+		vec3 F = f0 + (clamp(50.0 * f0.g, 0.0, 1.0) - f0) * schlick;
+
+		float visibility = blinn / max(4.0 * cNdotV * cNdotL, 0.75);
+		specular_light += cNdotL * visibility * F * light_color * attenuation * specular_amount;
 	}
 #endif // USE_ADDITIVE_LIGHTING
 

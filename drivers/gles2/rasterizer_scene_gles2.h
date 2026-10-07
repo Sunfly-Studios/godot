@@ -487,6 +487,12 @@ private:
 		);
 	}
 
+	enum AdditiveLightType {
+		ADDITIVE_LIGHT_DIRECTIONAL,
+		ADDITIVE_LIGHT_OMNI,
+		ADDITIVE_LIGHT_SPOT
+	};
+
 	/* REST OF GEOMETRY FUNCTIONS */
 
 	static void _geometry_instance_dependency_changed(Dependency::DependencyChangedNotification p_notification, DependencyTracker *p_tracker);
@@ -671,6 +677,7 @@ private:
 		bool used_normal_texture = false;
 		bool used_depth_texture = false;
 		uint64_t current_spec_constants = 0;
+		bool transparent_bg = false;
 
 		LightData *omni_lights = nullptr;
 		LightData *spot_lights = nullptr;
@@ -783,6 +790,9 @@ private:
 
 	template <PassMode p_pass_mode>
 	_FORCE_INLINE_ void _render_list_template(RenderListParameters *p_params, const RenderDataGLES2 *p_render_data, uint32_t p_from_element, uint32_t p_to_element, bool p_alpha_pass = false, bool p_replay = false);
+
+	template <AdditiveLightType p_light_type, bool p_is_batch>
+	_FORCE_INLINE_ void _execute_additive_light_draw(uint32_t p_light_gl_id, GLES2::SceneMaterialData *p_material, SceneShaderGLES2::ShaderVariant p_variant, uint64_t p_spec_constants, const Transform3D &p_world_xform, RS::PrimitiveType p_primitive, int p_instances, const MultiMeshInstanceData *p_mm, const Transform3D *p_owner_transform, bool p_use_index_buffer, GLenum p_primitive_gl, int p_drawn_count, GLenum p_index_type, RS::InstanceType p_base_type);
 
 	template <bool p_is_batch>
 	_FORCE_INLINE_ void _render_additive_light_passes(const GeometryInstanceSurface *p_surf, GLES2::SceneMaterialData *p_material, uint64_t p_spec_constants, bool p_instancing, const Transform3D &p_world_xform, RS::PrimitiveType p_primitive, int p_instances = 1, const MultiMeshInstanceData *p_mm = nullptr, const Transform3D *p_owner_transform = nullptr, bool p_use_index_buffer = false, GLenum p_primitive_gl = 0, int p_drawn_count = 0, GLenum p_index_type = 0);

@@ -43,12 +43,12 @@ class GLESHeaderStruct:
         # - servers/rendering_server.cpp
         # - drivers/gles2/rasterizer_scene_gles2.cpp (for the runtime defines)
         self.constants = {
-            "MAX_DIRECTIONAL_LIGHT_DATA_STRUCTS": 8,
-            "MAX_FORWARD_LIGHTS": 8, # up to 1024, default 8
+            "MAX_DIRECTIONAL_LIGHT_DATA_STRUCTS": 1,
+            "MAX_FORWARD_LIGHTS": 1, # up to 1024, default 1 (because of multi-pass architecture)
 
             # The actual value is 32, up to 256,
             # though I don't think we will use them all in GLES2.
-            "MAX_LIGHT_DATA_STRUCTS": 8,
+            "MAX_LIGHT_DATA_STRUCTS": 1,
         }
         self.structs = {}
         self.current_struct = None
