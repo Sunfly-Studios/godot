@@ -696,8 +696,11 @@ void RenderingDeviceDriverVulkan::_check_driver_workarounds(const VkPhysicalDevi
 	// Workaround for a bug in NVIDIA drivers where submitting a render pass with no bound pipeline and an attachment using the "Don't Care" store operation causes a crash.
 	driver_workarounds.avoid_store_op_dont_care_in_draw_list_with_no_bound_pipeline = (p_device_properties.vendorID == RenderingContextDriver::Vendor::VENDOR_NVIDIA);
 
-	// Workaround for shader compilers ("libufwriter.so") in PowerVR Rogue GPUs where creating shader modules or pipelines concurrently causes a crash.
-	if (p_device_properties.vendorID == RenderingContextDriver::Vendor::VENDOR_IMGTEC && strstr(p_device_properties.deviceName, "Rogue") != nullptr) {
+	// Workaround for shader compilers ("libufwriter.so") in PowerVR Rogue GPUs (and some B-Series BXM-8-256) where creating shader modules or pipelines concurrently causes a crash.
+	if (
+		p_device_properties.vendorID == RenderingContextDriver::Vendor::VENDOR_IMGTEC &&
+		(strstr(p_device_properties.deviceName, "Rogue") != nullptr || strstr(p_device_properties.deviceName, "BXM-8-256") != nullptr)
+	) {
 		powervr_rogue_shader_crash_workaround_mutex = memnew(BinaryMutex); // Non-null mutex pointer enables the workaround.
 	}
 }
