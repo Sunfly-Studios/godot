@@ -87,7 +87,8 @@ private:
 			FB_CONFIG_MAX
 		};
 
-		RID get_color_fbs(FramebufferConfigType p_config_type);
+		template <FramebufferConfigType p_config_type>
+		RID get_color_fbs();
 		virtual void free_data() override;
 		virtual void configure(RenderSceneBuffersRD *p_render_buffers) override;
 
@@ -167,8 +168,11 @@ private:
 
 	void _update_render_base_uniform_set();
 
-	void _update_instance_data_buffer(RenderListType p_render_list);
-	void _fill_instance_data(RenderListType p_render_list, uint32_t p_offset = 0, int32_t p_max_elements = -1, bool p_update_buffer = true);
+	template <RenderListType p_render_list>
+	void _update_instance_data_buffer();
+
+	template <RenderListType p_render_list>
+	void _fill_instance_data(uint32_t p_offset = 0, int32_t p_max_elements = -1, bool p_update_buffer = true);
 
 	template <RenderListType p_render_list, PassMode p_pass_mode>
 	void _fill_render_list(const RenderDataRD *p_render_data, bool p_append = false);

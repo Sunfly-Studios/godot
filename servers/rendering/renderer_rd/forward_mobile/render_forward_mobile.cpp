@@ -166,7 +166,8 @@ void RenderForwardMobile::RenderBufferDataForwardMobile::configure(RenderSceneBu
 	ERR_FAIL_NULL(render_buffers); // Huh? really?
 }
 
-RID RenderForwardMobile::RenderBufferDataForwardMobile::get_color_fbs(FramebufferConfigType p_config_type) {
+template <RenderForwardMobile::RenderBufferDataForwardMobile::FramebufferConfigType p_config_type>
+RID RenderForwardMobile::RenderBufferDataForwardMobile::get_color_fbs() {
 	ERR_FAIL_NULL_V(render_buffers, RID());
 
 	RendererRD::TextureStorage *texture_storage = RendererRD::TextureStorage::get_singleton();
@@ -204,73 +205,67 @@ RID RenderForwardMobile::RenderBufferDataForwardMobile::get_color_fbs(Framebuffe
 	// Now define our subpasses
 	Vector<RD::FramebufferPass> passes;
 
-	switch (p_config_type) {
-		case FB_CONFIG_RENDER_PASS: {
-			RD::FramebufferPass pass;
-			pass.color_attachments.push_back(0);
-			pass.depth_attachment = 1;
-			if (vrs_texture.is_valid()) {
-				pass.vrs_attachment = 2;
-			}
+	if constexpr (p_config_type == FB_CONFIG_RENDER_PASS) {
+		RD::FramebufferPass pass;
+		pass.color_attachments.push_back(0);
+		pass.depth_attachment = 1;
+		if (vrs_texture.is_valid()) {
+			pass.vrs_attachment = 2;
+		}
 
-			if (use_msaa) {
-				// Add resolve
-				pass.resolve_attachments.push_back(color_buffer_id);
-			}
-			passes.push_back(pass);
+		if (use_msaa) {
+			// Add resolve
+			pass.resolve_attachments.push_back(color_buffer_id);
+		}
+		passes.push_back(pass);
 
-			return FramebufferCacheRD::get_singleton()->get_cache_multipass(textures, passes, view_count);
-		} break;
+		return FramebufferCacheRD::get_singleton()->get_cache_multipass(textures, passes, view_count);
+	} else if constexpr (p_config_type == FB_CONFIG_RENDER_AND_POST_PASS) {
+		Size2i target_size = render_buffers->get_target_size();
+		Size2i internal_size = render_buffers->get_internal_size();
 
-		case FB_CONFIG_RENDER_AND_POST_PASS: {
-			Size2i target_size = render_buffers->get_target_size();
-			Size2i internal_size = render_buffers->get_internal_size();
+		// can't do our blit pass if resolutions don't match, this should already have been checked.
+		ERR_FAIL_COND_V(target_size != internal_size, RID());
 
-			// can't do our blit pass if resolutions don't match, this should already have been checked.
-			ERR_FAIL_COND_V(target_size != internal_size, RID());
+		RD::FramebufferPass pass;
+		pass.color_attachments.push_back(0);
+		pass.depth_attachment = 1;
+		if (vrs_texture.is_valid()) {
+			pass.vrs_attachment = 2;
+		}
 
-			RD::FramebufferPass pass;
-			pass.color_attachments.push_back(0);
-			pass.depth_attachment = 1;
-			if (vrs_texture.is_valid()) {
-				pass.vrs_attachment = 2;
-			}
+		if (use_msaa) {
+			// add resolve
+			pass.resolve_attachments.push_back(color_buffer_id);
+		}
 
-			if (use_msaa) {
-				// add resolve
-				pass.resolve_attachments.push_back(color_buffer_id);
-			}
+		passes.push_back(pass);
 
-			passes.push_back(pass);
+		// - add blit to 2D pass
+		RID render_target = render_buffers->get_render_target();
+		ERR_FAIL_COND_V(render_target.is_null(), RID());
+		RID target_buffer;
+		if (view_count > 1 || texture_storage->render_target_get_msaa(render_target) == RS::VIEWPORT_MSAA_DISABLED) {
+			target_buffer = texture_storage->render_target_get_rd_texture(render_target);
+		} else {
+			target_buffer = texture_storage->render_target_get_rd_texture_msaa(render_target);
+			texture_storage->render_target_set_msaa_needs_resolve(render_target, true); // Make sure this gets resolved.
+		}
+		ERR_FAIL_COND_V(target_buffer.is_null(), RID());
 
-			// - add blit to 2D pass
-			RID render_target = render_buffers->get_render_target();
-			ERR_FAIL_COND_V(render_target.is_null(), RID());
-			RID target_buffer;
-			if (view_count > 1 || texture_storage->render_target_get_msaa(render_target) == RS::VIEWPORT_MSAA_DISABLED) {
-				target_buffer = texture_storage->render_target_get_rd_texture(render_target);
-			} else {
-				target_buffer = texture_storage->render_target_get_rd_texture_msaa(render_target);
-				texture_storage->render_target_set_msaa_needs_resolve(render_target, true); // Make sure this gets resolved.
-			}
-			ERR_FAIL_COND_V(target_buffer.is_null(), RID());
+		int target_buffer_id = textures.size();
+		textures.push_back(target_buffer); // target buffer
 
-			int target_buffer_id = textures.size();
-			textures.push_back(target_buffer); // target buffer
+		RD::FramebufferPass blit_pass;
+		blit_pass.input_attachments.push_back(color_buffer_id); // Read from our (resolved) color buffer
+		blit_pass.color_attachments.push_back(target_buffer_id); // Write into our target buffer
+		// this doesn't need VRS
+		passes.push_back(blit_pass);
 
-			RD::FramebufferPass blit_pass;
-			blit_pass.input_attachments.push_back(color_buffer_id); // Read from our (resolved) color buffer
-			blit_pass.color_attachments.push_back(target_buffer_id); // Write into our target buffer
-			// this doesn't need VRS
-			passes.push_back(blit_pass);
-
-			return FramebufferCacheRD::get_singleton()->get_cache_multipass(textures, passes, view_count);
-		} break;
-		default:
-			break;
-	};
-
-	return RID();
+		return FramebufferCacheRD::get_singleton()->get_cache_multipass(textures, passes, view_count);
+	} else {
+		return RID();
+	}
 }
 
 RID RenderForwardMobile::reflection_probe_create_framebuffer(RID p_color, RID p_depth) {
@@ -844,8 +839,8 @@ void RenderForwardMobile::_render_scene(RenderDataRD *p_render_data, const Color
 	_fill_render_list<RENDER_LIST_OPAQUE, PASS_MODE_COLOR>(p_render_data);
 	render_list[RENDER_LIST_OPAQUE].sort_by_key();
 	render_list[RENDER_LIST_ALPHA].sort_by_reverse_depth_and_priority();
-	_fill_instance_data(RENDER_LIST_OPAQUE);
-	_fill_instance_data(RENDER_LIST_ALPHA);
+	_fill_instance_data<RENDER_LIST_OPAQUE>();
+	_fill_instance_data<RENDER_LIST_ALPHA>();
 
 	if (p_render_data->render_info) {
 		p_render_data->render_info->info[RS::VIEWPORT_RENDER_INFO_TYPE_VISIBLE][RS::VIEWPORT_RENDER_INFO_DRAW_CALLS_IN_FRAME] = p_render_data->instances->size();
@@ -890,11 +885,11 @@ void RenderForwardMobile::_render_scene(RenderDataRD *p_render_data, const Color
 
 		if (using_subpass_post_process) {
 			// We can do all in one go.
-			framebuffer = rb_data->get_color_fbs(RenderBufferDataForwardMobile::FB_CONFIG_RENDER_AND_POST_PASS);
+			framebuffer = rb_data->get_color_fbs<RenderBufferDataForwardMobile::FB_CONFIG_RENDER_AND_POST_PASS>();
 			global_pipeline_data_required.use_subpass_post_pass = true;
 		} else {
 			// We separate things out.
-			framebuffer = rb_data->get_color_fbs(RenderBufferDataForwardMobile::FB_CONFIG_RENDER_PASS);
+			framebuffer = rb_data->get_color_fbs<RenderBufferDataForwardMobile::FB_CONFIG_RENDER_PASS>();
 			global_pipeline_data_required.use_separate_post_pass = true;
 		}
 		samplers = rb->get_samplers();
@@ -1473,7 +1468,7 @@ void RenderForwardMobile::_render_shadow_append(RID p_framebuffer, const PagedAr
 
 	uint32_t render_list_size = render_list[RENDER_LIST_SECONDARY].elements.size() - render_list_from;
 	render_list[RENDER_LIST_SECONDARY].sort_by_key_range(render_list_from, render_list_size);
-	_fill_instance_data(RENDER_LIST_SECONDARY, render_list_from, render_list_size);
+	_fill_instance_data<RENDER_LIST_SECONDARY>(render_list_from, render_list_size);
 
 	{
 		//regular forward for now
@@ -1552,7 +1547,7 @@ void RenderForwardMobile::_render_material(const Transform3D &p_cam_transform, c
 	PassMode pass_mode = PASS_MODE_DEPTH_MATERIAL;
 	_fill_render_list<RENDER_LIST_SECONDARY, PASS_MODE_DEPTH_MATERIAL>(&render_data);
 	render_list[RENDER_LIST_SECONDARY].sort_by_key();
-	_fill_instance_data(RENDER_LIST_SECONDARY);
+	_fill_instance_data<RENDER_LIST_SECONDARY>();
 
 	RID rp_uniform_set = _setup_render_pass_uniform_set(RENDER_LIST_SECONDARY, nullptr, RID(), RendererRD::MaterialStorage::get_singleton()->samplers_rd_get_default());
 
@@ -1597,7 +1592,7 @@ void RenderForwardMobile::_render_uv2(const PagedArray<RenderGeometryInstance *>
 	PassMode pass_mode = PASS_MODE_DEPTH_MATERIAL;
 	_fill_render_list<RENDER_LIST_SECONDARY, PASS_MODE_DEPTH_MATERIAL>(&render_data);
 	render_list[RENDER_LIST_SECONDARY].sort_by_key();
-	_fill_instance_data(RENDER_LIST_SECONDARY);
+	_fill_instance_data<RENDER_LIST_SECONDARY>();
 
 	RID rp_uniform_set = _setup_render_pass_uniform_set(RENDER_LIST_SECONDARY, nullptr, RID(), RendererRD::MaterialStorage::get_singleton()->samplers_rd_get_default());
 
@@ -1680,7 +1675,7 @@ void RenderForwardMobile::_render_particle_collider_heightfield(RID p_fb, const 
 
 	_fill_render_list<RENDER_LIST_SECONDARY, PASS_MODE_SHADOW>(&render_data);
 	render_list[RENDER_LIST_SECONDARY].sort_by_key();
-	_fill_instance_data(RENDER_LIST_SECONDARY);
+	_fill_instance_data<RENDER_LIST_SECONDARY>();
 
 	RID rp_uniform_set = _setup_render_pass_uniform_set(RENDER_LIST_SECONDARY, nullptr, RID(), RendererRD::MaterialStorage::get_singleton()->samplers_rd_get_default());
 
@@ -1818,7 +1813,8 @@ RID RenderForwardMobile::_render_buffers_get_velocity_texture(Ref<RenderSceneBuf
 	return RID();
 }
 
-void RenderForwardMobile::_update_instance_data_buffer(RenderListType p_render_list) {
+template <RenderForwardMobile::RenderListType p_render_list>
+void RenderForwardMobile::_update_instance_data_buffer() {
 	if (scene_state.instance_data[p_render_list].size() > 0) {
 		if (scene_state.instance_buffer[p_render_list] == RID() || scene_state.instance_buffer_size[p_render_list] < scene_state.instance_data[p_render_list].size()) {
 			if (scene_state.instance_buffer[p_render_list] != RID()) {
@@ -1832,7 +1828,8 @@ void RenderForwardMobile::_update_instance_data_buffer(RenderListType p_render_l
 	}
 }
 
-void RenderForwardMobile::_fill_instance_data(RenderListType p_render_list, uint32_t p_offset, int32_t p_max_elements, bool p_update_buffer) {
+template <RenderForwardMobile::RenderListType p_render_list>
+void RenderForwardMobile::_fill_instance_data(uint32_t p_offset, int32_t p_max_elements, bool p_update_buffer) {
 	RenderList *rl = &render_list[p_render_list];
 	uint32_t element_total = p_max_elements >= 0 ? uint32_t(p_max_elements) : rl->elements.size();
 
@@ -1899,7 +1896,7 @@ void RenderForwardMobile::_fill_instance_data(RenderListType p_render_list, uint
 	}
 
 	if (p_update_buffer) {
-		_update_instance_data_buffer(p_render_list);
+		_update_instance_data_buffer<p_render_list>();
 	}
 }
 
@@ -2187,7 +2184,7 @@ void RenderForwardMobile::_render_list_template(RenderingDevice::DrawListID p_dr
 	uint32_t pipeline_hash = 0;
 	uint32_t prev_pipeline_hash = 0;
 
-	bool shadow_pass = (p_pass_mode == PASS_MODE_SHADOW) || (p_pass_mode == PASS_MODE_SHADOW_DP);
+	constexpr bool shadow_pass = (p_pass_mode == PASS_MODE_SHADOW) || (p_pass_mode == PASS_MODE_SHADOW_DP);
 
 	for (uint32_t i = p_from_element; i < p_to_element; i++) {
 		const GeometryInstanceSurfaceDataCache *surf = p_params->elements[i];
@@ -2215,7 +2212,7 @@ void RenderForwardMobile::_render_list_template(RenderingDevice::DrawListID p_dr
 			push_constant.uv_offset[1] = 0.0;
 		}
 
-		if (shadow_pass) {
+		if constexpr (shadow_pass) {
 			material_uniform_set = surf->material_uniform_set_shadow;
 			shader = surf->shader_shadow;
 			mesh_surface = surf->surface_shadow;
@@ -2254,15 +2251,17 @@ void RenderForwardMobile::_render_list_template(RenderingDevice::DrawListID p_dr
 		}
 
 		//request a redraw if one of the shaders uses TIME
-		if (shader->uses_time) {
+		if (shader && shader->uses_time) {
 			should_request_redraw = true;
 		}
 
 		//find cull variant
-		SceneShaderForwardMobile::ShaderData::CullVariant cull_variant;
+		SceneShaderForwardMobile::ShaderData::CullVariant cull_variant = SceneShaderForwardMobile::ShaderData::CULL_VARIANT_NORMAL;
 
-		if (p_pass_mode == PASS_MODE_DEPTH_MATERIAL || ((p_pass_mode == PASS_MODE_SHADOW || p_pass_mode == PASS_MODE_SHADOW_DP) && surf->flags & GeometryInstanceSurfaceDataCache::FLAG_USES_DOUBLE_SIDED_SHADOWS)) {
-			cull_variant = SceneShaderForwardMobile::ShaderData::CULL_VARIANT_DOUBLE_SIDED;
+		if constexpr (p_pass_mode == PASS_MODE_DEPTH_MATERIAL || ((p_pass_mode == PASS_MODE_SHADOW || p_pass_mode == PASS_MODE_SHADOW_DP))) {
+			if (surf->flags & GeometryInstanceSurfaceDataCache::FLAG_USES_DOUBLE_SIDED_SHADOWS) {
+				cull_variant = SceneShaderForwardMobile::ShaderData::CULL_VARIANT_DOUBLE_SIDED;
+			}
 		} else {
 			bool mirror = surf->owner->mirror;
 			if (p_params->reverse_cull) {
@@ -2274,26 +2273,20 @@ void RenderForwardMobile::_render_list_template(RenderingDevice::DrawListID p_dr
 		pipeline_key.primitive_type = surf->primitive;
 		RID xforms_uniform_set = surf->owner->transforms_uniform_set;
 
-		switch (p_pass_mode) {
-			case PASS_MODE_COLOR:
-			case PASS_MODE_COLOR_TRANSPARENT: {
-				if (element_info.uses_lightmap) {
-					pipeline_key.version = p_params->view_count > 1 ? SceneShaderForwardMobile::SHADER_VERSION_LIGHTMAP_COLOR_PASS_MULTIVIEW : SceneShaderForwardMobile::SHADER_VERSION_LIGHTMAP_COLOR_PASS;
-				} else {
-					pipeline_key.version = p_params->view_count > 1 ? SceneShaderForwardMobile::SHADER_VERSION_COLOR_PASS_MULTIVIEW : SceneShaderForwardMobile::SHADER_VERSION_COLOR_PASS;
-				}
-			} break;
-			case PASS_MODE_SHADOW: {
-				pipeline_key.version = p_params->view_count > 1 ? SceneShaderForwardMobile::SHADER_VERSION_SHADOW_PASS_MULTIVIEW : SceneShaderForwardMobile::SHADER_VERSION_SHADOW_PASS;
-			} break;
-			case PASS_MODE_SHADOW_DP: {
-				ERR_FAIL_COND_MSG(p_params->view_count > 1, "Multiview not supported for shadow DP pass");
-				pipeline_key.version = SceneShaderForwardMobile::SHADER_VERSION_SHADOW_PASS_DP;
-			} break;
-			case PASS_MODE_DEPTH_MATERIAL: {
-				ERR_FAIL_COND_MSG(p_params->view_count > 1, "Multiview not supported for material pass");
-				pipeline_key.version = SceneShaderForwardMobile::SHADER_VERSION_DEPTH_PASS_WITH_MATERIAL;
-			} break;
+		if constexpr (p_pass_mode == PASS_MODE_COLOR || p_pass_mode == PASS_MODE_COLOR_TRANSPARENT) {
+			if (element_info.uses_lightmap) {
+				pipeline_key.version = p_params->view_count > 1 ? SceneShaderForwardMobile::SHADER_VERSION_LIGHTMAP_COLOR_PASS_MULTIVIEW : SceneShaderForwardMobile::SHADER_VERSION_LIGHTMAP_COLOR_PASS;
+			} else {
+				pipeline_key.version = p_params->view_count > 1 ? SceneShaderForwardMobile::SHADER_VERSION_COLOR_PASS_MULTIVIEW : SceneShaderForwardMobile::SHADER_VERSION_COLOR_PASS;
+			}
+		} else if constexpr (p_pass_mode == PASS_MODE_SHADOW) {
+			pipeline_key.version = p_params->view_count > 1 ? SceneShaderForwardMobile::SHADER_VERSION_SHADOW_PASS_MULTIVIEW : SceneShaderForwardMobile::SHADER_VERSION_SHADOW_PASS;
+		} else if constexpr (p_pass_mode == PASS_MODE_SHADOW_DP) {
+			ERR_FAIL_COND_MSG(p_params->view_count > 1, "Multiview not supported for shadow DP pass");
+			pipeline_key.version = SceneShaderForwardMobile::SHADER_VERSION_SHADOW_PASS_DP;
+		} else if constexpr (p_pass_mode == PASS_MODE_DEPTH_MATERIAL) {
+			ERR_FAIL_COND_MSG(p_params->view_count > 1, "Multiview not supported for material pass");
+			pipeline_key.version = SceneShaderForwardMobile::SHADER_VERSION_DEPTH_PASS_WITH_MATERIAL;
 		}
 
 		pipeline_key.framebuffer_format_id = framebuffer_format;

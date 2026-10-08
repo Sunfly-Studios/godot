@@ -148,7 +148,9 @@ public:
 
 		RID get_color_only_fb();
 		RID get_color_pass_fb(uint32_t p_color_pass_flags);
-		RID get_depth_fb(DepthFrameBufferType p_type = DEPTH_FB);
+
+		template <DepthFrameBufferType p_type = DEPTH_FB>
+		RID get_depth_fb();
 		RID get_specular_only_fb();
 		RID get_velocity_only_fb();
 
@@ -400,8 +402,11 @@ private:
 	void _render_list(RenderingDevice::DrawListID p_draw_list, RenderingDevice::FramebufferFormatID p_framebuffer_Format, RenderListParameters *p_params, uint32_t p_from_element, uint32_t p_to_element);
 	void _render_list_with_draw_list(RenderListParameters *p_params, RID p_framebuffer, BitField<RD::DrawFlags> p_draw_flags = RD::DRAW_DEFAULT_ALL, const Vector<Color> &p_clear_color_values = Vector<Color>(), float p_clear_depth_value = 0.0, uint32_t p_clear_stencil_value = 0, const Rect2 &p_region = Rect2());
 
-	void _update_instance_data_buffer(RenderListType p_render_list);
-	void _fill_instance_data(RenderListType p_render_list, int *p_render_info = nullptr, uint32_t p_offset = 0, int32_t p_max_elements = -1, bool p_update_buffer = true);
+	template <RenderListType p_render_list>
+	void _update_instance_data_buffer();
+
+	template <RenderListType p_render_list>
+	void _fill_instance_data(int *p_render_info = nullptr, uint32_t p_offset = 0, int32_t p_max_elements = -1, bool p_update_buffer = true);
 
 	template <RenderListType p_render_list, PassMode p_pass_mode>
 	void _fill_render_list(const RenderDataRD *p_render_data, bool p_using_sdfgi = false, bool p_using_opaque_gi = false, bool p_using_motion_pass = false, bool p_append = false);

@@ -3210,8 +3210,10 @@ void RasterizerSceneGLES3::_render_list_template(RenderListParameters *p_params,
 			// Find cull variant.
 			RS::CullMode cull_mode = shader->cull_mode;
 
-			if (p_pass_mode == PASS_MODE_MATERIAL || (p_pass_mode == PASS_MODE_SHADOW && (surf->flags & GeometryInstanceSurface::FLAG_USES_DOUBLE_SIDED_SHADOWS))) {
-				cull_mode = RS::CULL_MODE_DISABLED;
+			if constexpr (p_pass_mode == PASS_MODE_MATERIAL || (p_pass_mode == PASS_MODE_SHADOW)) {
+				if (surf->flags & GeometryInstanceSurface::FLAG_USES_DOUBLE_SIDED_SHADOWS) {
+					cull_mode = RS::CULL_MODE_DISABLED;
+				}
 			} else {
 				bool mirror = inst->mirror;
 				if (p_params->reverse_cull) {
@@ -3573,7 +3575,7 @@ void RasterizerSceneGLES3::_render_list_template(RenderListParameters *p_params,
 
 			// Pass in reflection probe data
 			if constexpr (p_pass_mode == PASS_MODE_COLOR || p_pass_mode == PASS_MODE_COLOR_TRANSPARENT) {
-				if (pass == 0 && inst->reflection_probe_rid_cache.size() > 0) {
+				if (pass == 0 && inst && inst->reflection_probe_rid_cache.size() > 0) {
 					GLES3::Config *config = GLES3::Config::get_singleton();
 					GLES3::LightStorage *light_storage = GLES3::LightStorage::get_singleton();
 
@@ -3636,7 +3638,7 @@ void RasterizerSceneGLES3::_render_list_template(RenderListParameters *p_params,
 			material_storage->shaders.scene_shader.version_set_uniform(SceneShaderGLES3::MODEL_FLAGS, inst->flags_cache, shader->version, instance_variant, spec_constants);
 			material_storage->shaders.scene_shader.version_set_uniform(SceneShaderGLES3::INSTANCE_OFFSET, uint32_t(inst->shader_uniforms_offset), shader->version, instance_variant, spec_constants);
 
-			if (p_pass_mode == PASS_MODE_MATERIAL) {
+			if constexpr (p_pass_mode == PASS_MODE_MATERIAL) {
 				material_storage->shaders.scene_shader.version_set_uniform(SceneShaderGLES3::UV_OFFSET, p_params->uv_offset, shader->version, instance_variant, spec_constants);
 			}
 
