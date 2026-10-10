@@ -13,7 +13,7 @@
 		- Device deployment and debugging
 		[b]Requirements:[/b]
 		- OpenHarmony SDK properly installed and configured
-		- Vulkan renderer (Forward+ or Mobile rendering method with the Vulkan driver)
+		- Vulkan or OpenGL renderer (Forward+ or Mobile rendering method with the Vulkan driver, or Compatibility or Legacy rendering method with the GLES3 or GLES2 drivers)
 		- Valid export templates (debug/release)
 		- For device deployment: HDC (HarmonyOS Device Connector) tool
 		- For signing: Valid certificate files and signing profiles
