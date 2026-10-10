@@ -75,13 +75,13 @@ DisplayServerIOS::DisplayServerIOS(const String &p_rendering_driver, WindowMode 
 	bool fb_angle2 = GLOBAL_GET("rendering/gl_legacy/fallback_to_angle");
 	bool fb_angle1 = GLOBAL_GET("rendering/gl_classic/fallback_to_angle");
 
-	Vector driver_attempts;
+	Vector<String> driver_attempts;
 
 	if (multilayer_fallback) {
-		Vector rd_attempts;
-		Vector native_attempts;
-		Vector angle_attempts;
-		Vector forced_attempts;
+		Vector<String> rd_attempts;
+		Vector<String> native_attempts;
+		Vector<String> angle_attempts;
+		Vector<String> forced_attempts;
 
 		if (rendering_driver == "metal" || rendering_driver == "vulkan") {
 #if defined(METAL_ENABLED)
