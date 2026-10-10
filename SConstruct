@@ -811,6 +811,20 @@ if is_production and is_strict_target:
         ]
 
         if lto_mode == "full":
+            # After a MethodBind refactor, a ClassDB refactor,
+            # a GDCLASS refactor, and a GDVIRTUAL refactor,
+            # all in ~3 weeks, I knew I wasn't going fucking crazy.
+            # Under the MSVC ABI, the front-end (clang) forgets
+            # to emit the appropiate metadata that tells the back-end
+            # which virtual functions are "dead".
+            # Because it didn't do it properly, to the back-end, pretty much
+            # almost all core virtual functions were "dead" and
+            # replace them with nulls, causing runtime crashes.
+            #
+            # It didn't ICE or crash during LTO linking, it sucessfully wasted
+            # up to 1h20m of my lifetime while giving me a broken executable.
+            # This is Compiler Gaslighting >:(.
+            # EDIT: Fixed in our LLVM fork.
             llvm_flags += ["-fvirtual-function-elimination"]
     
     # GCC exclusive flags
