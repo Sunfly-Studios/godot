@@ -824,11 +824,13 @@ bool LightStorage::reflection_probe_instance_begin_render(RID p_instance, RID p_
 		glActiveTexture(GL_TEXTURE0);
 
 		{
-			// GLES2: Use a Renderbuffer instead of a 2D Texture Array for depth attachment.
 			glGenRenderbuffers(1, &atlas->depth);
 			glBindRenderbuffer(GL_RENDERBUFFER, atlas->depth);
-
+#if defined(WEB_ENABLED) || defined(OPENHARMONY_ENABLED)
+			GLenum depth_format = GL_DEPTH_COMPONENT16;
+#else
 			GLenum depth_format = GLES2_CONFIG->support_depth24 ? GL_DEPTH_COMPONENT24_OES : GL_DEPTH_COMPONENT16;
+#endif
 			glRenderbufferStorage(GL_RENDERBUFFER, depth_format, atlas->size, atlas->size);
 
 			GLES2::Utilities::get_singleton()->render_buffer_allocated_data(atlas->depth, atlas->size * atlas->size * 3, "Reflection probe atlas (depth)");
@@ -844,7 +846,7 @@ bool LightStorage::reflection_probe_instance_begin_render(RID p_instance, RID p_
 			glBindTexture(GL_TEXTURE_CUBE_MAP, color);
 			atlas->reflections.write[i].color = color;
 
-			// GLES2: No glTexStorage2D, allocate manually
+			// Allocate
 			int mipmap_size = atlas->size;
 			uint32_t data_size = 0;
 			for (int m = 0; m < atlas->mipmap_count; m++) {

@@ -914,6 +914,10 @@ void ParticlesStorage::update_particles() {
 
 template <typename ParticleInstanceData>
 void ParticlesStorage::_particles_reverse_lifetime_sort(Particles *particles) {
+#if defined(WEB_ENABLED) || defined(OPENHARMONY_ENABLED)
+	// Noop for these platforms as they don't support the OES
+	// extension
+#else
 	if (
 		!GLES2_CONFIG->support_mapbuffer ||
 		!particles->sort_buffer_filled ||
@@ -939,6 +943,7 @@ void ParticlesStorage::_particles_reverse_lifetime_sort(Particles *particles) {
 	}
 	GL_CHECK_ERROR("GLES2::ParticlesStorage::_particles_reverse_lifetime_sort: glUnmapBufferOES");
 	glBindBuffer(GL_ARRAY_BUFFER, 0);
+#endif
 }
 
 Dependency *ParticlesStorage::particles_get_dependency(RID p_particles) const {
