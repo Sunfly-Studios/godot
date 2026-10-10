@@ -51,13 +51,11 @@
 
 // Copied from `cowdata.h`
 #if defined(IS_32_BIT)
-typedef int32_t Size;
 typedef uint32_t USize;
 static constexpr USize MAX_INT = INT32_MAX;
 static constexpr USize BITMAP_FULL = 0xFFFFFFFFU;
 static constexpr size_t OBJECTS_PER_SLAB = 32;
 #else
-typedef int64_t Size;
 typedef uint64_t USize;
 static constexpr USize MAX_INT = INT64_MAX;
 static constexpr USize BITMAP_FULL = 0xFFFFFFFFFFFFFFFFULL;
