@@ -5219,7 +5219,7 @@ void RasterizerSceneGLES1::_render_list_template(RenderListParameters *p_params,
 	GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_render_list_template: glFrontFace");
 
 	// Kick off the batched draw pipeline
-	batch_scene_render_items(surfaces, count, p_render_data->cam_transform, p_alpha_pass, p_pass_mode, p_replay);
+	batch_scene_render_items<p_pass_mode>(surfaces, count, p_render_data->cam_transform, p_alpha_pass, p_replay);
 
 	// Clean-up
 	glFrontFace(GL_CCW);

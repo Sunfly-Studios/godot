@@ -3386,7 +3386,7 @@ void RasterizerSceneGLES2::_render_list_template(RenderListParameters *p_params,
 	scene_state.current_spec_constants = p_params->spec_constant_base_flags;
 
 	// Dispatch batch processor or immediate drawer
-	batch_scene_render_items(surfaces, count, p_render_data->cam_transform, p_alpha_pass, p_pass_mode, p_replay);
+	batch_scene_render_items<p_pass_mode>(surfaces, count, p_render_data->cam_transform, p_alpha_pass, p_replay);
 
 	// Clean-up
 	glFrontFace(GL_CCW);

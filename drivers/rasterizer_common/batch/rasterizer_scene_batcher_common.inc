@@ -74,8 +74,8 @@ void RasterizerSceneBatcherCommon<T_API>::batch_scene_end() {
 }
 
 template <typename T_API>
-template <class T_SURFACE>
-void RasterizerSceneBatcherCommon<T_API>::batch_scene_render_items(T_SURFACE **p_surfaces, int p_count, const Transform3D &p_camera_transform, bool p_transparent, typename BatcherEnums::PassMode p_pass_mode, bool p_replay) {
+template <typename BatcherEnums::PassMode p_pass_mode, class T_SURFACE>
+void RasterizerSceneBatcherCommon<T_API>::batch_scene_render_items(T_SURFACE **p_surfaces, int p_count, const Transform3D &p_camera_transform, bool p_transparent, bool p_replay) {
 	if (!bdata.settings_use_batching || p_count == 0) {
 		get_this()->scene_render_items_implementation(p_surfaces, p_count, p_camera_transform, p_transparent);
 		return;
@@ -125,7 +125,7 @@ void RasterizerSceneBatcherCommon<T_API>::batch_scene_render_items(T_SURFACE **p
 		sort_items(p_transparent);
 		
 		// Pack & Render: Build VBOs and fire draw calls
-		join_and_flush_sorted_items<T_SURFACE>(p_transparent);
+		join_and_flush_sorted_items<p_pass_mode, T_SURFACE>(p_transparent);
 	}
 
 	// Draw the unbatchable meshes directly, bypassing the batcher overhead
@@ -204,7 +204,7 @@ void RasterizerSceneBatcherCommon<T_API>::sort_items(bool p_transparent) {
 }
 
 template <typename T_API>
-template <class T_SURFACE>
+template <typename BatcherEnums::PassMode p_pass_mode, class T_SURFACE>
 void RasterizerSceneBatcherCommon<T_API>::join_and_flush_sorted_items(bool p_transparent) {
 	_render_item_state.reset();
 	bdata.batches.reset();
@@ -285,7 +285,7 @@ void RasterizerSceneBatcherCommon<T_API>::join_and_flush_sorted_items(bool p_tra
 		for (uint32_t i = 0; i < batch.num_items; i++) {
 			T_SURFACE *surface = static_cast<T_SURFACE *>(bdata.sort_items[batch.first_item_index + i].item);
 			// Retry current item
-			prefill_joined_item<T_SURFACE>(surface, use_hardware_transform, i);
+			prefill_joined_item<p_pass_mode, T_SURFACE>(surface, use_hardware_transform, i);
 		}
 
 		// Flush the batch
@@ -329,7 +329,7 @@ bool RasterizerSceneBatcherCommon<T_API>::try_join_item(T_SURFACE *p_surface, Re
 }
 
 template <typename T_API>
-template <class T_SURFACE>
+template <typename BatcherEnums::PassMode p_pass_mode, class T_SURFACE>
 bool RasterizerSceneBatcherCommon<T_API>::prefill_joined_item(T_SURFACE *p_surface, bool p_use_hardware_transform, uint32_t p_item_index) {
 	uint32_t base_verts = 0;
 	uint32_t base_indices = 0;
@@ -355,7 +355,10 @@ bool RasterizerSceneBatcherCommon<T_API>::prefill_joined_item(T_SURFACE *p_surfa
 	// Only prepare when this is the first item in the batch.
 	// Subsequent items don't need to override.
 	if (bdata.total_verts == 0) {
-		if (bdata.pass_mode == BatcherEnums::PassMode::PASS_MODE_SHADOW || bdata.pass_mode == BatcherEnums::PassMode::PASS_MODE_DEPTH) {
+		// Explicitly call the templated parameter for performance
+		// and better DCE. And we know that `bdata.pass_mode` is in
+		// sync as well.
+		if constexpr (p_pass_mode == BatcherEnums::PassMode::PASS_MODE_SHADOW || p_pass_mode == BatcherEnums::PassMode::PASS_MODE_DEPTH) {
 			bool uses_alpha_clip = p_surface->material && p_surface->material->shader_data && p_surface->material->shader_data->uses_alpha_clip;
 			if (uses_alpha_clip) {
 				bdata.fvf = BatcherEnums::FVF_DEPTH_ALPHA;

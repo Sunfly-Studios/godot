@@ -340,8 +340,8 @@ protected:
 	void batch_scene_begin();
 	void batch_scene_end();
 
-	template <class T_SURFACE>
-	void batch_scene_render_items(T_SURFACE **p_surfaces, int p_count, const Transform3D &p_camera_transform, bool p_transparent, BatcherEnums::PassMode p_pass_mode, bool p_replay = false);
+	template <BatcherEnums::PassMode p_pass_mode, class T_SURFACE>
+	void batch_scene_render_items(T_SURFACE **p_surfaces, int p_count, const Transform3D &p_camera_transform, bool p_transparent, bool p_replay = false);
 
 	template <class T_SURFACE>
 	void record_items(T_SURFACE **p_surfaces, int p_count, const Transform3D &p_camera_transform, bool p_transparent);
@@ -363,13 +363,13 @@ protected:
 
 	void sort_items(bool p_transparent);
 
-	template <class T_SURFACE>
+	template <BatcherEnums::PassMode p_pass_mode, class T_SURFACE>
 	void join_and_flush_sorted_items(bool p_transparent);
 
 	template <class T_SURFACE>
 	bool try_join_item(T_SURFACE *p_surface, RenderItemState3D &r_ris);
 
-	template <class T_SURFACE>
+	template <BatcherEnums::PassMode p_pass_mode, class T_SURFACE>
 	bool prefill_joined_item(T_SURFACE *p_surface, bool p_use_hardware_transform, uint32_t p_item_index = 0);
 
 	template <class T_SURFACE>
