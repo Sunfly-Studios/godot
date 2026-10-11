@@ -362,6 +362,11 @@ def configure(env: "SConsEnvironment"):
         env.Append(CCFLAGS=["-sSUPPORT_LONGJMP='wasm'"])
         env.Append(LINKFLAGS=["-sSUPPORT_LONGJMP='wasm'"])
 
+        # Use native WASM exceptions for 64-bit for
+        # better compatibility.
+        env.Append(CCFLAGS=["-fwasm-exceptions"])
+        env.Append(LINKFLAGS=["-fwasm-exceptions"])
+
         env.Append(LINKFLAGS=["-sMIN_FIREFOX_VERSION=134"])
         env.Append(LINKFLAGS=["-sMIN_CHROME_VERSION=133"])
         print_warning("`wasm64` is experimental. Is only supported on Firefox 134 and Chrome 133 and later. Here be dragons.")
