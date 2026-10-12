@@ -49,6 +49,7 @@
 #include "storage/material_storage.h"
 #include "storage/render_scene_buffers_gles1.h"
 #include "storage/utilities.h"
+#include "storage/mesh_storage.h"
 #include "function_router_gles1.h"
 
 struct RenderDataGLES1 {
@@ -107,6 +108,7 @@ class RasterizerSceneGLES1;
 struct BatcherAPISceneGLES1 {
 	using Scene = RasterizerSceneGLES1;
 	using MaterialData = GLES1::SceneMaterialData;
+	using MeshStorage = GLES1::MeshStorage;
 	using TextureStorage = GLES1::TextureStorage;
 	using Texture = GLES1::Texture;
 	using CanvasTexture = GLES1::CanvasTexture;
@@ -351,6 +353,7 @@ private:
 		PackedVector3Array normal_cache;
 		PackedFloat32Array tangent_cache;
 		PackedVector2Array uv_cache;
+		PackedVector2Array uv2_cache;
 		PackedColorArray color_cache;
 		PackedInt32Array index_cache;
 
@@ -408,6 +411,7 @@ private:
 		LocalVector<RID> reflection_probe_rid_cache;
 		LocalVector<Transform3D> reflection_probes_local_transform_cache;
 
+		RID skeleton;
 		RID lightmap_instance;
 		Rect2 lightmap_uv_scale;
 		uint32_t lightmap_slice_index;
@@ -524,6 +528,12 @@ private:
 		proj.columns[2] = Vector4(p_array[8], p_array[9], p_array[10], p_array[11]);
 		proj.columns[3] = Vector4(p_array[12], p_array[13], p_array[14], p_array[15]);
 		return proj;
+	}
+
+	_FORCE_INLINE_ void _gl_inverse_transpose_normal(Basis &normal_basis, Transform3D &world_xform) {
+		normal_basis.set_column(0, world_xform.basis.get_column(1).cross(world_xform.basis.get_column(2)));
+		normal_basis.set_column(1, world_xform.basis.get_column(2).cross(world_xform.basis.get_column(0)));
+		normal_basis.set_column(2, world_xform.basis.get_column(0).cross(world_xform.basis.get_column(1)));
 	}
 
 	// RAII like data structures to manage these matrix

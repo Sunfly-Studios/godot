@@ -47,6 +47,7 @@
 #include "compiler/shader_gles2.h"
 #include "storage/light_storage.h"
 #include "storage/material_storage.h"
+#include "storage/mesh_storage.h"
 #include "storage/render_scene_buffers_gles2.h"
 #include "storage/utilities.h"
 
@@ -106,6 +107,7 @@ class RasterizerSceneGLES2;
 struct BatcherAPISceneGLES2 {
 	using Scene = RasterizerSceneGLES2;
 	using MaterialData = GLES2::SceneMaterialData;
+	using MeshStorage = GLES2::MeshStorage;
 	using TextureStorage = GLES2::TextureStorage;
 	using Texture = GLES2::Texture;
 	using CanvasTexture = GLES2::CanvasTexture;
@@ -291,6 +293,14 @@ private:
 		int32_t light_pass_index = -1;
 		bool finished_base_pass = false;
 
+		PackedVector3Array vertex_cache;
+		PackedVector3Array normal_cache;
+		PackedFloat32Array tangent_cache;
+		PackedVector2Array uv_cache;
+		PackedVector2Array uv2_cache;
+		PackedColorArray color_cache;
+		PackedInt32Array index_cache;
+
 		void *surface = nullptr;
 		GLES2::SceneShaderData *shader = nullptr;
 		GLES2::SceneMaterialData *material = nullptr;
@@ -338,6 +348,7 @@ private:
 		LocalVector<RID> reflection_probe_rid_cache;
 		LocalVector<Transform3D> reflection_probes_local_transform_cache;
 
+		RID skeleton;
 		RID lightmap_instance;
 		Rect2 lightmap_uv_scale;
 		uint32_t lightmap_slice_index;
@@ -402,12 +413,12 @@ private:
 		}
 	}
 
-	_FORCE_INLINE_ void _gl_reconstruct_view_matrix(Transform3D &view_matrix) {
-		const float *m = scene_state.ubo.view_matrix;
-		view_matrix.basis.rows[0] = Vector3(m[0], m[4], m[8]);
-		view_matrix.basis.rows[1] = Vector3(m[1], m[5], m[9]);
-		view_matrix.basis.rows[2] = Vector3(m[2], m[6], m[10]);
-		view_matrix.origin = Vector3(m[12], m[13], m[14]);
+	_FORCE_INLINE_ void _gl_reconstruct_view_matrix(Transform3D &r_matrix, const float *p_matrix = nullptr) {
+		const float *m = p_matrix ? p_matrix : scene_state.ubo.view_matrix;
+		r_matrix.basis.rows[0] = Vector3(m[0], m[4], m[8]);
+		r_matrix.basis.rows[1] = Vector3(m[1], m[5], m[9]);
+		r_matrix.basis.rows[2] = Vector3(m[2], m[6], m[10]);
+		r_matrix.origin = Vector3(m[12], m[13], m[14]);
 	}
 
 	_FORCE_INLINE_ Projection _gl_array_to_projection(const float *p_array) {

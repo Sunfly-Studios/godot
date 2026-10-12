@@ -627,6 +627,29 @@ Array MeshStorage::mesh_surface_get_arrays(RID p_mesh, int p_surface) const {
 		return arrays;
 	}
 
+	if (!s->vertex_cache.is_empty()) {
+		arrays[RS::ARRAY_VERTEX] = s->vertex_cache;
+		if (!s->normal_cache.is_empty()) {
+			arrays[RS::ARRAY_NORMAL] = s->normal_cache;
+		}
+		if (!s->tangent_cache.is_empty()) {
+			arrays[RS::ARRAY_TANGENT] = s->tangent_cache;
+		}
+		if (!s->color_cache.is_empty()) {
+			arrays[RS::ARRAY_COLOR] = s->color_cache;
+		}
+		if (!s->uv_cache.is_empty()) {
+			arrays[RS::ARRAY_TEX_UV] = s->uv_cache;
+		}
+		if (!s->uv2_cache.is_empty()) {
+			arrays[RS::ARRAY_TEX_UV2] = s->uv2_cache;
+		}
+		if (!s->index_cache.is_empty()) {
+			arrays[RS::ARRAY_INDEX] = s->index_cache;
+		}
+		return arrays;
+	}
+
 	Mesh::Surface::Version v;
 	const_cast<MeshStorage *>(this)->_mesh_surface_generate_version_for_input_mask(v, s, 0xFFFFFFFF);
 
@@ -653,6 +676,7 @@ Array MeshStorage::mesh_surface_get_arrays(RID p_mesh, int p_surface) const {
 				dst[i] = Vector3(f[0], f[1], f[2]);
 			}
 		}
+		s->vertex_cache = vertices;
 		arrays[RS::ARRAY_VERTEX] = vertices;
 	}
 
@@ -681,7 +705,35 @@ Array MeshStorage::mesh_surface_get_arrays(RID p_mesh, int p_surface) const {
 				dst[i] = Vector3(0, 1, 0);
 			}
 		}
+		s->normal_cache = normals;
 		arrays[RS::ARRAY_NORMAL] = normals;
+	}
+
+	// Tangent
+	if (v.attribs[RS::ARRAY_TANGENT].enabled && v_data) {
+		PackedFloat32Array tangents;
+		tangents.resize(sd.vertex_count * 4);
+		float *dst = tangents.ptrw();
+		int stride = v.attribs[RS::ARRAY_TANGENT].stride;
+		int offset = v.attribs[RS::ARRAY_TANGENT].offset;
+
+		for (uint32_t i = 0; i < sd.vertex_count; i++) {
+			const uint8_t *src = v_data + i * stride + offset;
+			if (!(s->format & RS::ARRAY_FLAG_COMPRESS_ATTRIBUTES)) {
+				const float *f = (const float *)src;
+				dst[i * 4 + 0] = f[0];
+				dst[i * 4 + 1] = f[1];
+				dst[i * 4 + 2] = f[2];
+				dst[i * 4 + 3] = f[3];
+			} else {
+				dst[i * 4 + 0] = 1.0f;
+				dst[i * 4 + 1] = 0.0f;
+				dst[i * 4 + 2] = 0.0f;
+				dst[i * 4 + 3] = 1.0f;
+			}
+		}
+		s->tangent_cache = tangents;
+		arrays[RS::ARRAY_TANGENT] = tangents;
 	}
 
 	// Color
@@ -696,6 +748,7 @@ Array MeshStorage::mesh_surface_get_arrays(RID p_mesh, int p_surface) const {
 			const uint8_t *src = a_data + i * stride + offset;
 			dst[i] = Color(src[0] / 255.0f, src[1] / 255.0f, src[2] / 255.0f, src[3] / 255.0f);
 		}
+		s->color_cache = colors;
 		arrays[RS::ARRAY_COLOR] = colors;
 	}
 
@@ -716,7 +769,29 @@ Array MeshStorage::mesh_surface_get_arrays(RID p_mesh, int p_surface) const {
 				dst[i] = Vector2(0, 0);
 			}
 		}
+		s->uv_cache = uvs;
 		arrays[RS::ARRAY_TEX_UV] = uvs;
+	}
+
+	// tex_uv2
+	if (v.attribs[RS::ARRAY_TEX_UV2].enabled && a_data) {
+		PackedVector2Array uvs2;
+		uvs2.resize(sd.vertex_count);
+		Vector2 *dst = uvs2.ptrw();
+		int stride = v.attribs[RS::ARRAY_TEX_UV2].stride;
+		int offset = v.attribs[RS::ARRAY_TEX_UV2].offset;
+
+		for (uint32_t i = 0; i < sd.vertex_count; i++) {
+			const uint8_t *src = a_data + i * stride + offset;
+			if (!(s->format & RS::ARRAY_FLAG_COMPRESS_ATTRIBUTES)) {
+				const float *f = (const float *)src;
+				dst[i] = Vector2(f[0], f[1]);
+			} else {
+				dst[i] = Vector2(0, 0);
+			}
+		}
+		s->uv2_cache = uvs2;
+		arrays[RS::ARRAY_TEX_UV2] = uvs2;
 	}
 
 	// Index
@@ -734,6 +809,7 @@ Array MeshStorage::mesh_surface_get_arrays(RID p_mesh, int p_surface) const {
 				dst[i] = ((const uint32_t *)i_data)[i];
 			}
 		}
+		s->index_cache = indices;
 		arrays[RS::ARRAY_INDEX] = indices;
 	}
 
@@ -850,11 +926,20 @@ void MeshStorage::mesh_surface_bind_arrays_gles1(void *p_surface, uint64_t p_inp
 		glDisableClientState(GL_TEXTURE_COORD_ARRAY);
 	}
 
+	// tex_uv2
 	if (GLES1_CONFIG->max_texture_units > 1) {
 		glClientActiveTexture(GL_TEXTURE1);
 
-		// Hijack GL_TEXTURE1 for tangents
-		if (version->attribs[RS::ARRAY_TANGENT].enabled && (use_vbo_vertex || base_ptr_vertex)) {
+		// Bind tex_uv2 on GL_TEXTURE1 when enabled, otherwise fallback to tangent stream
+		if (version->attribs[RS::ARRAY_TEX_UV2].enabled && (use_vbo_attrib || base_ptr_attrib)) {
+			glEnableClientState(GL_TEXTURE_COORD_ARRAY);
+			glTexCoordPointer(
+				version->attribs[RS::ARRAY_TEX_UV2].size,
+				version->attribs[RS::ARRAY_TEX_UV2].type,
+				version->attribs[RS::ARRAY_TEX_UV2].stride,
+				GL_OFFSET_PTR_ATTRIB(version->attribs[RS::ARRAY_TEX_UV2].offset)
+			);
+		} else if (version->attribs[RS::ARRAY_TANGENT].enabled && (use_vbo_vertex || base_ptr_vertex)) {
 			// Restore the vertex buffer binding before evaluating the tangent pointer
 			if (use_vbo_vertex) {
 				glBindBuffer(GL_ARRAY_BUFFER, s->vertex_buffer);
@@ -873,6 +958,32 @@ void MeshStorage::mesh_surface_bind_arrays_gles1(void *p_surface, uint64_t p_inp
 			glDisableClientState(GL_TEXTURE_COORD_ARRAY);
 		}
 
+		if (GLES1_CONFIG->max_texture_units > 2) {
+			// Use TU2 for tangent and UV2
+			glClientActiveTexture(GL_TEXTURE2);
+
+			if (
+				version->attribs[RS::ARRAY_TEX_UV2].enabled &&
+				version->attribs[RS::ARRAY_TANGENT].enabled && (use_vbo_vertex || base_ptr_vertex)
+			) {
+				if (use_vbo_vertex) {
+					glBindBuffer(GL_ARRAY_BUFFER, s->vertex_buffer);
+				} else if (support_vbo) {
+					glBindBuffer(GL_ARRAY_BUFFER, 0);
+				}
+
+				glEnableClientState(GL_TEXTURE_COORD_ARRAY);
+				glTexCoordPointer(
+					version->attribs[RS::ARRAY_TANGENT].size,
+					version->attribs[RS::ARRAY_TANGENT].type,
+					version->attribs[RS::ARRAY_TANGENT].stride,
+					GL_OFFSET_PTR_VERTEX(version->attribs[RS::ARRAY_TANGENT].offset)
+				);
+			} else {
+				glDisableClientState(GL_TEXTURE_COORD_ARRAY);
+			}
+		}
+
 		// Reset active client texture state for subsequent operations
 		glClientActiveTexture(GL_TEXTURE0);
 	}
@@ -889,6 +1000,11 @@ void MeshStorage::mesh_surface_unbind_arrays_gles1(void *p_surface) {
 	glDisableClientState(GL_COLOR_ARRAY);
 
 	if (GLES1_CONFIG->max_texture_units > 1) {
+		if (GLES1_CONFIG->max_texture_units > 2) {
+			glClientActiveTexture(GL_TEXTURE2);
+			glDisableClientState(GL_TEXTURE_COORD_ARRAY);
+		}
+
 		glClientActiveTexture(GL_TEXTURE1);
 		glDisableClientState(GL_TEXTURE_COORD_ARRAY);
 
@@ -2501,6 +2617,7 @@ void MeshStorage::_multimesh_set_visible_instances(RID p_multimesh, int p_visibl
 	MultiMesh *multimesh = multimesh_owner.get_or_null(p_multimesh);
 	ERR_FAIL_NULL(multimesh);
 	multimesh->visible_instances = p_visible;
+	multimesh->dependency.changed_notify(Dependency::DEPENDENCY_CHANGED_MULTIMESH_VISIBLE_INSTANCES);
 }
 
 int MeshStorage::_multimesh_get_visible_instances(RID p_multimesh) const {

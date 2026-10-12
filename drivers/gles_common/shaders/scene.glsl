@@ -64,11 +64,11 @@ attribute highp vec3 vertex_attrib; // attrib:0
 /* clang-format on */
 
 #ifdef NORMAL_USED
-attribute vec2 normal_attrib; // attrib:1
+attribute vec3 normal_attrib; // attrib:1
 #endif
 
 #if defined(TANGENT_USED) || defined(NORMAL_MAP_USED) || defined(LIGHT_ANISOTROPY_USED)
-attribute vec2 tangent_attrib; // attrib:2
+attribute vec4 tangent_attrib; // attrib:2
 #endif
 
 #if defined(COLOR_USED)
@@ -257,14 +257,13 @@ void main() {
 #endif
 
 #ifdef NORMAL_USED
-	vec3 normal = oct_to_vec3(normal_attrib * 2.0 - 1.0);
+	vec3 normal = normal_attrib;
 #endif
 	highp mat3 model_normal_matrix = mat3(model_matrix);
 
 #if defined(TANGENT_USED) || defined(NORMAL_MAP_USED) || defined(LIGHT_ANISOTROPY_USED)
-	vec2 signed_tangent_attrib = tangent_attrib * 2.0 - 1.0;
-	vec3 tangent = oct_to_vec3(vec2(signed_tangent_attrib.x, abs(signed_tangent_attrib.y) * 2.0 - 1.0));
-	float binormalf = sign(signed_tangent_attrib.y);
+	vec3 tangent = tangent_attrib.xyz;
+	float binormalf = tangent_attrib.w;
 	vec3 binormal = normalize(cross(normal, tangent) * binormalf);
 #endif
 

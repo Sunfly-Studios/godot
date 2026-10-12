@@ -98,10 +98,12 @@ struct MaterialData {
 	// Used internally by all Materials
 	void update_parameters_internal(const HashMap<StringName, Variant> &p_parameters, bool p_uniform_dirty, bool p_textures_dirty, const HashMap<StringName, ShaderLanguage::ShaderNode::Uniform> &p_uniforms, const uint32_t *p_uniform_offsets, const Vector<ShaderCompiler::GeneratedCode::Texture> &p_texture_uniforms, const HashMap<StringName, HashMap<int, RID>> &p_default_texture_params, uint32_t p_ubo_size, bool p_is_3d_shader_type);
 
+public:
+	Vector<RID> texture_cache;
+
 protected:
 	Vector<uint8_t> ubo_data;
 	GLuint uniform_buffer = GLuint(0);
-	Vector<RID> texture_cache;
 
 private:
 	friend class MaterialStorage;

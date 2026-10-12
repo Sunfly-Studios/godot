@@ -75,6 +75,16 @@ struct Mesh {
 		uint32_t uncompressed_stride = 0;
 		Vector<uint8_t> uncompressed_buffer;
 
+		// Keep in sync with `GeometryInstanceSurface`
+		// in the scene rasterizer.
+		PackedVector3Array vertex_cache;
+		PackedVector3Array normal_cache;
+		PackedFloat32Array tangent_cache;
+		PackedVector2Array uv_cache;
+		PackedVector2Array uv2_cache;
+		PackedColorArray color_cache;
+		PackedInt32Array index_cache;
+
 		// Cache vertex arrays so they can be created
 		struct Version {
 			uint32_t input_mask = 0;

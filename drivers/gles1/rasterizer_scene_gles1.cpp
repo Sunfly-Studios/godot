@@ -162,7 +162,7 @@ static GLuint _init_radiance_texture_gles1(int p_size, int p_mipmaps, String p_n
 // Helper defines for the long batch types
 #define BATCH_TYPE RasterizerSceneBatcherCommon<BatcherAPISceneGLES1>
 
-static _FORCE_INLINE_ void _batch_fill_vertex(BATCH_TYPE::BatchVertex3D &r_bv, const Vector3 *p_pos, const Vector3 *p_norm, const float *p_tan, const Vector2 *p_uv, const Color *p_col, uint32_t p_index, float p_matrix_index) {
+static _FORCE_INLINE_ void _batch_fill_vertex(BATCH_TYPE::BatchVertex3D &r_bv, const Vector3 *p_pos, const Vector3 *p_norm, const float *p_tan, const Vector2 *p_uv, const Vector2 *p_uv2, const Color *p_col, uint32_t p_index, float p_matrix_index) {
 	r_bv.pos.set(p_pos[p_index]);
 
 	if (p_norm) {
@@ -186,6 +186,12 @@ static _FORCE_INLINE_ void _batch_fill_vertex(BATCH_TYPE::BatchVertex3D &r_bv, c
 		r_bv.uv.set(p_uv[p_index]);
 	} else {
 		r_bv.uv.set(0, 0);
+	}
+
+	if (p_uv2) {
+		r_bv.uv2.set(p_uv2[p_index]);
+	} else {
+		r_bv.uv2.set(0, 0);
 	}
 
 	if (p_col) {
@@ -257,7 +263,7 @@ static _FORCE_INLINE_ void _batch_decode_multimesh_instance(const float *p_data,
 	}
 }
 
-static _FORCE_INLINE_ void _batch_fill_vertex_instanced(BATCH_TYPE::BatchVertex3DInstanced &r_bv, const Vector3 *p_pos, const Vector3 *p_norm, const float *p_tan, const Vector2 *p_uv, const Color *p_col, uint32_t p_index, const Transform3D &p_world_xform, const Basis &p_normal_basis, const Color &p_inst_color, float p_matrix_index) {
+static _FORCE_INLINE_ void _batch_fill_vertex_instanced(BATCH_TYPE::BatchVertex3DInstanced &r_bv, const Vector3 *p_pos, const Vector3 *p_norm, const float *p_tan, const Vector2 *p_uv, const Vector2 *p_uv2, const Color *p_col, uint32_t p_index, const Transform3D &p_world_xform, const Basis &p_normal_basis, const Color &p_inst_color, float p_matrix_index) {
 	r_bv.pos.set(p_world_xform.xform(p_pos[p_index]));
 
 	if (p_norm) {
@@ -281,6 +287,12 @@ static _FORCE_INLINE_ void _batch_fill_vertex_instanced(BATCH_TYPE::BatchVertex3
 		r_bv.uv.set(p_uv[p_index]);
 	} else {
 		r_bv.uv.set(0, 0);
+	}
+
+	if (p_uv2) {
+		r_bv.uv2.set(p_uv2[p_index]);
+	} else {
+		r_bv.uv2.set(0, 0);
 	}
 
 	if (p_col) {
@@ -863,6 +875,7 @@ void RasterizerSceneGLES1::_geometry_instance_add_surface(GeometryInstanceGLES1 
 		surf->normal_cache = arrays[RS::ARRAY_NORMAL];
 		surf->tangent_cache = arrays[RS::ARRAY_TANGENT];
 		surf->uv_cache = arrays[RS::ARRAY_TEX_UV];
+		surf->uv2_cache = arrays[RS::ARRAY_TEX_UV2];
 		surf->color_cache = arrays[RS::ARRAY_COLOR];
 		surf->index_cache = arrays[RS::ARRAY_INDEX];
 		surf->index_count = surf->index_cache.size() > 0 ? surf->index_cache.size() : surf->vertex_cache.size();
@@ -2093,15 +2106,8 @@ void RasterizerSceneGLES1::_batch_get_hardware_limits(BATCH_TYPE::BatchLimits &r
 }
 
 void RasterizerSceneGLES1::_batch_get_instance_geometry_capacity(const GeometryInstanceSurface *p_surface, uint32_t &r_vertex_count, uint32_t &r_index_count) {
-	uint32_t drawn_vertex_count = p_surface->vertex_cache.size();
-	uint32_t drawn_index_count = p_surface->index_cache.size();
-
-	// Multiply by instance count so multimeshes automatically
-	// bypass the batcher if necessary
-	uint32_t instances = p_surface->owner->instance_count > 0 ? p_surface->owner->instance_count : 1;
-
-	r_vertex_count = drawn_vertex_count * instances;
-	r_index_count = drawn_index_count * instances;
+	r_vertex_count = p_surface->vertex_cache.size();
+	r_index_count = p_surface->index_cache.size();
 
 	// Ensure unindexed geometry does not starve the index buffer requirement.
 	if (r_index_count == 0) {
@@ -2146,16 +2152,20 @@ uint64_t RasterizerSceneGLES1::_batch_get_state_hash(const GeometryInstanceSurfa
 	uint64_t mat_id = p_surface->material ? static_cast<uint64_t>((uintptr_t)p_surface->material >> 4) : 0;
 	hash |= (mat_id & 0xFFFFF) << 32;
 
-	// Bits 31-16: Source mesh surface ID (16 bits)
-	// Groups identical source geometry
-	uint64_t mesh_id = p_surface->surface ? static_cast<uint64_t>((uintptr_t)p_surface->surface >> 4) : 0;
-	hash |= (mesh_id & 0xFFFF) << 16;
+	// Bit 31: Has texture
+	uint64_t has_texture = 0;
+	if (p_surface->material && p_surface->material->texture_cache.size() > 0) {
+		has_texture = 1;
+	}
+	hash |= (has_texture & 0x1) << 31;
 
-	// Bits 15-0: Mesh surface ID / primitive topology (16 bits)
-	uint64_t surface_id = p_surface->surface_index;
+	// Bits 30-16: Base Type (15 bits)
+	uint64_t base_type = p_surface->owner->data->base_type;
+	hash |= (base_type & 0x7FFF) << 16;
+
+	// Bits 15-0: Primitive topology (16 bits)
 	uint64_t primitive = p_surface->primitive;
-	hash |= ((surface_id & 0xFF) << 8); // Surface ID in 15-8
-	hash |= (primitive & 0xFF); // Primitive type in 7-0
+	hash |= (primitive & 0xFFFF);
 
 	return hash;
 }
@@ -2173,6 +2183,7 @@ void RasterizerSceneGLES1::_batch_fill_instance_geometry(const GeometryInstanceS
 	const PackedVector3Array &normals = p_surface->normal_cache;
 	const PackedFloat32Array &tangents = p_surface->tangent_cache;
 	const PackedVector2Array &uvs = p_surface->uv_cache;
+	const PackedVector2Array &uvs2 = p_surface->uv2_cache;
 	const PackedColorArray &colors = p_surface->color_cache;
 	const PackedInt32Array &indices = p_surface->index_cache;
 
@@ -2181,6 +2192,7 @@ void RasterizerSceneGLES1::_batch_fill_instance_geometry(const GeometryInstanceS
 	const Vector3 *norm_ptr = normals.size() > 0 ? normals.ptr() : nullptr;
 	const float *tan_ptr = tangents.size() > 0 ? tangents.ptr() : nullptr;
 	const Vector2 *uv_ptr = uvs.size() > 0 ? uvs.ptr() : nullptr;
+	const Vector2 *uv2_ptr = uvs2.size() > 0 ? uvs2.ptr() : nullptr;
 	const Color *col_ptr = colors.size() > 0 ? colors.ptr() : nullptr;
 
 	if (p_use_hardware_transform) {
@@ -2196,7 +2208,7 @@ void RasterizerSceneGLES1::_batch_fill_instance_geometry(const GeometryInstanceS
 			}
 		} else {
 			for (uint32_t i = 0; i < v_count; i++) {
-				_batch_fill_vertex(r_bvs[i], pos_ptr, norm_ptr, tan_ptr, uv_ptr, col_ptr, i, (float)p_item_index);
+				_batch_fill_vertex(r_bvs[i], pos_ptr, norm_ptr, tan_ptr, uv_ptr, uv2_ptr, col_ptr, i, (float)p_item_index);
 			}
 		}
 	} else {
@@ -2216,12 +2228,10 @@ void RasterizerSceneGLES1::_batch_fill_instance_geometry(const GeometryInstanceS
 			}
 		} else {
 			Basis normal_basis;
-			normal_basis.set_column(0, world_xform.basis.get_column(1).cross(world_xform.basis.get_column(2)));
-			normal_basis.set_column(1, world_xform.basis.get_column(2).cross(world_xform.basis.get_column(0)));
-			normal_basis.set_column(2, world_xform.basis.get_column(0).cross(world_xform.basis.get_column(1)));
+			_gl_inverse_transpose_normal(normal_basis, world_xform);
 
 			for (uint32_t i = 0; i < v_count; i++) {
-				_batch_fill_vertex(r_bvs[i], pos_ptr, norm_ptr, tan_ptr, uv_ptr, col_ptr, i, (float)p_item_index);
+				_batch_fill_vertex(r_bvs[i], pos_ptr, norm_ptr, tan_ptr, uv_ptr, uv2_ptr, col_ptr, i, (float)p_item_index);
 
 				r_bvs[i].pos.set(world_xform.xform(pos_ptr[i]));
 
@@ -2268,6 +2278,7 @@ void RasterizerSceneGLES1::_batch_fill_multimesh_geometry(const GeometryInstance
 	const PackedVector3Array &normals = p_surface->normal_cache;
 	const PackedFloat32Array &tangents = p_surface->tangent_cache;
 	const PackedVector2Array &uvs = p_surface->uv_cache;
+	const PackedVector2Array &uvs2 = p_surface->uv2_cache;
 	const PackedColorArray &colors = p_surface->color_cache;
 	const PackedInt32Array &indices = p_surface->index_cache;
 
@@ -2276,6 +2287,7 @@ void RasterizerSceneGLES1::_batch_fill_multimesh_geometry(const GeometryInstance
 	const Vector3 *norm_ptr = normals.size() > 0 ? normals.ptr() : nullptr;
 	const float *tan_ptr = tangents.size() > 0 ? tangents.ptr() : nullptr;
 	const Vector2 *uv_ptr = uvs.size() > 0 ? uvs.ptr() : nullptr;
+	const Vector2 *uv2_ptr = uvs2.size() > 0 ? uvs2.ptr() : nullptr;
 	const Color *col_ptr = colors.size() > 0 ? colors.ptr() : nullptr;
 
 	int instances = p_surface->owner->instance_count;
@@ -2308,12 +2320,10 @@ void RasterizerSceneGLES1::_batch_fill_multimesh_geometry(const GeometryInstance
 			}
 		} else {
 			Basis normal_basis;
-			normal_basis.set_column(0, world_xform.basis.get_column(1).cross(world_xform.basis.get_column(2)));
-			normal_basis.set_column(1, world_xform.basis.get_column(2).cross(world_xform.basis.get_column(0)));
-			normal_basis.set_column(2, world_xform.basis.get_column(0).cross(world_xform.basis.get_column(1)));
+			_gl_inverse_transpose_normal(normal_basis, world_xform);
 
 			for (uint32_t i = 0; i < v_count; i++) {
-				_batch_fill_vertex_instanced(r_bvs[bvs_idx], pos_ptr, norm_ptr, tan_ptr, uv_ptr, col_ptr, i, world_xform, normal_basis, inst_color, (float)p_item_index);
+				_batch_fill_vertex_instanced(r_bvs[bvs_idx], pos_ptr, norm_ptr, tan_ptr, uv_ptr, uv2_ptr, col_ptr, i, world_xform, normal_basis, inst_color, (float)p_item_index);
 				bvs_idx++;
 			}
 		}
@@ -2414,6 +2424,16 @@ void RasterizerSceneGLES1::_batch_bind_material(GLES1::SceneMaterialData *p_mate
 			if (bdata.pass_mode != PASS_MODE_SHADOW) {
 				_gl_setup_material_pass(scene_state.is_additive_pass);
 				GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_batch_bind_material: _gl_setup_material_pass");
+
+				// If material is active, enable.
+				if (p_material_data->texture_cache.size() > 0) {
+					glActiveTexture(GL_TEXTURE0);
+					glEnable(GL_TEXTURE_2D);
+				} else {
+					glActiveTexture(GL_TEXTURE0);
+					glDisable(GL_TEXTURE_2D);
+					glBindTexture(GL_TEXTURE_2D, 0);
+				}
 			} else {
 				glDisable(GL_TEXTURE_2D);
 				glDisable(GL_COLOR_MATERIAL);
@@ -4585,11 +4605,15 @@ void RasterizerSceneGLES1::render_scene(const Ref<RenderSceneBuffers> &p_render_
 		render_data.cam_projection = p_camera_data->main_projection;
 		render_data.cam_orthogonal = p_camera_data->is_orthogonal;
 		render_data.camera_visible_layers = p_camera_data->visible_layers;
+		render_data.main_cam_transform = p_camera_data->main_transform;
+		render_data.z_near = p_camera_data->main_projection.get_z_near();
+		render_data.z_far = p_camera_data->main_projection.get_z_far();
 
 		render_data.instances = &p_instances;
 		render_data.lights = &p_lights;
 		render_data.environment = p_environment;
 		render_data.camera_attributes = p_camera_attributes;
+		render_data.shadow_atlas = p_shadow_atlas;
 		render_data.reflection_probe = p_reflection_probe;
 		render_data.reflection_probe_pass = p_reflection_probe_pass;
 		render_data.render_info = r_render_info;

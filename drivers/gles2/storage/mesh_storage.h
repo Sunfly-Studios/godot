@@ -73,6 +73,19 @@ struct Mesh {
 		uint32_t attribute_buffer_size = 0;
 		uint32_t skin_buffer_size = 0;
 
+		uint32_t uncompressed_stride = 0;
+		Vector<uint8_t> uncompressed_buffer;
+
+		// Keep in sync with `GeometryInstanceSurface`
+		// in the scene rasterizer.
+		PackedVector3Array vertex_cache;
+		PackedVector3Array normal_cache;
+		PackedFloat32Array tangent_cache;
+		PackedVector2Array uv_cache;
+		PackedVector2Array uv2_cache;
+		PackedColorArray color_cache;
+		PackedInt32Array index_cache;
+
 		// Cache vertex arrays so they can be created
 		struct Version {
 			uint32_t input_mask = 0;
@@ -246,7 +259,14 @@ private:
 	mutable RID_Owner<Mesh, true> mesh_owner;
 
 	void _mesh_surface_generate_version_for_input_mask(Mesh::Surface::Version &v, Mesh::Surface *s, uint64_t p_input_mask, MeshInstance::Surface *mis = nullptr);
+	void _mesh_surface_generate_version_for_input_mask_2d(Mesh::Surface::Version &v, Mesh::Surface *s, uint64_t p_input_mask, MeshInstance::Surface *mis = nullptr);
+	void _mesh_surface_generate_version_for_input_mask_3d(Mesh::Surface::Version &v, Mesh::Surface *s, uint64_t p_input_mask, MeshInstance::Surface *mis = nullptr);
 	void _mesh_surface_clear(Mesh *mesh, int p_surface);
+
+	void _decompress_surface_data(RS::SurfaceData &r_surface, Mesh::Surface *s);
+	void _decompress_surface_data_2d(RS::SurfaceData &r_surface, Mesh::Surface *s);
+	void _decompress_surface_data_3d(RS::SurfaceData &r_surface, Mesh::Surface *s);
+	void _decompress_3d_buffer(const uint8_t *p_src, uint8_t *p_dst, uint32_t p_vertex_count, uint64_t p_format, uint32_t p_compressed_stride, uint32_t p_uncompressed_stride, const AABB &p_aabb);
 
 	/* Mesh Instance API */
 
@@ -325,7 +345,9 @@ public:
 	virtual void mesh_clear(RID p_mesh) override;
 	virtual void mesh_surface_remove(RID p_mesh, int p_surface) override;
 
-	void surface_get_batch_data(void *p_surface, uint64_t &r_format, uint32_t &r_vertex_count, uint32_t &r_index_count, Vector<uint8_t> &r_vertex_data, Vector<uint8_t> &r_attribute_data, Vector<uint8_t> &r_index_data);
+	void mesh_surface_bind_arrays_gles2(void *p_surface, uint64_t p_input_mask);
+	void mesh_surface_unbind_arrays_gles2(void *p_surface);
+	Array mesh_surface_get_arrays(RID p_mesh, int p_surface) const;
 
 	// TODO(GLES2): All of these below where literally copy-pasted
 	// from GLES3 driver code. Need to verify if these work

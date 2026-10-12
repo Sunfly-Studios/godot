@@ -173,6 +173,7 @@ public:
 		BatchVector3 pos;
 		BatchVector3 normal;
 		BatchVector2 uv;
+		BatchVector2 uv2;
 		BatchVector4 tangent;
 		BatchColor color;
 		BatchVector4 instance_xform0;
@@ -180,7 +181,7 @@ public:
 		BatchVector4 instance_xform2;
 
 		uint8_t matrix_index[4];
-		float pad[2];
+		float pad[4];
 	};
 
 	// A struct used to simulate instaced rendering for
@@ -189,6 +190,7 @@ public:
 		BatchVector3 pos;
 		BatchVector3 normal;
 		BatchVector2 uv;
+		BatchVector2 uv2;
 		BatchVector4 tangent;
 		BatchColor color;
 		BatchVector4 instance_xform0;
@@ -196,7 +198,7 @@ public:
 		BatchVector4 instance_xform2;
 		BatchColor instance_color_custom_data;
 		uint8_t matrix_index[4];
-		float pad[1];
+		float pad[3];
 	};
 
 	// 3D shadow/depth FVF (Position + Instance Matrix)
@@ -232,10 +234,14 @@ public:
 			item = o.item;
 			depth = o.depth;
 			state_hash = o.state_hash;
+			mesh_id = o.mesh_id;
+			surface_index = o.surface_index;
 		}
 		void *item;
 		float depth;
 		uint64_t state_hash;
+		uint32_t mesh_id;
+		uint32_t surface_index;
 	};
 
 	// Limits for the 3D batcher
@@ -349,7 +355,13 @@ protected:
 	struct SortOpaque {
 		_FORCE_INLINE_ bool operator()(const BSortItem3D &A, const BSortItem3D &B) const {
 			if (A.state_hash == B.state_hash) {
-				return A.depth < B.depth;
+				if (A.mesh_id == B.mesh_id) {
+					if (A.surface_index == B.surface_index) {
+						return A.depth < B.depth;
+					}
+					return A.surface_index < B.surface_index;
+				}
+				return A.mesh_id < B.mesh_id;
 			}
 			return A.state_hash < B.state_hash;
 		}
@@ -370,7 +382,7 @@ protected:
 	bool try_join_item(T_SURFACE *p_surface, RenderItemState3D &r_ris);
 
 	template <BatcherEnums::PassMode p_pass_mode, class T_SURFACE>
-	bool prefill_joined_item(T_SURFACE *p_surface, bool p_use_hardware_transform, uint32_t p_item_index = 0);
+	void prefill_joined_item(T_SURFACE *p_surface, bool p_use_hardware_transform, uint32_t p_item_index = 0);
 
 	template <class T_SURFACE>
 	void flush_render_batches(typename T_API::MaterialData *p_material_data, RS::PrimitiveType p_primitive, Batch3D &p_batch, bool p_transparent);

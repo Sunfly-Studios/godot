@@ -101,92 +101,63 @@ static GLenum cube_map_faces[6] = {
 // Helper defines for the long batch types
 #define BATCH_TYPE RasterizerSceneBatcherCommon<BatcherAPISceneGLES2>
 
-static _FORCE_INLINE_ void _batch_fill_vertex_depth(BATCH_TYPE::BatchVertex3DDepth &r_bv, const uint8_t *p_v_ptr, uint64_t p_format, bool p_is_2d, const Transform3D &p_write_xform) {
-	if (p_is_2d) {
-		const float *f = (const float *)p_v_ptr;
-		r_bv.pos.set(f[0], f[1], 0.0f);
+static _FORCE_INLINE_ void _batch_fill_vertex(BATCH_TYPE::BatchVertex3D &r_bv, const Vector3 *p_pos, const Vector3 *p_norm, const float *p_tan, const Vector2 *p_uv, const Vector2 *p_uv2, const Color *p_col, uint32_t p_index, const Transform3D &p_write_xform) {
+	r_bv.pos.set(p_pos[p_index]);
+
+	if (p_norm) {
+		r_bv.normal.set(p_norm[p_index]);
 	} else {
-		const float *f = (const float *)p_v_ptr;
-		r_bv.pos.set(f[0], f[1], f[2]);
+		r_bv.normal.set(0.0f, 1.0f, 0.0f);
 	}
 
-	r_bv.instance_xform0.set(p_write_xform.basis.rows[0][0], p_write_xform.basis.rows[0][1], p_write_xform.basis.rows[0][2], p_write_xform.origin.x);
-	r_bv.instance_xform1.set(p_write_xform.basis.rows[1][0], p_write_xform.basis.rows[1][1], p_write_xform.basis.rows[1][2], p_write_xform.origin.y);
-	r_bv.instance_xform2.set(p_write_xform.basis.rows[2][0], p_write_xform.basis.rows[2][1], p_write_xform.basis.rows[2][2], p_write_xform.origin.z);
-}
-
-static _FORCE_INLINE_ void _batch_fill_vertex_depth_alpha(BATCH_TYPE::BatchVertex3DDepthAlpha &r_bv, const uint8_t *p_v_ptr, const uint8_t *p_a_ptr, uint64_t p_format, bool p_is_2d, bool p_is_compressed, const Transform3D &p_write_xform) {
-	if (p_is_2d) {
-		const float *f = (const float *)p_v_ptr;
-		r_bv.pos.set(f[0], f[1], 0.0f);
+	if (p_tan) {
+		r_bv.tangent.set(
+			p_tan[p_index * 4 + 0],
+			p_tan[p_index * 4 + 1],
+			p_tan[p_index * 4 + 2],
+			p_tan[p_index * 4 + 3]
+		);
 	} else {
-		const float *f = (const float *)p_v_ptr;
-		r_bv.pos.set(f[0], f[1], f[2]);
+		r_bv.tangent.set(1.0f, 0.0f, 0.0f, 1.0f);
 	}
 
-	if (p_a_ptr) {
-		int attr_offset = (p_format & RS::ARRAY_FORMAT_COLOR) ? 4 : 0;
-		if (p_format & RS::ARRAY_FORMAT_TEX_UV) {
-			if (p_is_compressed) {
-				const uint16_t *uv_s = (const uint16_t *)(p_a_ptr + attr_offset);
-				r_bv.uv.set(Math::half_to_float(uv_s[0]), Math::half_to_float(uv_s[1]));
-			} else {
-				const float *uv_f = (const float *)(p_a_ptr + attr_offset);
-				r_bv.uv.set(uv_f[0], uv_f[1]);
-			}
-		} else {
-			r_bv.uv.set(0.0f, 0.0f);
-		}
+	if (p_uv) {
+		r_bv.uv.set(p_uv[p_index]);
 	} else {
 		r_bv.uv.set(0.0f, 0.0f);
 	}
 
-	r_bv.instance_xform0.set(p_write_xform.basis.rows[0][0], p_write_xform.basis.rows[0][1], p_write_xform.basis.rows[0][2], p_write_xform.origin.x);
-	r_bv.instance_xform1.set(p_write_xform.basis.rows[1][0], p_write_xform.basis.rows[1][1], p_write_xform.basis.rows[1][2], p_write_xform.origin.y);
-	r_bv.instance_xform2.set(p_write_xform.basis.rows[2][0], p_write_xform.basis.rows[2][1], p_write_xform.basis.rows[2][2], p_write_xform.origin.z);
-}
-
-static _FORCE_INLINE_ void _batch_fill_vertex(BATCH_TYPE::BatchVertex3D &r_bv, const uint8_t *p_v_ptr, const uint8_t *p_n_ptr, const uint8_t *p_a_ptr, uint64_t p_format, bool p_is_2d, bool p_is_compressed, const Transform3D &p_write_xform) {
-	if (p_is_2d) {
-		const float *f = (const float *)p_v_ptr;
-		r_bv.pos.set(f[0], f[1], 0.0f);
+	if (p_uv2) {
+		r_bv.uv2.set(p_uv2[p_index]);
 	} else {
-		const float *f = (const float *)p_v_ptr;
-		r_bv.pos.set(f[0], f[1], f[2]);
+		r_bv.uv2.set(0.0f, 0.0f);
 	}
 
-	if (p_format & RS::ARRAY_FORMAT_NORMAL) {
-		const uint16_t *us = (const uint16_t *)p_n_ptr;
-		r_bv.normal.set(us[0] / 65535.0f, us[1] / 65535.0f, 0.0f);
-	} else {
-		r_bv.normal.set(0.5f, 1.0f, 0.0f); // Octahedral encoding for (0, 1, 0)
-	}
-
-	if (p_a_ptr) {
-		int attr_offset = 0;
-		if (p_format & RS::ARRAY_FORMAT_COLOR) {
-			r_bv.color.r = p_a_ptr[attr_offset + 0];
-			r_bv.color.g = p_a_ptr[attr_offset + 1];
-			r_bv.color.b = p_a_ptr[attr_offset + 2];
-			r_bv.color.a = p_a_ptr[attr_offset + 3];
-			attr_offset += 4;
-		} else {
-			r_bv.color.set_white();
-		}
-
-		if (p_format & RS::ARRAY_FORMAT_TEX_UV) {
-			if (p_is_compressed) {
-				const uint16_t *uv_s = (const uint16_t *)(p_a_ptr + attr_offset);
-				r_bv.uv.set(Math::half_to_float(uv_s[0]), Math::half_to_float(uv_s[1]));
-			} else {
-				const float *uv_f = (const float *)(p_a_ptr + attr_offset);
-				r_bv.uv.set(uv_f[0], uv_f[1]);
-			}
-		} else {
-			r_bv.uv.set(0.0f, 0.0f);
-		}
+	if (p_col) {
+		r_bv.color.set(p_col[p_index]);
 	} else {
 		r_bv.color.set_white();
+	}
+
+	r_bv.instance_xform0.set(p_write_xform.basis.rows[0][0], p_write_xform.basis.rows[0][1], p_write_xform.basis.rows[0][2], p_write_xform.origin.x);
+	r_bv.instance_xform1.set(p_write_xform.basis.rows[1][0], p_write_xform.basis.rows[1][1], p_write_xform.basis.rows[1][2], p_write_xform.origin.y);
+	r_bv.instance_xform2.set(p_write_xform.basis.rows[2][0], p_write_xform.basis.rows[2][1], p_write_xform.basis.rows[2][2], p_write_xform.origin.z);
+}
+
+static _FORCE_INLINE_ void _batch_fill_vertex_depth(BATCH_TYPE::BatchVertex3DDepth &r_bv, const Vector3 *p_pos, uint32_t p_index, const Transform3D &p_write_xform) {
+	r_bv.pos.set(p_pos[p_index]);
+
+	r_bv.instance_xform0.set(p_write_xform.basis.rows[0][0], p_write_xform.basis.rows[0][1], p_write_xform.basis.rows[0][2], p_write_xform.origin.x);
+	r_bv.instance_xform1.set(p_write_xform.basis.rows[1][0], p_write_xform.basis.rows[1][1], p_write_xform.basis.rows[1][2], p_write_xform.origin.y);
+	r_bv.instance_xform2.set(p_write_xform.basis.rows[2][0], p_write_xform.basis.rows[2][1], p_write_xform.basis.rows[2][2], p_write_xform.origin.z);
+}
+
+static _FORCE_INLINE_ void _batch_fill_vertex_depth_alpha(BATCH_TYPE::BatchVertex3DDepthAlpha &r_bv, const Vector3 *p_pos, const Vector2 *p_uv, uint32_t p_index, const Transform3D &p_write_xform) {
+	r_bv.pos.set(p_pos[p_index]);
+
+	if (p_uv) {
+		r_bv.uv.set(p_uv[p_index]);
+	} else {
 		r_bv.uv.set(0.0f, 0.0f);
 	}
 
@@ -195,54 +166,73 @@ static _FORCE_INLINE_ void _batch_fill_vertex(BATCH_TYPE::BatchVertex3D &r_bv, c
 	r_bv.instance_xform2.set(p_write_xform.basis.rows[2][0], p_write_xform.basis.rows[2][1], p_write_xform.basis.rows[2][2], p_write_xform.origin.z);
 }
 
-static _FORCE_INLINE_ void _batch_fill_vertex_instanced(BATCH_TYPE::BatchVertex3DInstanced &r_bv, const uint8_t *p_v_ptr, const uint8_t *p_n_ptr, const uint8_t *p_a_ptr, uint64_t p_format, bool p_is_2d, bool p_is_compressed, const Transform3D &p_write_xform, const Color &p_inst_color) {
-	if (p_is_2d) {
-		const float *f = (const float *)p_v_ptr;
-		r_bv.pos.set(f[0], f[1], 0.0f);
+static _FORCE_INLINE_ void _batch_fill_vertex_instanced(BATCH_TYPE::BatchVertex3DInstanced &r_bv, const Vector3 *p_pos, const Vector3 *p_norm, const float *p_tan, const Vector2 *p_uv, const Vector2 *p_uv2, const Color *p_col, uint32_t p_index, const Transform3D &p_write_xform, const Color &p_inst_color) {
+	r_bv.pos.set(p_pos[p_index]);
+
+	if (p_norm) {
+		r_bv.normal.set(p_norm[p_index]);
 	} else {
-		const float *f = (const float *)p_v_ptr;
-		r_bv.pos.set(f[0], f[1], f[2]);
+		r_bv.normal.set(0.0f, 1.0f, 0.0f);
 	}
 
-	if (p_format & RS::ARRAY_FORMAT_NORMAL) {
-		const uint16_t *us = (const uint16_t *)p_n_ptr;
-		r_bv.normal.set(us[0] / 65535.0f, us[1] / 65535.0f, 0.0f);
+	if (p_tan) {
+		r_bv.tangent.set(
+			p_tan[p_index * 4 + 0],
+			p_tan[p_index * 4 + 1],
+			p_tan[p_index * 4 + 2],
+			p_tan[p_index * 4 + 3]
+		);
 	} else {
-		r_bv.normal.set(0.5f, 1.0f, 0.0f);
+		r_bv.tangent.set(1.0f, 0.0f, 0.0f, 1.0f);
 	}
 
-	if (p_a_ptr) {
-		int attr_offset = 0;
-		if (p_format & RS::ARRAY_FORMAT_COLOR) {
-			r_bv.color.r = p_a_ptr[attr_offset + 0];
-			r_bv.color.g = p_a_ptr[attr_offset + 1];
-			r_bv.color.b = p_a_ptr[attr_offset + 2];
-			r_bv.color.a = p_a_ptr[attr_offset + 3];
-			attr_offset += 4;
-		} else {
-			r_bv.color.set_white();
-		}
+	if (p_uv) {
+		r_bv.uv.set(p_uv[p_index]);
+	} else {
+		r_bv.uv.set(0.0f, 0.0f);
+	}
 
-		if (p_format & RS::ARRAY_FORMAT_TEX_UV) {
-			if (p_is_compressed) {
-				const uint16_t *uv_s = (const uint16_t *)(p_a_ptr + attr_offset);
-				r_bv.uv.set(Math::half_to_float(uv_s[0]), Math::half_to_float(uv_s[1]));
-			} else {
-				const float *uv_f = (const float *)(p_a_ptr + attr_offset);
-				r_bv.uv.set(uv_f[0], uv_f[1]);
-			}
-		} else {
-			r_bv.uv.set(0.0f, 0.0f);
-		}
+	if (p_uv2) {
+		r_bv.uv2.set(p_uv2[p_index]);
+	} else {
+		r_bv.uv2.set(0.0f, 0.0f);
+	}
+
+	if (p_col) {
+		r_bv.color.set(p_col[p_index]);
 	} else {
 		r_bv.color.set_white();
-		r_bv.uv.set(0.0f, 0.0f);
 	}
 
 	r_bv.instance_xform0.set(p_write_xform.basis.rows[0][0], p_write_xform.basis.rows[0][1], p_write_xform.basis.rows[0][2], p_write_xform.origin.x);
 	r_bv.instance_xform1.set(p_write_xform.basis.rows[1][0], p_write_xform.basis.rows[1][1], p_write_xform.basis.rows[1][2], p_write_xform.origin.y);
 	r_bv.instance_xform2.set(p_write_xform.basis.rows[2][0], p_write_xform.basis.rows[2][1], p_write_xform.basis.rows[2][2], p_write_xform.origin.z);
 	r_bv.instance_color_custom_data.set(p_inst_color);
+}
+
+static _FORCE_INLINE_ void _batch_fill_vertex_depth_instanced(BATCH_TYPE::BatchVertex3DDepth &r_bv, const Vector3 *p_pos, uint32_t p_index, const Transform3D &p_world_xform, float p_matrix_index) {
+	r_bv.pos.set(p_world_xform.xform(p_pos[p_index]));
+	uint8_t *m_idx = (uint8_t *)&r_bv.instance_xform0;
+	m_idx[0] = static_cast<uint8_t>(p_matrix_index);
+	m_idx[1] = 0;
+	m_idx[2] = 0;
+	m_idx[3] = 0;
+	unaligned_write<float>(&r_bv.instance_xform0.y, 1.0f);
+}
+
+static _FORCE_INLINE_ void _batch_fill_vertex_depth_alpha_instanced(BATCH_TYPE::BatchVertex3DDepthAlpha &r_bv, const Vector3 *p_pos, const Vector2 *p_uv, uint32_t p_index, const Transform3D &p_world_xform, float p_matrix_index) {
+	r_bv.pos.set(p_world_xform.xform(p_pos[p_index]));
+	if (p_uv) {
+		r_bv.uv.set(p_uv[p_index]);
+	} else {
+		r_bv.uv.set(0, 0);
+	}
+	uint8_t *m_idx = (uint8_t *)&r_bv.instance_xform0;
+	m_idx[0] = static_cast<uint8_t>(p_matrix_index);
+	m_idx[1] = 0;
+	m_idx[2] = 0;
+	m_idx[3] = 0;
+	unaligned_write<float>(&r_bv.instance_xform0.y, 1.0f);
 }
 
 void RasterizerSceneGLES2::initialize() {
@@ -626,6 +616,20 @@ void RasterizerSceneGLES2::_geometry_instance_add_surface(GeometryInstanceGLES2 
 	surf->surface = GLES2::MeshStorage::get_singleton()->mesh_get_surface(p_mesh, p_surface);
 	surf->primitive = GLES2::MeshStorage::get_singleton()->mesh_surface_get_primitive(surf->surface);
 	surf->surface_index = p_surface;
+
+	Array arrays = GLES2::MeshStorage::get_singleton()->mesh_surface_get_arrays(p_mesh, p_surface);
+	if (!arrays.is_empty()) {
+		surf->vertex_cache = arrays[RS::ARRAY_VERTEX];
+		surf->normal_cache = arrays[RS::ARRAY_NORMAL];
+		surf->tangent_cache = arrays[RS::ARRAY_TANGENT];
+		surf->uv_cache = arrays[RS::ARRAY_TEX_UV];
+		surf->uv2_cache = arrays[RS::ARRAY_TEX_UV2];
+		surf->color_cache = arrays[RS::ARRAY_COLOR];
+		surf->index_cache = arrays[RS::ARRAY_INDEX];
+		surf->index_count = surf->index_cache.size() > 0 ? surf->index_cache.size() : surf->vertex_cache.size();
+	} else {
+		surf->index_count = 0;
+	}
 
 	surf->owner = ginstance;
 	surf->next = ginstance->surface_caches;
@@ -1517,18 +1521,8 @@ void RasterizerSceneGLES2::_batch_get_hardware_limits(BATCH_TYPE::BatchLimits &r
 }
 
 void RasterizerSceneGLES2::_batch_get_instance_geometry_capacity(const GeometryInstanceSurface *p_surface, uint32_t &r_vertex_count, uint32_t &r_index_count) {
-	if (!p_surface->surface) {
-		r_vertex_count = 0;
-		r_index_count = 0;
-		return;
-	}
-
-	uint64_t format = 0;
-	Vector<uint8_t> v_data;
-	Vector<uint8_t> a_data;
-	Vector<uint8_t> i_data;
-
-	GLES2::MeshStorage::get_singleton()->surface_get_batch_data(p_surface->surface, format, r_vertex_count, r_index_count, v_data, a_data, i_data);
+	r_vertex_count = p_surface->vertex_cache.size();
+	r_index_count = p_surface->index_cache.size();
 
 	// Ensure unindexed geometry does not starve the index buffer requirement.
 	if (r_index_count == 0) {
@@ -1555,16 +1549,18 @@ uint64_t RasterizerSceneGLES2::_batch_get_state_hash(const GeometryInstanceSurfa
 	uint64_t mat_id = p_surface->material ? static_cast<uint64_t>((uintptr_t)p_surface->material >> 4) : 0;
 	hash |= (mat_id & 0xFFFFF) << 32;
 
-	// Bits 31-16: Source mesh surface ID (16 bits)
-	// Groups identical source geometry
-	uint64_t mesh_id = p_surface->surface ? static_cast<uint64_t>((uintptr_t)p_surface->surface >> 4) : 0;
-	hash |= (mesh_id & 0xFFFF) << 16;
+	// Bit 31: Has texture
+	// Not used for state toggles, but keeps hashes the same between GLES1 and GLES2
+	uint64_t has_texture = 0;
+	hash |= (has_texture & 0x1) << 31;
 
-	// Bits 15-0: Mesh surface ID / primitive topology (16 bits)
-	uint64_t surface_id = p_surface->surface_index;
+	// Bits 30-16: Base Type (15 bits)
+	uint64_t base_type = p_surface->owner->data->base_type;
+	hash |= (base_type & 0x7FFF) << 16;
+
+	// Bits 15-0: Primitive topology (16 bits)
 	uint64_t primitive = p_surface->primitive;
-	hash |= ((surface_id & 0xFF) << 8); // Surface ID in 15-8
-	hash |= (primitive & 0xFF); // Primitive type in 7-0
+	hash |= (primitive & 0xFFFF);
 
 	return hash;
 }
@@ -1578,76 +1574,54 @@ void RasterizerSceneGLES2::_batch_fill_instance_geometry(const GeometryInstanceS
 		return;
 	}
 
-	uint64_t format = 0;
-	uint32_t vertex_count = 0;
-	uint32_t index_count = 0;
-	Vector<uint8_t> v_data;
-	Vector<uint8_t> a_data;
-	Vector<uint8_t> i_data;
-
-	GLES2::MeshStorage::get_singleton()->surface_get_batch_data(p_surface->surface, format, vertex_count, index_count, v_data, a_data, i_data);
-
-	if (v_data.is_empty() || vertex_count == 0) {
+	const PackedVector3Array &positions = p_surface->vertex_cache;
+	if (positions.is_empty()) {
 		return;
 	}
 
-	bool is_2d = format & RS::ARRAY_FLAG_USE_2D_VERTICES;
-	bool is_compressed = format & RS::ARRAY_FLAG_COMPRESS_ATTRIBUTES;
+	const PackedVector3Array &normals = p_surface->normal_cache;
+	const PackedFloat32Array &tangents = p_surface->tangent_cache;
+	const PackedVector2Array &uvs = p_surface->uv_cache;
+	const PackedVector2Array &uvs2 = p_surface->uv2_cache;
+	const PackedColorArray &colors = p_surface->color_cache;
+	const PackedInt32Array &indices = p_surface->index_cache;
 
-	int pos_stride = is_2d ? (sizeof(float) * 2) : (sizeof(float) * 3);
-	int normal_offset = pos_stride * vertex_count;
-	int normal_tangent_stride = 0;
-	if (format & RS::ARRAY_FORMAT_NORMAL) {
-		if (is_compressed) {
-			normal_tangent_stride = 4;
-		} else {
-			normal_tangent_stride = (format & RS::ARRAY_FORMAT_TANGENT) ? 8 : 4;
-		}
-	}
-
-	int attr_stride = (a_data.size() > 0 && vertex_count > 0) ? (a_data.size() / vertex_count) : 0;
-
-	const uint8_t *v_read_pos = v_data.ptr();
-	const uint8_t *v_read_norm = v_data.ptr() + normal_offset;
-	const uint8_t *a_read = a_data.is_empty() ? nullptr : a_data.ptr();
+	uint32_t v_count = positions.size();
+	const Vector3 *pos_ptr = positions.ptr();
+	const Vector3 *norm_ptr = normals.size() > 0 ? normals.ptr() : nullptr;
+	const float *tan_ptr = tangents.size() > 0 ? tangents.ptr() : nullptr;
+	const Vector2 *uv_ptr = uvs.size() > 0 ? uvs.ptr() : nullptr;
+	const Vector2 *uv2_ptr = uvs2.size() > 0 ? uvs2.ptr() : nullptr;
+	const Color *col_ptr = colors.size() > 0 ? colors.ptr() : nullptr;
 
 	Transform3D world_xform = p_surface->owner->transform;
 	Transform3D write_xform = p_use_hardware_transform ? Transform3D() : world_xform;
 
 	if (bdata.fvf == BatcherEnums::FVF_DEPTH_ONLY) {
 		BATCH_TYPE::BatchVertex3DDepth *bvs_depth = (BATCH_TYPE::BatchVertex3DDepth *)r_bvs;
-		for (uint32_t i = 0; i < vertex_count; i++) {
-			const uint8_t *p_ptr = v_read_pos + i * pos_stride;
-			_batch_fill_vertex_depth(bvs_depth[i], p_ptr, format, is_2d, write_xform);
+		for (uint32_t i = 0; i < v_count; i++) {
+			_batch_fill_vertex_depth(bvs_depth[i], pos_ptr, i, write_xform);
 		}
 	} else if (bdata.fvf == BatcherEnums::FVF_DEPTH_ALPHA) {
-		BATCH_TYPE::BatchVertex3DDepthAlpha *bvs_alpha = (BATCH_TYPE::BatchVertex3DDepthAlpha *)r_bvs;
-		for (uint32_t i = 0; i < vertex_count; i++) {
-			const uint8_t *p_ptr = v_read_pos + i * pos_stride;
-			const uint8_t *a_ptr = a_read ? (a_read + i * attr_stride) : nullptr;
-			_batch_fill_vertex_depth_alpha(bvs_alpha[i], p_ptr, a_ptr, format, is_2d, is_compressed, write_xform);
+		BATCH_TYPE::BatchVertex3DDepthAlpha *bvs_depth_alpha = (BATCH_TYPE::BatchVertex3DDepthAlpha *)r_bvs;
+		for (uint32_t i = 0; i < v_count; i++) {
+			_batch_fill_vertex_depth_alpha(bvs_depth_alpha[i], pos_ptr, uv_ptr, i, write_xform);
 		}
 	} else {
-		for (uint32_t i = 0; i < vertex_count; i++) {
-			const uint8_t *p_ptr = v_read_pos + i * pos_stride;
-			const uint8_t *n_ptr = v_read_norm + i * normal_tangent_stride;
-			const uint8_t *a_ptr = a_read ? (a_read + i * attr_stride) : nullptr;
-
-			_batch_fill_vertex(r_bvs[i], p_ptr, n_ptr, a_ptr, format, is_2d, is_compressed, write_xform);
+		for (uint32_t i = 0; i < v_count; i++) {
+			_batch_fill_vertex(r_bvs[i], pos_ptr, norm_ptr, tan_ptr, uv_ptr, uv2_ptr, col_ptr, i, write_xform);
 		}
 	}
 
-	if (r_inds && index_count > 0 && !i_data.is_empty()) {
-		bool is_16 = vertex_count <= 65536;
-		const uint8_t *i_read = i_data.ptr();
-
-		for (uint32_t i = 0; i < index_count; i++) {
-			uint32_t idx = is_16 ? ((uint16_t *)i_read)[i] : ((uint32_t *)i_read)[i];
-			r_inds[i] = (uint16_t)(idx + p_start_vert);
+	if (r_inds && indices.size() > 0) {
+		uint32_t i_count = indices.size();
+		const int32_t *idx_ptr = indices.ptr();
+		for (uint32_t i = 0; i < i_count; i++) {
+			r_inds[i] = (uint16_t)(idx_ptr[i] + p_start_vert);
 		}
 	} else if (r_inds) {
 		// Auto-generate sequential indices for unindexed meshes.
-		for (uint32_t i = 0; i < vertex_count; i++) {
+		for (uint32_t i = 0; i < v_count; i++) {
 			r_inds[i] = (uint16_t)(i + p_start_vert);
 		}
 	}
@@ -1658,38 +1632,25 @@ void RasterizerSceneGLES2::_batch_fill_multimesh_geometry(const GeometryInstance
 		return;
 	}
 
-	uint64_t format = 0;
-	uint32_t vertex_count = 0;
-	uint32_t index_count = 0;
-	Vector<uint8_t> v_data;
-	Vector<uint8_t> a_data;
-	Vector<uint8_t> i_data;
-
-	GLES2::MeshStorage::get_singleton()->surface_get_batch_data(p_surface->surface, format, vertex_count, index_count, v_data, a_data, i_data);
-
-	if (v_data.is_empty() || vertex_count == 0) {
+	const PackedVector3Array &positions = p_surface->vertex_cache;
+	if (positions.is_empty()) {
 		return;
 	}
 
-	bool is_2d = format & RS::ARRAY_FLAG_USE_2D_VERTICES;
-	bool is_compressed = format & RS::ARRAY_FLAG_COMPRESS_ATTRIBUTES;
+	const PackedVector3Array &normals = p_surface->normal_cache;
+	const PackedFloat32Array &tangents = p_surface->tangent_cache;
+	const PackedVector2Array &uvs = p_surface->uv_cache;
+	const PackedVector2Array &uvs2 = p_surface->uv2_cache;
+	const PackedColorArray &colors = p_surface->color_cache;
+	const PackedInt32Array &indices = p_surface->index_cache;
 
-	int pos_stride = is_2d ? (sizeof(float) * 2) : (sizeof(float) * 3);
-	int normal_offset = pos_stride * vertex_count;
-	int normal_tangent_stride = 0;
-	if (format & RS::ARRAY_FORMAT_NORMAL) {
-		if (is_compressed) {
-			normal_tangent_stride = 4;
-		} else {
-			normal_tangent_stride = (format & RS::ARRAY_FORMAT_TANGENT) ? 8 : 4;
-		}
-	}
-
-	int attr_stride = (a_data.size() > 0 && vertex_count > 0) ? (a_data.size() / vertex_count) : 0;
-
-	const uint8_t *v_read_pos = v_data.ptr();
-	const uint8_t *v_read_norm = v_data.ptr() + normal_offset;
-	const uint8_t *a_read = a_data.is_empty() ? nullptr : a_data.ptr();
+	uint32_t v_count = positions.size();
+	const Vector3 *pos_ptr = positions.ptr();
+	const Vector3 *norm_ptr = normals.size() > 0 ? normals.ptr() : nullptr;
+	const float *tan_ptr = tangents.size() > 0 ? tangents.ptr() : nullptr;
+	const Vector2 *uv_ptr = uvs.size() > 0 ? uvs.ptr() : nullptr;
+	const Vector2 *uv2_ptr = uvs2.size() > 0 ? uvs2.ptr() : nullptr;
+	const Color *col_ptr = colors.size() > 0 ? colors.ptr() : nullptr;
 
 	int instances = p_surface->owner->instance_count;
 	MultiMeshInstanceData mm = _get_multimesh_data(p_surface);
@@ -1697,82 +1658,50 @@ void RasterizerSceneGLES2::_batch_fill_multimesh_geometry(const GeometryInstance
 	uint32_t bvs_idx = 0;
 	Transform3D owner_transform = p_surface->owner->transform;
 
-	if (bdata.fvf == BatcherEnums::FVF_DEPTH_ONLY) {
-		BATCH_TYPE::BatchVertex3DDepth *bvs_depth = (BATCH_TYPE::BatchVertex3DDepth *)r_bvs;
-		for (int inst = 0; inst < instances; inst++) {
-			Transform3D xform;
-			Color inst_color = Color(1, 1, 1, 1);
-			if (p_surface->owner->data->base_type == RS::INSTANCE_MULTIMESH && mm.data) {
-				_gl_batch_decode_multimesh_instance(mm.data + (inst * mm.stride), mm.format, mm.uses_colors, mm.color_offset, xform, inst_color);
-			} else if (p_surface->owner->data->base_type == RS::INSTANCE_PARTICLES) {
-				xform = Transform3D();
-			}
-			Transform3D write_xform = p_use_hardware_transform ? xform : (owner_transform * xform);
-
-			for (uint32_t i = 0; i < vertex_count; i++) {
-				const uint8_t *p_ptr = v_read_pos + i * pos_stride;
-				_batch_fill_vertex_depth(bvs_depth[bvs_idx++], p_ptr, format, is_2d, write_xform);
-			}
+	Color inst_color(1.0f, 1.0f, 1.0f, 1.0f);
+	for (int inst = 0; inst < instances; inst++) {
+		Transform3D xform;
+		if (p_surface->owner->data->base_type == RS::INSTANCE_MULTIMESH && mm.data) {
+			_gl_batch_decode_multimesh_instance(mm.data + (inst * mm.stride), mm.format, mm.uses_colors, mm.color_offset, xform, inst_color);
+		} else if (p_surface->owner->data->base_type == RS::INSTANCE_PARTICLES) {
+			xform = Transform3D();
 		}
-	} else if (bdata.fvf == BatcherEnums::FVF_DEPTH_ALPHA) {
-		BATCH_TYPE::BatchVertex3DDepthAlpha *bvs_alpha = (BATCH_TYPE::BatchVertex3DDepthAlpha *)r_bvs;
-		for (int inst = 0; inst < instances; inst++) {
-			Transform3D xform;
-			Color inst_color = Color(1, 1, 1, 1);
-			if (p_surface->owner->data->base_type == RS::INSTANCE_MULTIMESH && mm.data) {
-				_gl_batch_decode_multimesh_instance(mm.data + (inst * mm.stride), mm.format, mm.uses_colors, mm.color_offset, xform, inst_color);
-			} else if (p_surface->owner->data->base_type == RS::INSTANCE_PARTICLES) {
-				xform = Transform3D();
+
+		Transform3D write_xform = p_use_hardware_transform ? xform : (owner_transform * xform);
+
+		if (bdata.fvf == BatcherEnums::FVF_DEPTH_ONLY) {
+			BATCH_TYPE::BatchVertex3DDepth *bvs_depth = (BATCH_TYPE::BatchVertex3DDepth *)r_bvs;
+			for (uint32_t i = 0; i < v_count; i++) {
+				_batch_fill_vertex_depth(bvs_depth[bvs_idx++], pos_ptr, i, write_xform);
 			}
-			Transform3D write_xform = p_use_hardware_transform ? xform : (owner_transform * xform);
-
-			for (uint32_t i = 0; i < vertex_count; i++) {
-				const uint8_t *p_ptr = v_read_pos + i * pos_stride;
-				const uint8_t *a_ptr = a_read ? (a_read + i * attr_stride) : nullptr;
-				_batch_fill_vertex_depth_alpha(bvs_alpha[bvs_idx++], p_ptr, a_ptr, format, is_2d, is_compressed, write_xform);
+		} else if (bdata.fvf == BatcherEnums::FVF_DEPTH_ALPHA) {
+			BATCH_TYPE::BatchVertex3DDepthAlpha *bvs_depth_alpha = (BATCH_TYPE::BatchVertex3DDepthAlpha *)r_bvs;
+			for (uint32_t i = 0; i < v_count; i++) {
+				_batch_fill_vertex_depth_alpha(bvs_depth_alpha[bvs_idx++], pos_ptr, uv_ptr, i, write_xform);
 			}
-		}
-	} else {
-		for (int inst = 0; inst < instances; inst++) {
-			Transform3D xform;
-			Color inst_color = Color(1, 1, 1, 1);
-
-			if (p_surface->owner->data->base_type == RS::INSTANCE_MULTIMESH && mm.data) {
-				_gl_batch_decode_multimesh_instance(mm.data + (inst * mm.stride), mm.format, mm.uses_colors, mm.color_offset, xform, inst_color);
-			} else if (p_surface->owner->data->base_type == RS::INSTANCE_PARTICLES) {
-				xform = Transform3D();
-			}
-
-			Transform3D write_xform = p_use_hardware_transform ? xform : (owner_transform * xform);
-
-			for (uint32_t i = 0; i < vertex_count; i++) {
-				const uint8_t *p_ptr = v_read_pos + i * pos_stride;
-				const uint8_t *n_ptr = v_read_norm + i * normal_tangent_stride;
-				const uint8_t *a_ptr = a_read ? (a_read + i * attr_stride) : nullptr;
-
-				_batch_fill_vertex_instanced(r_bvs[bvs_idx], p_ptr, n_ptr, a_ptr, format, is_2d, is_compressed, write_xform, inst_color);
-				bvs_idx++;
+		} else {
+			for (uint32_t i = 0; i < v_count; i++) {
+				_batch_fill_vertex_instanced(r_bvs[bvs_idx++], pos_ptr, norm_ptr, tan_ptr, uv_ptr, uv2_ptr, col_ptr, i, write_xform, inst_color);
 			}
 		}
 	}
 
-	if (r_inds && index_count > 0 && !i_data.is_empty()) {
-		bool is_16 = vertex_count <= 65536;
-		const uint8_t *i_read = i_data.ptr();
+	if (r_inds && indices.size() > 0) {
+		uint32_t i_count = indices.size();
+		const int32_t *idx_ptr = indices.ptr();
 
 		uint32_t inds_idx = 0;
 		for (int inst = 0; inst < instances; inst++) {
-			for (uint32_t i = 0; i < index_count; i++) {
-				uint32_t idx = is_16 ? ((uint16_t *)i_read)[i] : ((uint32_t *)i_read)[i];
-				r_inds[inds_idx++] = (uint16_t)(idx + p_start_vert + (inst * vertex_count));
+			for (uint32_t i = 0; i < i_count; i++) {
+				r_inds[inds_idx++] = (uint16_t)(idx_ptr[i] + p_start_vert + (inst * v_count));
 			}
 		}
 	} else if (r_inds) {
 		// Auto-generate sequential indices for unindexed meshes.
 		uint32_t inds_idx = 0;
 		for (int inst = 0; inst < instances; inst++) {
-			for (uint32_t i = 0; i < vertex_count; i++) {
-				r_inds[inds_idx++] = (uint16_t)(i + p_start_vert + (inst * vertex_count));
+			for (uint32_t i = 0; i < v_count; i++) {
+				r_inds[inds_idx++] = (uint16_t)(i + p_start_vert + (inst * v_count));
 			}
 		}
 	}
@@ -1889,7 +1818,7 @@ void RasterizerSceneGLES2::_batch_render_items(GLES2::SceneMaterialData *p_mater
 	}
 
 	Transform3D world_xform;
-	if (use_hardware_transform && bdata.fvf != BatcherEnums::FVF_INSTANCED) {
+	if (use_hardware_transform) {
 		world_xform = first_surf->owner->transform;
 	}
 
@@ -1956,8 +1885,16 @@ void RasterizerSceneGLES2::_batch_render_generic(RS::PrimitiveType p_primitive, 
 		glEnableVertexAttribArray(RS::ARRAY_NORMAL);
 		glVertexAttribPointer(RS::ARRAY_NORMAL, 3, GL_FLOAT, GL_FALSE, stride, (void *)BATCH_OFFSET_OF(normal));
 
+		glEnableVertexAttribArray(RS::ARRAY_TANGENT);
+		glVertexAttribPointer(RS::ARRAY_TANGENT, 4, GL_FLOAT, GL_FALSE, stride, (void *)BATCH_OFFSET_OF(tangent));
+		GL_CHECK_ERROR("GLES2::RasterizerSceneGLES2::_batch_render_generic: glBindVertexAttribArray RS::ARRAY_TANGENT");
+
 		glEnableVertexAttribArray(RS::ARRAY_TEX_UV);
 		glVertexAttribPointer(RS::ARRAY_TEX_UV, 2, GL_FLOAT, GL_FALSE, stride, (void *)BATCH_OFFSET_OF(uv));
+
+		glEnableVertexAttribArray(RS::ARRAY_TEX_UV2);
+		glVertexAttribPointer(RS::ARRAY_TEX_UV2, 2, GL_FLOAT, GL_FALSE, stride, (void *)BATCH_OFFSET_OF(uv2));
+		GL_CHECK_ERROR("GLES2::RasterizerSceneGLES2::_batch_render_generic: glBindVertexAttribArray RS::ARRAY_TEX_UV2");
 
 		if (p_has_color) {
 			glEnableVertexAttribArray(RS::ARRAY_COLOR);
@@ -1970,10 +1907,14 @@ void RasterizerSceneGLES2::_batch_render_generic(RS::PrimitiveType p_primitive, 
 		glEnableVertexAttribArray(RS::ARRAY_TEX_UV);
 		glVertexAttribPointer(RS::ARRAY_TEX_UV, 2, GL_FLOAT, GL_FALSE, stride, (void *)BATCH_DEPTH_ALPHA_OFFSET_OF(uv));
 		glDisableVertexAttribArray(RS::ARRAY_NORMAL);
+		glDisableVertexAttribArray(RS::ARRAY_TANGENT);
+		glDisableVertexAttribArray(RS::ARRAY_TEX_UV2);
 		glDisableVertexAttribArray(RS::ARRAY_COLOR);
 	} else {
 		glDisableVertexAttribArray(RS::ARRAY_NORMAL);
+		glDisableVertexAttribArray(RS::ARRAY_TANGENT);
 		glDisableVertexAttribArray(RS::ARRAY_TEX_UV);
+		glDisableVertexAttribArray(RS::ARRAY_TEX_UV2);
 		glDisableVertexAttribArray(RS::ARRAY_COLOR);
 	}
 
@@ -2019,7 +1960,9 @@ void RasterizerSceneGLES2::_batch_render_generic(RS::PrimitiveType p_primitive, 
 	// Unbind
 	glDisableVertexAttribArray(RS::ARRAY_VERTEX);
 	glDisableVertexAttribArray(RS::ARRAY_NORMAL);
+	glDisableVertexAttribArray(RS::ARRAY_TANGENT);
 	glDisableVertexAttribArray(RS::ARRAY_TEX_UV);
+	glDisableVertexAttribArray(RS::ARRAY_TEX_UV2);
 	glDisableVertexAttribArray(RS::ARRAY_COLOR);
 	glDisableVertexAttribArray(12);
 	glDisableVertexAttribArray(13);
@@ -2095,14 +2038,8 @@ void RasterizerSceneGLES2::_render_single_item_immediate(const GeometryInstanceS
 		_render_item_state.current_material_data = p_surface->material;
 	}
 
-	// Retrieve VAO/VBOs
-	GLuint vertex_array_gl = 0;
-	mesh_storage->mesh_surface_get_vertex_arrays_and_format(p_surface->surface, shader->vertex_input_mask, vertex_array_gl);
-
-	if (vertex_array_gl == 0) {
-		return;
-	}
-	glBindVertexArray(vertex_array_gl);
+	// Bind arrays
+	mesh_storage->mesh_surface_bind_arrays_gles2(p_surface->surface, shader->vertex_input_mask);
 
 	GLuint index_array_gl = mesh_storage->mesh_surface_get_index_buffer(p_surface->surface, p_surface->lod_index);
 	bool use_index_buffer = index_array_gl != 0;
@@ -2114,13 +2051,32 @@ void RasterizerSceneGLES2::_render_single_item_immediate(const GeometryInstanceS
 	int drawn_count = mesh_storage->mesh_surface_get_vertices_drawn_count(p_surface->surface);
 	GLenum index_type = use_index_buffer ? mesh_storage->mesh_surface_get_index_type(p_surface->surface) : 0;
 
-	int instances = p_surface->owner->instance_count > 0 ? p_surface->owner->instance_count : 1;
+	int instances = p_surface->owner->instance_count >= 0 ? p_surface->owner->instance_count : 1;
+	if (instances == 0) {
+		// Ghost mesh
+		mesh_storage->mesh_surface_unbind_arrays_gles2(p_surface->surface);
+		if (use_index_buffer) {
+			glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+		}
+		return;
+	}
+
 	bool is_multimesh = p_surface->owner->data->base_type == RS::INSTANCE_MULTIMESH;
 	MultiMeshInstanceData mm = _get_multimesh_data(p_surface);
 	Transform3D owner_transform = p_surface->owner->transform;
 
-	if (mm.uses_colors) {
-		glDisableVertexAttribArray(RS::ARRAY_COLOR);
+	if (promote_to_instancing) {
+		// Provide default values when we promote
+		// to instancing.
+		glDisableVertexAttribArray(12);
+		glDisableVertexAttribArray(13);
+		glDisableVertexAttribArray(14);
+		glDisableVertexAttribArray(15);
+		glVertexAttrib4f(12, 1.0f, 0.0f, 0.0f, 0.0f);
+		glVertexAttrib4f(13, 0.0f, 1.0f, 0.0f, 0.0f);
+		glVertexAttrib4f(14, 0.0f, 0.0f, 1.0f, 0.0f);
+		glVertexAttrib4f(15, 1.0f, 1.0f, 1.0f, 1.0f);
+		GL_CHECK_ERROR("GLES2::RasterizerSceneGLES2::_render_single_item_immediate: glVertexAttrib4f instancing defaults");
 	}
 
 	// =====================================
@@ -2138,8 +2094,8 @@ void RasterizerSceneGLES2::_render_single_item_immediate(const GeometryInstanceS
 		Transform3D write_xform = owner_transform * xform;
 		material_storage->shaders.scene_shader.version_set_uniform(SceneShaderGLES2::WORLD_TRANSFORM, write_xform, shader->version, variant, spec_constants);
 
-		if (mm.uses_colors) {
-			glVertexAttrib4f(RS::ARRAY_COLOR, inst_color.r, inst_color.g, inst_color.b, inst_color.a);
+		if (promote_to_instancing) {
+			glVertexAttrib4f(15, inst_color.r, inst_color.g, inst_color.b, inst_color.a);
 		}
 
 		if (use_index_buffer) {
@@ -2180,9 +2136,7 @@ void RasterizerSceneGLES2::_render_single_item_immediate(const GeometryInstanceS
 	}
 
 	// Unbind state
-	if (vertex_array_gl != 0) {
-		glBindVertexArray(0);
-	}
+	mesh_storage->mesh_surface_unbind_arrays_gles2(p_surface->surface);
 	if (use_index_buffer) {
 		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
 	}
@@ -2984,10 +2938,10 @@ void RasterizerSceneGLES2::_bind_scene_camera_uniforms(RID p_version, SceneShade
 	Projection inv_proj = _gl_array_to_projection(scene_state.ubo.inv_projection_matrix);
 
 	Transform3D view;
-	_gl_reconstruct_view_matrix(view);
+	_gl_reconstruct_view_matrix(view, scene_state.ubo.view_matrix);
 
 	Transform3D inv_view;
-	_gl_reconstruct_view_matrix(inv_view);
+	_gl_reconstruct_view_matrix(inv_view, scene_state.ubo.inv_view_matrix);
 
 	material_storage->shaders.scene_shader.version_set_uniform(SceneShaderGLES2::PROJECTION_MATRIX, proj, p_version, p_variant, p_spec_constants);
 	material_storage->shaders.scene_shader.version_set_uniform(SceneShaderGLES2::INV_PROJECTION_MATRIX, inv_proj, p_version, p_variant, p_spec_constants);
@@ -3018,7 +2972,7 @@ void RasterizerSceneGLES2::_bind_scene_camera_uniforms(RID p_version, SceneShade
 	material_storage->shaders.scene_shader.version_set_uniform(SceneShaderGLES2::Z_NEAR, scene_state.ubo.z_near, p_version, p_variant, p_spec_constants);
 
 	Transform3D main_cam_inv_view;
-	_gl_reconstruct_view_matrix(main_cam_inv_view);
+	_gl_reconstruct_view_matrix(main_cam_inv_view, scene_state.ubo.main_cam_inv_view_matrix);
 
 	material_storage->shaders.scene_shader.version_set_uniform(SceneShaderGLES2::MAIN_CAM_INV_VIEW_MATRIX, main_cam_inv_view, p_version, p_variant, p_spec_constants);
 	material_storage->shaders.scene_shader.version_set_uniform(SceneShaderGLES2::SHADOW_BIAS, scene_state.ubo.shadow_bias, p_version, p_variant, p_spec_constants);
@@ -3092,11 +3046,15 @@ void RasterizerSceneGLES2::render_scene(const Ref<RenderSceneBuffers> &p_render_
 		render_data.cam_projection = p_camera_data->main_projection;
 		render_data.cam_orthogonal = p_camera_data->is_orthogonal;
 		render_data.camera_visible_layers = p_camera_data->visible_layers;
+		render_data.main_cam_transform = p_camera_data->main_transform;
+		render_data.z_near = p_camera_data->main_projection.get_z_near();
+		render_data.z_far = p_camera_data->main_projection.get_z_far();
 
 		render_data.instances = &p_instances;
 		render_data.lights = &p_lights;
 		render_data.environment = p_environment;
 		render_data.camera_attributes = p_camera_attributes;
+		render_data.shadow_atlas = p_shadow_atlas;
 		render_data.reflection_probe = p_reflection_probe;
 		render_data.reflection_probe_pass = p_reflection_probe_pass;
 		render_data.render_info = r_render_info;
@@ -3435,6 +3393,10 @@ void RasterizerSceneGLES2::_execute_additive_light_draw(uint32_t p_light_gl_id, 
 
 			Transform3D write_xform = *p_owner_transform * xform;
 			material_storage->shaders.scene_shader.version_set_uniform(SceneShaderGLES2::WORLD_TRANSFORM, write_xform, shader->version, p_variant, p_spec_constants);
+
+			if (is_multimesh || is_particles) {
+				glVertexAttrib4f(15, inst_color.r, inst_color.g, inst_color.b, inst_color.a);
+			}
 
 			if (p_use_index_buffer) {
 				glDrawElements(p_primitive_gl, p_drawn_count, p_index_type, 0);
