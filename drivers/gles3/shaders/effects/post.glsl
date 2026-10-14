@@ -86,6 +86,16 @@ vec3 apply_color_correction(vec3 color) {
 #endif // USE_1D_LUT
 #endif // USE_COLOR_CORRECTION
 
+#ifdef USE_BCS
+vec3 apply_bcs(vec3 color) {
+	color = mix(vec3(0.0), color, brightness);
+	color = mix(vec3(0.5), color, contrast);
+	color = mix(vec3(dot(vec3(1.0), color) * 0.33333), color, saturation);
+
+	return color;
+}
+#endif
+
 #if defined(USE_SSAO_ABYSS) || defined(USE_SSAO_LOW) || defined(USE_SSAO_MED) || defined(USE_SSAO_HIGH) || defined(USE_SSAO_MEGA)
 #define USE_SOME_SSAO
 uniform float ssao_intensity;
