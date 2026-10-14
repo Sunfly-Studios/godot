@@ -99,7 +99,7 @@ public:
 	static constexpr uint32_t EMPTY_HASH = 0;
 
 private:
-	using _ElementAlloc = _HashMapElementAllocatorWrapper< HashMapElement< TKey, TValue >, Allocator >;
+	using _ElementAlloc = _HashMapElementAllocatorWrapper<HashMapElement<TKey, TValue>, Allocator>;
 	Allocator element_alloc; // Ignored but kept for binary signatures
 	HashMapElement<TKey, TValue> **elements = nullptr;
 	uint32_t *hashes = nullptr;

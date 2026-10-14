@@ -177,7 +177,7 @@ public:
 				value(std::forward<Args>(p_args)...) {}
 	};
 
-	using _ElementAlloc = _ListElementAllocatorWrapper< Element, A >;
+	using _ElementAlloc = _ListElementAllocatorWrapper<Element, A>;
 	static inline ThreadSafeSlabAllocator<_Data> _data_allocator;
 
 	typedef T ValueType;
