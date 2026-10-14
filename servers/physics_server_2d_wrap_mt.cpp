@@ -50,7 +50,7 @@ void PhysicsServer2DWrapMT::_thread_loop() {
 
 void PhysicsServer2DWrapMT::step(real_t p_step) {
 	if (create_thread) {
-		command_queue.push(physics_server_2d, &PhysicsServer2D::step, p_step);
+		command_queue.push_static<&PhysicsServer2D::step>(physics_server_2d, p_step);
 	} else {
 		physics_server_2d->step(p_step);
 	}
@@ -77,8 +77,8 @@ void PhysicsServer2DWrapMT::init() {
 	if (create_thread) {
 		WorkerThreadPool::TaskID tid = WorkerThreadPool::get_singleton()->add_task(callable_mp(this, &PhysicsServer2DWrapMT::_thread_loop), true);
 		command_queue.set_pump_task_id(tid);
-		command_queue.push(this, &PhysicsServer2DWrapMT::_assign_mt_ids, tid);
-		command_queue.push_and_sync(physics_server_2d, &PhysicsServer2D::init);
+		command_queue.push_static<&PhysicsServer2DWrapMT::_assign_mt_ids>(this, tid);
+		command_queue.push_and_sync_static<&PhysicsServer2D::init>(physics_server_2d);
 		DEV_ASSERT(server_task_id == tid);
 	} else {
 		server_thread = Thread::MAIN_ID;
@@ -88,8 +88,8 @@ void PhysicsServer2DWrapMT::init() {
 
 void PhysicsServer2DWrapMT::finish() {
 	if (create_thread) {
-		command_queue.push(physics_server_2d, &PhysicsServer2D::finish);
-		command_queue.push(this, &PhysicsServer2DWrapMT::_thread_exit);
+		command_queue.push_static<&PhysicsServer2D::finish>(physics_server_2d);
+		command_queue.push_static<&PhysicsServer2DWrapMT::_thread_exit>(this);
 		if (server_task_id != WorkerThreadPool::INVALID_TASK_ID) {
 			WorkerThreadPool::get_singleton()->wait_for_task_completion(server_task_id);
 			server_task_id = WorkerThreadPool::INVALID_TASK_ID;

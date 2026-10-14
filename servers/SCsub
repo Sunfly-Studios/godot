@@ -1,9 +1,18 @@
 #!/usr/bin/env python
 from misc.utility.scons_hints import *
+import make_rendering_server_crtp
 
 Import("env")
 
 env.servers_sources = []
+
+gen = env.CommandNoCache(
+    "rendering_server_binds.gen.inc",
+    "rendering_server.h",
+    env.Run(make_rendering_server_crtp.run),
+)
+# Prevents cyclic dependencies
+env.Ignore(gen, gen)
 
 env.add_source_files(env.servers_sources, "audio_server.cpp")
 env.add_source_files(env.servers_sources, "camera_server.cpp")

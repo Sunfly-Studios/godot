@@ -186,25 +186,25 @@ public:
 				TestMsgType msg_type = message_types_to_write[i];
 				switch (msg_type) {
 					case TEST_MSG_FUNC1_TRANSFORM:
-						command_queue.push(this, &SharedThreadState::func1, tr);
+						command_queue.push_static<&SharedThreadState::func1>(this, tr);
 						break;
 					case TEST_MSG_FUNC2_TRANSFORM_FLOAT:
-						command_queue.push(this, &SharedThreadState::func2, tr, f);
+						command_queue.push_static<&SharedThreadState::func2>(this, tr, f);
 						break;
 					case TEST_MSG_FUNC3_TRANSFORMx6:
-						command_queue.push(this, &SharedThreadState::func3, tr, tr, tr, tr, tr, tr);
+						command_queue.push_static<&SharedThreadState::func3>(this, tr, tr, tr, tr, tr, tr);
 						break;
 					case TEST_MSGSYNC_FUNC1_TRANSFORM:
-						command_queue.push_and_sync(this, &SharedThreadState::func1, tr);
+						command_queue.push_and_sync_static<&SharedThreadState::func1>(this, tr);
 						break;
 					case TEST_MSGSYNC_FUNC2_TRANSFORM_FLOAT:
-						command_queue.push_and_sync(this, &SharedThreadState::func2, tr, f);
+						command_queue.push_and_sync_static<&SharedThreadState::func2>(this, tr, f);
 						break;
 					case TEST_MSGRET_FUNC1_TRANSFORM:
-						command_queue.push_and_ret(this, &SharedThreadState::func1r, &otr, tr);
+						command_queue.push_and_ret_static<&SharedThreadState::func1r>(this, &otr, tr);
 						break;
 					case TEST_MSGRET_FUNC2_TRANSFORM_FLOAT:
-						command_queue.push_and_ret(this, &SharedThreadState::func2r, &otr, tr, f);
+						command_queue.push_and_ret_static<&SharedThreadState::func2r>(this, &otr, tr, f);
 						break;
 					default:
 						break;
@@ -496,7 +496,7 @@ TEST_CASE("[CommandQueue] Test Parameter Passing Semantics") {
 		SharedThreadState::CopyMoveTestType lvalue(42);
 
 		SUBCASE("Pass by copy") {
-			sts.command_queue.push(&sts, &SharedThreadState::copy_move_test_copy, lvalue);
+			sts.command_queue.push_static<&SharedThreadState::copy_move_test_copy>(&sts, lvalue);
 
 			sts.message_count_to_read = -1;
 			sts.reader_threadwork.main_start_work();
@@ -507,7 +507,7 @@ TEST_CASE("[CommandQueue] Test Parameter Passing Semantics") {
 		}
 
 		SUBCASE("Pass by reference") {
-			sts.command_queue.push(&sts, &SharedThreadState::copy_move_test_ref, lvalue);
+			sts.command_queue.push_static<&SharedThreadState::copy_move_test_ref>(&sts, lvalue);
 
 			sts.message_count_to_read = -1;
 			sts.reader_threadwork.main_start_work();
@@ -523,8 +523,7 @@ TEST_CASE("[CommandQueue] Test Parameter Passing Semantics") {
 		SharedThreadState::CopyMoveTestType::move_count = 0;
 
 		SUBCASE("Pass by copy") {
-			sts.command_queue.push(&sts, &SharedThreadState::copy_move_test_copy,
-					SharedThreadState::CopyMoveTestType(43));
+			sts.command_queue.push_static<&SharedThreadState::copy_move_test_copy>(&sts, SharedThreadState::CopyMoveTestType(43));
 
 			sts.message_count_to_read = -1;
 			sts.reader_threadwork.main_start_work();
@@ -535,8 +534,7 @@ TEST_CASE("[CommandQueue] Test Parameter Passing Semantics") {
 		}
 
 		SUBCASE("Pass by reference") {
-			sts.command_queue.push(&sts, &SharedThreadState::copy_move_test_ref,
-					SharedThreadState::CopyMoveTestType(43));
+			sts.command_queue.push_static<&SharedThreadState::copy_move_test_ref>(&sts, SharedThreadState::CopyMoveTestType(43));
 
 			sts.message_count_to_read = -1;
 			sts.reader_threadwork.main_start_work();
@@ -547,8 +545,7 @@ TEST_CASE("[CommandQueue] Test Parameter Passing Semantics") {
 		}
 
 		SUBCASE("Pass by rvalue reference") {
-			sts.command_queue.push(&sts, &SharedThreadState::copy_move_test_move,
-					SharedThreadState::CopyMoveTestType(43));
+			sts.command_queue.push_static<&SharedThreadState::copy_move_test_move>(&sts, SharedThreadState::CopyMoveTestType(43));
 
 			sts.message_count_to_read = -1;
 			sts.reader_threadwork.main_start_work();

@@ -50,7 +50,7 @@ void PhysicsServer3DWrapMT::_thread_loop() {
 
 void PhysicsServer3DWrapMT::step(real_t p_step) {
 	if (create_thread) {
-		command_queue.push(physics_server_3d, &PhysicsServer3D::step, p_step);
+		command_queue.push_static<&PhysicsServer3D::step>(physics_server_3d, p_step);
 	} else {
 		physics_server_3d->step(p_step);
 	}
@@ -77,8 +77,8 @@ void PhysicsServer3DWrapMT::init() {
 	if (create_thread) {
 		WorkerThreadPool::TaskID tid = WorkerThreadPool::get_singleton()->add_task(callable_mp(this, &PhysicsServer3DWrapMT::_thread_loop), true);
 		command_queue.set_pump_task_id(tid);
-		command_queue.push(this, &PhysicsServer3DWrapMT::_assign_mt_ids, tid);
-		command_queue.push_and_sync(physics_server_3d, &PhysicsServer3D::init);
+		command_queue.push_static<&PhysicsServer3DWrapMT::_assign_mt_ids>(this, tid);
+		command_queue.push_and_sync_static<&PhysicsServer3D::init>(physics_server_3d);
 		DEV_ASSERT(server_task_id == tid);
 	} else {
 		server_thread = Thread::MAIN_ID;
@@ -88,8 +88,8 @@ void PhysicsServer3DWrapMT::init() {
 
 void PhysicsServer3DWrapMT::finish() {
 	if (create_thread) {
-		command_queue.push(physics_server_3d, &PhysicsServer3D::finish);
-		command_queue.push(this, &PhysicsServer3DWrapMT::_thread_exit);
+		command_queue.push_static<&PhysicsServer3D::finish>(physics_server_3d);
+		command_queue.push_static<&PhysicsServer3DWrapMT::_thread_exit>(this);
 		if (server_task_id != WorkerThreadPool::INVALID_TASK_ID) {
 			WorkerThreadPool::get_singleton()->wait_for_task_completion(server_task_id);
 			server_task_id = WorkerThreadPool::INVALID_TASK_ID;

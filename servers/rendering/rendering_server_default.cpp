@@ -247,8 +247,8 @@ void RenderingServerDefault::init() {
 		DisplayServer::get_singleton()->release_rendering_thread();
 		WorkerThreadPool::TaskID tid = WorkerThreadPool::get_singleton()->add_task(callable_mp(this, &RenderingServerDefault::_thread_loop), true);
 		command_queue.set_pump_task_id(tid);
-		command_queue.push(this, &RenderingServerDefault::_assign_mt_ids, tid);
-		command_queue.push_and_sync(this, &RenderingServerDefault::_init);
+		command_queue.push_static<&RenderingServerDefault::_assign_mt_ids>(this, tid);
+		command_queue.push_and_sync_static<&RenderingServerDefault::_init>(this);
 		DEV_ASSERT(server_task_id == tid);
 	} else {
 		server_thread = Thread::MAIN_ID;
@@ -258,8 +258,8 @@ void RenderingServerDefault::init() {
 
 void RenderingServerDefault::finish() {
 	if (create_thread) {
-		command_queue.push(this, &RenderingServerDefault::_finish);
-		command_queue.push(this, &RenderingServerDefault::_thread_exit);
+		command_queue.push_static<&RenderingServerDefault::_finish>(this);
+		command_queue.push_static<&RenderingServerDefault::_thread_exit>(this);
 		if (server_task_id != WorkerThreadPool::INVALID_TASK_ID) {
 			WorkerThreadPool::get_singleton()->wait_for_task_completion(server_task_id);
 			server_task_id = WorkerThreadPool::INVALID_TASK_ID;
@@ -414,7 +414,7 @@ void RenderingServerDefault::draw(bool p_present, double frame_step) {
 	RS::get_singleton()->emit_signal(SNAME("frame_pre_draw"));
 	changes = 0;
 	if (create_thread) {
-		command_queue.push(this, &RenderingServerDefault::_draw, p_present, frame_step);
+		command_queue.push_static<&RenderingServerDefault::_draw>(this, p_present, frame_step);
 	} else {
 		_draw(p_present, frame_step);
 	}
@@ -433,7 +433,8 @@ void RenderingServerDefault::_call_on_render_thread(const Callable &p_callable) 
 	p_callable.call();
 }
 
-RenderingServerDefault::RenderingServerDefault(bool p_create_thread) {
+RenderingServerDefault::RenderingServerDefault(bool p_create_thread) :
+		RenderingServer(&RenderingServerDispatcher<RenderingServerDefault>::vtable) {
 	RenderingServer::init();
 
 	create_thread = p_create_thread;

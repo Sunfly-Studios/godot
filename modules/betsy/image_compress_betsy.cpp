@@ -229,8 +229,8 @@ void BetsyCompressor::_init() {
 void BetsyCompressor::init() {
 	WorkerThreadPool::TaskID tid = WorkerThreadPool::get_singleton()->add_task(callable_mp(this, &BetsyCompressor::_thread_loop), true);
 	command_queue.set_pump_task_id(tid);
-	command_queue.push(this, &BetsyCompressor::_assign_mt_ids, tid);
-	command_queue.push_and_sync(this, &BetsyCompressor::_init);
+	command_queue.push_static<&BetsyCompressor::_assign_mt_ids>(this, tid);
+	command_queue.push_and_sync_static<&BetsyCompressor::_init>(this);
 	DEV_ASSERT(task_id == tid);
 }
 
@@ -267,7 +267,7 @@ void BetsyCompressor::_thread_exit() {
 }
 
 void BetsyCompressor::finish() {
-	command_queue.push(this, &BetsyCompressor::_thread_exit);
+	command_queue.push_static<&BetsyCompressor::_thread_exit>(this);
 	if (task_id != WorkerThreadPool::INVALID_TASK_ID) {
 		WorkerThreadPool::get_singleton()->wait_for_task_completion(task_id);
 		task_id = WorkerThreadPool::INVALID_TASK_ID;

@@ -39,31 +39,48 @@
 #include "core/templates/tuple.h"
 #include "core/typedefs.h"
 
+#include <type_traits>
+
 class CommandQueueMT {
 	static const size_t MAX_COMMAND_SIZE = 1024;
 
 	struct CommandBase {
-		bool sync = false;
-		virtual void call() = 0;
-		virtual ~CommandBase() = default;
+		typedef void (*CallThunk)(CommandBase *);
+		typedef void (*DestroyThunk)(CommandBase *);
 
-		CommandBase(bool p_sync) :
-				sync(p_sync) {}
+		CallThunk call_fn = nullptr;
+		DestroyThunk destroy_fn = nullptr;
+		bool sync = false;
+
+		_FORCE_INLINE_ CommandBase(CallThunk p_call, DestroyThunk p_destroy, bool p_sync) :
+				call_fn(p_call), destroy_fn(p_destroy), sync(p_sync) {}
 	};
 
+	// Runtime PTMF Command (kept for external compatibility)
 	template <typename T, typename M, bool NeedsSync, typename... Args>
 	struct Command : public CommandBase {
 		T *instance;
 		M method;
 		Tuple<GetSimpleTypeT<Args>...> args;
 
+		_NO_INLINE_ static void _call_thunk(CommandBase *p_base) {
+			Command *self = static_cast<Command *>(p_base);
+			self->call_impl(BuildIndexSequence<sizeof...(Args)>{});
+		}
+
+		_NO_INLINE_ static void _destroy_thunk(CommandBase *p_base) {
+			static_cast<Command *>(p_base)->~Command();
+		}
+
 		template <typename... FwdArgs>
 		_FORCE_INLINE_ Command(T *p_instance, M p_method, FwdArgs &&...p_args) :
-				CommandBase(NeedsSync), instance(p_instance), method(p_method), args(std::forward<FwdArgs>(p_args)...) {}
-
-		void call() {
-			call_impl(BuildIndexSequence<sizeof...(Args)>{});
-		}
+				CommandBase(
+						&_call_thunk,
+						std::is_trivially_destructible_v<Tuple<GetSimpleTypeT<Args>...>> ? nullptr : &_destroy_thunk,
+						NeedsSync),
+				instance(p_instance),
+				method(p_method),
+				args(std::forward<FwdArgs>(p_args)...) {}
 
 	private:
 		template <size_t... I>
@@ -78,6 +95,7 @@ class CommandQueueMT {
 	};
 
 	// Separate class from Command so we can save the space of the ret pointer for commands that don't return.
+	// Runtime PTMF CommandRet (kept for external compatibility)
 	template <typename T, typename M, typename R, typename... Args>
 	struct CommandRet : public CommandBase {
 		T *instance;
@@ -85,18 +103,103 @@ class CommandQueueMT {
 		R *ret;
 		Tuple<GetSimpleTypeT<Args>...> args;
 
-		_FORCE_INLINE_ CommandRet(T *p_instance, M p_method, R *p_ret, GetSimpleTypeT<Args>... p_args) :
-				CommandBase(true), instance(p_instance), method(p_method), ret(p_ret), args{ p_args... } {}
-
-		void call() override {
-			*ret = call_impl(BuildIndexSequence<sizeof...(Args)>{});
+		_NO_INLINE_ static void _call_thunk(CommandBase *p_base) {
+			CommandRet *self = static_cast<CommandRet *>(p_base);
+			*self->ret = self->call_impl(BuildIndexSequence<sizeof...(Args)>{});
 		}
+
+		_NO_INLINE_ static void _destroy_thunk(CommandBase *p_base) {
+			static_cast<CommandRet *>(p_base)->~CommandRet();
+		}
+
+		_FORCE_INLINE_ CommandRet(T *p_instance, M p_method, R *p_ret, GetSimpleTypeT<Args>... p_args) :
+				CommandBase(
+						&_call_thunk,
+						std::is_trivially_destructible_v<Tuple<GetSimpleTypeT<Args>...>> ? nullptr : &_destroy_thunk,
+						true),
+				instance(p_instance),
+				method(p_method),
+				ret(p_ret),
+				args{ p_args... } {}
 
 	private:
 		template <size_t... I>
 		_FORCE_INLINE_ R call_impl(IndexSequence<I...>) {
 			// Move out of the Tuple, this will be destroyed as soon as the call is complete.
 			return (instance->*method)(std::move(get<I>())...);
+		}
+
+		// This method exists so we can call it in the parameter pack expansion in call_impl.
+		template <size_t I>
+		_FORCE_INLINE_ auto &get() { return ::tuple_get<I>(args); }
+	};
+
+	// Compile-time NTTP CommandStatic
+	template <typename T, auto Method, bool NeedsSync, typename... Args>
+	struct CommandStatic : public CommandBase {
+		T *instance;
+		Tuple<GetSimpleTypeT<Args>...> args;
+
+		_NO_INLINE_ static void _call_thunk(CommandBase *p_base) {
+			CommandStatic *self = static_cast<CommandStatic *>(p_base);
+			self->call_impl(BuildIndexSequence<sizeof...(Args)>{});
+		}
+
+		_NO_INLINE_ static void _destroy_thunk(CommandBase *p_base) {
+			static_cast<CommandStatic *>(p_base)->~CommandStatic();
+		}
+
+		template <typename... FwdArgs>
+		_FORCE_INLINE_ CommandStatic(T *p_instance, FwdArgs &&...p_args) :
+				CommandBase(
+						&_call_thunk,
+						std::is_trivially_destructible_v<Tuple<GetSimpleTypeT<Args>...>> ? nullptr : &_destroy_thunk,
+						NeedsSync),
+				instance(p_instance),
+				args(std::forward<FwdArgs>(p_args)...) {}
+
+	private:
+		template <size_t... I>
+		_FORCE_INLINE_ void call_impl(IndexSequence<I...>) {
+			// Move out of the Tuple, this will be destroyed as soon as the call is complete.
+			(instance->*Method)(std::move(get<I>())...);
+		}
+
+		// This method exists so we can call it in the parameter pack expansion in call_impl.
+		template <size_t I>
+		_FORCE_INLINE_ auto &get() { return ::tuple_get<I>(args); }
+	};
+
+	// Compile-time NTTP CommandRetStatic
+	template <typename T, auto Method, typename R, typename... Args>
+	struct CommandRetStatic : public CommandBase {
+		T *instance;
+		R *ret;
+		Tuple<GetSimpleTypeT<Args>...> args;
+
+		_NO_INLINE_ static void _call_thunk(CommandBase *p_base) {
+			CommandRetStatic *self = static_cast<CommandRetStatic *>(p_base);
+			*self->ret = self->call_impl(BuildIndexSequence<sizeof...(Args)>{});
+		}
+
+		_NO_INLINE_ static void _destroy_thunk(CommandBase *p_base) {
+			static_cast<CommandRetStatic *>(p_base)->~CommandRetStatic();
+		}
+
+		_FORCE_INLINE_ CommandRetStatic(T *p_instance, R *p_ret, GetSimpleTypeT<Args>... p_args) :
+				CommandBase(
+						&_call_thunk,
+						std::is_trivially_destructible_v<Tuple<GetSimpleTypeT<Args>...>> ? nullptr : &_destroy_thunk,
+						true),
+				instance(p_instance),
+				ret(p_ret),
+				args{ p_args... } {}
+
+	private:
+		template <size_t... I>
+		_FORCE_INLINE_ R call_impl(IndexSequence<I...>) {
+			// Move out of the Tuple, this will be destroyed as soon as the call is complete.
+			return (instance->*Method)(std::move(get<I>())...);
 		}
 
 		// This method exists so we can call it in the parameter pack expansion in call_impl.
@@ -134,7 +237,7 @@ class CommandQueueMT {
 	}
 
 	template <typename T, bool NeedsSync, typename... Args>
-	_FORCE_INLINE_ void _push_internal(Args &&...args) {
+	_NO_INLINE_ void _push_internal(Args &&...args) {
 		MutexLock mlock(mutex);
 		create_command<T>(std::forward<Args>(args)...);
 
@@ -179,7 +282,8 @@ class CommandQueueMT {
 			memcpy(cmd_backup, reinterpret_cast<const char *>(cmd), size);
 
 			uint32_t allowance_id = WorkerThreadPool::thread_enter_unlock_allowance_zone(lock);
-			std::launder(reinterpret_cast<CommandBase *>(cmd_backup))->call();
+			CommandBase *backup_cmd = std::launder(reinterpret_cast<CommandBase *>(cmd_backup));
+			backup_cmd->call_fn(backup_cmd);
 			WorkerThreadPool::thread_exit_unlock_allowance_zone(allowance_id);
 
 			// Handle potential realloc due to the command and unlock allowance.
@@ -191,10 +295,12 @@ class CommandQueueMT {
 				sync_cond_var.notify_all();
 				lock.temp_relock();
 				// Handle potential realloc happened during unlock.
-				cmd = reinterpret_cast<CommandBase *>(&command_mem[flush_read_ptr]);
+				cmd = std::launder(reinterpret_cast<CommandBase *>(&command_mem[flush_read_ptr]));
 			}
 
-			cmd->~CommandBase();
+			if (cmd->destroy_fn) {
+				cmd->destroy_fn(cmd);
+			}
 
 			flush_read_ptr += size;
 		}
@@ -219,28 +325,51 @@ class CommandQueueMT {
 	void _no_op() {}
 
 public:
+	// Legacy runtime-PTMF API (kept for external compatibility).
 	template <typename T, typename M, typename... Args>
-	void push(T *p_instance, M p_method, Args &&...p_args) {
-		// Standard command, no sync.
+	_FORCE_INLINE_ void push(T *p_instance, M p_method, Args &&...p_args) {
 		using CommandType = Command<T, M, false, Args...>;
 		static_assert(sizeof(CommandType) <= MAX_COMMAND_SIZE);
 		_push_internal<CommandType, false>(p_instance, p_method, std::forward<Args>(p_args)...);
 	}
 
 	template <typename T, typename M, typename... Args>
-	void push_and_sync(T *p_instance, M p_method, Args... p_args) {
-		// Standard command, sync.
+	_FORCE_INLINE_ void push_and_sync(T *p_instance, M p_method, Args... p_args) {
 		using CommandType = Command<T, M, true, Args...>;
 		static_assert(sizeof(CommandType) <= MAX_COMMAND_SIZE);
 		_push_internal<CommandType, true>(p_instance, p_method, std::forward<Args>(p_args)...);
 	}
 
 	template <typename T, typename M, typename R, typename... Args>
-	void push_and_ret(T *p_instance, M p_method, R *r_ret, Args... p_args) {
-		// Command with return value, sync.
+	_FORCE_INLINE_ void push_and_ret(T *p_instance, M p_method, R *r_ret, Args... p_args) {
 		using CommandType = CommandRet<T, M, R, Args...>;
 		static_assert(sizeof(CommandType) <= MAX_COMMAND_SIZE);
 		_push_internal<CommandType, true>(p_instance, p_method, r_ret, std::forward<Args>(p_args)...);
+	}
+
+	// Compile-time NTTP API (recommended)
+	template <auto Method, typename T, typename... Args>
+	_FORCE_INLINE_ void push_static(T *p_instance, Args &&...p_args) {
+		// Standard command, no sync.
+		using CommandType = CommandStatic<T, Method, false, Args...>;
+		static_assert(sizeof(CommandType) <= MAX_COMMAND_SIZE);
+		_push_internal<CommandType, false>(p_instance, std::forward<Args>(p_args)...);
+	}
+
+	template <auto Method, typename T, typename... Args>
+	_FORCE_INLINE_ void push_and_sync_static(T *p_instance, Args... p_args) {
+		// Standard command, sync.
+		using CommandType = CommandStatic<T, Method, true, Args...>;
+		static_assert(sizeof(CommandType) <= MAX_COMMAND_SIZE);
+		_push_internal<CommandType, true>(p_instance, std::forward<Args>(p_args)...);
+	}
+
+	template <auto Method, typename T, typename R, typename... Args>
+	_FORCE_INLINE_ void push_and_ret_static(T *p_instance, R *r_ret, Args... p_args) {
+		// Command with return value, sync.
+		using CommandType = CommandRetStatic<T, Method, R, Args...>;
+		static_assert(sizeof(CommandType) <= MAX_COMMAND_SIZE);
+		_push_internal<CommandType, true>(p_instance, r_ret, std::forward<Args>(p_args)...);
 	}
 
 	_FORCE_INLINE_ void flush_if_pending() {
@@ -254,7 +383,7 @@ public:
 	}
 
 	void sync() {
-		push_and_sync(this, &CommandQueueMT::_no_op);
+		push_and_sync_static<&CommandQueueMT::_no_op>(this);
 	}
 
 	void wait_and_flush() {
