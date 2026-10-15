@@ -477,6 +477,14 @@ bool TriangleMesh::inside_convex_shape(const Plane *p_planes, int p_plane_count,
 	return true;
 }
 
+AABB TriangleMesh::get_aabb() const {
+	if (!valid) {
+		return AABB();
+	}
+
+	return bvh[bvh.size() - 1].aabb;
+}
+
 bool TriangleMesh::is_valid() const {
 	return valid;
 }

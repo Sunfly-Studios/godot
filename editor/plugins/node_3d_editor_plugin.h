@@ -707,6 +707,7 @@ private:
 	bool current_hover_gizmo_handle_secondary;
 
 	DynamicBVH gizmo_bvh;
+	bool gizmo_bvh_needs_optimization = true;
 
 	real_t snap_translate_value;
 	real_t snap_rotate_value;
