@@ -847,6 +847,8 @@ Files extracted from the upstream source:
 Patches:
 
 - `0001-remove-unused-save-features.patch` ([GH-113965](https://github.com/godotengine/godot/issues/113965))
+- `0002-fixed-big-endian.patch`
+- `0003-missing-vector2-hpp.patch`
 
 
 ## openxr

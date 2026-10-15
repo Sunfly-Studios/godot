@@ -1,0 +1,13 @@
+diff --git a/thirdparty/msdfgen/ext/resolve-shape-geometry.cpp b/thirdparty/msdfgen/ext/resolve-shape-geometry.cpp
+index 6e5a9b2c38..327ce057ae 100644
+--- a/thirdparty/msdfgen/ext/resolve-shape-geometry.cpp
++++ b/thirdparty/msdfgen/ext/resolve-shape-geometry.cpp
+@@ -5,7 +5,7 @@
+ 
+ #include <core/SkPath.h>
+ #include <pathops/SkPathOps.h>
+-#include "../core/Vector2.h"
++#include "../core/Vector2.hpp"
+ #include "../core/edge-segments.h"
+ #include "../core/Contour.h"
+ 
