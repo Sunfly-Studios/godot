@@ -104,7 +104,7 @@ def parse_rendering_server(header_text):
     pos = class_match.end()
     brace_depth = 1
     access = "private"
-    pp_stack = []
+    pp_stack = [] # Pre Processor stack, not... that.
     methods = []
 
     lines = header_text[pos:].splitlines()
@@ -230,7 +230,7 @@ def run(target, source, env):
         name = m["name"]
         args = m["args"]
         is_const = m["const"]
-        pp = m["pp"]
+        pp = m["pp"] # Pre Processors
 
         self_ptr_type = "const RenderingServer *" if is_const else "RenderingServer *"
         cast_type = "const T *" if is_const else "T *"
