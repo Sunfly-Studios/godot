@@ -1052,6 +1052,13 @@ Some downstream changes have been made and are identified by
 They can be reapplied using the patch included in the `patches`
 folder.
 
+Patches:
+
+- `0001-skia-build-fix.patch`
+- `0002-skia-macos-1012.patch`
+- `0003-skia-trim.patch`
+
+
 ## spirv-cross
 
 - Upstream: https://github.com/KhronosGroup/SPIRV-Cross

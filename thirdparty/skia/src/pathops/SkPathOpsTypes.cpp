@@ -194,11 +194,16 @@ int UlpsDistance(float a, float b) {
 // cube root approximation using bit hack for 64-bit float
 // adapted from Kahan's cbrt
 static double cbrt_5d(double d) {
-    const unsigned int B1 = 715094163;
-    double t = 0.0;
-    unsigned int* pt = (unsigned int*) &t;
-    unsigned int* px = (unsigned int*) &d;
-    pt[1] = px[1] / 3 + B1;
+    constexpr uint64_t B1 = 715094163ULL;
+    uint64_t x_bits;
+    memcpy(&x_bits, &d, sizeof(x_bits));
+    // Using shifting operates on values
+    // rather than byte adresses. Bypassing
+    // endianess issues.
+    uint64_t hi = (uint32_t)(x_bits >> 32);
+    uint64_t t_bits = (uint64_t)(hi / 3 + B1) << 32;
+    double t;
+    memcpy(&t, &t_bits, sizeof(t));
     return t;
 }
 

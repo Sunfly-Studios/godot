@@ -32,7 +32,8 @@
 // The gn build has no option which sets SKNX_NO_SIMD.
 // Use SKVX_USE_SIMD internally to avoid confusing double negation.
 // Do not use 'defined' in a macro expansion.
-#if !defined(SKNX_NO_SIMD)
+#if !defined(SKNX_NO_SIMD) && !defined(BIG_ENDIAN_ENABLED) && \
+    (!defined(__BYTE_ORDER__) || (__BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__))
     #define SKVX_USE_SIMD 1
 #else
     #define SKVX_USE_SIMD 0

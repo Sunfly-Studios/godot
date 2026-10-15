@@ -79,7 +79,7 @@ if env["builtin_skia"]:
         ]
     )
     env_skia.Append(CPPDEFINES=["SK_SUPPORT_GPU=0"])
-    if env["target"] == "debug":
+    if env["target"] == "template_debug":
         env_skia.Append(CPPDEFINES=["SK_DEBUG"])
     else:
         env_skia.Append(CPPDEFINES=["SK_RELEASE"])

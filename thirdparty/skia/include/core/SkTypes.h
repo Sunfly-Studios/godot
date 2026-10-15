@@ -61,19 +61,12 @@
 #endif
 
 #if !defined(SK_CPU_BENDIAN) && !defined(SK_CPU_LENDIAN)
-    #if defined(__BYTE_ORDER__) && (__BYTE_ORDER__ == __ORDER_BIG_ENDIAN__)
+    // BIG_ENDIAN_ENABLED is reliably defined by Godot
+    // when compiling for a big-endian platform
+    #if defined(BIG_ENDIAN_ENABLED) || (defined(__BYTE_ORDER__) && (__BYTE_ORDER__ == __ORDER_BIG_ENDIAN__))
         #define SK_CPU_BENDIAN
     #elif defined(__BYTE_ORDER__) && (__BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__)
         #define SK_CPU_LENDIAN
-    #elif defined(__sparc) || defined(__sparc__) || \
-      defined(_POWER) || defined(__powerpc__) || \
-      defined(__ppc__) || defined(__hppa) || \
-      defined(__PPC__) || defined(__PPC64__) || \
-      defined(_MIPSEB) || defined(__ARMEB__) || \
-      defined(__s390__) || \
-      (defined(__sh__) && defined(__BIG_ENDIAN__)) || \
-      (defined(__ia64) && defined(__BIG_ENDIAN__))
-         #define SK_CPU_BENDIAN
     #else
         #define SK_CPU_LENDIAN
     #endif
@@ -216,12 +209,6 @@
 #  error "cannot define both SK_CPU_LENDIAN and SK_CPU_BENDIAN"
 #elif !defined(SK_CPU_LENDIAN) && !defined(SK_CPU_BENDIAN)
 #  error "must define either SK_CPU_LENDIAN or SK_CPU_BENDIAN"
-#endif
-
-#if defined(SK_CPU_BENDIAN) && !defined(I_ACKNOWLEDGE_SKIA_DOES_NOT_SUPPORT_BIG_ENDIAN)
-    #error "The Skia team is not endian-savvy enough to support big-endian CPUs."
-    #error "If you still want to use Skia,"
-    #error "please define I_ACKNOWLEDGE_SKIA_DOES_NOT_SUPPORT_BIG_ENDIAN."
 #endif
 
 #if !defined(SK_ATTRIBUTE)
