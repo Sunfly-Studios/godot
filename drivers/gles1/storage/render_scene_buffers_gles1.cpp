@@ -180,9 +180,9 @@ void RenderSceneBuffersGLES1::_check_render_buffers() {
 		GLES1::TextureStorage::get_singleton()->bind_framebuffer(internal3d.fbo);
 
 		glFramebufferTexture2DOES(GL_FRAMEBUFFER_OES, GL_COLOR_ATTACHMENT0_OES, texture_target, internal3d.color, 0);
-		glFramebufferTexture2DOES(GL_FRAMEBUFFER_OES, GL_DEPTH_ATTACHMENT, texture_target, internal3d.depth, 0);
+		glFramebufferTexture2DOES(GL_FRAMEBUFFER_OES, GL_DEPTH_ATTACHMENT_OES, texture_target, internal3d.depth, 0);
 
-		GLenum status = glCheckFramebufferStatus(GL_FRAMEBUFFER_OES);
+		GLenum status = glCheckFramebufferStatusOES(GL_FRAMEBUFFER_OES);
 		if (status != GL_FRAMEBUFFER_COMPLETE_OES) {
 			_clear_intermediate_buffers();
 			WARN_PRINT("Could not create 3D internal buffers, status: " + texture_storage->get_framebuffer_error(status));
@@ -364,7 +364,7 @@ void RenderSceneBuffersGLES1::check_glow_buffers() {
 
 		glFramebufferTexture2DOES(GL_FRAMEBUFFER_OES, GL_COLOR_ATTACHMENT0_OES, GL_TEXTURE_2D, glow.levels[i].color, 0);
 
-		GLenum status = glCheckFramebufferStatus(GL_FRAMEBUFFER_OES);
+		GLenum status = glCheckFramebufferStatusOES(GL_FRAMEBUFFER_OES);
 		if (status != GL_FRAMEBUFFER_COMPLETE_OES) {
 			WARN_PRINT("Could not create glow buffers, status: " + texture_storage->get_framebuffer_error(status));
 			_clear_glow_buffers();
