@@ -228,8 +228,12 @@ void RenderSceneBuffersGLES2::_clear_intermediate_buffers() {
 void RenderSceneBuffersGLES2::check_backbuffer(bool p_need_color, bool p_need_depth) {
 	GLES2::TextureStorage *texture_storage = GLES2::TextureStorage::get_singleton();
 
+	// Setup our back buffer
+	bool needs_init_check = false;
+
 	if (backbuffer3d.fbo == 0) {
 		glGenFramebuffers(1, &backbuffer3d.fbo);
+		needs_init_check = true;
 	}
 
 	GLES2::TextureStorage::get_singleton()->bind_framebuffer(backbuffer3d.fbo);
@@ -252,6 +256,7 @@ void RenderSceneBuffersGLES2::check_backbuffer(bool p_need_color, bool p_need_de
 		GLES2::Utilities::get_singleton()->texture_allocated_data(backbuffer3d.color, internal_size.x * internal_size.y * color_format_size, "3D Back buffer color texture");
 
 		glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, texture_target, backbuffer3d.color, 0);
+		needs_init_check = true;
 	}
 
 	if (backbuffer3d.depth == 0 && p_need_depth) {
@@ -269,14 +274,17 @@ void RenderSceneBuffersGLES2::check_backbuffer(bool p_need_color, bool p_need_de
 		GLES2::Utilities::get_singleton()->texture_allocated_data(backbuffer3d.depth, internal_size.x * internal_size.y * depth_format_size, "3D back buffer depth texture");
 
 		glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, texture_target, backbuffer3d.depth, 0);
+		needs_init_check = true;
 	}
 
-	GLenum status = glCheckFramebufferStatus(GL_FRAMEBUFFER);
-	if (status != GL_FRAMEBUFFER_COMPLETE) {
-		_clear_back_buffers();
-		WARN_PRINT("Could not create 3D back buffers, status: " + texture_storage->get_framebuffer_error(status));
+	if (needs_init_check) {
+		GLenum status = glCheckFramebufferStatus(GL_FRAMEBUFFER);
+		if (status != GL_FRAMEBUFFER_COMPLETE) {
+			_clear_back_buffers();
+			WARN_PRINT("Could not create 3D back buffers, status: " + texture_storage->get_framebuffer_error(status));
+		}
+		GL_CHECK_ERROR("GLES2::RenderSceneBuffersGLES2::check_backbuffer: framebuffer setup");
 	}
-	GL_CHECK_ERROR("GLES2::RenderSceneBuffersGLES2::check_backbuffer: framebuffer setup");
 
 	glBindTexture(texture_target, 0);
 	GLES2::TextureStorage::get_singleton()->bind_framebuffer_system();
