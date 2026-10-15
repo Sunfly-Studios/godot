@@ -59,6 +59,14 @@ struct Mesh {
 		};
 		RS::PrimitiveType primitive = RS::PRIMITIVE_POINTS;
 		uint64_t format = 0;
+
+		// For compatibility between Godot's compressed
+		// formats for other renderers (which assume compressed data).
+		uint64_t original_format = 0;
+		Vector<uint8_t> original_vertex_data;
+		Vector<uint8_t> original_attribute_data;
+		Vector<uint8_t> original_blend_shape_data;
+
 		uint32_t context_generation = 1;
 
 		GLuint vertex_buffer = 0;
@@ -87,7 +95,7 @@ struct Mesh {
 
 		// Cache vertex arrays so they can be created
 		struct Version {
-			uint32_t input_mask = 0;
+			uint64_t input_mask = 0;
 			GLuint vertex_array = 0;
 
 			Attrib attribs[RS::ARRAY_MAX];
@@ -271,6 +279,7 @@ private:
 	void _decompress_surface_data_2d(RS::SurfaceData &r_surface, Mesh::Surface *s);
 	void _decompress_surface_data_3d(RS::SurfaceData &r_surface, Mesh::Surface *s);
 	void _decompress_3d_buffer(const uint8_t *p_src, uint8_t *p_dst, uint32_t p_vertex_count, uint64_t p_format, uint32_t p_compressed_stride, uint32_t p_uncompressed_stride, const AABB &p_aabb);
+	void _decompress_attribute_buffer_3d(RS::SurfaceData &r_surface, uint32_t p_vertex_count);
 
 	/* Mesh Instance API */
 
@@ -280,6 +289,10 @@ private:
 	void _mesh_instance_clear(MeshInstance *mi);
 	void _mesh_instance_add_surface(MeshInstance *mi, Mesh *mesh, uint32_t p_surface);
 	void _mesh_instance_remove_surface(MeshInstance *mi, int p_surface);
+	void _blend_shape_bind_mesh_instance_buffer(MeshInstance *p_mi, uint32_t p_surface);
+	void _update_mesh_instance_surface_2d(MeshInstance *p_mi, Skeleton *p_sk, uint32_t p_surface, float p_base_weight);
+	void _update_mesh_instance_surface_3d(MeshInstance *p_mi, Skeleton *p_sk, uint32_t p_surface, float p_base_weight);
+
 	SelfList<MeshInstance>::List dirty_mesh_instance_weights;
 	SelfList<MeshInstance>::List dirty_mesh_instance_arrays;
 
@@ -297,7 +310,8 @@ private:
 	mutable RID_Owner<Skeleton, true> skeleton_owner;
 
 	_FORCE_INLINE_ void _skeleton_make_dirty(Skeleton *skeleton);
-	void _compute_skeleton(MeshInstance *p_mi, Skeleton *p_sk, uint32_t p_surface);
+	void _compute_skeleton_2d(MeshInstance *p_mi, Skeleton *p_sk, uint32_t p_surface);
+	void _compute_skeleton_3d(MeshInstance *p_mi, Skeleton *p_sk, uint32_t p_surface);
 
 	Skeleton *skeleton_dirty_list = nullptr;
 
@@ -349,6 +363,7 @@ public:
 	virtual void mesh_surface_remove(RID p_mesh, int p_surface) override;
 
 	void mesh_surface_bind_arrays_gles1(void *p_surface, uint64_t p_input_mask);
+	void mesh_instance_surface_bind_arrays_gles1(RID p_mesh_instance, uint32_t p_surface_index, uint64_t p_input_mask);
 	void mesh_surface_unbind_arrays_gles1(void *p_surface);
 	Array mesh_surface_get_arrays(RID p_mesh, int p_surface) const;
 
@@ -477,9 +492,9 @@ public:
 	}
 
 	// Use this to cache Vertex Array Objects so they are only generated once
-	_FORCE_INLINE_ void mesh_surface_get_vertex_arrays_and_format(void *p_surface, uint64_t p_input_mask, GLuint &r_vertex_array_gl) {
+	_FORCE_INLINE_ Mesh::Surface::Version *mesh_surface_get_vertex_arrays_and_format(void *p_surface, uint64_t p_input_mask, GLuint &r_vertex_array_gl) {
 		Mesh::Surface *s = reinterpret_cast<Mesh::Surface *>(p_surface);
-		ERR_FAIL_NULL(s);
+		ERR_FAIL_NULL_V(s, nullptr);
 
 		s->version_lock.lock();
 
@@ -491,21 +506,28 @@ public:
 			}
 			// We have this version, hooray.
 			r_vertex_array_gl = s->versions[i].vertex_array;
+			Mesh::Surface::Version *v = &s->versions[i];
 			s->version_lock.unlock();
-			return;
+			return v;
 		}
 
 		uint32_t version = s->version_count;
 		s->version_count++;
 		s->versions = (Mesh::Surface::Version *)memrealloc(s->versions, sizeof(Mesh::Surface::Version) * s->version_count);
 
-		ERR_FAIL_NULL(s->versions);
+		ERR_FAIL_NULL_V(s->versions, nullptr);
+
+		::new (&s->versions[version]) Mesh::Surface::Version();
 
 		_mesh_surface_generate_version_for_input_mask(s->versions[version], s, p_input_mask);
 
+		s->versions[version].vertex_array = 0;
+
 		r_vertex_array_gl = s->versions[version].vertex_array;
+		Mesh::Surface::Version *v = &s->versions[version];
 
 		s->version_lock.unlock();
+		return v;
 	}
 
 	/* MESH INSTANCE API */
@@ -523,12 +545,12 @@ public:
 
 	// TODO: considering hashing versions with multimesh buffer RID.
 	// Doing so would allow us to avoid specifying multimesh buffer pointers every frame and may improve performance.
-	_FORCE_INLINE_ void mesh_instance_surface_get_vertex_arrays_and_format(RID p_mesh_instance, uint32_t p_surface_index, uint64_t p_input_mask, GLuint &r_vertex_array_gl) {
+	_FORCE_INLINE_ Mesh::Surface::Version *mesh_instance_surface_get_vertex_arrays_and_format(RID p_mesh_instance, uint32_t p_surface_index, uint64_t p_input_mask, GLuint &r_vertex_array_gl) {
 		MeshInstance *mi = mesh_instance_owner.get_or_null(p_mesh_instance);
-		ERR_FAIL_NULL(mi);
+		ERR_FAIL_NULL_V(mi, nullptr);
 		Mesh *mesh = mi->mesh;
-		ERR_FAIL_NULL(mesh);
-		ERR_FAIL_UNSIGNED_INDEX(p_surface_index, mesh->surface_count);
+		ERR_FAIL_NULL_V(mesh, nullptr);
+		ERR_FAIL_UNSIGNED_INDEX_V(p_surface_index, mesh->surface_count, nullptr);
 
 		MeshInstance::Surface *mis = &mi->surfaces[p_surface_index];
 		Mesh::Surface *s = mesh->surfaces[p_surface_index];
@@ -543,21 +565,28 @@ public:
 			}
 			//we have this version, hooray
 			r_vertex_array_gl = mis->versions[i].vertex_array;
+			Mesh::Surface::Version *v = &mis->versions[i];
 			s->version_lock.unlock();
-			return;
+			return v;
 		}
 
 		uint32_t version = mis->version_count;
 		mis->version_count++;
 		mis->versions = (Mesh::Surface::Version *)memrealloc(mis->versions, sizeof(Mesh::Surface::Version) * mis->version_count);
 
-		ERR_FAIL_NULL(mis->versions);
+		ERR_FAIL_NULL_V(mis->versions, nullptr);
+
+		::new (&mis->versions[version]) Mesh::Surface::Version();
 
 		_mesh_surface_generate_version_for_input_mask(mis->versions[version], s, p_input_mask, mis);
 
+		mis->versions[version].vertex_array = 0;
+
 		r_vertex_array_gl = mis->versions[version].vertex_array;
+		Mesh::Surface::Version *v = &mis->versions[version];
 
 		s->version_lock.unlock();
+		return v;
 	}
 
 	/* MULTIMESH API */

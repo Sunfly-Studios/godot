@@ -54,7 +54,7 @@ RasterizerSceneGLES2 *RasterizerSceneGLES2::singleton = nullptr;
 static GLuint _init_radiance_texture_gles2(int p_size, int p_mipmaps, String p_name) {
 	GLuint tex;
 	glGenTextures(1, &tex);
-	GL_CHECK_ERROR("GLES2::RasterizerSceneGLES2::_init_radiance_texture_gles2: glGenTextures");
+	GL_CHECK_ERROR("GLES2::RasterizerSceneGLES2::RasterizerSceneGLES2::_init_radiance_texture_gles2: glGenTextures");
 
 	glBindTexture(GL_TEXTURE_CUBE_MAP, tex);
 
@@ -67,7 +67,7 @@ static GLuint _init_radiance_texture_gles2(int p_size, int p_mipmaps, String p_n
 		total_size += size * size * 4 * 6;
 		size = MAX(1, size >> 1);
 	}
-	GL_CHECK_ERROR("GLES2::RasterizerSceneGLES2::_init_radiance_texture_gles2: glTexImage2D");
+	GL_CHECK_ERROR("GLES2::RasterizerSceneGLES2::RasterizerSceneGLES2::_init_radiance_texture_gles2: glTexImage2D");
 
 	glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MIN_FILTER, p_mipmaps > 0 ? GL_LINEAR_MIPMAP_LINEAR : GL_LINEAR);
 	glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
@@ -81,19 +81,26 @@ static GLuint _init_radiance_texture_gles2(int p_size, int p_mipmaps, String p_n
 	return tex;
 }
 
-static const Vector3 view_normals[6] = {
+static constexpr int MAXIMUM_COLOR_ATTACHMENT = 4;
+static const Vector3 VIEW_NORMALS[6] = {
 	Vector3(+1, 0, 0), Vector3(-1, 0, 0), Vector3(0, +1, 0),
 	Vector3(0, -1, 0), Vector3(0, 0, +1), Vector3(0, 0, -1)
 };
-static const Vector3 view_up[6] = {
+static const Vector3 VIEW_UP[6] = {
 	Vector3(0, -1, 0), Vector3(0, -1, 0), Vector3(0, 0, +1),
 	Vector3(0, 0, -1), Vector3(0, -1, 0), Vector3(0, -1, 0)
 };
-static constexpr GLenum prim[5] = { GL_POINTS, GL_LINES, GL_LINE_STRIP, GL_TRIANGLES, GL_TRIANGLE_STRIP };
-static GLenum cube_map_faces[6] = {
+static constexpr GLenum PRIM[5] = { GL_POINTS, GL_LINES, GL_LINE_STRIP, GL_TRIANGLES, GL_TRIANGLE_STRIP };
+static GLenum CUBE_MAP_FACES[6] = {
 	GL_TEXTURE_CUBE_MAP_POSITIVE_X, GL_TEXTURE_CUBE_MAP_NEGATIVE_X,
 	GL_TEXTURE_CUBE_MAP_NEGATIVE_Y, GL_TEXTURE_CUBE_MAP_POSITIVE_Y,
 	GL_TEXTURE_CUBE_MAP_POSITIVE_Z, GL_TEXTURE_CUBE_MAP_NEGATIVE_Z
+};
+static constexpr uint64_t PASS_SPEC_FLAGS[4] = {
+	SceneShaderGLES2::RENDER_MATERIAL_ALBEDO,
+	SceneShaderGLES2::RENDER_MATERIAL_NORMAL,
+	SceneShaderGLES2::RENDER_MATERIAL_ORM,
+	SceneShaderGLES2::RENDER_MATERIAL_EMISSION,
 };
 
 /* STATIC BATCH API HELPERS */
@@ -352,7 +359,7 @@ void sky() {
 		// _draw_sky handles fallback internally
 		sky_globals.screen_triangle_array = 0;
 
-		GL_CHECK_ERROR("GLES2::RasterizerSceneGLES2::initialize: sky screen triangle setup");
+		GL_CHECK_ERROR("GLES2::RasterizerSceneGLES2::RasterizerSceneGLES2::initialize: sky screen triangle setup");
 	}
 
 	{
@@ -654,6 +661,16 @@ void RasterizerSceneGLES2::_geometry_instance_update(RenderGeometryInstance *p_g
 			const RID *materials = nullptr;
 			uint32_t surface_count;
 			RID mesh = ginstance->data->base;
+
+			if (ginstance->data->dirty_dependencies) {
+				RSG::utilities->base_update_dependency(mesh, &ginstance->data->dependency_tracker);
+				if (ginstance->mesh_instance.is_valid()) {
+					GLES2::MeshInstance *mi = mesh_storage->get_mesh_instance(ginstance->mesh_instance);
+					if (mi && mi->skeleton.is_valid()) {
+						mesh_storage->skeleton_update_dependency(mi->skeleton, &ginstance->data->dependency_tracker);
+					}
+				}
+			}
 
 			materials = mesh_storage->mesh_get_surface_count_and_materials(mesh, surface_count);
 			if (materials) {
@@ -1069,37 +1086,37 @@ void RasterizerSceneGLES2::_draw_sky(RID p_env, const Projection &p_projection, 
 	scene_state.enable_gl_depth_test(true);
 	scene_state.enable_gl_depth_draw(false);
 	glDepthFunc(GL_GEQUAL);
-	GL_CHECK_ERROR("GLES2::RasterizerSceneGLES2::_draw_sky: glDepthFunc");
+	GL_CHECK_ERROR("GLES2::RasterizerSceneGLES2::RasterizerSceneGLES2::_draw_sky: glDepthFunc");
 
 	scene_state.enable_gl_blend(false);
 	scene_state.set_gl_cull_mode(RS::CULL_MODE_BACK);
 
 	if (sky_globals.screen_triangle_array != 0) {
 		glBindVertexArray(sky_globals.screen_triangle_array);
-		GL_CHECK_ERROR("GLES2::RasterizerSceneGLES2::_draw_sky: glBindVertexArray");
+		GL_CHECK_ERROR("GLES2::RasterizerSceneGLES2::RasterizerSceneGLES2::_draw_sky: glBindVertexArray");
 	} else {
 		glBindBuffer(GL_ARRAY_BUFFER, sky_globals.screen_triangle);
-		GL_CHECK_ERROR("GLES2::RasterizerSceneGLES2::_draw_sky: glBindBuffer");
+		GL_CHECK_ERROR("GLES2::RasterizerSceneGLES2::RasterizerSceneGLES2::_draw_sky: glBindBuffer");
 
 		glEnableVertexAttribArray(RS::ARRAY_VERTEX);
-		GL_CHECK_ERROR("GLES2::RasterizerSceneGLES2::_draw_sky: glEnableVertexAttribArray");
+		GL_CHECK_ERROR("GLES2::RasterizerSceneGLES2::RasterizerSceneGLES2::_draw_sky: glEnableVertexAttribArray");
 
 		glVertexAttribPointer(RS::ARRAY_VERTEX, 2, GL_FLOAT, GL_FALSE, sizeof(float) * 2, nullptr);
-		GL_CHECK_ERROR("GLES2::RasterizerSceneGLES2::_draw_sky: glVertexAttribPointer");
+		GL_CHECK_ERROR("GLES2::RasterizerSceneGLES2::RasterizerSceneGLES2::_draw_sky: glVertexAttribPointer");
 	}
 
 	glDrawArrays(GL_TRIANGLES, 0, 3);
-	GL_CHECK_ERROR("GLES2::RasterizerSceneGLES2::_draw_sky: glDrawArrays");
+	GL_CHECK_ERROR("GLES2::RasterizerSceneGLES2::RasterizerSceneGLES2::_draw_sky: glDrawArrays");
 
 	if (sky_globals.screen_triangle_array == 0) {
 		glDisableVertexAttribArray(RS::ARRAY_VERTEX);
-		GL_CHECK_ERROR("GLES2::RasterizerSceneGLES2::_draw_sky: glDisableVertexAttribArray");
+		GL_CHECK_ERROR("GLES2::RasterizerSceneGLES2::RasterizerSceneGLES2::_draw_sky: glDisableVertexAttribArray");
 
 		glBindBuffer(GL_ARRAY_BUFFER, 0);
-		GL_CHECK_ERROR("GLES2::RasterizerSceneGLES2::_draw_sky: unbind GL_ARRAY_BUFFER");
+		GL_CHECK_ERROR("GLES2::RasterizerSceneGLES2::RasterizerSceneGLES2::_draw_sky: unbind GL_ARRAY_BUFFER");
 	} else {
 		glBindVertexArray(0);
-		GL_CHECK_ERROR("GLES2::RasterizerSceneGLES2::_draw_sky: unbind glBindVertexArray");
+		GL_CHECK_ERROR("GLES2::RasterizerSceneGLES2::RasterizerSceneGLES2::_draw_sky: unbind glBindVertexArray");
 	}
 }
 
@@ -1195,17 +1212,17 @@ void RasterizerSceneGLES2::_update_sky_radiance(RID p_env, const Projection &p_p
 
 		GLint prev_viewport[4];
 		glGetIntegerv(GL_VIEWPORT, prev_viewport);
-		GL_CHECK_ERROR("GLES2::RasterizerSceneGLES2::_update_sky_radiance: glGetIntegerv GL_VIEWPORT");
+		GL_CHECK_ERROR("GLES2::RasterizerSceneGLES2::RasterizerSceneGLES2::_update_sky_radiance: glGetIntegerv GL_VIEWPORT");
 
 		GLint prev_fbo;
 		glGetIntegerv(GL_FRAMEBUFFER_BINDING, &prev_fbo);
-		GL_CHECK_ERROR("GLES2::RasterizerSceneGLES2::_update_sky_radiance: glGetIntegerv GL_FRAMEBUFFER_BINDING");
+		GL_CHECK_ERROR("GLES2::RasterizerSceneGLES2::RasterizerSceneGLES2::_update_sky_radiance: glGetIntegerv GL_FRAMEBUFFER_BINDING");
 
 		glViewport(0, 0, sky->radiance_size, sky->radiance_size);
-		GL_CHECK_ERROR("GLES2::RasterizerSceneGLES2::_update_sky_radiance: glViewport");
+		GL_CHECK_ERROR("GLES2::RasterizerSceneGLES2::RasterizerSceneGLES2::_update_sky_radiance: glViewport");
 
 		GLES2::TextureStorage::get_singleton()->bind_framebuffer(sky->radiance_framebuffer);
-		GL_CHECK_ERROR("GLES2::RasterizerSceneGLES2::_update_sky_radiance: glBindFramebuffer");
+		GL_CHECK_ERROR("GLES2::RasterizerSceneGLES2::RasterizerSceneGLES2::_update_sky_radiance: glBindFramebuffer");
 
 		scene_state.reset_gl_state();
 		scene_state.set_gl_cull_mode(RS::CULL_MODE_DISABLED);
@@ -1213,38 +1230,38 @@ void RasterizerSceneGLES2::_update_sky_radiance(RID p_env, const Projection &p_p
 
 		if (sky_globals.screen_triangle_array != 0) {
 			glBindVertexArray(sky_globals.screen_triangle_array);
-			GL_CHECK_ERROR("GLES2::RasterizerSceneGLES2::_update_sky_radiance: glBindVertexArray");
+			GL_CHECK_ERROR("GLES2::RasterizerSceneGLES2::RasterizerSceneGLES2::_update_sky_radiance: glBindVertexArray");
 		} else {
 			glBindBuffer(GL_ARRAY_BUFFER, sky_globals.screen_triangle);
-			GL_CHECK_ERROR("GLES2::RasterizerSceneGLES2::_update_sky_radiance: glBindBuffer");
+			GL_CHECK_ERROR("GLES2::RasterizerSceneGLES2::RasterizerSceneGLES2::_update_sky_radiance: glBindBuffer");
 			glEnableVertexAttribArray(RS::ARRAY_VERTEX);
 			glVertexAttribPointer(RS::ARRAY_VERTEX, 2, GL_FLOAT, GL_FALSE, sizeof(float) * 2, nullptr);
-			GL_CHECK_ERROR("GLES2::RasterizerSceneGLES2::_update_sky_radiance: glVertexAttribPointer");
+			GL_CHECK_ERROR("GLES2::RasterizerSceneGLES2::RasterizerSceneGLES2::_update_sky_radiance: glVertexAttribPointer");
 		}
 
 		for (int i = 0; i < 6; i++) {
-			Basis local_view = Basis::looking_at(view_normals[i], view_up[i]);
+			Basis local_view = Basis::looking_at(VIEW_NORMALS[i], VIEW_UP[i]);
 			material_storage->shaders.sky_shader.version_set_uniform(SkyShaderGLES2::ORIENTATION, local_view, shader_data->version, SkyShaderGLES2::MODE_CUBEMAP, sky_spec);
 			glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_CUBE_MAP_POSITIVE_X + i, sky->radiance, 0);
-			GL_CHECK_ERROR("GLES2::RasterizerSceneGLES2::_update_sky_radiance: glFramebufferTexture2D");
+			GL_CHECK_ERROR("GLES2::RasterizerSceneGLES2::RasterizerSceneGLES2::_update_sky_radiance: glFramebufferTexture2D");
 			glDrawArrays(GL_TRIANGLES, 0, 3);
-			GL_CHECK_ERROR("GLES2::RasterizerSceneGLES2::_update_sky_radiance: glDrawArrays");
+			GL_CHECK_ERROR("GLES2::RasterizerSceneGLES2::RasterizerSceneGLES2::_update_sky_radiance: glDrawArrays");
 		}
 
 		if (sky_globals.screen_triangle_array == 0) {
 			glDisableVertexAttribArray(RS::ARRAY_VERTEX);
 			glBindBuffer(GL_ARRAY_BUFFER, 0);
-			GL_CHECK_ERROR("GLES2::RasterizerSceneGLES2::_update_sky_radiance: cleanup VBO");
+			GL_CHECK_ERROR("GLES2::RasterizerSceneGLES2::RasterizerSceneGLES2::_update_sky_radiance: cleanup VBO");
 		} else {
 			glBindVertexArray(0);
-			GL_CHECK_ERROR("GLES2::RasterizerSceneGLES2::_update_sky_radiance: cleanup VAO");
+			GL_CHECK_ERROR("GLES2::RasterizerSceneGLES2::RasterizerSceneGLES2::_update_sky_radiance: cleanup VAO");
 		}
 
 		// Fast path generation for cubemap lods natively
 		glActiveTexture(GL_TEXTURE0);
 		glBindTexture(GL_TEXTURE_CUBE_MAP, sky->radiance);
 		glGenerateMipmap(GL_TEXTURE_CUBE_MAP);
-		GL_CHECK_ERROR("GLES2::RasterizerSceneGLES2::_update_sky_radiance: glGenerateMipmap");
+		GL_CHECK_ERROR("GLES2::RasterizerSceneGLES2::RasterizerSceneGLES2::_update_sky_radiance: glGenerateMipmap");
 
 		sky->processing_layer = 1;
 		sky->baked_exposure = p_sky_energy_multiplier;
@@ -1252,7 +1269,7 @@ void RasterizerSceneGLES2::_update_sky_radiance(RID p_env, const Projection &p_p
 
 		GLES2::TextureStorage::get_singleton()->bind_framebuffer(prev_fbo);
 		glViewport(prev_viewport[0], prev_viewport[1], prev_viewport[2], prev_viewport[3]);
-		GL_CHECK_ERROR("GLES2::RasterizerSceneGLES2::_update_sky_radiance: restore GL state");
+		GL_CHECK_ERROR("GLES2::RasterizerSceneGLES2::RasterizerSceneGLES2::_update_sky_radiance: restore GL state");
 
 	} else {
 		if (sky_mode == RS::SKY_MODE_INCREMENTAL && sky->processing_layer < max_processing_layer) {
@@ -1292,38 +1309,38 @@ Ref<Image> RasterizerSceneGLES2::sky_bake_panorama(RID p_sky, float p_energy, bo
 		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, p_size.width, p_size.height, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
 		GLES2::Utilities::get_singleton()->texture_allocated_data(rad_tex, p_size.width * p_size.height * 4, "Temp sky panorama");
 	}
-	GL_CHECK_ERROR("GLES2::RasterizerSceneGLES2::sky_bake_panorama: glTexImage2D");
+	GL_CHECK_ERROR("GLES2::RasterizerSceneGLES2::RasterizerSceneGLES2::sky_bake_panorama: glTexImage2D");
 
 	GLint prev_fbo = 0;
 	glGetIntegerv(GL_FRAMEBUFFER_BINDING, &prev_fbo);
-	GL_CHECK_ERROR("GLES2::RasterizerSceneGLES2::sky_bake_panorama: glGetIntegerv GL_FRAMEBUFFER_BINDING");
+	GL_CHECK_ERROR("GLES2::RasterizerSceneGLES2::RasterizerSceneGLES2::sky_bake_panorama: glGetIntegerv GL_FRAMEBUFFER_BINDING");
 
 	GLuint rad_fbo = 0;
 	glGenFramebuffers(1, &rad_fbo);
 	GLES2::TextureStorage::get_singleton()->bind_framebuffer(rad_fbo);
 	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, rad_tex, 0);
-	GL_CHECK_ERROR("GLES2::RasterizerSceneGLES2::sky_bake_panorama: glFramebufferTexture2D");
+	GL_CHECK_ERROR("GLES2::RasterizerSceneGLES2::RasterizerSceneGLES2::sky_bake_panorama: glFramebufferTexture2D");
 
 	glActiveTexture(GL_TEXTURE0);
 	glBindTexture(GL_TEXTURE_CUBE_MAP, sky->radiance);
-	GL_CHECK_ERROR("GLES2::RasterizerSceneGLES2::sky_bake_panorama: glBindTexture");
+	GL_CHECK_ERROR("GLES2::RasterizerSceneGLES2::RasterizerSceneGLES2::sky_bake_panorama: glBindTexture");
 
 	GLint prev_viewport[4];
 	glGetIntegerv(GL_VIEWPORT, prev_viewport);
 	glViewport(0, 0, p_size.width, p_size.height);
-	GL_CHECK_ERROR("GLES2::RasterizerSceneGLES2::sky_bake_panorama: glViewport");
+	GL_CHECK_ERROR("GLES2::RasterizerSceneGLES2::RasterizerSceneGLES2::sky_bake_panorama: glViewport");
 
 	glClearColor(0.0, 0.0, 0.0, 1.0);
 	glClear(GL_COLOR_BUFFER_BIT);
-	GL_CHECK_ERROR("GLES2::RasterizerSceneGLES2::sky_bake_panorama: glClear");
+	GL_CHECK_ERROR("GLES2::RasterizerSceneGLES2::RasterizerSceneGLES2::sky_bake_panorama: glClear");
 
 	copy_effects->copy_cube_to_panorama(p_bake_irradiance ? float(sky->mipmap_count) : 0.0);
-	GL_CHECK_ERROR("GLES2::RasterizerSceneGLES2::sky_bake_panorama: copy_cube_to_panorama");
+	GL_CHECK_ERROR("GLES2::RasterizerSceneGLES2::RasterizerSceneGLES2::sky_bake_panorama: copy_cube_to_panorama");
 
 	GLES2::TextureStorage::get_singleton()->bind_framebuffer(prev_fbo);
 	glDeleteFramebuffers(1, &rad_fbo);
 	glViewport(prev_viewport[0], prev_viewport[1], prev_viewport[2], prev_viewport[3]);
-	GL_CHECK_ERROR("GLES2::RasterizerSceneGLES2::sky_bake_panorama: restore GL state");
+	GL_CHECK_ERROR("GLES2::RasterizerSceneGLES2::RasterizerSceneGLES2::sky_bake_panorama: restore GL state");
 
 	RID tex_rid = GLES2::TextureStorage::get_singleton()->texture_allocate();
 	{
@@ -1722,7 +1739,7 @@ void RasterizerSceneGLES2::_batch_upload_buffers(BATCH_TYPE::Batch3D &r_batch) {
 
 		glBindBuffer(GL_ARRAY_BUFFER, 0);
 		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
-		GL_CHECK_ERROR("GLES2::RasterizerSceneGLES2::_batch_upload_buffers: pool initialization");
+		GL_CHECK_ERROR("GLES2::RasterizerSceneGLES2::RasterizerSceneGLES2::_batch_upload_buffers: pool initialization");
 	}
 
 	r_batch.vbo_index = bdata.current_vbo_index;
@@ -1735,7 +1752,7 @@ void RasterizerSceneGLES2::_batch_upload_buffers(BATCH_TYPE::Batch3D &r_batch) {
 	glBindBuffer(GL_ARRAY_BUFFER, pool.gl_vertex_buffer);
 	glBufferData(GL_ARRAY_BUFFER, bdata.unit_vertices.max_size() * sizeof(BATCH_TYPE::BatchVertex3DInstanced), nullptr, GL_DYNAMIC_DRAW);
 	glBufferSubData(GL_ARRAY_BUFFER, 0, bytes_to_upload, bdata.unit_vertices.get_data());
-	GL_CHECK_ERROR("GLES2::RasterizerSceneGLES2::_batch_upload_buffers: glBufferSubData ARRAY_BUFFER");
+	GL_CHECK_ERROR("GLES2::RasterizerSceneGLES2::RasterizerSceneGLES2::_batch_upload_buffers: glBufferSubData ARRAY_BUFFER");
 
 	// Orphan the index buffer
 	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, pool.gl_index_buffer);
@@ -1743,7 +1760,7 @@ void RasterizerSceneGLES2::_batch_upload_buffers(BATCH_TYPE::Batch3D &r_batch) {
 	if (indices_bytes_to_upload > 0) {
 		glBufferSubData(GL_ELEMENT_ARRAY_BUFFER, 0, indices_bytes_to_upload, bdata.indices.get_data());
 	}
-	GL_CHECK_ERROR("GLES2::RasterizerSceneGLES2::_batch_upload_buffers: glBufferSubData ELEMENT_ARRAY_BUFFER");
+	GL_CHECK_ERROR("GLES2::RasterizerSceneGLES2::RasterizerSceneGLES2::_batch_upload_buffers: glBufferSubData ELEMENT_ARRAY_BUFFER");
 
 	bdata.current_vbo_index++;
 }
@@ -1768,6 +1785,9 @@ void RasterizerSceneGLES2::_batch_bind_material(GLES2::SceneMaterialData *p_mate
 		}
 
 		uint64_t spec_constants = scene_state.current_spec_constants;
+		if (bdata.pass_mode == PASS_MODE_MATERIAL) {
+			spec_constants |= SceneShaderGLES2::RENDER_MATERIAL;
+		}
 
 		if (p_material_data->shader_data) {
 			bool success = GLES2::MaterialStorage::get_singleton()->shaders.scene_shader.version_bind_shader(p_material_data->shader_data->version, variant, spec_constants);
@@ -1782,6 +1802,14 @@ void RasterizerSceneGLES2::_batch_bind_material(GLES2::SceneMaterialData *p_mate
 			_bind_scene_camera_uniforms(p_material_data->shader_data->version, variant, spec_constants);
 			GLES2::MaterialStorage::get_singleton()->shaders.scene_shader.version_set_uniform(SceneShaderGLES2::WORLD_TRANSFORM, p_world_transform, p_material_data->shader_data->version, variant, spec_constants);
 
+			if (bdata.pass_mode == PASS_MODE_MATERIAL) {
+				GLint uv_offset_loc = GLES2::MaterialStorage::get_singleton()->shaders.scene_shader.version_get_uniform(SceneShaderGLES2::UV_OFFSET, p_material_data->shader_data->version, variant, spec_constants);
+				if (uv_offset_loc != -1) {
+					glUniform2f(uv_offset_loc, scene_state.current_uv_offset.x, scene_state.current_uv_offset.y);
+					GL_CHECK_ERROR("GLES2::RasterizerSceneGLES2::RasterizerSceneGLES2::_batch_bind_material: glUniform2f uv_offset");
+				}
+			}
+
 			if (
 				(bdata.pass_mode == PASS_MODE_COLOR || bdata.pass_mode == PASS_MODE_COLOR_TRANSPARENT) &&
 				bdata.batches.size() > 0 &&
@@ -1791,7 +1819,7 @@ void RasterizerSceneGLES2::_batch_bind_material(GLES2::SceneMaterialData *p_mate
 				GLES2::MaterialStorage::get_singleton()->shaders.scene_shader.version_set_uniform(SceneShaderGLES2::OMNI_LIGHT_COUNT, 0, p_material_data->shader_data->version, variant, spec_constants);
 				GLES2::MaterialStorage::get_singleton()->shaders.scene_shader.version_set_uniform(SceneShaderGLES2::SPOT_LIGHT_COUNT, 0, p_material_data->shader_data->version, variant, spec_constants);
 			}
-			GL_CHECK_ERROR("GLES2::RasterizerSceneGLES2::_batch_bind_material: light data upload");
+			GL_CHECK_ERROR("GLES2::RasterizerSceneGLES2::RasterizerSceneGLES2::_batch_bind_material: light data upload");
 
 			scene_state.set_gl_cull_mode(p_material_data->shader_data->cull_mode);
 			scene_state.enable_gl_depth_test(p_material_data->shader_data->depth_test == GLES2::SceneShaderData::DEPTH_TEST_ENABLED);
@@ -1807,7 +1835,7 @@ void RasterizerSceneGLES2::_batch_bind_material(GLES2::SceneMaterialData *p_mate
 
 void RasterizerSceneGLES2::_batch_threshold_flush() {
 	glFlush();
-	GL_CHECK_ERROR("GLES2::RasterizerSceneGLES2::_batch_threshold_flush: glFlush");
+	GL_CHECK_ERROR("GLES2::RasterizerSceneGLES2::RasterizerSceneGLES2::_batch_threshold_flush: glFlush");
 }
 
 void RasterizerSceneGLES2::_batch_render_items(GLES2::SceneMaterialData *p_material_data, RS::PrimitiveType p_primitive, BATCH_TYPE::Batch3D &p_batch, bool p_transparent) {
@@ -1827,7 +1855,7 @@ void RasterizerSceneGLES2::_batch_render_items(GLES2::SceneMaterialData *p_mater
 	// =====================================
 	_batch_bind_material(p_material_data, world_xform, p_transparent);
 	_batch_render_generic(p_primitive, 0, p_batch.num_indices, true);
-	GL_CHECK_ERROR("GLES2::RasterizerSceneGLES2::_batch_render_items: glDrawElements BASE_PASS");
+	GL_CHECK_ERROR("GLES2::RasterizerSceneGLES2::RasterizerSceneGLES2::_batch_render_items: glDrawElements BASE_PASS");
 
 	// =====================================
 	// Additive passes (omni & spot lights)
@@ -1871,7 +1899,7 @@ void RasterizerSceneGLES2::_batch_render_generic(RS::PrimitiveType p_primitive, 
 	uint32_t stride = bdata.unit_vertices.get_unit_size_bytes();
 
 	glBindBuffer(GL_ARRAY_BUFFER, gl_vbo);
-	GL_CHECK_ERROR("GLES2::RasterizerSceneGLES2::_batch_render_generic: glBindBuffer ARRAY_BUFFER");
+	GL_CHECK_ERROR("GLES2::RasterizerSceneGLES2::RasterizerSceneGLES2::_batch_render_generic: glBindBuffer ARRAY_BUFFER");
 
 #define BATCH_INSTANCED_OFFSET_OF(pointer) offsetof(BATCH_TYPE::BatchVertex3DInstanced, pointer)
 #define BATCH_OFFSET_OF(pointer) offsetof(BATCH_TYPE::BatchVertex3D, pointer)
@@ -1887,14 +1915,14 @@ void RasterizerSceneGLES2::_batch_render_generic(RS::PrimitiveType p_primitive, 
 
 		glEnableVertexAttribArray(RS::ARRAY_TANGENT);
 		glVertexAttribPointer(RS::ARRAY_TANGENT, 4, GL_FLOAT, GL_FALSE, stride, (void *)BATCH_OFFSET_OF(tangent));
-		GL_CHECK_ERROR("GLES2::RasterizerSceneGLES2::_batch_render_generic: glBindVertexAttribArray RS::ARRAY_TANGENT");
+		GL_CHECK_ERROR("GLES2::RasterizerSceneGLES2::RasterizerSceneGLES2::_batch_render_generic: glBindVertexAttribArray RS::ARRAY_TANGENT");
 
 		glEnableVertexAttribArray(RS::ARRAY_TEX_UV);
 		glVertexAttribPointer(RS::ARRAY_TEX_UV, 2, GL_FLOAT, GL_FALSE, stride, (void *)BATCH_OFFSET_OF(uv));
 
 		glEnableVertexAttribArray(RS::ARRAY_TEX_UV2);
 		glVertexAttribPointer(RS::ARRAY_TEX_UV2, 2, GL_FLOAT, GL_FALSE, stride, (void *)BATCH_OFFSET_OF(uv2));
-		GL_CHECK_ERROR("GLES2::RasterizerSceneGLES2::_batch_render_generic: glBindVertexAttribArray RS::ARRAY_TEX_UV2");
+		GL_CHECK_ERROR("GLES2::RasterizerSceneGLES2::RasterizerSceneGLES2::_batch_render_generic: glBindVertexAttribArray RS::ARRAY_TEX_UV2");
 
 		if (p_has_color) {
 			glEnableVertexAttribArray(RS::ARRAY_COLOR);
@@ -1941,16 +1969,16 @@ void RasterizerSceneGLES2::_batch_render_generic(RS::PrimitiveType p_primitive, 
 		glEnableVertexAttribArray(15); // instance_color_custom_data
 		glVertexAttribPointer(15, 4, GL_UNSIGNED_BYTE, GL_TRUE, stride, (void *)BATCH_INSTANCED_OFFSET_OF(instance_color_custom_data));
 	}
-	GL_CHECK_ERROR("GLES2::RasterizerSceneGLES2::_batch_render_generic: glVertexAttribPointers setup");
+	GL_CHECK_ERROR("GLES2::RasterizerSceneGLES2::RasterizerSceneGLES2::_batch_render_generic: glVertexAttribPointers setup");
 
 	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, gl_ibo);
-	GL_CHECK_ERROR("GLES2::RasterizerSceneGLES2::_batch_render_generic: glBindBuffer ELEMENT_ARRAY_BUFFER");
+	GL_CHECK_ERROR("GLES2::RasterizerSceneGLES2::RasterizerSceneGLES2::_batch_render_generic: glBindBuffer ELEMENT_ARRAY_BUFFER");
 
-	GLenum primitive_gl = prim[int(p_primitive)];
+	GLenum primitive_gl = PRIM[int(p_primitive)];
 
 	glDrawElements(primitive_gl, p_count, GL_UNSIGNED_SHORT, (void *)(p_offset * sizeof(uint16_t)));
 
-	GL_CHECK_ERROR("GLES2::RasterizerSceneGLES2::_batch_render_generic: glDrawElements");
+	GL_CHECK_ERROR("GLES2::RasterizerSceneGLES2::RasterizerSceneGLES2::_batch_render_generic: glDrawElements");
 
 #undef BATCH_OFFSET_OF
 #undef BATCH_INSTANCED_OFFSET_OF
@@ -1974,7 +2002,7 @@ void RasterizerSceneGLES2::_batch_render_generic(RS::PrimitiveType p_primitive, 
 
 	glBindBuffer(GL_ARRAY_BUFFER, 0);
 	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
-	GL_CHECK_ERROR("GLES2::RasterizerSceneGLES2::_batch_render_generic: state cleanup");
+	GL_CHECK_ERROR("GLES2::RasterizerSceneGLES2::RasterizerSceneGLES2::_batch_render_generic: state cleanup");
 }
 
 void RasterizerSceneGLES2::_render_single_item_immediate(const GeometryInstanceSurface *p_surface) {
@@ -2005,6 +2033,9 @@ void RasterizerSceneGLES2::_render_single_item_immediate(const GeometryInstanceS
 	}
 
 	uint64_t spec_constants = scene_state.current_spec_constants;
+	if (bdata.pass_mode == PASS_MODE_MATERIAL) {
+		spec_constants |= SceneShaderGLES2::RENDER_MATERIAL;
+	}
 
 	if (item_hash != _render_item_state.current_state_hash) {
 		// Bind shader
@@ -2038,8 +2069,38 @@ void RasterizerSceneGLES2::_render_single_item_immediate(const GeometryInstanceS
 		_render_item_state.current_material_data = p_surface->material;
 	}
 
+	uint64_t input_mask = shader->vertex_input_mask;
+	if (bdata.pass_mode == PASS_MODE_MATERIAL) {
+		input_mask |= (1ULL << RS::ARRAY_TEX_UV2);
+		GLint uv_offset_loc = material_storage->shaders.scene_shader.version_get_uniform(SceneShaderGLES2::UV_OFFSET, shader->version, variant, spec_constants);
+		if (uv_offset_loc != -1) {
+			glUniform2f(uv_offset_loc, scene_state.current_uv_offset.x, scene_state.current_uv_offset.y);
+			GL_CHECK_ERROR("GLES2::RasterizerSceneGLES2::RasterizerSceneGLES2::_render_single_item_immediate: glUniform2f uv_offset");
+		}
+	}
+
 	// Bind arrays
-	mesh_storage->mesh_surface_bind_arrays_gles2(p_surface->surface, shader->vertex_input_mask);
+	bool is_mesh = p_surface->owner->data->base_type == RS::INSTANCE_MESH;
+	bool has_mi = false;
+	bool has_skel = false;
+
+	if (is_mesh) {
+		has_mi = p_surface->owner->mesh_instance.is_valid();
+		if (has_mi) {
+			GLES2::MeshInstance *mi = mesh_storage->get_mesh_instance(p_surface->owner->mesh_instance);
+			if (mi && mi->skeleton.is_valid()) {
+				has_skel = true;
+			}
+		}
+	}
+
+	int blend_count = is_mesh ? mesh_storage->mesh_get_blend_shape_count(p_surface->owner->data->base) : 0;
+
+	if (is_mesh && has_mi && (has_skel || blend_count > 0)) {
+		mesh_storage->mesh_instance_surface_bind_arrays_gles2(p_surface->owner->mesh_instance, p_surface->surface_index, input_mask);
+	} else {
+		mesh_storage->mesh_surface_bind_arrays_gles2(p_surface->surface, input_mask);
+	}
 
 	GLuint index_array_gl = mesh_storage->mesh_surface_get_index_buffer(p_surface->surface, p_surface->lod_index);
 	bool use_index_buffer = index_array_gl != 0;
@@ -2047,7 +2108,7 @@ void RasterizerSceneGLES2::_render_single_item_immediate(const GeometryInstanceS
 		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, index_array_gl);
 	}
 
-	GLenum primitive_gl = prim[int(p_surface->primitive)];
+	GLenum primitive_gl = PRIM[int(p_surface->primitive)];
 	int drawn_count = mesh_storage->mesh_surface_get_vertices_drawn_count(p_surface->surface);
 	GLenum index_type = use_index_buffer ? mesh_storage->mesh_surface_get_index_type(p_surface->surface) : 0;
 
@@ -2076,7 +2137,7 @@ void RasterizerSceneGLES2::_render_single_item_immediate(const GeometryInstanceS
 		glVertexAttrib4f(13, 0.0f, 1.0f, 0.0f, 0.0f);
 		glVertexAttrib4f(14, 0.0f, 0.0f, 1.0f, 0.0f);
 		glVertexAttrib4f(15, 1.0f, 1.0f, 1.0f, 1.0f);
-		GL_CHECK_ERROR("GLES2::RasterizerSceneGLES2::_render_single_item_immediate: glVertexAttrib4f instancing defaults");
+		GL_CHECK_ERROR("GLES2::RasterizerSceneGLES2::RasterizerSceneGLES2::_render_single_item_immediate: glVertexAttrib4f instancing defaults");
 	}
 
 	// =====================================
@@ -2104,7 +2165,7 @@ void RasterizerSceneGLES2::_render_single_item_immediate(const GeometryInstanceS
 			glDrawArrays(primitive_gl, 0, drawn_count);
 		}
 	}
-	GL_CHECK_ERROR("GLES2::RasterizerSceneGLES2::_render_single_item_immediate: glDrawElements BASE_PASS");
+	GL_CHECK_ERROR("GLES2::RasterizerSceneGLES2::RasterizerSceneGLES2::_render_single_item_immediate: glDrawElements BASE_PASS");
 
 	// =====================================
 	// Additive passes (omni & spot lights)
@@ -2149,6 +2210,8 @@ void RasterizerSceneGLES2::_render_single_item_immediate(const GeometryInstanceS
 
 template <RasterizerSceneGLES2::RenderListType p_render_list, RasterizerSceneGLES2::PassMode p_pass_mode>
 void RasterizerSceneGLES2::_fill_render_list(const RenderDataGLES2 *p_render_data, bool p_append) {
+	GLES2::MeshStorage *mesh_storage = GLES2::MeshStorage::get_singleton();
+
 	if constexpr (p_render_list == RENDER_LIST_OPAQUE) {
 		scene_state.used_screen_texture = false;
 		scene_state.used_normal_texture = false;
@@ -2187,8 +2250,13 @@ void RasterizerSceneGLES2::_fill_render_list(const RenderDataGLES2 *p_render_dat
 			}
 			inst->depth = p_render_data->cam_transform.origin.distance_to(center) - inst->sorting_offset;
 		}
-
 		uint32_t depth_layer = CLAMP(int(inst->depth * 16 / z_max), 0, 15);
+
+		uint32_t flags = inst->base_flags; //fill flags if appropriate
+
+		if (inst->non_uniform_scale) {
+			flags |= INSTANCE_DATA_FLAGS_NON_UNIFORM_SCALE;
+		}
 
 		if constexpr (p_pass_mode == PASS_MODE_COLOR) {
 			inst->light_passes.clear();
@@ -2247,8 +2315,50 @@ void RasterizerSceneGLES2::_fill_render_list(const RenderDataGLES2 *p_render_dat
 
 		GeometryInstanceSurface *surf = inst->surface_caches;
 
+		float lod_distance = 0.0;
+
+		if (p_render_data->cam_orthogonal) {
+			lod_distance = 1.0;
+		} else {
+			Vector3 aabb_min = inst->transformed_aabb.position;
+			Vector3 aabb_max = inst->transformed_aabb.position + inst->transformed_aabb.size;
+			Vector3 camera_position = p_render_data->main_cam_transform.origin;
+			Vector3 surface_distance = Vector3(0.0, 0.0, 0.0).max(aabb_min - camera_position).max(camera_position - aabb_max);
+
+			lod_distance = surface_distance.length();
+		}
+
 		while (surf) {
-			surf->lod_index = 0; // TODO(GLES2): Simple stub for LOD
+			// LOD
+
+			if (p_render_data->screen_mesh_lod_threshold > 0.0 && mesh_storage->mesh_surface_has_lod(surf->surface)) {
+				uint32_t indices = 0;
+				surf->lod_index = mesh_storage->mesh_surface_get_lod(surf->surface, inst->lod_model_scale * inst->lod_bias, lod_distance * p_render_data->lod_distance_multiplier, p_render_data->screen_mesh_lod_threshold, indices);
+				surf->index_count = indices;
+
+				if (p_render_data->render_info) {
+					indices = _gl_indices_to_primitives(surf->primitive, indices);
+					if constexpr (p_render_list == RENDER_LIST_OPAQUE) { //opaque
+						p_render_data->render_info->info[RS::VIEWPORT_RENDER_INFO_TYPE_VISIBLE][RS::VIEWPORT_RENDER_INFO_PRIMITIVES_IN_FRAME] += indices;
+					} else if constexpr (p_render_list == RENDER_LIST_SECONDARY) { //shadow
+						p_render_data->render_info->info[RS::VIEWPORT_RENDER_INFO_TYPE_SHADOW][RS::VIEWPORT_RENDER_INFO_PRIMITIVES_IN_FRAME] += indices;
+					}
+				}
+
+			} else {
+				surf->lod_index = 0;
+
+				if (p_render_data->render_info) {
+					uint32_t to_draw = mesh_storage->mesh_surface_get_vertices_drawn_count(surf->surface);
+					to_draw = _gl_indices_to_primitives(surf->primitive, to_draw);
+					to_draw *= inst->instance_count > 0 ? inst->instance_count : 1;
+					if constexpr (p_render_list == RENDER_LIST_OPAQUE) { //opaque
+						p_render_data->render_info->info[RS::VIEWPORT_RENDER_INFO_TYPE_VISIBLE][RS::VIEWPORT_RENDER_INFO_PRIMITIVES_IN_FRAME] += to_draw;
+					} else if constexpr (p_render_list == RENDER_LIST_SECONDARY) { //shadow
+						p_render_data->render_info->info[RS::VIEWPORT_RENDER_INFO_TYPE_SHADOW][RS::VIEWPORT_RENDER_INFO_PRIMITIVES_IN_FRAME] += to_draw;
+					}
+				}
+			}
 
 			if constexpr (p_pass_mode == PASS_MODE_COLOR) {
 				if (surf->flags & GeometryInstanceSurface::FLAG_PASS_OPAQUE) {
@@ -2269,6 +2379,14 @@ void RasterizerSceneGLES2::_fill_render_list(const RenderDataGLES2 *p_render_dat
 				}
 			} else if constexpr (p_pass_mode == PASS_MODE_SHADOW) {
 				if (surf->flags & GeometryInstanceSurface::FLAG_PASS_SHADOW) {
+					rl->add_element(surf);
+				}
+			} else if constexpr (p_pass_mode == PASS_MODE_MATERIAL) {
+				if (surf->flags & (GeometryInstanceSurface::FLAG_PASS_DEPTH | GeometryInstanceSurface::FLAG_PASS_OPAQUE | GeometryInstanceSurface::FLAG_PASS_ALPHA)) {
+					rl->add_element(surf);
+				}
+			} else {
+				if (surf->flags & (GeometryInstanceSurface::FLAG_PASS_DEPTH | GeometryInstanceSurface::FLAG_PASS_OPAQUE)) {
 					rl->add_element(surf);
 				}
 			}
@@ -2812,14 +2930,14 @@ void RasterizerSceneGLES2::_render_shadow_pass(RID p_light, RID p_shadow_atlas, 
 				GLuint shadow_texture = light_storage->shadow_atlas_get_quadrant_shadow_texture(p_shadow_atlas, quadrant, shadow);
 
 				GLES2::TextureStorage::get_singleton()->bind_framebuffer(shadow_fb);
-				GL_CHECK_ERROR("GLES2::RasterizerSceneGLES2::_render_shadow_pass: glBindFramebuffer (omni)");
+				GL_CHECK_ERROR("GLES2::RasterizerSceneGLES2::RasterizerSceneGLES2::_render_shadow_pass: glBindFramebuffer (omni)");
 
 				if (GLES2_CONFIG->support_depth_texture) {
-					glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, cube_map_faces[p_pass], shadow_texture, 0);
+					glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, CUBE_MAP_FACES[p_pass], shadow_texture, 0);
 				} else {
-					glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, cube_map_faces[p_pass], shadow_texture, 0);
+					glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, CUBE_MAP_FACES[p_pass], shadow_texture, 0);
 				}
-				GL_CHECK_ERROR("GLES2::RasterizerSceneGLES2::_render_shadow_pass: glFramebufferTexture2D (omni)");
+				GL_CHECK_ERROR("GLES2::RasterizerSceneGLES2::RasterizerSceneGLES2::_render_shadow_pass: glFramebufferTexture2D (omni)");
 
 				light_projection = light_storage->light_instance_get_shadow_camera(p_light, p_pass);
 				light_transform = light_storage->light_instance_get_shadow_transform(p_light, p_pass);
@@ -2862,9 +2980,9 @@ void RasterizerSceneGLES2::_render_shadow_pass(RID p_light, RID p_shadow_atlas, 
 	render_list[RENDER_LIST_SECONDARY].sort_by_key();
 
 	GLES2::TextureStorage::get_singleton()->bind_framebuffer(shadow_fb);
-	GL_CHECK_ERROR("GLES2::RasterizerSceneGLES2::_render_shadow_pass: glBindFramebuffer");
+	GL_CHECK_ERROR("GLES2::RasterizerSceneGLES2::RasterizerSceneGLES2::_render_shadow_pass: glBindFramebuffer");
 	glViewport(atlas_rect.position.x, atlas_rect.position.y, atlas_rect.size.x, atlas_rect.size.y);
-	GL_CHECK_ERROR("GLES2::RasterizerSceneGLES2::_render_shadow_pass: glViewport");
+	GL_CHECK_ERROR("GLES2::RasterizerSceneGLES2::RasterizerSceneGLES2::_render_shadow_pass: glViewport");
 
 	scene_state.reset_gl_state();
 	scene_state.enable_gl_depth_test(true);
@@ -2880,7 +2998,7 @@ void RasterizerSceneGLES2::_render_shadow_pass(RID p_light, RID p_shadow_atlas, 
 
 	scene_state.enable_gl_scissor_test(true);
 	glScissor(atlas_rect.position.x, atlas_rect.position.y, atlas_rect.size.x, atlas_rect.size.y);
-	GL_CHECK_ERROR("GLES2::RasterizerSceneGLES2::_render_shadow_pass: glScissor");
+	GL_CHECK_ERROR("GLES2::RasterizerSceneGLES2::RasterizerSceneGLES2::_render_shadow_pass: glScissor");
 
 	if (GLES2_CONFIG->support_depth_texture) {
 		glClear(GL_DEPTH_BUFFER_BIT);
@@ -2888,7 +3006,7 @@ void RasterizerSceneGLES2::_render_shadow_pass(RID p_light, RID p_shadow_atlas, 
 		glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
 		glClear(GL_DEPTH_BUFFER_BIT | GL_COLOR_BUFFER_BIT);
 	}
-	GL_CHECK_ERROR("GLES2::RasterizerSceneGLES2::_render_shadow_pass: glClear");
+	GL_CHECK_ERROR("GLES2::RasterizerSceneGLES2::RasterizerSceneGLES2::_render_shadow_pass: glClear");
 
 	scene_state.enable_gl_scissor_test(false);
 
@@ -2910,7 +3028,7 @@ void RasterizerSceneGLES2::_render_shadow_pass(RID p_light, RID p_shadow_atlas, 
 	glDisable(GL_CULL_FACE);
 	scene_state.cull_mode = RS::CULL_MODE_DISABLED;
 	GLES2::TextureStorage::get_singleton()->bind_framebuffer_system();
-	GL_CHECK_ERROR("GLES2::RasterizerSceneGLES2::_render_shadow_pass: cleanup");
+	GL_CHECK_ERROR("GLES2::RasterizerSceneGLES2::RasterizerSceneGLES2::_render_shadow_pass: cleanup");
 }
 
 /* BINDING UTILITIES */
@@ -3183,11 +3301,11 @@ void RasterizerSceneGLES2::render_scene(const Ref<RenderSceneBuffers> &p_render_
 		// Reverse-Z, far clipping plane is 0.0
 		RasterizerGLES2::clear_depth(0.0f);
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-		GL_CHECK_ERROR("GLES2::RasterizerSceneGLES2::render_scene: glClear");
+		GL_CHECK_ERROR("GLES2::RasterizerSceneGLES2::RasterizerSceneGLES2::render_scene: glClear");
 	} else {
 		RasterizerGLES2::clear_depth(0.0f);
 		glClear(GL_DEPTH_BUFFER_BIT);
-		GL_CHECK_ERROR("GLES2::RasterizerSceneGLES2::render_scene: glClear");
+		GL_CHECK_ERROR("GLES2::RasterizerSceneGLES2::RasterizerSceneGLES2::render_scene: glClear");
 	}
 
 	if (rb.is_valid()) {
@@ -3203,7 +3321,7 @@ void RasterizerSceneGLES2::render_scene(const Ref<RenderSceneBuffers> &p_render_
 	if (render_data.directional_shadow_count > 0) {
 		glActiveTexture(GL_TEXTURE0 + GLES2_CONFIG->max_texture_image_units - 3);
 		glBindTexture(GL_TEXTURE_2D, GLES2::LightStorage::get_singleton()->directional_shadow_get_texture());
-		GL_CHECK_ERROR("GLES2::RasterizerSceneGLES2::render_scene: glBindTexture directional shadow");
+		GL_CHECK_ERROR("GLES2::RasterizerSceneGLES2::RasterizerSceneGLES2::render_scene: glBindTexture directional shadow");
 		glActiveTexture(GL_TEXTURE0);
 	}
 
@@ -3261,14 +3379,14 @@ void RasterizerSceneGLES2::render_scene(const Ref<RenderSceneBuffers> &p_render_
 	// Transparent Pass
 	scene_state.enable_gl_blend(true);
 	glBlendEquation(GL_FUNC_ADD);
-	GL_CHECK_ERROR("GLES2::RasterizerSceneGLES2::render_scene: glBlendEquation");
+	GL_CHECK_ERROR("GLES2::RasterizerSceneGLES2::RasterizerSceneGLES2::render_scene: glBlendEquation");
 
 	if (render_data.transparent_bg) {
 		glBlendFuncSeparate(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
 	} else {
 		glBlendFuncSeparate(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_ZERO, GL_ONE);
 	}
-	GL_CHECK_ERROR("GLES2::RasterizerSceneGLES2::render_scene: glBlendFuncSeparate");
+	GL_CHECK_ERROR("GLES2::RasterizerSceneGLES2::RasterizerSceneGLES2::render_scene: glBlendFuncSeparate");
 
 	RenderListParameters render_list_params_alpha(render_list[RENDER_LIST_ALPHA].elements.ptr(), render_list[RENDER_LIST_ALPHA].elements.size(), reverse_cull, spec_constant_base_flags, use_wireframe);
 	_render_list_template<PASS_MODE_COLOR_TRANSPARENT>(&render_list_params_alpha, &render_data, 0, render_list[RENDER_LIST_ALPHA].elements.size(), true);
@@ -3284,7 +3402,7 @@ void RasterizerSceneGLES2::render_scene(const Ref<RenderSceneBuffers> &p_render_
 		glBindVertexArray(0);
 	}
 	GLES2::TextureStorage::get_singleton()->bind_framebuffer_system();
-	GL_CHECK_ERROR("GLES2::RasterizerSceneGLES2::render_scene: reset_gl_state cleanup");
+	GL_CHECK_ERROR("GLES2::RasterizerSceneGLES2::RasterizerSceneGLES2::render_scene: reset_gl_state cleanup");
 }
 
 void RasterizerSceneGLES2::_render_post_processing(const RenderDataGLES2 *p_render_data) {
@@ -3298,7 +3416,7 @@ void RasterizerSceneGLES2::_render_post_processing(const RenderDataGLES2 *p_rend
 	// Bind the actual final render target FBO
 	GLuint rt_fbo = texture_storage->render_target_get_fbo(rb->render_target);
 	texture_storage->bind_framebuffer(rt_fbo);
-	GL_CHECK_ERROR("GLES2::RasterizerSceneGLES2::_render_post_processing: bind_framebuffer");
+	GL_CHECK_ERROR("GLES2::RasterizerSceneGLES2::RasterizerSceneGLES2::_render_post_processing: bind_framebuffer");
 
 	// Set up pure blitting state
 	glViewport(0, 0, rb->target_size.width, rb->target_size.height);
@@ -3309,7 +3427,7 @@ void RasterizerSceneGLES2::_render_post_processing(const RenderDataGLES2 *p_rend
 	scene_state.enable_gl_depth_draw(false);
 
 	glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
-	GL_CHECK_ERROR("GLES2::RasterizerSceneGLES2::_render_post_processing: glColorMask");
+	GL_CHECK_ERROR("GLES2::RasterizerSceneGLES2::RasterizerSceneGLES2::_render_post_processing: glColorMask");
 
 	glActiveTexture(GL_TEXTURE0);
 	glBindTexture(GL_TEXTURE_2D, rb->internal3d.color);
@@ -3325,7 +3443,7 @@ void RasterizerSceneGLES2::_render_post_processing(const RenderDataGLES2 *p_rend
 	GLES2::CopyEffects::get_singleton()->copy_to_rect(Rect2(0, 0, 1, 1));
 
 	glBindTexture(GL_TEXTURE_2D, 0);
-	GL_CHECK_ERROR("GLES2::RasterizerSceneGLES2::_render_post_processing: copy_to_rect");
+	GL_CHECK_ERROR("GLES2::RasterizerSceneGLES2::RasterizerSceneGLES2::_render_post_processing: copy_to_rect");
 }
 
 template <RasterizerSceneGLES2::PassMode p_pass_mode>
@@ -3338,17 +3456,29 @@ void RasterizerSceneGLES2::_render_list_template(RenderListParameters *p_params,
 	GeometryInstanceSurface **surfaces = &p_params->elements[p_from_element];
 
 	glFrontFace(p_params->reverse_cull ? GL_CW : GL_CCW);
-	GL_CHECK_ERROR("GLES2::RasterizerSceneGLES2::_render_list_template: glFrontFace");
+	GL_CHECK_ERROR("GLES2::RasterizerSceneGLES2::RasterizerSceneGLES2::_render_list_template: glFrontFace");
 
-	// Save the spec constant
+	// Save the spec constant and uv_offset
 	scene_state.current_spec_constants = p_params->spec_constant_base_flags;
+	scene_state.current_uv_offset = p_params->uv_offset;
 
 	// Dispatch batch processor or immediate drawer
 	batch_scene_render_items<p_pass_mode>(surfaces, count, p_render_data->cam_transform, p_alpha_pass, p_replay);
 
+	// Record info
+	if constexpr (p_pass_mode != PASS_MODE_DEPTH) {
+		// Don't count elements during depth pre-pass to match the RD renderers.
+		if (p_render_data->render_info) {
+			p_render_data->render_info->info[RS::VIEWPORT_RENDER_INFO_TYPE_VISIBLE][RS::VIEWPORT_RENDER_INFO_OBJECTS_IN_FRAME] += count;
+			p_render_data->render_info->info[RS::VIEWPORT_RENDER_INFO_TYPE_VISIBLE][RS::VIEWPORT_RENDER_INFO_DRAW_CALLS_IN_FRAME]++;
+		}
+	}
+	// TODO (GLES2): Figure out how to adapt GLES3'S brute-force
+	// `should_request_draw` into our batcher architecture.
+
 	// Clean-up
 	glFrontFace(GL_CCW);
-	GL_CHECK_ERROR("GLES2::RasterizerSceneGLES2::_render_list_template: glFrontFace restore");
+	GL_CHECK_ERROR("GLES2::RasterizerSceneGLES2::RasterizerSceneGLES2::_render_list_template: glFrontFace restore");
 }
 
 template <RasterizerSceneGLES2::AdditiveLightType p_light_type, bool p_is_batch>
@@ -3407,11 +3537,11 @@ void RasterizerSceneGLES2::_execute_additive_light_draw(uint32_t p_light_gl_id, 
 	}
 
 	if constexpr (p_light_type == ADDITIVE_LIGHT_DIRECTIONAL) {
-		GL_CHECK_ERROR("GLES2::RasterizerSceneGLES2::_execute_additive_light_draw: DIRECTIONAL");
+		GL_CHECK_ERROR("GLES2::RasterizerSceneGLES2::RasterizerSceneGLES2::_execute_additive_light_draw: DIRECTIONAL");
 	} else if constexpr (p_light_type == ADDITIVE_LIGHT_OMNI) {
-		GL_CHECK_ERROR("GLES2::RasterizerSceneGLES2::_execute_additive_light_draw: OMNI");
+		GL_CHECK_ERROR("GLES2::RasterizerSceneGLES2::RasterizerSceneGLES2::_execute_additive_light_draw: OMNI");
 	} else if constexpr (p_light_type == ADDITIVE_LIGHT_SPOT) {
-		GL_CHECK_ERROR("GLES2::RasterizerSceneGLES2::_execute_additive_light_draw: SPOT");
+		GL_CHECK_ERROR("GLES2::RasterizerSceneGLES2::RasterizerSceneGLES2::_execute_additive_light_draw: SPOT");
 	}
 }
 
@@ -3483,8 +3613,105 @@ void RasterizerSceneGLES2::render_particle_collider_heightfield(RID p_collider, 
 
 }
 
-void RasterizerSceneGLES2::_render_uv2(const PagedArray<RenderGeometryInstance *> &p_instances, GLuint p_framebuffer, const Rect2i &p_region) {
+void RasterizerSceneGLES2::_render_uv2(const PagedArray<RenderGeometryInstance *> &p_instances, GLuint p_framebuffer, const Rect2i &p_region, const GLuint p_color_textures[4]) {
+	RENDER_TIMESTAMP("Setup Rendering UV2");
 
+	RenderDataGLES2 render_data;
+	render_data.instances = &p_instances;
+
+	scene_state.ubo.emissive_exposure_normalization = -1.0;
+
+	_setup_environment(&render_data, true, Size2i(1, 1), true, Color(), false);
+
+	_fill_render_list<RENDER_LIST_SECONDARY, PASS_MODE_MATERIAL>(&render_data);
+	render_list[RENDER_LIST_SECONDARY].sort_by_key();
+
+	RENDER_TIMESTAMP("Render 3D Material");
+
+	// Save state
+	GLint prev_fbo = 0;
+	glGetIntegerv(GL_FRAMEBUFFER_BINDING, &prev_fbo);
+	GL_CHECK_ERROR("GLES2::RasterizerSceneGLES2::_render_uv2: glGetIntegerv GL_FRAMEBUFFER_BINDING");
+
+	GLint prev_viewport[4] = {};
+	glGetIntegerv(GL_VIEWPORT, prev_viewport);
+	GL_CHECK_ERROR("GLES2::RasterizerSceneGLES2::_render_uv2: glGetIntegerv GL_VIEWPORT");
+
+	GLboolean prev_color_mask[4] = { GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE };
+	glGetBooleanv(GL_COLOR_WRITEMASK, prev_color_mask);
+	GL_CHECK_ERROR("GLES2::RasterizerSceneGLES2::_render_uv2: glGetBooleanv GL_COLOR_WRITEMASK");
+
+	GLint prev_depth_func = GL_LESS;
+	glGetIntegerv(GL_DEPTH_FUNC, &prev_depth_func);
+	GL_CHECK_ERROR("GLES2::RasterizerSceneGLES2::_render_uv2: glGetIntegerv GL_DEPTH_FUNC");
+
+	GLES2::TextureStorage::get_singleton()->bind_framebuffer(p_framebuffer);
+	glViewport(p_region.position.x, p_region.position.y, p_region.size.x, p_region.size.y);
+	GL_CHECK_ERROR("GLES2::RasterizerSceneGLES2::_render_uv2: glViewport");
+
+	const uint64_t base_spec_constant = (
+		SceneShaderGLES2::RENDER_MATERIAL |
+		SceneShaderGLES2::DISABLE_FOG |
+		SceneShaderGLES2::DISABLE_LIGHT_DIRECTIONAL |
+		SceneShaderGLES2::DISABLE_LIGHT_OMNI |
+		SceneShaderGLES2::DISABLE_LIGHT_SPOT |
+		SceneShaderGLES2::DISABLE_LIGHTMAP
+	);
+
+	constexpr int UV_OFFSET_COUNT = 9;
+	const Vector2 uv_offsets[UV_OFFSET_COUNT] = {
+		Vector2(-1, 1),
+		Vector2(1, 1),
+		Vector2(1, -1),
+		Vector2(-1, -1),
+		Vector2(-1, 0),
+		Vector2(1, 0),
+		Vector2(0, -1),
+		Vector2(0, 1),
+		Vector2(0, 0),
+	};
+
+	// Run the single-attachment pass since we
+	// cannot "just" use GL_COLOR_ATTACHMENT1..3
+	for (int pass = 0; pass < MAXIMUM_COLOR_ATTACHMENT; pass++) {
+		glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, p_color_textures[pass], 0);
+		GL_CHECK_ERROR("GLES2::RasterizerSceneGLES2::_render_uv2: glFramebufferTexture2D");
+
+		scene_state.reset_gl_state();
+		scene_state.enable_gl_depth_test(true);
+		scene_state.enable_gl_depth_draw(true);
+		glDepthFunc(GL_GREATER);
+		GL_CHECK_ERROR("GLES2::RasterizerSceneGLES2::_render_uv2: glDepthFunc");
+
+		glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+		glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
+		RasterizerGLES2::clear_depth(0.0f);
+		glClear(GL_DEPTH_BUFFER_BIT | GL_COLOR_BUFFER_BIT);
+		GL_CHECK_ERROR("GLES2::RasterizerSceneGLES2::_render_uv2: glClear");
+
+		const uint64_t spec_constant = base_spec_constant | PASS_SPEC_FLAGS[pass];
+		RenderListParameters render_list_params(render_list[RENDER_LIST_SECONDARY].elements.ptr(), render_list[RENDER_LIST_SECONDARY].elements.size(), false, spec_constant, true, Vector2(0, 0));
+
+		for (int i = 0; i < UV_OFFSET_COUNT; i++) {
+			Vector2 ofs = uv_offsets[i];
+			ofs.x /= p_region.size.width;
+			ofs.y /= p_region.size.height;
+			render_list_params.uv_offset = ofs;
+			_render_list_template<PASS_MODE_MATERIAL>(&render_list_params, &render_data, 0, render_list[RENDER_LIST_SECONDARY].elements.size(), false, i > 0);
+		}
+
+		render_list_params.uv_offset = Vector2(0, 0);
+		render_list_params.force_wireframe = false;
+		_render_list_template<PASS_MODE_MATERIAL>(&render_list_params, &render_data, 0, render_list[RENDER_LIST_SECONDARY].elements.size(), false, true);
+	}
+
+	// Restore state
+	scene_state.reset_gl_state();
+	glDepthFunc(prev_depth_func);
+	glColorMask(prev_color_mask[0], prev_color_mask[1], prev_color_mask[2], prev_color_mask[3]);
+	glViewport(prev_viewport[0], prev_viewport[1], prev_viewport[2], prev_viewport[3]);
+	GLES2::TextureStorage::get_singleton()->bind_framebuffer(prev_fbo);
+	GL_CHECK_ERROR("GLES2::RasterizerSceneGLES2::_render_uv2: restore GL state");
 }
 
 void RasterizerSceneGLES2::set_time(double p_time, double p_step) {
@@ -3523,7 +3750,267 @@ void RasterizerSceneGLES2::sub_surface_scattering_set_scale(float p_scale, float
 }
 
 TypedArray<Image> RasterizerSceneGLES2::bake_render_uv2(RID p_base, const TypedArray<RID> &p_material_overrides, const Size2i &p_image_size) {
-	return TypedArray<Image>();
+	ERR_FAIL_COND_V_MSG(p_image_size.width <= 0, TypedArray<Image>(), "Image width must be greater than 0.");
+	ERR_FAIL_COND_V_MSG(p_image_size.height <= 0, TypedArray<Image>(), "Image height must be greater than 0.");
+
+	GLES2::Config *config = GLES2::Config::get_singleton();
+	GLES2::TextureStorage *texture_storage = GLES2::TextureStorage::get_singleton();
+	GLES2::Utilities *utilities = GLES2::Utilities::get_singleton();
+
+	// Safe states
+	GLint prev_fbo = 0;
+	glGetIntegerv(GL_FRAMEBUFFER_BINDING, &prev_fbo);
+	GL_CHECK_ERROR("GLES2::RasterizerSceneGLES2::bake_render_uv2: glGetIntegerv GL_FRAMEBUFFER_BINDING");
+
+	GLint prev_active_tex = GL_TEXTURE0;
+	glGetIntegerv(GL_ACTIVE_TEXTURE, &prev_active_tex);
+	GL_CHECK_ERROR("GLES2::RasterizerSceneGLES2::bake_render_uv2: glGetIntegerv GL_ACTIVE_TEXTURE");
+
+	glActiveTexture(GL_TEXTURE0);
+	GLint prev_tex_2d = 0;
+	glGetIntegerv(GL_TEXTURE_BINDING_2D, &prev_tex_2d);
+	GL_CHECK_ERROR("GLES2::RasterizerSceneGLES2::bake_render_uv2: glGetIntegerv GL_TEXTURE_BINDING_2D");
+
+	GLint prev_rbo = 0;
+	glGetIntegerv(GL_RENDERBUFFER_BINDING, &prev_rbo);
+	GL_CHECK_ERROR("GLES2::RasterizerSceneGLES2::bake_render_uv2: glGetIntegerv GL_RENDERBUFFER_BINDING");
+
+	GLuint albedo_alpha_tex = 0;
+	GLuint normal_tex = 0;
+	GLuint orm_tex = 0;
+	GLuint emission_tex = 0;
+	GLuint depth_tex = 0;
+	GLuint depth_rbo = 0;
+
+	// Generate textures
+	glGenTextures(1, &albedo_alpha_tex);
+	glGenTextures(1, &normal_tex);
+	glGenTextures(1, &orm_tex);
+	glGenTextures(1, &emission_tex);
+	GL_CHECK_ERROR("GLES2::RasterizerSceneGLES2::bake_render_uv2: glGenTextures");
+
+	// Bind and setup textures
+	glBindTexture(GL_TEXTURE_2D, albedo_alpha_tex);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, p_image_size.width, p_image_size.height, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
+	_gl_setup_bake_uv2_tex_params();
+	GL_CHECK_ERROR("GLES2::RasterizerSceneGLES2::bake_render_uv2: glTexImage2D albedo_alpha_tex");
+	utilities->texture_allocated_data(albedo_alpha_tex, p_image_size.width * p_image_size.height * 4, "Lightmap albedo texture");
+
+	glBindTexture(GL_TEXTURE_2D, normal_tex);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, p_image_size.width, p_image_size.height, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
+	_gl_setup_bake_uv2_tex_params();
+	GL_CHECK_ERROR("GLES2::RasterizerSceneGLES2::bake_render_uv2: glTexImage2D normal_tex");
+	utilities->texture_allocated_data(normal_tex, p_image_size.width * p_image_size.height * 4, "Lightmap normal texture");
+
+	glBindTexture(GL_TEXTURE_2D, orm_tex);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, p_image_size.width, p_image_size.height, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
+	_gl_setup_bake_uv2_tex_params();
+	GL_CHECK_ERROR("GLES2::RasterizerSceneGLES2::bake_render_uv2: glTexImage2D orm_tex");
+	utilities->texture_allocated_data(orm_tex, p_image_size.width * p_image_size.height * 4, "Lightmap ORM texture");
+
+	glBindTexture(GL_TEXTURE_2D, emission_tex);
+	if (config->float_texture_supported) {
+#ifdef GL_API_ENABLED
+		GLenum internal_format = RasterizerGLES2::is_gles_over_gl() ? GL_RGBA32F : GL_RGBA;
+#else
+		GLenum internal_format = GL_RGBA;
+#endif
+		glTexImage2D(GL_TEXTURE_2D, 0, internal_format, p_image_size.width, p_image_size.height, 0, GL_RGBA, GL_FLOAT, nullptr);
+		_gl_setup_bake_uv2_tex_params();
+		GL_CHECK_ERROR("GLES2::RasterizerSceneGLES2::bake_render_uv2: glTexImage2D emission_tex float");
+		utilities->texture_allocated_data(emission_tex, p_image_size.width * p_image_size.height * 16, "Lightmap emission texture");
+	} else {
+		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, p_image_size.width, p_image_size.height, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
+		_gl_setup_bake_uv2_tex_params();
+		GL_CHECK_ERROR("GLES2::RasterizerSceneGLES2::bake_render_uv2: glTexImage2D emission_tex rgba8");
+		utilities->texture_allocated_data(emission_tex, p_image_size.width * p_image_size.height * 4, "Lightmap emission texture");
+	}
+
+	GLuint fbo = 0;
+	glGenFramebuffers(1, &fbo);
+	GL_CHECK_ERROR("GLES2::RasterizerSceneGLES2::bake_render_uv2: glGenFramebuffers");
+	texture_storage->bind_framebuffer(fbo);
+
+	if (config->support_depth_texture) {
+		glGenTextures(1, &depth_tex);
+		glBindTexture(GL_TEXTURE_2D, depth_tex);
+#ifdef GL_API_ENABLED
+		GLenum depth_internal = RasterizerGLES2::is_gles_over_gl() ? GL_DEPTH_COMPONENT24 : GL_DEPTH_COMPONENT;
+#else
+		GLenum depth_internal = GL_DEPTH_COMPONENT;
+#endif
+		glTexImage2D(GL_TEXTURE_2D, 0, depth_internal, p_image_size.width, p_image_size.height, 0, GL_DEPTH_COMPONENT, GL_UNSIGNED_INT, nullptr);
+		_gl_setup_bake_uv2_tex_params();
+		GL_CHECK_ERROR("GLES2::RasterizerSceneGLES2::bake_render_uv2: glTexImage2D depth_tex");
+		utilities->texture_allocated_data(depth_tex, p_image_size.width * p_image_size.height * 4, "Lightmap depth texture");
+
+		glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, depth_tex, 0);
+		GL_CHECK_ERROR("GLES2::RasterizerSceneGLES2::bake_render_uv2: glFramebufferTexture2D depth_tex");
+	} else {
+		glGenRenderbuffers(1, &depth_rbo);
+		glBindRenderbuffer(GL_RENDERBUFFER, depth_rbo);
+		glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT16, p_image_size.width, p_image_size.height);
+		GL_CHECK_ERROR("GLES2::RasterizerSceneGLES2::bake_render_uv2: glRenderbufferStorage depth_rbo");
+		utilities->render_buffer_allocated_data(depth_rbo, p_image_size.width * p_image_size.height * 2, "Lightmap depth renderbuffer");
+
+		glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, depth_rbo);
+		GL_CHECK_ERROR("GLES2::RasterizerSceneGLES2::bake_render_uv2: glFramebufferRenderbuffer depth_rbo");
+	}
+
+	const GLuint color_texs[4] = { albedo_alpha_tex, normal_tex, orm_tex, emission_tex };
+
+#define CLEANUP_RESOURCES()                             \
+	texture_storage->bind_framebuffer(prev_fbo);        \
+	glBindRenderbuffer(GL_RENDERBUFFER, prev_rbo);      \
+	glActiveTexture(GL_TEXTURE0);                       \
+	glBindTexture(GL_TEXTURE_2D, prev_tex_2d);          \
+	glActiveTexture(prev_active_tex);                   \
+	if (fbo != 0) {                                     \
+		glDeleteFramebuffers(1, &fbo);                  \
+	}                                                   \
+	if (albedo_alpha_tex != 0) {                        \
+		utilities->texture_free_data(albedo_alpha_tex); \
+	}                                                   \
+	if (normal_tex != 0) {                              \
+		utilities->texture_free_data(normal_tex);       \
+	}                                                   \
+	if (orm_tex != 0) {                                 \
+		utilities->texture_free_data(orm_tex);          \
+	}                                                   \
+	if (emission_tex != 0) {                            \
+		utilities->texture_free_data(emission_tex);     \
+	}                                                   \
+	if (depth_tex != 0) {                               \
+		utilities->texture_free_data(depth_tex);        \
+	}                                                   \
+	if (depth_rbo != 0) {                               \
+		utilities->render_buffer_free_data(depth_rbo);  \
+	}                                                   \
+	GL_CHECK_ERROR("GLES2::RasterizerSceneGLES2::bake_render_uv2: cleanup_resources");
+
+	// Validate completeness across all color attachments (including float emission_tex)
+	for (int i = 0; i < MAXIMUM_COLOR_ATTACHMENT; i++) {
+		glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, color_texs[i], 0);
+		GL_CHECK_ERROR("GLES2::RasterizerSceneGLES2::bake_render_uv2: glFramebufferTexture2D completeness check");
+		GLenum status = glCheckFramebufferStatus(GL_FRAMEBUFFER);
+		if (status != GL_FRAMEBUFFER_COMPLETE) {
+			if (i == 3 && config->float_texture_supported) {
+				// Hardware supports sampling float textures but not rendering to them.
+				// Fallback to RGBA8
+				glBindTexture(GL_TEXTURE_2D, emission_tex);
+				glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, p_image_size.width, p_image_size.height, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
+				GL_CHECK_ERROR("GLES2::RasterizerSceneGLES2::bake_render_uv2: glTexImage2D emission_tex fallback");
+				utilities->texture_resize_data(emission_tex, p_image_size.width * p_image_size.height * 4);
+				glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, emission_tex, 0);
+				status = glCheckFramebufferStatus(GL_FRAMEBUFFER);
+			}
+			if (status != GL_FRAMEBUFFER_COMPLETE) {
+				CLEANUP_RESOURCES();
+				WARN_PRINT("Could not create render target, status: " + texture_storage->get_framebuffer_error(status));
+				return TypedArray<Image>();
+			}
+		}
+	}
+
+	RenderGeometryInstance *gi_inst = geometry_instance_create(p_base);
+	if (unlikely(!gi_inst)) {
+		CLEANUP_RESOURCES();
+		ERR_FAIL_V(TypedArray<Image>());
+	}
+
+	uint32_t sc = RSG::mesh_storage->mesh_get_surface_count(p_base);
+	Vector<RID> materials;
+	materials.resize(sc);
+
+	for (uint32_t i = 0; i < sc; i++) {
+		if (i < (uint32_t)p_material_overrides.size()) {
+			materials.write[i] = p_material_overrides[i];
+		}
+	}
+
+	gi_inst->set_surface_materials(materials);
+
+	if (cull_argument.size() == 0) {
+		cull_argument.push_back(nullptr);
+	}
+	cull_argument[0] = gi_inst;
+	_render_uv2(cull_argument, fbo, Rect2i(0, 0, p_image_size.width, p_image_size.height), color_texs);
+
+	geometry_instance_free(gi_inst);
+
+	TypedArray<Image> ret;
+
+	RID tex_rid = texture_storage->texture_allocate();
+	GLES2::Texture *existing_tex = texture_storage->get_texture(tex_rid);
+	if (existing_tex && existing_tex->tex_id != 0) {
+		glDeleteTextures(1, &existing_tex->tex_id);
+		existing_tex->tex_id = 0;
+		GL_CHECK_ERROR("GLES2::RasterizerSceneGLES2::bake_render_uv2: glDeleteTextures dummy shell");
+	}
+
+	GLES2::Texture texture;
+	texture.width = p_image_size.width;
+	texture.height = p_image_size.height;
+	texture.alloc_width = p_image_size.width;
+	texture.alloc_height = p_image_size.height;
+	texture.format = Image::FORMAT_RGBA8;
+	texture.real_format = Image::FORMAT_RGBA8;
+	texture.gl_format_cache = GL_RGBA;
+	texture.gl_type_cache = GL_FLOAT;
+	texture.type = GLES2::Texture::TYPE_2D;
+	texture.target = GL_TEXTURE_2D;
+	texture.active = true;
+	texture.is_render_target = true;
+
+	texture_storage->texture_2d_initialize_from_texture(tex_rid, texture);
+	GLES2::Texture *tex = texture_storage->get_texture(tex_rid);
+
+	{
+		tex->tex_id = albedo_alpha_tex;
+		Ref<Image> img = texture_storage->texture_2d_get(tex_rid);
+		utilities->texture_free_data(albedo_alpha_tex);
+		albedo_alpha_tex = 0;
+		ret.push_back(img);
+	}
+
+	{
+		tex->tex_id = normal_tex;
+		Ref<Image> img = texture_storage->texture_2d_get(tex_rid);
+		utilities->texture_free_data(normal_tex);
+		normal_tex = 0;
+		ret.push_back(img);
+	}
+
+	{
+		tex->tex_id = orm_tex;
+		Ref<Image> img = texture_storage->texture_2d_get(tex_rid);
+		utilities->texture_free_data(orm_tex);
+		orm_tex = 0;
+		ret.push_back(img);
+	}
+
+	{
+		tex->tex_id = emission_tex;
+		if (config->float_texture_supported) {
+			tex->format = Image::FORMAT_RGBAH;
+			tex->real_format = Image::FORMAT_RGBAH;
+			tex->gl_type_cache = GL_FLOAT;
+		}
+		Ref<Image> img = texture_storage->texture_2d_get(tex_rid);
+		utilities->texture_free_data(emission_tex);
+		emission_tex = 0;
+		ret.push_back(img);
+	}
+
+	tex->is_render_target = false;
+	tex->tex_id = 0;
+	texture_storage->texture_free(tex_rid);
+
+	CLEANUP_RESOURCES();
+
+#undef CLEANUP_RESOURCES
+
+	return ret;
 }
 
 bool RasterizerSceneGLES2::free(RID p_rid) {

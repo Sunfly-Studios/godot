@@ -4,7 +4,6 @@ uniform highp samplerCube omni_shadow_texture; // texunit:-3
 #endif
 #ifdef ADDITIVE_SPOT
 uniform highp sampler2D spot_shadow_texture; // texunit:-3
-uniform highp float positional_shadow_atlas_pixel_size;
 #endif
 #endif
 

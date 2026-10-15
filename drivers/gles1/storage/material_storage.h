@@ -41,6 +41,8 @@
 #include "servers/rendering/storage/utilities.h"
 
 #include "drivers/gles1/transpiler/shader_transpiler_gles1.h"
+#include "drivers/gles1/storage/materials/standard_material_3d.h"
+#include "drivers/gles1/storage/materials/orm_material_3d.h"
 #include "drivers/gles1/shaders/canvas.glsl.gen.h"
 #include "drivers/gles1/shaders/particles.glsl.gen.h"
 #include "drivers/gles1/shaders/scene.glsl.gen.h"
@@ -356,6 +358,15 @@ struct SceneMaterialData : public MaterialData {
 	bool use_distance_fade = false;
 	float distance_fade_min = 0.0f;
 	float distance_fade_max = 0.0f;
+
+	// Material approximation
+	enum ApproximationType {
+		APPROX_NONE,
+		APPROX_STANDARD,
+		APPROX_ORM
+	};
+	ApproximationType approx_type = APPROX_NONE;
+	void *approx_data = nullptr;
 
 	virtual void set_render_priority(int p_priority);
 	virtual void set_next_pass(RID p_pass);

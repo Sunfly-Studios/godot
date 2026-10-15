@@ -173,6 +173,12 @@ void MeshStorage::mesh_add_surface(RID p_mesh, const RS::SurfaceData &p_surface)
 		ERR_FAIL_COND(s->uncompressed_buffer.size() != p_surface.vertex_count * s->uncompressed_stride);
 	}
 
+	// Store the data how it came in
+	s->original_format = p_surface.format;
+	s->original_vertex_data = p_surface.vertex_data;
+	s->original_attribute_data = p_surface.attribute_data;
+	s->original_blend_shape_data = p_surface.blend_shape_data;
+
 	RS::SurfaceData surface_data = p_surface;
 
 	// Add the compressed flag if its somehow missing
@@ -515,14 +521,9 @@ RS::SurfaceData MeshStorage::mesh_get_surface(RID p_mesh, int p_surface) const {
 	Mesh::Surface &s = *mesh->surfaces[p_surface];
 
 	RS::SurfaceData sd;
-	sd.format = s.format;
-	if (s.vertex_buffer != 0) {
-		sd.vertex_data = GLES2::Utilities::get_singleton()->buffer_get_data(GL_ARRAY_BUFFER, s.vertex_buffer, s.vertex_buffer_size);
-	}
-
-	if (s.attribute_buffer != 0) {
-		sd.attribute_data = GLES2::Utilities::get_singleton()->buffer_get_data(GL_ARRAY_BUFFER, s.attribute_buffer, s.attribute_buffer_size);
-	}
+	sd.format = s.original_format;
+	sd.vertex_data = s.original_vertex_data;
+	sd.attribute_data = s.original_attribute_data;
 
 	if (s.skin_buffer != 0) {
 		sd.skin_data = GLES2::Utilities::get_singleton()->buffer_get_data(GL_ARRAY_BUFFER, s.skin_buffer, s.skin_buffer_size);
@@ -546,14 +547,7 @@ RS::SurfaceData MeshStorage::mesh_get_surface(RID p_mesh, int p_surface) const {
 
 	sd.bone_aabbs = s.bone_aabbs;
 	sd.mesh_to_skeleton_xform = s.mesh_to_skeleton_xform;
-
-	if (mesh->blend_shape_count) {
-		sd.blend_shape_data = Vector<uint8_t>();
-		for (uint32_t i = 0; i < mesh->blend_shape_count; i++) {
-			sd.blend_shape_data.append_array(GLES2::Utilities::get_singleton()->buffer_get_data(GL_ARRAY_BUFFER, s.blend_shapes[i].vertex_buffer, s.vertex_buffer_size));
-		}
-	}
-
+	sd.blend_shape_data = s.original_blend_shape_data;
 	sd.uv_scale = s.uv_scale;
 
 	return sd;
@@ -752,7 +746,55 @@ void MeshStorage::mesh_surface_bind_arrays_gles2(void *p_surface, uint64_t p_inp
 	GL_CHECK_ERROR("GLES2::MeshStorage::mesh_surface_bind_arrays_gles2: pointers bound");
 }
 
+void MeshStorage::mesh_instance_surface_bind_arrays_gles2(RID p_mesh_instance, uint32_t p_surface_index, uint64_t p_input_mask) {
+	MeshInstance *mi = mesh_instance_owner.get_or_null(p_mesh_instance);
+	ERR_FAIL_NULL(mi);
+	ERR_FAIL_NULL(mi->mesh);
+	ERR_FAIL_UNSIGNED_INDEX(p_surface_index, mi->surfaces.size());
+	ERR_FAIL_UNSIGNED_INDEX(p_surface_index, mi->mesh->surface_count);
+
+	MeshInstance::Surface &mis = mi->surfaces[p_surface_index];
+	Mesh::Surface *s = mi->mesh->surfaces[p_surface_index];
+
+	// If this specific surface has no instance deformation buffer, fallback to base surface VBO
+	if (mis.vertex_buffer == 0) {
+		mesh_surface_bind_arrays_gles2(s, p_input_mask);
+		return;
+	}
+
+	GLuint vertex_array_gl = 0;
+	Mesh::Surface::Version *version = mesh_instance_surface_get_vertex_arrays_and_format(p_mesh_instance, p_surface_index, p_input_mask, vertex_array_gl);
+	ERR_FAIL_NULL(version);
+
+	for (int i = 0; i < RS::ARRAY_INDEX; i++) {
+		if (!version->attribs[i].enabled) {
+			glDisableVertexAttribArray(i);
+			continue;
+		}
+		if (i <= RS::ARRAY_TANGENT) {
+			glBindBuffer(GL_ARRAY_BUFFER, mis.vertex_buffer);
+		} else if (i >= RS::ARRAY_BONES && i <= RS::ARRAY_WEIGHTS) {
+			glBindBuffer(GL_ARRAY_BUFFER, s->skin_buffer);
+		} else {
+			glBindBuffer(GL_ARRAY_BUFFER, s->attribute_buffer);
+		}
+		glEnableVertexAttribArray(i);
+		glVertexAttribPointer(
+			i,
+			version->attribs[i].size,
+			version->attribs[i].type,
+			version->attribs[i].normalized,
+			version->attribs[i].stride,
+			(const void *)(uintptr_t)(version->attribs[i].offset)
+		);
+	}
+	GL_CHECK_ERROR("GLES2::MeshStorage::mesh_instance_surface_bind_arrays_gles2: pointers bound");
+}
+
 void MeshStorage::mesh_surface_unbind_arrays_gles2(void *p_surface) {
+	if (GLES2_CONFIG->support_vao) {
+		glBindVertexArray(0);
+	}
 	for (int i = 0; i < RS::ARRAY_INDEX; i++) {
 		glDisableVertexAttribArray(i);
 	}
@@ -1065,8 +1107,8 @@ void MeshStorage::_mesh_surface_generate_version_for_input_mask_2d(Mesh::Surface
 			case RS::ARRAY_BONES: {
 				v.attribs[i].offset = skin_stride;
 				v.attribs[i].size = 4;
-				v.attribs[i].type = GL_UNSIGNED_SHORT;
-				skin_stride += 4 * sizeof(uint16_t);
+				v.attribs[i].type = GL_FLOAT;
+				skin_stride += 4 * sizeof(float);
 				v.attribs[i].normalized = GL_FALSE; // Interpreted directly as float index by our shader
 				v.attribs[i].integer = false; // Prevents the system from expecting glVertexAttribIPointer
 			} break;
@@ -1074,9 +1116,9 @@ void MeshStorage::_mesh_surface_generate_version_for_input_mask_2d(Mesh::Surface
 			case RS::ARRAY_WEIGHTS: {
 				v.attribs[i].offset = skin_stride;
 				v.attribs[i].size = 4;
-				v.attribs[i].type = GL_UNSIGNED_SHORT;
-				skin_stride += 4 * sizeof(uint16_t);
-				v.attribs[i].normalized = GL_TRUE;
+				v.attribs[i].type = GL_FLOAT;
+				skin_stride += 4 * sizeof(float);
+				v.attribs[i].normalized = GL_FALSE;
 			} break;
 		}
 	}
@@ -1172,17 +1214,17 @@ void MeshStorage::_mesh_surface_generate_version_for_input_mask_3d(Mesh::Surface
 			} break;
 			case RS::ARRAY_BONES: {
 				v.attribs[i].offset = skin_stride;
-				v.attribs[i].type = GL_UNSIGNED_SHORT;
+				v.attribs[i].type = GL_FLOAT;
 				v.attribs[i].size = (s->format & RS::ARRAY_FLAG_USE_8_BONE_WEIGHTS) ? 8 : 4;
 				v.attribs[i].normalized = GL_FALSE;
-				skin_stride += v.attribs[i].size * sizeof(uint16_t);
+				skin_stride += v.attribs[i].size * sizeof(float);
 			} break;
 			case RS::ARRAY_WEIGHTS: {
 				v.attribs[i].offset = skin_stride;
-				v.attribs[i].type = GL_UNSIGNED_SHORT;
+				v.attribs[i].type = GL_FLOAT;
 				v.attribs[i].size = (s->format & RS::ARRAY_FLAG_USE_8_BONE_WEIGHTS) ? 8 : 4;
-				v.attribs[i].normalized = GL_TRUE;
-				skin_stride += v.attribs[i].size * sizeof(uint16_t);
+				v.attribs[i].normalized = GL_FALSE;
+				skin_stride += v.attribs[i].size * sizeof(float);
 			} break;
 		}
 	}
@@ -1360,7 +1402,110 @@ void MeshStorage::_decompress_surface_data_3d(RS::SurfaceData &r_surface, Mesh::
 		r_surface.blend_shape_data = new_bs_data;
 	}
 
+	_decompress_attribute_buffer_3d(r_surface, vertex_count);
+
 	r_surface.format &= ~RS::ARRAY_FLAG_COMPRESS_ATTRIBUTES;
+}
+
+void MeshStorage::_decompress_attribute_buffer_3d(RS::SurfaceData &r_surface, uint32_t p_vertex_count) {
+	if (r_surface.attribute_data.is_empty() || p_vertex_count == 0) {
+		return;
+	}
+	bool has_color = r_surface.format & RS::ARRAY_FORMAT_COLOR;
+	bool has_uv = r_surface.format & RS::ARRAY_FORMAT_TEX_UV;
+	bool has_uv2 = r_surface.format & RS::ARRAY_FORMAT_TEX_UV2;
+
+	uint32_t custom_total_bytes = 0;
+	for (int i = 0; i < RS::ARRAY_CUSTOM_COUNT; i++) {
+		if (r_surface.format & (1ULL << (RS::ARRAY_CUSTOM0 + i))) {
+			const uint32_t fmt_shift[RS::ARRAY_CUSTOM_COUNT] = { RS::ARRAY_FORMAT_CUSTOM0_SHIFT, RS::ARRAY_FORMAT_CUSTOM1_SHIFT, RS::ARRAY_FORMAT_CUSTOM2_SHIFT, RS::ARRAY_FORMAT_CUSTOM3_SHIFT };
+			const uint32_t fmtsize[RS::ARRAY_CUSTOM_MAX] = { 4, 4, 4, 8, 4, 8, 12, 16 };
+			uint32_t fmt = (r_surface.format >> fmt_shift[i]) & RS::ARRAY_FORMAT_CUSTOM_MASK;
+			custom_total_bytes += fmtsize[fmt];
+		}
+	}
+
+	uint32_t actual_src_a_stride = r_surface.attribute_data.size() / p_vertex_count;
+	uint32_t non_uv_bytes = (has_color ? 4 : 0) + custom_total_bytes;
+	uint32_t uv_count = (has_uv ? 1 : 0) + (has_uv2 ? 1 : 0);
+
+	// If each UV is already 8 bytes (float2), no UV decompression is needed
+	if (uv_count > 0 && actual_src_a_stride == non_uv_bytes + uv_count * 8) {
+		return;
+	}
+
+	uint32_t src_col_offset = 0;
+	uint32_t src_a_stride = has_color ? 4 : 0;
+
+	uint32_t src_uv_offset = src_a_stride;
+	if (has_uv) {
+		src_a_stride += 4;
+	}
+
+	uint32_t src_uv2_offset = src_a_stride;
+	if (has_uv2) {
+		src_a_stride += 4;
+	}
+
+	uint32_t custom_bytes = (actual_src_a_stride > src_a_stride) ? (actual_src_a_stride - src_a_stride) : 0;
+
+	uint32_t dst_col_bytes = has_color ? 4 : 0;
+	uint32_t dst_uv_bytes = has_uv ? 8 : 0;
+	uint32_t dst_uv2_bytes = has_uv2 ? 8 : 0;
+	uint32_t dst_a_stride = dst_col_bytes + dst_uv_bytes + dst_uv2_bytes + custom_bytes;
+
+	Vector<uint8_t> new_a_data;
+	new_a_data.resize(p_vertex_count * dst_a_stride);
+
+	const uint8_t *src_a = r_surface.attribute_data.ptr();
+	uint8_t *dst_a = new_a_data.ptrw();
+	bool use_uv_scale = !r_surface.uv_scale.is_zero_approx();
+
+	for (uint32_t i = 0; i < p_vertex_count; i++) {
+		const uint8_t *sa = src_a + (i * actual_src_a_stride);
+		uint8_t *da = dst_a + (i * dst_a_stride);
+		uint32_t dst_offset = 0;
+
+		if (has_color) {
+			da[dst_offset + 0] = sa[src_col_offset + 0];
+			da[dst_offset + 1] = sa[src_col_offset + 1];
+			da[dst_offset + 2] = sa[src_col_offset + 2];
+			da[dst_offset + 3] = sa[src_col_offset + 3];
+			dst_offset += 4;
+		}
+
+		if (has_uv) {
+			float *du = (float *)(da + dst_offset);
+			const uint16_t *uv_src = (const uint16_t *)(sa + src_uv_offset);
+			if (use_uv_scale) {
+				du[0] = (uv_src[0] / 65535.0f - 0.5f) * r_surface.uv_scale.x;
+				du[1] = (uv_src[1] / 65535.0f - 0.5f) * r_surface.uv_scale.y;
+			} else {
+				du[0] = Math::half_to_float(uv_src[0]);
+				du[1] = Math::half_to_float(uv_src[1]);
+			}
+			dst_offset += 8;
+		}
+
+		if (has_uv2) {
+			float *du2 = (float *)(da + dst_offset);
+			const uint16_t *uv2_src = (const uint16_t *)(sa + src_uv2_offset);
+			if (use_uv_scale) {
+				du2[0] = (uv2_src[0] / 65535.0f - 0.5f) * r_surface.uv_scale.z;
+				du2[1] = (uv2_src[1] / 65535.0f - 0.5f) * r_surface.uv_scale.w;
+			} else {
+				du2[0] = Math::half_to_float(uv2_src[0]);
+				du2[1] = Math::half_to_float(uv2_src[1]);
+			}
+			dst_offset += 8;
+		}
+
+		if (custom_bytes > 0) {
+			memcpy(da + dst_offset, sa + src_a_stride, custom_bytes);
+		}
+	}
+
+	r_surface.attribute_data = new_a_data;
 }
 
 void MeshStorage::_decompress_3d_buffer(const uint8_t *p_src, uint8_t *p_dst, uint32_t p_vertex_count, uint64_t p_format, uint32_t p_compressed_stride, uint32_t p_uncompressed_stride, const AABB &p_aabb) {
@@ -1368,15 +1513,38 @@ void MeshStorage::_decompress_3d_buffer(const uint8_t *p_src, uint8_t *p_dst, ui
 	bool has_normal = p_format & RS::ARRAY_FORMAT_NORMAL;
 	bool has_tangent = p_format & RS::ARRAY_FORMAT_TANGENT;
 
-	// Source offsets (Planar for position, Interleaved for normals/tangents)
-	uint32_t src_pos_base = 0;
+	// Determine whether position is 8-byte (4x uint16_t UNORM) or 12-byte (3x float)
+	uint32_t expected_norm_tang_stride = (has_normal ? 4 : 0) + (has_tangent ? 4 : 0);
+	bool combined_pos_norm_tang = false;
+	uint32_t src_pos_stride = 0;
 
-	// The attribute block starts after the planar position block
-	const uint8_t *src_attr_base = p_src + (has_vertex ? (p_vertex_count * 12) : 0);
-	uint32_t src_attr_stride = (has_normal ? 4 : 0) + (has_tangent ? 4 : 0);
+	if (has_vertex) {
+		if (has_normal && !has_tangent && p_compressed_stride == 8) {
+			// 3x uint16_t position (6 bytes) + 2x uint8_t octahedral normal (2 bytes)
+			// packed into 8 bytes, no separate attribute stream.
+			src_pos_stride = 8;
+			combined_pos_norm_tang = true;
+		} else if (p_compressed_stride == 8 + expected_norm_tang_stride) {
+			// 4x uint16_t position (8 bytes) followed by separate normal/tangent attribute stream.
+			src_pos_stride = 8;
+		} else if (has_normal && has_tangent && p_compressed_stride == 12) {
+			// 3x uint16_t position (6 bytes) + 2x uint8_t octahedral normal (2 bytes) packed into 8 bytes,
+			// followed by a separate 4-byte octahedral tangent stream (8 + 4 = 12 bytes total stride).
+			src_pos_stride = 8;
+			combined_pos_norm_tang = true;
+		} else {
+			// Uncompressed 3x float position (12 bytes) followed by separate normal/tangent attribute stream.
+			src_pos_stride = 12;
+		}
+	}
 
+	const uint8_t *src_attr_base = p_src + (has_vertex ? (p_vertex_count * src_pos_stride) : 0);
+	uint32_t src_attr_stride = combined_pos_norm_tang ? (has_tangent ? 4 : 0) : expected_norm_tang_stride;
+
+	// If normals are packed into the position block,
+	// tangents start at offset 0 of the attribute stream instead of offset 4.
 	uint32_t src_norm_offset = 0;
-	uint32_t src_tang_offset = has_normal ? 4 : 0;
+	uint32_t src_tang_offset = combined_pos_norm_tang ? 0 : (has_normal ? 4 : 0);
 
 	// Destination offsets (uncompressed, fully interleaved layout)
 	uint32_t dst_pos_offset = 0;
@@ -1388,28 +1556,41 @@ void MeshStorage::_decompress_3d_buffer(const uint8_t *p_src, uint8_t *p_dst, ui
 		uint8_t *dst_v = p_dst + (i * p_uncompressed_stride);
 
 		if (has_vertex) {
-			// Read from the planar position block
-			const float *pos_src = (const float *)(p_src + src_pos_base + (i * 12));
 			float *pos_dst = (float *)(dst_v + dst_pos_offset);
-
-			pos_dst[0] = pos_src[0];
-			pos_dst[1] = pos_src[1];
-			pos_dst[2] = pos_src[2];
+			if (src_pos_stride == 8) {
+				const uint16_t *pos_src = (const uint16_t *)(p_src + (i * 8));
+				pos_dst[0] = (pos_src[0] / 65535.0f) * p_aabb.size.x + p_aabb.position.x;
+				pos_dst[1] = (pos_src[1] / 65535.0f) * p_aabb.size.y + p_aabb.position.y;
+				pos_dst[2] = (pos_src[2] / 65535.0f) * p_aabb.size.z + p_aabb.position.z;
+			} else {
+				const float *pos_src = (const float *)(p_src + (i * 12));
+				pos_dst[0] = pos_src[0];
+				pos_dst[1] = pos_src[1];
+				pos_dst[2] = pos_src[2];
+			}
 		}
 
 		if (has_normal) {
-			// Read from the compressed interleaved attribute layout
-			const uint16_t *norm_src = (const uint16_t *)(src_a + src_norm_offset);
 			float *norm_dst = (float *)(dst_v + dst_norm_offset);
-
-			Vector3 normal = _gles2_decode_octahedral_normal(norm_src[0], norm_src[1]);
-			norm_dst[0] = normal.x;
-			norm_dst[1] = normal.y;
-			norm_dst[2] = normal.z;
+			const uint16_t *norm_src = nullptr;
+			if (combined_pos_norm_tang) {
+				const uint8_t *norm_u8 = p_src + (i * 8) + 6;
+				uint16_t nx = (uint16_t)norm_u8[0] * 257;
+				uint16_t ny = (uint16_t)norm_u8[1] * 257;
+				Vector3 normal = _gles2_decode_octahedral_normal(nx, ny);
+				norm_dst[0] = normal.x;
+				norm_dst[1] = normal.y;
+				norm_dst[2] = normal.z;
+			} else {
+				norm_src = (const uint16_t *)(src_a + src_norm_offset);
+				Vector3 normal = _gles2_decode_octahedral_normal(norm_src[0], norm_src[1]);
+				norm_dst[0] = normal.x;
+				norm_dst[1] = normal.y;
+				norm_dst[2] = normal.z;
+			}
 		}
 
 		if (has_tangent) {
-			// Read from the compressed interleaved attribute layout
 			const uint16_t *tang_src = (const uint16_t *)(src_a + src_tang_offset);
 			float *tang_dst = (float *)(dst_v + dst_tang_offset);
 
@@ -1431,12 +1612,11 @@ Array MeshStorage::mesh_surface_get_arrays(RID p_mesh, int p_surface) const {
 	ERR_FAIL_UNSIGNED_INDEX_V((uint32_t)p_surface, mesh->surface_count, Array());
 
 	Mesh::Surface *s = mesh->surfaces[p_surface];
-	RS::SurfaceData sd = mesh_get_surface(p_mesh, p_surface);
 
 	Array arrays;
 	arrays.resize(RS::ARRAY_MAX);
 
-	if (sd.vertex_count == 0) {
+	if (s->vertex_count == 0) {
 		return arrays;
 	}
 
@@ -1466,26 +1646,36 @@ Array MeshStorage::mesh_surface_get_arrays(RID p_mesh, int p_surface) const {
 	Mesh::Surface::Version v;
 	const_cast<MeshStorage *>(this)->_mesh_surface_generate_version_for_input_mask(v, s, 0xFFFFFFFF);
 
-	const uint8_t *v_data = sd.vertex_data.is_empty() ? nullptr : sd.vertex_data.ptr();
-	const uint8_t *a_data = sd.attribute_data.is_empty() ? nullptr : sd.attribute_data.ptr();
+	Vector<uint8_t> v_buf;
+	if (s->vertex_buffer != 0) {
+		v_buf = GLES2::Utilities::get_singleton()->buffer_get_data(GL_ARRAY_BUFFER, s->vertex_buffer, s->vertex_buffer_size);
+	}
+	Vector<uint8_t> a_buf;
+	if (s->attribute_buffer != 0) {
+		a_buf = GLES2::Utilities::get_singleton()->buffer_get_data(GL_ARRAY_BUFFER, s->attribute_buffer, s->attribute_buffer_size);
+	}
+	Vector<uint8_t> i_buf;
+	if (s->index_count > 0 && s->index_buffer != 0) {
+		i_buf = GLES2::Utilities::get_singleton()->buffer_get_data(GL_ELEMENT_ARRAY_BUFFER, s->index_buffer, s->index_buffer_size);
+	}
+
+	const uint8_t *v_data = v_buf.is_empty() ? nullptr : v_buf.ptr();
+	const uint8_t *a_data = a_buf.is_empty() ? nullptr : a_buf.ptr();
 
 	// Vertex
 	if (v.attribs[RS::ARRAY_VERTEX].enabled && v_data) {
 		PackedVector3Array vertices;
-		vertices.resize(sd.vertex_count);
+		vertices.resize(s->vertex_count);
 		Vector3 *dst = vertices.ptrw();
 		int stride = v.attribs[RS::ARRAY_VERTEX].stride;
 		int offset = v.attribs[RS::ARRAY_VERTEX].offset;
 
-		for (uint32_t i = 0; i < sd.vertex_count; i++) {
+		for (uint32_t i = 0; i < s->vertex_count; i++) {
 			const uint8_t *src = v_data + i * stride + offset;
+			const float *f = (const float *)src;
 			if (s->format & RS::ARRAY_FLAG_USE_2D_VERTICES) {
-				const float *f = (const float *)src;
-				dst[i] = Vector3(f[0], f[1], 0);
-			} else if (s->format & RS::ARRAY_FLAG_COMPRESS_ATTRIBUTES) {
-				dst[i] = Vector3(0, 0, 0);
+				dst[i] = Vector3(f[0], f[1], 0.0f);
 			} else {
-				const float *f = (const float *)src;
 				dst[i] = Vector3(f[0], f[1], f[2]);
 			}
 		}
@@ -1496,27 +1686,21 @@ Array MeshStorage::mesh_surface_get_arrays(RID p_mesh, int p_surface) const {
 	// Normal
 	if (v.attribs[RS::ARRAY_NORMAL].enabled && v_data) {
 		PackedVector3Array normals;
-		normals.resize(sd.vertex_count);
+		normals.resize(s->vertex_count);
 		Vector3 *dst = normals.ptrw();
 		int stride = v.attribs[RS::ARRAY_NORMAL].stride;
 		int offset = v.attribs[RS::ARRAY_NORMAL].offset;
 
-		for (uint32_t i = 0; i < sd.vertex_count; i++) {
+		for (uint32_t i = 0; i < s->vertex_count; i++) {
 			uint32_t read_offset = i * stride + offset;
 
-			// Don't overflow past an offset.
-			if ((read_offset + sizeof(float) * 3) > (uint32_t)(sd.vertex_data.size())) {
-				dst[i] = Vector3(0, 1, 0);
+			if ((read_offset + sizeof(float) * 3) > (uint32_t)(v_buf.size())) {
+				dst[i] = Vector3(0.0f, 1.0f, 0.0f);
 				continue;
 			}
 
-			const uint8_t *src = v_data + read_offset;
-			if (!(s->format & RS::ARRAY_FLAG_COMPRESS_ATTRIBUTES)) {
-				const float *f = (const float *)src;
-				dst[i] = Vector3(f[0], f[1], f[2]);
-			} else {
-				dst[i] = Vector3(0, 1, 0);
-			}
+			const float *f = (const float *)(v_data + read_offset);
+			dst[i] = Vector3(f[0], f[1], f[2]);
 		}
 		s->normal_cache = normals;
 		arrays[RS::ARRAY_NORMAL] = normals;
@@ -1525,25 +1709,27 @@ Array MeshStorage::mesh_surface_get_arrays(RID p_mesh, int p_surface) const {
 	// Tangent
 	if (v.attribs[RS::ARRAY_TANGENT].enabled && v_data) {
 		PackedFloat32Array tangents;
-		tangents.resize(sd.vertex_count * 4);
+		tangents.resize(s->vertex_count * 4);
 		float *dst = tangents.ptrw();
 		int stride = v.attribs[RS::ARRAY_TANGENT].stride;
 		int offset = v.attribs[RS::ARRAY_TANGENT].offset;
 
-		for (uint32_t i = 0; i < sd.vertex_count; i++) {
-			const uint8_t *src = v_data + i * stride + offset;
-			if (!(s->format & RS::ARRAY_FLAG_COMPRESS_ATTRIBUTES)) {
-				const float *f = (const float *)src;
-				dst[i * 4 + 0] = f[0];
-				dst[i * 4 + 1] = f[1];
-				dst[i * 4 + 2] = f[2];
-				dst[i * 4 + 3] = f[3];
-			} else {
+		for (uint32_t i = 0; i < s->vertex_count; i++) {
+			uint32_t read_offset = i * stride + offset;
+
+			if ((read_offset + sizeof(float) * 4) > (uint32_t)(v_buf.size())) {
 				dst[i * 4 + 0] = 1.0f;
 				dst[i * 4 + 1] = 0.0f;
 				dst[i * 4 + 2] = 0.0f;
 				dst[i * 4 + 3] = 1.0f;
+				continue;
 			}
+
+			const float *f = (const float *)(v_data + read_offset);
+			dst[i * 4 + 0] = f[0];
+			dst[i * 4 + 1] = f[1];
+			dst[i * 4 + 2] = f[2];
+			dst[i * 4 + 3] = f[3];
 		}
 		s->tangent_cache = tangents;
 		arrays[RS::ARRAY_TANGENT] = tangents;
@@ -1552,14 +1738,19 @@ Array MeshStorage::mesh_surface_get_arrays(RID p_mesh, int p_surface) const {
 	// Color
 	if (v.attribs[RS::ARRAY_COLOR].enabled && a_data) {
 		PackedColorArray colors;
-		colors.resize(sd.vertex_count);
+		colors.resize(s->vertex_count);
 		Color *dst = colors.ptrw();
 		int stride = v.attribs[RS::ARRAY_COLOR].stride;
 		int offset = v.attribs[RS::ARRAY_COLOR].offset;
 
-		for (uint32_t i = 0; i < sd.vertex_count; i++) {
+		for (uint32_t i = 0; i < s->vertex_count; i++) {
 			const uint8_t *src = a_data + i * stride + offset;
-			dst[i] = Color(src[0] / 255.0f, src[1] / 255.0f, src[2] / 255.0f, src[3] / 255.0f);
+			if (v.attribs[RS::ARRAY_COLOR].type == GL_FLOAT) {
+				const float *f = (const float *)src;
+				dst[i] = Color(f[0], f[1], f[2], f[3]);
+			} else {
+				dst[i] = Color(src[0] / 255.0f, src[1] / 255.0f, src[2] / 255.0f, src[3] / 255.0f);
+			}
 		}
 		s->color_cache = colors;
 		arrays[RS::ARRAY_COLOR] = colors;
@@ -1568,19 +1759,14 @@ Array MeshStorage::mesh_surface_get_arrays(RID p_mesh, int p_surface) const {
 	// tex_uv
 	if (v.attribs[RS::ARRAY_TEX_UV].enabled && a_data) {
 		PackedVector2Array uvs;
-		uvs.resize(sd.vertex_count);
+		uvs.resize(s->vertex_count);
 		Vector2 *dst = uvs.ptrw();
 		int stride = v.attribs[RS::ARRAY_TEX_UV].stride;
 		int offset = v.attribs[RS::ARRAY_TEX_UV].offset;
 
-		for (uint32_t i = 0; i < sd.vertex_count; i++) {
-			const uint8_t *src = a_data + i * stride + offset;
-			if (!(s->format & RS::ARRAY_FLAG_COMPRESS_ATTRIBUTES)) {
-				const float *f = (const float *)src;
-				dst[i] = Vector2(f[0], f[1]);
-			} else {
-				dst[i] = Vector2(0, 0);
-			}
+		for (uint32_t i = 0; i < s->vertex_count; i++) {
+			const float *f = (const float *)(a_data + i * stride + offset);
+			dst[i] = Vector2(f[0], f[1]);
 		}
 		s->uv_cache = uvs;
 		arrays[RS::ARRAY_TEX_UV] = uvs;
@@ -1589,33 +1775,28 @@ Array MeshStorage::mesh_surface_get_arrays(RID p_mesh, int p_surface) const {
 	// tex_uv2
 	if (v.attribs[RS::ARRAY_TEX_UV2].enabled && a_data) {
 		PackedVector2Array uvs2;
-		uvs2.resize(sd.vertex_count);
+		uvs2.resize(s->vertex_count);
 		Vector2 *dst = uvs2.ptrw();
 		int stride = v.attribs[RS::ARRAY_TEX_UV2].stride;
 		int offset = v.attribs[RS::ARRAY_TEX_UV2].offset;
 
-		for (uint32_t i = 0; i < sd.vertex_count; i++) {
-			const uint8_t *src = a_data + i * stride + offset;
-			if (!(s->format & RS::ARRAY_FLAG_COMPRESS_ATTRIBUTES)) {
-				const float *f = (const float *)src;
-				dst[i] = Vector2(f[0], f[1]);
-			} else {
-				dst[i] = Vector2(0, 0);
-			}
+		for (uint32_t i = 0; i < s->vertex_count; i++) {
+			const float *f = (const float *)(a_data + i * stride + offset);
+			dst[i] = Vector2(f[0], f[1]);
 		}
 		s->uv2_cache = uvs2;
 		arrays[RS::ARRAY_TEX_UV2] = uvs2;
 	}
 
 	// Index
-	if (sd.index_count > 0 && !sd.index_data.is_empty()) {
+	if (s->index_count > 0 && !i_buf.is_empty()) {
 		PackedInt32Array indices;
-		indices.resize(sd.index_count);
+		indices.resize(s->index_count);
 		int32_t *dst = indices.ptrw();
-		const uint8_t *i_data = sd.index_data.ptr();
+		const uint8_t *i_data = i_buf.ptr();
 
-		bool use_16 = (sd.vertex_count <= 65536);
-		for (uint32_t i = 0; i < sd.index_count; i++) {
+		const bool use_16 = (s->vertex_count <= 65536);
+		for (uint32_t i = 0; i < s->index_count; i++) {
 			if (use_16) {
 				dst[i] = ((const uint16_t *)i_data)[i];
 			} else {
@@ -1669,7 +1850,6 @@ RID MeshStorage::mesh_instance_create(RID p_base) {
 	RID rid = mesh_instance_owner.make_rid();
 	MeshInstance *mi = mesh_instance_owner.get_or_null(rid);
 	ERR_FAIL_NULL_V(mi, RID());
-
 	mi->mesh = mesh;
 
 	for (uint32_t i = 0; i < mesh->surface_count; i++) {
@@ -1678,6 +1858,9 @@ RID MeshStorage::mesh_instance_create(RID p_base) {
 
 	mi->I = mesh->instances.push_back(mi);
 	mi->dirty = true;
+	if (!mi->array_update_list.in_list()) {
+		dirty_mesh_instance_arrays.add(&mi->array_update_list);
+	}
 
 	return rid;
 }
@@ -1687,6 +1870,12 @@ void MeshStorage::mesh_instance_free(RID p_rid) {
 	ERR_FAIL_NULL(mi);
 
 	_mesh_instance_clear(mi);
+	if (mi->array_update_list.in_list()) {
+		dirty_mesh_instance_arrays.remove(&mi->array_update_list);
+	}
+	if (mi->weight_update_list.in_list()) {
+		dirty_mesh_instance_weights.remove(&mi->weight_update_list);
+	}
 	mi->mesh->instances.erase(mi->I);
 	mi->I = nullptr;
 
@@ -1695,12 +1884,15 @@ void MeshStorage::mesh_instance_free(RID p_rid) {
 
 void MeshStorage::mesh_instance_set_skeleton(RID p_mesh_instance, RID p_skeleton) {
 	MeshInstance *mi = mesh_instance_owner.get_or_null(p_mesh_instance);
-	if (mi->skeleton == p_skeleton) {
+	if (!mi || mi->skeleton == p_skeleton) {
 		return;
 	}
 	mi->skeleton = p_skeleton;
 	mi->skeleton_version = 0;
 	mi->dirty = true;
+	if (!mi->array_update_list.in_list()) {
+		dirty_mesh_instance_arrays.add(&mi->array_update_list);
+	}
 }
 
 void MeshStorage::mesh_instance_set_blend_shape_weight(RID p_mesh_instance, int p_shape, float p_weight) {
@@ -1713,11 +1905,14 @@ void MeshStorage::mesh_instance_set_blend_shape_weight(RID p_mesh_instance, int 
 
 void MeshStorage::_mesh_instance_clear(MeshInstance *mi) {
 	for (uint32_t i = 0; i < mi->surfaces.size(); i++) {
-		if (GLES2_CONFIG->support_vao) {
-			for (uint32_t j = 0; j < mi->surfaces[i].version_count; j++) {
-				if (mi->surfaces[i].versions[j].vertex_array != 0) {
-					glDeleteVertexArrays(1, &mi->surfaces[i].versions[j].vertex_array);
-				}
+		if (mi->surfaces[i].vertex_buffer != 0) {
+			GLES2::Utilities::get_singleton()->buffer_free_data(mi->surfaces[i].vertex_buffer);
+			mi->surfaces[i].vertex_buffer = 0;
+		}
+		for (int j = 0; j < 2; j++) {
+			if (mi->surfaces[i].vertex_buffers[j] != 0) {
+				GLES2::Utilities::get_singleton()->buffer_free_data(mi->surfaces[i].vertex_buffers[j]);
+				mi->surfaces[i].vertex_buffers[j] = 0;
 			}
 		}
 
@@ -1753,28 +1948,40 @@ void MeshStorage::_mesh_instance_add_surface(MeshInstance *mi, Mesh *mesh, uint3
 		}
 		if ((s.format_cache & (1ULL << RS::ARRAY_NORMAL))) {
 			s.vertex_normal_offset_cache = s.vertex_stride_cache;
-			s.vertex_stride_cache += sizeof(uint32_t) * 2;
+			s.vertex_stride_cache += sizeof(float) * 3;
 		}
 		if ((s.format_cache & (1ULL << RS::ARRAY_TANGENT))) {
 			s.vertex_tangent_offset_cache = s.vertex_stride_cache;
-			s.vertex_stride_cache += sizeof(uint32_t) * 2;
+			s.vertex_stride_cache += sizeof(float) * 4;
 		}
 
-		int buffer_size = s.vertex_stride_cache * mesh->surfaces[p_surface]->vertex_count;
+		uint32_t buffer_size = s.vertex_stride_cache * mesh->surfaces[p_surface]->vertex_count;
+		const void *initial_data = nullptr;
+		if ((uint32_t)mesh->surfaces[p_surface]->uncompressed_buffer.size() == buffer_size) {
+			initial_data = mesh->surfaces[p_surface]->uncompressed_buffer.ptr();
+		}
+
+		GLint prev_array_buffer = 0;
+		glGetIntegerv(GL_ARRAY_BUFFER_BINDING, &prev_array_buffer);
+		GL_CHECK_ERROR("GLES2::MeshStorage::_mesh_instance_add_surface: glGetIntegerv GL_ARRAY_BUFFER_BINDING");
 
 		// Buffer to be used for rendering. Final output of skeleton and blend shapes.
 		glGenBuffers(1, &s.vertex_buffer);
 		glBindBuffer(GL_ARRAY_BUFFER, s.vertex_buffer);
-		GLES2::Utilities::get_singleton()->buffer_allocate_data(GL_ARRAY_BUFFER, s.vertex_buffer, buffer_size, nullptr, GL_DYNAMIC_DRAW, "MeshInstance vertex buffer");
+		GLES2::Utilities::get_singleton()->buffer_allocate_data(GL_ARRAY_BUFFER, s.vertex_buffer, buffer_size, initial_data, GL_DYNAMIC_DRAW, "MeshInstance vertex buffer");
+		GL_CHECK_ERROR("GLES2::MeshStorage::_mesh_instance_add_surface: buffer_allocate_data vertex_buffer");
+
 		if (mesh->blend_shape_count > 0) {
 			// Ping-Pong buffers for processing blendshapes.
 			glGenBuffers(2, s.vertex_buffers);
 			for (uint32_t i = 0; i < 2; i++) {
 				glBindBuffer(GL_ARRAY_BUFFER, s.vertex_buffers[i]);
-				GLES2::Utilities::get_singleton()->buffer_allocate_data(GL_ARRAY_BUFFER, s.vertex_buffers[i], buffer_size, nullptr, GL_DYNAMIC_DRAW, "MeshInstance process buffer[" + itos(i) + "]");
+				GLES2::Utilities::get_singleton()->buffer_allocate_data(GL_ARRAY_BUFFER, s.vertex_buffers[i], buffer_size, initial_data, GL_DYNAMIC_DRAW, "MeshInstance process buffer[" + itos(i) + "]");
+				GL_CHECK_ERROR("GLES2::MeshStorage::_mesh_instance_add_surface: buffer_allocate_data process buffer");
 			}
 		}
-		glBindBuffer(GL_ARRAY_BUFFER, 0); //unbind
+		glBindBuffer(GL_ARRAY_BUFFER, prev_array_buffer);
+		GL_CHECK_ERROR("GLES2::MeshStorage::_mesh_instance_add_surface: restore GL_ARRAY_BUFFER");
 	}
 
 	mi->surfaces.push_back(s);
@@ -1784,12 +1991,14 @@ void MeshStorage::_mesh_instance_add_surface(MeshInstance *mi, Mesh *mesh, uint3
 void MeshStorage::_mesh_instance_remove_surface(MeshInstance *mi, int p_surface) {
 	ERR_FAIL_UNSIGNED_INDEX((uint32_t)p_surface, mi->surfaces.size());
 
-	// Clean up instance-specific VAOs
-	if (GLES2_CONFIG->support_vao) {
-		for (uint32_t j = 0; j < mi->surfaces[p_surface].version_count; j++) {
-			if (mi->surfaces[p_surface].versions[j].vertex_array != 0) {
-				glDeleteVertexArrays(1, &mi->surfaces[p_surface].versions[j].vertex_array);
-			}
+	if (mi->surfaces[p_surface].vertex_buffer != 0) {
+		GLES2::Utilities::get_singleton()->buffer_free_data(mi->surfaces[p_surface].vertex_buffer);
+		mi->surfaces[p_surface].vertex_buffer = 0;
+	}
+	for (int j = 0; j < 2; j++) {
+		if (mi->surfaces[p_surface].vertex_buffers[j] != 0) {
+			GLES2::Utilities::get_singleton()->buffer_free_data(mi->surfaces[p_surface].vertex_buffers[j]);
+			mi->surfaces[p_surface].vertex_buffers[j] = 0;
 		}
 	}
 	if (mi->surfaces[p_surface].versions) {
@@ -1858,7 +2067,7 @@ void MeshStorage::_blend_shape_bind_mesh_instance_buffer(MeshInstance *p_mi, uin
 	GL_CHECK_ERROR("GLES2::MeshStorage::_blend_shape_bind_mesh_instance_buffer");
 }
 
-void MeshStorage::_compute_skeleton(MeshInstance *p_mi, Skeleton *p_sk, uint32_t p_surface) {
+void MeshStorage::_compute_skeleton_2d(MeshInstance *p_mi, Skeleton *p_sk, uint32_t p_surface) {
 	ERR_FAIL_NULL(p_mi);
 	ERR_FAIL_NULL(p_sk);
 
@@ -1973,16 +2182,201 @@ void MeshStorage::_compute_skeleton(MeshInstance *p_mi, Skeleton *p_sk, uint32_t
 	return;
 }
 
+void MeshStorage::_compute_skeleton_3d(MeshInstance *p_mi, Skeleton *p_sk, uint32_t p_surface) {
+	ERR_FAIL_NULL(p_mi);
+	ERR_FAIL_NULL(p_sk);
+
+	Mesh::Surface *s = p_mi->mesh->surfaces[p_surface];
+	Vector<uint8_t> src_vertices = GLES2::Utilities::get_singleton()->buffer_get_data(GL_ARRAY_BUFFER, s->vertex_buffer, s->vertex_buffer_size);
+	Vector<uint8_t> src_skin = GLES2::Utilities::get_singleton()->buffer_get_data(GL_ARRAY_BUFFER, s->skin_buffer, s->skin_buffer_size);
+
+	if (src_vertices.is_empty() || src_skin.is_empty()) {
+		return;
+	}
+
+	bool use_8_weights = p_mi->surfaces[p_surface].format_cache & RS::ARRAY_FLAG_USE_8_BONE_WEIGHTS;
+	bool has_normal = p_mi->surfaces[p_surface].format_cache & RS::ARRAY_FORMAT_NORMAL;
+	bool has_tangent = p_mi->surfaces[p_surface].format_cache & RS::ARRAY_FORMAT_TANGENT;
+
+	int vertex_count = s->vertex_count;
+	int dst_vertex_stride = p_mi->surfaces[p_surface].vertex_stride_cache;
+	int src_vertex_stride = s->vertex_buffer_size / vertex_count;
+	int skin_stride = s->skin_buffer_size / vertex_count;
+
+	Vector<uint8_t> dst_vertices;
+	dst_vertices.resize(vertex_count * dst_vertex_stride);
+
+	uint8_t *v_w = dst_vertices.ptrw();
+	const uint8_t *v_r = src_vertices.ptr();
+	const uint8_t *s_r = src_skin.ptr();
+	const float *bone_data = p_sk->data.ptr();
+
+	for (int i = 0; i < vertex_count; i++) {
+		const uint8_t *p32 = v_r + i * src_vertex_stride;
+
+		Vector3 src_pos(
+			unaligned_read<float>(p32 + 0),
+			unaligned_read<float>(p32 + 4),
+			unaligned_read<float>(p32 + 8)
+		);
+
+		Vector3 src_norm;
+		if (has_normal) {
+			src_norm = Vector3(
+				unaligned_read<float>(p32 + 12),
+				unaligned_read<float>(p32 + 16),
+				unaligned_read<float>(p32 + 20)
+			);
+		}
+
+		Vector3 src_tang;
+		float src_binorm_sign = 1.0f;
+		if (has_tangent) {
+			src_tang = Vector3(
+				unaligned_read<float>(p32 + 24),
+				unaligned_read<float>(p32 + 28),
+				unaligned_read<float>(p32 + 32)
+			);
+			src_binorm_sign = unaligned_read<float>(p32 + 36);
+		}
+
+		const uint8_t *bones_ptr = s_r + i * skin_stride;
+		const uint8_t *weights_ptr = s_r + i * skin_stride + (use_8_weights ? 8 : 4) * sizeof(uint16_t);
+
+		Vector3 dst_pos;
+		Vector3 dst_norm;
+		Vector3 dst_tang;
+		float total_weight = 0.0f;
+		int weight_count = use_8_weights ? 8 : 4;
+
+		for (int k = 0; k < weight_count; k++) {
+			uint16_t weight_val = unaligned_read<uint16_t>(weights_ptr + k * sizeof(uint16_t));
+			float w = weight_val / 65535.0f;
+			if (w == 0.0f) {
+				continue;
+			}
+			total_weight += w;
+
+			uint16_t bone_idx = unaligned_read<uint16_t>(bones_ptr + k * sizeof(uint16_t));
+			if (bone_idx >= p_sk->size) {
+				continue;
+			}
+
+			Transform3D b_xform;
+			const float *b_ptr = bone_data + bone_idx * 12;
+
+			b_xform.basis.rows[0][0] = b_ptr[0];
+			b_xform.basis.rows[0][1] = b_ptr[1];
+			b_xform.basis.rows[0][2] = b_ptr[2];
+			b_xform.origin.x = b_ptr[3];
+			b_xform.basis.rows[1][0] = b_ptr[4];
+			b_xform.basis.rows[1][1] = b_ptr[5];
+			b_xform.basis.rows[1][2] = b_ptr[6];
+			b_xform.origin.y = b_ptr[7];
+			b_xform.basis.rows[2][0] = b_ptr[8];
+			b_xform.basis.rows[2][1] = b_ptr[9];
+			b_xform.basis.rows[2][2] = b_ptr[10];
+			b_xform.origin.z = b_ptr[11];
+
+			dst_pos += b_xform.xform(src_pos) * w;
+
+			if (has_normal) {
+				dst_norm += b_xform.basis.xform(src_norm) * w;
+			}
+			if (has_tangent) {
+				dst_tang += b_xform.basis.xform(src_tang) * w;
+			}
+		}
+
+		if (total_weight < 0.01f) {
+			dst_pos = src_pos;
+			dst_norm = src_norm;
+			dst_tang = src_tang;
+		} else {
+			dst_pos /= total_weight;
+			if (has_normal) {
+				dst_norm = (dst_norm / total_weight).normalized();
+			}
+			if (has_tangent) {
+				dst_tang = (dst_tang / total_weight).normalized();
+			}
+		}
+
+		uint8_t *w32 = v_w + i * dst_vertex_stride;
+
+		unaligned_write<float>(w32 + 0, dst_pos.x);
+		unaligned_write<float>(w32 + 4, dst_pos.y);
+		unaligned_write<float>(w32 + 8, dst_pos.z);
+
+		int current_offset = 12;
+		if (has_normal) {
+			unaligned_write<float>(w32 + current_offset + 0, dst_norm.x);
+			unaligned_write<float>(w32 + current_offset + 4, dst_norm.y);
+			unaligned_write<float>(w32 + current_offset + 8, dst_norm.z);
+			current_offset += 12;
+		}
+		if (has_tangent) {
+			unaligned_write<float>(w32 + current_offset + 0, dst_tang.x);
+			unaligned_write<float>(w32 + current_offset + 4, dst_tang.y);
+			unaligned_write<float>(w32 + current_offset + 8, dst_tang.z);
+			unaligned_write<float>(w32 + current_offset + 12, src_binorm_sign);
+			current_offset += 16;
+		}
+
+		if (src_vertex_stride > current_offset && dst_vertex_stride >= src_vertex_stride) {
+			memcpy(w32 + current_offset, p32 + current_offset, src_vertex_stride - current_offset);
+		}
+	}
+
+	glBindBuffer(GL_ARRAY_BUFFER, p_mi->surfaces[p_surface].vertex_buffer);
+	GLES2::Utilities::get_singleton()->buffer_update_data(
+		GL_ARRAY_BUFFER,
+		p_mi->surfaces[p_surface].vertex_buffer,
+		0,
+		dst_vertices.size(),
+		dst_vertices.ptr()
+	);
+	GL_CHECK_ERROR("GLES2::MeshStorage::_compute_skeleton_3d: buffer_update_data");
+	glBindBuffer(GL_ARRAY_BUFFER, 0);
+}
+
+void MeshStorage::_update_mesh_instance_surface_2d(MeshInstance *p_mi, Skeleton *p_sk, uint32_t p_surface, float p_base_weight) {
+	bool can_use_skeleton = (
+		p_sk != nullptr &&
+		p_sk->use_2d &&
+		(p_mi->surfaces[p_surface].format_cache & RS::ARRAY_FORMAT_BONES)
+	);
+
+	if (can_use_skeleton) {
+		_compute_skeleton_2d(p_mi, p_sk, p_surface);
+	}
+}
+
+void MeshStorage::_update_mesh_instance_surface_3d(MeshInstance *p_mi, Skeleton *p_sk, uint32_t p_surface, float p_base_weight) {
+	bool can_use_skeleton = (
+		p_sk != nullptr &&
+		!p_sk->use_2d &&
+		(p_mi->surfaces[p_surface].format_cache & RS::ARRAY_FORMAT_BONES)
+	);
+
+	if (can_use_skeleton) {
+		_compute_skeleton_3d(p_mi, p_sk, p_surface);
+	}
+}
+
 void MeshStorage::update_mesh_instances() {
 	if (dirty_mesh_instance_arrays.first() == nullptr) {
 		return;
 	}
 
+	GLint prev_array_buffer = 0;
+	glGetIntegerv(GL_ARRAY_BUFFER_BINDING, &prev_array_buffer);
+	GL_CHECK_ERROR("GLES2::MeshStorage::update_mesh_instances: glGetIntegerv GL_ARRAY_BUFFER_BINDING");
+
 	while (dirty_mesh_instance_arrays.first()) {
 		MeshInstance *mi = dirty_mesh_instance_arrays.first()->self();
 		Skeleton *sk = skeleton_owner.get_or_null(mi->skeleton);
-
-		float base_weight = 1.0;
+		float base_weight = 1.0f;
 		if (mi->surfaces.size() && mi->mesh->blend_shape_count && mi->mesh->blend_shape_mode == RS::BLEND_SHAPE_MODE_NORMALIZED) {
 			for (uint32_t i = 0; i < mi->mesh->blend_shape_count; i++) {
 				base_weight -= mi->blend_weights[i];
@@ -1994,157 +2388,10 @@ void MeshStorage::update_mesh_instances() {
 				continue;
 			}
 
-			bool array_is_2d = mi->surfaces[i].format_cache & RS::ARRAY_FLAG_USE_2D_VERTICES;
-			bool can_use_skeleton = sk != nullptr && sk->use_2d == array_is_2d && (mi->surfaces[i].format_cache & RS::ARRAY_FORMAT_BONES);
-			bool use_8_weights = mi->surfaces[i].format_cache & RS::ARRAY_FLAG_USE_8_BONE_WEIGHTS;
-
-			if (mi->mesh->blend_shape_count) {
-				SkeletonShaderGLES2::ShaderVariant variant = SkeletonShaderGLES2::MODE_BASE_PASS;
-				uint64_t specialization = 0;
-				specialization |= array_is_2d ? SkeletonShaderGLES2::MODE_2D : 0;
-				specialization |= SkeletonShaderGLES2::USE_BLEND_SHAPES;
-
-				if (!array_is_2d) {
-					if ((mi->surfaces[i].format_cache & (1ULL << RS::ARRAY_NORMAL))) {
-						specialization |= SkeletonShaderGLES2::USE_NORMAL;
-					}
-					if ((mi->surfaces[i].format_cache & (1ULL << RS::ARRAY_TANGENT))) {
-						specialization |= SkeletonShaderGLES2::USE_TANGENT;
-					}
-				}
-
-				bool success = skeleton_shader.shader.version_bind_shader(skeleton_shader.shader_version, variant, specialization);
-				if (!success) {
-					continue;
-				}
-
-				skeleton_shader.shader.version_set_uniform(SkeletonShaderGLES2::BLEND_WEIGHT, base_weight, skeleton_shader.shader_version, variant, specialization);
-				skeleton_shader.shader.version_set_uniform(SkeletonShaderGLES2::BLEND_SHAPE_COUNT, float(mi->mesh->blend_shape_count), skeleton_shader.shader_version, variant, specialization);
-
-				glBindBuffer(GL_ARRAY_BUFFER, 0);
-				GL_CHECK_ERROR("GLES2::MeshStorage::update_mesh_instances: glBindBuffer(GL_ARRAY_BUFFER, 0) [Base Pass]");
-
-				GLuint vertex_array_gl = 0;
-				uint64_t mask = RS::ARRAY_FORMAT_VERTEX | RS::ARRAY_FORMAT_NORMAL | RS::ARRAY_FORMAT_VERTEX;
-				uint64_t format = mi->mesh->surfaces[i]->format & mask;
-				Mesh::Surface::Version *version = mesh_surface_get_vertex_arrays_and_format(mi->mesh->surfaces[i], format, vertex_array_gl);
-
-				mesh_surface_bind_version(version, mi->mesh->surfaces[i]);
-				GL_CHECK_ERROR("GLES2::MeshStorage::update_mesh_instances: mesh_surface_bind_version [Base Pass]");
-
-				variant = SkeletonShaderGLES2::MODE_BLEND_PASS;
-				success = skeleton_shader.shader.version_bind_shader(skeleton_shader.shader_version, variant, specialization);
-				if (!success) {
-					mesh_surface_unbind_version(version);
-					continue;
-				}
-
-				for (uint32_t bs = 0; bs < mi->mesh->blend_shape_count - 1; bs++) {
-					float weight = mi->blend_weights[bs];
-
-					if (Math::is_zero_approx(weight)) {
-						continue;
-					}
-
-					skeleton_shader.shader.version_set_uniform(SkeletonShaderGLES2::BLEND_WEIGHT, weight, skeleton_shader.shader_version, variant, specialization);
-					skeleton_shader.shader.version_set_uniform(SkeletonShaderGLES2::BLEND_SHAPE_COUNT, float(mi->mesh->blend_shape_count), skeleton_shader.shader_version, variant, specialization);
-
-					if (GLES2_CONFIG->support_vao) {
-						glBindVertexArray(mi->mesh->surfaces[i]->blend_shapes[bs].vertex_array);
-					}
-					GL_CHECK_ERROR("GLES2::MeshStorage::update_mesh_instances: VAO Bind [Mid Blend Pass]");
-
-					_blend_shape_bind_mesh_instance_buffer(mi, i);
-
-					SWAP(mi->surfaces[i].vertex_buffers[0], mi->surfaces[i].vertex_buffers[1]);
-				}
-
-				uint32_t bs = mi->mesh->blend_shape_count - 1;
-				float weight = mi->blend_weights[bs];
-
-				if (GLES2_CONFIG->support_vao) {
-					glBindVertexArray(mi->mesh->surfaces[i]->blend_shapes[bs].vertex_array);
-				}
-				GL_CHECK_ERROR("GLES2::MeshStorage::update_mesh_instances: VAO Bind [Final Blend Pass]");
-
-				_blend_shape_bind_mesh_instance_buffer(mi, i);
-
-				specialization |= can_use_skeleton ? SkeletonShaderGLES2::USE_SKELETON : 0;
-				specialization |= (can_use_skeleton && use_8_weights) ? SkeletonShaderGLES2::USE_EIGHT_WEIGHTS : 0;
-				specialization |= SkeletonShaderGLES2::FINAL_PASS;
-
-				success = skeleton_shader.shader.version_bind_shader(skeleton_shader.shader_version, variant, specialization);
-				if (!success) {
-					mesh_surface_unbind_version(version);
-					continue;
-				}
-
-				skeleton_shader.shader.version_set_uniform(SkeletonShaderGLES2::BLEND_WEIGHT, weight, skeleton_shader.shader_version, variant, specialization);
-				skeleton_shader.shader.version_set_uniform(SkeletonShaderGLES2::BLEND_SHAPE_COUNT, float(mi->mesh->blend_shape_count), skeleton_shader.shader_version, variant, specialization);
-
-				if (can_use_skeleton) {
-					Transform2D transform = mi->canvas_item_transform_2d.affine_inverse() * sk->base_transform_2d;
-					skeleton_shader.shader.version_set_uniform(SkeletonShaderGLES2::SKELETON_TRANSFORM_X, transform[0], skeleton_shader.shader_version, variant, specialization);
-					skeleton_shader.shader.version_set_uniform(SkeletonShaderGLES2::SKELETON_TRANSFORM_Y, transform[1], skeleton_shader.shader_version, variant, specialization);
-					skeleton_shader.shader.version_set_uniform(SkeletonShaderGLES2::SKELETON_TRANSFORM_OFFSET, transform[2], skeleton_shader.shader_version, variant, specialization);
-
-					Transform2D inverse_transform = transform.affine_inverse();
-					skeleton_shader.shader.version_set_uniform(SkeletonShaderGLES2::INVERSE_TRANSFORM_X, inverse_transform[0], skeleton_shader.shader_version, variant, specialization);
-					skeleton_shader.shader.version_set_uniform(SkeletonShaderGLES2::INVERSE_TRANSFORM_Y, inverse_transform[1], skeleton_shader.shader_version, variant, specialization);
-					skeleton_shader.shader.version_set_uniform(SkeletonShaderGLES2::INVERSE_TRANSFORM_OFFSET, inverse_transform[2], skeleton_shader.shader_version, variant, specialization);
-
-					// Will seamlessly process CPU skinning if TF is unsupported
-					_compute_skeleton(mi, sk, i);
-					can_use_skeleton = false;
-				}
-
-				mesh_surface_unbind_version(version);
-				GL_CHECK_ERROR("GLES2::MeshStorage::update_mesh_instances: mesh_surface_unbind_version [Post Blend]");
-			}
-
-			if (can_use_skeleton) {
-				SkeletonShaderGLES2::ShaderVariant variant = SkeletonShaderGLES2::MODE_BASE_PASS;
-				uint64_t specialization = 0;
-				specialization |= array_is_2d ? SkeletonShaderGLES2::MODE_2D : 0;
-				specialization |= SkeletonShaderGLES2::USE_SKELETON;
-				specialization |= SkeletonShaderGLES2::FINAL_PASS;
-				specialization |= use_8_weights ? SkeletonShaderGLES2::USE_EIGHT_WEIGHTS : 0;
-
-				if (!array_is_2d) {
-					if ((mi->surfaces[i].format_cache & (1ULL << RS::ARRAY_NORMAL))) {
-						specialization |= SkeletonShaderGLES2::USE_NORMAL;
-					}
-					if ((mi->surfaces[i].format_cache & (1ULL << RS::ARRAY_TANGENT))) {
-						specialization |= SkeletonShaderGLES2::USE_TANGENT;
-					}
-				}
-
-				bool success = skeleton_shader.shader.version_bind_shader(skeleton_shader.shader_version, variant, specialization);
-				if (!success) {
-					continue;
-				}
-
-				Transform2D transform = mi->canvas_item_transform_2d.affine_inverse() * sk->base_transform_2d;
-				skeleton_shader.shader.version_set_uniform(SkeletonShaderGLES2::SKELETON_TRANSFORM_X, transform[0], skeleton_shader.shader_version, variant, specialization);
-				skeleton_shader.shader.version_set_uniform(SkeletonShaderGLES2::SKELETON_TRANSFORM_Y, transform[1], skeleton_shader.shader_version, variant, specialization);
-				skeleton_shader.shader.version_set_uniform(SkeletonShaderGLES2::SKELETON_TRANSFORM_OFFSET, transform[2], skeleton_shader.shader_version, variant, specialization);
-
-				Transform2D inverse_transform = transform.affine_inverse();
-				skeleton_shader.shader.version_set_uniform(SkeletonShaderGLES2::INVERSE_TRANSFORM_X, inverse_transform[0], skeleton_shader.shader_version, variant, specialization);
-				skeleton_shader.shader.version_set_uniform(SkeletonShaderGLES2::INVERSE_TRANSFORM_Y, inverse_transform[1], skeleton_shader.shader_version, variant, specialization);
-				skeleton_shader.shader.version_set_uniform(SkeletonShaderGLES2::INVERSE_TRANSFORM_OFFSET, inverse_transform[2], skeleton_shader.shader_version, variant, specialization);
-
-				GLuint vertex_array_gl = 0;
-				uint64_t mask = RS::ARRAY_FORMAT_VERTEX | RS::ARRAY_FORMAT_NORMAL | RS::ARRAY_FORMAT_VERTEX;
-				uint64_t format = mi->mesh->surfaces[i]->format & mask;
-				Mesh::Surface::Version *version = mesh_surface_get_vertex_arrays_and_format(mi->mesh->surfaces[i], format, vertex_array_gl);
-
-				mesh_surface_bind_version(version, mi->mesh->surfaces[i]);
-				GL_CHECK_ERROR("GLES2::MeshStorage::update_mesh_instances: mesh_surface_bind_version [Skeleton Pass]");
-
-				_compute_skeleton(mi, sk, i);
-
-				mesh_surface_unbind_version(version);
+			if (mi->surfaces[i].format_cache & RS::ARRAY_FLAG_USE_2D_VERTICES) {
+				_update_mesh_instance_surface_2d(mi, sk, i, base_weight);
+			} else {
+				_update_mesh_instance_surface_3d(mi, sk, i, base_weight);
 			}
 		}
 
@@ -2155,8 +2402,8 @@ void MeshStorage::update_mesh_instances() {
 		dirty_mesh_instance_arrays.remove(&mi->array_update_list);
 	}
 
-	glBindBuffer(GL_ARRAY_BUFFER, 0);
-	GL_CHECK_ERROR("GLES2::MeshStorage::update_mesh_instances: glBindBuffer final");
+	glBindBuffer(GL_ARRAY_BUFFER, prev_array_buffer);
+	GL_CHECK_ERROR("GLES2::MeshStorage::update_mesh_instances: restore GL_ARRAY_BUFFER");
 }
 
 /* MULTIMESH API */

@@ -315,8 +315,8 @@ struct Texture {
 		GL_CHECK_ERROR("GLES2::Texture::gl_set_filter: glTexParameteri");
 
 		bool is_npot = (
-			is_power_of_2<int>(width) &&
-			is_power_of_2<int>(height)
+			!is_power_of_2<int>(width) ||
+			!is_power_of_2<int>(height)
 		);
 		if (is_npot && !config->support_npot_repeat_mipmap) {
 			pmin = (pmin == GL_NEAREST || pmin == GL_NEAREST_MIPMAP_NEAREST || pmin == GL_NEAREST_MIPMAP_LINEAR) ? GL_NEAREST : GL_LINEAR;
@@ -355,8 +355,8 @@ struct Texture {
 
 		GLES2::Config *config = GLES2::Config::get_singleton();
 		bool is_npot = (
-			is_power_of_2<int>(width) &&
-			is_power_of_2<int>(height)
+			!is_power_of_2<int>(width) ||
+			!is_power_of_2<int>(height)
 		);
 		if (is_npot && !config->support_npot_repeat_mipmap) {
 			prep = GL_CLAMP_TO_EDGE;

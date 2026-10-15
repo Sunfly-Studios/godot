@@ -45,7 +45,7 @@ void RasterizerSceneBatcherCommon<T_API>::batch_constructor() {
 
 template <typename T_API>
 void RasterizerSceneBatcherCommon<T_API>::batch_initialize() {
-bdata.settings_use_batching = GLOBAL_GET("rendering/batching/use_batching");
+	bdata.settings_use_batching = GLOBAL_GET("rendering/batching/use_batching");
 	bdata.settings_dynamic_vertex_limit = GLOBAL_GET("rendering/limits/opengl/max_dynamic_vertex_limit");
 	bdata.dynamic_upload_threshold_bytes = static_cast<uint32_t>(GLOBAL_GET("rendering/limits/opengl/dynamic_buffer_flush_threshold_kb")) * 1024;
 	bdata.max_batch_draw_call_count = static_cast<uint32_t>(GLOBAL_GET("rendering/limits/opengl/max_batch_draw_call_count"));
@@ -77,6 +77,8 @@ template <typename T_API>
 template <typename BatcherEnums::PassMode p_pass_mode, class T_SURFACE>
 void RasterizerSceneBatcherCommon<T_API>::batch_scene_render_items(T_SURFACE **p_surfaces, int p_count, const Transform3D &p_camera_transform, bool p_transparent, bool p_replay) {
 	if (!bdata.settings_use_batching || p_count == 0) {
+		bdata.pass_mode = p_pass_mode;
+		_render_item_state.reset();
 		get_this()->scene_render_items_implementation(p_surfaces, p_count, p_camera_transform, p_transparent);
 		return;
 	}
@@ -90,6 +92,9 @@ void RasterizerSceneBatcherCommon<T_API>::batch_scene_render_items(T_SURFACE **p
 		_render_item_state.reset();
 		for (uint32_t b = 0; b < (uint32_t)bdata.batches.size(); b++) {
 			Batch3D &batch = bdata.batches[b];
+			if (batch.num_verts == 0) {
+				continue;
+			}
 			T_SURFACE *first_surface = static_cast<T_SURFACE *>(bdata.sort_items[batch.first_item_index].item);
 			typename T_API::MaterialData *material = get_this()->_batch_get_material_data(first_surface);
 			RS::PrimitiveType primitive = first_surface->primitive;
@@ -160,7 +165,15 @@ void RasterizerSceneBatcherCommon<T_API>::record_items(T_SURFACE **p_surfaces, i
 		// Skeletons cannot be batched. If we find any in the mesh, don't even try.
 		bool has_deformation = false;
 		if (surface->owner->data->base_type == RS::INSTANCE_MESH) {
-			if (surface->owner->skeleton.is_valid() || T_API::MeshStorage::get_singleton()->mesh_get_blend_shape_count(surface->owner->data->base) > 0) {
+			bool has_skel = false;
+			if (surface->owner->mesh_instance.is_valid()) {
+				T_API::MeshInstance *mi = T_API::MeshStorage::get_singleton()->get_mesh_instance(surface->owner->mesh_instance);
+				if (mi && mi->skeleton.is_valid()) {
+					has_skel = true;
+				}
+			}
+			
+			if (has_skel || T_API::MeshStorage::get_singleton()->mesh_get_blend_shape_count(surface->owner->data->base) > 0) {
 				has_deformation = true;
 			}
 		}

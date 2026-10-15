@@ -112,6 +112,7 @@ struct BatcherAPISceneGLES2 {
 	using Texture = GLES2::Texture;
 	using CanvasTexture = GLES2::CanvasTexture;
 	using Shader = GLES2::Shader;
+	using MeshInstance = GLES2::MeshInstance;
 
 	static constexpr bool FORCE_BAKE_MODULATE = false;
 };
@@ -456,7 +457,14 @@ private:
 		r_array[11] = 0.0f;
 	}
 
-	static _FORCE_INLINE_ void _gl_batch_decode_multimesh_instance(const float *p_data, RS::MultimeshTransformFormat p_format, bool p_uses_colors, uint32_t p_color_offset, Transform3D &r_xform, Color &r_color) {
+	_FORCE_INLINE_ void _gl_setup_bake_uv2_tex_params() {
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+	}
+
+	_FORCE_INLINE_ void _gl_batch_decode_multimesh_instance(const float *p_data, RS::MultimeshTransformFormat p_format, bool p_uses_colors, uint32_t p_color_offset, Transform3D &r_xform, Color &r_color) {
 		if (p_format == RS::MULTIMESH_TRANSFORM_3D) {
 			r_xform.basis.rows[0] = Vector3(p_data[0], p_data[1], p_data[2]);
 			r_xform.origin.x = p_data[3];
@@ -688,6 +696,7 @@ private:
 		bool used_normal_texture = false;
 		bool used_depth_texture = false;
 		uint64_t current_spec_constants = 0;
+		Vector2 current_uv_offset = Vector2(0, 0);
 		bool transparent_bg = false;
 
 		LightData *omni_lights = nullptr;
@@ -1046,7 +1055,7 @@ public:
 	void sub_surface_scattering_set_scale(float p_scale, float p_depth_scale) override;
 
 	TypedArray<Image> bake_render_uv2(RID p_base, const TypedArray<RID> &p_material_overrides, const Size2i &p_image_size) override;
-	void _render_uv2(const PagedArray<RenderGeometryInstance *> &p_instances, GLuint p_framebuffer, const Rect2i &p_region);
+	void _render_uv2(const PagedArray<RenderGeometryInstance *> &p_instances, GLuint p_framebuffer, const Rect2i &p_region, const GLuint p_color_textures[4]);
 
 	bool free(RID p_rid) override;
 	void update() override;

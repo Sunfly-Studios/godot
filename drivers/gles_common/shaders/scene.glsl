@@ -27,6 +27,11 @@ BASE_PASS = true
 USE_ADDITIVE_LIGHTING = false
 ADDITIVE_OMNI = false
 ADDITIVE_SPOT = false
+RENDER_MATERIAL = false
+RENDER_MATERIAL_ALBEDO = false
+RENDER_MATERIAL_NORMAL = false
+RENDER_MATERIAL_ORM = false
+RENDER_MATERIAL_EMISSION = false
 
 #[vertex]
 
@@ -79,7 +84,7 @@ attribute vec4 color_attrib; // attrib:3
 attribute vec2 uv_attrib; // attrib:4
 #endif
 
-#if defined(UV2_USED) || defined(USE_LIGHTMAP)
+#if defined(UV2_USED) || defined(USE_LIGHTMAP) || defined(RENDER_MATERIAL)
 attribute vec2 uv2_attrib; // attrib:5
 #endif
 
@@ -185,6 +190,8 @@ uniform float fog_sun_scatter;
 uniform int camera_visible_layers;
 
 uniform highp mat4 world_transform;
+
+uniform mediump vec2 uv_offset;
 
 #ifdef USE_LIGHTMAP
 uniform highp vec4 lightmap_uv_rect;
@@ -411,6 +418,10 @@ void main() {
 	gl_Position = position;
 #else
 	gl_Position = projection_matrix_local * vec4(vertex_interp, 1.0);
+#endif
+
+#ifdef RENDER_MATERIAL
+	gl_Position = vec4((uv2_attrib.xy + uv_offset) * 2.0 - 1.0, 0.0001, 1.0);
 #endif
 }
 
@@ -658,6 +669,16 @@ vec4 fog_process(vec3 vertex) {
 
 #endif // !MODE_RENDER_DEPTH
 
+#ifdef USE_BCS
+vec3 apply_bcs(vec3 color) {
+	color = mix(vec3(0.0), color, brightness);
+	color = mix(vec3(0.5), color, contrast);
+	color = mix(vec3(dot(vec3(1.0), color) * 0.33333), color, saturation);
+
+	return color;
+}
+#endif
+
 void main() {
 	vec3 vertex = vertex_interp;
 
@@ -756,9 +777,18 @@ void main() {
 #ifndef USE_SHADOW_TO_OPACITY
 
 #if defined(ALPHA_SCISSOR_USED)
+#ifdef RENDER_MATERIAL
+	if (alpha < alpha_scissor_threshold) {
+		alpha = 0.0;
+	} else {
+		alpha = 1.0;
+	}
+#else
 	if (alpha < alpha_scissor_threshold) {
 		discard;
 	}
+	alpha = 1.0;
+#endif // RENDER_MATERIAL
 #endif // ALPHA_SCISSOR_USED
 
 #ifdef USE_OPAQUE_PREPASS
@@ -948,13 +978,23 @@ void main() {
 #endif // !MODE_RENDER_DEPTH
 
 #if defined(USE_SHADOW_TO_OPACITY)
+#ifndef MODE_RENDER_DEPTH
 	alpha = min(alpha, clamp(length(ambient_light), 0.0, 1.0));
 
 #if defined(ALPHA_SCISSOR_USED)
+#ifdef RENDER_MATERIAL
+	if (alpha < alpha_scissor_threshold) {
+		alpha = 0.0;
+	} else {
+		alpha = 1.0;
+	}
+#else
 	if (alpha < alpha_scissor_threshold) {
 		discard;
 	}
+#endif // RENDER_MATERIAL
 #endif // ALPHA_SCISSOR_USED
+#endif // !MODE_RENDER_DEPTH
 
 #ifdef USE_OPAQUE_PREPASS
 #if !defined(ALPHA_SCISSOR_USED)
@@ -971,6 +1011,20 @@ void main() {
 #ifdef MODE_RENDER_DEPTH
 	gl_FragColor = frag_color;
 #else // !MODE_RENDER_DEPTH
+
+#ifdef RENDER_MATERIAL
+#if defined(RENDER_MATERIAL_ALBEDO)
+	gl_FragColor = vec4(albedo, alpha);
+#elif defined(RENDER_MATERIAL_NORMAL)
+	gl_FragColor = vec4(normal * 0.5 + 0.5, 0.0);
+#elif defined(RENDER_MATERIAL_ORM)
+	gl_FragColor = vec4(ao, roughness, metallic, 1.0);
+#elif defined(RENDER_MATERIAL_EMISSION)
+	gl_FragColor = vec4(emission, 0.0);
+#else
+	gl_FragColor = vec4(0.0);
+#endif
+#else // !RENDER_MATERIAL
 
 #ifdef MODE_UNSHADED
 #if defined(USE_ADDITIVE_LIGHTING)
@@ -1015,6 +1069,7 @@ void main() {
 #endif
 
 	gl_FragColor = frag_color;
+#endif // !RENDER_MATERIAL
 #endif //!MODE_RENDER_DEPTH
 
 }

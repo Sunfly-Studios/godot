@@ -113,6 +113,7 @@ struct BatcherAPISceneGLES1 {
 	using Texture = GLES1::Texture;
 	using CanvasTexture = GLES1::CanvasTexture;
 	using Shader = GLES1::Shader;
+	using MeshInstance = GLES1::MeshInstance;
 
 	static constexpr bool FORCE_BAKE_MODULATE = true;
 };
@@ -531,9 +532,70 @@ private:
 	}
 
 	_FORCE_INLINE_ void _gl_inverse_transpose_normal(Basis &normal_basis, Transform3D &world_xform) {
-		normal_basis.set_column(0, world_xform.basis.get_column(1).cross(world_xform.basis.get_column(2)));
-		normal_basis.set_column(1, world_xform.basis.get_column(2).cross(world_xform.basis.get_column(0)));
-		normal_basis.set_column(2, world_xform.basis.get_column(0).cross(world_xform.basis.get_column(1)));
+		normal_basis = world_xform.basis.inverse();
+		normal_basis.transpose();
+	}
+
+	_FORCE_INLINE_ void _gl_setup_bake_uv2_tex_params() {
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+	}
+
+	_FORCE_INLINE_ void _gl_setup_uv2_projection(const Vector2 &p_uv_offset) {
+		// gl_Position = vec4((uv2_attrib.xy + uv_offset) * 2.0 - 1.0, 0.0, 1.0)
+		// Since in PASS_MODE_MATERIAL the vertex array is fed UV2 (z = 0),
+		// an orthographic projection with scale (2, 2, 1) and translation
+		// (2 * offset.x - 1, 2 * offset.y - 1, 0) maps [0, 1] UVs to [-1, 1] NDC.
+		const float m[16] = {
+			2.0f, 0.0f, 0.0f, 0.0f,
+			0.0f, 2.0f, 0.0f, 0.0f,
+			0.0f, 0.0f, 1.0f, 0.0f,
+			(p_uv_offset.x * 2.0f) - 1.0f, (p_uv_offset.y * 2.0f) - 1.0f, 0.0f, 1.0f
+		};
+		glMatrixMode(GL_PROJECTION);
+		glLoadMatrixf(m);
+		glMatrixMode(GL_MODELVIEW);
+		glLoadIdentity();
+	}
+
+	_FORCE_INLINE_ void _gl_setup_uv2_material_pass(GLES1::SceneMaterialData *p_material_data, uint64_t p_spec_constants) {
+		glDisable(GL_LIGHTING);
+		glDisable(GL_FOG);
+		glDisable(GL_COLOR_MATERIAL);
+
+		if (GLES1_CONFIG->max_texture_units > 1) {
+			glActiveTexture(GL_TEXTURE1);
+			glDisable(GL_TEXTURE_2D);
+			glBindTexture(GL_TEXTURE_2D, 0);
+			glActiveTexture(GL_TEXTURE0);
+		}
+
+		if (p_spec_constants & SceneShaderGLES1::RENDER_MATERIAL_ALBEDO) {
+			if (p_material_data && p_material_data->texture_cache.size() > 0) {
+				glEnable(GL_TEXTURE_2D);
+				glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE);
+			} else {
+				glDisable(GL_TEXTURE_2D);
+				glBindTexture(GL_TEXTURE_2D, 0);
+			}
+			glColor4f(1.0f, 1.0f, 1.0f, 1.0f);
+		} else if (p_spec_constants & SceneShaderGLES1::RENDER_MATERIAL_NORMAL) {
+			glDisable(GL_TEXTURE_2D);
+			glBindTexture(GL_TEXTURE_2D, 0);
+			// Flat tangent-space normal (0.5, 0.5, 1.0, 1.0)
+			glColor4f(0.5f, 0.5f, 1.0f, 1.0f);
+		} else if (p_spec_constants & SceneShaderGLES1::RENDER_MATERIAL_ORM) {
+			glDisable(GL_TEXTURE_2D);
+			glBindTexture(GL_TEXTURE_2D, 0);
+			// Default ORM (AO = 1.0, Roughness = 0.8, Metallic = 0.2)
+			glColor4f(1.0f, 0.8f, 0.2f, 1.0f);
+		} else if (p_spec_constants & SceneShaderGLES1::RENDER_MATERIAL_EMISSION) {
+			glDisable(GL_TEXTURE_2D);
+			glBindTexture(GL_TEXTURE_2D, 0);
+			glColor4f(0.0f, 0.0f, 0.0f, 1.0f);
+		}
 	}
 
 	// RAII like data structures to manage these matrix
@@ -601,14 +663,17 @@ private:
 	struct GLClipPlaneScope {
 		bool active = false;
 		_FORCE_INLINE_ GLClipPlaneScope(bool p_active, const GLfloat *p_near, const GLfloat *p_far) {
-			active = p_active;
-			if (active) {
-				glEnable(GL_CLIP_PLANE0);
-				glEnable(GL_CLIP_PLANE1);
-
-				GLES1::Router::clip_plane(GL_CLIP_PLANE0, p_near);
-				GLES1::Router::clip_plane(GL_CLIP_PLANE1, p_far);
+			if (p_active) {
+				enable(p_near, p_far);
 			}
+		}
+		_FORCE_INLINE_ void enable(const GLfloat *p_near, const GLfloat *p_far) {
+			active = true;
+			glEnable(GL_CLIP_PLANE0);
+			glEnable(GL_CLIP_PLANE1);
+
+			GLES1::Router::clip_plane(GL_CLIP_PLANE0, p_near);
+			GLES1::Router::clip_plane(GL_CLIP_PLANE1, p_far);
 		}
 		_FORCE_INLINE_ ~GLClipPlaneScope() {
 			if (active) {
@@ -651,24 +716,71 @@ private:
 		}
 	}
 
-	_FORCE_INLINE_ void _gl_setup_material_pass(bool p_is_additive) {
-		constexpr GLfloat mat_diffuse[] = { 1.0f, 1.0f, 1.0f, 1.0f };
+	_FORCE_INLINE_ void _gl_setup_material_pass(const GLES1::SceneMaterialData *p_material_data, bool p_is_additive) {
+		constexpr GLfloat mat_default_albedo[] = { 0.6f, 0.6f, 0.6f, 1.0f };
 		constexpr GLfloat mat_specular[] = { 0.0f, 0.0f, 0.0f, 1.0f };
 		constexpr GLfloat mat_zero[] = { 0.0f, 0.0f, 0.0f, 1.0f };
-		constexpr GLfloat mat_ambient_base[] = { 1.0f, 1.0f, 1.0f, 1.0f };
 
-		glEnable(GL_COLOR_MATERIAL);
-		glMaterialfv(GL_FRONT_AND_BACK, GL_DIFFUSE, mat_diffuse);
-		glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, mat_specular);
-		glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 0.0f);
+		bool unshaded = (
+			p_material_data &&
+			p_material_data->shader_data &&
+			p_material_data->shader_data->unshaded
+		);
 
-		if (p_is_additive) {
+		if (unshaded) {
+			glDisable(GL_LIGHTING);
+		} else {
+			glEnable(GL_LIGHTING);
+		}
+
+		if (p_material_data && p_material_data->texture_cache.size() > 0) {
+			glEnable(GL_TEXTURE_2D);
+		} else {
+			glDisable(GL_TEXTURE_2D);
+		}
+
+		bool has_approx = p_material_data && (
+			p_material_data->approx_type != GLES1::SceneMaterialData::APPROX_NONE
+		) && p_material_data->approx_data;
+
+		if (!has_approx) {
+			glColor4f(mat_default_albedo[0], mat_default_albedo[1], mat_default_albedo[2], mat_default_albedo[3]);
+			glMaterialfv(GL_FRONT_AND_BACK, GL_DIFFUSE, mat_default_albedo);
+			glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, mat_specular);
+			glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 0.0f);
+
+			if (p_is_additive) {
+				glMaterialfv(GL_FRONT_AND_BACK, GL_AMBIENT, mat_zero);
+				glMaterialfv(GL_FRONT_AND_BACK, GL_EMISSION, mat_zero);
+			} else {
+				glMaterialfv(GL_FRONT_AND_BACK, GL_AMBIENT, mat_default_albedo);
+				glMaterialfv(GL_FRONT_AND_BACK, GL_EMISSION, mat_zero);
+			}
+		} else if (p_is_additive) {
 			glMaterialfv(GL_FRONT_AND_BACK, GL_AMBIENT, mat_zero);
 			glMaterialfv(GL_FRONT_AND_BACK, GL_EMISSION, mat_zero);
-		} else {
-			glMaterialfv(GL_FRONT_AND_BACK, GL_AMBIENT, mat_ambient_base);
-			glMaterialfv(GL_FRONT_AND_BACK, GL_EMISSION, mat_zero);
 		}
+
+		bool use_color_material = (
+			(p_material_data && p_material_data->shader_data && p_material_data->shader_data->uses_color) ||
+			bdata.fvf == BatcherEnums::FVF_REGULAR ||
+			bdata.fvf == BatcherEnums::FVF_INSTANCED
+		);
+
+		if (use_color_material) {
+			glEnable(GL_COLOR_MATERIAL);
+		} else {
+			glDisable(GL_COLOR_MATERIAL);
+			if (has_approx) {
+				const GLES1::StandardMaterialState *state = static_cast<const GLES1::StandardMaterialState *>(p_material_data->approx_data);
+				glColor4f(state->albedo[0], state->albedo[1], state->albedo[2], state->albedo[3]);
+				glMaterialfv(GL_FRONT_AND_BACK, GL_DIFFUSE, state->albedo);
+				if (!p_is_additive) {
+					glMaterialfv(GL_FRONT_AND_BACK, GL_AMBIENT, state->albedo);
+				}
+			}
+		}
+		GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_gl_setup_material_pass: material pass state");
 	}
 
 	_FORCE_INLINE_ void _gl_setup_light(bool p_two_sided = false) {
@@ -687,15 +799,22 @@ private:
 			MAX(0.0f, p_sky_top.b - p_ground_bottom.b),
 			1.0f
 		};
+		constexpr GLfloat zero_col[] = { 0.0f, 0.0f, 0.0f, 1.0f };
 		constexpr GLfloat top_pos[] = { 0.0f, 1.0f, 0.0f, 0.0f };
 
 		int max_lights = GLES1_CONFIG->max_lights;
 		int sky_light_idx = GL_LIGHT0 + (max_lights - 1);
 
 		glEnable(sky_light_idx);
+		glLightfv(sky_light_idx, GL_AMBIENT, zero_col);
 		glLightfv(sky_light_idx, GL_DIFFUSE, sky_fill_col);
-		glLightfv(sky_light_idx, GL_SPECULAR, sky_fill_col);
+		glLightfv(sky_light_idx, GL_SPECULAR, zero_col);
 		glLightfv(sky_light_idx, GL_POSITION, top_pos);
+		glLightf(sky_light_idx, GL_CONSTANT_ATTENUATION, 1.0f);
+		glLightf(sky_light_idx, GL_LINEAR_ATTENUATION, 0.0f);
+		glLightf(sky_light_idx, GL_QUADRATIC_ATTENUATION, 0.0f);
+		glLightf(sky_light_idx, GL_SPOT_CUTOFF, 180.0f);
+		glLightf(sky_light_idx, GL_SPOT_EXPONENT, 0.0f);
 
 		GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_gl_setup_sky_fill_light");
 	}
@@ -718,6 +837,9 @@ private:
 
 	_FORCE_INLINE_ void _gl_setup_directional_light(const DirectionalLightData &p_light, int p_light_idx) {
 		int gl_light = GL_LIGHT0 + p_light_idx;
+		const float light_amb[4] = { 0.0f, 0.0f, 0.0f, 1.0f };
+		glLightfv(gl_light, GL_AMBIENT, light_amb);
+
 		const float light_dir[4] = { p_light.direction[0], p_light.direction[1], p_light.direction[2], 0.0f };
 		glLightfv(gl_light, GL_POSITION, light_dir);
 
@@ -736,6 +858,9 @@ private:
 
 	_FORCE_INLINE_ void _gl_setup_omni_light(const LightData &p_light, int p_light_idx) {
 		int gl_light = GL_LIGHT0 + p_light_idx;
+		const float light_amb[4] = { 0.0f, 0.0f, 0.0f, 1.0f };
+		glLightfv(gl_light, GL_AMBIENT, light_amb);
+
 		const float light_pos[4] = { p_light.position[0], p_light.position[1], p_light.position[2], 1.0f };
 		glLightfv(gl_light, GL_POSITION, light_pos);
 
@@ -754,10 +879,13 @@ private:
 
 	_FORCE_INLINE_ void _gl_setup_spot_light(const LightData &p_light, int p_light_idx) {
 		int gl_light = GL_LIGHT0 + p_light_idx;
+		const float light_amb[4] = { 0.0f, 0.0f, 0.0f, 1.0f };
+		glLightfv(gl_light, GL_AMBIENT, light_amb);
+
 		const float light_pos[4] = { p_light.position[0], p_light.position[1], p_light.position[2], 1.0f };
 		glLightfv(gl_light, GL_POSITION, light_pos);
 
-		const float spot_dir[3] = { p_light.direction[0], p_light.direction[1], p_light.direction[2] };
+		const float spot_dir[3] = { -p_light.direction[0], -p_light.direction[1], -p_light.direction[2] };
 		glLightfv(gl_light, GL_SPOT_DIRECTION, spot_dir);
 
 		const float light_col[4] = { p_light.color[0], p_light.color[1], p_light.color[2], 1.0f };
@@ -1048,6 +1176,9 @@ private:
 		GLuint current_shadow_texture = 0;
 		float current_shadow_matrix[16] = {};
 		GLuint z_bound_texture = 0;
+
+		uint64_t current_spec_constants = 0;
+		Vector2 current_uv_offset = Vector2(0, 0);
 
 		// Default fallback colours
 		Color sky_top_color = Color(0.385, 0.454, 0.55, 1.0);
@@ -1423,7 +1554,7 @@ public:
 	void sub_surface_scattering_set_scale(float p_scale, float p_depth_scale) override;
 
 	TypedArray<Image> bake_render_uv2(RID p_base, const TypedArray<RID> &p_material_overrides, const Size2i &p_image_size) override;
-	void _render_uv2(const PagedArray<RenderGeometryInstance *> &p_instances, GLuint p_framebuffer, const Rect2i &p_region);
+	void _render_uv2(const PagedArray<RenderGeometryInstance *> &p_instances, GLuint p_framebuffer, const Rect2i &p_region, const GLuint p_color_textures[4], const RID p_color_tex_rids[4] = nullptr);
 
 	bool free(RID p_rid) override;
 	void update() override;

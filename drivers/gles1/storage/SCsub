@@ -3,4 +3,6 @@ from misc.utility.scons_hints import *
 
 Import("env")
 
+SConscript("materials/SCsub")
+
 env.add_source_files(env.drivers_sources, "*.cpp")

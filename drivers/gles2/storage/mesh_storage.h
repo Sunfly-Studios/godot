@@ -65,6 +65,13 @@ struct Mesh {
 		RS::PrimitiveType primitive = RS::PRIMITIVE_POINTS;
 		uint64_t format = 0;
 
+		// For compatibility between Godot's compressed
+		// formats for other renderers (which assume compressed data).
+		uint64_t original_format = 0;
+		Vector<uint8_t> original_vertex_data;
+		Vector<uint8_t> original_attribute_data;
+		Vector<uint8_t> original_blend_shape_data;
+
 		GLuint vertex_buffer = 0;
 		GLuint attribute_buffer = 0;
 		GLuint skin_buffer = 0;
@@ -88,7 +95,7 @@ struct Mesh {
 
 		// Cache vertex arrays so they can be created
 		struct Version {
-			uint32_t input_mask = 0;
+			uint64_t input_mask = 0;
 			GLuint vertex_array = 0;
 
 			Attrib attribs[RS::ARRAY_MAX];
@@ -267,6 +274,7 @@ private:
 	void _decompress_surface_data_2d(RS::SurfaceData &r_surface, Mesh::Surface *s);
 	void _decompress_surface_data_3d(RS::SurfaceData &r_surface, Mesh::Surface *s);
 	void _decompress_3d_buffer(const uint8_t *p_src, uint8_t *p_dst, uint32_t p_vertex_count, uint64_t p_format, uint32_t p_compressed_stride, uint32_t p_uncompressed_stride, const AABB &p_aabb);
+	void _decompress_attribute_buffer_3d(RS::SurfaceData &r_surface, uint32_t p_vertex_count);
 
 	/* Mesh Instance API */
 
@@ -276,6 +284,8 @@ private:
 	void _mesh_instance_add_surface(MeshInstance *mi, Mesh *mesh, uint32_t p_surface);
 	void _mesh_instance_remove_surface(MeshInstance *mi, int p_surface);
 	void _blend_shape_bind_mesh_instance_buffer(MeshInstance *p_mi, uint32_t p_surface);
+	void _update_mesh_instance_surface_2d(MeshInstance *p_mi, Skeleton *p_sk, uint32_t p_surface, float p_base_weight);
+	void _update_mesh_instance_surface_3d(MeshInstance *p_mi, Skeleton *p_sk, uint32_t p_surface, float p_base_weight);
 	SelfList<MeshInstance>::List dirty_mesh_instance_weights;
 	SelfList<MeshInstance>::List dirty_mesh_instance_arrays;
 
@@ -294,7 +304,8 @@ private:
 	mutable RID_Owner<Skeleton, true> skeleton_owner;
 
 	_FORCE_INLINE_ void _skeleton_make_dirty(Skeleton *skeleton);
-	void _compute_skeleton(MeshInstance *p_mi, Skeleton *p_sk, uint32_t p_surface);
+	void _compute_skeleton_2d(MeshInstance *p_mi, Skeleton *p_sk, uint32_t p_surface);
+	void _compute_skeleton_3d(MeshInstance *p_mi, Skeleton *p_sk, uint32_t p_surface);
 
 	Skeleton *skeleton_dirty_list = nullptr;
 
@@ -346,6 +357,7 @@ public:
 	virtual void mesh_surface_remove(RID p_mesh, int p_surface) override;
 
 	void mesh_surface_bind_arrays_gles2(void *p_surface, uint64_t p_input_mask);
+	void mesh_instance_surface_bind_arrays_gles2(RID p_mesh_instance, uint32_t p_surface_index, uint64_t p_input_mask);
 	void mesh_surface_unbind_arrays_gles2(void *p_surface);
 	Array mesh_surface_get_arrays(RID p_mesh, int p_surface) const;
 
@@ -622,11 +634,7 @@ public:
 
 		_mesh_surface_generate_version_for_input_mask(mis->versions[version], s, p_input_mask, mis);
 
-		if (GLES2_CONFIG->support_vao) {
-			glGenVertexArrays(1, &mis->versions[version].vertex_array);
-			// The actual binding is dynamic based on pass (Skeleton/BlendShape),
-			// so the array gets configured on the fly in update_mesh_instances
-		}
+		mis->versions[version].vertex_array = 0;
 
 		r_vertex_array_gl = mis->versions[version].vertex_array;
 		Mesh::Surface::Version *v = &mis->versions[version];

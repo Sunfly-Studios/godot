@@ -43,82 +43,180 @@
 
 using namespace GLES1;
 
+_FORCE_INLINE_ static void _gles1_convert_shader_filter_repeat(
+	ShaderLanguage::TextureFilter p_shader_filter,
+	ShaderLanguage::TextureRepeat p_shader_repeat,
+	RS::CanvasItemTextureFilter &r_filter,
+	RS::CanvasItemTextureRepeat &r_repeat
+) {
+	switch (p_shader_filter) {
+		case ShaderLanguage::FILTER_NEAREST:
+			r_filter = RS::CANVAS_ITEM_TEXTURE_FILTER_NEAREST;
+			break;
+		case ShaderLanguage::FILTER_LINEAR:
+			r_filter = RS::CANVAS_ITEM_TEXTURE_FILTER_LINEAR;
+			break;
+		case ShaderLanguage::FILTER_NEAREST_MIPMAP:
+			r_filter = RS::CANVAS_ITEM_TEXTURE_FILTER_NEAREST_WITH_MIPMAPS;
+			break;
+		case ShaderLanguage::FILTER_LINEAR_MIPMAP:
+			r_filter = RS::CANVAS_ITEM_TEXTURE_FILTER_LINEAR_WITH_MIPMAPS;
+			break;
+		case ShaderLanguage::FILTER_NEAREST_MIPMAP_ANISOTROPIC:
+			r_filter = RS::CANVAS_ITEM_TEXTURE_FILTER_NEAREST_WITH_MIPMAPS_ANISOTROPIC;
+			break;
+		case ShaderLanguage::FILTER_LINEAR_MIPMAP_ANISOTROPIC:
+		case ShaderLanguage::FILTER_DEFAULT:
+		default:
+			r_filter = RS::CANVAS_ITEM_TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC;
+			break;
+	}
+
+	switch (p_shader_repeat) {
+		case ShaderLanguage::REPEAT_DISABLE:
+			r_repeat = RS::CANVAS_ITEM_TEXTURE_REPEAT_DISABLED;
+			break;
+		case ShaderLanguage::REPEAT_ENABLE:
+		case ShaderLanguage::REPEAT_DEFAULT:
+		default:
+			r_repeat = RS::CANVAS_ITEM_TEXTURE_REPEAT_ENABLED;
+			break;
+	}
+}
+
 _FORCE_INLINE_ static void bind_uniforms_and_textures_generic_gles1(
 	const Vector<RID> &p_texture_cache,
 	const Vector<ShaderCompiler::GeneratedCode::Texture> &p_texture_uniforms
 ) {
-	int max_texture_units = GLES1_CONFIG->max_texture_image_units;
+	int max_texture_units = GLES1::Config::get_singleton()->max_texture_units;
+	GLES1::TextureStorage *texture_storage = GLES1::TextureStorage::get_singleton();
 
 	// Fetch the default white texture to use as a fallback for the combiners
-	RID white_tex_rid = GLES1::TextureStorage::get_singleton()->texture_gl_get_default(GLES1::DEFAULT_GL_TEXTURE_WHITE);
-	GLES1::Texture *white_tex = GLES1::TextureStorage::get_singleton()->get_texture(white_tex_rid);
-	GLuint default_tex_id = white_tex ? white_tex->tex_id : 0;
+	RID white_tex_rid = texture_storage->texture_gl_get_default(GLES1::DEFAULT_GL_TEXTURE_WHITE);
+	RID black_tex_rid = texture_storage->texture_gl_get_default(GLES1::DEFAULT_GL_TEXTURE_BLACK);
 
-	if (p_texture_cache.is_empty()) {
+	if (p_texture_cache.is_empty() || p_texture_uniforms.is_empty()) {
 		// Populate the texture units
 		for (int i = 0; i < max_texture_units; i++) {
-			glActiveTexture(GL_TEXTURE0 + i);
-			if (i < 2) {
-				glEnable(GL_TEXTURE_2D);
-				glBindTexture(GL_TEXTURE_2D, default_tex_id);
-			} else {
-				glBindTexture(GL_TEXTURE_2D, 0);
-				glDisable(GL_TEXTURE_2D);
+			if (max_texture_units > 1) {
+				glActiveTexture(GL_TEXTURE0 + i);
 			}
+			glBindTexture(GL_TEXTURE_2D, 0);
+			glDisable(GL_TEXTURE_2D);
 		}
-		glActiveTexture(GL_TEXTURE0);
-		GL_CHECK_ERROR("GLES1::bind_uniforms_and_textures_generic_gles1: glActiveTexture empty cache scrub");
+		if (max_texture_units > 1) {
+			glActiveTexture(GL_TEXTURE0);
+		}
+		GL_CHECK_ERROR("GLES1::MaterialStorage::bind_uniforms_and_textures_generic_gles1: empty cache scrub");
 		return;
 	}
 
-	// Bind Textures to their active GL_TEXTURE units
-	const RID *textures = p_texture_cache.ptr();
-	const ShaderCompiler::GeneratedCode::Texture *texture_uniforms = p_texture_uniforms.ptr();
+	RID tex_unit0_rid;
+	RS::CanvasItemTextureFilter filter0 = RS::CANVAS_ITEM_TEXTURE_FILTER_LINEAR_WITH_MIPMAPS;
+	RS::CanvasItemTextureRepeat repeat0 = RS::CANVAS_ITEM_TEXTURE_REPEAT_ENABLED;
+
+	RID tex_unit1_rid;
+	RS::CanvasItemTextureFilter filter1 = RS::CANVAS_ITEM_TEXTURE_FILTER_LINEAR_WITH_MIPMAPS;
+	RS::CanvasItemTextureRepeat repeat1 = RS::CANVAS_ITEM_TEXTURE_REPEAT_ENABLED;
+
+	bool unit1_is_lightmap = false;
+	bool has_albedo = false;
+
 	int texture_uniform_index = 0;
 	int texture_uniform_count = 0;
-	int ti = 0;
 
-	for (; ti < p_texture_cache.size(); ti++) {
-		if (unlikely(ti >= max_texture_units)) {
-			ERR_PRINT_ONCE(vformat("GLES1: Custom shader uses too many textures! Hardware limit is %d. Skipping remainder.", max_texture_units));
+	for (int ti = 0; ti < p_texture_cache.size(); ti++) {
+		if (texture_uniform_index >= p_texture_uniforms.size()) {
 			break;
 		}
+		const ShaderCompiler::GeneratedCode::Texture &texture_uniform = p_texture_uniforms[texture_uniform_index];
+		int array_span = texture_uniform.array_size > 0 ? texture_uniform.array_size : 1;
 
-		glActiveTexture(GL_TEXTURE0 + ti);
+		RS::CanvasItemTextureFilter cur_filter;
+		RS::CanvasItemTextureRepeat cur_repeat;
+		_gles1_convert_shader_filter_repeat(texture_uniform.filter, texture_uniform.repeat, cur_filter, cur_repeat);
 
-		GLES1::Texture *texture = GLES1::TextureStorage::get_singleton()->get_texture(textures[ti]);
-		if (texture && texture->tex_id != 0) {
-			glEnable(GL_TEXTURE_2D);
-			glBindTexture(GL_TEXTURE_2D, texture->tex_id);
-		} else {
-			// Ensure an incomplete texture definition doesn't break the active combiners
-			glEnable(GL_TEXTURE_2D);
-			glBindTexture(GL_TEXTURE_2D, default_tex_id);
+		RID current_rid = p_texture_cache[ti];
+
+		// Bind the first texture to Unit 0 unless explicitly replaced by albedo
+		if (ti == 0 && !has_albedo) {
+			tex_unit0_rid = current_rid;
+			filter0 = cur_filter;
+			repeat0 = cur_repeat;
+		}
+		
+		// Semantic routing
+		if (texture_uniform.name == "texture_albedo" || texture_uniform.name == "albedo_texture") {
+			tex_unit0_rid = current_rid;
+			filter0 = cur_filter;
+			repeat0 = cur_repeat;
+			has_albedo = true;
+		} else if (texture_uniform.name == "texture_emission" || texture_uniform.name == "emission_texture") {
+			if (!tex_unit1_rid.is_valid() && !unit1_is_lightmap && current_rid != black_tex_rid && current_rid != white_tex_rid) {
+				tex_unit1_rid = current_rid;
+				filter1 = cur_filter;
+				repeat1 = cur_repeat;
+				unit1_is_lightmap = false;
+			}
+		} else if (texture_uniform.name == "texture_lightmap" || texture_uniform.name == "lightmap_texture") {
+			// Lightmaps aggressively override emission in the secondary FFP slot
+			if (current_rid.is_valid() && current_rid != black_tex_rid && current_rid != white_tex_rid) {
+				tex_unit1_rid = current_rid;
+				filter1 = cur_filter;
+				repeat1 = cur_repeat;
+				unit1_is_lightmap = true;
+			}
 		}
 
-		const ShaderCompiler::GeneratedCode::Texture &texture_uniform = texture_uniforms[texture_uniform_index];
 		texture_uniform_count++;
-		if (texture_uniform_count >= texture_uniform.array_size) {
+		if (texture_uniform_count >= array_span) {
 			texture_uniform_index++;
 			texture_uniform_count = 0;
 		}
 	}
 
-	// Scrub remaining texture units.
-	for (int i = ti; i < max_texture_units; i++) {
-		glActiveTexture(GL_TEXTURE0 + i);
-		if (i < 2) {
-			glEnable(GL_TEXTURE_2D);
-			glBindTexture(GL_TEXTURE_2D, default_tex_id);
+	if (!tex_unit0_rid.is_valid()) {
+		tex_unit0_rid = white_tex_rid;
+	}
+
+	// TU0: Albedo / base texture
+	texture_storage->texture_bind_and_validate(tex_unit0_rid, GL_TEXTURE0, filter0, repeat0);
+	GL_CHECK_ERROR("GLES1::MaterialStorage::bind_uniforms_and_textures_generic_gles1: Unit 0 Bind");
+
+	// TU1: Secondary maps (lightmap or emission)
+	if (max_texture_units > 1) {
+		if (tex_unit1_rid.is_valid() && tex_unit1_rid != white_tex_rid && tex_unit1_rid != black_tex_rid) {
+			texture_storage->texture_bind_and_validate(tex_unit1_rid, GL_TEXTURE1, filter1, repeat1);
+			if (unit1_is_lightmap) {
+				// Multiply base color with baked shadows
+				glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE);
+			} else if (GLES1_CONFIG->support_texture_env_add) {
+				// Additive bleed for emission
+				glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_ADD);
+			} else {
+				// Regular modulate
+				glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE);
+			}
 		} else {
+			glActiveTexture(GL_TEXTURE1);
 			glBindTexture(GL_TEXTURE_2D, 0);
 			glDisable(GL_TEXTURE_2D);
 		}
+		GL_CHECK_ERROR("GLES1::MaterialStorage::bind_uniforms_and_textures_generic_gles1: Unit 1 Bind");
+	}
+
+	// Scrub remaining texture units
+	for (int i = 2; i < max_texture_units; i++) {
+		glActiveTexture(GL_TEXTURE0 + i);
+		glBindTexture(GL_TEXTURE_2D, 0);
+		glDisable(GL_TEXTURE_2D);
 	}
 
 	// Reset the active texture back to 0 for subsequent draw calls
-	glActiveTexture(GL_TEXTURE0);
-	GL_CHECK_ERROR("GLES1::bind_uniforms_and_textures_generic_gles1: glActiveTexture");
+	if (max_texture_units > 1) {
+		glActiveTexture(GL_TEXTURE0);
+	}
+	GL_CHECK_ERROR("GLES1::MaterialStorage::bind_uniforms_and_textures_generic_gles1: glActiveTexture Scrub");
 }
 
 
@@ -244,8 +342,37 @@ void MaterialData::update_textures(const HashMap<StringName, Variant> &p_paramet
 			Array tex_array = V->value;
 			for (int j = 0; j < array_size; j++) {
 				RID gl_texture;
-				if (p_default_textures.has(uniform_name) && p_default_textures[uniform_name].has(j)) {
-					gl_texture = p_default_textures[uniform_name][j];
+				if (j < tex_array.size()) {
+					gl_texture = tex_array[j];
+				}
+				if (!gl_texture.is_valid()) {
+					if (p_default_textures.has(uniform_name) && p_default_textures[uniform_name].has(j)) {
+						gl_texture = p_default_textures[uniform_name][j];
+					} else {
+						GLES1::DefaultGLTexture default_tex = GLES1::DEFAULT_GL_TEXTURE_WHITE;
+						if (p_texture_uniforms[i].hint == ShaderLanguage::ShaderNode::Uniform::HINT_DEFAULT_BLACK) {
+							default_tex = GLES1::DEFAULT_GL_TEXTURE_BLACK;
+						} else if (p_texture_uniforms[i].hint == ShaderLanguage::ShaderNode::Uniform::HINT_DEFAULT_TRANSPARENT) {
+							default_tex = GLES1::DEFAULT_GL_TEXTURE_TRANSPARENT;
+						} else if (p_texture_uniforms[i].hint == ShaderLanguage::ShaderNode::Uniform::HINT_NORMAL_ROUGHNESS_TEXTURE || p_texture_uniforms[i].hint == ShaderLanguage::ShaderNode::Uniform::HINT_NORMAL) {
+							default_tex = GLES1::DEFAULT_GL_TEXTURE_NORMAL;
+						} else if (p_texture_uniforms[i].hint == ShaderLanguage::ShaderNode::Uniform::HINT_ANISOTROPY) {
+							default_tex = GLES1::DEFAULT_GL_TEXTURE_ANISO;
+						}
+						gl_texture = texture_storage->texture_gl_get_default(default_tex);
+					}
+				}
+				p_textures[k++] = gl_texture;
+			}
+		} else {
+			// Single texture or fallback
+			RID gl_texture;
+			if (V) {
+				gl_texture = V->value;
+			}
+			if (!gl_texture.is_valid()) {
+				if (p_default_textures.has(uniform_name) && p_default_textures[uniform_name].has(0)) {
+					gl_texture = p_default_textures[uniform_name][0];
 				} else {
 					GLES1::DefaultGLTexture default_tex = GLES1::DEFAULT_GL_TEXTURE_WHITE;
 					if (p_texture_uniforms[i].hint == ShaderLanguage::ShaderNode::Uniform::HINT_DEFAULT_BLACK) {
@@ -259,25 +386,6 @@ void MaterialData::update_textures(const HashMap<StringName, Variant> &p_paramet
 					}
 					gl_texture = texture_storage->texture_gl_get_default(default_tex);
 				}
-				p_textures[k++] = gl_texture;
-			}
-		} else {
-			// Single texture or fallback
-			RID gl_texture;
-			if (p_default_textures.has(uniform_name) && p_default_textures[uniform_name].has(0)) {
-				gl_texture = p_default_textures[uniform_name][0];
-			} else {
-				GLES1::DefaultGLTexture default_tex = GLES1::DEFAULT_GL_TEXTURE_WHITE;
-				if (p_texture_uniforms[i].hint == ShaderLanguage::ShaderNode::Uniform::HINT_DEFAULT_BLACK) {
-					default_tex = GLES1::DEFAULT_GL_TEXTURE_BLACK;
-				} else if (p_texture_uniforms[i].hint == ShaderLanguage::ShaderNode::Uniform::HINT_DEFAULT_TRANSPARENT) {
-					default_tex = GLES1::DEFAULT_GL_TEXTURE_TRANSPARENT;
-				} else if (p_texture_uniforms[i].hint == ShaderLanguage::ShaderNode::Uniform::HINT_NORMAL_ROUGHNESS_TEXTURE || p_texture_uniforms[i].hint == ShaderLanguage::ShaderNode::Uniform::HINT_NORMAL) {
-					default_tex = GLES1::DEFAULT_GL_TEXTURE_NORMAL;
-				} else if (p_texture_uniforms[i].hint == ShaderLanguage::ShaderNode::Uniform::HINT_ANISOTROPY) {
-					default_tex = GLES1::DEFAULT_GL_TEXTURE_ANISO;
-				}
-				gl_texture = texture_storage->texture_gl_get_default(default_tex);
 			}
 
 			// Fill the entire array span even if the user only provided one texture
@@ -1394,7 +1502,10 @@ void CanvasMaterialData::bind_uniforms() {
 			glBindTexture(GL_TEXTURE_2D, 0);
 			glDisable(GL_TEXTURE_2D);
 		}
-		glActiveTexture(GL_TEXTURE0);
+		if (max_texture_units > 1) {
+			glActiveTexture(GL_TEXTURE0);
+		}
+		GL_CHECK_ERROR("GLES1::CanvasMaterialData::bind_uniforms: glActiveTexture empty scrub");
 		return;
 	}
 
@@ -1845,16 +1956,51 @@ void SceneMaterialData::set_next_pass(RID p_pass) {
 void SceneMaterialData::update_parameters(const HashMap<StringName, Variant> &p_parameters, bool p_uniform_dirty, bool p_textures_dirty) {
 	update_parameters_internal(p_parameters, p_uniform_dirty, p_textures_dirty, shader_data->uniforms, shader_data->ubo_offsets.ptr(), shader_data->texture_uniforms, shader_data->default_texture_params, shader_data->ubo_size, true);
 
-	if (p_parameters.has("distance_fade_min") && p_parameters.has("distance_fade_max")) {
-		use_distance_fade = true;
+	use_distance_fade = (
+		// Only enable if they are also declared in the shader
+		shader_data->uniforms.has("distance_fade_min") &&
+		shader_data->uniforms.has("distance_fade_max") &&
+		p_parameters.has("distance_fade_min") &&
+		p_parameters.has("distance_fade_max")
+	);
+
+	if (use_distance_fade) {
 		distance_fade_min = p_parameters["distance_fade_min"];
 		distance_fade_max = p_parameters["distance_fade_max"];
+	}
+
+	// Intercept the materials for approximation
+	bool has_orm = p_parameters.has("orm_texture");
+	bool has_std = (
+		p_parameters.has("albedo") ||
+		p_parameters.has("texture_albedo") ||
+		p_parameters.has("roughness") ||
+		p_parameters.has("metallic") ||
+		p_parameters.has("emission")
+	);
+
+	if (has_orm) {
+		approx_type = APPROX_ORM;
+		if (!approx_data) {
+			approx_data = memnew(StandardMaterialState);
+		}
+		ORMMaterialProcessor::update_state(*static_cast<StandardMaterialState *>(approx_data), p_parameters);
+	} else if (has_std) {
+		approx_type = APPROX_STANDARD;
+		if (!approx_data) {
+			approx_data = memnew(StandardMaterialState);
+		}
+		StandardMaterialProcessor::update_state(*static_cast<StandardMaterialState *>(approx_data), p_parameters);
 	} else {
-		use_distance_fade = false;
+		approx_type = APPROX_NONE;
 	}
 }
 
 SceneMaterialData::~SceneMaterialData() {
+	if (approx_data) {
+		memdelete(static_cast<StandardMaterialState *>(approx_data));
+		approx_data = nullptr;
+	}
 }
 
 GLES1::MaterialData *GLES1::_create_scene_material_func(ShaderData *p_shader) {
@@ -1868,6 +2014,13 @@ void SceneMaterialData::bind_uniforms() {
 	if (!shader_data || !shader_data->valid) {
 		return;
 	}
+
+	if (approx_type == APPROX_STANDARD && approx_data) {
+		StandardMaterialProcessor::bind_state(*static_cast<StandardMaterialState *>(approx_data));
+	} else if (approx_type == APPROX_ORM && approx_data) {
+		ORMMaterialProcessor::bind_state(*static_cast<StandardMaterialState *>(approx_data));
+	}
+
 	bind_uniforms_and_textures_generic_gles1(texture_cache, shader_data->texture_uniforms);
 }
 

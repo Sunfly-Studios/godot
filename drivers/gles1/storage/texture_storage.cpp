@@ -811,6 +811,13 @@ Ref<Image> TextureStorage::texture_2d_get(RID p_texture) const {
 	Ref<Image> image;
 
 	if (!Config::get_singleton()->support_fbo) {
+		// TODO: This is used so that systems like UV2
+		// can directly read from it as fallback for non FBOs.
+		// I haven't figured out why Godot only uses
+		// this for the editor only.
+		if (tex->image_cache_2d.is_valid()) {
+			return tex->image_cache_2d;
+		}
 		WARN_PRINT_ONCE("GLES1: CPU Image cache is empty and FBOs are not supported by the hardware. Cannot read back texture.");
 		return Ref<Image>();
 	}
@@ -876,7 +883,7 @@ Ref<Image> TextureStorage::texture_2d_get(RID p_texture) const {
 
 	GLint prev_active_tex = 0;
 	glGetIntegerv(GL_ACTIVE_TEXTURE, &prev_active_tex);
-	
+
 	if (Config::get_singleton()->max_texture_units > 1) {
 		glActiveTexture(GL_TEXTURE0);
 	}
@@ -909,11 +916,14 @@ Ref<Image> TextureStorage::texture_2d_get(RID p_texture) const {
 		glColorMask(prev_color_mask[0], prev_color_mask[1], prev_color_mask[2], prev_color_mask[3]);
 		glClearColor(prev_clear_color[0], prev_clear_color[1], prev_clear_color[2], prev_clear_color[3]);
 		glBindTexture(GL_TEXTURE_2D, prev_bound_tex);
-		
+
 		if (Config::get_singleton()->max_texture_units > 1) {
 			glActiveTexture(prev_active_tex);
 		}
 
+		if (tex->image_cache_2d.is_valid()) {
+			return tex->image_cache_2d;
+		}
 		ERR_FAIL_V_MSG(Ref<Image>(), "GLES1: FBO incomplete during texture_2d_get fallback readback.");
 	}
 
@@ -986,7 +996,7 @@ Ref<Image> TextureStorage::texture_2d_get(RID p_texture) const {
 	glClearColor(prev_clear_color[0], prev_clear_color[1], prev_clear_color[2], prev_clear_color[3]);
 
 	glBindTexture(GL_TEXTURE_2D, prev_bound_tex);
-	
+
 	if (Config::get_singleton()->max_texture_units > 1) {
 		glActiveTexture(prev_active_tex);
 	}
