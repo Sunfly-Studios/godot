@@ -1,18 +1,29 @@
 #!/usr/bin/env python
 from misc.utility.scons_hints import *
-import make_rendering_server_crtp
+
+from SCons.Script import Builder, Scanner
+import servers_vtable_builders
 
 Import("env")
 
-env.servers_sources = []
-
-gen = env.CommandNoCache(
-    "rendering_server_binds.gen.inc",
-    "rendering_server.h",
-    env.Run(make_rendering_server_crtp.run),
+# Register a builder with a null source_scanner so SCons does not parse #includes
+# inside the source .h file when generating the .gen.inc file.
+env["BUILDERS"]["MakeStaticVTable"] = Builder(
+    action=env.Run(servers_vtable_builders.make_static_vtable_builder),
+    source_scanner=Scanner(function=lambda node, env, path: []),
 )
-# Prevents cyclic dependencies
-env.Ignore(gen, gen)
+
+
+def generate_static_vtable(env, target_inc: str, source_header: str):
+    gen_node = env.MakeStaticVTable(target_inc, source_header)
+    env.NoCache(gen_node)
+    return gen_node
+
+
+generate_static_vtable(env, "gen/rendering_server_binds.gen.inc", "rendering_server.h")
+generate_static_vtable(env, "gen/rendering_method_binds.gen.inc", "rendering/rendering_method.h")
+
+env.servers_sources = []
 
 env.add_source_files(env.servers_sources, "audio_server.cpp")
 env.add_source_files(env.servers_sources, "camera_server.cpp")
