@@ -3355,6 +3355,9 @@ Error Main::setup2(bool p_show_boot_logo) {
 				String name = DisplayServer::get_create_function_name(i);
 				WARN_PRINT(vformat("Display driver %s failed, falling back to %s.", last_name, name));
 
+				if (display_server) {
+					memdelete(display_server);
+				}
 				display_server = DisplayServer::create(i, rendering_driver, window_mode, window_vsync_mode, window_flags, window_position, window_size, init_screen, context, init_embed_parent_window_id, err);
 				if (err == OK && display_server != nullptr) {
 					break;
