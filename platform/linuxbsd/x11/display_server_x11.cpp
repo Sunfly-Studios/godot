@@ -7618,8 +7618,10 @@ DisplayServerX11::~DisplayServerX11() {
 	
 	// Send owned clipboard data to clipboard manager before exit.
 	Window x11_main_window = windows[MAIN_WINDOW_ID].x11_window;
-	_clipboard_transfer_ownership(XA_PRIMARY, x11_main_window);
-	_clipboard_transfer_ownership(XInternAtom(x11_display, "CLIPBOARD", 0), x11_main_window);
+	if (x11_main_window) {
+		_clipboard_transfer_ownership(XA_PRIMARY, x11_main_window);
+		_clipboard_transfer_ownership(XInternAtom(x11_display, "CLIPBOARD", 0), x11_main_window);
+	}
 
 	events_thread_done.set();
 	events_thread.wait_to_finish();
@@ -7654,7 +7656,9 @@ DisplayServerX11::~DisplayServerX11() {
 			XDestroyIC(wd.xic);
 			wd.xic = nullptr;
 		}
-		XDestroyWindow(x11_display, wd.x11_xim_window);
+		if (x11_display) {
+			XDestroyWindow(x11_display, wd.x11_xim_window);
+		}
 #ifdef XKB_ENABLED
 		if (xkb_loaded_v05p) {
 			if (wd.xkb_state) {
@@ -7663,8 +7667,10 @@ DisplayServerX11::~DisplayServerX11() {
 			}
 		}
 #endif
-		XUnmapWindow(x11_display, wd.x11_window);
-		XDestroyWindow(x11_display, wd.x11_window);
+		if (x11_display) {
+			XUnmapWindow(x11_display, wd.x11_window);
+			XDestroyWindow(x11_display, wd.x11_window);
+		}
 	}
 
 #ifdef XKB_ENABLED
@@ -7719,7 +7725,10 @@ DisplayServerX11::~DisplayServerX11() {
 		XCloseIM(xim);
 	}
 
-	XCloseDisplay(x11_display);
+	if (x11_display) {
+		XCloseDisplay(x11_display);
+	}
+
 	if (xmbstring) {
 		memfree(xmbstring);
 	}
