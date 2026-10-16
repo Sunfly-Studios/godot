@@ -1909,7 +1909,7 @@ private:
 
 // Includes the auto-generated CRTP
 // Vtable, dispatcher and inline forwarders
-#include "servers/rendering_server_binds.gen.inc"
+#include "servers/gen/rendering_server_binds.gen.inc"
 
 // Make variant understand the enums.
 VARIANT_ENUM_CAST(RenderingServer::TextureType);

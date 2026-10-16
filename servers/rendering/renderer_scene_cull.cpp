@@ -4461,7 +4461,8 @@ void RendererSceneCull::InterpolationData::notify_free_instance(RID p_rid, Insta
 	instance_transform_update_list_prev->erase_multiple_unordered(p_rid);
 }
 
-RendererSceneCull::RendererSceneCull() {
+RendererSceneCull::RendererSceneCull() :
+	RenderingMethod(&RenderingMethodDispatcher<RendererSceneCull>::vtable) {
 	render_pass = 1;
 	singleton = this;
 
