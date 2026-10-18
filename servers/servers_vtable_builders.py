@@ -127,6 +127,7 @@ def _extract_nested_type_decl(stmt: str, nested_types: set[str]) -> None:
 def _default_vtable_member_name(class_name: str) -> str:
     """Derives a vtable pointer name if not explicitly provided (e.g. RenderingServer -> rs_vtable)."""
     if class_name == "RenderingServer":
+        # Maintain compatibility
         return "rs_vtable"
     # Fallback: snake_case initials + _vtable (e.g., RenderingMethod -> rm_vtable)
     initials = "".join(ch.lower() for ch in class_name if ch.isupper())
@@ -277,6 +278,7 @@ def parse_header_classes(header_text: str) -> list[dict]:
     return parsed_classes
 
 
+# Wrap Pre Processor
 def _wrap_pp(lines: list[str], pp_stack: list[str]) -> list[str]:
     if not pp_stack:
         return lines
@@ -307,7 +309,7 @@ def _generate_class_vtable_code(class_info: dict) -> str:
         name = m["name"]
         args = m["args"]
         is_const = m["const"]
-        pp = m["pp"]
+        pp = m["pp"] # Pre Processors
 
         self_ptr_type = f"const {class_name} *" if is_const else f"{class_name} *"
         cast_type = "const T *" if is_const else "T *"
