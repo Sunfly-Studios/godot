@@ -37,6 +37,8 @@
 #include "core/templates/list.h"
 #include "core/templates/rid.h"
 #include "core/templates/safe_refcount.h"
+#include "core/templates/generational_handle.h"
+#include "core/templates/sparse_set.h"
 
 #include <stdio.h>
 #include <typeinfo>
@@ -543,116 +545,471 @@ public:
 };
 
 template <typename T, bool THREAD_SAFE = false>
-class RID_PtrOwner {
-	RID_Alloc<T *, THREAD_SAFE> alloc;
+class RID_PtrOwner : public RID_AllocBase {
+	SparseSet<T *> sparse_set;
+	LocalVector<uint32_t> generations;
+	LocalVector<uint32_t> free_list;
+	LocalVector<uint32_t> validators;
+	mutable Mutex mutex;
+	const char *description = nullptr;
+
+	_FORCE_INLINE_ GenerationalHandle _allocate_handle(uint32_t &r_validator) {
+		uint32_t index;
+		uint32_t gen;
+		if (free_list.size() > 0) {
+			index = free_list[free_list.size() - 1];
+			free_list.resize(free_list.size() - 1);
+			gen = generations[index] + 1;
+			if (unlikely(gen == 0 || gen > GenerationalHandle::MAX_GENERATION)) {
+				gen = 1;
+			}
+			generations[index] = gen;
+		} else {
+			index = generations.size();
+			gen = 1;
+			generations.push_back(gen);
+			validators.push_back(0);
+		}
+		r_validator = (uint32_t)(_gen_id() & 0x7FFFFFFF);
+		validators[index] = r_validator;
+		return GenerationalHandle(index, gen);
+	}
 
 public:
 	_FORCE_INLINE_ RID make_rid(T *p_ptr) {
-		return alloc.make_rid(p_ptr);
+		if constexpr (THREAD_SAFE) {
+			mutex.lock();
+		}
+		uint32_t validator;
+		GenerationalHandle handle = _allocate_handle(validator);
+		sparse_set.insert(handle, p_ptr);
+		if constexpr (THREAD_SAFE) {
+			mutex.unlock();
+		}
+
+		uint64_t id = validator;
+		id <<= 32;
+		id |= handle.to_raw();
+		return _make_from_id(id);
 	}
 
 	_FORCE_INLINE_ RID allocate_rid() {
-		return alloc.allocate_rid();
+		if constexpr (THREAD_SAFE) {
+			mutex.lock();
+		}
+		uint32_t validator;
+		GenerationalHandle handle = _allocate_handle(validator);
+		sparse_set.insert(handle, nullptr);
+		if constexpr (THREAD_SAFE) {
+			mutex.unlock();
+		}
+
+		uint64_t id = validator;
+		id <<= 32;
+		id |= handle.to_raw();
+		return _make_from_id(id);
 	}
 
 	_FORCE_INLINE_ void initialize_rid(RID p_rid, T *p_ptr) {
-		alloc.initialize_rid(p_rid, p_ptr);
+		uint64_t id = p_rid.get_id();
+		uint32_t validator = (uint32_t)(id >> 32);
+		GenerationalHandle handle = GenerationalHandle::from_raw(id & 0xFFFFFFFF);
+
+		if constexpr (THREAD_SAFE) {
+			mutex.lock();
+		}
+		if (sparse_set.has(handle) && validators[handle.get_index()] == validator) {
+			sparse_set.get(handle) = p_ptr;
+		}
+		if constexpr (THREAD_SAFE) {
+			mutex.unlock();
+		}
 	}
 
 	_FORCE_INLINE_ T *get_or_null(const RID &p_rid) {
-		T **ptr = alloc.get_or_null(p_rid);
-		if (unlikely(!ptr)) {
+		if (p_rid == RID()) {
 			return nullptr;
 		}
-		return *ptr;
+		uint64_t id = p_rid.get_id();
+		uint32_t validator = (uint32_t)(id >> 32);
+		GenerationalHandle handle = GenerationalHandle::from_raw(id & 0xFFFFFFFF);
+
+		if constexpr (THREAD_SAFE) {
+			mutex.lock();
+		}
+		T *result = nullptr;
+		if (sparse_set.has(handle) && validators[handle.get_index()] == validator) {
+			T **ptr = sparse_set.get_ptr(handle);
+			result = ptr ? *ptr : nullptr;
+		}
+		if constexpr (THREAD_SAFE) {
+			mutex.unlock();
+		}
+		return result;
 	}
 
 	_FORCE_INLINE_ void replace(const RID &p_rid, T *p_new_ptr) {
-		T **ptr = alloc.get_or_null(p_rid);
-		ERR_FAIL_NULL(ptr);
-		*ptr = p_new_ptr;
+		uint64_t id = p_rid.get_id();
+		uint32_t validator = (uint32_t)(id >> 32);
+		GenerationalHandle handle = GenerationalHandle::from_raw(id & 0xFFFFFFFF);
+
+		if constexpr (THREAD_SAFE) {
+			mutex.lock();
+		}
+		if (sparse_set.has(handle) && validators[handle.get_index()] == validator) {
+			sparse_set.get(handle) = p_new_ptr;
+		}
+		if constexpr (THREAD_SAFE) {
+			mutex.unlock();
+		}
 	}
 
 	_FORCE_INLINE_ bool owns(const RID &p_rid) const {
-		return alloc.owns(p_rid);
+		if (p_rid == RID()) {
+			return false;
+		}
+		uint64_t id = p_rid.get_id();
+		uint32_t validator = (uint32_t)(id >> 32);
+		GenerationalHandle handle = GenerationalHandle::from_raw(id & 0xFFFFFFFF);
+
+		if constexpr (THREAD_SAFE) {
+			mutex.lock();
+		}
+		bool has = sparse_set.has(handle) && validators[handle.get_index()] == validator;
+		if constexpr (THREAD_SAFE) {
+			mutex.unlock();
+		}
+		return has;
 	}
 
 	_FORCE_INLINE_ void free(const RID &p_rid) {
-		alloc.free(p_rid);
+		if (p_rid == RID()) {
+			return;
+		}
+		uint64_t id = p_rid.get_id();
+		uint32_t validator = (uint32_t)(id >> 32);
+		GenerationalHandle handle = GenerationalHandle::from_raw(id & 0xFFFFFFFF);
+
+		if constexpr (THREAD_SAFE) {
+			mutex.lock();
+		}
+		if (sparse_set.has(handle) && validators[handle.get_index()] == validator) {
+			if (sparse_set.erase(handle)) {
+				free_list.push_back(handle.get_index());
+				validators[handle.get_index()] = 0xFFFFFFFF;
+			}
+		}
+		if constexpr (THREAD_SAFE) {
+			mutex.unlock();
+		}
 	}
 
 	_FORCE_INLINE_ uint32_t get_rid_count() const {
-		return alloc.get_rid_count();
+		if constexpr (THREAD_SAFE) {
+			mutex.lock();
+		}
+		uint32_t size = sparse_set.size();
+		if constexpr (THREAD_SAFE) {
+			mutex.unlock();
+		}
+		return size;
 	}
 
 	_FORCE_INLINE_ void get_owned_list(List<RID> *p_owned) const {
-		return alloc.get_owned_list(p_owned);
+		if constexpr (THREAD_SAFE) {
+			mutex.lock();
+		}
+		const LocalVector<GenerationalHandle> &reverse_map = sparse_set.get_reverse_map();
+		for (uint32_t i = 0; i < reverse_map.size(); ++i) {
+			GenerationalHandle handle = reverse_map[i];
+			uint64_t id = validators[handle.get_index()];
+			id <<= 32;
+			id |= handle.to_raw();
+			p_owned->push_back(_make_from_id(id));
+		}
+		if constexpr (THREAD_SAFE) {
+			mutex.unlock();
+		}
 	}
 
 	void fill_owned_buffer(RID *p_rid_buffer) const {
-		alloc.fill_owned_buffer(p_rid_buffer);
+		if constexpr (THREAD_SAFE) {
+			mutex.lock();
+		}
+		const LocalVector<GenerationalHandle> &reverse_map = sparse_set.get_reverse_map();
+		for (uint32_t i = 0; i < reverse_map.size(); ++i) {
+			GenerationalHandle handle = reverse_map[i];
+			uint64_t id = validators[handle.get_index()];
+			id <<= 32;
+			id |= handle.to_raw();
+			p_rid_buffer[i] = _make_from_id(id);
+		}
+		if constexpr (THREAD_SAFE) {
+			mutex.unlock();
+		}
 	}
 
 	void set_description(const char *p_description) {
-		alloc.set_description(p_description);
+		description = p_description;
 	}
 
-	RID_PtrOwner(uint32_t p_target_chunk_byte_size = 65536, uint32_t p_maximum_number_of_elements = 262144) :
-			alloc(p_target_chunk_byte_size, p_maximum_number_of_elements) {}
+	RID_PtrOwner(uint32_t p_target_chunk_byte_size = 65536, uint32_t p_maximum_number_of_elements = 262144) {
+	}
 };
 
 template <typename T, bool THREAD_SAFE = false>
-class RID_Owner {
-	RID_Alloc<T, THREAD_SAFE> alloc;
+class RID_Owner : public RID_AllocBase {
+	SparseSet<T *> sparse_set;
+	LocalVector<uint32_t> generations;
+	LocalVector<uint32_t> free_list;
+	LocalVector<uint32_t> validators;
+	mutable Mutex mutex;
+	const char *description = nullptr;
+
+	_FORCE_INLINE_ GenerationalHandle _allocate_handle(uint32_t &r_validator) {
+		uint32_t index;
+		uint32_t gen;
+		if (free_list.size() > 0) {
+			index = free_list[free_list.size() - 1];
+			free_list.resize(free_list.size() - 1);
+			gen = generations[index] + 1;
+			if (unlikely(gen == 0 || gen > GenerationalHandle::MAX_GENERATION)) {
+				gen = 1;
+			}
+			generations[index] = gen;
+		} else {
+			index = generations.size();
+			gen = 1;
+			generations.push_back(gen);
+			validators.push_back(0);
+		}
+		r_validator = (uint32_t)(_gen_id() & 0x7FFFFFFF);
+		validators[index] = r_validator;
+		return GenerationalHandle(index, gen);
+	}
 
 public:
 	_FORCE_INLINE_ RID make_rid() {
-		return alloc.make_rid();
+		T *ptr = static_cast<T *>(Memory::alloc_aligned_static(sizeof(T), alignof(T)));
+		unaligned_construct<T>(ptr);
+
+		if constexpr (THREAD_SAFE) {
+			mutex.lock();
+		}
+		uint32_t validator;
+		GenerationalHandle handle = _allocate_handle(validator);
+		sparse_set.insert(handle, ptr);
+		if constexpr (THREAD_SAFE) {
+			mutex.unlock();
+		}
+
+		uint64_t id = validator;
+		id <<= 32;
+		id |= handle.to_raw();
+		return _make_from_id(id);
 	}
+
 	_FORCE_INLINE_ RID make_rid(const T &p_ptr) {
-		return alloc.make_rid(p_ptr);
+		T *ptr = static_cast<T *>(Memory::alloc_aligned_static(sizeof(T), alignof(T)));
+		unaligned_construct<T>(ptr, p_ptr);
+
+		if constexpr (THREAD_SAFE) {
+			mutex.lock();
+		}
+		uint32_t validator;
+		GenerationalHandle handle = _allocate_handle(validator);
+		sparse_set.insert(handle, ptr);
+		if constexpr (THREAD_SAFE) {
+			mutex.unlock();
+		}
+
+		uint64_t id = validator;
+		id <<= 32;
+		id |= handle.to_raw();
+		return _make_from_id(id);
 	}
 
 	_FORCE_INLINE_ RID allocate_rid() {
-		return alloc.allocate_rid();
+		T *ptr = static_cast<T *>(Memory::alloc_aligned_static(sizeof(T), alignof(T)));
+
+		if constexpr (THREAD_SAFE) {
+			mutex.lock();
+		}
+		uint32_t validator;
+		GenerationalHandle handle = _allocate_handle(validator);
+		sparse_set.insert(handle, ptr);
+		if constexpr (THREAD_SAFE) {
+			mutex.unlock();
+		}
+
+		uint64_t id = validator;
+		id <<= 32;
+		id |= handle.to_raw();
+		return _make_from_id(id);
 	}
 
 	_FORCE_INLINE_ void initialize_rid(RID p_rid) {
-		alloc.initialize_rid(p_rid);
+		uint64_t id = p_rid.get_id();
+		uint32_t validator = (uint32_t)(id >> 32);
+		GenerationalHandle handle = GenerationalHandle::from_raw(id & 0xFFFFFFFF);
+
+		if constexpr (THREAD_SAFE) {
+			mutex.lock();
+		}
+		if (sparse_set.has(handle) && validators[handle.get_index()] == validator) {
+			unaligned_construct<T>(sparse_set.get(handle));
+		}
+		if constexpr (THREAD_SAFE) {
+			mutex.unlock();
+		}
 	}
 
 	_FORCE_INLINE_ void initialize_rid(RID p_rid, const T &p_ptr) {
-		alloc.initialize_rid(p_rid, p_ptr);
+		uint64_t id = p_rid.get_id();
+		uint32_t validator = (uint32_t)(id >> 32);
+		GenerationalHandle handle = GenerationalHandle::from_raw(id & 0xFFFFFFFF);
+
+		if constexpr (THREAD_SAFE) {
+			mutex.lock();
+		}
+		if (sparse_set.has(handle) && validators[handle.get_index()] == validator) {
+			unaligned_construct<T>(sparse_set.get(handle), p_ptr);
+		}
+		if constexpr (THREAD_SAFE) {
+			mutex.unlock();
+		}
 	}
 
 	_FORCE_INLINE_ T *get_or_null(const RID &p_rid) {
-		return alloc.get_or_null(p_rid);
+		if (p_rid == RID()) {
+			return nullptr;
+		}
+		uint64_t id = p_rid.get_id();
+		uint32_t validator = (uint32_t)(id >> 32);
+		GenerationalHandle handle = GenerationalHandle::from_raw(id & 0xFFFFFFFF);
+
+		if constexpr (THREAD_SAFE) {
+			mutex.lock();
+		}
+		T *result = nullptr;
+		if (sparse_set.has(handle) && validators[handle.get_index()] == validator) {
+			T **ptr = sparse_set.get_ptr(handle);
+			result = ptr ? *ptr : nullptr;
+		}
+		if constexpr (THREAD_SAFE) {
+			mutex.unlock();
+		}
+		return result;
 	}
 
 	_FORCE_INLINE_ bool owns(const RID &p_rid) const {
-		return alloc.owns(p_rid);
+		if (p_rid == RID()) {
+			return false;
+		}
+		uint64_t id = p_rid.get_id();
+		uint32_t validator = (uint32_t)(id >> 32);
+		GenerationalHandle handle = GenerationalHandle::from_raw(id & 0xFFFFFFFF);
+
+		if constexpr (THREAD_SAFE) {
+			mutex.lock();
+		}
+		bool has = sparse_set.has(handle) && validators[handle.get_index()] == validator;
+		if constexpr (THREAD_SAFE) {
+			mutex.unlock();
+		}
+		return has;
 	}
 
 	_FORCE_INLINE_ void free(const RID &p_rid) {
-		alloc.free(p_rid);
+		if (p_rid == RID()) {
+			return;
+		}
+		uint64_t id = p_rid.get_id();
+		uint32_t validator = (uint32_t)(id >> 32);
+		GenerationalHandle handle = GenerationalHandle::from_raw(id & 0xFFFFFFFF);
+
+		if constexpr (THREAD_SAFE) {
+			mutex.lock();
+		}
+		if (sparse_set.has(handle) && validators[handle.get_index()] == validator) {
+			T **ptr = sparse_set.get_ptr(handle);
+			if (ptr && *ptr) {
+				unaligned_destroy<T>(*ptr);
+				Memory::free_aligned_static(*ptr);
+				if (sparse_set.erase(handle)) {
+					free_list.push_back(handle.get_index());
+					validators[handle.get_index()] = 0xFFFFFFFF;
+				}
+			}
+		}
+		if constexpr (THREAD_SAFE) {
+			mutex.unlock();
+		}
 	}
 
 	_FORCE_INLINE_ uint32_t get_rid_count() const {
-		return alloc.get_rid_count();
+		if constexpr (THREAD_SAFE) {
+			mutex.lock();
+		}
+		uint32_t size = sparse_set.size();
+		if constexpr (THREAD_SAFE) {
+			mutex.unlock();
+		}
+		return size;
 	}
 
 	_FORCE_INLINE_ void get_owned_list(List<RID> *p_owned) const {
-		return alloc.get_owned_list(p_owned);
+		if constexpr (THREAD_SAFE) {
+			mutex.lock();
+		}
+		const LocalVector<GenerationalHandle> &reverse_map = sparse_set.get_reverse_map();
+		for (uint32_t i = 0; i < reverse_map.size(); ++i) {
+			GenerationalHandle handle = reverse_map[i];
+			uint64_t id = validators[handle.get_index()];
+			id <<= 32;
+			id |= handle.to_raw();
+			p_owned->push_back(_make_from_id(id));
+		}
+		if constexpr (THREAD_SAFE) {
+			mutex.unlock();
+		}
 	}
+
 	void fill_owned_buffer(RID *p_rid_buffer) const {
-		alloc.fill_owned_buffer(p_rid_buffer);
+		if constexpr (THREAD_SAFE) {
+			mutex.lock();
+		}
+		const LocalVector<GenerationalHandle> &reverse_map = sparse_set.get_reverse_map();
+		for (uint32_t i = 0; i < reverse_map.size(); ++i) {
+			GenerationalHandle handle = reverse_map[i];
+			uint64_t id = validators[handle.get_index()];
+			id <<= 32;
+			id |= handle.to_raw();
+			p_rid_buffer[i] = _make_from_id(id);
+		}
+		if constexpr (THREAD_SAFE) {
+			mutex.unlock();
+		}
 	}
 
 	void set_description(const char *p_description) {
-		alloc.set_description(p_description);
+		description = p_description;
 	}
-	RID_Owner(uint32_t p_target_chunk_byte_size = 65536, uint32_t p_maximum_number_of_elements = 262144) :
-			alloc(p_target_chunk_byte_size, p_maximum_number_of_elements) {}
+
+	RID_Owner(uint32_t p_target_chunk_byte_size = 65536, uint32_t p_maximum_number_of_elements = 262144) {
+	}
+
+	~RID_Owner() {
+		const LocalVector<GenerationalHandle> &reverse_map = sparse_set.get_reverse_map();
+		for (uint32_t i = 0; i < reverse_map.size(); ++i) {
+			GenerationalHandle handle = reverse_map[i];
+			T **ptr = sparse_set.get_ptr(handle);
+			if (ptr && *ptr) {
+				unaligned_destroy<T>(*ptr);
+				Memory::free_aligned_static(*ptr);
+			}
+		}
+	}
 };
 
 #endif // RID_OWNER_H
