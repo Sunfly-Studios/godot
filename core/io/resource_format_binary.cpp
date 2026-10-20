@@ -922,6 +922,10 @@ static void save_ustring(Ref<FileAccess> f, const String &p_string) {
 
 static String get_ustring(Ref<FileAccess> f) {
 	int len = f->get_32();
+	ERR_FAIL_COND_V_MSG(len < 0 || (uint64_t)len > f->get_length() - f->get_position(), String(), "Invalid string length, corrupt binary resource.");
+	if (len == 0) {
+		return String();
+	}
 	Vector<char> str_buf;
 	str_buf.resize(len);
 	f->get_buffer((uint8_t *)&str_buf[0], len);
@@ -932,6 +936,7 @@ static String get_ustring(Ref<FileAccess> f) {
 
 String ResourceLoaderBinary::get_unicode_string() {
 	int len = f->get_32();
+	ERR_FAIL_COND_V_MSG(len < 0 || (uint64_t)len > f->get_length() - f->get_position(), String(), "Invalid string length, corrupt binary resource.");
 	if (len > str_buf.size()) {
 		str_buf.resize(len);
 	}
