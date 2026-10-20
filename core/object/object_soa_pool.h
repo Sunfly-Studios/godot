@@ -196,11 +196,6 @@ private:
 	}
 
 	template <size_t... Is>
-	_FORCE_INLINE_ void _tight_all(IndexSequence<Is...>) {
-		(get_stream<Is>().tight(), ...);
-	}
-
-	template <size_t... Is>
 	_FORCE_INLINE_ void _clear_all(IndexSequence<Is...>) {
 		(get_stream<Is>().clear(), ...);
 	}
@@ -278,11 +273,6 @@ public:
 		_grow_sparse_table(p_capacity);
 		dense_to_handle.reserve(p_capacity);
 		_reserve_all(p_capacity, Sequence{});
-	}
-
-	void shrink_to_fit() {
-		dense_to_handle.tight();
-		_tight_all(Sequence{});
 	}
 
 	void clear() {

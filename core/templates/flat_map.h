@@ -176,11 +176,6 @@ public:
 		values.reserve(p_capacity);
 	}
 
-	_FORCE_INLINE_ void shrink_to_fit() {
-		keys.tight();
-		values.tight();
-	}
-
 	_FORCE_INLINE_ void clear() {
 		keys.clear();
 		values.clear();
