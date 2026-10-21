@@ -207,6 +207,82 @@ class CommandQueueMT {
 		_FORCE_INLINE_ auto &get() { return ::tuple_get<I>(args); }
 	};
 
+	// Type-erased CommandThunk (Signature-based)
+	template <typename T, typename ThunkFunc, bool NeedsSync, typename... Args>
+	struct CommandThunk : public CommandBase {
+		T *instance;
+		ThunkFunc thunk;
+		Tuple<GetSimpleTypeT<Args>...> args;
+
+		_NO_INLINE_ static void _call_thunk(CommandBase *p_base) {
+			CommandThunk *self = static_cast<CommandThunk *>(p_base);
+			self->call_impl(BuildIndexSequence<sizeof...(Args)>{});
+		}
+
+		_NO_INLINE_ static void _destroy_thunk(CommandBase *p_base) {
+			static_cast<CommandThunk *>(p_base)->~CommandThunk();
+		}
+
+		template <typename... FwdArgs>
+		_FORCE_INLINE_ CommandThunk(T *p_instance, ThunkFunc p_thunk, FwdArgs &&...p_args) :
+				CommandBase(
+						&_call_thunk,
+						std::is_trivially_destructible_v<Tuple<GetSimpleTypeT<Args>...>> ? nullptr : &_destroy_thunk,
+						NeedsSync),
+				instance(p_instance),
+				thunk(p_thunk),
+				args(std::forward<FwdArgs>(p_args)...) {}
+
+	private:
+		template <size_t... I>
+		_FORCE_INLINE_ void call_impl(IndexSequence<I...>) {
+			// Move out of the Tuple, this will be destroyed as soon as the call is complete.
+			thunk(instance, std::move(get<I>())...);
+		}
+
+		// This method exists so we can call it in the parameter pack expansion in call_impl.
+		template <size_t I>
+		_FORCE_INLINE_ auto &get() { return ::tuple_get<I>(args); }
+	};
+
+	template <typename T, typename ThunkFunc, typename R, typename... Args>
+	struct CommandRetThunk : public CommandBase {
+		T *instance;
+		ThunkFunc thunk;
+		R *ret;
+		Tuple<GetSimpleTypeT<Args>...> args;
+
+		_NO_INLINE_ static void _call_thunk(CommandBase *p_base) {
+			CommandRetThunk *self = static_cast<CommandRetThunk *>(p_base);
+			*self->ret = self->call_impl(BuildIndexSequence<sizeof...(Args)>{});
+		}
+
+		_NO_INLINE_ static void _destroy_thunk(CommandBase *p_base) {
+			static_cast<CommandRetThunk *>(p_base)->~CommandRetThunk();
+		}
+
+		_FORCE_INLINE_ CommandRetThunk(T *p_instance, ThunkFunc p_thunk, R *p_ret, GetSimpleTypeT<Args>... p_args) :
+				CommandBase(
+						&_call_thunk,
+						std::is_trivially_destructible_v<Tuple<GetSimpleTypeT<Args>...>> ? nullptr : &_destroy_thunk,
+						true),
+				instance(p_instance),
+				thunk(p_thunk),
+				ret(p_ret),
+				args{ p_args... } {}
+
+	private:
+		template <size_t... I>
+		_FORCE_INLINE_ R call_impl(IndexSequence<I...>) {
+			// Move out of the Tuple, this will be destroyed as soon as the call is complete.
+			return thunk(instance, std::move(get<I>())...);
+		}
+
+		// This method exists so we can call it in the parameter pack expansion in call_impl.
+		template <size_t I>
+		_FORCE_INLINE_ auto &get() { return ::tuple_get<I>(args); }
+	};
+
 	/***** BASE *******/
 
 	static const uint32_t DEFAULT_COMMAND_MEM_SIZE_KB = 64;
@@ -370,6 +446,28 @@ public:
 		using CommandType = CommandRetStatic<T, Method, R, Args...>;
 		static_assert(sizeof(CommandType) <= MAX_COMMAND_SIZE);
 		_push_internal<CommandType, true>(p_instance, r_ret, std::forward<Args>(p_args)...);
+	}
+
+	// Signature-based Thunk API
+	template <typename T, typename ThunkFunc, typename... Args>
+	_FORCE_INLINE_ void push_thunk(T *p_instance, ThunkFunc p_thunk, Args &&...p_args) {
+		using CommandType = CommandThunk<T, ThunkFunc, false, Args...>;
+		static_assert(sizeof(CommandType) <= MAX_COMMAND_SIZE);
+		_push_internal<CommandType, false>(p_instance, p_thunk, std::forward<Args>(p_args)...);
+	}
+
+	template <typename T, typename ThunkFunc, typename... Args>
+	_FORCE_INLINE_ void push_and_sync_thunk(T *p_instance, ThunkFunc p_thunk, Args... p_args) {
+		using CommandType = CommandThunk<T, ThunkFunc, true, Args...>;
+		static_assert(sizeof(CommandType) <= MAX_COMMAND_SIZE);
+		_push_internal<CommandType, true>(p_instance, p_thunk, std::forward<Args>(p_args)...);
+	}
+
+	template <typename T, typename ThunkFunc, typename R, typename... Args>
+	_FORCE_INLINE_ void push_and_ret_thunk(T *p_instance, ThunkFunc p_thunk, R *r_ret, Args... p_args) {
+		using CommandType = CommandRetThunk<T, ThunkFunc, R, Args...>;
+		static_assert(sizeof(CommandType) <= MAX_COMMAND_SIZE);
+		_push_internal<CommandType, true>(p_instance, p_thunk, r_ret, std::forward<Args>(p_args)...);
 	}
 
 	_FORCE_INLINE_ void flush_if_pending() {
