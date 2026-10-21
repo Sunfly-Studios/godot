@@ -3,6 +3,7 @@ from misc.utility.scons_hints import *
 
 from SCons.Script import Builder, Scanner
 import servers_vtable_builders
+import servers_wrap_mt_common_builder
 
 Import("env")
 
@@ -23,6 +24,13 @@ def generate_static_vtable(env, target_inc: str, source_header: str):
 generate_static_vtable(env, "gen/rendering_server_binds.gen.inc", "rendering_server.h")
 generate_static_vtable(env, "gen/rendering_method_binds.gen.inc", "rendering/rendering_method.h")
 
+gen_wrap_mt = env.Command(
+    "gen/server_wrap_mt_common.gen.h",
+    [],
+    env.Run(servers_wrap_mt_common_builder.make_wrap_mt_builder)
+)
+env.NoCache(gen_wrap_mt)
+
 env.servers_sources = []
 
 env.add_source_files(env.servers_sources, "audio_server.cpp")
@@ -35,6 +43,7 @@ env.add_source_files(env.servers_sources, "physics_server_2d_wrap_mt.cpp")
 env.add_source_files(env.servers_sources, "register_server_types.cpp")
 env.add_source_files(env.servers_sources, "rendering_server.cpp")
 env.add_source_files(env.servers_sources, "text_server.cpp")
+
 
 SConscript("audio/SCsub")
 SConscript("camera/SCsub")
@@ -54,4 +63,5 @@ if not env["disable_3d"]:
 
 lib = env.add_library("servers", env.servers_sources)
 
+env.Depends(env.servers_sources, gen_wrap_mt)
 env.Prepend(LIBS=[lib])

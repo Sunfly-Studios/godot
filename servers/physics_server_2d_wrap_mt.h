@@ -70,7 +70,7 @@ public:
 #define server_name physics_server_2d
 #define WRITE_ACTION
 
-#include "servers/server_wrap_mt_common.h"
+#include "servers/gen/server_wrap_mt_common.gen.h"
 
 	//FUNC1RID(shape,ShapeType); todo fix
 	FUNCRID(world_boundary_shape)
