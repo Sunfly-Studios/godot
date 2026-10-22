@@ -57,8 +57,14 @@ struct MethodBindVTable {
 	bool (*is_vararg)(const MethodBind *);
 };
 
+class __StaticColdFallback {};
+
 template <typename>
-struct MethodBindInstanceType;
+struct MethodBindInstanceType {
+	// Fallback for pure static methods with no arguments or non-pointer arguments.
+	// IsHotClass<__StaticColdFallback> will evaluate to false.
+	using type = __StaticColdFallback;
+};
 
 template <typename R, typename T, typename... Args >
 struct MethodBindInstanceType<R (T::*)(Args...)> {
@@ -67,6 +73,17 @@ struct MethodBindInstanceType<R (T::*)(Args...)> {
 
 template < typename R, typename T, typename... Args >
 struct MethodBindInstanceType<R (T::*)(Args...) const> {
+	using type = T;
+};
+
+// For static functions bound as methods (e.g. taking `const Camera3D*` as the first argument)
+template <typename R, typename T, typename... Args>
+struct MethodBindInstanceType<R (*)(T *, Args...)> {
+	using type = T;
+};
+
+template <typename R, typename T, typename... Args>
+struct MethodBindInstanceType<R (*)(const T *, Args...)> {
 	using type = T;
 };
 

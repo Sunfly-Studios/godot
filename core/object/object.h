@@ -43,6 +43,7 @@
 #include "core/templates/safe_refcount.h"
 #include "core/variant/callable_bind.h"
 #include "core/variant/variant.h"
+#include "core/object/class_temperature.h"
 
 #include <type_traits>
 

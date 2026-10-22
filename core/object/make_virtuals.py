@@ -262,7 +262,7 @@ def generate_version(argcount, const=False, returns=False, required=False, compa
         # `const` from any class, and rebuild a clean
         # mutable pointer before casting it.
         crtp_fast_path = f"""\t\tT_Exact* p_instance = static_cast<T_Exact*>(const_cast<std::remove_cv_t<std::remove_pointer_t<decltype(this)>>*>(this));\\
-\t\tif constexpr (_gdvirtual_##{var_name}##_trait<T_Exact>::value) {{\\
+\t\tif constexpr (_gdvirtual_##{var_name}##_trait<T_Exact>::value && IsHotClass<T_Exact>::value) {{\\
 \t\t\tif constexpr (std::is_void_v<decltype(std::declval<T_Exact>().m_name({declval_args}))>) {{\\
 \t\t\t\tp_instance->m_name({callargs_raw_pass});\\
 \t\t\t}} else {{\\
@@ -274,9 +274,9 @@ def generate_version(argcount, const=False, returns=False, required=False, compa
 \t\t}}"""
     else:
         var_name = "m_alias" if compat else "m_name"
-        
+
         crtp_fast_path = f"""\t\tT_Exact* p_instance = static_cast<T_Exact*>(const_cast<std::remove_cv_t<std::remove_pointer_t<decltype(this)>>*>(this));\\
-\t\tif constexpr (_gdvirtual_##{var_name}##_trait<T_Exact>::value) {{\\
+\t\tif constexpr (_gdvirtual_##{var_name}##_trait<T_Exact>::value && IsHotClass<T_Exact>::value) {{\\
 \t\t\tp_instance->m_name({callargs_raw_pass});\\
 \t\t\treturn true;\\
 \t\t}} else {{\\
@@ -339,6 +339,7 @@ def run(target, source, env):
 #define GDVIRTUAL_GEN_H
 
 #include "core/object/script_instance.h"
+#include "core/object/class_temperature.h"
 
 #include <utility>
 #include <type_traits> // for std::is_same_v

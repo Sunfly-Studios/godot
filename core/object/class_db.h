@@ -353,7 +353,19 @@ public:
 				argptrs[i] = &args[i];
 			}
 		}
-		MethodBind *bind = create_method_bind_static<M, m_method>();
+
+		// Automatically consider the type "hot" (for inline)
+		// or cold (outline) based on the type
+		// Go to `core/object/class_temperature.h` to add
+		// or remove classes from the hot paths.
+		using ClassType = typename MethodBindInstanceType<M>::type;
+		MethodBind *bind;
+		if constexpr (IsHotClass<ClassType>::value) {
+			bind = create_method_bind(m_method);
+		} else {
+			bind = create_method_bind_static<M, m_method>();
+		}
+
 		if constexpr (std::is_same_v<typename member_function_traits<M>::return_type, Object *>) {
 			bind->set_return_type_is_raw_object_ptr(true);
 		}
@@ -369,7 +381,15 @@ public:
 				argptrs[i] = &args[i];
 			}
 		}
-		MethodBind *bind = create_static_method_bind_static<M, m_method>();
+
+		using ClassType = typename MethodBindInstanceType<M>::type;
+		MethodBind *bind;
+		if constexpr (IsHotClass<ClassType>::value) {
+			bind = create_static_method_bind(m_method);
+		} else {
+			bind = create_static_method_bind_static<M, m_method>();
+		}
+
 		bind->set_instance_class(p_class);
 		if constexpr (std::is_same_v<typename member_function_traits<M>::return_type, Object *>) {
 			bind->set_return_type_is_raw_object_ptr(true);
@@ -386,7 +406,15 @@ public:
 				argptrs[i] = &args[i];
 			}
 		}
-		MethodBind *bind = create_method_bind_static<M, m_method>();
+
+		using ClassType = typename MethodBindInstanceType<M>::type;
+		MethodBind *bind;
+		if constexpr (IsHotClass<ClassType>::value) {
+			bind = create_method_bind(m_method);
+		} else {
+			bind = create_method_bind_static<M, m_method>();
+		}
+
 		if constexpr (std::is_same_v<typename member_function_traits<M>::return_type, Object *>) {
 			bind->set_return_type_is_raw_object_ptr(true);
 		}
@@ -402,7 +430,15 @@ public:
 				argptrs[i] = &args[i];
 			}
 		}
-		MethodBind *bind = create_static_method_bind_static<M, m_method>();
+
+		using ClassType = typename MethodBindInstanceType<M>::type;
+		MethodBind *bind;
+		if constexpr (IsHotClass<ClassType>::value) {
+			bind = create_static_method_bind(m_method);
+		} else {
+			bind = create_static_method_bind_static<M, m_method>();
+		}
+
 		bind->set_instance_class(p_class);
 		if constexpr (std::is_same_v<typename member_function_traits<M>::return_type, Object *>) {
 			bind->set_return_type_is_raw_object_ptr(true);

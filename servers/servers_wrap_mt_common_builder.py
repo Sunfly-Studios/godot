@@ -7,6 +7,8 @@ HEADER = """
 #ifndef SERVERS_GEN_SERVER_WRAP_MT_COMMON_GEN_H
 #define SERVERS_GEN_SERVER_WRAP_MT_COMMON_GEN_H
 
+#include "core/object/class_temperature.h"
+
 #ifdef DEBUG_ENABLED
 #define MAIN_THREAD_SYNC_CHECK \\
 	if (unlikely(Thread::is_main_thread() && Engine::get_singleton()->notify_frame_server_synced())) { \\
