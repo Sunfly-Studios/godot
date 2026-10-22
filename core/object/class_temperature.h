@@ -46,7 +46,12 @@ class Node;
 class Node2D;
 class Node3D;
 class Viewport;
+
+#ifndef X11_ENABLED
+// Conflicts with the Window defined in platform
 class Window;
+#endif
+
 class RenderingServer;
 class PhysicsServer2D;
 class PhysicsServer3D;
@@ -97,8 +102,12 @@ template <>
 struct IsHotClass<Node3D> : std::true_type {};
 template <>
 struct IsHotClass<Viewport> : std::true_type {};
+
+#ifndef X11_ENABLED
+// Conflicts with the Window defined in platform
 template <>
 struct IsHotClass<Window> : std::true_type {};
+#endif
 
 // All servers
 template <>
