@@ -125,15 +125,15 @@ class DisplayServerX11 : public DisplayServer {
 
 	_THREAD_SAFE_CLASS_
 
-	Atom wm_delete;
-	Atom xdnd_enter;
-	Atom xdnd_position;
-	Atom xdnd_status;
-	Atom xdnd_action_copy;
-	Atom xdnd_drop;
-	Atom xdnd_finished;
-	Atom xdnd_selection;
-	Atom xdnd_aware;
+	Atom wm_delete = None;
+	Atom xdnd_enter = None;
+	Atom xdnd_position = None;
+	Atom xdnd_status = None;
+	Atom xdnd_action_copy = None;
+	Atom xdnd_drop = None;
+	Atom xdnd_finished = None;
+	Atom xdnd_selection = None;
+	Atom xdnd_aware = None;
 	Atom requested = None;
 	int xdnd_version = 5;
 
@@ -161,10 +161,10 @@ class DisplayServerX11 : public DisplayServer {
 #endif
 
 	struct WindowData {
-		Window x11_window;
-		Window x11_xim_window;
-		Window parent;
-		::XIC xic;
+		Window x11_window = None;
+		Window x11_xim_window = None;
+		Window parent = None;
+		::XIC xic = nullptr;
 		bool ime_active = false;
 		bool ime_in_progress = false;
 		bool ime_suppress_next_keyup = false;
@@ -239,13 +239,13 @@ class DisplayServerX11 : public DisplayServer {
 	String internal_clipboard;
 	String internal_clipboard_primary;
 	Window xdnd_source_window = 0;
-	::Display *x11_display;
+	::Display *x11_display = nullptr;
 	char *xmbstring = nullptr;
 	int xmblen = 0;
 	unsigned long last_timestamp = 0;
 	::Time last_keyrelease_time = 0;
 	::XIM xim;
-	::XIMStyle xim_style;
+	::XIMStyle xim_style = 0;
 
 	static int _xim_preedit_start_callback(::XIM xim, ::XPointer client_data,
 			::XPointer call_data);
@@ -267,7 +267,7 @@ class DisplayServerX11 : public DisplayServer {
 	uint64_t time_since_no_focus = 0;
 
 	struct {
-		int opcode;
+		int opcode = 0;
 		Vector<int> touch_devices;
 		HashMap<int, Vector2> absolute_devices;
 		HashMap<int, Vector2> pen_pressure_range;
@@ -276,15 +276,15 @@ class DisplayServerX11 : public DisplayServer {
 		HashMap<int, bool> pen_inverted_devices;
 		XIEventMask all_event_mask;
 		HashMap<int, Vector2> state;
-		double pressure;
-		bool pressure_supported;
-		bool pen_inverted;
+		double pressure = 0.0;
+		bool pressure_supported = false;
+		bool pen_inverted = false;
 		Vector2 tilt;
 		Vector2 mouse_pos_to_filter;
 		Vector2 relative_motion;
 		Vector2 raw_pos;
 		Vector2 old_raw_pos;
-		::Time last_relative_time;
+		::Time last_relative_time = 0;
 	} xi;
 
 	bool _refresh_device_info();
@@ -317,9 +317,9 @@ class DisplayServerX11 : public DisplayServer {
 
 	const char *cursor_theme = nullptr;
 	int cursor_size = 0;
-	XcursorImage *cursor_img[CURSOR_MAX];
-	Cursor cursors[CURSOR_MAX];
-	Cursor null_cursor;
+	XcursorImage *cursor_img[CURSOR_MAX] = {};
+	Cursor cursors[CURSOR_MAX] = {};
+	Cursor null_cursor = None;
 	CursorShape current_cursor = CURSOR_ARROW;
 	HashMap<CursorShape, Vector<Variant>> cursors_cache;
 
@@ -339,9 +339,10 @@ class DisplayServerX11 : public DisplayServer {
 	bool kde5_embed_workaround = false; // Workaround embedded game visibility on KDE 5 (GH-102043).
 
 	struct Property {
-		unsigned char *data;
-		int format, nitems;
-		Atom type;
+		unsigned char *data = nullptr;
+		int format = 0;
+		int nitems = 0;
+		Atom type = None;
 	};
 	static Property _read_property(Display *p_display, Window p_window, Atom p_property);
 
