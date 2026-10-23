@@ -1930,7 +1930,7 @@ void RenderForwardClustered::_render_scene(RenderDataRD *p_render_data, const Co
 		color_framebuffer = rb_data->get_color_pass_fb(color_pass_flags);
 	}
 
-	if (using_sss || using_separate_specular || scene_state.used_lightmap || using_voxelgi) {
+	if (using_sss || using_separate_specular || scene_state.used_lightmap || scene_state.lightmaps_used > 0 || using_voxelgi) {
 		scene_shader.enable_advanced_shader_group(p_render_data->scene_data->view_count > 1);
 	}
 
