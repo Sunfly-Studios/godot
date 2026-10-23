@@ -2854,6 +2854,8 @@ void WaylandThread::_xdg_activation_token_on_done(void *data, struct xdg_activat
 	xdg_activation_v1_activate(ws->wayland_thread->registry.xdg_activation, token, ws->wl_surface);
 	xdg_activation_token_v1_destroy(xdg_activation_token);
 
+	ws->pending_xdg_activation_token = nullptr;
+
 	DEBUG_LOG_WAYLAND_THREAD(vformat("Received activation token and requested window activation."));
 }
 
@@ -3812,10 +3814,15 @@ void WaylandThread::window_request_attention(DisplayServer::WindowID p_window_id
 	WindowState &ws = main_window;
 
 	if (registry.xdg_activation) {
+		if (ws.pending_xdg_activation_token) {
+			xdg_activation_token_v1_destroy(ws.pending_xdg_activation_token);
+			ws.pending_xdg_activation_token = nullptr;
+		}
+
 		// Window attention requests are done through the XDG activation protocol.
-		xdg_activation_token_v1 *xdg_activation_token = xdg_activation_v1_get_activation_token(registry.xdg_activation);
-		xdg_activation_token_v1_add_listener(xdg_activation_token, &xdg_activation_token_listener, &ws);
-		xdg_activation_token_v1_commit(xdg_activation_token);
+		ws.pending_xdg_activation_token = xdg_activation_v1_get_activation_token(registry.xdg_activation);
+		xdg_activation_token_v1_add_listener(ws.pending_xdg_activation_token, &xdg_activation_token_listener, &ws);
+		xdg_activation_token_v1_commit(ws.pending_xdg_activation_token);
 	}
 }
 
@@ -4521,6 +4528,10 @@ void WaylandThread::destroy() {
 
 	if (main_window.xdg_toplevel) {
 		xdg_toplevel_destroy(main_window.xdg_toplevel);
+	}
+
+	if (main_window.pending_xdg_activation_token) {
+		xdg_activation_token_v1_destroy(ws.pending_xdg_activation_token);
 	}
 
 	if (main_window.xdg_surface) {
