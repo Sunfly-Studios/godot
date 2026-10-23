@@ -49,6 +49,12 @@ def arrange_program_clean(prog):
         Clean(prog, extra_files_to_clean)
 
 
+def norm_msys_path(p):
+    if p and p.startswith("/") and len(p) > 2 and p[2] == "/":
+        p = p[1] + ":" + p[2:]
+    return p.replace("\\", "/")
+
+
 res_file = "godot_res.rc"
 res_target = "godot_res" + env["OBJSUFFIX"]
 res_obj = env.RES(res_target, res_file)
@@ -56,6 +62,13 @@ env.Depends(res_obj, "#core/version_generated.gen.h")
 
 env.add_source_files(sources, common_win)
 sources += res_obj
+
+msvc_arch_aliases = {
+    "x86_32": "x86",
+    "x86_64": "x64",
+    "arm32": "arm",
+    "arm64": "arm64",
+}
 
 prog = env.add_program("#bin/godot", sources, PROGSUFFIX=env["PROGSUFFIX"])
 arrange_program_clean(prog)
@@ -85,13 +98,7 @@ if env["windows_subsystem"] == "gui":
     sources += common_win_wrap + res_wrap_obj
 
 if env["d3d12"]:
-    dxc_target_aliases = {
-        "x86_32": "x86",
-        "x86_64": "x64",
-        "arm32": "arm",
-        "arm64": "arm64",
-    }
-    dxc_arch_subdir = dxc_target_aliases[env["arch"]]
+    dxc_arch_subdir = msvc_arch_aliases[env["arch"]]
 
     agility_target_aliases = {
         "x86_32": "win32",
@@ -127,13 +134,7 @@ if env["d3d12"]:
     
 # d3d47 compiler DLL for ANGLE
 if env["angle_libs"] and env["winsdk_sysroot"]:
-    winsdk_sysroot_alias = {
-        "x86_32": "x86",
-        "x86_64": "x64",
-        "arm32": "arm",
-        "arm64": "arm64",
-    }
-    arch_subdir = winsdk_sysroot_alias[env["arch"]]
+    arch_subdir = msvc_arch_aliases[env["arch"]]
     d3dcompiler_dll = "d3dcompiler_47.dll"
 
     # Normalise MSYS2/Git bash paths
@@ -184,6 +185,107 @@ if env["angle_libs"] and env["winsdk_sysroot"]:
         resolved_dll_path,
         Copy("$TARGET", "$SOURCE"),
     )
+
+if env.get("msvc_redist_path") or env.get("msvc_stl_root"):
+    target_arch = msvc_arch_aliases[env["arch"]]
+    is_debug = bool(env["debug_crt"])
+    has_custom_stl = bool(env.get("msvc_stl_root"))
+
+    # Standard Visual C++ runtime
+    if env.get("msvc_redist_path"):
+        redist_path = norm_msys_path(env["msvc_redist_path"]).rstrip("/")
+        explicit_ver = ARGUMENTS.get("msvc_redist_version", env.get("msvc_redist_version", ""))
+
+        if os.path.exists(redist_path):
+            # Step into version directory if at .../Redist/MSVC
+            if explicit_ver and os.path.exists(f"{redist_path}/{explicit_ver}"):
+                redist_path = f"{redist_path}/{explicit_ver}"
+            else:
+                subdirs = [d for d in os.listdir(redist_path) if os.path.isdir(f"{redist_path}/{d}")]
+                versions = [d for d in subdirs if d[0].isdigit()]
+                if versions:
+                    versions.sort(key=lambda s: [int(x) for x in s.split(".") if x.isdigit()], reverse=True)
+                    redist_path = f"{redist_path}/{versions[0]}"
+
+            # Step into target_arch directory if at .../<version>
+            if os.path.basename(redist_path).lower() != target_arch.lower():
+                arch_candidate = f"{redist_path}/{target_arch}"
+                if os.path.exists(arch_candidate):
+                    redist_path = arch_candidate
+
+            # Step into Microsoft.VC*.CRT if at .../<target_arch>
+            if not (os.path.basename(redist_path).startswith("Microsoft.VC") and "CRT" in os.path.basename(redist_path)):
+                if os.path.exists(redist_path):
+                    crt_suffix = ".DebugCRT" if is_debug else ".CRT"
+                    crt_dirs = [
+                        d
+                        for d in os.listdir(redist_path)
+                        if os.path.isdir(f"{redist_path}/{d}")
+                        and d.startswith("Microsoft.VC")
+                        and d.endswith(crt_suffix)
+                    ]
+                    if not crt_dirs:
+                        crt_dirs = [
+                            d
+                            for d in os.listdir(redist_path)
+                            if os.path.isdir(f"{redist_path}/{d}")
+                            and d.startswith("Microsoft.VC")
+                            and d.endswith(".CRT")
+                        ]
+                    if crt_dirs:
+                        redist_path = f"{redist_path}/{crt_dirs[0]}"
+
+            if os.path.exists(redist_path):
+                for file in os.listdir(redist_path):
+                    file_lower = file.lower()
+                    if not (file_lower.endswith(".dll") or file_lower.endswith(".pdb")):
+                        continue
+
+                    # Skip standard MSVCP if custom STL is being bundled
+                    if has_custom_stl and file_lower.startswith("msvcp"):
+                        continue
+
+                    stem = os.path.splitext(file_lower)[0]
+                    is_debug_dll = stem.endswith("d") or "_1d" in stem or "_2d" in stem
+                    if is_debug != is_debug_dll:
+                        continue
+
+                    copied_node = env.Command(
+                        "#bin/" + file,
+                        redist_path + "/" + file,
+                        Copy("$TARGET", "$SOURCE"),
+                    )
+                    env.Depends(prog, copied_node)
+
+    # Custom STL DLLs from <msvc_stl_root>/bin/<target_arch>
+    if has_custom_stl:
+        stl_root = norm_msys_path(env["msvc_stl_root"]).rstrip("/")
+        stl_bin_path = f"{stl_root}/bin/{target_arch}"
+        if not os.path.exists(stl_bin_path):
+            stl_bin_path = f"{stl_root}/{target_arch}" if os.path.exists(f"{stl_root}/{target_arch}") else stl_root
+
+        if os.path.exists(stl_bin_path):
+            for file in os.listdir(stl_bin_path):
+                file_lower = file.lower()
+                if not (file_lower.endswith(".dll") or file_lower.endswith(".pdb")):
+                    continue
+
+                stem = os.path.splitext(file_lower)[0]
+                if stem.endswith("_oss"):
+                    stem = stem[:-4]
+                if stem.endswith("_codecvt_ids"):
+                    stem = stem[:-12]
+
+                is_debug_dll = stem.endswith("d")
+                if is_debug != is_debug_dll:
+                    continue
+
+                copied_node = env.Command(
+                    "#bin/" + file,
+                    stl_bin_path + "/" + file,
+                    Copy("$TARGET", "$SOURCE"),
+                )
+                env.Depends(prog, copied_node)
 
 if not os.getenv("VCINSTALLDIR"):
     if env["debug_symbols"]:

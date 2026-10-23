@@ -284,6 +284,41 @@ Error EditorExportPlatformWindows::export_project(const Ref<EditorExportPreset> 
 		}
 	}
 
+	int export_vcredist = p_preset->get("application/export_vcredist");
+	if (export_vcredist == 1) {
+		Ref<DirAccess> da = DirAccess::create(DirAccess::ACCESS_FILESYSTEM);
+		
+		// Propietary DLLs
+		if (da->file_exists(template_path.get_base_dir().path_join("msvcp140." + arch + ".dll"))) {
+			da->copy(template_path.get_base_dir().path_join("msvcp140." + arch + ".dll"), path.get_base_dir().path_join("msvcp140.dll"), get_chmod_flags());
+		}
+		if (da->file_exists(template_path.get_base_dir().path_join("msvcp140_1." + arch + ".dll"))) {
+			da->copy(template_path.get_base_dir().path_join("msvcp140_1." + arch + ".dll"), path.get_base_dir().path_join("msvcp140_1.dll"), get_chmod_flags());
+		}
+		if (da->file_exists(template_path.get_base_dir().path_join("msvcp140_2." + arch + ".dll"))) {
+			da->copy(template_path.get_base_dir().path_join("msvcp140_2." + arch + ".dll"), path.get_base_dir().path_join("msvcp140_2.dll"), get_chmod_flags());
+		}
+		
+		// OSS DLLs
+		if (da->file_exists(template_path.get_base_dir().path_join("msvcp140_oss." + arch + ".dll"))) {
+			da->copy(template_path.get_base_dir().path_join("msvcp140_oss." + arch + ".dll"), path.get_base_dir().path_join("msvcp140_oss.dll"), get_chmod_flags());
+		}
+		if (da->file_exists(template_path.get_base_dir().path_join("msvcp140_1_oss." + arch + ".dll"))) {
+			da->copy(template_path.get_base_dir().path_join("msvcp140_1_oss." + arch + ".dll"), path.get_base_dir().path_join("msvcp140_1_oss.dll"), get_chmod_flags());
+		}
+		if (da->file_exists(template_path.get_base_dir().path_join("msvcp140_2_oss." + arch + ".dll"))) {
+			da->copy(template_path.get_base_dir().path_join("msvcp140_2_oss." + arch + ".dll"), path.get_base_dir().path_join("msvcp140_2_oss.dll"), get_chmod_flags());
+		}
+
+		// VC runtime
+		if (da->file_exists(template_path.get_base_dir().path_join("vcruntime140_1." + arch + ".dll"))) {
+			da->copy(template_path.get_base_dir().path_join("vcruntime140_1." + arch + ".dll"), path.get_base_dir().path_join("vcruntime140_1.dll"), get_chmod_flags());
+		}
+		if (da->file_exists(template_path.get_base_dir().path_join("vcruntime140." + arch + ".dll"))) {
+			da->copy(template_path.get_base_dir().path_join("vcruntime140." + arch + ".dll"), path.get_base_dir().path_join("vcruntime140.dll"), get_chmod_flags());
+		}
+	}
+
 	// Export project.
 	String pck_path = path;
 	if (embedded) {
@@ -449,6 +484,7 @@ void EditorExportPlatformWindows::get_export_options(List<ExportOption> *r_optio
 	r_options->push_back(ExportOption(PropertyInfo(Variant::STRING, "application/trademarks"), ""));
 	r_options->push_back(ExportOption(PropertyInfo(Variant::INT, "application/export_angle", PROPERTY_HINT_ENUM, "Auto,Yes,No"), 0, true));
 	r_options->push_back(ExportOption(PropertyInfo(Variant::INT, "application/export_d3d12", PROPERTY_HINT_ENUM, "Auto,Yes,No"), 0, true));
+	r_options->push_back(ExportOption(PropertyInfo(Variant::INT, "application/export_vcredist", PROPERTY_HINT_ENUM, "Yes,No"), 0, true));
 	r_options->push_back(ExportOption(PropertyInfo(Variant::BOOL, "application/d3d12_agility_sdk_multiarch"), true, true));
 
 	String run_script = "Expand-Archive -LiteralPath '{temp_dir}\\{archive_name}' -DestinationPath '{temp_dir}'\n"
