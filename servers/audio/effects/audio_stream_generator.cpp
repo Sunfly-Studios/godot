@@ -70,7 +70,7 @@ Ref<AudioStreamPlayback> AudioStreamGenerator::instantiate_playback() {
 	Ref<AudioStreamGeneratorPlayback> playback;
 	playback.instantiate();
 	ERR_FAIL_COND_V(playback.is_null(), Ref<AudioStreamPlayback>());
-	playback->generator = this;
+	playback->generator = Ref<AudioStreamGenerator>(this);
 	int target_buffer_size = _get_target_rate() * buffer_len;
 	playback->buffer.resize(nearest_shift(target_buffer_size));
 	playback->buffer.clear();
@@ -238,7 +238,6 @@ void AudioStreamGeneratorPlayback::_bind_methods() {
 }
 
 AudioStreamGeneratorPlayback::AudioStreamGeneratorPlayback() {
-	generator = nullptr;
 	skips = 0;
 	active = false;
 	mixed = 0;
