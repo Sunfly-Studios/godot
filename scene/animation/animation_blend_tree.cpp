@@ -1486,13 +1486,15 @@ StringName AnimationNodeBlendTree::get_node_name(const Ref<AnimationNode> &p_nod
 }
 
 void AnimationNodeBlendTree::set_node_position(const StringName &p_node, const Vector2 &p_position) {
-	ERR_FAIL_COND(!nodes.has(p_node));
-	nodes[p_node].position = p_position;
+	RBMap<StringName, Node, StringName::AlphCompare>::Element *node = nodes.find(p_node);
+	ERR_FAIL_COND(!node);
+	node->get().position = p_position;
 }
 
 Vector2 AnimationNodeBlendTree::get_node_position(const StringName &p_node) const {
-	ERR_FAIL_COND_V(!nodes.has(p_node), Vector2());
-	return nodes[p_node].position;
+	const RBMap<StringName, Node, StringName::AlphCompare>::Element *node = nodes.find(p_node);
+	ERR_FAIL_COND_V(!node, Vector2());
+	return node->get().position;
 }
 
 void AnimationNodeBlendTree::get_child_nodes(List<ChildNode> *r_child_nodes) {
