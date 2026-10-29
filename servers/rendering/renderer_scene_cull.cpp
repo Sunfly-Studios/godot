@@ -3036,14 +3036,14 @@ void RendererSceneCull::_scene_cull(CullData &cull_data, InstanceCullResult &cul
 								continue;
 							}
 
-							if ((RSG::light_storage->light_get_bake_mode(E->base) == RS::LIGHT_BAKE_STATIC) && idata.instance->lightmap) {
-								continue;
-							}
+if ((RSG::light_storage->light_get_bake_mode(E->base) == RS::LIGHT_BAKE_STATIC) && idata.instance->lightmap) {
+	continue;
+}
 
-							instance_pair_buffer[idx++] = light->instance;
-							if (idx == MAX_INSTANCE_PAIRS) {
-								break;
-							}
+instance_pair_buffer[idx++] = light->instance;
+if (idx == MAX_INSTANCE_PAIRS) {
+	break;
+}
 						}
 
 						ERR_FAIL_NULL(geom->geometry_instance);
@@ -3052,7 +3052,7 @@ void RendererSceneCull::_scene_cull(CullData &cull_data, InstanceCullResult &cul
 					}
 
 					if (idata.flags & InstanceData::FLAG_GEOM_PROJECTOR_SOFTSHADOW_DIRTY) {
-						InstanceGeometryData *geom = static_cast<InstanceGeometryData *>(idata.instance->base_data);
+						InstanceGeometryData* geom = static_cast<InstanceGeometryData*>(idata.instance->base_data);
 
 						ERR_FAIL_NULL(geom->geometry_instance);
 						cull_data.cull->lock.lock();
@@ -3062,11 +3062,11 @@ void RendererSceneCull::_scene_cull(CullData &cull_data, InstanceCullResult &cul
 					}
 
 					if (geometry_instance_pair_mask & (1 << RS::INSTANCE_REFLECTION_PROBE) && (idata.flags & InstanceData::FLAG_GEOM_REFLECTION_DIRTY)) {
-						InstanceGeometryData *geom = static_cast<InstanceGeometryData *>(idata.instance->base_data);
+						InstanceGeometryData* geom = static_cast<InstanceGeometryData*>(idata.instance->base_data);
 						uint32_t idx = 0;
 
-						for (const Instance *E : geom->reflection_probes) {
-							InstanceReflectionProbeData *reflection_probe = static_cast<InstanceReflectionProbeData *>(E->base_data);
+						for (const Instance* E : geom->reflection_probes) {
+							InstanceReflectionProbeData* reflection_probe = static_cast<InstanceReflectionProbeData*>(E->base_data);
 
 							instance_pair_buffer[idx++] = reflection_probe->instance;
 							if (idx == MAX_INSTANCE_PAIRS) {
@@ -3080,11 +3080,11 @@ void RendererSceneCull::_scene_cull(CullData &cull_data, InstanceCullResult &cul
 					}
 
 					if (geometry_instance_pair_mask & (1 << RS::INSTANCE_DECAL) && (idata.flags & InstanceData::FLAG_GEOM_DECAL_DIRTY)) {
-						InstanceGeometryData *geom = static_cast<InstanceGeometryData *>(idata.instance->base_data);
+						InstanceGeometryData* geom = static_cast<InstanceGeometryData*>(idata.instance->base_data);
 						uint32_t idx = 0;
 
-						for (const Instance *E : geom->decals) {
-							InstanceDecalData *decal = static_cast<InstanceDecalData *>(E->base_data);
+						for (const Instance* E : geom->decals) {
+							InstanceDecalData* decal = static_cast<InstanceDecalData*>(E->base_data);
 
 							instance_pair_buffer[idx++] = decal->instance;
 							if (idx == MAX_INSTANCE_PAIRS) {
@@ -3099,10 +3099,10 @@ void RendererSceneCull::_scene_cull(CullData &cull_data, InstanceCullResult &cul
 					}
 
 					if (idata.flags & InstanceData::FLAG_GEOM_VOXEL_GI_DIRTY) {
-						InstanceGeometryData *geom = static_cast<InstanceGeometryData *>(idata.instance->base_data);
+						InstanceGeometryData* geom = static_cast<InstanceGeometryData*>(idata.instance->base_data);
 						uint32_t idx = 0;
-						for (const Instance *E : geom->voxel_gi_instances) {
-							InstanceVoxelGIData *voxel_gi = static_cast<InstanceVoxelGIData *>(E->base_data);
+						for (const Instance* E : geom->voxel_gi_instances) {
+							InstanceVoxelGIData* voxel_gi = static_cast<InstanceVoxelGIData*>(E->base_data);
 
 							instance_pair_buffer[idx++] = voxel_gi->probe_instance;
 							if (idx == MAX_INSTANCE_PAIRS) {
@@ -3117,9 +3117,9 @@ void RendererSceneCull::_scene_cull(CullData &cull_data, InstanceCullResult &cul
 					}
 
 					if ((idata.flags & InstanceData::FLAG_LIGHTMAP_CAPTURE) && idata.instance->last_frame_pass != frame_number && !idata.instance->lightmap_target_sh.is_empty() && !idata.instance->lightmap_sh.is_empty()) {
-						InstanceGeometryData *geom = static_cast<InstanceGeometryData *>(idata.instance->base_data);
-						Color *sh = idata.instance->lightmap_sh.ptrw();
-						const Color *target_sh = idata.instance->lightmap_target_sh.ptr();
+						InstanceGeometryData* geom = static_cast<InstanceGeometryData*>(idata.instance->base_data);
+						Color* sh = idata.instance->lightmap_sh.ptrw();
+						const Color* target_sh = idata.instance->lightmap_target_sh.ptr();
 						for (uint32_t j = 0; j < 9; j++) {
 							sh[j] = sh[j].lerp(target_sh[j], MIN(1.0, lightmap_probe_update_speed));
 						}
@@ -3136,15 +3136,28 @@ void RendererSceneCull::_scene_cull(CullData &cull_data, InstanceCullResult &cul
 				}
 			}
 
-			for (uint32_t j = 0; j < cull_data.cull->shadow_count; j++) {
-				if (!light_culler->cull_directional_light(cull_data.scenario->instance_aabbs[i], j)) {
-					continue;
-				}
-				for (uint32_t k = 0; k < cull_data.cull->shadows[j].cascade_count; k++) {
-					if (IN_FRUSTUM(cull_data.cull->shadows[j].cascades[k].frustum) && VIS_CHECK) {
-						uint32_t base_type = idata.flags & InstanceData::FLAG_BASE_TYPE_MASK;
+			{
+				// Directional Shadow culling.
+				uint32_t base_type = idata.flags & InstanceData::FLAG_BASE_TYPE_MASK;
 
-						if (((1 << base_type) & RS::INSTANCE_GEOMETRY_MASK) && idata.flags & InstanceData::FLAG_CAST_SHADOWS && (LAYER_CHECK & cull_data.cull->shadows[j].caster_mask)) {
+				if (
+					cull_data.cull->shadow_count > 0 &&
+					((1 << base_type) & RS::INSTANCE_GEOMETRY_MASK) &&
+					idata.flags & InstanceData::FLAG_CAST_SHADOWS &&
+					!((base_type == RS::INSTANCE_PARTICLES) && RSG::particles_storage->particles_is_inactive(idata.base_rid)) &&
+					VIS_CHECK
+				) {
+					for (uint32_t j = 0; j < cull_data.cull->shadow_count; j++) {
+						if (!(LAYER_CHECK & cull_data.cull->shadows[j].caster_mask)) {
+							continue;
+						}
+						for (uint32_t k = 0; k < cull_data.cull->shadows[j].cascade_count; k++) {
+							if (!IN_FRUSTUM(cull_data.cull->shadows[j].cascades[k].frustum)) {
+								continue;
+							}
+							if (!light_culler->cull_directional_light(cull_data.scenario->instance_aabbs[i], j)) {
+								continue;
+							}
 							cull_result.directional_shadows[j].cascade_geometry_instances[k].push_back(idata.instance_geometry);
 							mesh_visible = true;
 						}
