@@ -275,7 +275,7 @@ void BetsyCompressor::finish() {
 
 	if (compress_rd != nullptr) {
 		// Free the RD (and RCD if necessary).
-		memdelete(compress_rd);
+		memdelete_allocator<RenderingDevice, RenderingDeviceAllocator>(compress_rd);
 		compress_rd = nullptr;
 		if (compress_rcd != nullptr) {
 			memdelete(compress_rcd);
