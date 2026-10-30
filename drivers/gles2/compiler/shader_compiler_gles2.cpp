@@ -531,7 +531,7 @@ String ShaderCompilerGLES2::_dump_node_code(ShaderLanguage::Node *p_node, int p_
 				vertex_global += custom_functions.as_string();
 				vertex_global += "#endif\n";
 
-				fragment_global += "#if defined(FRAGMENT_CODE_USED) || defined(LIGHT_CODE_USED)\n";
+				fragment_global += "#if defined(FRAGMENT_CODE_USED) || defined(LIGHT_CODE_USED) || defined(SKY_CODE_USED) || defined(FOG_CODE_USED)\n";
 				fragment_global += forward_decls.as_string();
 				fragment_global += custom_functions.as_string();
 				fragment_global += "#endif\n";
@@ -1052,7 +1052,20 @@ String ShaderCompilerGLES2::_dump_node_code(ShaderLanguage::Node *p_node, int p_
 			ShaderLanguage::MemberNode *member_node = (ShaderLanguage::MemberNode *)p_node;
 			code += _dump_node_code(member_node->owner, p_level, r_gen_code, p_actions, p_default_actions, p_assigning);
 			code += ".";
-			code += member_node->name;
+			if (member_node->datatype == ShaderLanguage::TYPE_STRUCT || member_node->owner->get_datatype() == ShaderLanguage::TYPE_STRUCT) {
+				code += _mkid(member_node->name);
+			} else {
+				code += member_node->name;
+			}
+			if (member_node->call_expression != nullptr) {
+				code += ".";
+				code += _dump_node_code(member_node->call_expression, p_level, r_gen_code, p_actions, p_default_actions, p_assigning, false);
+			}
+			if (member_node->index_expression != nullptr) {
+				code += "[";
+				code += _dump_node_code(member_node->index_expression, p_level, r_gen_code, p_actions, p_default_actions, p_assigning);
+				code += "]";
+			}
 		} break;
 	}
 
