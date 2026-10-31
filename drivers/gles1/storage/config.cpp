@@ -175,6 +175,7 @@ Config::Config() {
 	support_npot_repeat_mipmap = extensions.has("GL_OES_texture_npot") || extensions.has("GL_ARB_texture_non_power_of_two") || extensions.has("GL_APPLE_texture_2D_limited_npot");
 	support_mapbuffer = extensions.has("GL_OES_mapbuffer") || extensions.has("GL_NV_copy_buffer") || extensions.has("GL_ARB_map_buffer_range");
 	srgb_framebuffer_supported = extensions.has("GL_ARB_framebuffer_sRGB") || extensions.has("GL_EXT_framebuffer_sRGB");
+	support_disjoint_timer_query = extensions.has("GL_EXT_disjoint_timer_query") || extensions.has("GL_ARB_timer_query") || extensions.has("GL_EXT_timer_query");
 
 	// 3D Extensions
 	support_vertex_half_float = extensions.has("GL_OES_vertex_half_float") || extensions.has("GL_ARB_half_float_pixel");

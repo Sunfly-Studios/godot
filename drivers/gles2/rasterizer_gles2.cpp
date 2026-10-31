@@ -532,19 +532,24 @@ void RasterizerGLES2::_blit_render_target_to_screen(RID p_render_target, Display
 	glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
 
 	// Restore GL states
-	glEnable(GL_BLEND);
-	glEnable(GL_DEPTH_TEST);
-	glEnable(GL_CULL_FACE);
+	glDisable(GL_BLEND);
+	glDisable(GL_DEPTH_TEST);
+	glDisable(GL_CULL_FACE);
 	glDisable(GL_SCISSOR_TEST);
+	glUseProgram(0);
 	GL_CHECK_ERROR("GLES2::RasterizerGLES2::_blit_render_target_to_screen: restore states");
 
 	// Clean remaining buffer state leakage
 	glBindBuffer(GL_ARRAY_BUFFER, 0);
 	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+	if (config && config->support_vao) {
+		glBindVertexArray(0);
+	}
 
 	for (int i = 0; i < attrib_limit; i++) {
 		glDisableVertexAttribArray(i);
 	}
+	GL_CHECK_ERROR("GLES2::RasterizerGLES2::_blit_render_target_to_screen: cleanup buffers");
 }
 
 // is this p_screen useless in a multi window environment?

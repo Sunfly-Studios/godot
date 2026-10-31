@@ -58,12 +58,35 @@ Utilities::Utilities() {
 		frames[i].timestamp_result_names.resize(max_timestamp_query_elements);
 		frames[i].timestamp_cpu_result_values.resize(max_timestamp_query_elements);
 		frames[i].timestamp_result_values.resize(max_timestamp_query_elements);
+		memset(frames[i].timestamp_result_values.ptr(), 0, max_timestamp_query_elements * sizeof(uint64_t));
 		frames[i].timestamp_result_count = 0;
+
+#if defined(TOOLS_ENABLED) && defined(GL_API_ENABLED)
+		if (GLES1_CONFIG->support_disjoint_timer_query && GLES1_CONFIG->gl_minor_version >= 5) {
+			glGenQueries(max_timestamp_query_elements, frames[i].queries);
+			GL_CHECK_ERROR("GLES1::Utilities::Utilities: glGenQueries");
+		} else {
+			memset(frames[i].queries, 0, sizeof(frames[i].queries));
+		}
+#else
+		memset(frames[i].queries, 0, sizeof(frames[i].queries));
+#endif // TOOLS_ENABLED && GL_API_ENABLED
 	}
 }
 
 Utilities::~Utilities() {
 	singleton = nullptr;
+
+#if defined(TOOLS_ENABLED) && defined(GL_API_ENABLED)
+	if (GLES1_CONFIG->support_disjoint_timer_query && GLES1_CONFIG->gl_minor_version >= 5) {
+		for (int i = 0; i < FRAME_COUNT; i++) {
+			if (frames[i].queries[0] != 0) {
+				glDeleteQueries(max_timestamp_query_elements, frames[i].queries);
+				GL_CHECK_ERROR("GLES1::Utilities::~Utilities: glDeleteQueries");
+			}
+		}
+	}
+#endif // TOOLS_ENABLED && GL_API_ENABLED
 
 	if (texture_mem_cache) {
 		uint32_t leaked_data_size = 0;
@@ -336,14 +359,65 @@ void Utilities::capture_timestamps_begin() {
 void Utilities::capture_timestamp(const String &p_name) {
 	ERR_FAIL_COND(frames[frame].timestamp_count >= max_timestamp_query_elements);
 
-	frames[frame].timestamp_names[frames[frame].timestamp_count] = p_name;
-	frames[frame].timestamp_cpu_values[frames[frame].timestamp_count] = OS::get_singleton()->get_ticks_usec();
+	uint32_t idx = frames[frame].timestamp_count;
+	frames[frame].timestamp_names[idx] = p_name;
+	frames[frame].timestamp_cpu_values[idx] = OS::get_singleton()->get_ticks_usec();
+
+#ifdef TOOLS_ENABLED
+	if (GLES1_CONFIG->gl_minor_version >= 5) {
+#ifdef GL_API_ENABLED
+		if (GLES1_CONFIG->support_disjoint_timer_query && frames[frame].queries[idx] != 0) {
+			glQueryCounter(frames[frame].queries[idx], GL_TIMESTAMP);
+			GL_CHECK_ERROR("GLES1::Utilities::capture_timestamp: glQueryCounter");
+		} else
+#endif // GL_API_ENABLED
+		{
+			if (p_name == "Internal End") {
+				glFinish();
+				GL_CHECK_ERROR("GLES1::Utilities::capture_timestamp: glFinish");
+			} else if (p_name == "Internal Begin" || p_name == "Frame Begin") {
+				glFlush();
+				GL_CHECK_ERROR("GLES1::Utilities::capture_timestamp: glFlush");
+			}
+			frames[frame].timestamp_result_values[idx] = OS::get_singleton()->get_ticks_usec() * 1000ULL;
+		}
+	}
+#endif // TOOLS_ENABLED
+
 	frames[frame].timestamp_count++;
 }
 
 void Utilities::_capture_timestamps_begin() {
 	// frame is incremented at the end of the frame so this gives us the queries for frame - 2. By then they should be ready.
 	if (frames[frame].timestamp_count) {
+#ifdef TOOLS_ENABLED
+		if (GLES1_CONFIG->gl_minor_version >= 5) {
+#ifdef GL_API_ENABLED
+			if (GLES1_CONFIG->support_disjoint_timer_query && frames[frame].queries[0] != 0) {
+				GLint disjoint = 0;
+				GLES1::Config *config = GLES1::Config::get_singleton();
+				if (config && config->extensions.has("GL_EXT_disjoint_timer_query")) {
+					glGetIntegerv(GL_GPU_DISJOINT_EXT, &disjoint);
+					GL_CHECK_ERROR("GLES1::Utilities::_capture_timestamps_begin: glGetIntegerv GL_GPU_DISJOINT_EXT");
+				}
+				for (uint32_t i = 0; i < frames[frame].timestamp_count; i++) {
+					if (disjoint) {
+						frames[frame].timestamp_result_values[i] = 0;
+					} else {
+						uint64_t temp = 0;
+						glGetQueryObjectui64v(frames[frame].queries[i], GL_QUERY_RESULT, &temp);
+						GL_CHECK_ERROR("GLES1::Utilities::_capture_timestamps_begin: glGetQueryObjectui64v");
+						frames[frame].timestamp_result_values[i] = temp;
+					}
+				}
+			}
+#endif // GL_API_ENABLED
+		} else {
+			memset(frames[frame].timestamp_result_values.ptr(), 0, frames[frame].timestamp_count * sizeof(uint64_t));
+		}
+#else
+		memset(frames[frame].timestamp_result_values.ptr(), 0, frames[frame].timestamp_count * sizeof(uint64_t));
+#endif // TOOLS_ENABLED
 		SWAP(frames[frame].timestamp_names, frames[frame].timestamp_result_names);
 		SWAP(frames[frame].timestamp_cpu_values, frames[frame].timestamp_cpu_result_values);
 	}

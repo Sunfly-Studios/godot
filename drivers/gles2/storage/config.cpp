@@ -162,6 +162,7 @@ Config::Config() {
 	external_texture_supported = extensions.has("GL_OES_EGL_image_external");
 	support_transform_feedback = extensions.has("GL_EXT_transform_feedback") || extensions.has("GL_NV_transform_feedback") || extensions.has("GL_ARB_transform_feedback2");
 	support_mapbuffer = extensions.has("GL_OES_mapbuffer") || extensions.has("GL_NV_copy_buffer");
+	support_disjoint_timer_query = extensions.has("GL_EXT_disjoint_timer_query") || extensions.has("GL_ARB_timer_query") || extensions.has("GL_EXT_timer_query");
 
 	if (RasterizerGLES2::is_gles_over_gl()) {
 		float_texture_supported = true;

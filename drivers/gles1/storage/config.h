@@ -107,6 +107,7 @@ public:
 	bool support_mapbuffer = false; // GL_OES_mapbuffer
 	bool support_depth_texture = false; // GL_OES_depth_texture
 	bool support_shadow = false; // GL_ARB_shadow
+	bool support_disjoint_timer_query = false; // GL_EXT_disjoint_timer_query / GL_ARB_timer_query
 
 	// 3D
 	bool support_vertex_half_float = false; // GL_OES_vertex_half_float

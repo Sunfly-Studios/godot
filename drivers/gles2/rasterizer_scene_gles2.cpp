@@ -559,55 +559,42 @@ void RasterizerSceneGLES2::_geometry_instance_dependency_deleted(const RID &p_de
 }
 
 void RasterizerSceneGLES2::_geometry_instance_add_surface_with_material(GeometryInstanceGLES2 *ginstance, uint32_t p_surface, GLES2::SceneMaterialData *p_material, uint32_t p_material_id, uint32_t p_shader_id, RID p_mesh) {
+	GLES2::MeshStorage *mesh_storage = GLES2::MeshStorage::get_singleton();
 
-}
-
-void RasterizerSceneGLES2::_geometry_instance_add_surface_with_material_chain(GeometryInstanceGLES2 *ginstance, uint32_t p_surface, GLES2::SceneMaterialData *p_material_data, RID p_mat_src, RID p_mesh) {
-
-}
-
-void RasterizerSceneGLES2::_geometry_instance_add_surface(GeometryInstanceGLES2 *ginstance, uint32_t p_surface, RID p_material, RID p_mesh) {
-	GLES2::MaterialStorage *material_storage = GLES2::MaterialStorage::get_singleton();
-	RID m_src = ginstance->data->material_override.is_valid() ? ginstance->data->material_override : p_material;
-	GLES2::SceneMaterialData *material_data = nullptr;
-
-	if (m_src.is_valid()) {
-		material_data = static_cast<GLES2::SceneMaterialData *>(material_storage->material_get_data(m_src, RS::SHADER_SPATIAL));
-		if (!material_data || !material_data->shader_data->valid) {
-			material_data = nullptr;
-		}
-	}
-
-	if (!material_data) {
-		material_data = static_cast<GLES2::SceneMaterialData *>(material_storage->material_get_data(scene_globals.default_material, RS::SHADER_SPATIAL));
-		m_src = scene_globals.default_material;
-	}
-
-	if (!material_data) {
-		return;
-	}
-
-	GeometryInstanceSurface *surf = geometry_instance_surface_alloc.alloc();
-
-	bool has_read_screen_alpha = material_data->shader_data->uses_screen_texture || material_data->shader_data->uses_depth_texture || material_data->shader_data->uses_normal_texture;
-	bool has_base_alpha = ((material_data->shader_data->uses_alpha && !material_data->shader_data->uses_alpha_clip) || has_read_screen_alpha);
-	bool has_blend_alpha = material_data->shader_data->uses_blend_alpha;
+	bool has_read_screen_alpha = p_material->shader_data->uses_screen_texture || p_material->shader_data->uses_depth_texture || p_material->shader_data->uses_normal_texture;
+	bool has_base_alpha = ((p_material->shader_data->uses_alpha && !p_material->shader_data->uses_alpha_clip) || has_read_screen_alpha);
+	bool has_blend_alpha = p_material->shader_data->uses_blend_alpha;
 	bool has_alpha = has_base_alpha || has_blend_alpha;
 
 	uint32_t flags = 0;
-	if (material_data->shader_data->uses_screen_texture) {
+
+	if (p_material->shader_data->uses_screen_texture) {
 		flags |= GeometryInstanceSurface::FLAG_USES_SCREEN_TEXTURE;
 	}
-	if (material_data->shader_data->uses_depth_texture) {
+	if (p_material->shader_data->uses_depth_texture) {
 		flags |= GeometryInstanceSurface::FLAG_USES_DEPTH_TEXTURE;
 	}
-	if (material_data->shader_data->uses_normal_texture) {
+	if (p_material->shader_data->uses_normal_texture) {
 		flags |= GeometryInstanceSurface::FLAG_USES_NORMAL_TEXTURE;
 	}
+	if (ginstance->data->cast_double_sided_shadows) {
+		flags |= GeometryInstanceSurface::FLAG_USES_DOUBLE_SIDED_SHADOWS;
+	}
 
-	if (has_alpha || has_read_screen_alpha || material_data->shader_data->depth_draw == GLES2::SceneShaderData::DEPTH_DRAW_DISABLED || material_data->shader_data->depth_test == GLES2::SceneShaderData::DEPTH_TEST_DISABLED) {
+	if (
+		has_alpha ||
+		has_read_screen_alpha ||
+		p_material->shader_data->depth_draw == GLES2::SceneShaderData::DEPTH_DRAW_DISABLED ||
+		p_material->shader_data->depth_test == GLES2::SceneShaderData::DEPTH_TEST_DISABLED
+	) {
 		flags |= GeometryInstanceSurface::FLAG_PASS_ALPHA;
-		if (material_data->shader_data->uses_depth_prepass_alpha && !(material_data->shader_data->depth_draw == GLES2::SceneShaderData::DEPTH_DRAW_DISABLED || material_data->shader_data->depth_test == GLES2::SceneShaderData::DEPTH_TEST_DISABLED)) {
+
+		bool is_depth_disabled = (
+			p_material->shader_data->depth_draw == GLES2::SceneShaderData::DEPTH_DRAW_DISABLED ||
+			p_material->shader_data->depth_test == GLES2::SceneShaderData::DEPTH_TEST_DISABLED
+		);
+
+		if (p_material->shader_data->uses_depth_prepass_alpha && !is_depth_disabled) {
 			flags |= GeometryInstanceSurface::FLAG_PASS_DEPTH;
 			flags |= GeometryInstanceSurface::FLAG_PASS_SHADOW;
 		}
@@ -617,14 +604,38 @@ void RasterizerSceneGLES2::_geometry_instance_add_surface(GeometryInstanceGLES2 
 		flags |= GeometryInstanceSurface::FLAG_PASS_SHADOW;
 	}
 
+	GLES2::SceneMaterialData *material_shadow = nullptr;
+	void *surface_shadow = nullptr;
+	if (!p_material->shader_data->uses_particle_trails && !p_material->shader_data->writes_modelview_or_projection && !p_material->shader_data->uses_vertex && !p_material->shader_data->uses_discard && !p_material->shader_data->uses_depth_prepass_alpha && !p_material->shader_data->uses_alpha_clip && !p_material->shader_data->uses_world_coordinates && !p_material->shader_data->wireframe) {
+		flags |= GeometryInstanceSurface::FLAG_USES_SHARED_SHADOW_MATERIAL;
+		material_shadow = static_cast<GLES2::SceneMaterialData *>(GLES2::MaterialStorage::get_singleton()->material_get_data(scene_globals.default_material, RS::SHADER_SPATIAL));
+
+		RID shadow_mesh = mesh_storage->mesh_get_shadow_mesh(p_mesh);
+		if (shadow_mesh.is_valid()) {
+			surface_shadow = mesh_storage->mesh_get_surface(shadow_mesh, p_surface);
+		}
+	} else {
+		material_shadow = p_material;
+	}
+
+	GeometryInstanceSurface *surf = geometry_instance_surface_alloc.alloc();
+
 	surf->flags = flags;
-	surf->shader = material_data->shader_data;
-	surf->material = material_data;
-	surf->surface = GLES2::MeshStorage::get_singleton()->mesh_get_surface(p_mesh, p_surface);
-	surf->primitive = GLES2::MeshStorage::get_singleton()->mesh_surface_get_primitive(surf->surface);
+	surf->shader = p_material->shader_data;
+	surf->material = p_material;
+	surf->surface = mesh_storage->mesh_get_surface(p_mesh, p_surface);
+	surf->primitive = mesh_storage->mesh_surface_get_primitive(surf->surface);
 	surf->surface_index = p_surface;
 
-	Array arrays = GLES2::MeshStorage::get_singleton()->mesh_surface_get_arrays(p_mesh, p_surface);
+	if (ginstance->data->dirty_dependencies) {
+		RSG::utilities->base_update_dependency(p_mesh, &ginstance->data->dependency_tracker);
+	}
+
+	surf->shader_shadow = material_shadow->shader_data;
+	surf->material_shadow = material_shadow;
+	surf->surface_shadow = surface_shadow ? surface_shadow : surf->surface;
+
+	Array arrays = mesh_storage->mesh_surface_get_arrays(p_mesh, p_surface);
 	if (!arrays.is_empty()) {
 		surf->vertex_cache = arrays[RS::ARRAY_VERTEX];
 		surf->normal_cache = arrays[RS::ARRAY_NORMAL];
@@ -644,7 +655,70 @@ void RasterizerSceneGLES2::_geometry_instance_add_surface(GeometryInstanceGLES2 
 
 	surf->sort.sort_key1 = 0;
 	surf->sort.sort_key2 = 0;
-	surf->sort.priority = material_data->priority;
+	surf->sort.surface_index = p_surface;
+	surf->sort.material_id_low = p_material_id & 0x0000FFFF;
+	surf->sort.material_id_hi = p_material_id >> 16;
+	surf->sort.shader_id = p_shader_id;
+	surf->sort.geometry_id = p_mesh.get_local_index();
+	surf->sort.priority = p_material->priority;
+}
+
+void RasterizerSceneGLES2::_geometry_instance_add_surface_with_material_chain(GeometryInstanceGLES2 *ginstance, uint32_t p_surface, GLES2::SceneMaterialData *p_material_data, RID p_mat_src, RID p_mesh) {
+	GLES2::SceneMaterialData *material_data = p_material_data;
+	GLES2::MaterialStorage *material_storage = GLES2::MaterialStorage::get_singleton();
+
+	_geometry_instance_add_surface_with_material(ginstance, p_surface, material_data, p_mat_src.get_local_index(), material_storage->material_get_shader_id(p_mat_src), p_mesh);
+
+	while (material_data->next_pass.is_valid()) {
+		RID next_pass = material_data->next_pass;
+		material_data = static_cast<GLES2::SceneMaterialData *>(material_storage->material_get_data(next_pass, RS::SHADER_SPATIAL));
+		if (!material_data || !material_data->shader_data->valid) {
+			break;
+		}
+		if (ginstance->data->dirty_dependencies) {
+			material_storage->material_update_dependency(next_pass, &ginstance->data->dependency_tracker);
+		}
+		_geometry_instance_add_surface_with_material(ginstance, p_surface, material_data, next_pass.get_local_index(), material_storage->material_get_shader_id(next_pass), p_mesh);
+	}
+}
+
+void RasterizerSceneGLES2::_geometry_instance_add_surface(GeometryInstanceGLES2 *ginstance, uint32_t p_surface, RID p_material, RID p_mesh) {
+	GLES2::MaterialStorage *material_storage = GLES2::MaterialStorage::get_singleton();
+	RID m_src = ginstance->data->material_override.is_valid() ? ginstance->data->material_override : p_material;
+	GLES2::SceneMaterialData *material_data = nullptr;
+
+	if (m_src.is_valid()) {
+		material_data = static_cast<GLES2::SceneMaterialData *>(material_storage->material_get_data(m_src, RS::SHADER_SPATIAL));
+		if (!material_data || !material_data->shader_data->valid) {
+			material_data = nullptr;
+		}
+	}
+
+	if (material_data) {
+		if (ginstance->data->dirty_dependencies) {
+			material_storage->material_update_dependency(m_src, &ginstance->data->dependency_tracker);
+		}
+	} else {
+		material_data = static_cast<GLES2::SceneMaterialData *>(material_storage->material_get_data(scene_globals.default_material, RS::SHADER_SPATIAL));
+		m_src = scene_globals.default_material;
+	}
+
+	ERR_FAIL_NULL(material_data);
+
+	_geometry_instance_add_surface_with_material_chain(ginstance, p_surface, material_data, m_src, p_mesh);
+
+	if (ginstance->data->material_overlay.is_valid()) {
+		m_src = ginstance->data->material_overlay;
+
+		material_data = static_cast<GLES2::SceneMaterialData *>(material_storage->material_get_data(m_src, RS::SHADER_SPATIAL));
+		if (material_data && material_data->shader_data->valid) {
+			if (ginstance->data->dirty_dependencies) {
+				material_storage->material_update_dependency(m_src, &ginstance->data->dependency_tracker);
+			}
+
+			_geometry_instance_add_surface_with_material_chain(ginstance, p_surface, material_data, m_src, p_mesh);
+		}
+	}
 }
 
 void RasterizerSceneGLES2::_geometry_instance_update(RenderGeometryInstance *p_geometry_instance) {
@@ -1525,6 +1599,12 @@ void RasterizerSceneGLES2::voxel_gi_set_quality(RS::VoxelGIQuality) {
 
 void RasterizerSceneGLES2::scene_render_items_implementation(GeometryInstanceSurface **p_surfaces, int p_count, const Transform3D &p_camera_transform, bool p_transparent) {
 	for (int i = 0; i < p_count; i++) {
+		if (
+			bdata.pass_mode == PASS_MODE_COLOR &&
+			!(p_surfaces[i]->flags & GeometryInstanceSurface::FLAG_PASS_OPAQUE)
+		) {
+			continue;
+		}
 		_render_single_item_immediate(p_surfaces[i]);
 	}
 }
@@ -1977,6 +2057,7 @@ void RasterizerSceneGLES2::_batch_render_generic(RS::PrimitiveType p_primitive, 
 	GLenum primitive_gl = PRIM[int(p_primitive)];
 
 	glDrawElements(primitive_gl, p_count, GL_UNSIGNED_SHORT, (void *)(p_offset * sizeof(uint16_t)));
+	_record_draw_call_info(scene_state.current_render_info);
 
 	GL_CHECK_ERROR("GLES2::RasterizerSceneGLES2::RasterizerSceneGLES2::_batch_render_generic: glDrawElements");
 
@@ -2164,6 +2245,7 @@ void RasterizerSceneGLES2::_render_single_item_immediate(const GeometryInstanceS
 		} else {
 			glDrawArrays(primitive_gl, 0, drawn_count);
 		}
+		_record_draw_call_info(scene_state.current_render_info);
 	}
 	GL_CHECK_ERROR("GLES2::RasterizerSceneGLES2::RasterizerSceneGLES2::_render_single_item_immediate: glDrawElements BASE_PASS");
 
@@ -2338,6 +2420,7 @@ void RasterizerSceneGLES2::_fill_render_list(const RenderDataGLES2 *p_render_dat
 
 				if (p_render_data->render_info) {
 					indices = _gl_indices_to_primitives(surf->primitive, indices);
+					indices *= inst->instance_count > 0 ? inst->instance_count : 1;
 					if constexpr (p_render_list == RENDER_LIST_OPAQUE) { //opaque
 						p_render_data->render_info->info[RS::VIEWPORT_RENDER_INFO_TYPE_VISIBLE][RS::VIEWPORT_RENDER_INFO_PRIMITIVES_IN_FRAME] += indices;
 					} else if constexpr (p_render_list == RENDER_LIST_SECONDARY) { //shadow
@@ -2361,10 +2444,15 @@ void RasterizerSceneGLES2::_fill_render_list(const RenderDataGLES2 *p_render_dat
 			}
 
 			if constexpr (p_pass_mode == PASS_MODE_COLOR) {
-				if (surf->flags & GeometryInstanceSurface::FLAG_PASS_OPAQUE) {
+#ifdef DEBUG_ENABLED
+				bool force_alpha = unlikely(get_debug_draw_mode() == RS::VIEWPORT_DEBUG_DRAW_OVERDRAW);
+#else
+				bool force_alpha = false;
+#endif
+				if (!force_alpha && (surf->flags & (GeometryInstanceSurface::FLAG_PASS_DEPTH | GeometryInstanceSurface::FLAG_PASS_OPAQUE))) {
 					rl->add_element(surf);
 				}
-				if (surf->flags & GeometryInstanceSurface::FLAG_PASS_ALPHA) {
+				if (force_alpha || (surf->flags & GeometryInstanceSurface::FLAG_PASS_ALPHA)) {
 					render_list[RENDER_LIST_ALPHA].add_element(surf);
 				}
 
@@ -3361,22 +3449,31 @@ void RasterizerSceneGLES2::render_scene(const Ref<RenderSceneBuffers> &p_render_
 		spec_constant_base_flags |= SceneShaderGLES2::DISABLE_FOG;
 	}
 
-	// Opaque Pass
+	// ==================================
+	// Opaque pass
+	// ==================================
+	RENDER_TIMESTAMP("Render Opaque Pass");
 	scene_state.enable_gl_blend(false);
 	RenderListParameters render_list_params(render_list[RENDER_LIST_OPAQUE].elements.ptr(), render_list[RENDER_LIST_OPAQUE].elements.size(), reverse_cull, spec_constant_base_flags, use_wireframe);
 	_render_list_template<PASS_MODE_COLOR>(&render_list_params, &render_data, 0, render_list[RENDER_LIST_OPAQUE].elements.size());
 
 	scene_state.enable_gl_depth_draw(false);
 
+	// ==================================
 	// Sky background pass
+	// ==================================
 	if (draw_sky) {
+		RENDER_TIMESTAMP("Render Sky");
 		scene_state.enable_gl_depth_test(true);
 		scene_state.enable_gl_blend(false);
 		scene_state.set_gl_cull_mode(RS::CULL_MODE_BACK);
 		_draw_sky(render_data.environment, render_data.cam_projection, render_data.cam_transform, sky_energy_multiplier, 1.0, false, flip_y, false);
 	}
 
-	// Transparent Pass
+	// ==================================
+	// Transparent pass
+	// ==================================
+	RENDER_TIMESTAMP("Render 3D Transparent Pass");
 	scene_state.enable_gl_blend(true);
 	glBlendEquation(GL_FUNC_ADD);
 	GL_CHECK_ERROR("GLES2::RasterizerSceneGLES2::RasterizerSceneGLES2::render_scene: glBlendEquation");
@@ -3458,23 +3555,41 @@ void RasterizerSceneGLES2::_render_list_template(RenderListParameters *p_params,
 	glFrontFace(p_params->reverse_cull ? GL_CW : GL_CCW);
 	GL_CHECK_ERROR("GLES2::RasterizerSceneGLES2::RasterizerSceneGLES2::_render_list_template: glFrontFace");
 
-	// Save the spec constant and uv_offset
+	// Save the spec constant, uv_offset, and render_info
 	scene_state.current_spec_constants = p_params->spec_constant_base_flags;
 	scene_state.current_uv_offset = p_params->uv_offset;
+	scene_state.current_render_info = p_render_data->render_info;
+
+	// Record objects and check redraw requirements before batching
+	bool should_request_redraw = false;
+	for (int i = 0; i < count; i++) {
+		if (surfaces[i]->shader && surfaces[i]->shader->uses_time) {
+			should_request_redraw = true;
+			break;
+		}
+	}
+
+	if constexpr (p_pass_mode != PASS_MODE_DEPTH) {
+		// Don't count elements during depth pre-pass to match the RD renderers.
+		if (p_render_data->render_info) {
+			RS::ViewportRenderInfoType info_type;
+			if constexpr (p_pass_mode == PASS_MODE_SHADOW) {
+				info_type = RS::VIEWPORT_RENDER_INFO_TYPE_SHADOW;
+			} else {
+				info_type = RS::VIEWPORT_RENDER_INFO_TYPE_VISIBLE;
+			}
+			p_render_data->render_info->info[info_type][RS::VIEWPORT_RENDER_INFO_OBJECTS_IN_FRAME] += count;
+		}
+	}
 
 	// Dispatch batch processor or immediate drawer
 	batch_scene_render_items<p_pass_mode>(surfaces, count, p_render_data->cam_transform, p_alpha_pass, p_replay);
 
-	// Record info
-	if constexpr (p_pass_mode != PASS_MODE_DEPTH) {
-		// Don't count elements during depth pre-pass to match the RD renderers.
-		if (p_render_data->render_info) {
-			p_render_data->render_info->info[RS::VIEWPORT_RENDER_INFO_TYPE_VISIBLE][RS::VIEWPORT_RENDER_INFO_OBJECTS_IN_FRAME] += count;
-			p_render_data->render_info->info[RS::VIEWPORT_RENDER_INFO_TYPE_VISIBLE][RS::VIEWPORT_RENDER_INFO_DRAW_CALLS_IN_FRAME]++;
-		}
+	scene_state.current_render_info = nullptr;
+
+	if (should_request_redraw) {
+		RenderingServerDefault::redraw_request();
 	}
-	// TODO (GLES2): Figure out how to adapt GLES3'S brute-force
-	// `should_request_draw` into our batcher architecture.
 
 	// Clean-up
 	glFrontFace(GL_CCW);
@@ -3533,6 +3648,7 @@ void RasterizerSceneGLES2::_execute_additive_light_draw(uint32_t p_light_gl_id, 
 			} else {
 				glDrawArrays(p_primitive_gl, 0, p_drawn_count);
 			}
+			_record_draw_call_info(scene_state.current_render_info);
 		}
 	}
 

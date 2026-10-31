@@ -59,11 +59,28 @@ Utilities::Utilities() {
 		frames[i].timestamp_cpu_result_values.resize(max_timestamp_query_elements);
 		frames[i].timestamp_result_values.resize(max_timestamp_query_elements);
 		frames[i].timestamp_result_count = 0;
+		memset(frames[i].timestamp_result_values.ptr(), 0, max_timestamp_query_elements * sizeof(uint64_t));
+
+		if (GLES2_CONFIG->support_disjoint_timer_query) {
+			glGenQueries(max_timestamp_query_elements, frames[i].queries);
+			GL_CHECK_ERROR("GLES2::Utilities::Utilities: glGenQueries");
+		} else {
+			memset(frames[i].queries, 0, sizeof(frames[i].queries));
+		}
 	}
 }
 
 Utilities::~Utilities() {
 	singleton = nullptr;
+
+	if (GLES2_CONFIG->support_disjoint_timer_query) {
+		for (int i = 0; i < FRAME_COUNT; i++) {
+			if (frames[i].queries[0] != 0) {
+				glDeleteQueries(max_timestamp_query_elements, frames[i].queries);
+				GL_CHECK_ERROR("GLES2::Utilities::~Utilities: glDeleteQueries");
+			}
+		}
+	}
 
 	if (texture_mem_cache) {
 		uint32_t leaked_data_size = 0;
@@ -319,6 +336,19 @@ void Utilities::capture_timestamps_begin() {
 void Utilities::capture_timestamp(const String &p_name) {
 	ERR_FAIL_COND(frames[frame].timestamp_count >= max_timestamp_query_elements);
 
+	if (GLES2_CONFIG->support_disjoint_timer_query) {
+		if (unlikely(frames[frame].queries[0] == 0)) {
+			glGenQueries(max_timestamp_query_elements, frames[frame].queries);
+			GL_CHECK_ERROR("GLES2::Utilities::capture_timestamp: glGenQueries");
+		}
+		if (frames[frame].queries[frames[frame].timestamp_count] != 0) {
+#ifdef GL_API_ENABLED
+			glQueryCounter(frames[frame].queries[frames[frame].timestamp_count], GL_TIMESTAMP);
+			GL_CHECK_ERROR("GLES2::Utilities::capture_timestamp: glQueryCounter");
+#endif
+		}
+	}
+
 	frames[frame].timestamp_names[frames[frame].timestamp_count] = p_name;
 	frames[frame].timestamp_cpu_values[frames[frame].timestamp_count] = OS::get_singleton()->get_ticks_usec();
 	frames[frame].timestamp_count++;
@@ -327,6 +357,27 @@ void Utilities::capture_timestamp(const String &p_name) {
 void Utilities::_capture_timestamps_begin() {
 	// frame is incremented at the end of the frame so this gives us the queries for frame - 2. By then they should be ready.
 	if (frames[frame].timestamp_count) {
+		if (GLES2_CONFIG->support_disjoint_timer_query && frames[frame].queries[0] != 0) {
+#ifdef GL_API_ENABLED
+			GLint disjoint = 0;
+			glGetIntegerv(GL_GPU_DISJOINT_EXT, &disjoint);
+			GL_CHECK_ERROR("GLES2::Utilities::_capture_timestamps_begin: glGetIntegerv GL_GPU_DISJOINT_EXT");
+			for (uint32_t i = 0; i < frames[frame].timestamp_count; i++) {
+				if (disjoint) {
+					frames[frame].timestamp_result_values[i] = 0;
+				} else {
+					uint64_t temp = 0;
+					glGetQueryObjectui64v(frames[frame].queries[i], GL_QUERY_RESULT, &temp);
+					GL_CHECK_ERROR("GLES2::Utilities::_capture_timestamps_begin: glGetQueryObjectui64v");
+					frames[frame].timestamp_result_values[i] = temp;
+				}
+			}
+#endif
+		} else {
+			for (uint32_t i = 0; i < frames[frame].timestamp_count; i++) {
+				frames[frame].timestamp_result_values[i] = 0;
+			}
+		}
 		SWAP(frames[frame].timestamp_names, frames[frame].timestamp_result_names);
 		SWAP(frames[frame].timestamp_cpu_values, frames[frame].timestamp_cpu_result_values);
 	}

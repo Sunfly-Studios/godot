@@ -395,23 +395,16 @@ private:
 	// Forward the structs;
 	struct MultiMeshInstanceData;
 
-	_FORCE_INLINE_ static uint32_t _gl_indices_to_primitives(GLenum p_primitive, uint32_t p_indices) {
-		switch (p_primitive) {
-			case GL_POINTS:
-				return p_indices;
-			case GL_LINES:
-				return p_indices / 2;
-			case GL_LINE_STRIP:
-			case GL_LINE_LOOP:
-				return p_indices > 1 ? p_indices - 1 : 0;
-			case GL_TRIANGLES:
-				return p_indices / 3;
-			case GL_TRIANGLE_STRIP:
-			case GL_TRIANGLE_FAN:
-				return p_indices > 2 ? p_indices - 2 : 0;
-			default:
-				return 0;
+	_FORCE_INLINE_ static uint32_t _gl_indices_to_primitives(RS::PrimitiveType p_primitive, uint32_t p_indices) {
+		static constexpr uint32_t divisor[RS::PRIMITIVE_MAX] = { 1, 2, 1, 3, 1 };
+		static constexpr uint32_t subtractor[RS::PRIMITIVE_MAX] = { 0, 0, 1, 0, 1 };
+		if (
+			p_primitive <= 0 &&
+			unlikely(p_primitive >= RS::PRIMITIVE_MAX || p_indices < subtractor[p_primitive])
+		) {
+			return 0;
 		}
+		return (p_indices - subtractor[p_primitive]) / divisor[p_primitive];
 	}
 
 	_FORCE_INLINE_ void _gl_reconstruct_view_matrix(Transform3D &r_matrix, const float *p_matrix = nullptr) {
@@ -499,11 +492,28 @@ private:
 
 	bool _promote_batch_to_instancing(BatcherEnums::FVF fvf, const Transform3D& p_world_transform) {
 		return (
-			bdata.fvf == BatcherEnums::FVF_INSTANCED ||
-			bdata.fvf == BatcherEnums::FVF_DEPTH_ONLY ||
-			bdata.fvf == BatcherEnums::FVF_DEPTH_ALPHA ||
-			(bdata.fvf == BatcherEnums::FVF_REGULAR && p_world_transform == Transform3D())
+			fvf == BatcherEnums::FVF_INSTANCED ||
+			fvf == BatcherEnums::FVF_DEPTH_ONLY ||
+			fvf == BatcherEnums::FVF_DEPTH_ALPHA ||
+			(fvf == BatcherEnums::FVF_REGULAR && p_world_transform == Transform3D())
 		);
+	}
+
+	void _record_draw_call_info(RenderingMethod::RenderInfo* r_rendering_info) {
+		if (!r_rendering_info) {
+			return;
+		}
+
+		// Count the draw call
+		if (bdata.pass_mode != PASS_MODE_DEPTH) {
+			RS::ViewportRenderInfoType info_type;
+			if (bdata.pass_mode == PASS_MODE_SHADOW) {
+				info_type = RS::VIEWPORT_RENDER_INFO_TYPE_SHADOW;
+			} else {
+				info_type = RS::VIEWPORT_RENDER_INFO_TYPE_VISIBLE;
+			}
+			r_rendering_info->info[info_type][RS::VIEWPORT_RENDER_INFO_DRAW_CALLS_IN_FRAME]++;
+		}
 	}
 
 	enum AdditiveLightType {
@@ -698,6 +708,7 @@ private:
 		uint64_t current_spec_constants = 0;
 		Vector2 current_uv_offset = Vector2(0, 0);
 		bool transparent_bg = false;
+		RenderingMethod::RenderInfo *current_render_info = nullptr;
 
 		LightData *omni_lights = nullptr;
 		LightData *spot_lights = nullptr;

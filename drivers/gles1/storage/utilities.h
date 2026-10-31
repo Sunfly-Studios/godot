@@ -301,6 +301,7 @@ public:
 		GLuint queries[MAX_QUERIES];
 		TightLocalVector<String> timestamp_names;
 		TightLocalVector<uint64_t> timestamp_cpu_values;
+		TightLocalVector<uint64_t> timestamp_gpu_values;
 		uint32_t timestamp_count = 0;
 		TightLocalVector<String> timestamp_result_names;
 		TightLocalVector<uint64_t> timestamp_cpu_result_values;

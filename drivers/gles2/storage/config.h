@@ -129,6 +129,7 @@ public:
 	bool support_draw_buffers = false; // GL_EXT_draw_buffers
 	bool support_transform_feedback = false; // GL_EXT_transform_feedback
 	bool support_mapbuffer = false; // GL_OES_mapbuffer
+	bool support_disjoint_timer_query = false; // GL_EXT_disjoint_timer_query / GL_ARB_timer_query
 
 	// Compatibility / Workarounds
 	bool adreno_3xx_compatibility = false;

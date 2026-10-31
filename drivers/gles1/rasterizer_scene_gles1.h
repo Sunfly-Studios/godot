@@ -455,23 +455,16 @@ private:
 
 	/* INLINE GL HELPERS */
 
-	_FORCE_INLINE_ static uint32_t _gl_indices_to_primitives(GLenum p_primitive, uint32_t p_indices) {
-		switch (p_primitive) {
-			case GL_POINTS:
-				return p_indices;
-			case GL_LINES:
-				return p_indices / 2;
-			case GL_LINE_STRIP:
-			case GL_LINE_LOOP:
-				return p_indices > 1 ? p_indices - 1 : 0;
-			case GL_TRIANGLES:
-				return p_indices / 3;
-			case GL_TRIANGLE_STRIP:
-			case GL_TRIANGLE_FAN:
-				return p_indices > 2 ? p_indices - 2 : 0;
-			default:
-				return 0;
+	_FORCE_INLINE_ static uint32_t _gl_indices_to_primitives(RS::PrimitiveType p_primitive, uint32_t p_indices) {
+		static constexpr uint32_t divisor[RS::PRIMITIVE_MAX] = { 1, 2, 1, 3, 1 };
+		static constexpr uint32_t subtractor[RS::PRIMITIVE_MAX] = { 0, 0, 1, 0, 1 };
+		if (
+			p_primitive <= 0 &&
+			unlikely(p_primitive >= RS::PRIMITIVE_MAX || p_indices < subtractor[p_primitive])
+		) {
+			return 0;
 		}
+		return (p_indices - subtractor[p_primitive]) / divisor[p_primitive];
 	}
 
 	_FORCE_INLINE_ void _gl_load_transform(const Transform3D &p_transform) {
@@ -961,6 +954,23 @@ private:
 		}
 	}
 
+	void _record_draw_call_info(RenderingMethod::RenderInfo *r_rendering_info) {
+		if (!r_rendering_info) {
+			return;
+		}
+
+		// Count the draw call
+		if (bdata.pass_mode != PASS_MODE_DEPTH) {
+			RS::ViewportRenderInfoType info_type;
+			if (bdata.pass_mode == PASS_MODE_SHADOW) {
+				info_type = RS::VIEWPORT_RENDER_INFO_TYPE_SHADOW;
+			} else {
+				info_type = RS::VIEWPORT_RENDER_INFO_TYPE_VISIBLE;
+			}
+			r_rendering_info->info[info_type][RS::VIEWPORT_RENDER_INFO_DRAW_CALLS_IN_FRAME]++;
+		}
+	}
+
 	/* REST OF GEOMETRY FUNCTIONS */
 
 	static void _geometry_instance_dependency_changed(Dependency::DependencyChangedNotification p_notification, DependencyTracker *p_tracker);
@@ -1183,6 +1193,8 @@ private:
 		// Default fallback colours
 		Color sky_top_color = Color(0.385, 0.454, 0.55, 1.0);
 		Color ground_bottom_color = Color(0.2, 0.169, 0.133, 1.0);
+
+		RenderingMethod::RenderInfo *current_render_info = nullptr;
 
 		LightData *omni_lights = nullptr;
 		LightData *spot_lights = nullptr;

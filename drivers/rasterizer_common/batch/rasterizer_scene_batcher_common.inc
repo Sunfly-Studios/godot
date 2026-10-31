@@ -142,6 +142,12 @@ template <class T_SURFACE>
 void RasterizerSceneBatcherCommon<T_API>::record_items(T_SURFACE **p_surfaces, int p_count, const Transform3D &p_camera_transform, bool p_transparent) {
 	for (int i = 0; i < p_count; i++) {
 		T_SURFACE *surface = p_surfaces[i];
+		if (
+			bdata.pass_mode == BatcherEnums::PASS_MODE_COLOR &&
+			!(surface->flags & T_SURFACE::FLAG_PASS_OPAQUE)
+		) {
+			continue;
+		}
 		
 		uint32_t base_verts = 0;
 		uint32_t base_indices = 0;
