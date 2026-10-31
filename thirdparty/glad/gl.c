@@ -2652,30 +2652,42 @@ static int glad_gl_get_extensions( const char **out_exts, char ***out_exts_i) {
         unsigned int index = 0;
         unsigned int num_exts_i = 0;
         char **exts_i = NULL;
-        glad_glGetIntegerv(GL_NUM_EXTENSIONS, (int*) &num_exts_i);
-        exts_i = (char **) malloc((num_exts_i + 1) * (sizeof *exts_i));
-        if (exts_i == NULL) {
-            return 0;
-        }
-        for(index = 0; index < num_exts_i; index++) {
-            const char *gl_str_tmp = (const char*) glad_glGetStringi(GL_EXTENSIONS, index);
-            size_t len = strlen(gl_str_tmp) + 1;
 
-            char *local_str = (char*) malloc(len * sizeof(char));
-            if(local_str == NULL) {
-                exts_i[index] = NULL;
-                glad_gl_free_extensions(exts_i);
+        /* Clear GL error state before querying */
+        if (glad_glGetError != NULL) {
+            while (glad_glGetError() != GL_NO_ERROR) {}
+        }
+
+        if (glad_glGetIntegerv != NULL) {
+            glad_glGetIntegerv(GL_NUM_EXTENSIONS, (int*) &num_exts_i);
+        }
+
+        /* If GL_NUM_EXTENSIONS triggered an error (e.g. OpenGL < 3.0), bypass this block */
+        if (glad_glGetError == NULL || glad_glGetError() == GL_NO_ERROR) {
+            exts_i = (char **) malloc((num_exts_i + 1) * (sizeof *exts_i));
+            if (exts_i == NULL) {
                 return 0;
             }
+            for(index = 0; index < num_exts_i; index++) {
+                const char *gl_str_tmp = (const char*) glad_glGetStringi(GL_EXTENSIONS, index);
+                size_t len = strlen(gl_str_tmp) + 1;
 
-            memcpy(local_str, gl_str_tmp, len * sizeof(char));
-            exts_i[index] = local_str;
+                char *local_str = (char*) malloc(len * sizeof(char));
+                if(local_str == NULL) {
+                    exts_i[index] = NULL;
+                    glad_gl_free_extensions(exts_i);
+                    return 0;
+                }
+
+                memcpy(local_str, gl_str_tmp, len * sizeof(char));
+                exts_i[index] = local_str;
+            }
+            exts_i[index] = NULL;
+
+            *out_exts_i = exts_i;
+
+            return 1;
         }
-        exts_i[index] = NULL;
-
-        *out_exts_i = exts_i;
-
-        return 1;
     }
 #else
     GLAD_UNUSED(out_exts_i);
