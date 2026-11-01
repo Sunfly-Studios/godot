@@ -863,6 +863,19 @@ int DisplayServerIOS::screen_get_dpi(int p_screen) const {
 
 		NSString *string = [NSString stringWithCString:systemInfo.machine encoding:NSUTF8StringEncoding];
 		if (string) {
+#if __IPHONE_OS_VERSION_MAX_ALLOWED >= 270100
+			if (@available(iOS 27.1, *)) {
+				if (!GDTAppDelegateService.viewController.godotView.hingeClosed) {
+					NSDictionary *iOSModelToDPI = [GDTDeviceMetrics dpiListInternal];
+					for (NSArray *keyArray in iOSModelToDPI) {
+						if ([keyArray containsObject:string]) {
+							NSNumber *value = iOSModelToDPI[keyArray];
+							return [value intValue];
+						}
+					}
+				}
+			}
+#endif
 			NSDictionary *iOSModelToDPI = [GodotDeviceMetrics dpiList];
 			for (NSArray *keyArray in iOSModelToDPI) {
 				if ([keyArray containsObject:string]) {

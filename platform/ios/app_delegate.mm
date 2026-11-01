@@ -86,6 +86,19 @@ static AppDelegate *delegate_singleton = nil;
 	ViewController *viewController = [[ViewController alloc] init];
 	viewController.godotView.useCADisplayLink = bool(GLOBAL_DEF("display.iOS/use_cadisplaylink", true)) ? YES : NO;
 	viewController.godotView.renderingInterval = 1.0 / kRenderingFrequency;
+	viewController.godotView.hingeClosed = YES;
+
+#if __IPHONE_OS_VERSION_MAX_ALLOWED >= 270100
+	if (@available(iOS 27.1, *)) {
+		@autoreleasepool {
+			[self addInteraction:[[UIHingeInteraction alloc] initWithUpdateHandler:^(UIHingeInteraction *interaction, UIHingeInteractionUpdate *update) {
+				if (update.hinge) {
+					viewController.godotView.hingeClosed = update.hinge.status == UIHingeStatusClosed;
+				}
+			}]];
+		}
+	}
+#endif
 
 	self.window.rootViewController = viewController;
 

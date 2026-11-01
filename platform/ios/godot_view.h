@@ -48,6 +48,7 @@ class String;
 @property(assign, nonatomic) id<GodotViewDelegate> delegate;
 
 @property(assign, readonly, nonatomic) BOOL isActive;
+@property(assign, nonatomic) BOOL hingeClosed;
 
 @property(assign, nonatomic) BOOL useCADisplayLink;
 @property(strong, readonly, nonatomic) CALayer<DisplayLayer> *renderingLayer;
