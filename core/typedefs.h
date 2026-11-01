@@ -87,6 +87,18 @@ static_assert(__cplusplus >= 201703L);
 #endif
 #endif
 
+// Use to tell the compiler that we guarantee
+// that memory address by the variables that it is
+// used on to will not overlap.
+#if defined(__GNUC__) || defined(__clang__)
+#define RESTRICT __restrict__
+#elif defined(_MSC_VER)
+#define RESTRICT __restrict
+#else
+#define RESTRICT
+#endif
+
+
 // Some platforms may not natievly support atomics, but the compiler
 // can emulate it in software.
 #define GODOT_REQUIRE_LOCK_FREE_ATOMICS 1
