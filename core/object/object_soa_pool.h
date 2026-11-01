@@ -148,7 +148,7 @@ public:
 	using ComponentType = typename SOATypeAt<Index, Components...>::Type;
 
 private:
-	using Sequence = BuildIndexSequence<COMPONENT_COUNT>;
+	using Sequence = typename BuildIndexSequence<COMPONENT_COUNT>::Type;
 	SOAStreamPack<Sequence, Components...> streams;
 
 	// Single-stream helpers

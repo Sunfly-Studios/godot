@@ -31,8 +31,6 @@
 #ifndef BATCHER_ENUMS_H
 #define BATCHER_ENUMS_H
 
-#include <stdint.h>
-
 class BatcherEnums {
 public:
 	enum FVF {
@@ -45,6 +43,14 @@ public:
 		FVF_INSTANCED,
 		FVF_DEPTH_ONLY,
 		FVF_DEPTH_ALPHA,
+
+		// 3D Tiered Payloads
+		FVF_3D_TIER1_BASE,
+		FVF_3D_TIER2_COLOR,
+		FVF_3D_TIER3_TANGENT,
+		FVF_3D_TIER4_PALETTE,
+		FVF_3D_DEPTH_MINIMAL,
+		FVF_3D_DEPTH_ALPHA_MINIMAL,
 	};
 
 	enum PassMode {
@@ -70,6 +76,20 @@ public:
 
 		USE_MODULATE_FVF = 1 << 3,
 		USE_LARGE_FVF = 1 << 4,
+	};
+
+	// these flags are specifically for 3D batching
+	enum BatchFlags3D : uint32_t {
+		BTF_3D_NONE = 0,
+		BTF_3D_USES_COLORS = 1 << 0,
+		BTF_3D_USES_TANGENTS = 1 << 1,
+		BTF_3D_USES_UV2 = 1 << 2,
+		BTF_3D_USES_SKINNING = 1 << 3,
+		BTF_3D_USES_INSTANCING = 1 << 4,
+		BTF_3D_USES_ALPHA_CLIP = 1 << 5,
+		BTF_3D_PREVENT_COLOR_BAKING = 1 << 6,
+		BTF_3D_PREVENT_VERTEX_BAKING = 1 << 7,
+		BTF_3D_PREVENT_ITEM_JOINING = 1 << 8,
 	};
 
 	enum BatchType : uint16_t {

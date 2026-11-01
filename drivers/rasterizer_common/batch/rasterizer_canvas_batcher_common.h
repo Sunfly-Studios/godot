@@ -569,7 +569,7 @@ private:
 	void _translate_batches_to_vertex_colored_FVF();
 
 	template <class BATCH_VERTEX_TYPE, bool INCLUDE_LIGHT_ANGLES, bool INCLUDE_MODULATE, bool INCLUDE_LARGE>
-	void _translate_batches_to_larger_FVF(uint32_t p_sequence_batch_type_flags);
+	void _translate_batches_to_larger_FVF_2d(uint32_t p_sequence_batch_type_flags);
 
 protected:
 	void _software_transform_vertex(BatchVector2 &r_v, const Transform2D &p_tr) const;

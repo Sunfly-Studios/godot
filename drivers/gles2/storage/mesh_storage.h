@@ -33,9 +33,13 @@
 
 #ifdef GLES2_ENABLED
 
+#include "core/object/object_soa_pool.h"
+#include "core/templates/flat_map.h"
+#include "core/templates/generational_handle.h"
 #include "core/templates/local_vector.h"
 #include "core/templates/rid_owner.h"
 #include "core/templates/self_list.h"
+#include "core/templates/sparse_set.h"
 #include "drivers/gles2/shaders/skeleton.glsl.gen.h"
 #include "servers/rendering/storage/mesh_storage.h"
 #include "servers/rendering/storage/utilities.h"
@@ -82,6 +86,8 @@ struct Mesh {
 
 		uint32_t uncompressed_stride = 0;
 		Vector<uint8_t> uncompressed_buffer;
+		Vector<uint8_t> skin_data_cache;
+		FlatMap<uint64_t, uint32_t> version_index_map;
 
 		// Keep in sync with `GeometryInstanceSurface`
 		// in the scene rasterizer.
@@ -177,6 +183,7 @@ struct Mesh {
 struct MeshInstance {
 	Mesh *mesh = nullptr;
 	RID skeleton;
+	GenerationalHandle scratch_handle;
 	struct Surface {
 		GLuint vertex_buffers[2] = { 0, 0 };
 		GLuint vertex_arrays[2] = { 0, 0 };
@@ -189,6 +196,8 @@ struct MeshInstance {
 
 		Mesh::Surface::Version *versions = nullptr; //allocated on demand
 		uint32_t version_count = 0;
+		FlatMap<uint64_t, uint32_t> version_index_map;
+		LocalVector<uint8_t> skinning_scratch_buffer;
 	};
 	LocalVector<Surface> surfaces;
 	LocalVector<float> blend_weights;
@@ -302,6 +311,11 @@ private:
 	/* Skeleton */
 
 	mutable RID_Owner<Skeleton, true> skeleton_owner;
+
+	// Persistent DOD workspaces for software skinning
+	ObjectSOAPool<Transform3D, Basis> skeleton_bone_3d_soa;
+	LocalVector<Transform2D> skeleton_bone_2d_scratch;
+	SparseSet<uint32_t> active_skinning_instances;
 
 	_FORCE_INLINE_ void _skeleton_make_dirty(Skeleton *skeleton);
 	void _compute_skeleton_2d(MeshInstance *p_mi, Skeleton *p_sk, uint32_t p_surface);
@@ -472,15 +486,10 @@ public:
 
 		s->version_lock.lock();
 
-		// There will never be more than 3 or 4 versions, so iterating is the fastest way.
-
-		for (uint32_t i = 0; i < s->version_count; i++) {
-			if (s->versions[i].input_mask != p_input_mask) {
-				continue;
-			}
+		if (const uint32_t *found_idx = s->version_index_map.find(p_input_mask)) {
 			// We have this version, hooray.
-			r_vertex_array_gl = s->versions[i].vertex_array;
-			Mesh::Surface::Version *v = &s->versions[i];
+			r_vertex_array_gl = s->versions[*found_idx].vertex_array;
+			Mesh::Surface::Version *v = &s->versions[*found_idx];
 			s->version_lock.unlock();
 			return v;
 		}
@@ -489,11 +498,15 @@ public:
 		s->version_count++;
 		s->versions = (Mesh::Surface::Version *)memrealloc(s->versions, sizeof(Mesh::Surface::Version) * s->version_count);
 
-		ERR_FAIL_NULL_V(s->versions, nullptr);
+		if (unlikely(!s->versions)) {
+			s->version_lock.unlock();
+			ERR_FAIL_NULL_V(s->versions, nullptr);
+		}
 
 		::new (&s->versions[version]) Mesh::Surface::Version();
 
 		_mesh_surface_generate_version_for_input_mask(s->versions[version], s, p_input_mask);
+		s->version_index_map.insert(p_input_mask, version);
 
 		if (GLES2_CONFIG->support_vao) {
 			glGenVertexArrays(1, &s->versions[version].vertex_array);
@@ -612,14 +625,9 @@ public:
 
 		s->version_lock.lock();
 
-		//there will never be more than, at much, 3 or 4 versions, so iterating is the fastest way
-
-		for (uint32_t i = 0; i < mis->version_count; i++) {
-			if (mis->versions[i].input_mask != p_input_mask) {
-				continue;
-			}
-			r_vertex_array_gl = mis->versions[i].vertex_array;
-			Mesh::Surface::Version *v = &mis->versions[i];
+		if (const uint32_t *found_idx = mis->version_index_map.find(p_input_mask)) {
+			r_vertex_array_gl = mis->versions[*found_idx].vertex_array;
+			Mesh::Surface::Version *v = &mis->versions[*found_idx];
 			s->version_lock.unlock();
 			return v;
 		}
@@ -628,13 +636,17 @@ public:
 		mis->version_count++;
 		mis->versions = (Mesh::Surface::Version *)memrealloc(mis->versions, sizeof(Mesh::Surface::Version) * mis->version_count);
 
-		ERR_FAIL_NULL_V(mis->versions, nullptr);
+		if (unlikely(!mis->versions)) {
+			s->version_lock.unlock();
+			ERR_FAIL_NULL_V(mis->versions, nullptr);
+		}
 
 		::new (&mis->versions[version]) Mesh::Surface::Version();
 
 		_mesh_surface_generate_version_for_input_mask(mis->versions[version], s, p_input_mask, mis);
 
 		mis->versions[version].vertex_array = 0;
+		mis->version_index_map.insert(p_input_mask, version);
 
 		r_vertex_array_gl = mis->versions[version].vertex_array;
 		Mesh::Surface::Version *v = &mis->versions[version];

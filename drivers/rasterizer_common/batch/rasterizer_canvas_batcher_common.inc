@@ -756,28 +756,36 @@ void RasterizerCanvasBatcherCommon<T_API>::flush_render_batches(RendererCanvasRe
 		case BatcherEnums::FVF_UNBATCHED:
 		case BatcherEnums::FVF_REGULAR:
 			break;
-		// Only used for 3D batching and to silence compiler warnings
+		// These are only used in the 3D batcher but the compiler
+		// complains that they are not handled here. So they are
+		// here just to silence those warnings.
 		case BatcherEnums::FVF_INSTANCED:
 		case BatcherEnums::FVF_DEPTH_ONLY:
 		case BatcherEnums::FVF_DEPTH_ALPHA:
+		case BatcherEnums::FVF_3D_TIER1_BASE:
+		case BatcherEnums::FVF_3D_TIER2_COLOR:
+		case BatcherEnums::FVF_3D_TIER3_TANGENT:
+		case BatcherEnums::FVF_3D_TIER4_PALETTE:
+		case BatcherEnums::FVF_3D_DEPTH_MINIMAL:
+		case BatcherEnums::FVF_3D_DEPTH_ALPHA_MINIMAL:
 			break;
 		case BatcherEnums::FVF_COLOR: {
 			bool contains_non_polygons = (p_sequence_batch_type_flags & ~BatcherEnums::BTF_POLY) != 0;
 
 			if (!bdata.vertex_colors.size() || contains_non_polygons) {
-				_translate_batches_to_larger_FVF<BatchVertexColored, false, false, false>(p_sequence_batch_type_flags);
+				_translate_batches_to_larger_FVF_2d<BatchVertexColored, false, false, false>(p_sequence_batch_type_flags);
 			} else {
 				_translate_batches_to_vertex_colored_FVF();
 			}
 		} break;
 		case BatcherEnums::FVF_LIGHT_ANGLE:
-			_translate_batches_to_larger_FVF<BatchVertexLightAngled, true, false, false>(p_sequence_batch_type_flags);
+			_translate_batches_to_larger_FVF_2d<BatchVertexLightAngled, true, false, false>(p_sequence_batch_type_flags);
 			break;
 		case BatcherEnums::FVF_MODULATED:
-			_translate_batches_to_larger_FVF<BatchVertexModulated, true, true, false>(p_sequence_batch_type_flags);
+			_translate_batches_to_larger_FVF_2d<BatchVertexModulated, true, true, false>(p_sequence_batch_type_flags);
 			break;
 		case BatcherEnums::FVF_LARGE:
-			_translate_batches_to_larger_FVF<BatchVertexLarge, true, true, true>(p_sequence_batch_type_flags);
+			_translate_batches_to_larger_FVF_2d<BatchVertexLarge, true, true, true>(p_sequence_batch_type_flags);
 			break;
 	}
 
@@ -985,7 +993,7 @@ bool RasterizerCanvasBatcherCommon<T_API>::_disallow_item_join_if_batch_types_to
 
 template <typename T_API>
 template <class BATCH_VERTEX_TYPE, bool INCLUDE_LIGHT_ANGLES, bool INCLUDE_MODULATE, bool INCLUDE_LARGE>
-void RasterizerCanvasBatcherCommon<T_API>::_translate_batches_to_larger_FVF(uint32_t p_sequence_batch_type_flags) {
+void RasterizerCanvasBatcherCommon<T_API>::_translate_batches_to_larger_FVF_2d(uint32_t p_sequence_batch_type_flags) {
 	bool include_poly_color = false;
 
 	if (p_sequence_batch_type_flags & BatcherEnums::BTF_POLY) {

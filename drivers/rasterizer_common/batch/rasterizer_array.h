@@ -64,8 +64,8 @@ public:
 
 	void free() {
 		if (_list) {
-			memdelete_arr(_list);
-			_list = 0;
+			Memory::free_aligned_static(_list);
+			_list = nullptr;
 		}
 		_size = 0;
 		_max_size = 0;
@@ -81,7 +81,7 @@ public:
 		_max_size_bytes = p_max_size_units * p_max_unit_size_bytes;
 
 		if (_max_size_bytes) {
-			_list = memnew_arr(uint8_t, _max_size_bytes);
+			_list = static_cast<uint8_t *>(Memory::alloc_aligned_static(_max_size_bytes, 16));
 		}
 	}
 

@@ -38,6 +38,8 @@
 #include "core/templates/rid_owner.h"
 #include "core/templates/self_list.h"
 #include "drivers/rasterizer_common/batch/rasterizer_scene_batcher_common.h"
+#include "drivers/gles_common/common_math.h"
+#include "drivers/gles_common/common_functions.h"
 #include "drivers/gles1/shaders/effects/cubemap_filter.glsl.gen.h"
 #include "drivers/gles1/shaders/sky.glsl.gen.h"
 #include "scene/resources/mesh.h"
@@ -216,13 +218,13 @@ private:
 		correction.set_depth_correction(p_flip_y, true, false);
 		Projection projection = correction * p_render_data->cam_projection;
 
-		_gl_load_projection(projection);
+		glLoadMatrixf(_gl_load_projection(projection));
 
 		glMatrixMode(GL_MODELVIEW);
 		glPushMatrix();
 
 		Transform3D view = p_render_data->inv_cam_transform;
-		_gl_load_transform(view);
+		glLoadMatrixf(_gl_load_transform(view));
 
 		glDisable(GL_LIGHTING);
 		glDisable(GL_TEXTURE_2D);
@@ -455,80 +457,6 @@ private:
 
 	/* INLINE GL HELPERS */
 
-	_FORCE_INLINE_ static uint32_t _gl_indices_to_primitives(RS::PrimitiveType p_primitive, uint32_t p_indices) {
-		static constexpr uint32_t divisor[RS::PRIMITIVE_MAX] = { 1, 2, 1, 3, 1 };
-		static constexpr uint32_t subtractor[RS::PRIMITIVE_MAX] = { 0, 0, 1, 0, 1 };
-		if (
-			p_primitive <= 0 &&
-			unlikely(p_primitive >= RS::PRIMITIVE_MAX || p_indices < subtractor[p_primitive])
-		) {
-			return 0;
-		}
-		return (p_indices - subtractor[p_primitive]) / divisor[p_primitive];
-	}
-
-	_FORCE_INLINE_ void _gl_load_transform(const Transform3D &p_transform) {
-		const float m[16] = {
-			p_transform.basis.rows[0][0], p_transform.basis.rows[1][0], p_transform.basis.rows[2][0], 0.0f,
-			p_transform.basis.rows[0][1], p_transform.basis.rows[1][1], p_transform.basis.rows[2][1], 0.0f,
-			p_transform.basis.rows[0][2], p_transform.basis.rows[1][2], p_transform.basis.rows[2][2], 0.0f,
-			p_transform.origin.x, p_transform.origin.y, p_transform.origin.z, 1.0f
-		};
-		glLoadMatrixf(m);
-	}
-
-	_FORCE_INLINE_ void _gl_mult_transform(const Transform3D &p_transform) {
-		const float m[16] = {
-			p_transform.basis.rows[0][0], p_transform.basis.rows[1][0], p_transform.basis.rows[2][0], 0.0f,
-			p_transform.basis.rows[0][1], p_transform.basis.rows[1][1], p_transform.basis.rows[2][1], 0.0f,
-			p_transform.basis.rows[0][2], p_transform.basis.rows[1][2], p_transform.basis.rows[2][2], 0.0f,
-			p_transform.origin.x, p_transform.origin.y, p_transform.origin.z, 1.0f
-		};
-		glMultMatrixf(m);
-	}
-
-	_FORCE_INLINE_ void _gl_load_projection(const Projection &p_proj) {
-		const float m[16] = {
-			p_proj.columns[0][0], p_proj.columns[0][1], p_proj.columns[0][2], p_proj.columns[0][3],
-			p_proj.columns[1][0], p_proj.columns[1][1], p_proj.columns[1][2], p_proj.columns[1][3],
-			p_proj.columns[2][0], p_proj.columns[2][1], p_proj.columns[2][2], p_proj.columns[2][3],
-			p_proj.columns[3][0], p_proj.columns[3][1], p_proj.columns[3][2], p_proj.columns[3][3]
-		};
-		glLoadMatrixf(m);
-	}
-
-	_FORCE_INLINE_ void _gl_mult_projection(const Projection &p_proj) {
-		const float m[16] = {
-			p_proj.columns[0][0], p_proj.columns[0][1], p_proj.columns[0][2], p_proj.columns[0][3],
-			p_proj.columns[1][0], p_proj.columns[1][1], p_proj.columns[1][2], p_proj.columns[1][3],
-			p_proj.columns[2][0], p_proj.columns[2][1], p_proj.columns[2][2], p_proj.columns[2][3],
-			p_proj.columns[3][0], p_proj.columns[3][1], p_proj.columns[3][2], p_proj.columns[3][3]
-		};
-		glMultMatrixf(m);
-	}
-
-	_FORCE_INLINE_ void _gl_reconstruct_view_matrix(Transform3D &view_matrix) {
-		const float *m = scene_state.ubo.view_matrix;
-		view_matrix.basis.set_column(0, Vector3(m[0], m[1], m[2]));
-		view_matrix.basis.set_column(1, Vector3(m[4], m[5], m[6]));
-		view_matrix.basis.set_column(2, Vector3(m[8], m[9], m[10]));
-		view_matrix.origin = Vector3(m[12], m[13], m[14]);
-	}
-
-	_FORCE_INLINE_ Projection _gl_array_to_projection(const float *p_array) {
-		Projection proj;
-		proj.columns[0] = Vector4(p_array[0], p_array[1], p_array[2], p_array[3]);
-		proj.columns[1] = Vector4(p_array[4], p_array[5], p_array[6], p_array[7]);
-		proj.columns[2] = Vector4(p_array[8], p_array[9], p_array[10], p_array[11]);
-		proj.columns[3] = Vector4(p_array[12], p_array[13], p_array[14], p_array[15]);
-		return proj;
-	}
-
-	_FORCE_INLINE_ void _gl_inverse_transpose_normal(Basis &normal_basis, Transform3D &world_xform) {
-		normal_basis = world_xform.basis.inverse();
-		normal_basis.transpose();
-	}
-
 	_FORCE_INLINE_ void _gl_setup_bake_uv2_tex_params() {
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
@@ -756,6 +684,9 @@ private:
 
 		bool use_color_material = (
 			(p_material_data && p_material_data->shader_data && p_material_data->shader_data->uses_color) ||
+			bdata.fvf == BatcherEnums::FVF_3D_TIER2_COLOR ||
+			bdata.fvf == BatcherEnums::FVF_3D_TIER3_TANGENT ||
+			bdata.fvf == BatcherEnums::FVF_3D_TIER4_PALETTE ||
 			bdata.fvf == BatcherEnums::FVF_REGULAR ||
 			bdata.fvf == BatcherEnums::FVF_INSTANCED
 		);
@@ -1311,10 +1242,20 @@ private:
 	void _batch_get_instance_geometry_capacity(const GeometryInstanceSurface *p_surface, uint32_t &r_vertex_count, uint32_t &r_index_count);
 	float _batch_get_item_depth(const GeometryInstanceSurface *p_surface, const Transform3D &p_camera_transform);
 	uint64_t _batch_get_state_hash(const GeometryInstanceSurface *p_surface);
+	uint32_t _batch_get_surface_flags(const GeometryInstanceSurface *p_surface) const;
+	RasterizerSceneBatcherCommon<BatcherAPISceneGLES1>::BatchColor _batch_get_surface_modulate(const GeometryInstanceSurface *p_surface) const;
+	_FORCE_INLINE_ bool _batch_requires_palette_fvf() const {
+		return GLES1_CONFIG->support_matrix_palette && glIsEnabled(GL_MATRIX_PALETTE_OES);
+	}
+	_FORCE_INLINE_ bool _batch_buffer_orphan_and_upload_3d(unsigned int p_buffer_size_bytes, unsigned int p_offset_bytes, unsigned int p_data_size_bytes, const void *p_data, GLenum p_target, GLenum p_usage, bool p_optional_orphan) const;
+	
 	GLES1::SceneMaterialData *_batch_get_material_data(const GeometryInstanceSurface *p_surface);
 
-	void _batch_fill_instance_geometry(const GeometryInstanceSurface *p_surface, RasterizerSceneBatcherCommon<BatcherAPISceneGLES1>::BatchVertex3D *r_bvs, uint16_t *r_inds, uint32_t p_start_vert, bool p_use_hardware_transform, uint32_t p_item_index);
-	void _batch_fill_multimesh_geometry(const GeometryInstanceSurface *p_surface, RasterizerSceneBatcherCommon<BatcherAPISceneGLES1>::BatchVertex3DInstanced *r_bvs, uint16_t *r_inds, uint32_t p_start_vert, bool p_use_hardware_transform, uint32_t p_item_index);
+	void _batch_fill_instance_tiered(const RasterizerSceneBatcherCommon<BatcherAPISceneGLES1>::BItemRef3D &p_ref, RasterizerSceneBatcherCommon<BatcherAPISceneGLES1>::BatchVertex3DTier1 *r_base, RasterizerSceneBatcherCommon<BatcherAPISceneGLES1>::BatchColor *r_col, RasterizerSceneBatcherCommon<BatcherAPISceneGLES1>::BatchVector2 *r_uv2, RasterizerSceneBatcherCommon<BatcherAPISceneGLES1>::BatchVector4 *r_tan, RasterizerSceneBatcherCommon<BatcherAPISceneGLES1>::BatchVector4 *r_weights, uint32_t *r_matrix_idx, uint16_t *r_inds, uint32_t p_start_vert, bool p_use_hardware_transform, uint32_t p_item_index);
+	void _batch_fill_multimesh_tiered(const RasterizerSceneBatcherCommon<BatcherAPISceneGLES1>::BItemRef3D &p_ref, RasterizerSceneBatcherCommon<BatcherAPISceneGLES1>::BatchVertex3DTier1 *r_base, RasterizerSceneBatcherCommon<BatcherAPISceneGLES1>::BatchColor *r_col, RasterizerSceneBatcherCommon<BatcherAPISceneGLES1>::BatchVector2 *r_uv2, RasterizerSceneBatcherCommon<BatcherAPISceneGLES1>::BatchVector4 *r_tan, RasterizerSceneBatcherCommon<BatcherAPISceneGLES1>::BatchVector4 *r_weights, uint32_t *r_matrix_idx, uint16_t *r_inds, uint32_t p_start_vert, bool p_use_hardware_transform, uint32_t p_item_index);
+	void _batch_fill_instance_depth(const RasterizerSceneBatcherCommon<BatcherAPISceneGLES1>::BItemRef3D &p_ref, uint8_t *r_bvs, uint16_t *r_inds, uint32_t p_start_vert, bool p_use_hardware_transform, uint32_t p_item_index);
+	void _batch_fill_multimesh_depth(const RasterizerSceneBatcherCommon<BatcherAPISceneGLES1>::BItemRef3D &p_ref, uint8_t *r_bvs, uint16_t *r_inds, uint32_t p_start_vert, bool p_use_hardware_transform, uint32_t p_item_index);
+
 	void _batch_upload_buffers(RasterizerSceneBatcherCommon<BatcherAPISceneGLES1>::Batch3D &r_batch);
 	void _batch_bind_material(GLES1::SceneMaterialData *p_material_data, const Transform3D &p_world_transform, bool p_transparent);
 	void _batch_render_generic(RS::PrimitiveType p_primitive, uint32_t p_offset = 0, uint32_t p_count = 0, bool p_has_color = true);

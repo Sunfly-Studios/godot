@@ -42,6 +42,8 @@
 
 #include "drivers/gles_common/error_macros.h"
 #include "drivers/rasterizer_common/batch/rasterizer_canvas_batcher_common.h"
+#include "drivers/gles_common/common_math.h"
+#include "drivers/gles_common/common_functions.h"
 
 #include "drivers/gles2/shaders/canvas.glsl.gen.h"
 #include "drivers/gles2/shaders/canvas_occlusion.glsl.gen.h"
@@ -234,7 +236,7 @@ protected:
 	void _set_canvas_uniforms();
 	void _bind_quad_buffer() const;
 
-	_FORCE_INLINE_ bool _buffer_orphan_and_upload(unsigned int p_buffer_size_bytes, unsigned int p_offset_bytes, unsigned int p_data_size_bytes, const void *p_data, GLenum p_target, GLenum p_usage, bool p_optional_orphan) const;
+	_FORCE_INLINE_ bool _buffer_orphan_and_upload_2d(unsigned int p_buffer_size_bytes, unsigned int p_offset_bytes, unsigned int p_data_size_bytes, const void *p_data, GLenum p_target, GLenum p_usage, bool p_optional_orphan) const;
 	void _legacy_draw_polygon(Item::CommandPolygon *p_poly, GLES2::CanvasMaterialData *p_material);
 	void _legacy_draw_primitive(Item::CommandPrimitive *p_pr, GLES2::CanvasMaterialData *p_material);
 	void _legacy_draw_line(Item::CommandPrimitive *p_pr, GLES2::CanvasMaterialData *p_material);
@@ -283,30 +285,6 @@ public:
 	void update() override;
 	virtual void set_debug_redraw(bool p_enabled, double p_time, const Color &p_color) override;
 	virtual uint32_t get_pipeline_compilations(RS::PipelineSource p_source) override;
-
-	_FORCE_INLINE_ GLenum get_gl_primitive_type(RS::PrimitiveType primitive) {
-		GLenum gl_primitive = GL_TRIANGLES;
-		switch (primitive) {
-			case RS::PRIMITIVE_POINTS:
-				gl_primitive = GL_POINTS;
-				break;
-			case RS::PRIMITIVE_LINES:
-				gl_primitive = GL_LINES;
-				break;
-			case RS::PRIMITIVE_LINE_STRIP:
-				gl_primitive = GL_LINE_STRIP;
-				break;
-			case RS::PRIMITIVE_TRIANGLES:
-				gl_primitive = GL_TRIANGLES;
-				break;
-			case RS::PRIMITIVE_TRIANGLE_STRIP:
-				gl_primitive = GL_TRIANGLE_STRIP;
-				break;
-			default:
-				break;
-		}
-		return gl_primitive;
-	}
 
 	_FORCE_INLINE_ void set_gl_blend_mode(
 		GLES2::CanvasShaderData::BlendMode blend_mode,
@@ -373,25 +351,6 @@ public:
 			return false;
 		}
 		return true;
-	}
-
-	_FORCE_INLINE_ static uint32_t _gl_indices_to_primitives(GLenum p_primitive, uint32_t p_indices) {
-		switch (p_primitive) {
-			case GL_POINTS:
-				return p_indices;
-			case GL_LINES:
-				return p_indices / 2;
-			case GL_LINE_STRIP:
-			case GL_LINE_LOOP:
-				return p_indices > 1 ? p_indices - 1 : 0;
-			case GL_TRIANGLES:
-				return p_indices / 3;
-			case GL_TRIANGLE_STRIP:
-			case GL_TRIANGLE_FAN:
-				return p_indices > 2 ? p_indices - 2 : 0;
-			default:
-				return 0;
-		}
 	}
 
 private:

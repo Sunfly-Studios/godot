@@ -38,6 +38,7 @@
 #include "core/templates/rid_owner.h"
 #include "core/templates/self_list.h"
 #include "drivers/rasterizer_common/batch/rasterizer_scene_batcher_common.h"
+#include "drivers/gles_common/common_math.h"
 #include "drivers/gles2/shaders/effects/cubemap_filter.glsl.gen.h"
 #include "drivers/gles2/shaders/sky.glsl.gen.h"
 #include "scene/resources/mesh.h"
@@ -395,61 +396,6 @@ private:
 	// Forward the structs;
 	struct MultiMeshInstanceData;
 
-	_FORCE_INLINE_ static uint32_t _gl_indices_to_primitives(RS::PrimitiveType p_primitive, uint32_t p_indices) {
-		static constexpr uint32_t divisor[RS::PRIMITIVE_MAX] = { 1, 2, 1, 3, 1 };
-		static constexpr uint32_t subtractor[RS::PRIMITIVE_MAX] = { 0, 0, 1, 0, 1 };
-		if (
-			p_primitive <= 0 &&
-			unlikely(p_primitive >= RS::PRIMITIVE_MAX || p_indices < subtractor[p_primitive])
-		) {
-			return 0;
-		}
-		return (p_indices - subtractor[p_primitive]) / divisor[p_primitive];
-	}
-
-	_FORCE_INLINE_ void _gl_reconstruct_view_matrix(Transform3D &r_matrix, const float *p_matrix = nullptr) {
-		const float *m = p_matrix ? p_matrix : scene_state.ubo.view_matrix;
-		r_matrix.basis.rows[0] = Vector3(m[0], m[4], m[8]);
-		r_matrix.basis.rows[1] = Vector3(m[1], m[5], m[9]);
-		r_matrix.basis.rows[2] = Vector3(m[2], m[6], m[10]);
-		r_matrix.origin = Vector3(m[12], m[13], m[14]);
-	}
-
-	_FORCE_INLINE_ Projection _gl_array_to_projection(const float *p_array) {
-		Projection proj;
-		proj.columns[0] = Vector4(p_array[0], p_array[1], p_array[2], p_array[3]);
-		proj.columns[1] = Vector4(p_array[4], p_array[5], p_array[6], p_array[7]);
-		proj.columns[2] = Vector4(p_array[8], p_array[9], p_array[10], p_array[11]);
-		proj.columns[3] = Vector4(p_array[12], p_array[13], p_array[14], p_array[15]);
-		return proj;
-	}
-
-	_FORCE_INLINE_ Basis _gl_array_to_basis(const float *p_array) {
-		Basis basis;
-		basis.set_column(0, Vector3(p_array[0], p_array[1], p_array[2]));
-		basis.set_column(1, Vector3(p_array[4], p_array[5], p_array[6]));
-		basis.set_column(2, Vector3(p_array[8], p_array[9], p_array[10]));
-		return basis;
-	}
-
-	_FORCE_INLINE_ void _gl_basis_to_array(const Basis &p_basis, float *r_array) {
-		Vector3 col0 = p_basis.get_column(0);
-		Vector3 col1 = p_basis.get_column(1);
-		Vector3 col2 = p_basis.get_column(2);
-		r_array[0] = col0.x;
-		r_array[1] = col0.y;
-		r_array[2] = col0.z;
-		r_array[3] = 0.0f;
-		r_array[4] = col1.x;
-		r_array[5] = col1.y;
-		r_array[6] = col1.z;
-		r_array[7] = 0.0f;
-		r_array[8] = col2.x;
-		r_array[9] = col2.y;
-		r_array[10] = col2.z;
-		r_array[11] = 0.0f;
-	}
-
 	_FORCE_INLINE_ void _gl_setup_bake_uv2_tex_params() {
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
@@ -490,13 +436,8 @@ private:
 	};
 	MultiMeshInstanceData _get_multimesh_data(const GeometryInstanceSurface *p_surface);
 
-	bool _promote_batch_to_instancing(BatcherEnums::FVF fvf, const Transform3D& p_world_transform) {
-		return (
-			fvf == BatcherEnums::FVF_INSTANCED ||
-			fvf == BatcherEnums::FVF_DEPTH_ONLY ||
-			fvf == BatcherEnums::FVF_DEPTH_ALPHA ||
-			(fvf == BatcherEnums::FVF_REGULAR && p_world_transform == Transform3D())
-		);
+	bool _promote_batch_to_instancing(BatcherEnums::FVF p_fvf, const Transform3D &p_world_transform) const {
+		return p_fvf == BatcherEnums::FVF_INSTANCED;
 	}
 
 	void _record_draw_call_info(RenderingMethod::RenderInfo* r_rendering_info) {
@@ -836,10 +777,21 @@ private:
 	void _batch_get_instance_geometry_capacity(const GeometryInstanceSurface *p_surface, uint32_t &r_vertex_count, uint32_t &r_index_count);
 	float _batch_get_item_depth(const GeometryInstanceSurface *p_surface, const Transform3D &p_camera_transform);
 	uint64_t _batch_get_state_hash(const GeometryInstanceSurface *p_surface);
+	uint32_t _batch_get_surface_flags(const GeometryInstanceSurface *p_surface) const;
+	RasterizerSceneBatcherCommon<BatcherAPISceneGLES2>::BatchColor _batch_get_surface_modulate(const GeometryInstanceSurface *p_surface) const;
+	_FORCE_INLINE_ bool _batch_requires_palette_fvf() const {
+		// Not required for GLES2
+		return false;
+	}
+	_FORCE_INLINE_ bool _batch_buffer_orphan_and_upload_3d(unsigned int p_buffer_size_bytes, unsigned int p_offset_bytes, unsigned int p_data_size_bytes, const void *p_data, GLenum p_target, GLenum p_usage, bool p_optional_orphan) const;
+	
 	GLES2::SceneMaterialData *_batch_get_material_data(const GeometryInstanceSurface *p_surface);
 
-	void _batch_fill_instance_geometry(const GeometryInstanceSurface *p_surface, RasterizerSceneBatcherCommon<BatcherAPISceneGLES2>::BatchVertex3D *r_bvs, uint16_t *r_inds, uint32_t p_start_vert, bool p_use_hardware_transform, uint32_t p_item_index);
-	void _batch_fill_multimesh_geometry(const GeometryInstanceSurface *p_surface, RasterizerSceneBatcherCommon<BatcherAPISceneGLES2>::BatchVertex3DInstanced *r_bvs, uint16_t *r_inds, uint32_t p_start_vert, bool p_use_hardware_transform, uint32_t p_item_index);
+	void _batch_fill_instance_tiered(const RasterizerSceneBatcherCommon<BatcherAPISceneGLES2>::BItemRef3D &p_ref, RasterizerSceneBatcherCommon<BatcherAPISceneGLES2>::BatchVertex3DTier1 *r_base, RasterizerSceneBatcherCommon<BatcherAPISceneGLES2>::BatchColor *r_col, RasterizerSceneBatcherCommon<BatcherAPISceneGLES2>::BatchVector2 *r_uv2, RasterizerSceneBatcherCommon<BatcherAPISceneGLES2>::BatchVector4 *r_tan, RasterizerSceneBatcherCommon<BatcherAPISceneGLES2>::BatchVector4 *r_weights, uint32_t *r_matrix_idx, uint16_t *r_inds, uint32_t p_start_vert, bool p_use_hardware_transform, uint32_t p_item_index);
+	void _batch_fill_multimesh_tiered(const RasterizerSceneBatcherCommon<BatcherAPISceneGLES2>::BItemRef3D &p_ref, RasterizerSceneBatcherCommon<BatcherAPISceneGLES2>::BatchVertex3DTier1 *r_base, RasterizerSceneBatcherCommon<BatcherAPISceneGLES2>::BatchColor *r_col, RasterizerSceneBatcherCommon<BatcherAPISceneGLES2>::BatchVector2 *r_uv2, RasterizerSceneBatcherCommon<BatcherAPISceneGLES2>::BatchVector4 *r_tan, RasterizerSceneBatcherCommon<BatcherAPISceneGLES2>::BatchVector4 *r_weights, uint32_t *r_matrix_idx, uint16_t *r_inds, uint32_t p_start_vert, bool p_use_hardware_transform, uint32_t p_item_index);
+	void _batch_fill_instance_depth(const RasterizerSceneBatcherCommon<BatcherAPISceneGLES2>::BItemRef3D &p_ref, uint8_t *r_bvs, uint16_t *r_inds, uint32_t p_start_vert, bool p_use_hardware_transform, uint32_t p_item_index);
+	void _batch_fill_multimesh_depth(const RasterizerSceneBatcherCommon<BatcherAPISceneGLES2>::BItemRef3D &p_ref, uint8_t *r_bvs, uint16_t *r_inds, uint32_t p_start_vert, bool p_use_hardware_transform, uint32_t p_item_index);
+
 	void _batch_upload_buffers(RasterizerSceneBatcherCommon<BatcherAPISceneGLES2>::Batch3D &r_batch);
 	void _batch_bind_material(GLES2::SceneMaterialData *p_material_data, const Transform3D &p_world_transform, bool p_transparent);
 	void _batch_render_generic(RS::PrimitiveType p_primitive, uint32_t p_offset = 0, uint32_t p_count = 0, bool p_has_color = true);
