@@ -200,7 +200,9 @@ public:
 		p_name._data = nullptr;
 		return *this;
 	}
-	StringName(const char *p_name, bool p_static = false);
+	StringName(StrRange<char> p_name, bool p_static = false);
+	_FORCE_INLINE_ StringName(const char *p_name, bool p_static = false) :
+			StringName(StrRange(p_name, strlen(p_name)), p_static) {}
 	StringName(const StringName &p_name);
 	StringName(StringName &&p_name) noexcept {
 		_data = p_name._data;

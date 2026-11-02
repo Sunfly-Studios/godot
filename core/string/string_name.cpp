@@ -261,16 +261,16 @@ void StringName::assign_static_unique_class_name(StringName *ptr, const char *p_
 	}
 }
 
-StringName::StringName(const char *p_name, bool p_static) {
+StringName::StringName(const StrRange<char> p_name, bool p_static) {
 	_data = nullptr;
 
 	ERR_FAIL_COND(!configured);
 
-	if (!p_name || p_name[0] == 0) {
+	if (p_name.len == 0) {
 		return; //empty, ignore
 	}
 
-	const uint32_t hash = String::hash(p_name);
+	const uint32_t hash = String::hash(p_name.c_str, p_name.len);
 	const uint32_t idx = hash & STRING_TABLE_MASK;
 
 	MutexLock lock(mutex);
@@ -278,7 +278,7 @@ StringName::StringName(const char *p_name, bool p_static) {
 
 	while (_data) {
 		// compare hash first
-		if (_data->hash == hash && _data->operator==(p_name)) {
+		if (_data->hash == hash && _data->operator==(p_name.c_str)) {
 			break;
 		}
 		_data = _data->next;
@@ -298,7 +298,11 @@ StringName::StringName(const char *p_name, bool p_static) {
 	}
 
 	_data = data_allocator.alloc();
-	_data->name = p_name;
+	// NOTE: PR #106068 (which is what this is based on)
+	// assumes that all strings passed into this are latin1
+	// for performance benefits. We do not have that utility
+	// nor do I agree on the blind assumption.
+	_data->name = p_name.c_str;
 	_data->refcount.init();
 	_data->static_count.set(p_static ? 1 : 0);
 	_data->hash = hash;
