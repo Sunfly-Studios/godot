@@ -696,6 +696,11 @@ void RenderingDeviceDriverVulkan::_check_driver_workarounds(const VkPhysicalDevi
 	// Workaround for a bug in NVIDIA drivers where submitting a render pass with no bound pipeline and an attachment using the "Don't Care" store operation causes a crash.
 	driver_workarounds.avoid_store_op_dont_care_in_draw_list_with_no_bound_pipeline = (p_device_properties.vendorID == RenderingContextDriver::Vendor::VENDOR_NVIDIA);
 
+	// Workaround for Adreno 740, where every ubershader pipeline holds about 24 MB of driver memory.
+	if (p_device_properties.vendorID == RenderingContextDriver::Vendor::VENDOR_QUALCOMM && p_device_properties.deviceID == 0x43050a01) {
+		driver_workarounds.disable_ubershaders = true;
+	}
+
 	// Workaround for shader compilers ("libufwriter.so") in PowerVR Rogue GPUs (and some B-Series BXM-8-256) where creating shader modules or pipelines concurrently causes a crash.
 	if (
 		p_device_properties.vendorID == RenderingContextDriver::Vendor::VENDOR_IMGTEC &&
