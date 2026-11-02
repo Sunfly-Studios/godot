@@ -2072,26 +2072,35 @@ void GDScriptInstance::notification(int p_notification, bool p_reversed) {
 	//notification is not virtual, it gets called at ALL levels just like in C.
 	Variant value = p_notification;
 	const Variant *args[1] = { &value };
+	const StringName &notification_str = GDScriptLanguage::get_singleton()->strings._notification;
 
-	List<GDScript *> pl;
-	GDScript *sptr = script.ptr();
-	while (sptr) {
-		if (p_reversed) {
-			pl.push_back(sptr);
-		} else {
-			pl.push_front(sptr);
-		}
-		sptr = sptr->_base;
-	}
-	for (GDScript *sc : pl) {
-		if (likely(sc->valid)) {
-			HashMap<StringName, GDScriptFunction *>::Iterator E = sc->member_functions.find(GDScriptLanguage::get_singleton()->strings._notification);
-			if (E) {
-				Callable::CallError err;
-				E->value->call(this, args, 1, err);
-				if (err.error != Callable::CallError::CALL_OK) {
-					//print error about notification call
+	// TODO: Print error about failed `_notification` calls.
+
+	if (likely(!p_reversed)) {
+		for (GDScript *scr = script.ptr(); scr != nullptr; scr = scr->base.ptr()) {
+			if (likely(scr->valid)) {
+				GDScriptFunction **fn = scr->member_functions.getptr(notification_str);
+				if (fn) {
+					Callable::CallError err;
+					(*fn)->call(this, args, 1, err);
 				}
+			}
+		}
+		return;
+	}
+
+	LocalVector<GDScript *> script_stack;
+	for (GDScript *scr = script.ptr(); scr != nullptr; scr = scr->base.ptr()) {
+		script_stack.push_back(scr);
+	}
+
+	for (int i = script_stack.size() - 1; i >= 0; i--) {
+		GDScript *scr = script_stack.ptr()[i];
+		if (likely(scr->valid)) {
+			GDScriptFunction **fn = scr->member_functions.getptr(notification_str);
+			if (fn != nullptr) {
+				Callable::CallError err;
+				(*fn)->call(this, args, 1, err);
 			}
 		}
 	}
