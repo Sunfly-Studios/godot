@@ -6403,7 +6403,7 @@ TypedArray<Image> RasterizerSceneGLES1::bake_render_uv2(RID p_base, const TypedA
 			texture.context_generation = GLES1_CONFIG->context_generation;
 			texture.total_data_size = alloc_w * alloc_h * 4;
 			texture.tex_id = color_texs[i];
-			texture.image_cache_2d = blank_img.is_valid() ? blank_img->duplicate() : Ref<Image>();
+			texture.image_cache_2d = blank_img.is_valid() ? blank_img->duplicate() : Ref<Resource>();
 
 			texture_storage->texture_2d_initialize_from_texture(temp_tex_rids[i], texture);
 		}
