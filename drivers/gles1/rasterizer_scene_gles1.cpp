@@ -1316,6 +1316,7 @@ void RasterizerSceneGLES1::_draw_sky(RID p_env, const Projection &p_projection, 
 	material_storage->shaders.sky_shader.version_set_uniform(SkyShaderGLES1::LUMINANCE_MULTIPLIER, p_luminance_multiplier, shader_data->version, SkyShaderGLES1::MODE_BACKGROUND, sky_spec);
 	material_storage->shaders.sky_shader.version_set_uniform(SkyShaderGLES1::EXPOSURE, scene_state.tonemap_ubo.exposure, shader_data->version, SkyShaderGLES1::MODE_BACKGROUND, sky_spec);
 	material_storage->shaders.sky_shader.version_set_uniform(SkyShaderGLES1::WHITE, scene_state.tonemap_ubo.white, shader_data->version, SkyShaderGLES1::MODE_BACKGROUND, sky_spec);
+	material_storage->shaders.sky_shader.version_set_uniform(SkyShaderGLES1::TONEMAPPER, scene_state.tonemap_ubo.tonemapper, shader_data->version, SkyShaderGLES1::MODE_BACKGROUND, sky_spec);
 
 	if (is_environment(p_env)) {
 		Color fog_color = environment_get_fog_light_color(p_env).srgb_to_linear() * environment_get_fog_light_energy(p_env);
@@ -5076,10 +5077,16 @@ void RasterizerSceneGLES1::render_scene(const Ref<RenderSceneBuffers> &p_render_
 	GLES1::TextureStorage *texture_storage = GLES1::TextureStorage::get_singleton();
 	RENDER_TIMESTAMP("Setup 3D Scene");
 
+	bool apply_color_adjustments_in_post = false;
 	bool is_reflection_probe = p_reflection_probe.is_valid();
 
 	Ref<RenderSceneBuffersGLES1> rb = p_render_buffers;
 	ERR_FAIL_COND(rb.is_null());
+
+	if (rb->get_scaling_3d_mode() != RS::VIEWPORT_SCALING_3D_MODE_OFF) {
+		// If we're scaling, we apply tonemapping etc. in post, so disable it during rendering
+		apply_color_adjustments_in_post = true;
+	}
 
 	GLES1::RenderTarget *rt = nullptr;
 	if (!is_reflection_probe) {
@@ -5087,6 +5094,8 @@ void RasterizerSceneGLES1::render_scene(const Ref<RenderSceneBuffers> &p_render_
 		ERR_FAIL_NULL(rt);
 	}
 
+	// Assign render data
+	// Use the format from rendererRD
 	RenderDataGLES1 render_data;
 	{
 		render_data.render_buffers = rb;
@@ -5127,6 +5136,40 @@ void RasterizerSceneGLES1::render_scene(const Ref<RenderSceneBuffers> &p_render_
 
 	bool reverse_cull = render_data.cam_transform.basis.determinant() < 0;
 	bool use_wireframe = get_debug_draw_mode() == RS::VIEWPORT_DEBUG_DRAW_WIREFRAME;
+
+	// Tonemapping
+	// Even though the driver doesn't support tonemapping, we still
+	// track it for consistency and also to be able to warn.
+	SceneState::TonemapUBO tonemap_ubo;
+	if (render_data.environment.is_valid()) {
+		bool use_bcs = environment_get_adjustments_enabled(render_data.environment);
+		if (use_bcs) {
+			apply_color_adjustments_in_post = true;
+		}
+
+		float exposure = environment_get_exposure(render_data.environment);
+		float white = environment_get_white(render_data.environment);
+		uint32_t tonemapper = int32_t(environment_get_tone_mapper(render_data.environment));
+		float brightness = environment_get_adjustments_brightness(render_data.environment);
+		float contrast = environment_get_adjustments_contrast(render_data.environment);
+		float saturation = environment_get_adjustments_saturation(render_data.environment);
+
+		tonemap_ubo.exposure = exposure;
+		tonemap_ubo.white = white;
+		tonemap_ubo.tonemapper = tonemapper;
+
+		tonemap_ubo.brightness = brightness;
+		tonemap_ubo.contrast = contrast;
+		tonemap_ubo.saturation = saturation;
+
+		// Only warn about tonemapping. The others we don't have to
+		// mention about I don't think...
+		if (tonemapper != 0) {
+			WARN_PRINT_ONCE("Environment tonemapping is not supported in the Classic renderer");
+		}
+	}
+	scene_state.tonemap_ubo = tonemap_ubo;
+
 	bool draw_sky = false;
 	bool draw_sky_fog_only = false;
 	bool keep_color = false;
@@ -5244,6 +5287,7 @@ void RasterizerSceneGLES1::render_scene(const Ref<RenderSceneBuffers> &p_render_
 
 	if (rb.is_valid()) {
 		GLES1::TextureStorage::get_singleton()->bind_framebuffer(rb->get_render_fbo());
+		rb->set_apply_color_adjustments_in_post(apply_color_adjustments_in_post);
 		glViewport(0, 0, screen_size.width, screen_size.height);
 	}
 

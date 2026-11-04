@@ -124,6 +124,7 @@ uniform int directional_light_count;
 
 uniform highp float exposure;
 uniform highp float white;
+uniform highp int tonemapper;
 
 #ifdef USE_DEBANDING
 // https://www.iryoku.com/next-generation-post-processing-in-call-of-duty-advanced-warfare
@@ -188,7 +189,7 @@ void main() {
 	color = srgb_to_linear(color);
 	color *= exposure;
 #ifdef APPLY_TONEMAPPING
-	color = apply_tonemapping(color, white);
+	color = apply_tonemapping(color, white, tonemapper);
 #endif
 	color = linear_to_srgb(color);
 

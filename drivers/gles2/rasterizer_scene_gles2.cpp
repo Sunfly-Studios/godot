@@ -1044,6 +1044,7 @@ void RasterizerSceneGLES2::_draw_sky(RID p_env, const Projection &p_projection, 
 	material_storage->shaders.sky_shader.version_set_uniform(SkyShaderGLES2::LUMINANCE_MULTIPLIER, p_luminance_multiplier, shader_data->version, SkyShaderGLES2::MODE_BACKGROUND, sky_spec);
 	material_storage->shaders.sky_shader.version_set_uniform(SkyShaderGLES2::EXPOSURE, scene_state.tonemap_ubo.exposure, shader_data->version, SkyShaderGLES2::MODE_BACKGROUND, sky_spec);
 	material_storage->shaders.sky_shader.version_set_uniform(SkyShaderGLES2::WHITE, scene_state.tonemap_ubo.white, shader_data->version, SkyShaderGLES2::MODE_BACKGROUND, sky_spec);
+	material_storage->shaders.sky_shader.version_set_uniform(SkyShaderGLES2::TONEMAPPER, scene_state.tonemap_ubo.tonemapper, shader_data->version, SkyShaderGLES2::MODE_BACKGROUND, sky_spec);
 
 	if (p_env.is_valid()) {
 		Color fog_color = environment_get_fog_light_color(p_env).srgb_to_linear() * environment_get_fog_light_energy(p_env);
@@ -3527,6 +3528,7 @@ void RasterizerSceneGLES2::_bind_scene_camera_uniforms(RID p_version, SceneShade
 
 	material_storage->shaders.scene_shader.version_set_uniform(SceneShaderGLES2::EXPOSURE, scene_state.tonemap_ubo.exposure, p_version, p_variant, p_spec_constants);
 	material_storage->shaders.scene_shader.version_set_uniform(SceneShaderGLES2::WHITE, scene_state.tonemap_ubo.white, p_version, p_variant, p_spec_constants);
+	material_storage->shaders.scene_shader.version_set_uniform(SceneShaderGLES2::TONEMAPPER, (int)scene_state.tonemap_ubo.tonemapper, p_version, p_variant, p_spec_constants);
 
 	if (!(p_spec_constants & SceneShaderGLES2::DISABLE_LIGHT_DIRECTIONAL)) {
 		if (scene_state.ubo.directional_light_count > 0) {
@@ -3558,10 +3560,16 @@ void RasterizerSceneGLES2::render_scene(const Ref<RenderSceneBuffers> &p_render_
 	GLES2::TextureStorage *texture_storage = GLES2::TextureStorage::get_singleton();
 	RENDER_TIMESTAMP("Setup 3D Scene");
 
+	bool apply_color_adjustments_in_post = false;
 	bool is_reflection_probe = p_reflection_probe.is_valid();
 
 	Ref<RenderSceneBuffersGLES2> rb = p_render_buffers;
 	ERR_FAIL_COND(rb.is_null());
+
+	if (rb->get_scaling_3d_mode() != RS::VIEWPORT_SCALING_3D_MODE_OFF) {
+		// If we're scaling, we apply tonemapping etc. in post, so disable it during rendering
+		apply_color_adjustments_in_post = true;
+	}
 
 	GLES2::RenderTarget *rt = nullptr;
 	if (!is_reflection_probe) {
@@ -3569,6 +3577,19 @@ void RasterizerSceneGLES2::render_scene(const Ref<RenderSceneBuffers> &p_render_
 		ERR_FAIL_NULL(rt);
 	}
 
+	/* TODO: Add GLOW for this renderer (maybe M3.6?)
+	bool glow_enabled = false;
+	if (p_environment.is_valid()) {
+		glow_enabled = environment_get_glow_enabled(p_environment);
+		if (glow_enabled) {
+			// If glow is enabled, we apply tonemapping etc. in post, so disable it during rendering
+			apply_color_adjustments_in_post = true;
+		}
+	}
+	*/
+
+	// Assign render data
+	// Use the format from rendererRD
 	RenderDataGLES2 render_data;
 	{
 		render_data.render_buffers = rb;
@@ -3611,6 +3632,25 @@ void RasterizerSceneGLES2::render_scene(const Ref<RenderSceneBuffers> &p_render_
 
 	bool reverse_cull = render_data.cam_transform.basis.determinant() < 0;
 	bool use_wireframe = get_debug_draw_mode() == RS::VIEWPORT_DEBUG_DRAW_WIREFRAME;
+
+	// Tonemapping
+	SceneState::TonemapUBO tonemap_ubo;
+	if (render_data.environment.is_valid()) {
+		bool use_bcs = environment_get_adjustments_enabled(render_data.environment);
+		if (use_bcs) {
+			apply_color_adjustments_in_post = true;
+		}
+
+		tonemap_ubo.exposure = environment_get_exposure(render_data.environment);
+		tonemap_ubo.white = environment_get_white(render_data.environment);
+		tonemap_ubo.tonemapper = int32_t(environment_get_tone_mapper(render_data.environment));
+
+		tonemap_ubo.brightness = environment_get_adjustments_brightness(render_data.environment);
+		tonemap_ubo.contrast = environment_get_adjustments_contrast(render_data.environment);
+		tonemap_ubo.saturation = environment_get_adjustments_saturation(render_data.environment);
+	}
+	scene_state.tonemap_ubo = tonemap_ubo;
+
 	bool draw_sky = false;
 	bool draw_sky_fog_only = false;
 	bool keep_color = false;
@@ -3709,6 +3749,7 @@ void RasterizerSceneGLES2::render_scene(const Ref<RenderSceneBuffers> &p_render_
 
 	if (rb.is_valid()) {
 		GLES2::TextureStorage::get_singleton()->bind_framebuffer(rb->get_render_fbo());
+		rb->set_apply_color_adjustments_in_post(apply_color_adjustments_in_post);
 		glViewport(0, 0, screen_size.width, screen_size.height);
 	}
 
@@ -3777,6 +3818,10 @@ void RasterizerSceneGLES2::render_scene(const Ref<RenderSceneBuffers> &p_render_
 		(render_data.environment.is_valid() && !environment_get_fog_enabled(render_data.environment))
 	) {
 		spec_constant_base_flags |= SceneShaderGLES2::DISABLE_FOG;
+	}
+
+	if (!apply_color_adjustments_in_post) {
+		spec_constant_base_flags |= SceneShaderGLES2::APPLY_TONEMAPPING;
 	}
 
 	// ==================================

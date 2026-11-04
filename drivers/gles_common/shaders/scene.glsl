@@ -32,6 +32,7 @@ RENDER_MATERIAL_ALBEDO = false
 RENDER_MATERIAL_NORMAL = false
 RENDER_MATERIAL_ORM = false
 RENDER_MATERIAL_EMISSION = false
+APPLY_TONEMAPPING = true
 
 #[vertex]
 
@@ -602,6 +603,7 @@ uniform int camera_visible_layers;
 
 uniform float exposure;
 uniform float white;
+uniform int tonemapper;
 
 /* clang-format off */
 
@@ -1057,7 +1059,9 @@ void main() {
 
 	// Tonemap before writing as we are writing to an sRGB framebuffer
 	frag_color.rgb *= exposure;
-	frag_color.rgb = apply_tonemapping(frag_color.rgb, white);
+#ifdef APPLY_TONEMAPPING
+	frag_color.rgb = apply_tonemapping(frag_color.rgb, white, tonemapper);
+#endif
 	frag_color.rgb = linear_to_srgb(frag_color.rgb);
 
 #ifdef USE_BCS
