@@ -39,4 +39,12 @@ _FORCE_INLINE_ GLenum _gl_get_primitive_type(RS::PrimitiveType p_primitive) {
     return PRIM[int(p_primitive)];
 }
 
+template <typename T>
+_FORCE_INLINE_ constexpr bool _gl_is_npot(T width, T height) {
+    return (
+        !is_power_of_2<T>(width) ||
+        !is_power_of_2<T>(height)
+    );
+}
+
 #endif // COMMON_FUNCTIONS_GLES_COMMON_H

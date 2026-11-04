@@ -44,6 +44,7 @@
 
 #include "drivers/gles_common/error_macros.h"
 #include "drivers/gles_common/common_defines.h"
+#include "drivers/gles_common/common_functions.h"
 
 // This polyfill is added here otherwise
 // this may crash on Desktop
@@ -314,11 +315,7 @@ struct Texture {
 		glTexParameteri(target, GL_TEXTURE_MAG_FILTER, pmag);
 		GL_CHECK_ERROR("GLES2::Texture::gl_set_filter: glTexParameteri");
 
-		bool is_npot = (
-			!is_power_of_2<int>(width) ||
-			!is_power_of_2<int>(height)
-		);
-		if (is_npot && !config->support_npot_repeat_mipmap) {
+		if (_gl_is_npot(width, height) && !config->support_npot_repeat_mipmap) {
 			pmin = (pmin == GL_NEAREST || pmin == GL_NEAREST_MIPMAP_NEAREST || pmin == GL_NEAREST_MIPMAP_LINEAR) ? GL_NEAREST : GL_LINEAR;
 			glTexParameteri(target, GL_TEXTURE_MIN_FILTER, pmin);
 		}
@@ -354,11 +351,7 @@ struct Texture {
 		}
 
 		GLES2::Config *config = GLES2::Config::get_singleton();
-		bool is_npot = (
-			!is_power_of_2<int>(width) ||
-			!is_power_of_2<int>(height)
-		);
-		if (is_npot && !config->support_npot_repeat_mipmap) {
+		if (_gl_is_npot(width, height) && !config->support_npot_repeat_mipmap) {
 			prep = GL_CLAMP_TO_EDGE;
 		}
 

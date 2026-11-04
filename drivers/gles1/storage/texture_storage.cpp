@@ -596,14 +596,9 @@ void TextureStorage::texture_2d_initialize(RID p_texture, const Ref<Image> &p_im
 	// while letting the higher versions handle it
 	// gracefully.
 	if (!config->support_npot_repeat_mipmap || GLES1_CONFIG->gl_minor_version < 4) {
-		int po2_width = next_power_of_2(texture->width);
-		int po2_height = next_power_of_2(texture->height);
-
-		bool is_po2 = (texture->width == po2_width) && (texture->height == po2_height);
-
-		if (!is_po2) {
-			texture->alloc_width = po2_width;
-			texture->alloc_height = po2_height;
+		if (_gl_is_npot(texture->width, texture->height)) {
+			texture->alloc_width = next_power_of_2(texture->width);
+			texture->alloc_height = next_power_of_2(texture->height);
 			texture->resize_to_po2 = true;
 		}
 	}
@@ -2645,11 +2640,7 @@ void TextureStorage::render_target_gen_back_buffer_mipmaps(RID p_render_target, 
 	}
 	glBindTexture(GL_TEXTURE_2D, rt->backbuffer);
 
-	bool is_npot = (
-		is_power_of_2<int>(rt->size.width) &&
-		is_power_of_2<int>(rt->size.height)
-	);
-	if (is_npot && !GLES1_CONFIG->support_generate_mipmap) {
+	if (_gl_is_npot(rt->size.width, rt->size.height) && !GLES1_CONFIG->support_generate_mipmap) {
 		// Fall back to linear filtering.
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
 	} else {

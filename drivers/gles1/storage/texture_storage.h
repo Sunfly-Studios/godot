@@ -44,6 +44,7 @@
 
 #include "drivers/gles_common/error_macros.h"
 #include "drivers/gles_common/common_defines.h"
+#include "drivers/gles_common/common_functions.h"
 
 // This polyfill is added here otherwise
 // this may crash on Desktop
