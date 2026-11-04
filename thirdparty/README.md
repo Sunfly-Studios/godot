@@ -1235,6 +1235,8 @@ Patches:
 - `0002-VMA-godot-vulkan.patch` (GH-97510)
 - `0003-VMA-add-vmaCalculateLazilyAllocatedBytes.patch` (GH-99257)
 - `0004-support-open-harmony.patch` (GH-108553)
+- `0005-win-vista-support.patch`
+- `0006-VMA-ignore-maxMemoryAllocationCount.patch` (GH-125146)
 
 
 
