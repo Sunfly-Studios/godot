@@ -4531,7 +4531,7 @@ void WaylandThread::destroy() {
 	}
 
 	if (main_window.pending_xdg_activation_token) {
-		xdg_activation_token_v1_destroy(ws.pending_xdg_activation_token);
+		xdg_activation_token_v1_destroy(main_window.pending_xdg_activation_token);
 	}
 
 	if (main_window.xdg_surface) {

@@ -204,7 +204,7 @@ void RasterizerSceneBatcherCommon<T_API>::record_items(T_SURFACE **p_surfaces, i
 		if (surface->owner->data->base_type == RS::INSTANCE_MESH) {
 			bool has_skel = false;
 			if (surface->owner->mesh_instance.is_valid()) {
-				T_API::MeshInstance *mi = T_API::MeshStorage::get_singleton()->get_mesh_instance(surface->owner->mesh_instance);
+				typename T_API::MeshInstance *mi = T_API::MeshStorage::get_singleton()->get_mesh_instance(surface->owner->mesh_instance);
 				if (mi && mi->skeleton.is_valid()) {
 					has_skel = true;
 				}
