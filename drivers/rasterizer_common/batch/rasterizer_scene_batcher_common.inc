@@ -529,7 +529,7 @@ void RasterizerSceneBatcherCommon<T_API>::join_and_flush_sorted_items(bool p_tra
 	bdata.batches.reset();
 
 	// Stage 2: Delayed VRAM packing and Dynamic FVF Promotion per joined group
-for (uint32_t j = 0; j < (uint32_t)bdata.items_joined.size(); j++) {
+	for (uint32_t j = 0; j < (uint32_t)bdata.items_joined.size(); j++) {
 		const BItemJoined3D &joined = bdata.items_joined[j];
 		if (joined.num_item_refs == 0 || joined.total_verts == 0) {
 			continue;
@@ -799,18 +799,7 @@ void RasterizerSceneBatcherCommon<T_API>::flush_render_batches(typename T_API::M
 		bdata.fvf = BatcherEnums::FVF_UNBATCHED;
 		get_this()->_batch_render_items(p_material_data, p_primitive, p_batch, p_transparent);
 
-		// TODO: Refactor these calls into a local batcher
-		// utility.
-		bdata.draw_call_accumulator++;
-
-		if (
-			(bdata.dynamic_upload_threshold_bytes > 0 && bdata.dynamic_upload_accumulator >= bdata.dynamic_upload_threshold_bytes) ||
-			(bdata.max_batch_draw_call_count > 0 && bdata.draw_call_accumulator >= bdata.max_batch_draw_call_count)
-		) {
-			get_this()->_batch_threshold_flush();
-			bdata.dynamic_upload_accumulator = 0;
-			bdata.draw_call_accumulator = 0;
-		}
+		_calculate_draw_call_cost_or_flush(p_batch);
 
 		bdata.reset_flush();
 		_render_item_state.consumed_uniform_vectors = 0;
@@ -850,24 +839,8 @@ void RasterizerSceneBatcherCommon<T_API>::flush_render_batches(typename T_API::M
 
 	// Delegate the API-specific state binding and multi-draw dispatching to the driver
 	get_this()->_batch_render_items(p_material_data, p_primitive, p_batch, p_transparent);
-	
-	// Calculate the cost of this call
-	// and verify if we can keep it in the GPU "inventory"
-	bdata.dynamic_upload_accumulator += (
-		p_batch.num_verts * bdata.unit_vertices.get_unit_size_bytes()
-	) + (p_batch.num_indices * sizeof(uint16_t));
-	bdata.draw_call_accumulator++;
 
-	if (
-		(bdata.dynamic_upload_threshold_bytes > 0 && bdata.dynamic_upload_accumulator >= bdata.dynamic_upload_threshold_bytes) ||
-		(bdata.max_batch_draw_call_count > 0 && bdata.draw_call_accumulator >= bdata.max_batch_draw_call_count)
-	) {
-		// It is safer to manually flush and drop
-		// the inventory from the GPU than to keep it.
-		get_this()->_batch_threshold_flush();
-		bdata.dynamic_upload_accumulator = 0;
-		bdata.draw_call_accumulator = 0;
-	}
+	_calculate_draw_call_cost_or_flush(p_batch);
 	
 	// Reset VBO cursors
 	bdata.reset_flush();
@@ -912,4 +885,33 @@ void RasterizerSceneBatcherCommon<T_API>::_software_transform_normal_precomputed
 	Vector3 nc(r_n.x, r_n.y, r_n.z);
 	nc = p_cofactor.xform(nc).normalized();
 	r_n.set(nc);
+}
+
+template <typename T_API>
+void RasterizerSceneBatcherCommon<T_API>::_calculate_draw_call_cost_or_flush(Batch3D &p_batch) const {
+	RasterizerSceneBatcherCommon<T_API> *self = const_cast<RasterizerSceneBatcherCommon<T_API> *>(this);
+
+	if (p_batch.fvf != BatcherEnums::FVF_UNBATCHED) {
+		// Calculate the cost of this call
+		// and verify if we can keep it in the GPU "inventory."
+		// Don't count unbatched since they bypass the batcher
+		// anyway.
+		self->bdata.dynamic_upload_accumulator += (
+			p_batch.num_verts * self->bdata.unit_vertices.get_unit_size_bytes()
+		) + (p_batch.num_indices * sizeof(uint16_t));
+	}
+
+	// Always increment,
+	self->bdata.draw_call_accumulator++;
+
+	if (
+		(self->bdata.dynamic_upload_threshold_bytes > 0 && self->bdata.dynamic_upload_accumulator >= self->bdata.dynamic_upload_threshold_bytes) ||
+		(self->bdata.max_batch_draw_call_count > 0 && self->bdata.draw_call_accumulator >= self->bdata.max_batch_draw_call_count)
+	) {
+		// It is safer to manually flush and drop
+		// the inventory from the GPU than to keep it.
+		self->get_this()->_batch_threshold_flush();
+		self->bdata.dynamic_upload_accumulator = 0;
+		self->bdata.draw_call_accumulator = 0;
+	}
 }
