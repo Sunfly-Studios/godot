@@ -682,8 +682,20 @@ private:
 			glMaterialfv(GL_FRONT_AND_BACK, GL_EMISSION, mat_zero);
 		}
 
+		// For FVF_UNBATCHED and SMDDF, only enable GL_COLOR_MATERIAL if the batch actually
+		// uses vertex colors AND the shader requests them. Otherwise, material albedo is
+		// supplied directly via glColor4f and glMaterialfv below without a colour array bound.
+		const uint32_t batch_flags = _render_item_state.curr_batch ? _render_item_state.curr_batch->flags : 0;
+		const bool unbatched_uses_color = (
+			bdata.fvf == BatcherEnums::FVF_UNBATCHED &&
+			(batch_flags & BatcherEnums::BTF_3D_USES_COLORS) != 0 &&
+			p_material_data &&
+			p_material_data->shader_data &&
+			p_material_data->shader_data->uses_color
+		);
+
 		bool use_color_material = (
-			(p_material_data && p_material_data->shader_data && p_material_data->shader_data->uses_color) ||
+			unbatched_uses_color ||
 			bdata.fvf == BatcherEnums::FVF_3D_TIER2_COLOR ||
 			bdata.fvf == BatcherEnums::FVF_3D_TIER3_TANGENT ||
 			bdata.fvf == BatcherEnums::FVF_3D_TIER4_PALETTE ||
@@ -691,18 +703,21 @@ private:
 			bdata.fvf == BatcherEnums::FVF_INSTANCED
 		);
 
+		// Always load the approximated material albedo into glColor4f and GL_DIFFUSE/GL_AMBIENT
+		// so both uncoloured SMDDF meshes and unlit passes inherit the exact base material color.
+		if (has_approx) {
+			const GLES1::StandardMaterialState *state = static_cast<const GLES1::StandardMaterialState *>(p_material_data->approx_data);
+			glColor4f(state->albedo[0], state->albedo[1], state->albedo[2], state->albedo[3]);
+			glMaterialfv(GL_FRONT_AND_BACK, GL_DIFFUSE, state->albedo);
+			if (!p_is_additive) {
+				glMaterialfv(GL_FRONT_AND_BACK, GL_AMBIENT, state->albedo);
+			}
+		}
+
 		if (use_color_material) {
 			glEnable(GL_COLOR_MATERIAL);
 		} else {
 			glDisable(GL_COLOR_MATERIAL);
-			if (has_approx) {
-				const GLES1::StandardMaterialState *state = static_cast<const GLES1::StandardMaterialState *>(p_material_data->approx_data);
-				glColor4f(state->albedo[0], state->albedo[1], state->albedo[2], state->albedo[3]);
-				glMaterialfv(GL_FRONT_AND_BACK, GL_DIFFUSE, state->albedo);
-				if (!p_is_additive) {
-					glMaterialfv(GL_FRONT_AND_BACK, GL_AMBIENT, state->albedo);
-				}
-			}
 		}
 		GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_gl_setup_material_pass: material pass state");
 	}
@@ -1247,6 +1262,7 @@ private:
 	_FORCE_INLINE_ bool _batch_requires_palette_fvf() const {
 		return GLES1_CONFIG->support_matrix_palette && glIsEnabled(GL_MATRIX_PALETTE_OES);
 	}
+	bool _batch_can_use_single_mesh_fallback(const GeometryInstanceSurface *p_surface) const;
 	_FORCE_INLINE_ bool _batch_buffer_orphan_and_upload_3d(unsigned int p_buffer_size_bytes, unsigned int p_offset_bytes, unsigned int p_data_size_bytes, const void *p_data, GLenum p_target, GLenum p_usage, bool p_optional_orphan) const;
 	
 	GLES1::SceneMaterialData *_batch_get_material_data(const GeometryInstanceSurface *p_surface);
@@ -1260,6 +1276,7 @@ private:
 	void _batch_bind_material(GLES1::SceneMaterialData *p_material_data, const Transform3D &p_world_transform, bool p_transparent);
 	void _batch_render_generic(RS::PrimitiveType p_primitive, uint32_t p_offset = 0, uint32_t p_count = 0, bool p_has_color = true);
 	void _batch_render_items(GLES1::SceneMaterialData *p_material_data, RS::PrimitiveType p_primitive, RasterizerSceneBatcherCommon<BatcherAPISceneGLES1>::Batch3D &p_batch, bool p_transparent);
+	void _batch_render_single_mesh_fallback(RS::PrimitiveType p_primitive, uint32_t p_offset, uint32_t p_count, bool p_has_color);
 	void _batch_threshold_flush();
 
 	void _render_single_item_immediate(const GeometryInstanceSurface *p_surface);

@@ -1641,6 +1641,32 @@ GLES2::SceneMaterialData *RasterizerSceneGLES2::_batch_get_material_data(const G
 	return p_surface->material;
 }
 
+bool RasterizerSceneGLES2::_batch_can_use_single_mesh_fallback(const GeometryInstanceSurface *p_surface) const {
+	if (!p_surface || !p_surface->surface || !p_surface->owner) {
+		return false;
+	}
+
+	GLES2::MeshStorage *mesh_storage = GLES2::MeshStorage::get_singleton();
+	if (mesh_storage->mesh_surface_get_vertex_buffer(p_surface->surface) == 0) {
+		return false;
+	}
+
+	// Ensure indexed surfaces have a valid static IBO and supported index type.
+	const uint32_t index_count = mesh_storage->mesh_surface_get_index_count(p_surface->surface, p_surface->lod_index);
+	if (index_count > 0) {
+		if (mesh_storage->mesh_surface_get_index_buffer(p_surface->surface, p_surface->lod_index) == 0) {
+			return false;
+		}
+		const GLenum index_type = mesh_storage->mesh_surface_get_index_type(p_surface->surface);
+		if (index_type == GL_UNSIGNED_INT && !GLES2_CONFIG->support_32_bits_indices) {
+			// Cannot perform if we don't support 32-bit indices
+			return false;
+		}
+	}
+
+	return true;
+}
+
 void RasterizerSceneGLES2::_batch_fill_instance_tiered(const BATCH_TYPE::BItemRef3D &p_ref, BATCH_TYPE::BatchVertex3DTier1 *r_base, BATCH_TYPE::BatchColor *r_col, BATCH_TYPE::BatchVector2 *r_uv2, BATCH_TYPE::BatchVector4 *r_tan, BATCH_TYPE::BatchVector4 *r_weights, uint32_t *r_matrix_idx, uint16_t *r_inds, uint32_t p_start_vert, bool p_use_hardware_transform, uint32_t p_item_index) {
 	// Inspects the surface's mesh caches, shader requirements, and material approximation state
 	// to build a bitmask of BatchFlags3D. Used during Stage 1 joining to determine the
@@ -2216,7 +2242,10 @@ void RasterizerSceneGLES2::_batch_render_items(GLES2::SceneMaterialData *p_mater
 
 	const bool is_instanced = (p_batch.flags & BatcherEnums::BTF_3D_USES_INSTANCING) != 0;
 	const bool use_hardware_transform = (p_batch.num_item_refs == 1 && !is_instanced);
+	// Include FVF_UNBATCHED batches that flagged BTF_3D_USES_COLORS so their static
+	// color attribute stream is enabled during the SMDDF call.
 	const bool has_vertex_colors = (
+		(bdata.fvf == BatcherEnums::FVF_UNBATCHED && (p_batch.flags & BatcherEnums::BTF_3D_USES_COLORS) != 0) ||
 		bdata.fvf == BatcherEnums::FVF_3D_TIER2_COLOR ||
 		bdata.fvf == BatcherEnums::FVF_3D_TIER3_TANGENT ||
 		bdata.fvf == BatcherEnums::FVF_3D_TIER4_PALETTE ||
@@ -2243,18 +2272,246 @@ void RasterizerSceneGLES2::_batch_render_items(GLES2::SceneMaterialData *p_mater
 		bool promote_to_instancing = _promote_batch_to_instancing(bdata.fvf, world_xform);
 
 		_render_additive_light_passes<true>(first_surf, p_material_data, scene_state.current_spec_constants, promote_to_instancing, world_xform, p_primitive);
+	}
 
-		bool has_directional_light = scene_state.ubo.directional_light_count > 0;
-		bool has_omni_light = first_surf->owner->omni_light_gl_cache.size() > 0;
-		bool has_spot_light = first_surf->owner->spot_light_gl_cache.size() > 0;
+	// Always invalidate the state hash cache after a batched draw call
+	// so any subsequent single-mesh direct draw fallback or bypassed immediate item
+	// rebinds its shader program, uniforms, and render states cleanly.
+	_render_item_state.current_state_hash = 0;
+}
 
-		if (has_directional_light || has_omni_light || has_spot_light) {
-			_render_item_state.current_state_hash = 0;
+void RasterizerSceneGLES2::_batch_render_single_mesh_fallback(RS::PrimitiveType p_primitive, uint32_t p_offset, uint32_t p_count, bool p_has_color) {
+	// Executes a single-mesh direct draw fallback (SMDDF, FVF_UNBATCHED) directly from the mesh's
+	// native static VBO, ABO, and IBO while maintaining identical
+	// default vertex attribute constants and state sterilisation.
+	if (!_render_item_state.curr_batch) {
+		return;
+	}
+
+	const BATCH_TYPE::Batch3D &batch = *_render_item_state.curr_batch;
+	const BATCH_TYPE::BItemRef3D &first_ref = bdata.item_refs[batch.first_item_ref];
+	const GeometryInstanceSurface *surf = static_cast<const GeometryInstanceSurface *>(first_ref.surface);
+	if (!surf || !surf->surface || !surf->owner) {
+		return;
+	}
+
+	GLES2::MeshStorage *mesh_storage = GLES2::MeshStorage::get_singleton();
+
+	const GLuint gl_vbo = mesh_storage->mesh_surface_get_vertex_buffer(surf->surface);
+	if (gl_vbo == 0) {
+		return;
+	}
+
+	const bool is_depth_only = (
+		bdata.pass_mode == PASS_MODE_SHADOW ||
+		bdata.pass_mode == PASS_MODE_DEPTH
+	) && !(batch.flags & BatcherEnums::BTF_3D_USES_ALPHA_CLIP);
+	const bool is_depth_alpha = (
+		bdata.pass_mode == PASS_MODE_SHADOW ||
+		bdata.pass_mode == PASS_MODE_DEPTH
+	) && (batch.flags & BatcherEnums::BTF_3D_USES_ALPHA_CLIP);
+
+	// Derive the active vertex input mask from the shader and pass mode, stripping
+	// unused attributes during depth and shadow passes.
+	uint64_t input_mask = surf->shader ? surf->shader->vertex_input_mask : 0xFFFFFFFFULL;
+	if (bdata.pass_mode == PASS_MODE_MATERIAL) {
+		input_mask |= (1ULL << RS::ARRAY_TEX_UV2);
+	}
+	if (is_depth_only) {
+		input_mask &= (1ULL << RS::ARRAY_VERTEX);
+	} else if (is_depth_alpha) {
+		input_mask &= ((1ULL << RS::ARRAY_VERTEX) | (1ULL << RS::ARRAY_TEX_UV));
+	}
+
+	GLuint dummy_vao = 0;
+	GLES2::Mesh::Surface::Version *version = mesh_storage->mesh_surface_get_vertex_arrays_and_format(surf->surface, input_mask, dummy_vao);
+	ERR_FAIL_NULL(version);
+
+	if (GLES2_CONFIG->support_vao) {
+		glBindVertexArray(0);
+	}
+
+	// Bind interleaved vertex buffer (position, normal, tangent)
+	glBindBuffer(GL_ARRAY_BUFFER, gl_vbo);
+	GL_CHECK_ERROR("GLES2::RasterizerSceneGLES2::_batch_render_single_mesh_fallback: glBindBuffer vertex");
+
+	if (version->attribs[RS::ARRAY_VERTEX].enabled) {
+		glEnableVertexAttribArray(RS::ARRAY_VERTEX);
+		glVertexAttribPointer(
+			RS::ARRAY_VERTEX,
+			version->attribs[RS::ARRAY_VERTEX].size,
+			version->attribs[RS::ARRAY_VERTEX].type,
+			version->attribs[RS::ARRAY_VERTEX].normalized,
+			version->attribs[RS::ARRAY_VERTEX].stride,
+			(const void *)(uintptr_t)version->attribs[RS::ARRAY_VERTEX].offset
+		);
+	} else {
+		glDisableVertexAttribArray(RS::ARRAY_VERTEX);
+	}
+
+	if (!is_depth_only && !is_depth_alpha && version->attribs[RS::ARRAY_NORMAL].enabled) {
+		glEnableVertexAttribArray(RS::ARRAY_NORMAL);
+		glVertexAttribPointer(
+			RS::ARRAY_NORMAL,
+			version->attribs[RS::ARRAY_NORMAL].size,
+			version->attribs[RS::ARRAY_NORMAL].type,
+			version->attribs[RS::ARRAY_NORMAL].normalized,
+			version->attribs[RS::ARRAY_NORMAL].stride,
+			(const void *)(uintptr_t)version->attribs[RS::ARRAY_NORMAL].offset
+		);
+	} else {
+		glDisableVertexAttribArray(RS::ARRAY_NORMAL);
+		glVertexAttrib3f(RS::ARRAY_NORMAL, 0.0f, 1.0f, 0.0f);
+	}
+
+	if (!is_depth_only && !is_depth_alpha && version->attribs[RS::ARRAY_TANGENT].enabled) {
+		glEnableVertexAttribArray(RS::ARRAY_TANGENT);
+		glVertexAttribPointer(
+			RS::ARRAY_TANGENT,
+			version->attribs[RS::ARRAY_TANGENT].size,
+			version->attribs[RS::ARRAY_TANGENT].type,
+			version->attribs[RS::ARRAY_TANGENT].normalized,
+			version->attribs[RS::ARRAY_TANGENT].stride,
+			(const void *)(uintptr_t)version->attribs[RS::ARRAY_TANGENT].offset
+		);
+	} else {
+		glDisableVertexAttribArray(RS::ARRAY_TANGENT);
+		glVertexAttrib4f(RS::ARRAY_TANGENT, 1.0f, 0.0f, 0.0f, 1.0f);
+	}
+
+	// Bind attribute buffer (color, uv, uv2, custom0..3)
+	const GLuint gl_abo = mesh_storage->mesh_surface_get_attribute_buffer(surf->surface);
+	if (gl_abo != 0) {
+		glBindBuffer(GL_ARRAY_BUFFER, gl_abo);
+		GL_CHECK_ERROR("GLES2::RasterizerSceneGLES2::_batch_render_single_mesh_fallback: glBindBuffer attribute");
+	} else {
+		glBindBuffer(GL_ARRAY_BUFFER, 0);
+	}
+
+	if (
+		!is_depth_only &&
+		!is_depth_alpha &&
+		p_has_color &&
+		gl_abo != 0 &&
+		version->attribs[RS::ARRAY_COLOR].enabled
+	) {
+		glEnableVertexAttribArray(RS::ARRAY_COLOR);
+		glVertexAttribPointer(
+			RS::ARRAY_COLOR,
+			version->attribs[RS::ARRAY_COLOR].size,
+			version->attribs[RS::ARRAY_COLOR].type,
+			version->attribs[RS::ARRAY_COLOR].normalized,
+			version->attribs[RS::ARRAY_COLOR].stride,
+			(const void *)(uintptr_t)version->attribs[RS::ARRAY_COLOR].offset
+		);
+	} else {
+		glDisableVertexAttribArray(RS::ARRAY_COLOR);
+		glVertexAttrib4f(RS::ARRAY_COLOR, 1.0f, 1.0f, 1.0f, 1.0f);
+	}
+
+	if (!is_depth_only && gl_abo != 0 && version->attribs[RS::ARRAY_TEX_UV].enabled) {
+		glEnableVertexAttribArray(RS::ARRAY_TEX_UV);
+		glVertexAttribPointer(
+			RS::ARRAY_TEX_UV,
+			version->attribs[RS::ARRAY_TEX_UV].size,
+			version->attribs[RS::ARRAY_TEX_UV].type,
+			version->attribs[RS::ARRAY_TEX_UV].normalized,
+			version->attribs[RS::ARRAY_TEX_UV].stride,
+			(const void *)(uintptr_t)version->attribs[RS::ARRAY_TEX_UV].offset
+		);
+	} else {
+		glDisableVertexAttribArray(RS::ARRAY_TEX_UV);
+		glVertexAttrib2f(RS::ARRAY_TEX_UV, 0.0f, 0.0f);
+	}
+
+	if (!is_depth_only && !is_depth_alpha && gl_abo != 0 && version->attribs[RS::ARRAY_TEX_UV2].enabled) {
+		glEnableVertexAttribArray(RS::ARRAY_TEX_UV2);
+		glVertexAttribPointer(
+			RS::ARRAY_TEX_UV2,
+			version->attribs[RS::ARRAY_TEX_UV2].size,
+			version->attribs[RS::ARRAY_TEX_UV2].type,
+			version->attribs[RS::ARRAY_TEX_UV2].normalized,
+			version->attribs[RS::ARRAY_TEX_UV2].stride,
+			(const void *)(uintptr_t)version->attribs[RS::ARRAY_TEX_UV2].offset
+		);
+	} else {
+		glDisableVertexAttribArray(RS::ARRAY_TEX_UV2);
+		glVertexAttrib2f(RS::ARRAY_TEX_UV2, 0.0f, 0.0f);
+	}
+
+	for (int i = RS::ARRAY_CUSTOM0; i <= RS::ARRAY_CUSTOM3; i++) {
+		if (!is_depth_only && !is_depth_alpha && gl_abo != 0 && version->attribs[i].enabled) {
+			glEnableVertexAttribArray(i);
+			glVertexAttribPointer(
+				i,
+				version->attribs[i].size,
+				version->attribs[i].type,
+				version->attribs[i].normalized,
+				version->attribs[i].stride,
+				(const void *)(uintptr_t)version->attribs[i].offset
+			);
+		} else {
+			glDisableVertexAttribArray(i);
 		}
 	}
+
+	glDisableVertexAttribArray(RS::ARRAY_BONES);
+	glDisableVertexAttribArray(RS::ARRAY_WEIGHTS);
+
+	// Sterilise instancing slots (12-15)
+	glDisableVertexAttribArray(12);
+	glDisableVertexAttribArray(13);
+	glDisableVertexAttribArray(14);
+	glDisableVertexAttribArray(15);
+	glVertexAttrib4f(12, 1.0f, 0.0f, 0.0f, 0.0f);
+	glVertexAttrib4f(13, 0.0f, 1.0f, 0.0f, 0.0f);
+	glVertexAttrib4f(14, 0.0f, 0.0f, 1.0f, 0.0f);
+	glVertexAttrib4f(15, 1.0f, 1.0f, 1.0f, 1.0f);
+	GL_CHECK_ERROR("GLES2::RasterizerSceneGLES2::_batch_render_single_mesh_fallback: glVertexAttribPointers setup");
+
+	const uint32_t index_count = mesh_storage->mesh_surface_get_index_count(surf->surface, surf->lod_index);
+	const GLenum primitive_gl = _gl_get_primitive_type(p_primitive);
+
+	if (index_count > 0) {
+		const GLuint gl_ibo = mesh_storage->mesh_surface_get_index_buffer(surf->surface, surf->lod_index);
+		const GLenum index_type = mesh_storage->mesh_surface_get_index_type(surf->surface);
+		const uint32_t index_size = (index_type == GL_UNSIGNED_INT) ? sizeof(uint32_t) : sizeof(uint16_t);
+		const uint32_t draw_count = (p_count > 0) ? p_count : index_count;
+
+		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, gl_ibo);
+		GL_CHECK_ERROR("GLES2::RasterizerSceneGLES2::_batch_render_single_mesh_fallback: glBindBuffer ELEMENT_ARRAY_BUFFER");
+
+		glDrawElements(primitive_gl, draw_count, index_type, (const void *)(uintptr_t)(p_offset * index_size));
+		GL_CHECK_ERROR("GLES2::RasterizerSceneGLES2::_batch_render_single_mesh_fallback: glDrawElements");
+	} else {
+		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+		const uint32_t draw_count = (p_count > 0) ? p_count : mesh_storage->mesh_surface_get_vertices_drawn_count(surf->surface);
+
+		glDrawArrays(primitive_gl, p_offset, draw_count);
+		GL_CHECK_ERROR("GLES2::RasterizerSceneGLES2::_batch_render_single_mesh_fallback: glDrawArrays");
+	}
+
+	_record_draw_call_info(scene_state.current_render_info);
+
+	// Clean state
+	
+	// Sterilise enabled vertex attribute arrays and buffer bindings
+	for (int i = 0; i < RS::ARRAY_INDEX; i++) {
+		glDisableVertexAttribArray(i);
+	}
+
+	glBindBuffer(GL_ARRAY_BUFFER, 0);
+	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+	glVertexAttrib4f(RS::ARRAY_COLOR, 1.0f, 1.0f, 1.0f, 1.0f);
+	GL_CHECK_ERROR("GLES2::RasterizerSceneGLES2::_batch_render_single_mesh_fallback: state cleanup");
 }
 
 void RasterizerSceneGLES2::_batch_render_generic(RS::PrimitiveType p_primitive, uint32_t p_offset, uint32_t p_count, bool p_has_color) {
+	if (bdata.fvf == BatcherEnums::FVF_UNBATCHED) {
+		_batch_render_single_mesh_fallback(p_primitive, p_offset, p_count, p_has_color);
+		return;
+	}
+
 	uint32_t vbo_idx = _render_item_state.curr_batch ? _render_item_state.curr_batch->vbo_index : 0;
 	uint32_t gl_vbo = bdata.vbo_pool.size() > vbo_idx ? bdata.vbo_pool[vbo_idx].gl_vertex_buffer : 0;
 	uint32_t gl_ibo = bdata.vbo_pool.size() > vbo_idx ? bdata.vbo_pool[vbo_idx].gl_index_buffer : 0;

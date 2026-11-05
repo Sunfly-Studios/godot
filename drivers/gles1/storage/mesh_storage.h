@@ -505,6 +505,36 @@ public:
 		return (s->vertex_count <= 65536 && s->vertex_count > 0) ? GL_UNSIGNED_SHORT : GL_UNSIGNED_INT;
 	}
 
+	_FORCE_INLINE_ uint64_t mesh_surface_get_format(void *p_surface) const {
+		Mesh::Surface *s = reinterpret_cast<Mesh::Surface *>(p_surface);
+		ERR_FAIL_NULL_V(s, 0);
+		return s->format;
+	}
+
+	_FORCE_INLINE_ GLuint mesh_surface_get_vertex_buffer(void *p_surface) const {
+		Mesh::Surface *s = reinterpret_cast<Mesh::Surface *>(p_surface);
+		ERR_FAIL_NULL_V(s, 0);
+		return s->vertex_buffer;
+	}
+
+	_FORCE_INLINE_ const uint8_t *mesh_surface_get_vertex_array(void *p_surface) const {
+		Mesh::Surface *s = reinterpret_cast<Mesh::Surface *>(p_surface);
+		ERR_FAIL_NULL_V(s, nullptr);
+		return s->vertex_buffer_fallback.ptr();
+	}
+
+	_FORCE_INLINE_ GLuint mesh_surface_get_attribute_buffer(void *p_surface) const {
+		Mesh::Surface *s = reinterpret_cast<Mesh::Surface *>(p_surface);
+		ERR_FAIL_NULL_V(s, 0);
+		return s->attribute_buffer;
+	}
+
+	_FORCE_INLINE_ const uint8_t *mesh_surface_get_attribute_array(void *p_surface) const {
+		Mesh::Surface *s = reinterpret_cast<Mesh::Surface *>(p_surface);
+		ERR_FAIL_NULL_V(s, nullptr);
+		return s->attribute_buffer_fallback.ptr();
+	}
+
 	// Use this to cache Vertex Array Objects so they are only generated once
 	_FORCE_INLINE_ Mesh::Surface::Version *mesh_surface_get_vertex_arrays_and_format(void *p_surface, uint64_t p_input_mask, GLuint &r_vertex_array_gl) {
 		Mesh::Surface *s = reinterpret_cast<Mesh::Surface *>(p_surface);

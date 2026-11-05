@@ -48,6 +48,7 @@ void RasterizerSceneBatcherCommon<T_API>::batch_initialize() {
 	bdata.settings_use_batching = GLOBAL_GET("rendering/batching/use_batching");
 	bdata.settings_dynamic_vertex_limit = GLOBAL_GET("rendering/limits/opengl/max_dynamic_vertex_limit");
 	bdata.settings_item_reordering_lookahead = 4;
+	bdata.settings_use_single_mesh_fallback = true;
 
 	uint32_t threshold_bytes = static_cast<uint32_t>(GLOBAL_GET("rendering/limits/opengl/dynamic_buffer_flush_threshold_kb")) * 1024;
 
@@ -94,11 +95,15 @@ void RasterizerSceneBatcherCommon<T_API>::batch_scene_render_items(T_SURFACE **p
 	if (!bdata.settings_use_batching || p_count == 0) {
 		bdata.pass_mode = p_pass_mode;
 		_render_item_state.reset();
-		get_this()->scene_render_items_implementation(p_surfaces, p_count, p_camera_transform, p_transparent);
+		if (p_count > 0) {
+			get_this()->scene_render_items_implementation(p_surfaces, p_count, p_camera_transform, p_transparent);
+		}
 		return;
 	}
 
-	if (p_replay) {
+	// Only replay if the cached batches and item references are populated.
+	// Prevents replaying stale opaque batches when a subsequent pass has 0 items.
+	if (p_replay && bdata.batches.size() > 0 && bdata.item_refs.size() > 0) {
 		// During additive light or shadow passes, we can bypass the CPU overhead of 
 		// sorting and packing geometry. The VBOs were already populated during the 
 		// base opaque pass, so we just iterate over the established batch list and 
@@ -118,6 +123,8 @@ void RasterizerSceneBatcherCommon<T_API>::batch_scene_render_items(T_SURFACE **p
 			// how to correctly interpret the VBO layout and apply transforms.
 			bdata.fvf = batch.fvf;
 			switch (batch.fvf) {
+				case BatcherEnums::FVF_UNBATCHED:
+					break;
 				case BatcherEnums::FVF_3D_DEPTH_MINIMAL:
 				case BatcherEnums::FVF_DEPTH_ONLY:
 					bdata.unit_vertices.prepare(sizeof(BatchVertex3DDepthMinimal));
@@ -515,10 +522,14 @@ void RasterizerSceneBatcherCommon<T_API>::join_and_flush_sorted_items(bool p_tra
 	// Stage 1: Build lightweight BItemJoined3D and BItemRef3D lists
 	join_sorted_items<p_pass_mode, T_SURFACE>();
 
+	// Reset the state tracker because join_sorted_items mutated it for CPU grouping.
+	_render_item_state.reset();
+
+	// Also resets the batches
 	bdata.batches.reset();
 
 	// Stage 2: Delayed VRAM packing and Dynamic FVF Promotion per joined group
-	for (uint32_t j = 0; j < (uint32_t)bdata.items_joined.size(); j++) {
+for (uint32_t j = 0; j < (uint32_t)bdata.items_joined.size(); j++) {
 		const BItemJoined3D &joined = bdata.items_joined[j];
 		if (joined.num_item_refs == 0 || joined.total_verts == 0) {
 			continue;
@@ -549,6 +560,23 @@ void RasterizerSceneBatcherCommon<T_API>::join_and_flush_sorted_items(bool p_tra
 		_render_item_state.consumed_uniform_vectors = 0;
 
 		const bool use_hardware_transform = joined.use_hardware_transform();
+
+		// If a joined group contains only a single non-instanced mesh surface (and the driver
+		// does not require CPU packing for UV2/material baking), skip copying vertices into
+		// unit_vertices and skip dynamic VBO upload. Tag the batch as FVF_UNBATCHED so both
+		// the current flush and any subsequent replay passes bind the mesh's native static VBO.
+		if (
+			bdata.settings_use_single_mesh_fallback &&
+			use_hardware_transform &&
+			get_this()->_batch_can_use_single_mesh_fallback(first_surface)
+		) {
+			batch->fvf = BatcherEnums::FVF_UNBATCHED;
+			batch->num_verts = joined.total_verts;
+			batch->num_indices = joined.total_indices;
+			batch->vbo_index = 0xFFFFFFFF;
+			flush_render_batches<T_SURFACE>(material, primitive, *batch, p_transparent);
+			continue;
+		}
 
 		for (uint32_t i = 0; i < joined.num_item_refs; i++) {
 			const BItemRef3D &ref = bdata.item_refs[joined.first_item_ref + i];
@@ -763,6 +791,29 @@ template <class T_SURFACE>
 void RasterizerSceneBatcherCommon<T_API>::flush_render_batches(typename T_API::MaterialData *p_material_data, RS::PrimitiveType p_primitive, Batch3D &p_batch, bool p_transparent) {
 	if (p_batch.num_verts == 0 || p_primitive == RS::PRIMITIVE_MAX) {
 		bdata.reset_flush();
+		return;
+	}
+
+	// Intercept single-item batches flagged for the single-mesh direct draw fallback.
+	if (p_batch.fvf == BatcherEnums::FVF_UNBATCHED) {
+		bdata.fvf = BatcherEnums::FVF_UNBATCHED;
+		get_this()->_batch_render_items(p_material_data, p_primitive, p_batch, p_transparent);
+
+		// TODO: Refactor these calls into a local batcher
+		// utility.
+		bdata.draw_call_accumulator++;
+
+		if (
+			(bdata.dynamic_upload_threshold_bytes > 0 && bdata.dynamic_upload_accumulator >= bdata.dynamic_upload_threshold_bytes) ||
+			(bdata.max_batch_draw_call_count > 0 && bdata.draw_call_accumulator >= bdata.max_batch_draw_call_count)
+		) {
+			get_this()->_batch_threshold_flush();
+			bdata.dynamic_upload_accumulator = 0;
+			bdata.draw_call_accumulator = 0;
+		}
+
+		bdata.reset_flush();
+		_render_item_state.consumed_uniform_vectors = 0;
 		return;
 	}
 

@@ -345,6 +345,7 @@ public:
 		BatchData3D() {
 			reset_scene();
 			settings_use_batching = true;
+			settings_use_single_mesh_fallback = true;
 			settings_dynamic_vertex_limit = 1024;
 			settings_item_reordering_lookahead = 4;
 			dynamic_upload_accumulator = 0;
@@ -390,10 +391,28 @@ public:
 		uint32_t max_vertices;
 		uint32_t max_indices;
 
+		// Batching settings
+
+		// How many TOTAL vertices does a model have that can be
+		// safely batched?
+		// Default: 1024, maximum: 2048.
 		uint32_t settings_dynamic_vertex_limit;
+
+		// Controls the heuristic to evaluate neighbours, which
+		// then its used to swap them and prevent batch breaks.
+		// Default: 4
 		int settings_item_reordering_lookahead;
+
+		// Self-explanatory
+		// Default: true
 		bool settings_use_batching;
 
+		// Controls whether single-item 3D batches bypass dynamic VBO staging
+		// and draw directly from the mesh's static buffers inside the batcher.
+		// Default: true
+		bool settings_use_single_mesh_fallback;
+
+		// Accumulators
 		uint32_t dynamic_upload_accumulator;
 		uint32_t dynamic_upload_threshold_bytes;
 		uint32_t draw_call_accumulator;
@@ -543,6 +562,7 @@ protected:
 	void _software_transform_vertex(BatchVector3 &r_v, const Transform3D &p_tr) const;
 	void _software_transform_normal(BatchVector3 &r_n, const Transform3D &p_tr) const;
 	void _software_transform_normal_precomputed(BatchVector3 &r_n, const Basis &p_cofactor) const;
+	void _calculate_draw_call_cost_or_flush(Batch3D &p_batch) const;
 
 public:
 	Batch3D *_batch_request_new(bool p_blank = true) {

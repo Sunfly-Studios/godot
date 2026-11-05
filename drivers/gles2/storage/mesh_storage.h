@@ -472,11 +472,45 @@ public:
 		return 0;
 	}
 
+	_FORCE_INLINE_ uint32_t mesh_surface_get_index_count(void *p_surface, uint32_t p_lod) const {
+		Mesh::Surface *s = reinterpret_cast<Mesh::Surface *>(p_surface);
+		ERR_FAIL_NULL_V(s, 0);
+		if (p_lod == 0) {
+			return s->index_count;
+		} else {
+			return s->lods[p_lod - 1].index_count;
+		}
+	}
+
 	_FORCE_INLINE_ GLenum mesh_surface_get_index_type(void *p_surface) const {
 		Mesh::Surface *s = reinterpret_cast<Mesh::Surface *>(p_surface);
 		ERR_FAIL_NULL_V(s, -1);
 
 		return (s->vertex_count <= 65536 && s->vertex_count > 0) ? GL_UNSIGNED_SHORT : GL_UNSIGNED_INT;
+	}
+
+	_FORCE_INLINE_ uint64_t mesh_surface_get_format(void *p_surface) const {
+		Mesh::Surface *s = reinterpret_cast<Mesh::Surface *>(p_surface);
+		ERR_FAIL_NULL_V(s, 0);
+		return s->format;
+	}
+
+	_FORCE_INLINE_ GLuint mesh_surface_get_vertex_buffer(void *p_surface) const {
+		Mesh::Surface *s = reinterpret_cast<Mesh::Surface *>(p_surface);
+		ERR_FAIL_NULL_V(s, 0);
+		return s->vertex_buffer;
+	}
+
+	_FORCE_INLINE_ GLuint mesh_surface_get_attribute_buffer(void *p_surface) const {
+		Mesh::Surface *s = reinterpret_cast<Mesh::Surface *>(p_surface);
+		ERR_FAIL_NULL_V(s, 0);
+		return s->attribute_buffer;
+	}
+
+	_FORCE_INLINE_ GLuint mesh_surface_get_skin_buffer(void *p_surface) const {
+		Mesh::Surface *s = reinterpret_cast<Mesh::Surface *>(p_surface);
+		ERR_FAIL_NULL_V(s, 0);
+		return s->skin_buffer;
 	}
 
 	// Use this to cache Vertex Array Objects so they are only generated once
