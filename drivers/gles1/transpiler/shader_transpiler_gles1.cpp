@@ -106,6 +106,9 @@ static String f2sp0(float p_float) {
 }
 
 static String _typestr(ShaderLanguage::DataType p_type) {
+	if (p_type == ShaderLanguage::TYPE_SAMPLER2DARRAY) {
+		return "sampler2D";
+	}
 	return ShaderLanguage::get_datatype_name(p_type);
 }
 
@@ -881,7 +884,7 @@ String ShaderTranspilerGLES1::_dump_node_code(ShaderLanguage::Node *p_node, int 
 						if (var_node->name == "texture") {
 							// emit texture call
 
-							if (op_node->arguments[1]->get_datatype() == ShaderLanguage::TYPE_SAMPLER2D) { // ||
+							if (op_node->arguments[1]->get_datatype() == ShaderLanguage::TYPE_SAMPLER2D || op_node->arguments[1]->get_datatype() == ShaderLanguage::TYPE_SAMPLER2DARRAY) { // ||
 								//									op_node->arguments[1]->get_datatype() == ShaderLanguage::TYPE_SAMPLEREXT) {
 								code += "texture2D";
 							} else if (op_node->arguments[1]->get_datatype() == ShaderLanguage::TYPE_SAMPLERCUBE) {
@@ -891,7 +894,7 @@ String ShaderTranspilerGLES1::_dump_node_code(ShaderLanguage::Node *p_node, int 
 						} else if (var_node->name == "textureLod") {
 							// emit texture call
 
-							if (op_node->arguments[1]->get_datatype() == ShaderLanguage::TYPE_SAMPLER2D) {
+							if (op_node->arguments[1]->get_datatype() == ShaderLanguage::TYPE_SAMPLER2D || op_node->arguments[1]->get_datatype() == ShaderLanguage::TYPE_SAMPLER2DARRAY) {
 								code += "texture2DLod";
 							} else if (op_node->arguments[1]->get_datatype() == ShaderLanguage::TYPE_SAMPLERCUBE) {
 								code += "textureCubeLod";
@@ -936,15 +939,26 @@ String ShaderTranspilerGLES1::_dump_node_code(ShaderLanguage::Node *p_node, int 
 
 					code += "(";
 
+					bool is_texture_array_call = (
+						var_node->name == "texture" || var_node->name == "textureLod"
+					) && (op_node->arguments.size() > 1 && op_node->arguments[1]->get_datatype() == ShaderLanguage::TYPE_SAMPLER2DARRAY);
+
 					for (int i = 1; i < op_node->arguments.size(); i++) {
 						if (i > 1) {
 							code += ", ";
 						}
 
-						code += _dump_node_code(op_node->arguments[i], p_level, r_gen_code, p_actions, p_default_actions, p_assigning);
-					}
+						if (i == 2 && is_texture_array_call) {
+							code += "(";
+						}
 
-					code += ")";
+						code += _dump_node_code(op_node->arguments[i], p_level, r_gen_code, p_actions, p_default_actions, p_assigning);
+
+						// Demote and drop the `z` component.
+						if (i == 2 && is_texture_array_call) {
+							code += ").xy";
+						}
+					}
 
 					if (p_default_actions.usage_defines.has(var_node->name) && !used_name_defines.has(var_node->name)) {
 						String define = p_default_actions.usage_defines[var_node->name];
