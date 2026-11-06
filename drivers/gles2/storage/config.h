@@ -58,6 +58,7 @@ private:
 	bool _probe_texture_parameterf(GLenum p_target, GLenum p_pname, GLfloat p_param);
 	bool _probe_texture_parameteri(GLenum p_target, GLenum p_pname, GLint p_param);
 	bool _probe_depth_texture_support();
+	bool _probe_disjoint_timer_query_support();
 
 public:
 	bool use_nearest_mip_filter = false;
