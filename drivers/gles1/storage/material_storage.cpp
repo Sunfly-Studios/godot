@@ -103,6 +103,10 @@ _FORCE_INLINE_ static void bind_uniforms_and_textures_generic_gles1(
 			}
 			glBindTexture(GL_TEXTURE_2D, 0);
 			glDisable(GL_TEXTURE_2D);
+			if (GLES1_CONFIG->support_cubemap) {
+				glBindTexture(GL_TEXTURE_CUBE_MAP, 0);
+				glDisable(GL_TEXTURE_CUBE_MAP);
+			}
 		}
 		if (max_texture_units > 1) {
 			glActiveTexture(GL_TEXTURE0);
@@ -201,6 +205,10 @@ _FORCE_INLINE_ static void bind_uniforms_and_textures_generic_gles1(
 			glActiveTexture(GL_TEXTURE1);
 			glBindTexture(GL_TEXTURE_2D, 0);
 			glDisable(GL_TEXTURE_2D);
+			if (GLES1_CONFIG->support_cubemap) {
+				glBindTexture(GL_TEXTURE_CUBE_MAP, 0);
+				glDisable(GL_TEXTURE_CUBE_MAP);
+			}
 		}
 		GL_CHECK_ERROR("GLES1::MaterialStorage::bind_uniforms_and_textures_generic_gles1: Unit 1 Bind");
 	}
@@ -210,6 +218,10 @@ _FORCE_INLINE_ static void bind_uniforms_and_textures_generic_gles1(
 		glActiveTexture(GL_TEXTURE0 + i);
 		glBindTexture(GL_TEXTURE_2D, 0);
 		glDisable(GL_TEXTURE_2D);
+		if (GLES1_CONFIG->support_cubemap) {
+			glBindTexture(GL_TEXTURE_CUBE_MAP, 0);
+			glDisable(GL_TEXTURE_CUBE_MAP);
+		}
 	}
 
 	// Reset the active texture back to 0 for subsequent draw calls
@@ -1494,7 +1506,7 @@ void CanvasMaterialData::bind_uniforms() {
 		return;
 	}
 
-	int max_texture_units = GLES1_CONFIG->max_texture_image_units;
+	int max_texture_units = GLES1_CONFIG->max_texture_units;
 
 	if (texture_cache.is_empty()) {
 		// We return early for standard items, but we sweep any units

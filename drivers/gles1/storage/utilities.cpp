@@ -587,11 +587,25 @@ Size2i Utilities::get_maximum_viewport_size() const {
 }
 
 uint32_t Utilities::get_maximum_shader_varyings() const {
-	return 0;
+	// The GLES1 driver does NOT can CANNOT compile or run shaders,
+	// but if we set this to 0, then shaders that use varyings
+	// will error out and fail to compile, even though they won't actually
+	// do anything, and the engine will vomit shader errors that don't bite.
+	//
+	// So instead, we ask Vegeta to tell us what does the scouter say about
+	// the shader's power levels and set it to that instead.
+	return 9000;
 }
 
 uint64_t Utilities::get_maximum_uniform_buffer_size() const {
-	return 0;
+	// The GLES1 driver does NOT can CANNOT compile or run shaders,
+	// but if we set this to 0, then shaders that use varyings
+	// will error out and fail to compile, even though they won't actually
+	// do anything, and the engine will vomit shader errors that don't bite.
+	//
+	// So instead, we ask Vegeta to tell us what does the scouter say about
+	// the shader's power levels and set it to that instead.
+	return 9000;
 }
 
 #endif // GLES1_ENABLED

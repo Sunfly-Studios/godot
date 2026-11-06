@@ -170,9 +170,9 @@ void ShaderGLES1::_get_uniform_locations(Version::Specialization &spec, Version 
 
 void ShaderGLES1::_compile_specialization(Version::Specialization &spec, uint32_t p_variant, Version *p_version, uint64_t p_specialization) {
 	// Dummy ID.
-	spec.id = 1;
-	spec.vert_id = 0;
-	spec.frag_id = 0;
+	spec.id = ++spec.id;
+	spec.vert_id = ++spec.vert_id;
+	spec.frag_id = ++spec.frag_id;
 	spec.ok = true;
 }
 

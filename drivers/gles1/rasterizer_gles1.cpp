@@ -502,8 +502,10 @@ void RasterizerGLES1::_blit_render_target_to_screen(RID p_render_target, Display
 	glClientActiveTexture(GL_TEXTURE0);
 
 	GLint prev_array_buffer = 0, prev_element_buffer = 0;
-	glGetIntegerv(GL_ARRAY_BUFFER_BINDING, &prev_array_buffer);
-	glGetIntegerv(GL_ELEMENT_ARRAY_BUFFER_BINDING, &prev_element_buffer);
+	if (GLES1_CONFIG->support_vbo) {
+		glGetIntegerv(GL_ARRAY_BUFFER_BINDING, &prev_array_buffer);
+		glGetIntegerv(GL_ELEMENT_ARRAY_BUFFER_BINDING, &prev_element_buffer);
+	}
 	GL_CHECK_ERROR("GLES1::RasterizerGLES1::_blit_render_target_to_screen: state capture");
 
 	// Execute blit
@@ -512,7 +514,7 @@ void RasterizerGLES1::_blit_render_target_to_screen(RID p_render_target, Display
 
 	// If the OS reclaims the physical surface while the GL thread is mid-frame
 	// FBO 0 becomes incomplete.
-	if (glCheckFramebufferStatusOES(GL_FRAMEBUFFER_OES) != GL_FRAMEBUFFER_COMPLETE_OES) {
+	if (GLES1_CONFIG->support_fbo && glCheckFramebufferStatusOES(GL_FRAMEBUFFER_OES) != GL_FRAMEBUFFER_COMPLETE_OES) {
 		// Restore state before early out
 		if (prev_blend) {
 			glEnable(GL_BLEND);
@@ -539,8 +541,10 @@ void RasterizerGLES1::_blit_render_target_to_screen(RID p_render_target, Display
 		glViewport(prev_viewport[0], prev_viewport[1], prev_viewport[2], prev_viewport[3]);
 		glClearColor(prev_clear_color[0], prev_clear_color[1], prev_clear_color[2], prev_clear_color[3]);
 
-		glBindBuffer(GL_ARRAY_BUFFER, prev_array_buffer);
-		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, prev_element_buffer);
+		if (GLES1_CONFIG->support_vbo) {
+			glBindBuffer(GL_ARRAY_BUFFER, prev_array_buffer);
+			glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, prev_element_buffer);
+		}
 
 		if (prev_color_array) {
 			glEnableClientState(GL_COLOR_ARRAY);
@@ -632,23 +636,37 @@ void RasterizerGLES1::_blit_render_target_to_screen(RID p_render_target, Display
 		GL_CHECK_ERROR("GLES1::RasterizerGLES1::_blit_render_target_to_screen: texture setup");
 
 		// Unbind VBOs so glVertexPointer reads from our local CPU array
-		glBindBuffer(GL_ARRAY_BUFFER, 0);
-		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+		if (GLES1_CONFIG->support_vbo) {
+			glBindBuffer(GL_ARRAY_BUFFER, 0);
+			glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+		}
+
+		glDisable(GL_LIGHTING);
+		glDisable(GL_FOG);
+		glDisable(GL_ALPHA_TEST);
+		glDisable(GL_COLOR_MATERIAL);
+		glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE);
 
 		glClientActiveTexture(GL_TEXTURE0);
 		glDisableClientState(GL_NORMAL_ARRAY);
 		glDisableClientState(GL_COLOR_ARRAY);
 		glColor4f(1.0f, 1.0f, 1.0f, 1.0f);
 		GL_CHECK_ERROR("GLES1::RasterizerGLES1::_blit_render_target_to_screen: VBO unbind and color reset");
-		
+
 		// Eradicate secondary texture unit state leaks
 		for (int i = 1; i < num_tex_units; i++) {
 			glActiveTexture(GL_TEXTURE0 + i);
 			glDisable(GL_TEXTURE_2D);
+			if (GLES1_CONFIG->support_cubemap) {
+				glDisable(GL_TEXTURE_CUBE_MAP);
+			}
 			glClientActiveTexture(GL_TEXTURE0 + i);
 			glDisableClientState(GL_TEXTURE_COORD_ARRAY);
 		}
 		glActiveTexture(GL_TEXTURE0);
+		if (GLES1_CONFIG->support_cubemap) {
+			glDisable(GL_TEXTURE_CUBE_MAP);
+		}
 		glClientActiveTexture(GL_TEXTURE0);
 
 		// Reset the texture matrix
@@ -747,8 +765,10 @@ void RasterizerGLES1::_blit_render_target_to_screen(RID p_render_target, Display
 	glViewport(prev_viewport[0], prev_viewport[1], prev_viewport[2], prev_viewport[3]);
 	glClearColor(prev_clear_color[0], prev_clear_color[1], prev_clear_color[2], prev_clear_color[3]);
 
-	glBindBuffer(GL_ARRAY_BUFFER, prev_array_buffer);
-	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, prev_element_buffer);
+	if (GLES1_CONFIG->support_vbo) {
+		glBindBuffer(GL_ARRAY_BUFFER, prev_array_buffer);
+		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, prev_element_buffer);
+	}
 
 	if (prev_color_array) {
 		glEnableClientState(GL_COLOR_ARRAY);
@@ -889,8 +909,10 @@ void RasterizerGLES1::set_boot_image(const Ref<Image> &p_image, const Color &p_c
 	copy_effects->copy_to_rect(screenrect);
 
 	// Clean up
-	glBindBuffer(GL_ARRAY_BUFFER, 0);
-	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+	if (GLES1_CONFIG->support_vbo) {
+		glBindBuffer(GL_ARRAY_BUFFER, 0);
+		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+	}
 	glBindTexture(GL_TEXTURE_2D, 0);
 	glDisable(GL_TEXTURE_2D);
 	glDisable(GL_BLEND);

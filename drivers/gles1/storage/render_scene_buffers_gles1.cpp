@@ -92,9 +92,15 @@ void RenderSceneBuffersGLES1::_rt_attach_textures(GLuint p_color, GLuint p_depth
 	glFramebufferTexture2DOES(GL_FRAMEBUFFER_OES, GL_COLOR_ATTACHMENT0_OES, GL_TEXTURE_2D, p_color, 0);
 	GL_CHECK_ERROR("GLES1::RenderSceneBuffersGLES1::_rt_attach_textures: glFramebufferTexture2DOES color");
 
-	GLenum depth_attachment = p_depth_has_stencil ? GL_DEPTH_STENCIL_ATTACHMENT : GL_DEPTH_ATTACHMENT_OES;
-	glFramebufferTexture2DOES(GL_FRAMEBUFFER_OES, depth_attachment, GL_TEXTURE_2D, p_depth, 0);
-	GL_CHECK_ERROR("GLES1::RenderSceneBuffersGLES1::_rt_attach_textures: glFramebufferTexture2DOES depth");
+	if (p_depth != 0) {
+		if (GLES1::Utilities::get_singleton()->has_render_buffer_data(p_depth)) {
+			glFramebufferRenderbufferOES(GL_FRAMEBUFFER_OES, GL_DEPTH_ATTACHMENT_OES, GL_RENDERBUFFER_OES, p_depth);
+			GL_CHECK_ERROR("GLES1::RenderSceneBuffersGLES1::_rt_attach_textures: glFramebufferRenderbufferOES depth");
+		} else {
+			glFramebufferTexture2DOES(GL_FRAMEBUFFER_OES, GL_DEPTH_ATTACHMENT_OES, GL_TEXTURE_2D, p_depth, 0);
+			GL_CHECK_ERROR("GLES1::RenderSceneBuffersGLES1::_rt_attach_textures: glFramebufferTexture2DOES depth");
+		}
+	}
 }
 
 GLuint RenderSceneBuffersGLES1::_rt_get_cached_fbo(GLuint p_color, GLuint p_depth, GLsizei p_samples, uint32_t p_view_count) {
@@ -163,24 +169,40 @@ void RenderSceneBuffersGLES1::_check_render_buffers() {
 		GLES1::Utilities::get_singleton()->texture_allocated_data(internal3d.color, internal_size.x * internal_size.y * color_format_size, "3D color texture");
 
 		// Depth Buffer
-		glGenTextures(1, &internal3d.depth);
-		glBindTexture(texture_target, internal3d.depth);
-		glTexImage2D(texture_target, 0, GL_DEPTH_COMPONENT, internal_size.x, internal_size.y, 0, GL_DEPTH_COMPONENT, GL_UNSIGNED_SHORT, nullptr);
-		GL_CHECK_ERROR("GLES1::RenderSceneBuffersGLES1::_check_render_buffers: depth glTexImage2D");
+		if (GLES1_CONFIG->support_depth_texture) {
+			glGenTextures(1, &internal3d.depth);
+			glBindTexture(texture_target, internal3d.depth);
+			glTexImage2D(texture_target, 0, GL_DEPTH_COMPONENT, internal_size.x, internal_size.y, 0, GL_DEPTH_COMPONENT, GL_UNSIGNED_SHORT, nullptr);
+			GL_CHECK_ERROR("GLES1::RenderSceneBuffersGLES1::_check_render_buffers: depth glTexImage2D");
 
-		glTexParameteri(texture_target, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-		glTexParameteri(texture_target, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-		glTexParameteri(texture_target, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-		glTexParameteri(texture_target, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+			glTexParameteri(texture_target, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+			glTexParameteri(texture_target, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+			glTexParameteri(texture_target, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+			glTexParameteri(texture_target, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 
-		GLES1::Utilities::get_singleton()->texture_allocated_data(internal3d.depth, internal_size.x * internal_size.y * depth_format_size, "3D depth texture");
+			GLES1::Utilities::get_singleton()->texture_allocated_data(internal3d.depth, internal_size.x * internal_size.y * depth_format_size, "3D depth texture");
+		} else {
+			GLint prev_rbo = 0;
+			glGetIntegerv(GL_RENDERBUFFER_BINDING_OES, &prev_rbo);
+			glGenRenderbuffersOES(1, &internal3d.depth);
+			glBindRenderbufferOES(GL_RENDERBUFFER_OES, internal3d.depth);
+			glRenderbufferStorageOES(GL_RENDERBUFFER_OES, GL_DEPTH_COMPONENT16_OES, internal_size.x, internal_size.y);
+			GL_CHECK_ERROR("GLES1::RenderSceneBuffersGLES1::_check_render_buffers: depth glRenderbufferStorageOES");
+			glBindRenderbufferOES(GL_RENDERBUFFER_OES, prev_rbo);
+
+			GLES1::Utilities::get_singleton()->render_buffer_allocated_data(internal3d.depth, internal_size.x * internal_size.y * depth_format_size, "3D depth renderbuffer");
+		}
 
 		// Framebuffer
 		glGenFramebuffersOES(1, &internal3d.fbo);
 		GLES1::TextureStorage::get_singleton()->bind_framebuffer(internal3d.fbo);
 
 		glFramebufferTexture2DOES(GL_FRAMEBUFFER_OES, GL_COLOR_ATTACHMENT0_OES, texture_target, internal3d.color, 0);
-		glFramebufferTexture2DOES(GL_FRAMEBUFFER_OES, GL_DEPTH_ATTACHMENT_OES, texture_target, internal3d.depth, 0);
+		if (GLES1_CONFIG->support_depth_texture) {
+			glFramebufferTexture2DOES(GL_FRAMEBUFFER_OES, GL_DEPTH_ATTACHMENT_OES, texture_target, internal3d.depth, 0);
+		} else {
+			glFramebufferRenderbufferOES(GL_FRAMEBUFFER_OES, GL_DEPTH_ATTACHMENT_OES, GL_RENDERBUFFER_OES, internal3d.depth);
+		}
 
 		GLenum status = glCheckFramebufferStatusOES(GL_FRAMEBUFFER_OES);
 		if (status != GL_FRAMEBUFFER_COMPLETE_OES) {
@@ -236,7 +258,15 @@ void RenderSceneBuffersGLES1::_clear_intermediate_buffers() {
 	}
 
 	if (internal3d.depth != 0) {
-		GLES1::Utilities::get_singleton()->texture_free_data(internal3d.depth);
+		if (GLES1::Utilities::get_singleton()->has_texture_data(internal3d.depth)) {
+			GLES1::Utilities::get_singleton()->texture_free_data(internal3d.depth);
+		} else if (GLES1::Utilities::get_singleton()->has_render_buffer_data(internal3d.depth)) {
+			GLES1::Utilities::get_singleton()->render_buffer_free_data(internal3d.depth);
+		} else if (GLES1_CONFIG->support_depth_texture) {
+			glDeleteTextures(1, &internal3d.depth);
+		} else {
+			glDeleteRenderbuffersOES(1, &internal3d.depth);
+		}
 		internal3d.depth = 0;
 	}
 }
@@ -259,21 +289,35 @@ void RenderSceneBuffersGLES1::check_backbuffer(bool p_need_color, bool p_need_de
 	GLenum texture_target = GL_TEXTURE_2D;
 	uint32_t depth_format_size = 2;
 
-	if (backbuffer3d.color == 0 && p_need_color) {
-		glGenTextures(1, &backbuffer3d.color);
-		glBindTexture(texture_target, backbuffer3d.color);
+	if (backbuffer3d.depth == 0 && p_need_depth) {
+		if (GLES1_CONFIG->support_depth_texture) {
+			glGenTextures(1, &backbuffer3d.depth);
+			glBindTexture(texture_target, backbuffer3d.depth);
 
-		glTexImage2D(texture_target, 0, color_internal_format, internal_size.x, internal_size.y, 0, color_format, color_type, nullptr);
-		GL_CHECK_ERROR("GLES1::RenderSceneBuffersGLES1::check_backbuffer: color glTexImage2D");
+			glTexImage2D(texture_target, 0, GL_DEPTH_COMPONENT, internal_size.x, internal_size.y, 0, GL_DEPTH_COMPONENT, GL_UNSIGNED_SHORT, nullptr);
+			GL_CHECK_ERROR("GLES1::RenderSceneBuffersGLES1::check_backbuffer: depth glTexImage2D");
 
-		glTexParameteri(texture_target, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-		glTexParameteri(texture_target, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-		glTexParameteri(texture_target, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-		glTexParameteri(texture_target, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+			glTexParameteri(texture_target, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+			glTexParameteri(texture_target, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+			glTexParameteri(texture_target, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+			glTexParameteri(texture_target, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 
-		GLES1::Utilities::get_singleton()->texture_allocated_data(backbuffer3d.color, internal_size.x * internal_size.y * color_format_size, "3D Back buffer color texture");
+			GLES1::Utilities::get_singleton()->texture_allocated_data(backbuffer3d.depth, internal_size.x * internal_size.y * depth_format_size, "3D back buffer depth texture");
 
-		glFramebufferTexture2DOES(GL_FRAMEBUFFER_OES, GL_COLOR_ATTACHMENT0_OES, texture_target, backbuffer3d.color, 0);
+			glFramebufferTexture2DOES(GL_FRAMEBUFFER_OES, GL_DEPTH_ATTACHMENT_OES, texture_target, backbuffer3d.depth, 0);
+		} else {
+			GLint prev_rbo = 0;
+			glGetIntegerv(GL_RENDERBUFFER_BINDING_OES, &prev_rbo);
+			glGenRenderbuffersOES(1, &backbuffer3d.depth);
+			glBindRenderbufferOES(GL_RENDERBUFFER_OES, backbuffer3d.depth);
+			glRenderbufferStorageOES(GL_RENDERBUFFER_OES, GL_DEPTH_COMPONENT16_OES, internal_size.x, internal_size.y);
+			GL_CHECK_ERROR("GLES1::RenderSceneBuffersGLES1::check_backbuffer: depth glRenderbufferStorageOES");
+			glBindRenderbufferOES(GL_RENDERBUFFER_OES, prev_rbo);
+
+			GLES1::Utilities::get_singleton()->render_buffer_allocated_data(backbuffer3d.depth, internal_size.x * internal_size.y * depth_format_size, "3D back buffer depth renderbuffer");
+
+			glFramebufferRenderbufferOES(GL_FRAMEBUFFER_OES, GL_DEPTH_ATTACHMENT_OES, GL_RENDERBUFFER_OES, backbuffer3d.depth);
+		}
 		needs_init_check = true;
 	}
 
@@ -320,7 +364,15 @@ void RenderSceneBuffersGLES1::_clear_back_buffers() {
 	}
 
 	if (backbuffer3d.depth != 0) {
-		GLES1::Utilities::get_singleton()->texture_free_data(backbuffer3d.depth);
+		if (GLES1::Utilities::get_singleton()->has_texture_data(backbuffer3d.depth)) {
+			GLES1::Utilities::get_singleton()->texture_free_data(backbuffer3d.depth);
+		} else if (GLES1::Utilities::get_singleton()->has_render_buffer_data(backbuffer3d.depth)) {
+			GLES1::Utilities::get_singleton()->render_buffer_free_data(backbuffer3d.depth);
+		} else if (GLES1_CONFIG->support_depth_texture) {
+			glDeleteTextures(1, &backbuffer3d.depth);
+		} else {
+			glDeleteRenderbuffersOES(1, &backbuffer3d.depth);
+		}
 		backbuffer3d.depth = 0;
 	}
 }

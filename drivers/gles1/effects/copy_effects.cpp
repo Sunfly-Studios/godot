@@ -133,34 +133,43 @@ void CopyEffects::draw_screen_triangle() {
 	glEnableClientState(GL_VERTEX_ARRAY);
 	glEnableClientState(GL_TEXTURE_COORD_ARRAY);
 
-	if (likely(screen_triangle != 0)) {
+	if (GLES1_CONFIG->max_texture_units > 1) {
+		glClientActiveTexture(GL_TEXTURE0);
+	}
+	if (GLES1_CONFIG->support_vbo && likely(screen_triangle != 0)) {
 		// Set pointers of 4 floats (2 pos, 2 uv)
 		glBindBuffer(GL_ARRAY_BUFFER, screen_triangle);
 		glVertexPointer(2, GL_FLOAT, sizeof(float) * 4, nullptr);
 		glTexCoordPointer(2, GL_FLOAT, sizeof(float) * 4, (const void *)(uintptr_t)(sizeof(float) * 2));
 	} else {
-		glBindBuffer(GL_ARRAY_BUFFER, 0);
+		if (GLES1_CONFIG->support_vbo) {
+			glBindBuffer(GL_ARRAY_BUFFER, 0);
+		}
 		glVertexPointer(2, GL_FLOAT, sizeof(float) * 4, screen_triangle_verts);
 		glTexCoordPointer(2, GL_FLOAT, sizeof(float) * 4, screen_triangle_verts + 2);
 	}
-	GL_CHECK_ERROR("CopyEffects::draw_screen_triangle: state setup");
-	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+	GL_CHECK_ERROR("GLES1::CopyEffects::draw_screen_triangle: state setup");
+	if (GLES1_CONFIG->support_vbo) {
+		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+	}
 
 	// Draw the triangle
 	glDrawArrays(GL_TRIANGLES, 0, 3);
-	GL_CHECK_ERROR("CopyEffects::draw_screen_triangle: glDrawArrays");
+	GL_CHECK_ERROR("GLES1::CopyEffects::draw_screen_triangle: glDrawArrays");
 
 	// Clean up state
 	glDisableClientState(GL_VERTEX_ARRAY);
 	glDisableClientState(GL_TEXTURE_COORD_ARRAY);
-	glBindBuffer(GL_ARRAY_BUFFER, 0);
-	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+	if (GLES1_CONFIG->support_vbo) {
+		glBindBuffer(GL_ARRAY_BUFFER, 0);
+		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+	}
 
 	// Stop matrix bleed from source_section
 	glMatrixMode(GL_TEXTURE);
 	glLoadIdentity();
 	glMatrixMode(GL_MODELVIEW);
-	GL_CHECK_ERROR("CopyEffects::draw_screen_triangle: cleanup");
+	GL_CHECK_ERROR("GLES1::CopyEffects::draw_screen_triangle: cleanup");
 }
 
 void CopyEffects::draw_screen_quad() {
@@ -169,34 +178,43 @@ void CopyEffects::draw_screen_quad() {
 	glEnableClientState(GL_VERTEX_ARRAY);
 	glEnableClientState(GL_TEXTURE_COORD_ARRAY);
 
-	if (likely(quad != 0)) {
+	if (GLES1_CONFIG->max_texture_units > 1) {
+		glClientActiveTexture(GL_TEXTURE0);
+	}
+	if (GLES1_CONFIG->support_vbo && likely(quad != 0)) {
 		glBindBuffer(GL_ARRAY_BUFFER, quad);
 		// Position (2 floats, stride of 4 floats)
 		glVertexPointer(2, GL_FLOAT, sizeof(float) * 4, nullptr);
 		// UV (2 floats, stride of 4 floats, offset by 2 floats)
 		glTexCoordPointer(2, GL_FLOAT, sizeof(float) * 4, (const void *)(uintptr_t)(sizeof(float) * 2));
 	} else {
-		glBindBuffer(GL_ARRAY_BUFFER, 0);
+		if (GLES1_CONFIG->support_vbo) {
+			glBindBuffer(GL_ARRAY_BUFFER, 0);
+		}
 		glVertexPointer(2, GL_FLOAT, sizeof(float) * 4, screen_quad_verts);
 		glTexCoordPointer(2, GL_FLOAT, sizeof(float) * 4, screen_quad_verts + 2);
 	}
-	GL_CHECK_ERROR("CopyEffects::draw_screen_quad: state setup");
-	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+	GL_CHECK_ERROR("GLES1::CopyEffects::draw_screen_quad: state setup");
+	if (GLES1_CONFIG->support_vbo) {
+		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+	}
 
 	glDrawArrays(GL_TRIANGLES, 0, 6);
-	GL_CHECK_ERROR("CopyEffects::draw_screen_quad: glDrawArrays");
+	GL_CHECK_ERROR("GLES1::CopyEffects::draw_screen_quad: glDrawArrays");
 
 	// Clean up state
 	glDisableClientState(GL_VERTEX_ARRAY);
 	glDisableClientState(GL_TEXTURE_COORD_ARRAY);
-	glBindBuffer(GL_ARRAY_BUFFER, 0);
-	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+	if (GLES1_CONFIG->support_vbo) {
+		glBindBuffer(GL_ARRAY_BUFFER, 0);
+		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+	}
 
 	// Stop matrix bleed from source_section
 	glMatrixMode(GL_TEXTURE);
 	glLoadIdentity();
 	glMatrixMode(GL_MODELVIEW);
-	GL_CHECK_ERROR("CopyEffects::draw_screen_quad: cleanup");
+	GL_CHECK_ERROR("GLES1::CopyEffects::draw_screen_quad: cleanup");
 }
 
 void CopyEffects::copy_to_rect(const Rect2 &p_rect) {

@@ -1754,6 +1754,15 @@ void RasterizerSceneGLES1::_update_sky_radiance(RID p_env, const Projection &p_p
 
 			if (sky->processing_layer < MAX_SKY_PROCESSING_LAYERS) {
 				for (int i = first_face; i <= last_face; i++) {
+					glFramebufferTexture2DOES(GL_FRAMEBUFFER_OES, GL_COLOR_ATTACHMENT0_OES, GL_TEXTURE_CUBE_MAP_POSITIVE_X + i, sky->radiance, 0);
+					GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_update_sky_radiance: glFramebufferTexture2DOES");
+
+					GLenum status = glCheckFramebufferStatusOES(GL_FRAMEBUFFER_OES);
+					if (status != GL_FRAMEBUFFER_COMPLETE_OES) {
+						use_fbo = false;
+						break;
+					}
+
 					if (GLES1_CONFIG->support_vbo) {
 						glBindBuffer(GL_ARRAY_BUFFER, sky_globals.radiance_verts_vbo);
 						glVertexPointer(2, GL_FLOAT, 0, (void *)(uintptr_t)(i * NUM_VERTICES * 2 * sizeof(float)));
@@ -1769,8 +1778,6 @@ void RasterizerSceneGLES1::_update_sky_radiance(RID p_env, const Projection &p_p
 						glColorPointer(4, GL_UNSIGNED_BYTE, 0, sky_globals.radiance_colors + (i * NUM_VERTICES * 4));
 					}
 
-					glFramebufferTexture2DOES(GL_FRAMEBUFFER_OES, GL_COLOR_ATTACHMENT0_OES, GL_TEXTURE_CUBE_MAP_POSITIVE_X + i, sky->radiance, 0);
-					GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_update_sky_radiance: glFramebufferTexture2DOES");
 					glDrawArrays(GL_TRIANGLES, 0, NUM_VERTICES);
 					GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_update_sky_radiance: glDrawArrays");
 				}
@@ -1790,7 +1797,7 @@ void RasterizerSceneGLES1::_update_sky_radiance(RID p_env, const Projection &p_p
 		}
 
 		if (sky->processing_layer >= MAX_SKY_PROCESSING_LAYERS) {
-			if (use_fbo) {
+			if (use_fbo && GLES1_CONFIG->support_generate_mipmap) {
 				// Native cubemap LODs
 				if (GLES1_CONFIG->max_texture_units > 1) {
 					glActiveTexture(GL_TEXTURE0);
@@ -1842,6 +1849,7 @@ Ref<Image> RasterizerSceneGLES1::sky_bake_panorama(RID p_sky, float p_energy, bo
 	}
 
 	GLES1::CopyEffects *copy_effects = GLES1::CopyEffects::get_singleton();
+	GLES1::TextureStorage *texture_storage = GLES1::TextureStorage::get_singleton();
 	if (!copy_effects) {
 		return Ref<Image>();
 	}
@@ -1852,6 +1860,10 @@ Ref<Image> RasterizerSceneGLES1::sky_bake_panorama(RID p_sky, float p_energy, bo
 
 	bool use_float = false; // Config fallback to unsigned byte as default for GLES1 portability.
 	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, p_size.width, p_size.height, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 	GLES1::Utilities::get_singleton()->texture_allocated_data(rad_tex, p_size.width * p_size.height * 4, "Temp sky panorama");
 	GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::sky_bake_panorama: glTexImage2D");
 
@@ -1861,9 +1873,18 @@ Ref<Image> RasterizerSceneGLES1::sky_bake_panorama(RID p_sky, float p_energy, bo
 
 	GLuint rad_fbo = 0;
 	glGenFramebuffersOES(1, &rad_fbo);
-	glBindFramebufferOES(GL_FRAMEBUFFER_OES, rad_fbo);
+	texture_storage->bind_framebuffer(rad_fbo);
 	glFramebufferTexture2DOES(GL_FRAMEBUFFER_OES, GL_COLOR_ATTACHMENT0_OES, GL_TEXTURE_2D, rad_tex, 0);
 	GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::sky_bake_panorama: glFramebufferTexture2DOES");
+
+	GLenum status = glCheckFramebufferStatusOES(GL_FRAMEBUFFER_OES);
+	if (status != GL_FRAMEBUFFER_COMPLETE_OES) {
+		texture_storage->bind_framebuffer(prev_fbo);
+		glDeleteFramebuffersOES(1, &rad_fbo);
+		GLES1::Utilities::get_singleton()->texture_free_data(rad_tex);
+		GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::sky_bake_panorama: cleanup incomplete FBO");
+		return Ref<Image>();
+	}
 
 	if (GLES1_CONFIG->max_texture_units > 1) {
 		glActiveTexture(GL_TEXTURE0);
@@ -1886,12 +1907,19 @@ Ref<Image> RasterizerSceneGLES1::sky_bake_panorama(RID p_sky, float p_energy, bo
 	glBindTexture(GL_TEXTURE_CUBE_MAP, 0);
 	GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::sky_bake_panorama: unbind cubemap");
 
-	glBindFramebufferOES(GL_FRAMEBUFFER_OES, prev_fbo);
+	texture_storage->bind_framebuffer(prev_fbo);
 	glDeleteFramebuffersOES(1, &rad_fbo);
 	glViewport(prev_viewport[0], prev_viewport[1], prev_viewport[2], prev_viewport[3]);
 	GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::sky_bake_panorama: restore GL state");
 
 	RID tex_rid = GLES1::TextureStorage::get_singleton()->texture_allocate();
+	GLES1::Texture *existing_tex = GLES1::TextureStorage::get_singleton()->get_texture(tex_rid);
+	if (existing_tex && existing_tex->tex_id != 0) {
+		glDeleteTextures(1, &existing_tex->tex_id);
+		existing_tex->tex_id = 0;
+		GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::sky_bake_panorama: glDeleteTextures dummy shell");
+	}
+
 	{
 		GLES1::Texture texture;
 		texture.width = p_size.width;
@@ -5261,14 +5289,6 @@ void RasterizerSceneGLES1::_render_shadow_pass(RID p_light, RID p_shadow_atlas, 
 
 		if (light_storage->light_get_type(base) == RS::LIGHT_OMNI) {
 			if (light_storage->light_omni_get_shadow_mode(base) == RS::LIGHT_OMNI_SHADOW_CUBE && GLES1_CONFIG->support_cubemap) {
-				GLuint shadow_texture = light_storage->shadow_atlas_get_quadrant_shadow_texture(p_shadow_atlas, quadrant, shadow);
-
-				GLES1::TextureStorage::get_singleton()->bind_framebuffer(shadow_fb);
-				GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_render_shadow_pass: glBindFramebufferOES (omni)");
-
-				glFramebufferTexture2DOES(GL_FRAMEBUFFER_OES, GL_COLOR_ATTACHMENT0_OES, GL_TEXTURE_2D, shadow_texture, 0);
-				GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_render_shadow_pass: glFramebufferTexture2DOES (omni)");
-
 				light_projection = light_storage->light_instance_get_shadow_camera(p_light, p_pass);
 				light_transform = light_storage->light_instance_get_shadow_transform(p_light, p_pass);
 				shadow_size = shadow_size / 2;
@@ -5353,9 +5373,16 @@ void RasterizerSceneGLES1::_render_shadow_pass(RID p_light, RID p_shadow_atlas, 
 	glDisable(GL_LIGHTING);
 	glDisable(GL_FOG);
 	glDisable(GL_TEXTURE_2D);
+	glBindTexture(GL_TEXTURE_2D, 0);
 	if (GLES1_CONFIG->max_texture_units > 1) {
 		glActiveTexture(GL_TEXTURE1);
 		glDisable(GL_TEXTURE_2D);
+		glBindTexture(GL_TEXTURE_2D, 0);
+		if (GLES1_CONFIG->max_texture_units > 2) {
+			glActiveTexture(GL_TEXTURE2);
+			glDisable(GL_TEXTURE_2D);
+			glBindTexture(GL_TEXTURE_2D, 0);
+		}
 		glActiveTexture(GL_TEXTURE0);
 	}
 
@@ -5829,8 +5856,12 @@ void RasterizerSceneGLES1::_render_post_processing(const RenderDataGLES1 *p_rend
 	glDisable(GL_DEPTH_TEST);
 	glDisable(GL_CULL_FACE);
 	glDisable(GL_SCISSOR_TEST);
+	glDisable(GL_LIGHTING);
+	glDisable(GL_FOG);
 	glDepthMask(GL_FALSE);
-	glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+	glColorMask(1.0f, 1.0f, 1.0f, 1.0f);
+
+	glEnable(GL_TEXTURE_2D);
 
 	if (GLES1_CONFIG->max_texture_units > 1) {
 		glActiveTexture(GL_TEXTURE0);
