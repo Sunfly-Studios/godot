@@ -1206,6 +1206,7 @@ void MaterialStorage::material_set_shader(RID p_material, RID p_shader) {
 		material->shader = nullptr;
 		material->shader_id = 0;
 		material->shader_mode = RS::SHADER_MAX;
+		material->dependency.changed_notify(Dependency::DEPENDENCY_CHANGED_MATERIAL);
 		return;
 	}
 
@@ -1229,6 +1230,7 @@ void MaterialStorage::material_set_shader(RID p_material, RID p_shader) {
 
 	shader->owners.insert(material);
 
+	material->dependency.changed_notify(Dependency::DEPENDENCY_CHANGED_MATERIAL);
 	_material_queue_update(material, true, true);
 }
 
