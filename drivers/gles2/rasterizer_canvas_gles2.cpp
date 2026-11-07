@@ -154,7 +154,7 @@ void RasterizerCanvasGLES2::light_update_shadow(RID p_rid, int p_shadow_index, c
 		if (status != GL_FRAMEBUFFER_COMPLETE) {
 			ERR_PRINT("GLES2: Canvas shadow framebuffer not complete!");
 		}
-		GL_CHECK_ERROR("GLES2::Canvas::light_update_shadow: init fbo");
+		GL_CHECK_ERROR("GLES2::RasterizerCanvasGLES2::light_update_shadow: init fbo");
 	}
 
 	cl->shadow.z_far = p_far;
@@ -279,7 +279,7 @@ void RasterizerCanvasGLES2::light_update_shadow(RID p_rid, int p_shadow_index, c
 					glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, occluder->index_buffer);
 
 					glDrawElements(GL_TRIANGLES, occluder->line_point_count, GL_UNSIGNED_SHORT, nullptr);
-					GL_CHECK_ERROR("GLES2::Canvas::light_update_shadow: glDrawElements");
+					GL_CHECK_ERROR("GLES2::RasterizerCanvasGLES2::light_update_shadow: glDrawElements");
 				}
 			}
 			instance = instance->next;
@@ -325,7 +325,7 @@ void RasterizerCanvasGLES2::light_update_directional_shadow(RID p_rid, int p_sha
 		if (status != GL_FRAMEBUFFER_COMPLETE) {
 			ERR_PRINT("GLES2: Canvas shadow framebuffer not complete!");
 		}
-		GL_CHECK_ERROR("GLES2::Canvas::light_update_directional_shadow: init fbo");
+		GL_CHECK_ERROR("GLES2::RasterizerCanvasGLES2::light_update_directional_shadow: init fbo");
 	}
 
 	Vector2 light_dir = p_light_xform.columns[1].normalized();
@@ -442,7 +442,7 @@ void RasterizerCanvasGLES2::light_update_directional_shadow(RID p_rid, int p_sha
 
 		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, occluder->index_buffer);
 		glDrawElements(GL_TRIANGLES, occluder->line_point_count, GL_UNSIGNED_SHORT, nullptr);
-		GL_CHECK_ERROR("GLES2::Canvas::light_update_directional_shadow: glDrawElements");
+		GL_CHECK_ERROR("GLES2::RasterizerCanvasGLES2::light_update_directional_shadow: glDrawElements");
 
 		instance = instance->next;
 	}
@@ -545,11 +545,11 @@ void RasterizerCanvasGLES2::occluder_polygon_set_shape(RID p_occluder, const Vec
 	glBufferData(GL_ARRAY_BUFFER, geometry.size() * sizeof(Vector3), geometry.ptr(), GL_STATIC_DRAW);
 #endif
 
-	GL_CHECK_ERROR("GLES2::Canvas::occluder_polygon_set_shape: VBO upload");
+	GL_CHECK_ERROR("GLES2::RasterizerCanvasGLES2::occluder_polygon_set_shape: VBO upload");
 
 	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, oc->index_buffer);
 	glBufferData(GL_ELEMENT_ARRAY_BUFFER, indices.size() * sizeof(uint16_t), indices.ptr(), GL_STATIC_DRAW);
-	GL_CHECK_ERROR("GLES2::Canvas::occluder_polygon_set_shape: IBO upload");
+	GL_CHECK_ERROR("GLES2::RasterizerCanvasGLES2::occluder_polygon_set_shape: IBO upload");
 
 	glBindBuffer(GL_ARRAY_BUFFER, 0);
 	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
@@ -583,7 +583,7 @@ void RasterizerCanvasGLES2::set_shadow_texture_size(int p_size) {
 		glDeleteRenderbuffers(1, &state.shadow_depth_buffer);
 		state.shadow_depth_buffer = 0;
 	}
-	GL_CHECK_ERROR("GLES2::Canvas::set_shadow_texture_size: cleanup old buffers");
+	GL_CHECK_ERROR("GLES2::RasterizerCanvasGLES2::set_shadow_texture_size: cleanup old buffers");
 }
 
 bool RasterizerCanvasGLES2::free(RID p_rid) {
@@ -605,7 +605,7 @@ void RasterizerCanvasGLES2::initialize() {
 	// Quad buffer
 	{
 		glGenBuffers(1, &data.canvas_quad_vertices);
-		GL_CHECK_ERROR("GLES2::Canvas::initialize: glGenBuffers quad");
+		GL_CHECK_ERROR("GLES2::RasterizerCanvasGLES2::initialize: glGenBuffers quad");
 		glBindBuffer(GL_ARRAY_BUFFER, data.canvas_quad_vertices);
 
 		const constexpr float qv[8] = {
@@ -616,7 +616,7 @@ void RasterizerCanvasGLES2::initialize() {
 		};
 
 		GLES2::Utilities::get_singleton()->buffer_allocate_data(GL_ARRAY_BUFFER, data.canvas_quad_vertices, sizeof(float) * 8, qv, GL_STATIC_DRAW, "Canvas Quad");
-		GL_CHECK_ERROR("GLES2::Canvas::initialize: buffer_allocate_data quad");
+		GL_CHECK_ERROR("GLES2::RasterizerCanvasGLES2::initialize: buffer_allocate_data quad");
 		glBindBuffer(GL_ARRAY_BUFFER, 0);
 	}
 
@@ -627,10 +627,10 @@ void RasterizerCanvasGLES2::initialize() {
 		poly_size *= 1024;
 
 		glGenBuffers(1, &data.polygon_buffer);
-		GL_CHECK_ERROR("GLES2::Canvas::initialize: glGenBuffers poly");
+		GL_CHECK_ERROR("GLES2::RasterizerCanvasGLES2::initialize: glGenBuffers poly");
 		glBindBuffer(GL_ARRAY_BUFFER, data.polygon_buffer);
 		GLES2::Utilities::get_singleton()->buffer_allocate_data(GL_ARRAY_BUFFER, data.polygon_buffer, poly_size, nullptr, GL_DYNAMIC_DRAW, "Canvas Polygon Buffer");
-		GL_CHECK_ERROR("GLES2::Canvas::initialize: buffer_allocate_data poly");
+		GL_CHECK_ERROR("GLES2::RasterizerCanvasGLES2::initialize: buffer_allocate_data poly");
 		data.polygon_buffer_size = poly_size;
 		glBindBuffer(GL_ARRAY_BUFFER, 0);
 
@@ -639,10 +639,10 @@ void RasterizerCanvasGLES2::initialize() {
 		index_size *= 1024;
 
 		glGenBuffers(1, &data.polygon_index_buffer);
-		GL_CHECK_ERROR("GLES2::Canvas::initialize: glGenBuffers poly index");
+		GL_CHECK_ERROR("GLES2::RasterizerCanvasGLES2::initialize: glGenBuffers poly index");
 		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, data.polygon_index_buffer);
 		GLES2::Utilities::get_singleton()->buffer_allocate_data(GL_ELEMENT_ARRAY_BUFFER, data.polygon_index_buffer, index_size, nullptr, GL_DYNAMIC_DRAW, "Canvas Polygon Index Buffer");
-		GL_CHECK_ERROR("GLES2::Canvas::initialize: buffer_allocate_data poly index");
+		GL_CHECK_ERROR("GLES2::RasterizerCanvasGLES2::initialize: buffer_allocate_data poly index");
 		data.polygon_index_buffer_size = index_size;
 		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
 	}
@@ -650,14 +650,14 @@ void RasterizerCanvasGLES2::initialize() {
 	// Ninepatch buffers
 	{
 		glGenBuffers(1, &data.ninepatch_vertices);
-		GL_CHECK_ERROR("GLES2::Canvas::initialize: glGenBuffers ninepatch");
+		GL_CHECK_ERROR("GLES2::RasterizerCanvasGLES2::initialize: glGenBuffers ninepatch");
 		glBindBuffer(GL_ARRAY_BUFFER, data.ninepatch_vertices);
 		GLES2::Utilities::get_singleton()->buffer_allocate_data(GL_ARRAY_BUFFER, data.ninepatch_vertices, sizeof(float) * (16 + 16) * 2, nullptr, GL_DYNAMIC_DRAW, "Canvas Ninepatch Vertices");
-		GL_CHECK_ERROR("GLES2::Canvas::initialize: buffer_allocate_data ninepatch");
+		GL_CHECK_ERROR("GLES2::RasterizerCanvasGLES2::initialize: buffer_allocate_data ninepatch");
 		glBindBuffer(GL_ARRAY_BUFFER, 0);
 
 		glGenBuffers(1, &data.ninepatch_elements);
-		GL_CHECK_ERROR("GLES2::Canvas::initialize: glGenBuffers ninepatch index");
+		GL_CHECK_ERROR("GLES2::RasterizerCanvasGLES2::initialize: glGenBuffers ninepatch index");
 		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, data.ninepatch_elements);
 
 #define _EIDX(y, x) (y * 4 + x)
@@ -697,7 +697,7 @@ void RasterizerCanvasGLES2::initialize() {
 #undef _EIDX
 
 		GLES2::Utilities::get_singleton()->buffer_allocate_data(GL_ELEMENT_ARRAY_BUFFER, data.ninepatch_elements, sizeof(elems), elems, GL_STATIC_DRAW, "Canvas Ninepatch Elements");
-		GL_CHECK_ERROR("GLES2::Canvas::initialize: buffer_allocate_data ninepatch index");
+		GL_CHECK_ERROR("GLES2::RasterizerCanvasGLES2::initialize: buffer_allocate_data ninepatch index");
 		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
 	}
 
@@ -710,7 +710,7 @@ void RasterizerCanvasGLES2::initialize() {
 	// and instead query from the hardware.
 	GLint max_attribs = 8;
 	glGetIntegerv(GL_MAX_VERTEX_ATTRIBS, &max_attribs);
-	GL_CHECK_ERROR("GLES2::Canvas::initialize: glGetIntegerv GL_MAX_VERTEX_ATTRIBS");
+	GL_CHECK_ERROR("GLES2::RasterizerCanvasGLES2::initialize: glGetIntegerv GL_MAX_VERTEX_ATTRIBS");
 	maximum_attributes = MIN((int)RS::ARRAY_MAX, max_attribs);
 
 	// Batcher Initialisation
@@ -719,16 +719,16 @@ void RasterizerCanvasGLES2::initialize() {
 	if (bdata.vertex_buffer_size_bytes) {
 		// Reserve space for dynamic batched vertices
 		glGenBuffers(1, &bdata.gl_vertex_buffer);
-		GL_CHECK_ERROR("GLES2::Canvas::initialize: glGenBuffers batcher");
+		GL_CHECK_ERROR("GLES2::RasterizerCanvasGLES2::initialize: glGenBuffers batcher");
 		glBindBuffer(GL_ARRAY_BUFFER, bdata.gl_vertex_buffer);
 		GLES2::Utilities::get_singleton()->buffer_allocate_data(GL_ARRAY_BUFFER, bdata.gl_vertex_buffer, bdata.vertex_buffer_size_bytes, nullptr, GL_DYNAMIC_DRAW, "Canvas Batcher Vertices");
-		GL_CHECK_ERROR("GLES2::Canvas::initialize: buffer_allocate_data batcher");
+		GL_CHECK_ERROR("GLES2::RasterizerCanvasGLES2::initialize: buffer_allocate_data batcher");
 		glBindBuffer(GL_ARRAY_BUFFER, 0);
 
 		// Pre-fill index buffer.
 		// The indices never need to change so they are static.
 		glGenBuffers(1, &bdata.gl_index_buffer);
-		GL_CHECK_ERROR("GLES2::Canvas::initialize: glGenBuffers batcher index");
+		GL_CHECK_ERROR("GLES2::RasterizerCanvasGLES2::initialize: glGenBuffers batcher index");
 		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, bdata.gl_index_buffer);
 
 		Vector<uint16_t> indices;
@@ -751,7 +751,7 @@ void RasterizerCanvasGLES2::initialize() {
 		}
 
 		GLES2::Utilities::get_singleton()->buffer_allocate_data(GL_ELEMENT_ARRAY_BUFFER, bdata.gl_index_buffer, bdata.index_buffer_size_bytes, indices.ptr(), GL_STATIC_DRAW, "Canvas Batcher Indices");
-		GL_CHECK_ERROR("GLES2::Canvas::initialize: buffer_allocate_data batcher index");
+		GL_CHECK_ERROR("GLES2::RasterizerCanvasGLES2::initialize: buffer_allocate_data batcher index");
 		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
 	}
 
@@ -884,7 +884,7 @@ void RasterizerCanvasGLES2::_bind_canvas_texture(RID p_texture, RS::CanvasItemTe
 
 	// Bind Diffuse (Texture Unit 0)
 	glActiveTexture(GL_TEXTURE0);
-	GL_CHECK_ERROR("GLES2::Canvas::_bind_canvas_texture: glActiveTexture 0");
+	GL_CHECK_ERROR("GLES2::RasterizerCanvasGLES2::_bind_canvas_texture: glActiveTexture 0");
 	GLES2::Texture *texture = GLES2::TextureStorage::get_singleton()->get_texture(ct->diffuse);
 
 	if (!texture || texture->tex_id == 0 || texture->width == 0 || texture->height == 0) {
@@ -908,7 +908,7 @@ void RasterizerCanvasGLES2::_bind_canvas_texture(RID p_texture, RS::CanvasItemTe
 		}
 	} else {
 		glBindTexture(GL_TEXTURE_2D, texture->tex_id);
-		GL_CHECK_ERROR("GLES2::Canvas::_bind_canvas_texture: glBindTexture GL_TEXTURE_2D");
+		GL_CHECK_ERROR("GLES2::RasterizerCanvasGLES2::_bind_canvas_texture: glBindTexture GL_TEXTURE_2D");
 
 		// Setup Filters
 		GLenum min_filter = GL_LINEAR;
@@ -974,7 +974,7 @@ void RasterizerCanvasGLES2::_bind_canvas_texture(RID p_texture, RS::CanvasItemTe
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, mag_filter);
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, wrap_s);
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, wrap_t);
-		GL_CHECK_ERROR("GLES2::Canvas::_bind_canvas_texture: glTexParameteri");
+		GL_CHECK_ERROR("GLES2::RasterizerCanvasGLES2::_bind_canvas_texture: glTexParameteri");
 
 		if (texture->render_target) {
 			texture->render_target->used_in_frame = true;
@@ -992,7 +992,7 @@ void RasterizerCanvasGLES2::_bind_canvas_texture(RID p_texture, RS::CanvasItemTe
 
 	// Normal Map
 	glActiveTexture(GL_TEXTURE0 + max_units - 2);
-	GL_CHECK_ERROR("GLES2::Canvas::_bind_canvas_texture: glActiveTexture normal map");
+	GL_CHECK_ERROR("GLES2::RasterizerCanvasGLES2::_bind_canvas_texture: glActiveTexture normal map");
 	GLES2::Texture *normal_map = GLES2::TextureStorage::get_singleton()->get_texture(ct->normal_map);
 	if (!normal_map) {
 		GLES2::Texture *tex_norm = GLES2::TextureStorage::get_singleton()->get_texture(GLES2::TextureStorage::get_singleton()->texture_gl_get_default(GLES2::DEFAULT_GL_TEXTURE_NORMAL));
@@ -1015,7 +1015,7 @@ void RasterizerCanvasGLES2::_bind_canvas_texture(RID p_texture, RS::CanvasItemTe
 
 	// Specular Map
 	glActiveTexture(GL_TEXTURE0 + max_units - 1);
-	GL_CHECK_ERROR("GLES2::Canvas::_bind_canvas_texture: glActiveTexture specular map");
+	GL_CHECK_ERROR("GLES2::RasterizerCanvasGLES2::_bind_canvas_texture: glActiveTexture specular map");
 	GLES2::Texture *specular_map = GLES2::TextureStorage::get_singleton()->get_texture(ct->specular);
 	if (!specular_map) {
 		GLES2::Texture *tex_spec = GLES2::TextureStorage::get_singleton()->get_texture(GLES2::TextureStorage::get_singleton()->texture_gl_get_default(GLES2::DEFAULT_GL_TEXTURE_WHITE));
@@ -1165,28 +1165,28 @@ void RasterizerCanvasGLES2::canvas_begin(RID p_to_render_target, bool p_to_backb
 	// Bind the correct Framebuffer
 	if (p_to_backbuffer) {
 		GLES2::TextureStorage::get_singleton()->bind_framebuffer(render_target ? render_target->backbuffer_fbo : 0);
-		GL_CHECK_ERROR("GLES2::Canvas::canvas_begin: bind backbuffer fbo");
+		GL_CHECK_ERROR("GLES2::RasterizerCanvasGLES2::canvas_begin: bind backbuffer fbo");
 		glActiveTexture(GL_TEXTURE0 + config->max_texture_image_units - 4);
 		GLES2::Texture *tex = GLES2::TextureStorage::get_singleton()->get_texture(default_canvas_texture);
 		if (tex) {
 			glBindTexture(GL_TEXTURE_2D, tex->tex_id);
 		}
-		GL_CHECK_ERROR("GLES2::Canvas::canvas_begin: bind backbuffer tex");
+		GL_CHECK_ERROR("GLES2::RasterizerCanvasGLES2::canvas_begin: bind backbuffer tex");
 	} else {
 		GLES2::TextureStorage::get_singleton()->bind_framebuffer(render_target ? render_target->fbo : 0);
-		GL_CHECK_ERROR("GLES2::Canvas::canvas_begin: bind fbo");
+		GL_CHECK_ERROR("GLES2::RasterizerCanvasGLES2::canvas_begin: bind fbo");
 		glActiveTexture(GL_TEXTURE0 + config->max_texture_image_units - 4);
 		if (render_target) {
 			glBindTexture(GL_TEXTURE_2D, render_target->backbuffer);
 		}
-		GL_CHECK_ERROR("GLES2::Canvas::canvas_begin: bind fbo tex");
+		GL_CHECK_ERROR("GLES2::RasterizerCanvasGLES2::canvas_begin: bind fbo tex");
 	}
 
 	// Reset the active texture back to 0 immediately after,
 	// otherwise, the very next draw call may accidentally bind
 	// its diffuse texture to the screen texture unit.
 	glActiveTexture(GL_TEXTURE0);
-	GL_CHECK_ERROR("GLES2::Canvas::canvas_begin: reset glActiveTexture");
+	GL_CHECK_ERROR("GLES2::RasterizerCanvasGLES2::canvas_begin: reset glActiveTexture");
 
 	// Set blending and clear buffers if needed
 	if ((render_target && render_target->is_transparent) || p_to_backbuffer) {
@@ -1194,16 +1194,16 @@ void RasterizerCanvasGLES2::canvas_begin(RID p_to_render_target, bool p_to_backb
 	} else {
 		glBlendFuncSeparate(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_ZERO, GL_ONE);
 	}
-	GL_CHECK_ERROR("GLES2::Canvas::canvas_begin: glBlendFuncSeparate");
+	GL_CHECK_ERROR("GLES2::RasterizerCanvasGLES2::canvas_begin: glBlendFuncSeparate");
 
 	glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
-	GL_CHECK_ERROR("GLES2::Canvas::canvas_begin: glColorMask");
+	GL_CHECK_ERROR("GLES2::RasterizerCanvasGLES2::canvas_begin: glColorMask");
 
 	if (render_target && render_target->clear_requested) {
 		const Color &col = render_target->clear_color;
 		glClearColor(col.r, col.g, col.b, render_target->is_transparent ? col.a : 1.0f);
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
-		GL_CHECK_ERROR("GLES2::Canvas::canvas_begin: clear requested");
+		GL_CHECK_ERROR("GLES2::RasterizerCanvasGLES2::canvas_begin: clear requested");
 		render_target->clear_requested = false;
 	}
 
@@ -1218,7 +1218,7 @@ void RasterizerCanvasGLES2::canvas_begin(RID p_to_render_target, bool p_to_backb
 	GLsizei vp_h = MAX(0, (int)render_target_size.y);
 
 	glViewport(0, 0, vp_w, vp_h);
-	GL_CHECK_ERROR("GLES2::Canvas::canvas_begin: glViewport");
+	GL_CHECK_ERROR("GLES2::RasterizerCanvasGLES2::canvas_begin: glViewport");
 
 	reset_canvas();
 
@@ -1230,7 +1230,7 @@ void RasterizerCanvasGLES2::canvas_begin(RID p_to_render_target, bool p_to_backb
 	if (tex_white) {
 		glBindTexture(GL_TEXTURE_2D, tex_white->tex_id);
 	}
-	GL_CHECK_ERROR("GLES2::Canvas::canvas_begin: bind white tex");
+	GL_CHECK_ERROR("GLES2::RasterizerCanvasGLES2::canvas_begin: bind white tex");
 
 	// Purge all lingering vertex attribute states
 	for (int i = 0; i < maximum_attributes; i++) {
@@ -1242,7 +1242,7 @@ void RasterizerCanvasGLES2::canvas_begin(RID p_to_render_target, bool p_to_backb
 	glVertexAttrib4f(RS::ARRAY_TEX_UV2, 1.0f, 1.0f, 1.0f, 1.0f); // Modulate
 	glVertexAttrib2f(RS::ARRAY_CUSTOM0, 0.0f, 0.0f); // Large Vertex Transform Translate
 	glVertexAttrib4f(RS::ARRAY_CUSTOM1, 1.0f, 0.0f, 0.0f, 1.0f); // Large Vertex Transform Basis
-	GL_CHECK_ERROR("GLES2::Canvas::canvas_begin: reset attribs");
+	GL_CHECK_ERROR("GLES2::RasterizerCanvasGLES2::canvas_begin: reset attribs");
 	
 	// Calculate Projection Matrix
 	// Godot 4 seems to expect 3D transforms even in 2D.
@@ -1287,7 +1287,7 @@ void RasterizerCanvasGLES2::canvas_end() {
 
 	glBindBuffer(GL_ARRAY_BUFFER, 0);
 	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
-	GL_CHECK_ERROR("GLES2::Canvas::canvas_end: disable states");
+	GL_CHECK_ERROR("GLES2::RasterizerCanvasGLES2::canvas_end: disable states");
 
 	for (int i = 0; i < maximum_attributes; i++) {
 		glDisableVertexAttribArray(i);
@@ -1306,7 +1306,7 @@ void RasterizerCanvasGLES2::canvas_end() {
 	glScissor(0, 0, vp_w, vp_h);
 
 	glDisable(GL_SCISSOR_TEST);
-	GL_CHECK_ERROR("GLES2::Canvas::canvas_end: reset viewport/scissor");
+	GL_CHECK_ERROR("GLES2::RasterizerCanvasGLES2::canvas_end: reset viewport/scissor");
 
 	state.using_skeleton = false;
 	state.using_ninepatch = false;
@@ -1323,7 +1323,7 @@ void RasterizerCanvasGLES2::reset_canvas() {
 	glEnable(GL_BLEND);
 	glBlendEquation(GL_FUNC_ADD);
 	glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
-	GL_CHECK_ERROR("GLES2::Canvas::reset_canvas: states");
+	GL_CHECK_ERROR("GLES2::RasterizerCanvasGLES2::reset_canvas: states");
 
 	bool transparent_rt = false;
 	if (state.render_target != RID()) {
@@ -1342,11 +1342,11 @@ void RasterizerCanvasGLES2::reset_canvas() {
 	} else {
 		glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 	}
-	GL_CHECK_ERROR("GLES2::Canvas::reset_canvas: blend func");
+	GL_CHECK_ERROR("GLES2::RasterizerCanvasGLES2::reset_canvas: blend func");
 
 	glBindBuffer(GL_ARRAY_BUFFER, 0);
 	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
-	GL_CHECK_ERROR("GLES2::Canvas::reset_canvas: unbind buffers");
+	GL_CHECK_ERROR("GLES2::RasterizerCanvasGLES2::reset_canvas: unbind buffers");
 }
 
 void RasterizerCanvasGLES2::set_debug_redraw(bool p_enabled, double p_time, const Color &p_color) {
@@ -1538,7 +1538,7 @@ void RasterizerCanvasGLES2::canvas_render_items_implementation(Item *p_item_list
 				glBlendFuncSeparate(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_ZERO, GL_ONE);
 				break;
 		}
-		GL_CHECK_ERROR("GLES2::Canvas::canvas_render_items_implementation: light blend setup");
+		GL_CHECK_ERROR("GLES2::RasterizerCanvasGLES2::canvas_render_items_implementation: light blend setup");
 
 		// Bind light texture
 		glActiveTexture(GL_TEXTURE0 + config->max_texture_image_units - 6);
@@ -1558,7 +1558,7 @@ void RasterizerCanvasGLES2::canvas_render_items_implementation(Item *p_item_list
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-		GL_CHECK_ERROR("GLES2::Canvas::canvas_render_items_implementation: light texture bind");
+		GL_CHECK_ERROR("GLES2::RasterizerCanvasGLES2::canvas_render_items_implementation: light texture bind");
 
 		// Bind the shadow texture
 		state.using_shadow = p_light->use_shadow;
@@ -1571,7 +1571,7 @@ void RasterizerCanvasGLES2::canvas_render_items_implementation(Item *p_item_list
 			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
 			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
 			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-			GL_CHECK_ERROR("GLES2::Canvas::canvas_render_items_implementation: shadow texture bind");
+			GL_CHECK_ERROR("GLES2::RasterizerCanvasGLES2::canvas_render_items_implementation: shadow texture bind");
 		}
 	}
 
@@ -1584,7 +1584,7 @@ void RasterizerCanvasGLES2::canvas_render_items_implementation(Item *p_item_list
 	if (tex_white) {
 		glBindTexture(GL_TEXTURE_2D, tex_white->tex_id);
 	}
-	GL_CHECK_ERROR("GLES2::Canvas::canvas_render_items_implementation: bind GL_TEXTURE0/GL_TEXTURE_2D");
+	GL_CHECK_ERROR("GLES2::RasterizerCanvasGLES2::canvas_render_items_implementation: bind GL_TEXTURE0/GL_TEXTURE_2D");
 
 	bool reclip = false;
 	bool time_used = false;
@@ -1622,10 +1622,10 @@ void RasterizerCanvasGLES2::canvas_render_items_implementation(Item *p_item_list
 					int w = MAX(0, (int)ris.current_clip->final_clip_rect.size.x);
 					int h = MAX(0, (int)ris.current_clip->final_clip_rect.size.y);
 					enable_scissor(x, y, w, h);
-					GL_CHECK_ERROR("GLES2::Canvas::render_items: glScissor setup");
+					GL_CHECK_ERROR("GLES2::RasterizerCanvasGLES2::render_items: glScissor setup");
 				} else {
 					disable_scissor();
-					GL_CHECK_ERROR("GLES2::Canvas::render_items: glScissor disable");
+					GL_CHECK_ERROR("GLES2::RasterizerCanvasGLES2::render_items: glScissor disable");
 				}
 				reclip = false;
 			}
@@ -1722,10 +1722,10 @@ void RasterizerCanvasGLES2::canvas_render_items_implementation(Item *p_item_list
 									int w = MAX(0, (int)ris.current_clip->final_clip_rect.size.x);
 									int h = MAX(0, (int)ris.current_clip->final_clip_rect.size.y);
 									enable_scissor(x, y, w, h);
-									GL_CHECK_ERROR("GLES2::Canvas::render_items: glScissor setup");
+									GL_CHECK_ERROR("GLES2::RasterizerCanvasGLES2::render_items: glScissor setup");
 								} else {
 									disable_scissor();
-									GL_CHECK_ERROR("GLES2::Canvas::render_items: glScissor disable");
+									GL_CHECK_ERROR("GLES2::RasterizerCanvasGLES2::render_items: glScissor disable");
 								}
 								reclip = false;
 							}
@@ -1807,10 +1807,10 @@ void RasterizerCanvasGLES2::canvas_render_items_implementation(Item *p_item_list
 					int w = MAX(0, (int)ris.current_clip->final_clip_rect.size.x);
 					int h = MAX(0, (int)ris.current_clip->final_clip_rect.size.y);
 					enable_scissor(x, y, w, h);
-					GL_CHECK_ERROR("GLES2::Canvas::render_items: glScissor setup");
+					GL_CHECK_ERROR("GLES2::RasterizerCanvasGLES2::render_items: glScissor setup");
 				} else {
 					disable_scissor();
-					GL_CHECK_ERROR("GLES2::Canvas::render_items: glScissor disable");
+					GL_CHECK_ERROR("GLES2::RasterizerCanvasGLES2::render_items: glScissor disable");
 				}
 				reclip = false;
 			}
@@ -1923,7 +1923,7 @@ void RasterizerCanvasGLES2::_batch_upload_buffers_2d() {
 	}
 
 	glBindBuffer(GL_ARRAY_BUFFER, bdata.gl_vertex_buffer);
-	GL_CHECK_ERROR("GLES2::Canvas::batch_upload: glBindBuffer");
+	GL_CHECK_ERROR("GLES2::RasterizerCanvasGLES2::batch_upload: glBindBuffer");
 
 	uint32_t buffer_bytes = 0;
 	const void *data_ptr = nullptr;
@@ -2040,7 +2040,7 @@ void RasterizerCanvasGLES2::_batch_render_generic(const Batch &p_batch, GLES2::C
 	// Bind the massive dynamic buffer
 	glBindBuffer(GL_ARRAY_BUFFER, bdata.gl_vertex_buffer);
 	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, bdata.gl_index_buffer);
-	GL_CHECK_ERROR("GLES2::Canvas::batch_render_generic: bind VBO/IBO");
+	GL_CHECK_ERROR("GLES2::RasterizerCanvasGLES2::batch_render_generic: bind VBO/IBO");
 
 	glEnableVertexAttribArray(RS::ARRAY_VERTEX);
 	glVertexAttribPointer(RS::ARRAY_VERTEX, 2, GL_FLOAT, GL_FALSE, sizeof_vert, (const void *)(pointer_offset + offsetof(BatchVertex, pos)));
@@ -2092,7 +2092,7 @@ void RasterizerCanvasGLES2::_batch_render_generic(const Batch &p_batch, GLES2::C
 		glVertexAttrib4f(RS::ARRAY_WEIGHTS, 1.0f, 0.0f, 0.0f, 1.0f);
 	}
 
-	GL_CHECK_ERROR("GLES2::Canvas::batch_render_generic: setup client states");
+	GL_CHECK_ERROR("GLES2::RasterizerCanvasGLES2::batch_render_generic: setup client states");
 
 	// Send Pixel Size to the shader (using the state updated by _bind_canvas_texture)
 	state.canvas_shader->version_set_uniform(CanvasShaderGLES2::COLOR_TEXTURE_PIXEL_SIZE, state.texpixel_size, state.shader_version, state.mode_variant, state.specialization);
@@ -2107,7 +2107,7 @@ void RasterizerCanvasGLES2::_batch_render_generic(const Batch &p_batch, GLES2::C
 				current_render_info->info[RS::VIEWPORT_RENDER_INFO_TYPE_CANVAS][RS::VIEWPORT_RENDER_INFO_PRIMITIVES_IN_FRAME] += num_elements / 3;
 				current_render_info->info[RS::VIEWPORT_RENDER_INFO_TYPE_CANVAS][RS::VIEWPORT_RENDER_INFO_DRAW_CALLS_IN_FRAME]++;
 			}
-			GL_CHECK_ERROR("GLES2::Canvas::batch_render_generic: glDrawElements (BT_RECT)");
+			GL_CHECK_ERROR("GLES2::RasterizerCanvasGLES2::batch_render_generic: glDrawElements (BT_RECT)");
 		} break;
 		case BatcherEnums::BT_POLY: {
 			// Unbind the index buffer before an array draw.
@@ -2121,7 +2121,7 @@ void RasterizerCanvasGLES2::_batch_render_generic(const Batch &p_batch, GLES2::C
 				current_render_info->info[RS::VIEWPORT_RENDER_INFO_TYPE_CANVAS][RS::VIEWPORT_RENDER_INFO_PRIMITIVES_IN_FRAME] += num_elements / 3;
 				current_render_info->info[RS::VIEWPORT_RENDER_INFO_TYPE_CANVAS][RS::VIEWPORT_RENDER_INFO_DRAW_CALLS_IN_FRAME]++;
 			}
-			GL_CHECK_ERROR("GLES2::Canvas::batch_render_generic: glDrawArrays (BT_POLY)");
+			GL_CHECK_ERROR("GLES2::RasterizerCanvasGLES2::batch_render_generic: glDrawArrays (BT_POLY)");
 		} break;
 		default:
 			break;
@@ -2142,7 +2142,7 @@ void RasterizerCanvasGLES2::_batch_render_generic(const Batch &p_batch, GLES2::C
 	glVertexAttrib4f(RS::ARRAY_COLOR, 1.0f, 1.0f, 1.0f, 1.0f);
 	glBindBuffer(GL_ARRAY_BUFFER, 0);
 	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
-	GL_CHECK_ERROR("GLES2::Canvas::batch_render_generic: cleanup");
+	GL_CHECK_ERROR("GLES2::RasterizerCanvasGLES2::batch_render_generic: cleanup");
 }
 
 void RasterizerCanvasGLES2::render_batches(Item::Command *const *p_commands, Item *p_current_clip, bool &r_reclip, GLES2::CanvasMaterialData *p_material) {
@@ -2355,7 +2355,7 @@ void RasterizerCanvasGLES2::render_batches(Item::Command *const *p_commands, Ite
 								current_render_info->info[RS::VIEWPORT_RENDER_INFO_TYPE_CANVAS][RS::VIEWPORT_RENDER_INFO_PRIMITIVES_IN_FRAME] += 2;
 								current_render_info->info[RS::VIEWPORT_RENDER_INFO_TYPE_CANVAS][RS::VIEWPORT_RENDER_INFO_DRAW_CALLS_IN_FRAME]++;
 							}
-							GL_CHECK_ERROR("GLES2::Canvas::render_batches: TYPE_RECT glDrawArrays");
+							GL_CHECK_ERROR("GLES2::RasterizerCanvasGLES2::render_batches: TYPE_RECT glDrawArrays");
 
 							// Cleanup
 							glBindBuffer(GL_ARRAY_BUFFER, 0);
@@ -2474,7 +2474,7 @@ void RasterizerCanvasGLES2::render_batches(Item::Command *const *p_commands, Ite
 								}
 							}
 
-							GL_CHECK_ERROR("GLES2::Canvas::render_batches: TYPE_MULTIRECT glDrawArrays");
+							GL_CHECK_ERROR("GLES2::RasterizerCanvasGLES2::render_batches: TYPE_MULTIRECT glDrawArrays");
 
 							// Cleanup
 							glBindBuffer(GL_ARRAY_BUFFER, 0);
@@ -2607,7 +2607,7 @@ void RasterizerCanvasGLES2::render_batches(Item::Command *const *p_commands, Ite
 
 							glVertexAttribPointer(RS::ARRAY_VERTEX, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), nullptr);
 							glVertexAttribPointer(RS::ARRAY_TEX_UV, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (const void *)(sizeof(float) * 2));
-							GL_CHECK_ERROR("GLES2::Canvas::render_batches: TYPE_NINEPATCH client states");
+							GL_CHECK_ERROR("GLES2::RasterizerCanvasGLES2::render_batches: TYPE_NINEPATCH client states");
 
 							glDrawElements(GL_TRIANGLES, 18 * 3 - (np->draw_center ? 0 : 6), GL_UNSIGNED_BYTE, nullptr);
 							if (current_render_info) {
@@ -2615,7 +2615,7 @@ void RasterizerCanvasGLES2::render_batches(Item::Command *const *p_commands, Ite
 								current_render_info->info[RS::VIEWPORT_RENDER_INFO_TYPE_CANVAS][RS::VIEWPORT_RENDER_INFO_PRIMITIVES_IN_FRAME] += (18 * 3 - (np->draw_center ? 0 : 6)) / 3;
 								current_render_info->info[RS::VIEWPORT_RENDER_INFO_TYPE_CANVAS][RS::VIEWPORT_RENDER_INFO_DRAW_CALLS_IN_FRAME]++;
 							}
-							GL_CHECK_ERROR("GLES2::Canvas::render_batches: TYPE_NINEPATCH glDrawElements");
+							GL_CHECK_ERROR("GLES2::RasterizerCanvasGLES2::render_batches: TYPE_NINEPATCH glDrawElements");
 
 							glDisableVertexAttribArray(RS::ARRAY_VERTEX);
 							glDisableVertexAttribArray(RS::ARRAY_TEX_UV);
@@ -2703,7 +2703,7 @@ void RasterizerCanvasGLES2::render_batches(Item::Command *const *p_commands, Ite
 								if (s->index_count > 0) {
 									glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, s->index_buffer);
 								}
-								GL_CHECK_ERROR("GLES2::Canvas::render_batches: TYPE_MULTIMESH bind VBO/IBO");
+								GL_CHECK_ERROR("GLES2::RasterizerCanvasGLES2::render_batches: TYPE_MULTIMESH bind VBO/IBO");
 
 								if (s->version_count > 0 && s->versions) {
 									GLES2::Mesh::Surface::Version *v = &s->versions[0];
@@ -2735,7 +2735,7 @@ void RasterizerCanvasGLES2::render_batches(Item::Command *const *p_commands, Ite
 										}
 									}
 								}
-								GL_CHECK_ERROR("GLES2::Canvas::render_batches: TYPE_MULTIMESH setup client pointers");
+								GL_CHECK_ERROR("GLES2::RasterizerCanvasGLES2::render_batches: TYPE_MULTIMESH setup client pointers");
 
 								GLenum gl_primitive = _gl_get_primitive_type(s->primitive);
 								bool needs_32_bit = s->vertex_count >= (1 << 16);
@@ -2790,7 +2790,7 @@ void RasterizerCanvasGLES2::render_batches(Item::Command *const *p_commands, Ite
 												current_render_info->info[RS::VIEWPORT_RENDER_INFO_TYPE_CANVAS][RS::VIEWPORT_RENDER_INFO_PRIMITIVES_IN_FRAME] += _gl_indices_to_primitives_2d(gl_primitive, s->index_count);
 												current_render_info->info[RS::VIEWPORT_RENDER_INFO_TYPE_CANVAS][RS::VIEWPORT_RENDER_INFO_DRAW_CALLS_IN_FRAME]++;
 											}
-											GL_CHECK_ERROR("GLES2::Canvas::render_batches: TYPE_MULTIMESH glDrawElements");
+											GL_CHECK_ERROR("GLES2::RasterizerCanvasGLES2::render_batches: TYPE_MULTIMESH glDrawElements");
 										}
 									} else {
 										glDrawArrays(gl_primitive, 0, s->vertex_count);
@@ -2799,7 +2799,7 @@ void RasterizerCanvasGLES2::render_batches(Item::Command *const *p_commands, Ite
 											current_render_info->info[RS::VIEWPORT_RENDER_INFO_TYPE_CANVAS][RS::VIEWPORT_RENDER_INFO_PRIMITIVES_IN_FRAME] += _gl_indices_to_primitives_2d(gl_primitive, s->vertex_count);
 											current_render_info->info[RS::VIEWPORT_RENDER_INFO_TYPE_CANVAS][RS::VIEWPORT_RENDER_INFO_DRAW_CALLS_IN_FRAME]++;
 										}
-										GL_CHECK_ERROR("GLES2::Canvas::render_batches: TYPE_MULTIMESH glDrawArrays");
+										GL_CHECK_ERROR("GLES2::RasterizerCanvasGLES2::render_batches: TYPE_MULTIMESH glDrawArrays");
 									}
 								}
 
@@ -2832,7 +2832,7 @@ void RasterizerCanvasGLES2::render_batches(Item::Command *const *p_commands, Ite
 										int w = MAX(0, (int)p_current_clip->final_clip_rect.size.x);
 										int h = MAX(0, (int)p_current_clip->final_clip_rect.size.y);
 										enable_scissor(x, y, w, h);
-										GL_CHECK_ERROR("GLES2::Canvas::render_batches: Item::Command::TYPE_CLIP_IGNORE: glScissor");
+										GL_CHECK_ERROR("GLES2::RasterizerCanvasGLES2::render_batches: Item::Command::TYPE_CLIP_IGNORE: glScissor");
 										r_reclip = false;
 									}
 								}
@@ -2914,7 +2914,7 @@ void RasterizerCanvasGLES2::render_batches(Item::Command *const *p_commands, Ite
 									if (s->index_count > 0) {
 										glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, s->index_buffer);
 									}
-									GL_CHECK_ERROR("GLES2::Canvas::render_batches: TYPE_MESH bind VBO/IBO");
+									GL_CHECK_ERROR("GLES2::RasterizerCanvasGLES2::render_batches: TYPE_MESH bind VBO/IBO");
 
 									// Setup vertex attributes from the cached Version struct
 									if (s->version_count > 0 && s->versions) {
@@ -2974,7 +2974,7 @@ void RasterizerCanvasGLES2::render_batches(Item::Command *const *p_commands, Ite
 												}
 											}
 										}
-										GL_CHECK_ERROR("GLES2::Canvas::render_batches: TYPE_MESH setup client pointers");
+										GL_CHECK_ERROR("GLES2::RasterizerCanvasGLES2::render_batches: TYPE_MESH setup client pointers");
 									}
 
 									// Draw call using the correct index count and vertex count
@@ -2992,7 +2992,7 @@ void RasterizerCanvasGLES2::render_batches(Item::Command *const *p_commands, Ite
 												current_render_info->info[RS::VIEWPORT_RENDER_INFO_TYPE_CANVAS][RS::VIEWPORT_RENDER_INFO_PRIMITIVES_IN_FRAME] += _gl_indices_to_primitives_2d(gl_primitive, s->index_count);
 												current_render_info->info[RS::VIEWPORT_RENDER_INFO_TYPE_CANVAS][RS::VIEWPORT_RENDER_INFO_DRAW_CALLS_IN_FRAME]++;
 											}
-											GL_CHECK_ERROR("GLES2::Canvas::render_batches: TYPE_MESH glDrawElements");
+											GL_CHECK_ERROR("GLES2::RasterizerCanvasGLES2::render_batches: TYPE_MESH glDrawElements");
 										}
 									} else {
 										glDrawArrays(gl_primitive, 0, s->vertex_count);
@@ -3001,7 +3001,7 @@ void RasterizerCanvasGLES2::render_batches(Item::Command *const *p_commands, Ite
 											current_render_info->info[RS::VIEWPORT_RENDER_INFO_TYPE_CANVAS][RS::VIEWPORT_RENDER_INFO_PRIMITIVES_IN_FRAME] += _gl_indices_to_primitives_2d(gl_primitive, s->vertex_count);
 											current_render_info->info[RS::VIEWPORT_RENDER_INFO_TYPE_CANVAS][RS::VIEWPORT_RENDER_INFO_DRAW_CALLS_IN_FRAME]++;
 										}
-										GL_CHECK_ERROR("GLES2::Canvas::render_batches: TYPE_MESH glDrawArrays");
+										GL_CHECK_ERROR("GLES2::RasterizerCanvasGLES2::render_batches: TYPE_MESH glDrawArrays");
 									}
 
 									// Clean up attributes
@@ -3144,7 +3144,7 @@ void RasterizerCanvasGLES2::_draw_gui_primitive(int p_points, const Vector2 *p_v
 	} else {
 		glDisableVertexAttribArray(RS::ARRAY_TEX_UV);
 	}
-	GL_CHECK_ERROR("GLES2::Canvas::draw_gui: buffer subdata and pointers");
+	GL_CHECK_ERROR("GLES2::RasterizerCanvasGLES2::draw_gui: buffer subdata and pointers");
 
 	// For Gizmos, we often draw Lines, Triangles, or Points depending on p_points
 	GLenum draw_mode = GL_INVALID_ENUM;
@@ -3171,7 +3171,7 @@ void RasterizerCanvasGLES2::_draw_gui_primitive(int p_points, const Vector2 *p_v
 	glDisableVertexAttribArray(RS::ARRAY_COLOR);
 	glVertexAttrib4f(RS::ARRAY_COLOR, 1.0f, 1.0f, 1.0f, 1.0f);
 	glBindBuffer(GL_ARRAY_BUFFER, 0);
-	GL_CHECK_ERROR("GLES2::Canvas::draw_gui: glDrawArrays");
+	GL_CHECK_ERROR("GLES2::RasterizerCanvasGLES2::draw_gui: glDrawArrays");
 }
 
 void RasterizerCanvasGLES2::_legacy_draw_primitive(Item::CommandPrimitive *p_pr, GLES2::CanvasMaterialData *p_material) {
@@ -3284,7 +3284,7 @@ void RasterizerCanvasGLES2::_legacy_draw_polygon(Item::CommandPolygon *p_poly, G
 	} else {
 		glDisableVertexAttribArray(RS::ARRAY_TEX_UV);
 	}
-	GL_CHECK_ERROR("GLES2::Canvas::_legacy_draw_polygon: buffer subdata and pointers");
+	GL_CHECK_ERROR("GLES2::RasterizerCanvasGLES2::_legacy_draw_polygon: buffer subdata and pointers");
 
 	// Colors
 	if (pd.colors.size() == 1) {
@@ -3375,7 +3375,7 @@ void RasterizerCanvasGLES2::_legacy_draw_polygon(Item::CommandPolygon *p_poly, G
 				current_render_info->info[RS::VIEWPORT_RENDER_INFO_TYPE_CANVAS][RS::VIEWPORT_RENDER_INFO_PRIMITIVES_IN_FRAME] += _gl_indices_to_primitives_2d(GL_TRIANGLE_FAN, pd.points.size());
 				current_render_info->info[RS::VIEWPORT_RENDER_INFO_TYPE_CANVAS][RS::VIEWPORT_RENDER_INFO_DRAW_CALLS_IN_FRAME]++;
 			}
-			GL_CHECK_ERROR("GLES2::Canvas::_legacy_draw_polygon: glDrawArrays (GL_TRIANGLE_FAN)");
+			GL_CHECK_ERROR("GLES2::RasterizerCanvasGLES2::_legacy_draw_polygon: glDrawArrays (GL_TRIANGLE_FAN)");
 		} else {
 			glDrawArrays(gl_primitive, 0, pd.points.size());
 			if (current_render_info) {
@@ -3383,7 +3383,7 @@ void RasterizerCanvasGLES2::_legacy_draw_polygon(Item::CommandPolygon *p_poly, G
 				current_render_info->info[RS::VIEWPORT_RENDER_INFO_TYPE_CANVAS][RS::VIEWPORT_RENDER_INFO_PRIMITIVES_IN_FRAME] += _gl_indices_to_primitives_2d(gl_primitive, pd.points.size());
 				current_render_info->info[RS::VIEWPORT_RENDER_INFO_TYPE_CANVAS][RS::VIEWPORT_RENDER_INFO_DRAW_CALLS_IN_FRAME]++;
 			}
-			GL_CHECK_ERROR("GLES2::Canvas::_legacy_draw_polygon: glDrawArrays (Primitive)");
+			GL_CHECK_ERROR("GLES2::RasterizerCanvasGLES2::_legacy_draw_polygon: glDrawArrays (Primitive)");
 		}
 	}
 
@@ -3393,7 +3393,7 @@ void RasterizerCanvasGLES2::_legacy_draw_polygon(Item::CommandPolygon *p_poly, G
 	glDisableVertexAttribArray(RS::ARRAY_COLOR);
 	glVertexAttrib4f(RS::ARRAY_COLOR, 1.0f, 1.0f, 1.0f, 1.0f);
 	glBindBuffer(GL_ARRAY_BUFFER, 0);
-	GL_CHECK_ERROR("GLES2::Canvas::_legacy_draw_polygon: cleanup");
+	GL_CHECK_ERROR("GLES2::RasterizerCanvasGLES2::_legacy_draw_polygon: cleanup");
 }
 
 void RasterizerCanvasGLES2::_set_texture_rect_mode(bool p_texture_rect, bool p_light_angle, bool p_modulate, bool p_large_vertex) {
@@ -3470,7 +3470,7 @@ RendererCanvasRender::PolygonID RasterizerCanvasGLES2::request_polygon(const Vec
 
 	PolygonBuffers pb;
 	glGenBuffers(1, &pb.vertex_buffer);
-	GL_CHECK_ERROR("GLES2::Canvas::request_polygon: glGenBuffers(pb.vertex_buffer)");
+	GL_CHECK_ERROR("GLES2::RasterizerCanvasGLES2::request_polygon: glGenBuffers(pb.vertex_buffer)");
 	pb.count = vertex_count;
 	pb.index_buffer = 0;
 
@@ -3573,7 +3573,7 @@ RendererCanvasRender::PolygonID RasterizerCanvasGLES2::request_polygon(const Vec
 	glBindBuffer(GL_ARRAY_BUFFER, 0);
 	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
 
-	GL_CHECK_ERROR("GLES2::Canvas::request_polygon: glBindBuffer(GL_ELEMENT_ARRAY_BUFFER)");
+	GL_CHECK_ERROR("GLES2::RasterizerCanvasGLES2::request_polygon: glBindBuffer(GL_ELEMENT_ARRAY_BUFFER)");
 
 	PolygonID id = polygon_buffers.last_id++;
 	polygon_buffers.polygons[id] = pb;
