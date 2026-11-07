@@ -2204,22 +2204,6 @@ uint32_t RasterizerSceneGLES1::_batch_get_surface_flags(const GeometryInstanceSu
 		flags |= BatcherEnums::BTF_3D_USES_COLORS;
 	}
 
-	if (
-		p_surface->material &&
-		p_surface->material->approx_type != GLES1::SceneMaterialData::APPROX_NONE &&
-		p_surface->material->approx_data
-	) {
-		const GLES1::StandardMaterialState *st = static_cast<const GLES1::StandardMaterialState *>(p_surface->material->approx_data);
-		if (
-			st->albedo[0] != 1.0f ||
-			st->albedo[1] != 1.0f ||
-			st->albedo[2] != 1.0f ||
-			st->albedo[3] != 1.0f
-		) {
-			flags |= BatcherEnums::BTF_3D_USES_COLORS;
-		}
-	}
-
 	if (!p_surface->uv2_cache.is_empty() || bdata.pass_mode == PASS_MODE_MATERIAL) {
 		flags |= BatcherEnums::BTF_3D_USES_UV2;
 		if (scene_state.current_spec_constants & SceneShaderGLES1::RENDER_MATERIAL_NORMAL) {
@@ -2618,20 +2602,36 @@ void RasterizerSceneGLES1::_batch_fill_multimesh_tiered(const BATCH_TYPE::BItemR
 	}
 
 	if (r_inds) {
+		const bool is_strip = (
+			p_surface->primitive == RS::PRIMITIVE_TRIANGLE_STRIP ||
+			p_surface->primitive == RS::PRIMITIVE_LINE_STRIP
+		);
 		uint32_t inds_idx = 0;
 		if (indices.size() > 0) {
 			const uint32_t i_count = indices.size();
 			const int32_t *idx_ptr = indices.ptr();
 			for (int inst = 0; inst < instances; inst++) {
+				const uint32_t base_v = p_start_vert + (inst * v_count);
+				if (is_strip && inst > 0) {
+					r_inds[inds_idx] = r_inds[inds_idx - 1];
+					r_inds[inds_idx + 1] = static_cast<uint16_t>(idx_ptr[0] + base_v);
+					inds_idx += 2;
+				}
 				for (uint32_t i = 0; i < i_count; i++) {
-					r_inds[inds_idx++] = static_cast<uint16_t>(idx_ptr[i] + p_start_vert + (inst * v_count));
+					r_inds[inds_idx++] = static_cast<uint16_t>(idx_ptr[i] + base_v);
 				}
 			}
 		} else {
 			// Auto-generate sequential indices for unindexed meshes.
 			for (int inst = 0; inst < instances; inst++) {
+				const uint32_t base_v = p_start_vert + (inst * v_count);
+				if (is_strip && inst > 0) {
+					r_inds[inds_idx] = r_inds[inds_idx - 1];
+					r_inds[inds_idx + 1] = static_cast<uint16_t>(base_v);
+					inds_idx += 2;
+				}
 				for (uint32_t i = 0; i < v_count; i++) {
-					r_inds[inds_idx++] = static_cast<uint16_t>(i + p_start_vert + (inst * v_count));
+					r_inds[inds_idx++] = static_cast<uint16_t>(i + base_v);
 				}
 			}
 		}
@@ -2793,72 +2793,143 @@ void RasterizerSceneGLES1::_batch_fill_multimesh_depth(const BATCH_TYPE::BItemRe
 	}
 
 	if (r_inds) {
+		const bool is_strip = (
+			p_surface->primitive == RS::PRIMITIVE_TRIANGLE_STRIP ||
+			p_surface->primitive == RS::PRIMITIVE_LINE_STRIP
+		);
 		uint32_t inds_idx = 0;
 		if (indices.size() > 0) {
 			const uint32_t i_count = indices.size();
 			const int32_t *idx_ptr = indices.ptr();
 			for (int inst = 0; inst < instances; inst++) {
+				const uint32_t base_v = p_start_vert + (inst * v_count);
+				if (is_strip && inst > 0) {
+					r_inds[inds_idx] = r_inds[inds_idx - 1];
+					r_inds[inds_idx + 1] = static_cast<uint16_t>(idx_ptr[0] + base_v);
+					inds_idx += 2;
+				}
 				for (uint32_t i = 0; i < i_count; i++) {
-					r_inds[inds_idx++] = static_cast<uint16_t>(idx_ptr[i] + p_start_vert + (inst * v_count));
+					r_inds[inds_idx++] = static_cast<uint16_t>(idx_ptr[i] + base_v);
 				}
 			}
 		} else {
 			// Auto-generate sequential indices for unindexed meshes.
 			for (int inst = 0; inst < instances; inst++) {
+				const uint32_t base_v = p_start_vert + (inst * v_count);
+				if (is_strip && inst > 0) {
+					r_inds[inds_idx] = r_inds[inds_idx - 1];
+					r_inds[inds_idx + 1] = static_cast<uint16_t>(base_v);
+					inds_idx += 2;
+				}
 				for (uint32_t i = 0; i < v_count; i++) {
-					r_inds[inds_idx++] = static_cast<uint16_t>(i + p_start_vert + (inst * v_count));
+					r_inds[inds_idx++] = static_cast<uint16_t>(i + base_v);
 				}
 			}
 		}
 	}
 }
 
-void RasterizerSceneGLES1::_batch_upload_buffers(BATCH_TYPE::Batch3D &r_batch) {
+void RasterizerSceneGLES1::_batch_upload_buffers_3d(BATCH_TYPE::Batch3D &r_batch) {
 	const uint32_t max_vbo_bytes = bdata.unit_vertices.max_size() * sizeof(BATCH_TYPE::BatchVertex3DTier4);
 	const uint32_t max_ibo_bytes = bdata.indices.max_size() * sizeof(uint16_t);
 	const uint32_t bytes_to_upload = bdata.total_verts * bdata.unit_vertices.get_unit_size_bytes();
 	const uint32_t indices_bytes_to_upload = bdata.total_indices * sizeof(uint16_t);
+	const uint32_t aligned_vbo_bytes = (bytes_to_upload + 15U) & ~15U;
+	const uint32_t aligned_ibo_bytes = (indices_bytes_to_upload + 3U) & ~3U;
 
+	if (!GLES1_CONFIG->support_vbo) {
+		// Retain each batch's payload sequentially inside the unit vertices array
+		// plus its indices across the pass so multi-pass replays don't overwrite earlier batches.
+		if (
+			bdata.current_vbo_byte_offset + aligned_vbo_bytes > max_vbo_bytes ||
+			bdata.current_ibo_byte_offset + aligned_ibo_bytes > max_ibo_bytes
+		) {
+			bdata.current_vbo_byte_offset = 0;
+			bdata.current_ibo_byte_offset = 0;
+		}
+
+		uint8_t *vbo_base = const_cast<uint8_t *>(bdata.unit_vertices.get_data());
+		uint8_t *ibo_base = reinterpret_cast<uint8_t *>(const_cast<uint16_t *>(bdata.indices.get_data()));
+
+		if (bdata.current_vbo_byte_offset > 0 && vbo_base && bytes_to_upload > 0) {
+			memmove(vbo_base + bdata.current_vbo_byte_offset, vbo_base, bytes_to_upload);
+		}
+		if (bdata.current_ibo_byte_offset > 0 && ibo_base && indices_bytes_to_upload > 0) {
+			memmove(ibo_base + bdata.current_ibo_byte_offset, ibo_base, indices_bytes_to_upload);
+		}
+
+		r_batch.vbo_index = 0;
+		r_batch.vbo_byte_offset = bdata.current_vbo_byte_offset;
+		r_batch.ibo_byte_offset = bdata.current_ibo_byte_offset;
+		bdata.current_vbo_byte_offset += aligned_vbo_bytes;
+		bdata.current_ibo_byte_offset += aligned_ibo_bytes;
+		return;
+	}
+
+	if (GLES1_CONFIG->is_android_emulator) {
+		bdata.current_vbo_byte_offset = 0;
+		bdata.current_ibo_byte_offset = 0;
+	} else if (bdata.current_vbo_byte_offset > 0 || bdata.current_ibo_byte_offset > 0) {
+		if (
+			(bdata.current_vbo_byte_offset + aligned_vbo_bytes > max_vbo_bytes) ||
+			(bdata.current_ibo_byte_offset + aligned_ibo_bytes > max_ibo_bytes)
+		) {
+			bdata.current_vbo_index++;
+			bdata.current_vbo_byte_offset = 0;
+			bdata.current_ibo_byte_offset = 0;
+		}
+	}
+
+	bool pool_created = false;
 	if (bdata.current_vbo_index >= bdata.vbo_pool.size()) {
 		BATCH_TYPE::VBOPool new_pool;
-		if (GLES1_CONFIG->support_vbo) {
-			glGenBuffers(1, &new_pool.gl_vertex_buffer);
-			glBindBuffer(GL_ARRAY_BUFFER, new_pool.gl_vertex_buffer);
-			glBufferData(GL_ARRAY_BUFFER, max_vbo_bytes, nullptr, GL_DYNAMIC_DRAW);
+		glGenBuffers(1, &new_pool.gl_vertex_buffer);
+		glBindBuffer(GL_ARRAY_BUFFER, new_pool.gl_vertex_buffer);
+		glBufferData(GL_ARRAY_BUFFER, max_vbo_bytes, nullptr, GL_DYNAMIC_DRAW);
 
-			glGenBuffers(1, &new_pool.gl_index_buffer);
-			glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, new_pool.gl_index_buffer);
-			glBufferData(GL_ELEMENT_ARRAY_BUFFER, max_ibo_bytes, nullptr, GL_DYNAMIC_DRAW);
+		glGenBuffers(1, &new_pool.gl_index_buffer);
+		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, new_pool.gl_index_buffer);
+		glBufferData(GL_ELEMENT_ARRAY_BUFFER, max_ibo_bytes, nullptr, GL_DYNAMIC_DRAW);
 
-			glBindBuffer(GL_ARRAY_BUFFER, 0);
-			glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
-			GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_batch_upload_buffers: pool initialization");
-		}
+		glBindBuffer(GL_ARRAY_BUFFER, 0);
+		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+		GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_batch_upload_buffers: pool initialization");
 		bdata.vbo_pool.push_back(new_pool);
+		pool_created = true;
 	}
 
 	r_batch.vbo_index = bdata.current_vbo_index;
-	r_batch.vbo_byte_offset = 0;
-	r_batch.ibo_byte_offset = 0;
+	r_batch.vbo_byte_offset = bdata.current_vbo_byte_offset;
+	r_batch.ibo_byte_offset = bdata.current_ibo_byte_offset;
 	BATCH_TYPE::VBOPool &pool = bdata.vbo_pool[bdata.current_vbo_index];
 
-	if (GLES1_CONFIG->support_vbo && pool.gl_vertex_buffer != 0) {
+	if (pool.gl_vertex_buffer != 0) {
+		const bool is_sub_alloc = (
+			!GLES1_CONFIG->is_android_emulator &&
+			(pool_created || bdata.current_vbo_byte_offset > 0 || bdata.current_ibo_byte_offset > 0)
+		);
+
 		// Orphan the vertex buffer
 		glBindBuffer(GL_ARRAY_BUFFER, pool.gl_vertex_buffer);
 		uint32_t vbo_alloc = GLES1_CONFIG->is_android_emulator ? bytes_to_upload : max_vbo_bytes;
-		_batch_buffer_orphan_and_upload_3d(vbo_alloc, 0, bytes_to_upload, bdata.unit_vertices.get_data(), GL_ARRAY_BUFFER, GL_DYNAMIC_DRAW, false);
+		_batch_buffer_orphan_and_upload_3d(vbo_alloc, r_batch.vbo_byte_offset, bytes_to_upload, bdata.unit_vertices.get_data(), GL_ARRAY_BUFFER, GL_DYNAMIC_DRAW, is_sub_alloc);
 
 		// Orphan the index buffer
 		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, pool.gl_index_buffer);
 		uint32_t ibo_alloc = GLES1_CONFIG->is_android_emulator ? indices_bytes_to_upload : max_ibo_bytes;
-		_batch_buffer_orphan_and_upload_3d(ibo_alloc, 0, indices_bytes_to_upload, bdata.indices.get_data(), GL_ELEMENT_ARRAY_BUFFER, GL_DYNAMIC_DRAW, false);
+		_batch_buffer_orphan_and_upload_3d(ibo_alloc, r_batch.ibo_byte_offset, indices_bytes_to_upload, bdata.indices.get_data(), GL_ELEMENT_ARRAY_BUFFER, GL_DYNAMIC_DRAW, is_sub_alloc);
 
 		glBindBuffer(GL_ARRAY_BUFFER, 0);
 		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
 		GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_batch_upload_buffers: unbind buffers");
 	}
 
-	bdata.current_vbo_index++;
+	if (GLES1_CONFIG->is_android_emulator) {
+		bdata.current_vbo_index++;
+	} else {
+		bdata.current_vbo_byte_offset += aligned_vbo_bytes;
+		bdata.current_ibo_byte_offset += aligned_ibo_bytes;
+	}
 }
 
 void RasterizerSceneGLES1::_batch_bind_material(GLES1::SceneMaterialData *p_material_data, const Transform3D &p_world_transform, bool p_transparent) {
@@ -3190,15 +3261,20 @@ void RasterizerSceneGLES1::_batch_render_generic(RS::PrimitiveType p_primitive, 
 		GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_batch_render_generic: glEnableClientState GL_MATRIX_INDEX_ARRAY_OES");
 	}
 
+	const uint32_t vbo_byte_ofs = _render_item_state.curr_batch ? _render_item_state.curr_batch->vbo_byte_offset : 0;
+	const uint32_t ibo_byte_ofs = _render_item_state.curr_batch ? _render_item_state.curr_batch->ibo_byte_offset : 0;
+
 	const uint8_t *base_ptr = nullptr;
 	if (gl_vbo != 0) {
 		glBindBuffer(GL_ARRAY_BUFFER, gl_vbo);
+		base_ptr = reinterpret_cast<const uint8_t *>(static_cast<uintptr_t>(vbo_byte_ofs));
 	} else {
 		if (GLES1_CONFIG->support_vbo) {
 			glBindBuffer(GL_ARRAY_BUFFER, 0);
 		}
 		base_ptr = bdata.unit_vertices.get_data();
 		ERR_FAIL_NULL(base_ptr);
+		base_ptr += vbo_byte_ofs;
 	}
 
 	size_t pos_ofs = 0;
@@ -3276,13 +3352,14 @@ void RasterizerSceneGLES1::_batch_render_generic(RS::PrimitiveType p_primitive, 
 
 	if (gl_ibo != 0) {
 		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, gl_ibo);
-		glDrawElements(_gl_get_primitive_type(p_primitive), p_count, GL_UNSIGNED_SHORT, (void *)(uintptr_t)(p_offset * sizeof(uint16_t)));
+		glDrawElements(_gl_get_primitive_type(p_primitive), p_count, GL_UNSIGNED_SHORT, (void *)(uintptr_t)(ibo_byte_ofs + (p_offset * sizeof(uint16_t))));
 		GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_batch_render_generic: glDrawElements VBO");
 	} else {
 		if (GLES1_CONFIG->support_vbo) {
 			glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
 		}
-		glDrawElements(_gl_get_primitive_type(p_primitive), p_count, GL_UNSIGNED_SHORT, bdata.indices.get_data() + p_offset);
+		const uint8_t *ibo_client_ptr = reinterpret_cast<const uint8_t *>(bdata.indices.get_data()) + ibo_byte_ofs + (p_offset * sizeof(uint16_t));
+		glDrawElements(_gl_get_primitive_type(p_primitive), p_count, GL_UNSIGNED_SHORT, ibo_client_ptr);
 		GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_batch_render_generic: glDrawElements Client");
 	}
 	_record_draw_call_info(scene_state.current_render_info);
@@ -5832,9 +5909,11 @@ void RasterizerSceneGLES1::render_scene(const Ref<RenderSceneBuffers> &p_render_
 	GLES1::TextureStorage::get_singleton()->bind_framebuffer_system();
 	GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::render_scene: reset_gl_state cleanup");
 
-	// Reset VBO index. We require this to
+	// Reset VBO index and sub-allocation cursors. We require this to
 	// preserve full-scene VBO caching for our multi-pass lighting replays.
 	bdata.current_vbo_index = 0;
+	bdata.current_vbo_byte_offset = 0;
+	bdata.current_ibo_byte_offset = 0;
 }
 
 void RasterizerSceneGLES1::_render_post_processing(const RenderDataGLES1 *p_render_data) {
@@ -6434,6 +6513,10 @@ void RasterizerSceneGLES1::_render_uv2(const PagedArray<RenderGeometryInstance *
 		GLES1::TextureStorage::get_singleton()->bind_framebuffer(prev_fbo);
 	}
 	GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_render_uv2: restore GL state");
+
+	bdata.current_vbo_index = 0;
+	bdata.current_vbo_byte_offset = 0;
+	bdata.current_ibo_byte_offset = 0;
 }
 
 void RasterizerSceneGLES1::set_time(double p_time, double p_step) {

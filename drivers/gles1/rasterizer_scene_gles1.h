@@ -703,20 +703,27 @@ private:
 			bdata.fvf == BatcherEnums::FVF_INSTANCED
 		);
 
-		// Always load the approximated material albedo into glColor4f and GL_DIFFUSE/GL_AMBIENT
-		// so both uncoloured SMDDF meshes and unlit passes inherit the exact base material color.
-		if (has_approx) {
-			const GLES1::StandardMaterialState *state = static_cast<const GLES1::StandardMaterialState *>(p_material_data->approx_data);
-			glColor4f(state->albedo[0], state->albedo[1], state->albedo[2], state->albedo[3]);
-			glMaterialfv(GL_FRONT_AND_BACK, GL_DIFFUSE, state->albedo);
-			if (!p_is_additive) {
-				glMaterialfv(GL_FRONT_AND_BACK, GL_AMBIENT, state->albedo);
-			}
-		}
-
 		if (use_color_material) {
+			// Reset glColor4f and diffuse/ambient material factors to white so the pipeline
+			// does not double multiply the material albedo.
+			constexpr GLfloat mat_white[] = { 1.0f, 1.0f, 1.0f, 1.0f };
+			glColor4f(1.0f, 1.0f, 1.0f, 1.0f);
+			glMaterialfv(GL_FRONT_AND_BACK, GL_DIFFUSE, mat_white);
+			if (!p_is_additive) {
+				glMaterialfv(GL_FRONT_AND_BACK, GL_AMBIENT, mat_white);
+			}
 			glEnable(GL_COLOR_MATERIAL);
 		} else {
+			// Always load the approximated material albedo into glColor4f and GL_DIFFUSE/GL_AMBIENT
+			// so both uncoloured SMDDF meshes and unlit passes inherit the exact base material color.
+			if (has_approx) {
+				const GLES1::StandardMaterialState *state = static_cast<const GLES1::StandardMaterialState *>(p_material_data->approx_data);
+				glColor4f(state->albedo[0], state->albedo[1], state->albedo[2], state->albedo[3]);
+				glMaterialfv(GL_FRONT_AND_BACK, GL_DIFFUSE, state->albedo);
+				if (!p_is_additive) {
+					glMaterialfv(GL_FRONT_AND_BACK, GL_AMBIENT, state->albedo);
+				}
+			}
 			glDisable(GL_COLOR_MATERIAL);
 		}
 		GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_gl_setup_material_pass: material pass state");
@@ -1272,7 +1279,7 @@ private:
 	void _batch_fill_instance_depth(const RasterizerSceneBatcherCommon<BatcherAPISceneGLES1>::BItemRef3D &p_ref, uint8_t *r_bvs, uint16_t *r_inds, uint32_t p_start_vert, bool p_use_hardware_transform, uint32_t p_item_index);
 	void _batch_fill_multimesh_depth(const RasterizerSceneBatcherCommon<BatcherAPISceneGLES1>::BItemRef3D &p_ref, uint8_t *r_bvs, uint16_t *r_inds, uint32_t p_start_vert, bool p_use_hardware_transform, uint32_t p_item_index);
 
-	void _batch_upload_buffers(RasterizerSceneBatcherCommon<BatcherAPISceneGLES1>::Batch3D &r_batch);
+	void _batch_upload_buffers_3d(RasterizerSceneBatcherCommon<BatcherAPISceneGLES1>::Batch3D &r_batch);
 	void _batch_bind_material(GLES1::SceneMaterialData *p_material_data, const Transform3D &p_world_transform, bool p_transparent);
 	void _batch_render_generic(RS::PrimitiveType p_primitive, uint32_t p_offset = 0, uint32_t p_count = 0, bool p_has_color = true);
 	void _batch_render_items(GLES1::SceneMaterialData *p_material_data, RS::PrimitiveType p_primitive, RasterizerSceneBatcherCommon<BatcherAPISceneGLES1>::Batch3D &p_batch, bool p_transparent);

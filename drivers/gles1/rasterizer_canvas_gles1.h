@@ -416,7 +416,7 @@ private:
 	void canvas_render_items_implementation(Item *p_item_list, int p_z, const Color &p_modulate, Light *p_light, const Transform2D &p_base_transform);
 	void render_batches(Item::Command *const *p_commands, Item *p_current_clip, bool &r_reclip, GLES1::CanvasMaterialData *p_material);
 
-	void _batch_upload_buffers();
+	void _batch_upload_buffers_2d();
 	void _batch_render_generic(const Batch &p_batch, GLES1::CanvasMaterialData *p_material);
 
 	// RasterizerCanvasBatcherGLES1 Template Hooks

@@ -2347,7 +2347,7 @@ _FORCE_INLINE_ bool RasterizerCanvasGLES1::_buffer_orphan_and_upload_2d(unsigned
 	return true;
 }
 
-void RasterizerCanvasGLES1::_batch_upload_buffers() {
+void RasterizerCanvasGLES1::_batch_upload_buffers_2d() {
 	if (bdata.vertices.size() == 0 || bdata.gl_vertex_buffer == 0) {
 		return;
 	}

@@ -775,7 +775,7 @@ void RasterizerCanvasBatcherCommon<T_API>::flush_render_batches(RendererCanvasRe
 			if (!bdata.vertex_colors.size() || contains_non_polygons) {
 				_translate_batches_to_larger_FVF_2d<BatchVertexColored, false, false, false>(p_sequence_batch_type_flags);
 			} else {
-				_translate_batches_to_vertex_colored_FVF();
+				_translate_batches_to_vertex_colored_FVF_2d();
 			}
 		} break;
 		case BatcherEnums::FVF_LIGHT_ANGLE:
@@ -790,7 +790,7 @@ void RasterizerCanvasBatcherCommon<T_API>::flush_render_batches(RendererCanvasRe
 	}
 
 	// Send buffers to opengl
-	get_this()->_batch_upload_buffers();
+	get_this()->_batch_upload_buffers_2d();
 
 	// Execute the GL calls
 	RendererCanvasRender::Item::Command *const *commands = &p_first_item->first_command;
@@ -1125,7 +1125,7 @@ void RasterizerCanvasBatcherCommon<T_API>::_translate_batches_to_larger_FVF_2d(u
 }
 
 template <typename T_API>
-void RasterizerCanvasBatcherCommon<T_API>::_translate_batches_to_vertex_colored_FVF() {
+void RasterizerCanvasBatcherCommon<T_API>::_translate_batches_to_vertex_colored_FVF_2d() {
 	bdata.unit_vertices.prepare(sizeof(BatchVertexColored));
 	const BatchColor *source_vertex_colors = &bdata.vertex_colors[0];
 	int num_verts = bdata.vertices.size();

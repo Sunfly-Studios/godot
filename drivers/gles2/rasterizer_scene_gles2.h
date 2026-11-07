@@ -793,7 +793,7 @@ private:
 	void _batch_fill_instance_depth(const RasterizerSceneBatcherCommon<BatcherAPISceneGLES2>::BItemRef3D &p_ref, uint8_t *r_bvs, uint16_t *r_inds, uint32_t p_start_vert, bool p_use_hardware_transform, uint32_t p_item_index);
 	void _batch_fill_multimesh_depth(const RasterizerSceneBatcherCommon<BatcherAPISceneGLES2>::BItemRef3D &p_ref, uint8_t *r_bvs, uint16_t *r_inds, uint32_t p_start_vert, bool p_use_hardware_transform, uint32_t p_item_index);
 
-	void _batch_upload_buffers(RasterizerSceneBatcherCommon<BatcherAPISceneGLES2>::Batch3D &r_batch);
+	void _batch_upload_buffers_3d(RasterizerSceneBatcherCommon<BatcherAPISceneGLES2>::Batch3D &r_batch);
 	void _batch_bind_material(GLES2::SceneMaterialData *p_material_data, const Transform3D &p_world_transform, bool p_transparent);
 	void _batch_render_generic(RS::PrimitiveType p_primitive, uint32_t p_offset = 0, uint32_t p_count = 0, bool p_has_color = true);
 	void _batch_render_items(GLES2::SceneMaterialData *p_material_data, RS::PrimitiveType p_primitive, RasterizerSceneBatcherCommon<BatcherAPISceneGLES2>::Batch3D &p_batch, bool p_transparent);

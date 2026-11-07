@@ -307,6 +307,7 @@ public:
 		uint64_t state_hash;
 		uint32_t total_verts;
 		uint32_t total_indices;
+		uint32_t total_color_changes;
 
 		// Single non-instanced items use the GPU modelview matrix directly
 		// rather than paying CPU software-transform overhead.
@@ -348,12 +349,14 @@ public:
 			settings_use_single_mesh_fallback = true;
 			settings_dynamic_vertex_limit = 1024;
 			settings_item_reordering_lookahead = 4;
+			settings_colored_vertex_format_threshold = 0.25f;
 			dynamic_upload_accumulator = 0;
 			dynamic_upload_threshold_bytes = 0;
 			draw_call_accumulator = 0;
 			max_batch_draw_call_count = 0;
 			current_vbo_byte_offset = 0;
 			current_ibo_byte_offset = 0;
+			use_colored_vertices = false;
 		}
 
 		BatchLimits hardware_limits;
@@ -381,6 +384,8 @@ public:
 			indices.reset();
 			total_verts = 0;
 			total_indices = 0;
+			total_color_changes = 0;
+			use_colored_vertices = false;
 		}
 
 		LocalVector<VBOPool> vbo_pool;
@@ -412,11 +417,17 @@ public:
 		// Default: true
 		bool settings_use_single_mesh_fallback;
 
+		// Ratio of colour state changes to joined items above which Tier 1 batches
+		// dynamically promote to tier 2 colour or FVF_3D_TIER2_COLOR.
+		float settings_colored_vertex_format_threshold;
+		bool use_colored_vertices;
+
 		// Accumulators
 		uint32_t dynamic_upload_accumulator;
 		uint32_t dynamic_upload_threshold_bytes;
 		uint32_t draw_call_accumulator;
 		uint32_t max_batch_draw_call_count;
+		uint32_t total_color_changes;
 
 		BatcherEnums::FVF fvf;
 
@@ -460,6 +471,7 @@ public:
 			matrix_palette_count = 0;
 			current_primitive = RS::PRIMITIVE_MAX;
 			curr_batch = nullptr;
+			last_modulate.set_white();
 		}
 		uint64_t current_state_hash;
 		typename T_API::MaterialData *current_material_data;
@@ -467,6 +479,7 @@ public:
 		uint32_t matrix_palette_count;
 		RS::PrimitiveType current_primitive;
 		Batch3D *curr_batch;
+		BatchColor last_modulate;
 	} _render_item_state;
 
 private:
@@ -522,6 +535,8 @@ protected:
 
 	template <BatcherEnums::PassMode p_pass_mode, class T_SURFACE>
 	void prefill_joined_item(const BItemRef3D &p_ref, bool p_use_hardware_transform, uint32_t p_item_index, uint32_t p_joined_flags);
+
+	void _translate_batches_to_vertex_colored_FVF_3d(const Batch3D &p_batch);
 
 	template <class T_BATCH_VERT, bool INCLUDE_COLOR_UV2, bool INCLUDE_TANGENT, bool INCLUDE_PALETTE>
 	void _translate_batches_to_larger_FVF_3d(uint32_t p_num_verts);
