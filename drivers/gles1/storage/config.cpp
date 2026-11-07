@@ -186,6 +186,10 @@ Config::Config() {
 	support_shadow = extensions.has("GL_ARB_shadow") || extensions.has("GL_OES_shadow") || extensions.has("GL_EXT_shadow");
 	support_texture_env_combine = extensions.has("GL_OES_texture_env_crossbar") || extensions.has("GL_ARB_texture_env_combine") || extensions.has("GL_EXT_texture_env_combine");
 
+	// Decompression
+	bptc_supported = extensions.has("GL_ARB_texture_compression_bptc") || extensions.has("EXT_texture_compression_bptc");
+	rgtc_supported = extensions.has("GL_EXT_texture_compression_rgtc") || extensions.has("GL_ARB_texture_compression_rgtc");
+
 	if (support_texture_env_combine) {
 		if (!_probe_texture_envi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_COMBINE)) {
 			support_texture_env_combine = false;
@@ -232,8 +236,6 @@ Config::Config() {
 #else
 		s3tc_supported = extensions.has("GL_EXT_texture_compression_dxt1") || extensions.has("GL_EXT_texture_compression_s3tc");
 #endif
-		bptc_supported = extensions.has("GL_ARB_texture_compression_bptc") || extensions.has("EXT_texture_compression_bptc");
-		rgtc_supported = extensions.has("GL_EXT_texture_compression_rgtc") || extensions.has("GL_ARB_texture_compression_rgtc");
 	}
 
 	// Project Settings

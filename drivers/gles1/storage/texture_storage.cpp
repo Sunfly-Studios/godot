@@ -429,14 +429,32 @@ Ref<Image> TextureStorage::_get_gl_image_and_format(const Ref<Image> &p_image, I
 			ERR_FAIL_COND_V_MSG(dup.is_null(), p_image, "GLES1: Out of memory during image duplication for decompression.");
 
 			image = dup;
+
+			// Workaround: CPU software decompressors (e.g., bcdec) operate on 4x4 blocks.
+			// When decompressing small mipmaps (1x1, 2x2), they write a full block (64 bytes),
+			// vastly overflowing the tight bounds of the CowData vector and corrupting the heap.
+			// Strip mipmaps prior to decompression and regenerate them afterwards.
+			bool had_mipmaps = image->has_mipmaps();
+			if (had_mipmaps) {
+				image->clear_mipmaps();
+			}
+
 			image->decompress();
 			ERR_FAIL_COND_V_MSG(image->is_compressed(), image, "GLES1: Image decompression failed.");
+
+			if (had_mipmaps) {
+				image->generate_mipmaps();
+			}
+
 			if (decompress_ra_to_rg) {
 				image->convert_ra_rgba8_to_rg();
 				image->convert(Image::FORMAT_RG8);
 			}
 			switch (image->get_format()) {
-				case Image::FORMAT_RG8:
+				case Image::FORMAT_RG8: {
+					image->convert(Image::FORMAT_RGB8);
+				}
+					[[fallthrough]];
 				case Image::FORMAT_RGB8: {
 					r_gl_format = GL_RGB;
 					r_gl_internal_format = GL_RGB;
