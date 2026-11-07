@@ -281,9 +281,7 @@ void RasterizerSceneBatcherCommon<T_API>::record_items(T_SURFACE **p_surfaces, i
 
 template <typename T_API>
 bool RasterizerSceneBatcherCommon<T_API>::_sort_items_match_3d(const BSortItem3D &p_a, const BSortItem3D &p_b) const {
-	// Mask out bits 16-31 (source mesh/surface ID) so distinct meshes with identical materials can join.
-	const uint64_t mask = 0xFFFFFFFF0000FFFFULL;
-	return (p_a.state_hash & mask) == (p_b.state_hash & mask);
+	return (p_a.state_hash & MASK_ID) == (p_b.state_hash & MASK_ID);
 }
 
 template <typename T_API>
@@ -445,8 +443,8 @@ void RasterizerSceneBatcherCommon<T_API>::join_sorted_items() {
 
 		bool can_join = false;
 		if (curr_joined && !capacity_full) {
-			uint64_t masked_item_hash = bdata.sort_items[i].state_hash & 0xFFFFFFFF0000FFFFULL;
-			uint64_t masked_curr_hash = curr_joined->state_hash & 0xFFFFFFFF0000FFFFULL;
+			uint64_t masked_item_hash = bdata.sort_items[i].state_hash & MASK_ID;
+			uint64_t masked_curr_hash = curr_joined->state_hash & MASK_ID;
 			bool is_multimesh = (surf_flags & BatcherEnums::BTF_3D_USES_INSTANCING) != 0;
 			bool curr_is_multimesh = (curr_joined->flags & BatcherEnums::BTF_3D_USES_INSTANCING) != 0;
 
@@ -651,9 +649,9 @@ bool RasterizerSceneBatcherCommon<T_API>::try_join_item(T_SURFACE *p_surface, Re
 		}
 	}
 
-	// Mask out bits 16-31 (surface id / mesh id)
-	uint64_t masked_item_hash = item_hash & 0xFFFFFFFF0000FFFFULL;
-	uint64_t masked_current_hash = r_ris.current_state_hash & 0xFFFFFFFF0000FFFFULL;
+	// Mask out bits 16-31
+	uint64_t masked_item_hash = item_hash & MASK_ID;
+	uint64_t masked_current_hash = r_ris.current_state_hash & MASK_ID;
 
 	if (masked_item_hash != masked_current_hash) {
 		return false;
@@ -893,6 +891,7 @@ void RasterizerSceneBatcherCommon<T_API>::flush_render_batches(typename T_API::M
 		return;
 	}
 
+	// Determine FVF fragmentation and promote to coloured
 	bdata.use_colored_vertices = false;
 	if (bdata.fvf == BatcherEnums::FVF_3D_TIER1_BASE) {
 		if (p_batch.num_item_refs > 0 && !(p_batch.flags & BatcherEnums::BTF_3D_PREVENT_COLOR_BAKING)) {

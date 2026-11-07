@@ -172,6 +172,10 @@ public:
 #endif
 	};
 
+	// ID magic number that masks out the bits 16-31 (source mesh/surface ID)
+	// so distinct meshes with identical materials can join.
+	static constexpr uint64_t MASK_ID = 0xFFFFFFFF0000FFFFULL;
+
 	// Used to determine whether we use hardware transform (none),
 	// software transform just a translate (no rotate or scale),
 	// or software transform all verts (full 3x3 basis + origin).
