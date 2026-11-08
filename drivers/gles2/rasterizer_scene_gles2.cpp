@@ -1613,14 +1613,16 @@ uint32_t RasterizerSceneGLES2::_batch_get_surface_flags(const GeometryInstanceSu
 		flags |= BatcherEnums::BTF_3D_USES_ALPHA_CLIP;
 	}
 
-	// Prevent CPU vertex baking and multi-item joining if the shader modifies VERTEX, POSITION,
-	// or projection/modelview matrices in GLSL, so its hardware WORLD_TRANSFORM uniform stays intact.
-	const bool uses_shader = p_surface->shader;
+	// Prevent CPU vertex baking and multi-item joining if the shader reads/writes VERTEX, POSITION,
+	// uses world coordinates, or writes projection/modelview matrices in GLSL, so its hardware
+	// WORLD_TRANSFORM uniform stays intact and is not applied twice.
+	const bool uses_shader = p_surface->shader != nullptr;
 	const bool uses_vertex = uses_shader && p_surface->shader->uses_vertex;
 	const bool uses_position = uses_shader && p_surface->shader->uses_position;
+	const bool uses_world_coordinates = uses_shader && p_surface->shader->uses_world_coordinates;
 	const bool uses_modelview_or_projection = uses_shader && p_surface->shader->writes_modelview_or_projection;
 
-	if (uses_vertex || uses_position || uses_modelview_or_projection) {
+	if (uses_vertex || uses_position || uses_world_coordinates || uses_modelview_or_projection) {
 		flags |= BatcherEnums::BTF_3D_PREVENT_VERTEX_BAKING | BatcherEnums::BTF_3D_PREVENT_ITEM_JOINING;
 	}
 
@@ -1804,6 +1806,11 @@ void RasterizerSceneGLES2::_batch_fill_multimesh_tiered(const BATCH_TYPE::BItemR
 	BATCH_TYPE::BatchColor *RESTRICT color_dst = color_stream.ptr();
 	BATCH_TYPE::TransformMode3D *RESTRICT mode_dst = mode_stream.ptr();
 
+	const bool prevent_vertex_baking = (
+		p_surface->shader &&
+		(p_surface->shader->uses_vertex || p_surface->shader->uses_position || p_surface->shader->uses_world_coordinates || p_surface->shader->writes_modelview_or_projection)
+	);
+
 	for (int inst = 0; inst < instances; inst++) {
 		Transform3D xform;
 		Color raw_color(1.0f, 1.0f, 1.0f, 1.0f);
@@ -1811,7 +1818,7 @@ void RasterizerSceneGLES2::_batch_fill_multimesh_tiered(const BATCH_TYPE::BItemR
 			_gl_batch_decode_multimesh_instance(mm.data + (inst * mm.stride), mm.format, mm.uses_colors, mm.color_offset, xform, raw_color);
 		}
 
-		const Transform3D world_xform = p_ref.transform * xform;
+		const Transform3D world_xform = (p_use_hardware_transform || prevent_vertex_baking) ? xform : (p_ref.transform * xform);
 		const BATCH_TYPE::TransformMode3D mode = BATCH_TYPE::_find_transform_mode_3d(world_xform);
 		xform_dst[inst] = world_xform;
 		mode_dst[inst] = mode;
@@ -2303,7 +2310,11 @@ void RasterizerSceneGLES2::_batch_render_items(GLES2::SceneMaterialData *p_mater
 	}
 
 	const bool is_instanced = (p_batch.flags & BatcherEnums::BTF_3D_USES_INSTANCING) != 0;
-	const bool use_hardware_transform = (p_batch.num_item_refs == 1 && !is_instanced);
+	const bool prevent_vertex_baking = (p_batch.flags & BatcherEnums::BTF_3D_PREVENT_VERTEX_BAKING) != 0;
+	const bool use_hardware_transform = (
+		(p_batch.num_item_refs == 1 && !is_instanced) ||
+		(p_batch.num_item_refs == 1 && prevent_vertex_baking)
+	);
 	// Include FVF_UNBATCHED batches that flagged BTF_3D_USES_COLORS so their static
 	// color attribute stream is enabled during the SMDDF call.
 	const bool has_vertex_colors = (
