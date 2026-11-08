@@ -313,10 +313,13 @@ public:
 		uint32_t total_indices;
 		uint32_t total_color_changes;
 
-		// Single non-instanced items use the GPU modelview matrix directly
-		// rather than paying CPU software-transform overhead.
+		// Single non-instanced items (or items that explicitly forbid CPU vertex baking)
+		// use the GPU modelview matrix directly rather than paying CPU software-transform overhead.
 		_FORCE_INLINE_ bool use_hardware_transform() const {
-			return num_item_refs == 1 && !(flags & BatcherEnums::BTF_3D_USES_INSTANCING);
+			return (
+				(num_item_refs == 1 && !(flags & BatcherEnums::BTF_3D_USES_INSTANCING)) ||
+				((flags & BatcherEnums::BTF_3D_PREVENT_VERTEX_BAKING) != 0 && !(flags & BatcherEnums::BTF_3D_USES_INSTANCING))
+			);
 		}
 	};
 

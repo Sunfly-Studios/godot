@@ -232,12 +232,26 @@ void RasterizerSceneBatcherCommon<T_API>::record_items(T_SURFACE **p_surfaces, i
 			!Math::is_finite(aabb.size.x) || !Math::is_finite(aabb.size.y) || !Math::is_finite(aabb.size.z) ||
 			Math::abs(aabb.size.x) > 1e6f || Math::abs(aabb.size.y) > 1e6f || Math::abs(aabb.size.z) > 1e6f
 		);
+		const bool prevent_baking = (
+			surface->shader &&
+			(surface->shader->uses_vertex || surface->shader->uses_position || surface->shader->uses_world_coordinates || surface->shader->writes_modelview_or_projection)
+		);
+		const bool is_instanced = (
+			surface->owner->data->base_type == RS::INSTANCE_MULTIMESH ||
+			surface->owner->data->base_type == RS::INSTANCE_PARTICLES
+		);
 
 		// Do not batch if:
 		// 1. The base mesh passes the complexity limit
 		// 2. Some kind of skeleton mesh has been detected
 		// 3. Overflowing bounds
-		if (total_incoming_verts > bdata.settings_dynamic_vertex_limit || has_deformation || has_extreme_bounds) {
+		// 4. Instanced geometry that requires local shader vertex transforms
+		if (
+			total_incoming_verts > bdata.settings_dynamic_vertex_limit ||
+			has_deformation ||
+			has_extreme_bounds ||
+			(prevent_baking && is_instanced)
+		) {
 			if (!p_transparent) {
 				// Opaque massive models don't need strict sorting. Just dump them in the bypass list.
 				bdata.bypassed_opaque_items.push_back((void*)surface);
