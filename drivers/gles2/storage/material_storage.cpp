@@ -775,12 +775,13 @@ _FORCE_INLINE_ static void bind_uniforms_and_textures_generic_gles2(
 		const ShaderCompiler::GeneratedCode::Texture &texture_uniform = texture_uniforms[texture_uniform_index];
 
 		// Tell the custom shader which texture unit to read from
-		String tex_name = "m_" + String(texture_uniform.name);
+		String clean_name = String(texture_uniform.name).replace("__", "_dus_").replace("__", "_dus_");
+		String tex_name = "m_" + clean_name;
 		GLint tex_loc = glGetUniformLocation(prog, tex_name.utf8().get_data());
 
 		if (tex_loc < 0) {
 			// In case it is not prefixed with `m_`
-			tex_name = String(texture_uniform.name);
+			tex_name = clean_name;
 			tex_loc = glGetUniformLocation(prog, tex_name.utf8().get_data());
 		}
 
@@ -811,12 +812,26 @@ _FORCE_INLINE_ static void bind_uniforms_and_textures_generic_gles2(
 			}
 
 			glActiveTexture(GL_TEXTURE0 + current_tex_unit);
+			GL_CHECK_ERROR("GLES2::MaterialStorage::bind_uniforms_and_textures_generic_gles2: glActiveTexture");
 
 			GLES2::Texture *texture = GLES2::TextureStorage::get_singleton()->get_texture(textures[ti]);
 			if (texture && texture->tex_id != 0) {
 				glBindTexture(texture->target, texture->tex_id);
+				GL_CHECK_ERROR("GLES2::MaterialStorage::bind_uniforms_and_textures_generic_gles2: glBindTexture");
 			} else {
 				glBindTexture(GL_TEXTURE_2D, 0);
+				GL_CHECK_ERROR("GLES2::MaterialStorage::bind_uniforms_and_textures_generic_gles2: glBindTexture 0");
+			}
+
+			String pixel_size_name = tex_name + "_pixel_size";
+			GLint pixel_size_loc = glGetUniformLocation(prog, pixel_size_name.utf8().get_data());
+			if (pixel_size_loc >= 0) {
+				if (texture && texture->width > 0 && texture->height > 0) {
+					glUniform2f(pixel_size_loc, 1.0f / float(texture->width), 1.0f / float(texture->height));
+				} else {
+					glUniform2f(pixel_size_loc, 1.0f, 1.0f);
+				}
+				GL_CHECK_ERROR("GLES2::MaterialStorage::bind_uniforms_and_textures_generic_gles2: glUniform2f pixel_size");
 			}
 
 			current_tex_unit++;
