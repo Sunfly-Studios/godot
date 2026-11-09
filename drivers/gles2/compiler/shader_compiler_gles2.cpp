@@ -284,7 +284,7 @@ String ShaderCompilerGLES2::_dump_node_code(ShaderLanguage::Node *p_node, int p_
 				StringBuffer<> uniform_code;
 
 				ShaderLanguage::DataPrecision precision = E.value.precision;
-				if (precision == ShaderLanguage::PRECISION_DEFAULT && E.value.type != ShaderLanguage::TYPE_BOOL) {
+				if (precision == ShaderLanguage::PRECISION_DEFAULT && E.value.type != ShaderLanguage::TYPE_BOOL && !ShaderLanguage::is_sampler_type(E.value.type)) {
 					precision = ShaderLanguage::PRECISION_HIGHP;
 				}
 
