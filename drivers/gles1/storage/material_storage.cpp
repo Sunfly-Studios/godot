@@ -1865,6 +1865,7 @@ void SceneShaderData::set_code(const String &p_code) {
 	uses_normal_texture = gen_code.uses_normal_roughness_texture;
 	uses_vertex_time = gen_code.uses_vertex_time;
 	uses_fragment_time = gen_code.uses_fragment_time;
+	uses_world_coordinates = p_code.find("world_vertex_coords") != -1;
 
 	LocalVector<ShaderGLES1::TextureUniformData> texture_uniform_data = get_texture_uniform_data(gen_code.texture_uniforms);
 
