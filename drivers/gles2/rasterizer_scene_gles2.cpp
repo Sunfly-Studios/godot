@@ -1613,6 +1613,12 @@ uint32_t RasterizerSceneGLES2::_batch_get_surface_flags(const GeometryInstanceSu
 		flags |= BatcherEnums::BTF_3D_USES_ALPHA_CLIP;
 	}
 
+	if (!p_surface->tangent_cache.is_empty()) {
+		if (!p_surface->shader || (p_surface->shader->vertex_input_mask & (1ULL << RS::ARRAY_TANGENT)) || p_surface->shader->uses_normal) {
+			flags |= BatcherEnums::BTF_3D_USES_TANGENTS;
+		}
+	}
+
 	// Prevent CPU vertex baking and multi-item joining if the shader reads/writes VERTEX, POSITION,
 	// uses world coordinates, or writes projection/modelview matrices in GLSL, so its hardware
 	// WORLD_TRANSFORM uniform stays intact and is not applied twice.
