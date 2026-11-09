@@ -74,15 +74,23 @@ static _FORCE_INLINE_ Vector3 _gles1_decode_octahedral_normal(uint16_t p_x, uint
 }
 
 static _FORCE_INLINE_ void _gles1_decode_octahedral_tangent(uint16_t p_x, uint16_t p_y, Vector3 &r_tangent, float &r_binormal_sign) {
-	// Godot 4 packs the binormal sign (W) into the least significant bit of the Y component.
-	// We use a bitwise & to extract the sign before shifting the Y component to clear that bit.
-	r_binormal_sign = (p_y & 1) ? -1.0f : 1.0f;
-	uint16_t shifted_y = p_y >> 1;
-
-	// Decode X from standard 16-bit UNORM (65535) and
-	// the shifted Y from 15-bit UNORM (32767) into [-1.0, 1.0]
+	// Decode X from standard 16-bit UNORM (65535) into [-1.0, 1.0]
 	float x = (p_x / 65535.0f) * 2.0f - 1.0f;
-	float y = (shifted_y / 32767.0f) * 2.0f - 1.0f;
+	float y = (p_y / 65535.0f) * 2.0f - 1.0f;
+
+	// Godot 4 encodes binormal sign = -1.0f by
+	// mapping oct.y into [0.5, 1.0] (or the 0xFFFF sentinel)
+	r_binormal_sign = 1.0f;
+	if (x == -1.0f && y == 1.0f) {
+		y = -1.0f;
+		r_binormal_sign = -1.0f;
+	} else if (y >= 0.0f) {
+		y = y * 2.0f - 1.0f;
+		r_binormal_sign = -1.0f;
+	} else {
+		y = y * 2.0f + 1.0f;
+		r_binormal_sign = 1.0f;
+	}
 
 	float z = 1.0f - ABS(x) - ABS(y);
 
@@ -92,6 +100,13 @@ static _FORCE_INLINE_ void _gles1_decode_octahedral_tangent(uint16_t p_x, uint16
 	r_tangent.y += r_tangent.y >= 0.0f ? -t : t;
 
 	r_tangent.normalize();
+}
+
+static _FORCE_INLINE_ float _gles1_decode_uv_unorm16(uint16_t p_v, float p_scale) {
+	const float u = p_v / 65535.0f;
+	// Nonzero scale: centered/scaled encoding.
+	// Zero scale: plain UNORM16 in [0,1].
+	return (p_scale != 0.0f) ? (u - 0.5f) * p_scale : u;
 }
 
 /* MESH API */
@@ -159,9 +174,9 @@ void MeshStorage::mesh_add_surface(RID p_mesh, const RS::SurfaceData &p_surface)
 		s->uncompressed_stride += (p_surface.format & RS::ARRAY_FLAG_USE_2D_VERTICES) ? (sizeof(float) * 2) : (sizeof(float) * 3);
 	}
 	if (p_surface.format & RS::ARRAY_FORMAT_NORMAL) {
-		s->uncompressed_stride += sizeof(float) * 3;
+		s->uncompressed_stride += (p_surface.format & RS::ARRAY_FLAG_USE_2D_VERTICES) ? (sizeof(float) * 4) : (sizeof(float) * 3);
 	}
-	if (p_surface.format & RS::ARRAY_FORMAT_TANGENT) {
+	if (!(p_surface.format & RS::ARRAY_FLAG_USE_2D_VERTICES) && (p_surface.format & RS::ARRAY_FORMAT_TANGENT)) {
 		s->uncompressed_stride += sizeof(float) * 4;
 	}
 
@@ -180,14 +195,6 @@ void MeshStorage::mesh_add_surface(RID p_mesh, const RS::SurfaceData &p_surface)
 	s->original_blend_shape_data = p_surface.blend_shape_data;
 
 	RS::SurfaceData surface_data = p_surface;
-
-	// Add the compressed flag if its somehow missing
-	if (surface_data.vertex_count > 0 && s->uncompressed_stride > 0) {
-		if ((uint32_t)surface_data.vertex_data.size() < surface_data.vertex_count * s->uncompressed_stride) {
-			surface_data.format |= RS::ARRAY_FLAG_COMPRESS_ATTRIBUTES;
-		}
-	}
-
 	_decompress_surface_data(surface_data, s);
 
 	s->format = surface_data.format;
@@ -299,7 +306,6 @@ void MeshStorage::mesh_add_surface(RID p_mesh, const RS::SurfaceData &p_surface)
 
 	// Skin buffer
 	if (surface_data.skin_data.size()) {
-		s->skin_data_cache = surface_data.skin_data;
 		if (GLES1_CONFIG->support_vbo) {
 			glGenBuffers(1, &s->skin_buffer);
 			GL_CHECK_ERROR("GLES1::MeshStorage::mesh_add_surface: glGenBuffers (skin buffer)");
@@ -343,14 +349,15 @@ void MeshStorage::mesh_add_surface(RID p_mesh, const RS::SurfaceData &p_surface)
 		mesh->has_bone_weights = true;
 	}
 
-	// Setup version attrib mapping
+	// Parse format bitfield into OpenGL attributes
+	const uint64_t base_input_mask = s->format & ((1ULL << RS::ARRAY_INDEX) - 1ULL);
 	s->version_count = 1;
 	s->versions = (Mesh::Surface::Version *)memalloc(sizeof(Mesh::Surface::Version));
 	ERR_FAIL_NULL(s->versions);
 
 	::new (&s->versions[0]) Mesh::Surface::Version();
-	_mesh_surface_generate_version_for_input_mask(s->versions[0], s, s->format);
-	s->version_index_map.insert(s->format, 0U);
+	_mesh_surface_generate_version_for_input_mask(s->versions[0], s, base_input_mask);
+	s->version_index_map.insert(base_input_mask, 0U);
 
 	s->vertex_count = surface_data.vertex_count;
 	s->aabb = surface_data.aabb;
@@ -842,10 +849,12 @@ void MeshStorage::mesh_surface_bind_arrays_gles1(void *p_surface, uint64_t p_inp
 	Mesh::Surface *s = reinterpret_cast<Mesh::Surface *>(p_surface);
 	ERR_FAIL_NULL(s);
 
+	const uint64_t effective_mask = p_input_mask & ((1ULL << RS::ARRAY_INDEX) - 1ULL);
+
 	s->version_lock.lock();
 
 	Mesh::Surface::Version *version = nullptr;
-	if (const uint32_t *found_idx = s->version_index_map.find(p_input_mask)) {
+	if (const uint32_t *found_idx = s->version_index_map.find(effective_mask)) {
 		version = &s->versions[*found_idx];
 	} else {
 		// Generate the version if it doesn't exist yet for this input mask
@@ -859,8 +868,8 @@ void MeshStorage::mesh_surface_bind_arrays_gles1(void *p_surface, uint64_t p_inp
 		}
 
 		::new (&s->versions[v_idx]) Mesh::Surface::Version();
-		_mesh_surface_generate_version_for_input_mask(s->versions[v_idx], s, p_input_mask);
-		s->version_index_map.insert(p_input_mask, v_idx);
+		_mesh_surface_generate_version_for_input_mask(s->versions[v_idx], s, effective_mask);
+		s->version_index_map.insert(effective_mask, v_idx);
 		version = &s->versions[v_idx];
 	}
 
@@ -895,6 +904,7 @@ void MeshStorage::mesh_surface_bind_arrays_gles1(void *p_surface, uint64_t p_inp
 		);
 	} else {
 		glDisableClientState(GL_VERTEX_ARRAY);
+		glColor3f(0.0f, 0.0f, 0.0f);
 	}
 
 	// Normal
@@ -907,6 +917,7 @@ void MeshStorage::mesh_surface_bind_arrays_gles1(void *p_surface, uint64_t p_inp
 		);
 	} else {
 		glDisableClientState(GL_NORMAL_ARRAY);
+		glColor3f(0.0f, 1.0f, 0.0f);
 	}
 
 	// --- Attribute buffer (colors, UVs) ---
@@ -931,6 +942,7 @@ void MeshStorage::mesh_surface_bind_arrays_gles1(void *p_surface, uint64_t p_inp
 		);
 	} else {
 		glDisableClientState(GL_COLOR_ARRAY);
+		glColor4f(1.0f, 1.0f, 1.0f, 1.0f);
 	}
 
 	if (GLES1_CONFIG->max_texture_units > 1) {
@@ -948,6 +960,7 @@ void MeshStorage::mesh_surface_bind_arrays_gles1(void *p_surface, uint64_t p_inp
 		);
 	} else {
 		glDisableClientState(GL_TEXTURE_COORD_ARRAY);
+		glColor3f(0.0f, 0.0f, 0.0f);
 	}
 
 	// tex_uv2
@@ -980,6 +993,7 @@ void MeshStorage::mesh_surface_bind_arrays_gles1(void *p_surface, uint64_t p_inp
 			);
 		} else {
 			glDisableClientState(GL_TEXTURE_COORD_ARRAY);
+			glColor3f(0.0f, 0.0f, 0.0f);
 		}
 
 		if (GLES1_CONFIG->max_texture_units > 2) {
@@ -1005,6 +1019,7 @@ void MeshStorage::mesh_surface_bind_arrays_gles1(void *p_surface, uint64_t p_inp
 				);
 			} else {
 				glDisableClientState(GL_TEXTURE_COORD_ARRAY);
+				glColor3f(0.0f, 0.0f, 0.0f);
 			}
 		}
 
@@ -1463,10 +1478,9 @@ void MeshStorage::_mesh_surface_generate_version_for_input_mask(Mesh::Surface::V
 }
 
 void MeshStorage::_mesh_surface_generate_version_for_input_mask_2d(Mesh::Surface::Version &v, Mesh::Surface *s, uint64_t p_input_mask, MeshInstance::Surface *mis) {
-	int position_stride = 0;
-	int normal_tangent_stride = 0;
 	int attributes_stride = 0;
 	int skin_stride = 0;
+	int interleaved_offset = 0;
 
 	for (int i = 0; i < RS::ARRAY_INDEX; i++) {
 		v.attribs[i].enabled = false;
@@ -1481,32 +1495,20 @@ void MeshStorage::_mesh_surface_generate_version_for_input_mask_2d(Mesh::Surface
 
 		switch (i) {
 			case RS::ARRAY_VERTEX: {
-				v.attribs[i].offset = 0;
+				v.attribs[i].offset = interleaved_offset;
 				v.attribs[i].type = GL_FLOAT;
 				v.attribs[i].normalized = GL_FALSE;
-				if (s->format & RS::ARRAY_FLAG_USE_2D_VERTICES) {
-					v.attribs[i].size = 2;
-					position_stride = 2 * sizeof(float);
-				} else {
-					v.attribs[i].size = 3;
-					position_stride = 3 * sizeof(float);
-				}
+				v.attribs[i].size = 2;
+				v.attribs[i].stride = s->uncompressed_stride;
+				interleaved_offset += 2 * sizeof(float);
 			} break;
 			case RS::ARRAY_NORMAL: {
-				v.attribs[i].size = 3;
+				v.attribs[i].offset = interleaved_offset;
 				v.attribs[i].type = GL_FLOAT;
 				v.attribs[i].normalized = GL_FALSE;
-
-				if (mis) {
-					// Skeleton animation output is interleaved
-					v.attribs[i].offset = position_stride;
-					normal_tangent_stride = position_stride + (3 * sizeof(float));
-					position_stride = normal_tangent_stride;
-				} else {
-					// Standard static mesh output is planar
-					v.attribs[i].offset = position_stride * s->vertex_count;
-					normal_tangent_stride = 3 * sizeof(float);
-				}
+				v.attribs[i].size = 4;
+				v.attribs[i].stride = s->uncompressed_stride;
+				interleaved_offset += 4 * sizeof(float);
 			} break;
 			case RS::ARRAY_TANGENT: {
 				v.attribs[i].enabled = false;
@@ -1527,52 +1529,42 @@ void MeshStorage::_mesh_surface_generate_version_for_input_mask_2d(Mesh::Surface
 				v.attribs[i].normalized = GL_FALSE;
 				attributes_stride += 2 * sizeof(float);
 			} break;
+			case RS::ARRAY_CUSTOM0:
+			case RS::ARRAY_CUSTOM1:
 			case RS::ARRAY_CUSTOM2:
 			case RS::ARRAY_CUSTOM3: {
+				const uint32_t fmt_shift[RS::ARRAY_CUSTOM_COUNT] = { RS::ARRAY_FORMAT_CUSTOM0_SHIFT, RS::ARRAY_FORMAT_CUSTOM1_SHIFT, RS::ARRAY_FORMAT_CUSTOM2_SHIFT, RS::ARRAY_FORMAT_CUSTOM3_SHIFT };
+				const uint32_t dst_fmtsize[RS::ARRAY_CUSTOM_MAX] = { 4, 4, 8, 16, 4, 8, 12, 16 };
+				const GLenum gl_type[RS::ARRAY_CUSTOM_MAX] = { GL_UNSIGNED_BYTE, GL_BYTE, GL_FLOAT, GL_FLOAT, GL_FLOAT, GL_FLOAT, GL_FLOAT, GL_FLOAT };
+				const GLboolean norm[RS::ARRAY_CUSTOM_MAX] = { GL_TRUE, GL_TRUE, GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE };
+				const GLint comp_count[RS::ARRAY_CUSTOM_MAX] = { 4, 4, 2, 4, 1, 2, 3, 4 };
+
 				v.attribs[i].offset = attributes_stride;
 				int idx = i - RS::ARRAY_CUSTOM0;
-				uint32_t fmt_shift[RS::ARRAY_CUSTOM_COUNT] = { RS::ARRAY_FORMAT_CUSTOM0_SHIFT, RS::ARRAY_FORMAT_CUSTOM1_SHIFT, RS::ARRAY_FORMAT_CUSTOM2_SHIFT, RS::ARRAY_FORMAT_CUSTOM3_SHIFT };
 				uint32_t fmt = (s->format >> fmt_shift[idx]) & RS::ARRAY_FORMAT_CUSTOM_MASK;
-				uint32_t fmtsize[RS::ARRAY_CUSTOM_MAX] = { 4, 4, 4, 8, 4, 8, 12, 16 };
-				GLenum gl_type[RS::ARRAY_CUSTOM_MAX] = { GL_UNSIGNED_BYTE, GL_BYTE, GL_FLOAT, GL_FLOAT, GL_FLOAT, GL_FLOAT, GL_FLOAT, GL_FLOAT };
-				GLboolean norm[RS::ARRAY_CUSTOM_MAX] = { GL_TRUE, GL_TRUE, GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE };
+
 				v.attribs[i].type = gl_type[fmt];
-				attributes_stride += fmtsize[fmt];
-				v.attribs[i].size = fmtsize[fmt] / sizeof(float);
+				v.attribs[i].size = comp_count[fmt];
 				v.attribs[i].normalized = norm[fmt];
+				attributes_stride += dst_fmtsize[fmt];
 			} break;
-			case RS::ARRAY_CUSTOM0:
-			case RS::ARRAY_BONES: {
-				v.attribs[i].offset = skin_stride;
-				v.attribs[i].size = 4;
-				v.attribs[i].type = GL_FLOAT;
-				skin_stride += 4 * sizeof(float);
-				v.attribs[i].normalized = GL_FALSE; // Interpreted directly as float index by our shader
-				v.attribs[i].integer = false; // Prevents the system from expecting glVertexAttribIPointer
-			} break;
-			case RS::ARRAY_CUSTOM1:
+			case RS::ARRAY_BONES:
 			case RS::ARRAY_WEIGHTS: {
 				v.attribs[i].offset = skin_stride;
-				v.attribs[i].size = 4;
+				v.attribs[i].size = (s->format & RS::ARRAY_FLAG_USE_8_BONE_WEIGHTS) ? 8 : 4;
 				v.attribs[i].type = GL_FLOAT;
-				skin_stride += 4 * sizeof(float);
 				v.attribs[i].normalized = GL_FALSE;
 				v.attribs[i].integer = false;
+				skin_stride += v.attribs[i].size * sizeof(float);
 			} break;
 		}
 	}
 
-	for (int i = 0; i < RS::ARRAY_INDEX; i++) {
-		if (!v.attribs[i].enabled) {
+	for (int i = RS::ARRAY_COLOR; i < RS::ARRAY_INDEX; i++) {
+		if (!(s->format & (1ULL << i))) {
 			continue;
 		}
-		if (i <= RS::ARRAY_TANGENT) {
-			if (mis) {
-				v.attribs[i].stride = position_stride; // Interleaved for skeletal
-			} else {
-				v.attribs[i].stride = (i == RS::ARRAY_VERTEX) ? position_stride : normal_tangent_stride;
-			}
-		} else if (i >= RS::ARRAY_CUSTOM0 && i <= RS::ARRAY_CUSTOM1) {
+		if (i >= RS::ARRAY_BONES && i <= RS::ARRAY_WEIGHTS) {
 			v.attribs[i].stride = skin_stride;
 		} else {
 			v.attribs[i].stride = attributes_stride;
@@ -1643,25 +1635,22 @@ void MeshStorage::_mesh_surface_generate_version_for_input_mask_3d(Mesh::Surface
 			case RS::ARRAY_CUSTOM1:
 			case RS::ARRAY_CUSTOM2:
 			case RS::ARRAY_CUSTOM3: {
+				const uint32_t fmt_shift[RS::ARRAY_CUSTOM_COUNT] = { RS::ARRAY_FORMAT_CUSTOM0_SHIFT, RS::ARRAY_FORMAT_CUSTOM1_SHIFT, RS::ARRAY_FORMAT_CUSTOM2_SHIFT, RS::ARRAY_FORMAT_CUSTOM3_SHIFT };
+				const uint32_t dst_fmtsize[RS::ARRAY_CUSTOM_MAX] = { 4, 4, 8, 16, 4, 8, 12, 16 };
+				const GLenum gl_type[RS::ARRAY_CUSTOM_MAX] = { GL_UNSIGNED_BYTE, GL_BYTE, GL_FLOAT, GL_FLOAT, GL_FLOAT, GL_FLOAT, GL_FLOAT, GL_FLOAT };
+				const GLboolean norm[RS::ARRAY_CUSTOM_MAX] = { GL_TRUE, GL_TRUE, GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE };
+				const GLint comp_count[RS::ARRAY_CUSTOM_MAX] = { 4, 4, 2, 4, 1, 2, 3, 4 };
+
 				v.attribs[i].offset = attribute_stride;
 				int idx = i - RS::ARRAY_CUSTOM0;
-				uint32_t fmt_shift[RS::ARRAY_CUSTOM_COUNT] = { RS::ARRAY_FORMAT_CUSTOM0_SHIFT, RS::ARRAY_FORMAT_CUSTOM1_SHIFT, RS::ARRAY_FORMAT_CUSTOM2_SHIFT, RS::ARRAY_FORMAT_CUSTOM3_SHIFT };
 				uint32_t fmt = (s->format >> fmt_shift[idx]) & RS::ARRAY_FORMAT_CUSTOM_MASK;
-				uint32_t fmtsize[RS::ARRAY_CUSTOM_MAX] = { 4, 4, 4, 8, 4, 8, 12, 16 };
-				GLenum gl_type[RS::ARRAY_CUSTOM_MAX] = { GL_UNSIGNED_BYTE, GL_BYTE, GL_FLOAT, GL_FLOAT, GL_FLOAT, GL_FLOAT, GL_FLOAT, GL_FLOAT };
-				GLboolean norm[RS::ARRAY_CUSTOM_MAX] = { GL_TRUE, GL_TRUE, GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE };
+
 				v.attribs[i].type = gl_type[fmt];
-				v.attribs[i].size = fmtsize[fmt] / (gl_type[fmt] == GL_UNSIGNED_BYTE || gl_type[fmt] == GL_BYTE ? 1 : 4);
+				v.attribs[i].size = comp_count[fmt];
 				v.attribs[i].normalized = norm[fmt];
-				attribute_stride += fmtsize[fmt];
+				attribute_stride += dst_fmtsize[fmt];
 			} break;
-			case RS::ARRAY_BONES: {
-				v.attribs[i].offset = skin_stride;
-				v.attribs[i].type = GL_FLOAT;
-				v.attribs[i].size = (s->format & RS::ARRAY_FLAG_USE_8_BONE_WEIGHTS) ? 8 : 4;
-				v.attribs[i].normalized = GL_FALSE;
-				skin_stride += v.attribs[i].size * sizeof(float);
-			} break;
+			case RS::ARRAY_BONES:
 			case RS::ARRAY_WEIGHTS: {
 				v.attribs[i].offset = skin_stride;
 				v.attribs[i].type = GL_FLOAT;
@@ -1673,7 +1662,7 @@ void MeshStorage::_mesh_surface_generate_version_for_input_mask_3d(Mesh::Surface
 	}
 
 	for (int i = RS::ARRAY_COLOR; i < RS::ARRAY_INDEX; i++) {
-		if (!v.attribs[i].enabled) {
+		if (!(s->format & (1ULL << i))) {
 			continue;
 		}
 
@@ -1698,255 +1687,269 @@ void MeshStorage::_decompress_surface_data(RS::SurfaceData &r_surface, Mesh::Sur
 	} else {
 		_decompress_surface_data_3d(r_surface, s);
 	}
+	_decompress_skin_buffer(r_surface, s);
+
+	r_surface.format &= ~RS::ARRAY_FLAG_COMPRESS_ATTRIBUTES;
 }
 
 void MeshStorage::_decompress_surface_data_2d(RS::SurfaceData &r_surface, Mesh::Surface *s) {
-	uint32_t v_count = r_surface.vertex_count;
-	uint64_t format = r_surface.format;
+	const uint32_t v_count = r_surface.vertex_count;
+	const uint64_t format = r_surface.format;
 
-	bool is_compressed = format & RS::ARRAY_FLAG_COMPRESS_ATTRIBUTES;
-	bool has_color = format & RS::ARRAY_FORMAT_COLOR;
-	bool has_uv = format & RS::ARRAY_FORMAT_TEX_UV;
-	bool has_uv2 = format & RS::ARRAY_FORMAT_TEX_UV2;
+	const bool has_vertex = (format & RS::ARRAY_FORMAT_VERTEX) != 0;
+	const bool has_normal = (format & RS::ARRAY_FORMAT_NORMAL) != 0;
 
-	uint32_t src_pos_offset = 0;
+	if (!r_surface.vertex_data.is_empty() && s->uncompressed_stride > 0) {
+		const uint8_t *src_v = r_surface.vertex_data.ptr();
+		uint8_t *dst_v = s->uncompressed_buffer.ptrw();
 
-	uint32_t src_a_stride = 0;
-	uint32_t src_col_offset = 0;
-	if (has_color) {
-		src_col_offset = src_a_stride;
-		src_a_stride += 4;
-	}
+		const uint32_t src_pos_stride = has_vertex ? 8 : 0;
+		const uint32_t src_norm_offset = v_count * src_pos_stride;
+		const uint32_t remaining_bytes = (uint32_t)r_surface.vertex_data.size() > src_norm_offset ? ((uint32_t)r_surface.vertex_data.size() - src_norm_offset) : 0;
+		const uint32_t src_norm_stride = (has_normal && v_count > 0) ? (remaining_bytes / v_count) : 0;
 
-	uint32_t src_uv_offset = 0;
-	if (has_uv) {
-		src_uv_offset = src_a_stride;
-		src_a_stride += is_compressed ? 4 : 8;
-	}
+		for (uint32_t i = 0; i < v_count; i++) {
+			uint8_t *dv = dst_v + i * s->uncompressed_stride;
+			uint32_t dst_offset = 0;
 
-	uint32_t src_uv2_offset = 0;
-	if (has_uv2) {
-		src_uv2_offset = src_a_stride;
-		src_a_stride += is_compressed ? 4 : 8;
-	}
-
-	uint32_t actual_v_stride = r_surface.vertex_data.size() / v_count;
-	uint32_t actual_a_stride = r_surface.attribute_data.size() > 0 ? (r_surface.attribute_data.size() / v_count) : 0;
-
-	uint32_t dst_pos_bytes = 8;
-	uint32_t dst_v_stride = dst_pos_bytes;
-
-	uint32_t dst_col_bytes = has_color ? 4 : 0;
-	uint32_t dst_uv_bytes = has_uv ? 8 : 0;
-	uint32_t dst_uv2_bytes = has_uv2 ? 8 : 0;
-	uint32_t dst_a_stride = dst_col_bytes + dst_uv_bytes + dst_uv2_bytes;
-
-	Vector<uint8_t> new_v_data;
-	new_v_data.resize(v_count * dst_v_stride);
-
-	Vector<uint8_t> new_a_data;
-	if (dst_a_stride > 0) {
-		new_a_data.resize(v_count * dst_a_stride);
-	}
-
-	const uint8_t *src_v = r_surface.vertex_data.ptr();
-	const uint8_t *src_a = r_surface.attribute_data.ptr();
-
-	uint8_t *dst_v = new_v_data.ptrw();
-	uint8_t *dst_a = new_a_data.ptrw();
-
-	for (uint32_t i = 0; i < v_count; i++) {
-		const uint8_t *sv = src_v + (i * actual_v_stride);
-		uint8_t *dv = dst_v + (i * dst_v_stride);
-
-		// Copy 2D Positions
-		memcpy(dv, sv + src_pos_offset, dst_pos_bytes);
-
-		if (src_a && dst_a_stride > 0) {
-			const uint8_t *sa = src_a + (i * actual_a_stride);
-			uint8_t *da = dst_a + (i * dst_a_stride);
-			uint32_t dst_a_offset = 0;
-
-			if (has_color) {
-				da[dst_a_offset + 0] = sa[src_col_offset + 0];
-				da[dst_a_offset + 1] = sa[src_col_offset + 1];
-				da[dst_a_offset + 2] = sa[src_col_offset + 2];
-				da[dst_a_offset + 3] = sa[src_col_offset + 3];
-				dst_a_offset += 4;
+			// Copy 2D Positions
+			if (has_vertex) {
+				memcpy(dv + dst_offset, src_v + i * src_pos_stride, 8);
+				dst_offset += 8;
 			}
 
-			if (has_uv) {
-				float *du = (float *)(da + dst_a_offset);
-				if (is_compressed) {
-					const uint16_t *uv_ptr = (const uint16_t *)(sa + src_uv_offset);
-					du[0] = Math::half_to_float(uv_ptr[0]);
-					du[1] = Math::half_to_float(uv_ptr[1]);
+			if (has_normal) {
+				float *norm_dst = reinterpret_cast<float *>(dv + dst_offset);
+				if (src_norm_stride >= 16) {
+					memcpy(norm_dst, src_v + src_norm_offset + i * src_norm_stride, 16);
+				} else if (src_norm_stride >= 4) {
+					const uint16_t *norm_src = reinterpret_cast<const uint16_t *>(src_v + src_norm_offset + i * src_norm_stride);
+					Vector3 n = _gles1_decode_octahedral_normal(norm_src[0], norm_src[1]);
+					norm_dst[0] = n.x;
+					norm_dst[1] = n.y;
+					norm_dst[2] = n.z;
+					norm_dst[3] = 1.0f;
 				} else {
-					memcpy(du, sa + src_uv_offset, 8);
+					norm_dst[0] = 0.0f;
+					norm_dst[1] = 0.0f;
+					norm_dst[2] = 1.0f;
+					norm_dst[3] = 1.0f;
 				}
-				dst_a_offset += 8;
-			}
-
-			if (has_uv2) {
-				float *du = (float *)(da + dst_a_offset);
-				if (is_compressed) {
-					const uint16_t *uv2_ptr = (const uint16_t *)(sa + src_uv2_offset);
-					du[0] = Math::half_to_float(uv2_ptr[0]);
-					du[1] = Math::half_to_float(uv2_ptr[1]);
-				} else {
-					memcpy(du, sa + src_uv2_offset, 8);
-				}
+				dst_offset += 16;
 			}
 		}
+
+		r_surface.vertex_data = s->uncompressed_buffer;
 	}
 
-	r_surface.vertex_data = new_v_data;
-	s->uncompressed_buffer = new_v_data;
-
-	if (new_a_data.size() > 0) {
-		r_surface.attribute_data = new_a_data;
-	} else {
-		r_surface.attribute_data.clear();
-	}
-
-	r_surface.format &= ~RS::ARRAY_FLAG_COMPRESS_ATTRIBUTES;
-	r_surface.format &= ~RS::ARRAY_FORMAT_CUSTOM0;
-	r_surface.format &= ~RS::ARRAY_FORMAT_CUSTOM1;
-	r_surface.format &= ~RS::ARRAY_FORMAT_CUSTOM2;
-	r_surface.format &= ~RS::ARRAY_FORMAT_CUSTOM3;
+	_decompress_attribute_buffer_3d(r_surface, v_count);
 }
 
 void MeshStorage::_decompress_surface_data_3d(RS::SurfaceData &r_surface, Mesh::Surface *s) {
-	if (!(r_surface.format & RS::ARRAY_FLAG_COMPRESS_ATTRIBUTES)) {
-		s->uncompressed_buffer = r_surface.vertex_data;
+	const uint32_t vertex_count = r_surface.vertex_count;
+	if (vertex_count == 0) {
 		return;
 	}
 
-	uint32_t vertex_count = r_surface.vertex_count;
-	if (vertex_count == 0 || r_surface.vertex_data.is_empty()) {
-		return;
+	// Always decompress
+	if (!r_surface.vertex_data.is_empty() && s->uncompressed_stride > 0) {
+		const uint32_t compressed_stride = r_surface.vertex_data.size() / vertex_count;
+		const uint32_t uncompressed_stride = s->uncompressed_stride;
+
+		_decompress_3d_buffer(
+			r_surface.vertex_data.ptr(),
+			s->uncompressed_buffer.ptrw(),
+			vertex_count,
+			r_surface.format,
+			compressed_stride,
+			uncompressed_stride,
+			r_surface.aabb
+		);
+		r_surface.vertex_data = s->uncompressed_buffer;
 	}
 
-	uint32_t compressed_stride = r_surface.vertex_data.size() / vertex_count;
-	uint32_t uncompressed_stride = s->uncompressed_stride;
+	// Decompress blend shapes (blend shapes only contain VERTEX, NORMAL, TANGENT)
+	if (!r_surface.blend_shape_data.is_empty() && s->uncompressed_stride > 0) {
+		const uint64_t bs_format = r_surface.format & (RS::ARRAY_FORMAT_BLEND_SHAPE_MASK | RS::ARRAY_FLAG_COMPRESS_ATTRIBUTES);
 
-	_decompress_3d_buffer(r_surface.vertex_data.ptr(), s->uncompressed_buffer.ptrw(), vertex_count, r_surface.format, compressed_stride, uncompressed_stride, r_surface.aabb);
-	r_surface.vertex_data = s->uncompressed_buffer;
+		// Calculate single blend shape compressed stride
+		const bool has_vertex = (bs_format & RS::ARRAY_FORMAT_VERTEX) != 0;
+		const bool has_normal = (bs_format & RS::ARRAY_FORMAT_NORMAL) != 0;
+		const bool has_tangent = (bs_format & RS::ARRAY_FORMAT_TANGENT) != 0;
+		const bool is_compressed = (r_surface.format & RS::ARRAY_FLAG_COMPRESS_ATTRIBUTES) != 0;
 
-	if (!r_surface.blend_shape_data.is_empty()) {
-		uint32_t bs_count = r_surface.blend_shape_data.size() / (vertex_count * compressed_stride);
-		Vector<uint8_t> new_bs_data;
-		new_bs_data.resize(bs_count * vertex_count * uncompressed_stride);
-
-		const uint8_t *bs_src = r_surface.blend_shape_data.ptr();
-		uint8_t *bs_dst = new_bs_data.ptrw();
-
-		for (uint32_t i = 0; i < bs_count; i++) {
-			_decompress_3d_buffer(bs_src + i * vertex_count * compressed_stride, bs_dst + i * vertex_count * uncompressed_stride, vertex_count, r_surface.format, compressed_stride, uncompressed_stride, r_surface.aabb);
+		uint32_t bs_comp_stride = 0;
+		if (has_vertex) {
+			bs_comp_stride += is_compressed ? 8 : 12;
 		}
-		r_surface.blend_shape_data = new_bs_data;
+		if (has_normal && !(is_compressed && !has_tangent)) {
+			bs_comp_stride += 4;
+		}
+		if (has_tangent && !is_compressed) {
+			bs_comp_stride += 4;
+		}
+
+		if (bs_comp_stride > 0 && (r_surface.blend_shape_data.size() % (vertex_count * bs_comp_stride)) == 0) {
+			const uint32_t num_shapes = r_surface.blend_shape_data.size() / (vertex_count * bs_comp_stride);
+			Vector<uint8_t> new_bs_data;
+			new_bs_data.resize(num_shapes * vertex_count * s->uncompressed_stride);
+
+			const uint8_t *bs_src = r_surface.blend_shape_data.ptr();
+			uint8_t *bs_dst = new_bs_data.ptrw();
+
+			for (uint32_t i = 0; i < num_shapes; i++) {
+				_decompress_3d_buffer(
+					bs_src + i * vertex_count * bs_comp_stride,
+					bs_dst + i * vertex_count * s->uncompressed_stride,
+					vertex_count,
+					bs_format,
+					bs_comp_stride,
+					s->uncompressed_stride,
+					r_surface.aabb
+				);
+			}
+			r_surface.blend_shape_data = new_bs_data;
+		}
 	}
 
+	// Always run attribute decompression
+	// to expand 16-bit UVs and half-float custom attributes to 32-bit float
 	_decompress_attribute_buffer_3d(r_surface, vertex_count);
-
-	r_surface.format &= ~RS::ARRAY_FLAG_COMPRESS_ATTRIBUTES;
 }
 
 void MeshStorage::_decompress_attribute_buffer_3d(RS::SurfaceData &r_surface, uint32_t p_vertex_count) {
 	if (r_surface.attribute_data.is_empty() || p_vertex_count == 0) {
 		return;
 	}
-	bool has_color = r_surface.format & RS::ARRAY_FORMAT_COLOR;
-	bool has_uv = r_surface.format & RS::ARRAY_FORMAT_TEX_UV;
-	bool has_uv2 = r_surface.format & RS::ARRAY_FORMAT_TEX_UV2;
 
-	uint32_t custom_total_bytes = 0;
+	const uint64_t format = r_surface.format;
+	const bool is_2d = (format & RS::ARRAY_FLAG_USE_2D_VERTICES) != 0;
+	const bool is_compressed = (format & RS::ARRAY_FLAG_COMPRESS_ATTRIBUTES) != 0;
+	const bool has_color = (format & RS::ARRAY_FORMAT_COLOR) != 0;
+	const bool has_uv = (format & RS::ARRAY_FORMAT_TEX_UV) != 0;
+	const bool has_uv2 = (format & RS::ARRAY_FORMAT_TEX_UV2) != 0;
+
+	const uint32_t fmt_shift[RS::ARRAY_CUSTOM_COUNT] = {
+		RS::ARRAY_FORMAT_CUSTOM0_SHIFT,
+		RS::ARRAY_FORMAT_CUSTOM1_SHIFT,
+		RS::ARRAY_FORMAT_CUSTOM2_SHIFT,
+		RS::ARRAY_FORMAT_CUSTOM3_SHIFT
+	};
+	const uint32_t src_custom_fmtsize[RS::ARRAY_CUSTOM_MAX] = { 4, 4, 4, 8, 4, 8, 12, 16 };
+	// Half-float custom formats (2 and 3) are expanded to 32-bit floats (8 and 16 bytes)
+	const uint32_t dst_custom_fmtsize[RS::ARRAY_CUSTOM_MAX] = { 4, 4, 8, 16, 4, 8, 12, 16 };
+
+	bool has_custom[RS::ARRAY_CUSTOM_COUNT] = { false, false, false, false };
+	uint32_t custom_fmt[RS::ARRAY_CUSTOM_COUNT] = { 0, 0, 0, 0 };
+	uint32_t src_custom_total = 0;
+	uint32_t dst_custom_total = 0;
+
 	for (int i = 0; i < RS::ARRAY_CUSTOM_COUNT; i++) {
-		if (r_surface.format & (1ULL << (RS::ARRAY_CUSTOM0 + i))) {
-			const uint32_t fmt_shift[RS::ARRAY_CUSTOM_COUNT] = { RS::ARRAY_FORMAT_CUSTOM0_SHIFT, RS::ARRAY_FORMAT_CUSTOM1_SHIFT, RS::ARRAY_FORMAT_CUSTOM2_SHIFT, RS::ARRAY_FORMAT_CUSTOM3_SHIFT };
-			const uint32_t fmtsize[RS::ARRAY_CUSTOM_MAX] = { 4, 4, 4, 8, 4, 8, 12, 16 };
-			uint32_t fmt = (r_surface.format >> fmt_shift[i]) & RS::ARRAY_FORMAT_CUSTOM_MASK;
-			custom_total_bytes += fmtsize[fmt];
+		if (!is_2d && (format & (1ULL << (RS::ARRAY_CUSTOM0 + i)))) {
+			has_custom[i] = true;
+			custom_fmt[i] = (format >> fmt_shift[i]) & RS::ARRAY_FORMAT_CUSTOM_MASK;
+			src_custom_total += src_custom_fmtsize[custom_fmt[i]];
+			dst_custom_total += dst_custom_fmtsize[custom_fmt[i]];
 		}
 	}
 
-	uint32_t actual_src_a_stride = r_surface.attribute_data.size() / p_vertex_count;
-	uint32_t non_uv_bytes = (has_color ? 4 : 0) + custom_total_bytes;
-	uint32_t uv_count = (has_uv ? 1 : 0) + (has_uv2 ? 1 : 0);
+	const uint32_t actual_src_stride = r_surface.attribute_data.size() / p_vertex_count;
+	const uint32_t src_color_bytes = has_color ? 4 : 0;
 
-	// If each UV is already 8 bytes (float2), no UV decompression is needed
-	if (uv_count > 0 && actual_src_a_stride == non_uv_bytes + uv_count * 8) {
+	// Determine exact byte size of UV1 and UV2 in the source attribute buffer
+	const uint32_t src_uv1_bytes = has_uv ? (is_compressed ? 4 : 8) : 0;
+	const uint32_t src_uv2_bytes = has_uv2 ? (is_compressed ? 4 : 8) : 0;
+
+	if (actual_src_stride != src_color_bytes + src_uv1_bytes + src_uv2_bytes + src_custom_total) {
+		// TODO (GLES2): It should be a dev assert.
+		ERR_PRINT_ONCE(vformat("GLES1 attribute stride mismatch: got %d, expected %d (fmt=0x%x)",
+			(int)actual_src_stride,
+			(int)(src_color_bytes + src_uv1_bytes + src_uv2_bytes + src_custom_total),
+			(uint64_t)format)
+		);
 		return;
 	}
 
-	uint32_t src_col_offset = 0;
-	uint32_t src_a_stride = has_color ? 4 : 0;
+	const uint32_t dst_color_bytes = has_color ? 4 : 0;
+	const uint32_t dst_uv1_bytes = has_uv ? 8 : 0;
+	const uint32_t dst_uv2_bytes = has_uv2 ? 8 : 0;
+	const uint32_t dst_stride = dst_color_bytes + dst_uv1_bytes + dst_uv2_bytes + dst_custom_total;
 
-	uint32_t src_uv_offset = src_a_stride;
-	if (has_uv) {
-		src_a_stride += 4;
+	if (dst_stride == 0) {
+		return;
 	}
-
-	uint32_t src_uv2_offset = src_a_stride;
-	if (has_uv2) {
-		src_a_stride += 4;
-	}
-
-	uint32_t custom_bytes = (actual_src_a_stride > src_a_stride) ? (actual_src_a_stride - src_a_stride) : 0;
-
-	uint32_t dst_col_bytes = has_color ? 4 : 0;
-	uint32_t dst_uv_bytes = has_uv ? 8 : 0;
-	uint32_t dst_uv2_bytes = has_uv2 ? 8 : 0;
-	uint32_t dst_a_stride = dst_col_bytes + dst_uv_bytes + dst_uv2_bytes + custom_bytes;
 
 	Vector<uint8_t> new_a_data;
-	new_a_data.resize(p_vertex_count * dst_a_stride);
+	new_a_data.resize(p_vertex_count * dst_stride);
 
-	const uint8_t *src_a = r_surface.attribute_data.ptr();
-	uint8_t *dst_a = new_a_data.ptrw();
-	bool use_uv_scale = !r_surface.uv_scale.is_zero_approx();
+	const uint8_t *src_base = r_surface.attribute_data.ptr();
+	uint8_t *dst_base = new_a_data.ptrw();
 
 	for (uint32_t i = 0; i < p_vertex_count; i++) {
-		const uint8_t *sa = src_a + (i * actual_src_a_stride);
-		uint8_t *da = dst_a + (i * dst_a_stride);
+		const uint8_t *sa = src_base + (i * actual_src_stride);
+		uint8_t *da = dst_base + (i * dst_stride);
+
+		uint32_t src_offset = 0;
 		uint32_t dst_offset = 0;
 
+		// Color (RGBA8 UNORM)
 		if (has_color) {
-			da[dst_offset + 0] = sa[src_col_offset + 0];
-			da[dst_offset + 1] = sa[src_col_offset + 1];
-			da[dst_offset + 2] = sa[src_col_offset + 2];
-			da[dst_offset + 3] = sa[src_col_offset + 3];
+			memcpy(da + dst_offset, sa + src_offset, 4);
+			src_offset += 4;
 			dst_offset += 4;
 		}
 
+		// UV1 -> float32x2
 		if (has_uv) {
-			float *du = (float *)(da + dst_offset);
-			const uint16_t *uv_src = (const uint16_t *)(sa + src_uv_offset);
-			if (use_uv_scale) {
-				du[0] = (uv_src[0] / 65535.0f - 0.5f) * r_surface.uv_scale.x;
-				du[1] = (uv_src[1] / 65535.0f - 0.5f) * r_surface.uv_scale.y;
+			float *du = reinterpret_cast<float *>(da + dst_offset);
+			if (src_uv1_bytes == 4) {
+				const uint16_t *uv_src = reinterpret_cast<const uint16_t *>(sa + src_offset);
+				du[0] = _gles1_decode_uv_unorm16(uv_src[0], r_surface.uv_scale.x);
+				du[1] = _gles1_decode_uv_unorm16(uv_src[1], r_surface.uv_scale.y);
 			} else {
-				du[0] = Math::half_to_float(uv_src[0]);
-				du[1] = Math::half_to_float(uv_src[1]);
+				memcpy(du, sa + src_offset, 8);
 			}
+			src_offset += src_uv1_bytes;
 			dst_offset += 8;
 		}
 
+		// UV2 -> float32x2
 		if (has_uv2) {
-			float *du2 = (float *)(da + dst_offset);
-			const uint16_t *uv2_src = (const uint16_t *)(sa + src_uv2_offset);
-			if (use_uv_scale) {
-				du2[0] = (uv2_src[0] / 65535.0f - 0.5f) * r_surface.uv_scale.z;
-				du2[1] = (uv2_src[1] / 65535.0f - 0.5f) * r_surface.uv_scale.w;
+			float *du2 = reinterpret_cast<float *>(da + dst_offset);
+			if (src_uv2_bytes == 4) {
+				const uint16_t *uv2_src = reinterpret_cast<const uint16_t *>(sa + src_offset);
+				du2[0] = _gles1_decode_uv_unorm16(uv2_src[0], r_surface.uv_scale.z);
+				du2[1] = _gles1_decode_uv_unorm16(uv2_src[1], r_surface.uv_scale.w);
 			} else {
-				du2[0] = Math::half_to_float(uv2_src[0]);
-				du2[1] = Math::half_to_float(uv2_src[1]);
+				memcpy(du2, sa + src_offset, 8);
 			}
+			src_offset += src_uv2_bytes;
 			dst_offset += 8;
 		}
 
-		if (custom_bytes > 0) {
-			memcpy(da + dst_offset, sa + src_a_stride, custom_bytes);
+		// Custom 0..3
+		for (int c = 0; c < RS::ARRAY_CUSTOM_COUNT; c++) {
+			if (!has_custom[c]) {
+				continue;
+			}
+			uint32_t fmt = custom_fmt[c];
+			if (fmt == RS::ARRAY_CUSTOM_RG_HALF) {
+				const uint16_t *ch = reinterpret_cast<const uint16_t *>(sa + src_offset);
+				float *cf = reinterpret_cast<float *>(da + dst_offset);
+				cf[0] = Math::half_to_float(ch[0]);
+				cf[1] = Math::half_to_float(ch[1]);
+			} else if (fmt == RS::ARRAY_CUSTOM_RGBA_HALF) {
+				const uint16_t *ch = reinterpret_cast<const uint16_t *>(sa + src_offset);
+				float *cf = reinterpret_cast<float *>(da + dst_offset);
+				cf[0] = Math::half_to_float(ch[0]);
+				cf[1] = Math::half_to_float(ch[1]);
+				cf[2] = Math::half_to_float(ch[2]);
+				cf[3] = Math::half_to_float(ch[3]);
+			} else {
+				memcpy(da + dst_offset, sa + src_offset, src_custom_fmtsize[fmt]);
+			}
+			src_offset += src_custom_fmtsize[fmt];
+			dst_offset += dst_custom_fmtsize[fmt];
 		}
 	}
 
@@ -1954,94 +1957,131 @@ void MeshStorage::_decompress_attribute_buffer_3d(RS::SurfaceData &r_surface, ui
 }
 
 void MeshStorage::_decompress_3d_buffer(const uint8_t *p_src, uint8_t *p_dst, uint32_t p_vertex_count, uint64_t p_format, uint32_t p_compressed_stride, uint32_t p_uncompressed_stride, const AABB &p_aabb) {
-	bool has_vertex = p_format & RS::ARRAY_FORMAT_VERTEX;
-	bool has_normal = p_format & RS::ARRAY_FORMAT_NORMAL;
-	bool has_tangent = p_format & RS::ARRAY_FORMAT_TANGENT;
+	const bool has_vertex = (p_format & RS::ARRAY_FORMAT_VERTEX) != 0;
+	const bool has_normal = (p_format & RS::ARRAY_FORMAT_NORMAL) != 0;
+	const bool has_tangent = (p_format & RS::ARRAY_FORMAT_TANGENT) != 0;
 
-	// Determine whether position is 8-byte (4x uint16_t UNORM) or 12-byte (3x float)
-	uint32_t expected_norm_tang_stride = (has_normal ? 4 : 0) + (has_tangent ? 4 : 0);
-	bool combined_pos_norm_tang = false;
-	uint32_t src_pos_stride = 0;
-
-	if (has_vertex) {
-		if (has_normal && !has_tangent && p_compressed_stride == 8) {
-			// 3x uint16_t position (6 bytes) + 2x uint8_t octahedral normal (2 bytes)
-			// packed into 8 bytes, no separate attribute stream.
-			src_pos_stride = 8;
-			combined_pos_norm_tang = true;
-		} else if (p_compressed_stride == 8 + expected_norm_tang_stride) {
-			// 4x uint16_t position (8 bytes) followed by separate normal/tangent attribute stream.
-			src_pos_stride = 8;
-		} else if (has_normal && has_tangent && p_compressed_stride == 12) {
-			// 3x uint16_t position (6 bytes) + 2x uint8_t octahedral normal (2 bytes) packed into 8 bytes,
-			// followed by a separate 4-byte octahedral tangent stream (8 + 4 = 12 bytes total stride).
-			src_pos_stride = 8;
-			combined_pos_norm_tang = true;
-		} else {
-			// Uncompressed 3x float position (12 bytes) followed by separate normal/tangent attribute stream.
-			src_pos_stride = 12;
+	// Already decompressed interleaved float32 buffer
+	if (p_compressed_stride == p_uncompressed_stride && !(p_format & RS::ARRAY_FLAG_COMPRESS_ATTRIBUTES)) {
+		// Verify if it isn't the edge case where compressed
+		// size equals uncompressed size (not possible for 3D since pos is 12, norm is 4 vs 12)
+		if (unlikely(!has_normal && !has_tangent)) {
+			memcpy(p_dst, p_src, p_vertex_count * p_uncompressed_stride);
+			return;
 		}
 	}
 
-	const uint8_t *src_attr_base = p_src + (has_vertex ? (p_vertex_count * src_pos_stride) : 0);
-	uint32_t src_attr_stride = combined_pos_norm_tang ? (has_tangent ? 4 : 0) : expected_norm_tang_stride;
+	// Determine Godot 4's exact planar block layout:
+	// Block 0: Position stream (p_vertex_count * pos_stride)
+	//   - Uncompressed: 12 bytes (float32 x 3)
+	//   - Compressed:   8 bytes  (uint16 x 4). Word 3 holds either:
+	//       * Tangent (octahedral uint8 x 2) if has_tangent is true
+	//       * Normal  (octahedral uint8 x 2) if has_normal && !has_tangent
+	//       * 0xFFFF  if neither is present
+	// Block 1: Normal / Tangent stream (p_vertex_count * norm_tang_stride)
+	//   - When positions are compressed (8-byte):
+	//       * If has_normal && has_tangent: 4 bytes (octahedral normal uint16 x 2)
+	//       * Otherwise: 0 bytes (normal was packed into position Word 3)
+	//   - When positions are uncompressed (12-byte):
+	//       * has_normal  ? 4 bytes (octahedral normal uint16 x 2) : 0
+	//       * has_tangent ? 4 bytes (octahedral tangent uint16 x 2) : 0
+	uint32_t pos_stride = 0;
+	uint32_t norm_tang_stride = 0;
+	bool pos_is_compressed = false;
+	bool normal_in_pos_w = false;
+	bool tangent_in_pos_w = false;
 
-	// If normals are packed into the position block,
-	// tangents start at offset 0 of the attribute stream instead of offset 4.
-	uint32_t src_norm_offset = 0;
-	uint32_t src_tang_offset = combined_pos_norm_tang ? 0 : (has_normal ? 4 : 0);
+	const uint32_t uncomp_pos_norm_tang_bytes = (
+		(has_vertex ? 12 : 0) + (has_normal ? 4 : 0) + (has_tangent ? 4 : 0)
+	);
 
-	// Destination offsets (uncompressed, fully interleaved layout)
-	uint32_t dst_pos_offset = 0;
-	uint32_t dst_norm_offset = has_vertex ? 12 : 0;
-	uint32_t dst_tang_offset = dst_norm_offset + (has_normal ? 12 : 0);
+	if (has_vertex) {
+		if (
+			(p_format & RS::ARRAY_FLAG_COMPRESS_ATTRIBUTES) &&
+			p_compressed_stride < uncomp_pos_norm_tang_bytes
+		) {
+			pos_stride = 8;
+			pos_is_compressed = true;
+			if (has_normal && has_tangent) {
+				norm_tang_stride = 4; // Normal is in separate 4-byte stream, Tangent is in pos[3]
+				tangent_in_pos_w = true;
+			} else if (has_normal && !has_tangent) {
+				norm_tang_stride = 0; // Normal is in pos[3]
+				normal_in_pos_w = true;
+			} else if (!has_normal && has_tangent) {
+				norm_tang_stride = 0; // Tangent is in pos[3]
+				tangent_in_pos_w = true;
+			}
+		} else {
+			pos_stride = 12;
+			pos_is_compressed = false;
+			norm_tang_stride = (has_normal ? 4 : 0) + (has_tangent ? 4 : 0);
+		}
+	} else {
+		norm_tang_stride = (has_normal ? 4 : 0) + (has_tangent ? 4 : 0);
+	}
+
+	const uint8_t *src_pos_base = p_src;
+	const uint8_t *src_norm_tang_base = p_src + (p_vertex_count * pos_stride);
+
+	const uint32_t dst_pos_offset = 0;
+	const uint32_t dst_norm_offset = has_vertex ? 12 : 0;
+	const uint32_t dst_tang_offset = dst_norm_offset + (has_normal ? 12 : 0);
 
 	for (uint32_t i = 0; i < p_vertex_count; i++) {
-		const uint8_t *src_a = src_attr_base + (i * src_attr_stride);
+		const uint8_t *src_pos_ptr = src_pos_base + (i * pos_stride);
+		const uint8_t *src_nt_ptr = src_norm_tang_base + (i * norm_tang_stride);
 		uint8_t *dst_v = p_dst + (i * p_uncompressed_stride);
 
+		// Position -> float32 x 3
 		if (has_vertex) {
-			float *pos_dst = (float *)(dst_v + dst_pos_offset);
-			if (src_pos_stride == 8) {
-				const uint16_t *pos_src = (const uint16_t *)(p_src + (i * 8));
-				pos_dst[0] = (pos_src[0] / 65535.0f) * p_aabb.size.x + p_aabb.position.x;
-				pos_dst[1] = (pos_src[1] / 65535.0f) * p_aabb.size.y + p_aabb.position.y;
-				pos_dst[2] = (pos_src[2] / 65535.0f) * p_aabb.size.z + p_aabb.position.z;
+			float *pos_dst = reinterpret_cast<float *>(dst_v + dst_pos_offset);
+			if (pos_is_compressed) {
+				const uint16_t *pos_u16 = reinterpret_cast<const uint16_t *>(src_pos_ptr);
+				pos_dst[0] = (pos_u16[0] / 65535.0f) * p_aabb.size.x + p_aabb.position.x;
+				pos_dst[1] = (pos_u16[1] / 65535.0f) * p_aabb.size.y + p_aabb.position.y;
+				pos_dst[2] = (pos_u16[2] / 65535.0f) * p_aabb.size.z + p_aabb.position.z;
 			} else {
-				const float *pos_src = (const float *)(p_src + (i * 12));
-				pos_dst[0] = pos_src[0];
-				pos_dst[1] = pos_src[1];
-				pos_dst[2] = pos_src[2];
+				memcpy(pos_dst, src_pos_ptr, 12);
 			}
 		}
 
+		// Normal -> float32 x 3
 		if (has_normal) {
-			float *norm_dst = (float *)(dst_v + dst_norm_offset);
-			const uint16_t *norm_src = nullptr;
-			if (combined_pos_norm_tang) {
-				const uint8_t *norm_u8 = p_src + (i * 8) + 6;
-				uint16_t nx = (uint16_t)norm_u8[0] * 257;
-				uint16_t ny = (uint16_t)norm_u8[1] * 257;
-				Vector3 normal = _gles1_decode_octahedral_normal(nx, ny);
-				norm_dst[0] = normal.x;
-				norm_dst[1] = normal.y;
-				norm_dst[2] = normal.z;
+			float *norm_dst = reinterpret_cast<float *>(dst_v + dst_norm_offset);
+			Vector3 normal;
+			if (normal_in_pos_w) {
+				// 2x uint8 UNORM packed into bytes 6 and 7 of the 8-byte position
+				const uint8_t *norm_u8 = src_pos_ptr + 6;
+				uint16_t nx = static_cast<uint16_t>(norm_u8[0]) * 257;
+				uint16_t ny = static_cast<uint16_t>(norm_u8[1]) * 257;
+				normal = _gles1_decode_octahedral_normal(nx, ny);
 			} else {
-				norm_src = (const uint16_t *)(src_a + src_norm_offset);
-				Vector3 normal = _gles1_decode_octahedral_normal(norm_src[0], norm_src[1]);
-				norm_dst[0] = normal.x;
-				norm_dst[1] = normal.y;
-				norm_dst[2] = normal.z;
+				const uint16_t *norm_u16 = reinterpret_cast<const uint16_t *>(src_nt_ptr);
+				normal = _gles1_decode_octahedral_normal(norm_u16[0], norm_u16[1]);
 			}
+			norm_dst[0] = normal.x;
+			norm_dst[1] = normal.y;
+			norm_dst[2] = normal.z;
 		}
 
+		// Tangent -> float32 x 4
 		if (has_tangent) {
-			const uint16_t *tang_src = (const uint16_t *)(src_a + src_tang_offset);
-			float *tang_dst = (float *)(dst_v + dst_tang_offset);
-
+			float *tang_dst = reinterpret_cast<float *>(dst_v + dst_tang_offset);
 			Vector3 tangent;
-			float binormal_sign;
-			_gles1_decode_octahedral_tangent(tang_src[0], tang_src[1], tangent, binormal_sign);
+			float binormal_sign = 1.0f;
+
+			if (tangent_in_pos_w) {
+				// 2x uint8 UNORM packed into bytes 6 and 7 of the 8-byte position
+				const uint8_t *tang_u8 = src_pos_ptr + 6;
+				uint16_t tx = static_cast<uint16_t>(tang_u8[0]) * 257;
+				uint16_t ty = static_cast<uint16_t>(tang_u8[1]) * 257;
+				_gles1_decode_octahedral_tangent(tx, ty, tangent, binormal_sign);
+			} else {
+				const uint32_t tang_src_offset = has_normal ? 4 : 0;
+				const uint16_t *tang_u16 = reinterpret_cast<const uint16_t *>(src_nt_ptr + tang_src_offset);
+				_gles1_decode_octahedral_tangent(tang_u16[0], tang_u16[1], tangent, binormal_sign);
+			}
 
 			tang_dst[0] = tangent.x;
 			tang_dst[1] = tangent.y;
@@ -2049,6 +2089,51 @@ void MeshStorage::_decompress_3d_buffer(const uint8_t *p_src, uint8_t *p_dst, ui
 			tang_dst[3] = binormal_sign;
 		}
 	}
+}
+
+void MeshStorage::_decompress_skin_buffer(RS::SurfaceData &r_surface, Mesh::Surface *s) {
+	if (r_surface.skin_data.is_empty() || r_surface.vertex_count == 0) {
+		return;
+	}
+
+	// Preserve original uint16 skin data
+	s->skin_data_cache = r_surface.skin_data;
+
+	const uint32_t v_count = r_surface.vertex_count;
+	const bool use_8_weights = (r_surface.format & RS::ARRAY_FLAG_USE_8_BONE_WEIGHTS) != 0;
+	const uint32_t weight_count = use_8_weights ? 8 : 4;
+
+	// Incoming Godot 4 skin_data is interleaved per vertex:
+	// [bones: weight_count * uint16_t] [weights: weight_count * uint16_t]
+	const uint32_t expected_src_stride = weight_count * 2 * sizeof(uint16_t);
+	const uint32_t actual_src_stride = r_surface.skin_data.size() / v_count;
+	if (actual_src_stride != expected_src_stride) {
+		return;
+	}
+
+	// Decompress to 32-bit floats for GL_FLOAT vertex attributes
+	const uint32_t dst_stride = weight_count * 2 * sizeof(float);
+	Vector<uint8_t> new_skin_data;
+	new_skin_data.resize(v_count * dst_stride);
+
+	const uint8_t *src_ptr = r_surface.skin_data.ptr();
+	uint8_t *dst_ptr = new_skin_data.ptrw();
+
+	for (uint32_t i = 0; i < v_count; i++) {
+		const uint16_t *src_u16 = reinterpret_cast<const uint16_t *>(src_ptr + i * actual_src_stride);
+		float *dst_f32 = reinterpret_cast<float *>(dst_ptr + i * dst_stride);
+
+		// Bones: uint16 index -> float32
+		for (uint32_t k = 0; k < weight_count; k++) {
+			dst_f32[k] = static_cast<float>(src_u16[k]);
+		}
+		// Weights: uint16 UNORM -> float32 [0.0, 1.0]
+		for (uint32_t k = 0; k < weight_count; k++) {
+			dst_f32[weight_count + k] = static_cast<float>(src_u16[weight_count + k]) / 65535.0f;
+		}
+	}
+
+	r_surface.skin_data = new_skin_data;
 }
 
 void MeshStorage::mesh_surface_remove(RID p_mesh, int p_surface) {

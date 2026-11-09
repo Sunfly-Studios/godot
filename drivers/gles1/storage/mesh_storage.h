@@ -289,6 +289,7 @@ private:
 	void _decompress_surface_data_3d(RS::SurfaceData &r_surface, Mesh::Surface *s);
 	void _decompress_3d_buffer(const uint8_t *p_src, uint8_t *p_dst, uint32_t p_vertex_count, uint64_t p_format, uint32_t p_compressed_stride, uint32_t p_uncompressed_stride, const AABB &p_aabb);
 	void _decompress_attribute_buffer_3d(RS::SurfaceData &r_surface, uint32_t p_vertex_count);
+	void _decompress_skin_buffer(RS::SurfaceData &r_surface, Mesh::Surface *s);
 
 	/* Mesh Instance API */
 
@@ -535,14 +536,28 @@ public:
 		return s->attribute_buffer_fallback.ptr();
 	}
 
+	_FORCE_INLINE_ GLuint mesh_surface_get_skin_buffer(void *p_surface) const {
+		Mesh::Surface *s = reinterpret_cast<Mesh::Surface *>(p_surface);
+		ERR_FAIL_NULL_V(s, 0);
+		return s->skin_buffer;
+	}
+
+	_FORCE_INLINE_ const uint8_t *mesh_surface_get_skin_array(void *p_surface) const {
+		Mesh::Surface *s = reinterpret_cast<Mesh::Surface *>(p_surface);
+		ERR_FAIL_NULL_V(s, nullptr);
+		return s->skin_buffer_fallback.ptr();
+	}
+
 	// Use this to cache Vertex Array Objects so they are only generated once
 	_FORCE_INLINE_ Mesh::Surface::Version *mesh_surface_get_vertex_arrays_and_format(void *p_surface, uint64_t p_input_mask, GLuint &r_vertex_array_gl) {
 		Mesh::Surface *s = reinterpret_cast<Mesh::Surface *>(p_surface);
 		ERR_FAIL_NULL_V(s, nullptr);
 
+		const uint64_t effective_mask = p_input_mask & ((1ULL << RS::ARRAY_INDEX) - 1ULL);
+
 		s->version_lock.lock();
 
-		if (const uint32_t *found_idx = s->version_index_map.find(p_input_mask)) {
+		if (const uint32_t *found_idx = s->version_index_map.find(effective_mask)) {
 			// We have this version, hooray.
 			r_vertex_array_gl = s->versions[*found_idx].vertex_array;
 			Mesh::Surface::Version *v = &s->versions[*found_idx];
@@ -561,10 +576,10 @@ public:
 
 		::new (&s->versions[version]) Mesh::Surface::Version();
 
-		_mesh_surface_generate_version_for_input_mask(s->versions[version], s, p_input_mask);
+		_mesh_surface_generate_version_for_input_mask(s->versions[version], s, effective_mask);
 
 		s->versions[version].vertex_array = 0;
-		s->version_index_map.insert(p_input_mask, version);
+		s->version_index_map.insert(effective_mask, version);
 
 		r_vertex_array_gl = s->versions[version].vertex_array;
 		Mesh::Surface::Version *v = &s->versions[version];
