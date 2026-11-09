@@ -221,8 +221,30 @@ void ShaderGLES2::_build_variant_code(StringBuilder &builder, uint32_t p_variant
 	// GLES2 Texture Polyfills
 	builder.append("#define texture texture2D\n");
 	builder.append("#define textureProj texture2DProj\n");
-	builder.append("#define textureLod texture2DLodEXT\n");
-	builder.append("#define textureProjLod texture2DProjLodEXT\n");
+	if (p_stage_type == STAGE_TYPE_VERTEX) {
+		builder.append("#define textureLod texture2DLod\n");
+		builder.append("#define textureProjLod texture2DProjLod\n");
+		if (GLES2_CONFIG->max_vertex_texture_image_units == 0) {
+			builder.append("#define texture2D(s, c) vec4(0.0)\n");
+			builder.append("#define texture2DProj(s, c) vec4(0.0)\n");
+			builder.append("#define textureCube(s, c) vec4(0.0)\n");
+			builder.append("#define texture2DLod(s, c, l) vec4(0.0)\n");
+			builder.append("#define texture2DProjLod(s, c, l) vec4(0.0)\n");
+			builder.append("#define textureCubeLod(s, c, l) vec4(0.0)\n");
+		} else {
+			builder.append("#define texture2D(s, c) texture2DLod(s, c, 0.0)\n");
+			builder.append("#define texture2DProj(s, c) texture2DProjLod(s, c, 0.0)\n");
+			builder.append("#define textureCube(s, c) textureCubeLod(s, c, 0.0)\n");
+		}
+	} else {
+		if (!RasterizerGLES2::is_gles_over_gl() && GLES2_CONFIG->texture_lod_supported) {
+			builder.append("#define textureLod texture2DLodEXT\n");
+			builder.append("#define textureProjLod texture2DProjLodEXT\n");
+		} else {
+			builder.append("#define textureLod texture2D\n");
+			builder.append("#define textureProjLod texture2DProj\n");
+		}
+	}
 
 	builder.append(general_defines.get_data());
 	if (variant_defines != nullptr) {
