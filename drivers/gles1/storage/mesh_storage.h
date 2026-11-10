@@ -70,6 +70,7 @@ struct Mesh {
 		Vector<uint8_t> original_vertex_data;
 		Vector<uint8_t> original_attribute_data;
 		Vector<uint8_t> original_blend_shape_data;
+		Vector<uint8_t> original_skin_data;
 
 		uint32_t context_generation = 1;
 

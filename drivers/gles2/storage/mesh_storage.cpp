@@ -193,6 +193,7 @@ void MeshStorage::mesh_add_surface(RID p_mesh, const RS::SurfaceData &p_surface)
 	s->original_vertex_data = p_surface.vertex_data;
 	s->original_attribute_data = p_surface.attribute_data;
 	s->original_blend_shape_data = p_surface.blend_shape_data;
+	s->original_skin_data = p_surface.skin_data;
 
 	RS::SurfaceData surface_data = p_surface;
 	_decompress_surface_data(surface_data, s);
@@ -500,6 +501,9 @@ void MeshStorage::mesh_surface_update_skin_region(RID p_mesh, int p_surface, int
 	if (p_offset + data_size <= (uint64_t)s->skin_data_cache.size()) {
 		memcpy(s->skin_data_cache.ptrw() + p_offset, r, data_size);
 	}
+	if (p_offset + data_size <= (uint64_t)s->original_skin_data.size()) {
+		memcpy(s->original_skin_data.ptrw() + p_offset, r, data_size);
+	}
 
 	// Protect state
 	GLint prev_buffer = 0;
@@ -551,7 +555,11 @@ RS::SurfaceData MeshStorage::mesh_get_surface(RID p_mesh, int p_surface) const {
 	sd.vertex_data = s.original_vertex_data;
 	sd.attribute_data = s.original_attribute_data;
 
-	if (s.skin_buffer != 0) {
+	if (!s.original_skin_data.is_empty()) {
+		sd.skin_data = s.original_skin_data;
+	} else if (!s.skin_data_cache.is_empty()) {
+		sd.skin_data = s.skin_data_cache;
+	} else if (s.skin_buffer != 0) {
 		sd.skin_data = GLES2::Utilities::get_singleton()->buffer_get_data(GL_ARRAY_BUFFER, s.skin_buffer, s.skin_buffer_size);
 	}
 
