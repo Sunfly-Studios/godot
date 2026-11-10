@@ -5693,7 +5693,7 @@ void RasterizerSceneGLES1::render_scene(const Ref<RenderSceneBuffers> &p_render_
 		_render_shadows(&render_data, screen_size);
 	} else {
 		// Sorry...
-		WARN_PRINT_ONCE("Shadows cannot be rendered on this hardware. Visual changes may occur.");
+		WARN_PRINT_ONCE("Shadows cannot be rendered on this device. Visual changes may occur.");
 	}
 	_setup_lights(&render_data, can_render_shadows, render_data.directional_light_count, render_data.omni_light_count, render_data.spot_light_count, render_data.directional_shadow_count);
 	_setup_environment(&render_data, false, screen_size, flip_y, clear_color, false);

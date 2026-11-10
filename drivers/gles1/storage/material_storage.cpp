@@ -967,7 +967,7 @@ void MaterialStorage::shader_set_code(RID p_shader, const String &p_code) {
 
 #if DEBUG_ENABLED
 	if (!p_code.is_empty()) {
-        WARN_PRINT_ONCE("Cannot load or import custom shaders under the gl_classic driver.");
+        WARN_PRINT_ONCE("Cannot load or import custom shaders on the Classic rendering driver.");
     }
 #endif
 
