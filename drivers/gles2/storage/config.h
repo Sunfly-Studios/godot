@@ -39,14 +39,6 @@
 
 #include "platform_gl.h"
 
-#ifdef ANDROID_ENABLED
-typedef void (*PFNGLFRAMEBUFFERTEXTUREMULTIVIEWOVRPROC)(GLenum, GLenum, GLuint, GLint, GLint, GLsizei);
-typedef void (*PFNGLTEXSTORAGE3DMULTISAMPLEPROC)(GLenum, GLsizei, GLenum, GLsizei, GLsizei, GLsizei, GLboolean);
-typedef void (*PFNGLFRAMEBUFFERTEXTURE2DMULTISAMPLEEXTPROC)(GLenum, GLenum, GLenum, GLuint, GLint, GLsizei);
-typedef void (*PFNGLFRAMEBUFFERTEXTUREMULTISAMPLEMULTIVIEWOVRPROC)(GLenum, GLenum, GLuint, GLint, GLsizei, GLint, GLsizei);
-typedef void (*PFNEGLIMAGETARGETTEXTURE2DOESPROC)(GLenum, void *);
-#endif
-
 namespace GLES2 {
 
 class Config {
@@ -138,14 +130,6 @@ public:
 	bool disable_transform_feedback_shader_cache = false; // PowerVR GE 8320 workaround.
 	bool polyfill_half2float = true; // ANGLE shader workaround.
 	bool is_android_emulator = false;
-
-#ifdef ANDROID_ENABLED
-	PFNGLFRAMEBUFFERTEXTUREMULTIVIEWOVRPROC eglFramebufferTextureMultiviewOVR = nullptr;
-	PFNGLTEXSTORAGE3DMULTISAMPLEPROC eglTexStorage3DMultisample = nullptr;
-	PFNGLFRAMEBUFFERTEXTURE2DMULTISAMPLEEXTPROC eglFramebufferTexture2DMultisampleEXT = nullptr;
-	PFNGLFRAMEBUFFERTEXTUREMULTISAMPLEMULTIVIEWOVRPROC eglFramebufferTextureMultisampleMultiviewOVR = nullptr;
-	PFNEGLIMAGETARGETTEXTURE2DOESPROC eglEGLImageTargetTexture2DOES = nullptr;
-#endif
 
 	static Config *get_singleton() { return singleton; }
 
