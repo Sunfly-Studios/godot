@@ -3285,6 +3285,33 @@ void RasterizerSceneGLES1::_batch_upload_buffers_3d(BatchType::Batch3D &r_batch,
 	}
 }
 
+_FORCE_INLINE_ bool RasterizerSceneGLES1::_batch_buffer_orphan_and_upload_3d(unsigned int p_buffer_size_bytes, unsigned int p_offset_bytes, unsigned int p_data_size_bytes, const void *p_data, GLenum p_target, GLenum p_usage, bool p_optional_orphan) const {
+	ERR_FAIL_COND_V((p_offset_bytes + p_data_size_bytes) > p_buffer_size_bytes, false);
+
+	if (!p_optional_orphan) {
+		if (GLES1_CONFIG->is_android_emulator && p_offset_bytes == 0 && p_buffer_size_bytes == p_data_size_bytes) {
+			// Workaround: Buggy emulators crash or race on standard orphaning.
+			// Passing the exact size and data directly to glBufferData forces a safe internal reallocation.
+			glBufferData(p_target, p_buffer_size_bytes, p_data, p_usage);
+			GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_batch_buffer_orphan_and_upload_3d: glBufferData emulator");
+			return true;
+		}
+		glBufferData(p_target, p_buffer_size_bytes, nullptr, p_usage);
+		GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_batch_buffer_orphan_and_upload_3d: glBufferData orphan");
+	}
+
+	if (p_data_size_bytes > 0 && p_data != nullptr) {
+		glBufferSubData(p_target, p_offset_bytes, p_data_size_bytes, p_data);
+		GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_batch_buffer_orphan_and_upload_3d: glBufferSubData");
+	}
+	return true;
+}
+
+void RasterizerSceneGLES1::_batch_threshold_flush() {
+	glFlush();
+	GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_batch_threshold_flush: glFlush");
+}
+
 void RasterizerSceneGLES1::_batch_bind_material(GLES1::SceneMaterialData *p_material_data, const Transform3D &p_world_transform, bool p_transparent) {
 	if (p_material_data) {
 		uint64_t spec_constants = scene_state.current_spec_constants;
@@ -3368,33 +3395,6 @@ void RasterizerSceneGLES1::_batch_bind_material(GLES1::SceneMaterialData *p_mate
 	) {
 		_gl_batch_material_manage_texture_shadows();
 	}
-}
-
-void RasterizerSceneGLES1::_batch_threshold_flush() {
-	glFlush();
-	GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_batch_threshold_flush: glFlush");
-}
-
-_FORCE_INLINE_ bool RasterizerSceneGLES1::_batch_buffer_orphan_and_upload_3d(unsigned int p_buffer_size_bytes, unsigned int p_offset_bytes, unsigned int p_data_size_bytes, const void *p_data, GLenum p_target, GLenum p_usage, bool p_optional_orphan) const {
-	ERR_FAIL_COND_V((p_offset_bytes + p_data_size_bytes) > p_buffer_size_bytes, false);
-
-	if (!p_optional_orphan) {
-		if (GLES1_CONFIG->is_android_emulator && p_offset_bytes == 0 && p_buffer_size_bytes == p_data_size_bytes) {
-			// Workaround: Buggy emulators crash or race on standard orphaning.
-			// Passing the exact size and data directly to glBufferData forces a safe internal reallocation.
-			glBufferData(p_target, p_buffer_size_bytes, p_data, p_usage);
-			GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_batch_buffer_orphan_and_upload_3d: glBufferData emulator");
-			return true;
-		}
-		glBufferData(p_target, p_buffer_size_bytes, nullptr, p_usage);
-		GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_batch_buffer_orphan_and_upload_3d: glBufferData orphan");
-	}
-
-	if (p_data_size_bytes > 0 && p_data != nullptr) {
-		glBufferSubData(p_target, p_offset_bytes, p_data_size_bytes, p_data);
-		GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_batch_buffer_orphan_and_upload_3d: glBufferSubData");
-	}
-	return true;
 }
 
 void RasterizerSceneGLES1::_batch_render_items(GLES1::SceneMaterialData *p_material_data, RS::PrimitiveType p_primitive, BatchType::Batch3D &p_batch, bool p_transparent) {

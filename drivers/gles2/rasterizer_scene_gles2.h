@@ -433,6 +433,17 @@ private:
 		}
 	}
 
+	_FORCE_INLINE_ void _gl_reset_instancing_attributes() {
+		glDisableVertexAttribArray(12);
+		glDisableVertexAttribArray(13);
+		glDisableVertexAttribArray(14);
+		glDisableVertexAttribArray(15);
+		glVertexAttrib4f(12, 1.0f, 0.0f, 0.0f, 0.0f);
+		glVertexAttrib4f(13, 0.0f, 1.0f, 0.0f, 0.0f);
+		glVertexAttrib4f(14, 0.0f, 0.0f, 1.0f, 0.0f);
+		glVertexAttrib4f(15, 1.0f, 1.0f, 1.0f, 1.0f);
+	}
+
 	/* UTILITIES */
 	struct MultiMeshInstanceData {
 		const float *data = nullptr;
