@@ -925,7 +925,7 @@ void MeshStorage::mesh_surface_bind_arrays_gles1(void *p_surface, uint64_t p_inp
 		);
 	} else {
 		glDisableClientState(GL_NORMAL_ARRAY);
-		glColor3f(0.0f, 1.0f, 0.0f);
+		glNormal3f(0.0f, 1.0f, 0.0f);
 	}
 
 	// --- Attribute buffer (colors, UVs) ---
@@ -968,7 +968,7 @@ void MeshStorage::mesh_surface_bind_arrays_gles1(void *p_surface, uint64_t p_inp
 		);
 	} else {
 		glDisableClientState(GL_TEXTURE_COORD_ARRAY);
-		glColor3f(0.0f, 0.0f, 0.0f);
+		glMultiTexCoord4f(GL_TEXTURE0, 0.0f, 0.0f, 0.0f, 1.0f);
 	}
 
 	// tex_uv2
@@ -1001,7 +1001,7 @@ void MeshStorage::mesh_surface_bind_arrays_gles1(void *p_surface, uint64_t p_inp
 			);
 		} else {
 			glDisableClientState(GL_TEXTURE_COORD_ARRAY);
-			glColor3f(0.0f, 0.0f, 0.0f);
+			glMultiTexCoord4f(GL_TEXTURE1, 0.0f, 0.0f, 0.0f, 1.0f);
 		}
 
 		if (GLES1_CONFIG->max_texture_units > 2) {
@@ -1027,7 +1027,7 @@ void MeshStorage::mesh_surface_bind_arrays_gles1(void *p_surface, uint64_t p_inp
 				);
 			} else {
 				glDisableClientState(GL_TEXTURE_COORD_ARRAY);
-				glColor3f(0.0f, 0.0f, 0.0f);
+				glMultiTexCoord4f(GL_TEXTURE2, 0.0f, 0.0f, 0.0f, 1.0f);
 			}
 		}
 
@@ -1088,6 +1088,7 @@ void MeshStorage::mesh_instance_surface_bind_arrays_gles1(RID p_mesh_instance, u
 		);
 	} else {
 		glDisableClientState(GL_VERTEX_ARRAY);
+		glColor3f(0.0f, 0.0f, 0.0f);
 	}
 
 	// Normal
@@ -1100,6 +1101,7 @@ void MeshStorage::mesh_instance_surface_bind_arrays_gles1(RID p_mesh_instance, u
 		);
 	} else {
 		glDisableClientState(GL_NORMAL_ARRAY);
+		glNormal3f(0.0f, 1.0f, 0.0f);
 	}
 
 	// --- Attribute buffer (colors, UVs from base Mesh::Surface) ---
@@ -1124,6 +1126,7 @@ void MeshStorage::mesh_instance_surface_bind_arrays_gles1(RID p_mesh_instance, u
 		);
 	} else {
 		glDisableClientState(GL_COLOR_ARRAY);
+		glColor3f(1.0f, 1.0f, 1.0f);
 	}
 
 	if (GLES1_CONFIG->max_texture_units > 1) {
@@ -1141,6 +1144,7 @@ void MeshStorage::mesh_instance_surface_bind_arrays_gles1(RID p_mesh_instance, u
 		);
 	} else {
 		glDisableClientState(GL_TEXTURE_COORD_ARRAY);
+		glMultiTexCoord4f(GL_TEXTURE0, 0.0f, 0.0f, 0.0f, 1.0f);
 	}
 
 	// tex_uv2 & tangent
@@ -1171,6 +1175,7 @@ void MeshStorage::mesh_instance_surface_bind_arrays_gles1(RID p_mesh_instance, u
 			);
 		} else {
 			glDisableClientState(GL_TEXTURE_COORD_ARRAY);
+			glMultiTexCoord4f(GL_TEXTURE1, 0.0f, 0.0f, 0.0f, 1.0f);
 		}
 
 		if (GLES1_CONFIG->max_texture_units > 2) {
@@ -1195,6 +1200,7 @@ void MeshStorage::mesh_instance_surface_bind_arrays_gles1(RID p_mesh_instance, u
 				);
 			} else {
 				glDisableClientState(GL_TEXTURE_COORD_ARRAY);
+				glMultiTexCoord4f(GL_TEXTURE2, 0.0f, 0.0f, 0.0f, 1.0f);
 			}
 		}
 
