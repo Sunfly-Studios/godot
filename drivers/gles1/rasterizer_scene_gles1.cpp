@@ -3488,39 +3488,9 @@ void RasterizerSceneGLES1::_batch_render_items(GLES1::SceneMaterialData *p_mater
 		glLoadMatrixf(_gl_load_transform(model_view));
 		GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_batch_render_items: glLoadMatrixf MODELVIEW single-item");
 
-		if (bdata.pass_mode == PASS_MODE_SHADOW_PROJECTION) {
-			if (GLES1_CONFIG->max_texture_units > 1) {
-				glActiveTexture(GL_TEXTURE1);
-				glMatrixMode(GL_TEXTURE);
-				glPushMatrix();
-				glMultMatrixf(_gl_mult_transform(world_xform));
-			}
-			if (GLES1_CONFIG->max_texture_units > 2) {
-				glActiveTexture(GL_TEXTURE2);
-				glMatrixMode(GL_TEXTURE);
-				glPushMatrix();
-				glMultMatrixf(_gl_mult_transform(world_xform));
-			}
-			glActiveTexture(GL_TEXTURE0);
-			glMatrixMode(GL_MODELVIEW);
-		}
-
+		_gl_push_shadow_projection_matrices(world_xform);
 		_batch_render_generic(p_primitive, 0, p_batch.num_indices, has_vertex_colors);
-
-		if (bdata.pass_mode == PASS_MODE_SHADOW_PROJECTION) {
-			if (GLES1_CONFIG->max_texture_units > 1) {
-				glActiveTexture(GL_TEXTURE1);
-				glMatrixMode(GL_TEXTURE);
-				glPopMatrix();
-			}
-			if (GLES1_CONFIG->max_texture_units > 2) {
-				glActiveTexture(GL_TEXTURE2);
-				glMatrixMode(GL_TEXTURE);
-				glPopMatrix();
-			}
-			glActiveTexture(GL_TEXTURE0);
-			glMatrixMode(GL_MODELVIEW);
-		}
+		_gl_pop_shadow_projection_matrices();
 
 		GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_batch_render_items: single-item");
 	}
@@ -4121,22 +4091,7 @@ void RasterizerSceneGLES1::_batch_render_static_mesh_group(GLES1::SceneMaterialD
 				glLoadMatrixf(_gl_load_transform(model_view));
 				GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_batch_render_static_mesh_group: glLoadMatrixf");
 
-				if (bdata.pass_mode == PASS_MODE_SHADOW_PROJECTION) {
-					if (GLES1_CONFIG->max_texture_units > 1) {
-						glActiveTexture(GL_TEXTURE1);
-						glMatrixMode(GL_TEXTURE);
-						glPushMatrix();
-						glMultMatrixf(_gl_mult_transform(ref.transform));
-					}
-					if (GLES1_CONFIG->max_texture_units > 2) {
-						glActiveTexture(GL_TEXTURE2);
-						glMatrixMode(GL_TEXTURE);
-						glPushMatrix();
-						glMultMatrixf(_gl_mult_transform(ref.transform));
-					}
-					glActiveTexture(GL_TEXTURE0);
-					glMatrixMode(GL_MODELVIEW);
-				}
+				_gl_push_shadow_projection_matrices(ref.transform);
 
 				if (has_indices) {
 					if (use_index_buffer) {
@@ -4150,21 +4105,7 @@ void RasterizerSceneGLES1::_batch_render_static_mesh_group(GLES1::SceneMaterialD
 					GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_batch_render_static_mesh_group: glDrawArrays");
 				}
 				_record_draw_call_info(scene_state.current_render_info);
-
-				if (bdata.pass_mode == PASS_MODE_SHADOW_PROJECTION) {
-					if (GLES1_CONFIG->max_texture_units > 1) {
-						glActiveTexture(GL_TEXTURE1);
-						glMatrixMode(GL_TEXTURE);
-						glPopMatrix();
-					}
-					if (GLES1_CONFIG->max_texture_units > 2) {
-						glActiveTexture(GL_TEXTURE2);
-						glMatrixMode(GL_TEXTURE);
-						glPopMatrix();
-					}
-					glActiveTexture(GL_TEXTURE0);
-					glMatrixMode(GL_MODELVIEW);
-				}
+				_gl_pop_shadow_projection_matrices();
 			} else {
 				MultiMeshInstanceData mm = _get_multimesh_data(surf);
 				const uint32_t instances = ref.instance_count;
@@ -4181,22 +4122,7 @@ void RasterizerSceneGLES1::_batch_render_static_mesh_group(GLES1::SceneMaterialD
 					glLoadMatrixf(_gl_load_transform(model_view));
 					GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_batch_render_static_mesh_group: glLoadMatrixf multimesh");
 
-					if (bdata.pass_mode == PASS_MODE_SHADOW_PROJECTION) {
-						if (GLES1_CONFIG->max_texture_units > 1) {
-							glActiveTexture(GL_TEXTURE1);
-							glMatrixMode(GL_TEXTURE);
-							glPushMatrix();
-							glMultMatrixf(_gl_mult_transform(final_xform));
-						}
-						if (GLES1_CONFIG->max_texture_units > 2) {
-							glActiveTexture(GL_TEXTURE2);
-							glMatrixMode(GL_TEXTURE);
-							glPushMatrix();
-							glMultMatrixf(_gl_mult_transform(final_xform));
-						}
-						glActiveTexture(GL_TEXTURE0);
-						glMatrixMode(GL_MODELVIEW);
-					}
+					_gl_push_shadow_projection_matrices(final_xform);
 
 					if (
 						mm.uses_colors &&
@@ -4219,21 +4145,7 @@ void RasterizerSceneGLES1::_batch_render_static_mesh_group(GLES1::SceneMaterialD
 						GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_batch_render_static_mesh_group: glDrawArrays multimesh");
 					}
 					_record_draw_call_info(scene_state.current_render_info);
-
-					if (bdata.pass_mode == PASS_MODE_SHADOW_PROJECTION) {
-						if (GLES1_CONFIG->max_texture_units > 1) {
-							glActiveTexture(GL_TEXTURE1);
-							glMatrixMode(GL_TEXTURE);
-							glPopMatrix();
-						}
-						if (GLES1_CONFIG->max_texture_units > 2) {
-							glActiveTexture(GL_TEXTURE2);
-							glMatrixMode(GL_TEXTURE);
-							glPopMatrix();
-						}
-						glActiveTexture(GL_TEXTURE0);
-						glMatrixMode(GL_MODELVIEW);
-					}
+					_gl_pop_shadow_projection_matrices();
 				}
 			}
 		}
@@ -4404,22 +4316,7 @@ void RasterizerSceneGLES1::_render_single_item_immediate(const GeometryInstanceS
 				glLoadMatrixf(_gl_load_transform(model_view));
 			}
 
-			if (bdata.pass_mode == PASS_MODE_SHADOW_PROJECTION) {
-				if (GLES1_CONFIG->max_texture_units > 1) {
-					glActiveTexture(GL_TEXTURE1);
-					glMatrixMode(GL_TEXTURE);
-					glPushMatrix();
-					glMultMatrixf(_gl_mult_transform(final_xform));
-				}
-				if (GLES1_CONFIG->max_texture_units > 2) {
-					glActiveTexture(GL_TEXTURE2);
-					glMatrixMode(GL_TEXTURE);
-					glPushMatrix();
-					glMultMatrixf(_gl_mult_transform(final_xform));
-				}
-				glActiveTexture(GL_TEXTURE0);
-				glMatrixMode(GL_MODELVIEW);
-			}
+			_gl_push_shadow_projection_matrices(final_xform);
 
 			if (
 				mm.uses_colors &&
@@ -4450,21 +4347,7 @@ void RasterizerSceneGLES1::_render_single_item_immediate(const GeometryInstanceS
 				GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_render_single_item_immediate: glDrawArrays");
 			}
 			_record_draw_call_info(scene_state.current_render_info);
-
-			if (bdata.pass_mode == PASS_MODE_SHADOW_PROJECTION) {
-				if (GLES1_CONFIG->max_texture_units > 1) {
-					glActiveTexture(GL_TEXTURE1);
-					glMatrixMode(GL_TEXTURE);
-					glPopMatrix();
-				}
-				if (GLES1_CONFIG->max_texture_units > 2) {
-					glActiveTexture(GL_TEXTURE2);
-					glMatrixMode(GL_TEXTURE);
-					glPopMatrix();
-				}
-				glActiveTexture(GL_TEXTURE0);
-				glMatrixMode(GL_MODELVIEW);
-			}
+			_gl_pop_shadow_projection_matrices();
 		}
 	}
 

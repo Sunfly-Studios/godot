@@ -910,6 +910,50 @@ private:
 		glActiveTexture(GL_TEXTURE0);
 	}
 
+	_FORCE_INLINE_ void _gl_push_shadow_projection_matrices(const Transform3D &p_world_xform) {
+		if (bdata.pass_mode != PASS_MODE_SHADOW_PROJECTION) {
+			return;
+		}
+		if (GLES1_CONFIG->max_texture_units > 1) {
+			glActiveTexture(GL_TEXTURE1);
+			glMatrixMode(GL_TEXTURE);
+			glPushMatrix();
+			glMultMatrixf(_gl_mult_transform(p_world_xform));
+		}
+		if (GLES1_CONFIG->max_texture_units > 2) {
+			glActiveTexture(GL_TEXTURE2);
+			glMatrixMode(GL_TEXTURE);
+			glPushMatrix();
+			glMultMatrixf(_gl_mult_transform(p_world_xform));
+		}
+		if (GLES1_CONFIG->max_texture_units > 1) {
+			glActiveTexture(GL_TEXTURE0);
+			glMatrixMode(GL_MODELVIEW);
+			GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_gl_push_shadow_projection_matrices: push texture matrices");
+		}
+	}
+
+	_FORCE_INLINE_ void _gl_pop_shadow_projection_matrices() {
+		if (bdata.pass_mode != PASS_MODE_SHADOW_PROJECTION) {
+			return;
+		}
+		if (GLES1_CONFIG->max_texture_units > 1) {
+			glActiveTexture(GL_TEXTURE1);
+			glMatrixMode(GL_TEXTURE);
+			glPopMatrix();
+		}
+		if (GLES1_CONFIG->max_texture_units > 2) {
+			glActiveTexture(GL_TEXTURE2);
+			glMatrixMode(GL_TEXTURE);
+			glPopMatrix();
+		}
+		if (GLES1_CONFIG->max_texture_units > 1) {
+			glActiveTexture(GL_TEXTURE0);
+			glMatrixMode(GL_MODELVIEW);
+			GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_gl_pop_shadow_projection_matrices: pop texture matrices");
+		}
+	}
+
 	_FORCE_INLINE_ void _gl_rsii_setup_shadow_projection_texcoords(const GeometryInstanceSurface *p_surface, uint64_t p_input_mask, bool p_use_deformed_instance) {
 		if (GLES1_CONFIG->max_texture_units <= 1) {
 			return;
