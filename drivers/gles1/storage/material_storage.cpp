@@ -101,6 +101,7 @@ _FORCE_INLINE_ static void bind_uniforms_and_textures_generic_gles1(
 			if (max_texture_units > 1) {
 				glActiveTexture(GL_TEXTURE0 + i);
 			}
+			glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE);
 			glBindTexture(GL_TEXTURE_2D, 0);
 			glDisable(GL_TEXTURE_2D);
 			if (GLES1_CONFIG->support_cubemap) {
@@ -185,6 +186,7 @@ _FORCE_INLINE_ static void bind_uniforms_and_textures_generic_gles1(
 
 	// TU0: Albedo / base texture
 	texture_storage->texture_bind_and_validate(tex_unit0_rid, GL_TEXTURE0, filter0, repeat0);
+	glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE);
 	GL_CHECK_ERROR("GLES1::MaterialStorage::bind_uniforms_and_textures_generic_gles1: Unit 0 Bind");
 
 	// TU1: Secondary maps (lightmap or emission)
@@ -203,6 +205,7 @@ _FORCE_INLINE_ static void bind_uniforms_and_textures_generic_gles1(
 			}
 		} else {
 			glActiveTexture(GL_TEXTURE1);
+			glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE);
 			glBindTexture(GL_TEXTURE_2D, 0);
 			glDisable(GL_TEXTURE_2D);
 			if (GLES1_CONFIG->support_cubemap) {
