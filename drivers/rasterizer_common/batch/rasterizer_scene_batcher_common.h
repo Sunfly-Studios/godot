@@ -172,6 +172,45 @@ public:
 #endif
 	};
 
+	// Quantised 32-bit signed normalized normal (GL_BYTE)
+	struct BatchNormal {
+		int8_t x, y, z, pad;
+
+		_FORCE_INLINE_ static int8_t _quantize_snorm8(float p_v) {
+			float c = CLAMP(p_v, -1.0f, 1.0f);
+			return static_cast<int8_t>(c >= 0.0f ? (c * 127.0f + 0.5f) : (c * 127.0f - 0.5f));
+		}
+
+		void set(float xx, float yy, float zz) {
+			x = _quantize_snorm8(xx);
+			y = _quantize_snorm8(yy);
+			z = _quantize_snorm8(zz);
+			pad = 0;
+		}
+		void set(const Vector3 &p_o) {
+			set(p_o.x, p_o.y, p_o.z);
+		}
+		void to(Vector3 &r_o) const {
+			r_o.x = static_cast<float>(x) * (1.0f / 127.0f);
+			r_o.y = static_cast<float>(y) * (1.0f / 127.0f);
+			r_o.z = static_cast<float>(z) * (1.0f / 127.0f);
+		}
+	};
+	static_assert(sizeof(BatchNormal) == 4, "BatchNormal must be 4 bytes.");
+
+	// Quantised 32-bit signed normalized tangent (GL_BYTE)
+	struct BatchTangent {
+		int8_t x, y, z, w;
+
+		void set(float xx, float yy, float zz, float ww) {
+			x = BatchNormal::_quantize_snorm8(xx);
+			y = BatchNormal::_quantize_snorm8(yy);
+			z = BatchNormal::_quantize_snorm8(zz);
+			w = BatchNormal::_quantize_snorm8(ww);
+		}
+	};
+	static_assert(sizeof(BatchTangent) == 4, "BatchTangent must be 4 bytes.");
+
 	// ID magic number that masks out the bits 16-31 (source mesh/surface ID)
 	// so distinct meshes with identical materials can join.
 	static constexpr uint64_t MASK_ID = 0xFFFFFFFF0000FFFFULL;
@@ -182,61 +221,59 @@ public:
 	enum TransformMode3D : uint8_t {
 		TM_3D_NONE = 0,
 		TM_3D_TRANSLATE = 1,
-		TM_3D_ALL = 2,
+		TM_3D_ORTHOGONAL = 2,
+		TM_3D_UNIFORM_SCALE = 3,
+		TM_3D_ALL = 4,
 	};
 
-	// Simplest 3D FVF (Tier 1 - 32 bytes):
-	// local or baked position, normal, and primary UV.
+	// Simplest 3D FVF (Tier 1 - 24 bytes):
+	// local or baked position, quantized normal, and primary UV.
 	// This is always written to initially during prefill, and can be promoted
 	// to larger tiered FVFs during flush if secondary attributes are required.
-	struct alignas(GODOT_MIN_STACK_ALIGN) BatchVertex3DTier1 {
+	struct alignas(4) BatchVertex3DTier1 {
 		BatchVector3 pos;
-		BatchVector3 normal;
+		BatchNormal normal;
 		BatchVector2 uv;
 	};
-	static_assert(sizeof(BatchVertex3DTier1) == 32, "BatchVertex3DTier1 must be 32 bytes.");
-	static_assert(sizeof(BatchVertex3DTier1) % GODOT_MIN_STACK_ALIGN == 0, "BatchVertex3DTier1 alignment mismatch.");
+	static_assert(sizeof(BatchVertex3DTier1) == 24, "BatchVertex3DTier1 must be 24 bytes.");
 
-	// Tier 2 (Colored - 48 bytes):
+	// Tier 2 (Colored - 36 bytes):
 	// incorporates baked vertex/albedo color and secondary UV2.
-	struct alignas(GODOT_MIN_STACK_ALIGN) BatchVertex3DTier2 {
+	struct alignas(4) BatchVertex3DTier2 {
 		BatchVector3 pos;
 		BatchColor color;
-		BatchVector3 normal;
-		uint32_t pad0;
+		BatchNormal normal;
 		BatchVector2 uv;
 		BatchVector2 uv2;
 	};
-	static_assert(sizeof(BatchVertex3DTier2) == 48, "BatchVertex3DTier2 must be 48 bytes.");
-	static_assert(sizeof(BatchVertex3DTier2) % GODOT_MIN_STACK_ALIGN == 0, "BatchVertex3DTier2 alignment mismatch.");
+	static_assert(sizeof(BatchVertex3DTier2) == 36, "BatchVertex3DTier2 must be 36 bytes.");
 
-	// Tier 3 (Tangent - 64 bytes):
-	// adds tangent vectors for normal-mapped surfaces.
-	struct alignas(GODOT_MIN_STACK_ALIGN) BatchVertex3DTier3 {
+	// Tier 3 (Tangent - 40 bytes):
+	// adds quantized tangent vectors for normal-mapped surfaces.
+	struct alignas(4) BatchVertex3DTier3 {
 		BatchVector3 pos;
 		BatchColor color;
-		BatchVector3 normal;
-		uint32_t pad0;
+		BatchNormal normal;
+		BatchTangent tangent;
 		BatchVector2 uv;
 		BatchVector2 uv2;
-		BatchVector4 tangent;
 	};
-	static_assert(sizeof(BatchVertex3DTier3) == 64, "BatchVertex3DTier3 must be 64 bytes.");
-	static_assert(sizeof(BatchVertex3DTier3) % GODOT_MIN_STACK_ALIGN == 0, "BatchVertex3DTier3 alignment mismatch.");
+	static_assert(sizeof(BatchVertex3DTier3) == 40, "BatchVertex3DTier3 must be 40 bytes.");
 
-	// Tier 4 (Skinned/Palette/Instanced - 80 bytes)
+	// Tier 4 (Skinned/Palette/Instanced - 64 bytes)
 	// Incorporates blend weights and matrix palette indices for hardware palette skinning or instancing.
 	struct alignas(GODOT_MIN_STACK_ALIGN) BatchVertex3DTier4 {
 		BatchVector3 pos;
 		BatchColor color;
-		BatchVector3 normal;
+		BatchNormal normal;
+		BatchTangent tangent;
 		uint8_t matrix_index[4];
+		uint32_t pad0;
 		BatchVector2 uv;
 		BatchVector2 uv2;
-		BatchVector4 tangent;
 		BatchVector4 weights;
 	};
-	static_assert(sizeof(BatchVertex3DTier4) == 80, "BatchVertex3DTier4 must be 80 bytes.");
+	static_assert(sizeof(BatchVertex3DTier4) == 64, "BatchVertex3DTier4 must be 64 bytes.");
 	static_assert(sizeof(BatchVertex3DTier4) % GODOT_MIN_STACK_ALIGN == 0, "BatchVertex3DTier4 alignment mismatch.");
 
 	// Minimal depth-only FVF (16 bytes)
@@ -309,14 +346,19 @@ public:
 		// Bitmask defined in BatcherEnums::BatchFlags3D
 		uint32_t flags;
 		uint64_t state_hash;
+		uint64_t batch_content_hash;
+		uint32_t mesh_id;
+		uint32_t surface_index;
 		uint32_t total_verts;
 		uint32_t total_indices;
 		uint32_t total_color_changes;
+		bool use_static_vbo_loop;
 
 		// Single non-instanced items (or items that explicitly forbid CPU vertex baking)
 		// use the GPU modelview matrix directly rather than paying CPU software-transform overhead.
 		_FORCE_INLINE_ bool use_hardware_transform() const {
 			return (
+				use_static_vbo_loop ||
 				(num_item_refs == 1 && !(flags & BatcherEnums::BTF_3D_USES_INSTANCING)) ||
 				((flags & BatcherEnums::BTF_3D_PREVENT_VERTEX_BAKING) != 0 && !(flags & BatcherEnums::BTF_3D_USES_INSTANCING))
 			);
@@ -343,10 +385,24 @@ public:
 		uint32_t max_indices_per_buffer;
 	};
 
+	// Struct for static cache batching
+	struct CachedBatchSlot3D {
+		uint64_t content_hash = 0;
+		uint32_t vbo_byte_offset = 0;
+		uint32_t ibo_byte_offset = 0;
+		uint32_t aligned_vbo_bytes = 0;
+		uint32_t aligned_ibo_bytes = 0;
+		uint32_t num_verts = 0;
+		uint32_t num_indices = 0;
+		BatcherEnums::FVF fvf = BatcherEnums::FVF_3D_TIER1_BASE;
+		uint32_t flags = 0;
+	};
+
 	// Tracker for VBOs
 	struct VBOPool {
 		uint32_t gl_vertex_buffer = 0;
 		uint32_t gl_index_buffer = 0;
+		LocalVector<CachedBatchSlot3D> cached_slots;
 	};
 
 	struct BatchData3D {
@@ -380,13 +436,6 @@ public:
 		}
 
 		void reset_flush() {
-			base_vertices.reset();
-			vertex_colors.reset();
-			vertex_uv2s.reset();
-			vertex_tangents.reset();
-			vertex_weights.reset();
-			vertex_matrix_indices.reset();
-
 			unit_vertices.prepare(unit_vertices.get_unit_size_bytes());
 			indices.reset();
 			total_verts = 0;
@@ -399,6 +448,17 @@ public:
 		uint32_t current_vbo_index = 0;
 		uint32_t current_vbo_byte_offset = 0;
 		uint32_t current_ibo_byte_offset = 0;
+		uint32_t current_vbo_slot_index = 0;
+
+		void invalidate_vbo_cache() {
+			for (uint32_t i = 0; i < vbo_pool.size(); i++) {
+				vbo_pool[i].cached_slots.clear();
+			}
+			current_vbo_index = 0;
+			current_vbo_byte_offset = 0;
+			current_ibo_byte_offset = 0;
+			current_vbo_slot_index = 0;
+		}
 
 		uint32_t max_vertices;
 		uint32_t max_indices;
@@ -438,14 +498,6 @@ public:
 
 		BatcherEnums::FVF fvf;
 
-		// Tier 1 minimal staging stream and auxiliary promotion streams
-		RasterizerArray<BatchVertex3DTier1> base_vertices;
-		RasterizerArray<BatchColor> vertex_colors;
-		RasterizerArray<BatchVector2> vertex_uv2s;
-		RasterizerArray<BatchVector4> vertex_tangents;
-		RasterizerArray<BatchVector4> vertex_weights;
-		RasterizerArray<uint32_t> vertex_matrix_indices;
-
 		RasterizerUnitArray<uint8_t> unit_vertices;
 		RasterizerArray<uint16_t> indices;
 
@@ -479,6 +531,8 @@ public:
 			current_primitive = RS::PRIMITIVE_MAX;
 			curr_batch = nullptr;
 			last_modulate.set_white();
+			current_mesh_id = 0;
+			current_surface_index = 0;
 		}
 		uint64_t current_state_hash;
 		typename T_API::MaterialData *current_material_data;
@@ -487,6 +541,8 @@ public:
 		RS::PrimitiveType current_primitive;
 		Batch3D *curr_batch;
 		BatchColor last_modulate;
+		uint32_t current_mesh_id;
+		uint32_t current_surface_index;
 	} _render_item_state;
 
 private:
@@ -543,20 +599,15 @@ protected:
 	template <BatcherEnums::PassMode p_pass_mode, class T_SURFACE>
 	void prefill_joined_item(const BItemRef3D &p_ref, bool p_use_hardware_transform, uint32_t p_item_index, uint32_t p_joined_flags);
 
-	void _translate_batches_to_vertex_colored_FVF_3d(const Batch3D &p_batch);
-
-	template <class T_BATCH_VERT, bool INCLUDE_COLOR_UV2, bool INCLUDE_TANGENT, bool INCLUDE_PALETTE>
-	void _translate_batches_to_larger_FVF_3d(uint32_t p_num_verts);
-
 	template <class T_SURFACE>
-	void flush_render_batches(typename T_API::MaterialData *p_material_data, RS::PrimitiveType p_primitive, Batch3D &p_batch, bool p_transparent);
+	void flush_render_batches(typename T_API::MaterialData *p_material_data, RS::PrimitiveType p_primitive, Batch3D &p_batch, bool p_transparent, uint64_t p_content_hash = 0);
 
 	template <class T_SURFACE>
 	void render_bypassed_items(bool p_transparent);
 
 	// Evaluates the 3D transform once per instance to determine whether software vertex
 	// expansion can skip the 3x3 basis multiplication and normal cofactor generation.
-	_FORCE_INLINE_ static TransformMode3D _find_transform_mode_3d(const Transform3D &p_tr) {
+	_FORCE_INLINE_ static TransformMode3D _find_transform_mode_3d(const Transform3D &p_tr, float *r_inv_scale = nullptr) {
 		const Basis &b = p_tr.basis;
 		const bool is_identity_basis = (
 			b.rows[0][0] == 1.0f && b.rows[0][1] == 0.0f && b.rows[0][2] == 0.0f &&
@@ -564,11 +615,47 @@ protected:
 			b.rows[2][0] == 0.0f && b.rows[2][1] == 0.0f && b.rows[2][2] == 1.0f
 		);
 		if (is_identity_basis) {
+			if (r_inv_scale) {
+				*r_inv_scale = 1.0f;
+			}
 			if (p_tr.origin.x == 0.0f && p_tr.origin.y == 0.0f && p_tr.origin.z == 0.0f) {
 				return TM_3D_NONE;
 			}
 			return TM_3D_TRANSLATE;
 		}
+
+		const Vector3 c0 = b.get_column(0);
+		const Vector3 c1 = b.get_column(1);
+		const Vector3 c2 = b.get_column(2);
+
+		const float l0_sq = c0.length_squared();
+		const float l1_sq = c1.length_squared();
+		const float l2_sq = c2.length_squared();
+
+		if (
+			l0_sq > 1e-8f &&
+			Math::is_equal_approx(l0_sq, l1_sq) &&
+			Math::is_equal_approx(l0_sq, l2_sq)
+		) {
+			const float tol = l0_sq * 1e-4f;
+			if (
+				Math::abs(c0.dot(c1)) <= tol &&
+				Math::abs(c0.dot(c2)) <= tol &&
+				Math::abs(c1.dot(c2)) <= tol
+			) {
+				if (Math::is_equal_approx(l0_sq, 1.0f)) {
+					if (r_inv_scale) {
+						*r_inv_scale = 1.0f;
+					}
+					return TM_3D_ORTHOGONAL;
+				}
+				if (r_inv_scale) {
+					*r_inv_scale = 1.0f / Math::sqrt(l0_sq);
+				}
+				return TM_3D_UNIFORM_SCALE;
+			}
+		}
+
 		return TM_3D_ALL;
 	}
 
@@ -581,9 +668,56 @@ protected:
 		cofactor.set_column(2, p_basis.get_column(0).cross(p_basis.get_column(1)));
 		return cofactor;
 	}
+	_FORCE_INLINE_ static uint32_t _hash_transform_3d(const Transform3D &p_tr) {
+		const uint32_t *words = reinterpret_cast<const uint32_t *>(&p_tr);
+		uint32_t h = 2166136261U;
+		for (uint32_t i = 0; i < (sizeof(Transform3D) / sizeof(uint32_t)); i++) {
+			uint32_t w = words[i];
+			if (w == 0x80000000U) {
+				w = 0U; // Normalise -0.0f to +0.0f
+			}
+			h = (h ^ w) * 16777619U;
+		}
+		return h == 0U ? 1U : h;
+	}
+	_FORCE_INLINE_ static uint64_t _fnv1a_64_mix(uint64_t p_hash, uint64_t p_val) {
+		p_hash ^= p_val;
+		p_hash *= 1099511628211ULL;
+		return p_hash;
+	}
+	_FORCE_INLINE_ void _prepare_unit_vertices_for_fvf(BatcherEnums::FVF p_fvf) {
+		switch (p_fvf) {
+			case BatcherEnums::FVF_UNBATCHED:
+			case BatcherEnums::FVF_STATIC_MESH_LOOP:
+				break;
+			case BatcherEnums::FVF_3D_DEPTH_MINIMAL:
+			case BatcherEnums::FVF_DEPTH_ONLY:
+				bdata.unit_vertices.prepare(sizeof(BatchVertex3DDepthMinimal));
+				break;
+			case BatcherEnums::FVF_3D_DEPTH_ALPHA_MINIMAL:
+			case BatcherEnums::FVF_DEPTH_ALPHA:
+				bdata.unit_vertices.prepare(sizeof(BatchVertex3DDepthAlphaMinimal));
+				break;
+			case BatcherEnums::FVF_3D_TIER1_BASE:
+				bdata.unit_vertices.prepare(sizeof(BatchVertex3DTier1));
+				break;
+			case BatcherEnums::FVF_3D_TIER2_COLOR:
+				bdata.unit_vertices.prepare(sizeof(BatchVertex3DTier2));
+				break;
+			case BatcherEnums::FVF_3D_TIER3_TANGENT:
+				bdata.unit_vertices.prepare(sizeof(BatchVertex3DTier3));
+				break;
+			case BatcherEnums::FVF_3D_TIER4_PALETTE:
+			case BatcherEnums::FVF_INSTANCED:
+			case BatcherEnums::FVF_REGULAR:
+			default:
+				bdata.unit_vertices.prepare(sizeof(BatchVertex3DTier4));
+				break;
+		}
+	}
 	void _software_transform_vertex(BatchVector3 &r_v, const Transform3D &p_tr) const;
-	void _software_transform_normal(BatchVector3 &r_n, const Transform3D &p_tr) const;
-	void _software_transform_normal_precomputed(BatchVector3 &r_n, const Basis &p_cofactor) const;
+	void _software_transform_normal(BatchNormal &r_n, const Transform3D &p_tr) const;
+	void _software_transform_normal_precomputed(BatchNormal &r_n, const Basis &p_cofactor) const;
 	void _calculate_draw_call_cost_or_flush(Batch3D &p_batch) const;
 
 public:

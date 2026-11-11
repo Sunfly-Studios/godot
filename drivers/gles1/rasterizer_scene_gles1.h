@@ -136,6 +136,8 @@ public:
 	};
 
 	using PassMode = BatcherEnums::PassMode;
+	using BatchType = RasterizerSceneBatcherCommon<BatcherAPISceneGLES1>;
+
 	static constexpr PassMode PASS_MODE_COLOR = BatcherEnums::PASS_MODE_COLOR;
 	static constexpr PassMode PASS_MODE_COLOR_TRANSPARENT = BatcherEnums::PASS_MODE_COLOR_TRANSPARENT;
 	static constexpr PassMode PASS_MODE_SHADOW = BatcherEnums::PASS_MODE_SHADOW;
@@ -360,6 +362,11 @@ private:
 		PackedVector2Array uv2_cache;
 		PackedColorArray color_cache;
 		PackedInt32Array index_cache;
+
+		mutable LocalVector<BatchVertex3DTier1> baked_world_cache;
+		mutable LocalVector<BatchTangent> baked_tangent_cache;
+		mutable Transform3D cached_transform;
+		mutable uint32_t cached_transform_hash = 0;
 
 		void *surface = nullptr;
 		GLES1::SceneShaderData *shader = nullptr;
@@ -703,11 +710,12 @@ private:
 		const uint32_t batch_flags = _render_item_state.curr_batch ? _render_item_state.curr_batch->flags : 0;
 		const bool unbatched_uses_color = (
 			!is_immediate_draw &&
-			bdata.fvf == BatcherEnums::FVF_UNBATCHED &&
+			(bdata.fvf == BatcherEnums::FVF_UNBATCHED || bdata.fvf == BatcherEnums::FVF_STATIC_MESH_LOOP) &&
 			(batch_flags & BatcherEnums::BTF_3D_USES_COLORS) != 0 &&
-			p_material_data &&
-			p_material_data->shader_data &&
-			p_material_data->shader_data->uses_color
+			(
+				(p_material_data && p_material_data->shader_data && p_material_data->shader_data->uses_color) ||
+				(batch_flags & BatcherEnums::BTF_3D_USES_INSTANCING) != 0
+			)
 		);
 		const bool immediate_uses_color = (
 			is_immediate_draw &&
@@ -1014,7 +1022,88 @@ private:
 		}
 	}
 
-	void _record_draw_call_info(RenderingMethod::RenderInfo *r_rendering_info) {
+	template <bool p_is_batch>
+	inline uint64_t _set_rendering_input_mask(
+		GLES1::SceneMaterialData *p_material_data,
+		const GeometryInstanceSurface *p_surface,
+		BatchType::Batch3D *p_batch = nullptr
+	) {
+		if (unlikely(!p_material_data || !p_surface)) {
+			return 0;
+		}
+		GLES1::SceneShaderData *shader = p_surface->shader;
+		uint64_t input_mask = (shader ? shader->vertex_input_mask : 0ULL) | (1ULL << RS::ARRAY_VERTEX);
+
+		if constexpr (p_is_batch) {
+			if (bdata.pass_mode == PASS_MODE_SHADOW || bdata.pass_mode == PASS_MODE_SHADOW_PROJECTION) {
+				input_mask &= ~(1ULL << RS::ARRAY_COLOR);
+				if ((shader && shader->uses_alpha_clip) || (p_batch->flags & BatcherEnums::BTF_3D_USES_ALPHA_CLIP)) {
+					input_mask |= (1ULL << RS::ARRAY_TEX_UV);
+				}
+			} else {
+				input_mask |= (1ULL << RS::ARRAY_NORMAL);
+
+				if (
+					(p_batch->flags & BatcherEnums::BTF_3D_USES_COLORS) &&
+					shader &&
+					shader->uses_color &&
+					!p_surface->color_cache.is_empty()
+				) {
+					input_mask |= (1ULL << RS::ARRAY_COLOR);
+				} else {
+					input_mask &= ~(1ULL << RS::ARRAY_COLOR);
+				}
+
+				if (p_batch->flags & BatcherEnums::BTF_3D_USES_TANGENTS) {
+					input_mask |= (1ULL << RS::ARRAY_TANGENT);
+				}
+				if (p_batch->flags & BatcherEnums::BTF_3D_USES_UV2) {
+					input_mask |= (1ULL << RS::ARRAY_TEX_UV2);
+				}
+				if (
+					(p_material_data && p_material_data->texture_cache.size() > 0) ||
+					!p_surface->uv_cache.is_empty() ||
+					(shader && shader->uses_alpha_clip) ||
+					(p_batch->flags & BatcherEnums::BTF_3D_USES_ALPHA_CLIP)
+				) {
+					input_mask |= (1ULL << RS::ARRAY_TEX_UV);
+				}
+			}
+		} else {
+			uint32_t surf_flags = _batch_get_surface_flags(p_surface);
+			if (bdata.pass_mode == PASS_MODE_SHADOW || bdata.pass_mode == PASS_MODE_SHADOW_PROJECTION) {
+				input_mask &= ~(1ULL << RS::ARRAY_COLOR);
+				if (shader && shader->uses_alpha_clip || (surf_flags & BatcherEnums::BTF_3D_USES_ALPHA_CLIP)) {
+					input_mask |= (1ULL << RS::ARRAY_TEX_UV);
+				}
+			} else {
+				input_mask |= (1ULL << RS::ARRAY_NORMAL);
+
+				if (surf_flags & BatcherEnums::BTF_3D_USES_COLORS) {
+					input_mask |= (1ULL << RS::ARRAY_COLOR);
+				}
+				if (surf_flags & BatcherEnums::BTF_3D_USES_TANGENTS) {
+					input_mask |= (1ULL << RS::ARRAY_TANGENT);
+				}
+				if (surf_flags & BatcherEnums::BTF_3D_USES_UV2) {
+					input_mask |= (1ULL << RS::ARRAY_TEX_UV2);
+				}
+
+				if (
+					(p_surface->material && p_surface->material->texture_cache.size() > 0) ||
+					!p_surface->uv_cache.is_empty() ||
+					(shader && shader->uses_alpha_clip) ||
+					(surf_flags & BatcherEnums::BTF_3D_USES_ALPHA_CLIP)
+				) {
+					input_mask |= (1ULL << RS::ARRAY_TEX_UV);
+				}
+			}
+		}
+
+		return input_mask;
+	}
+
+	_FORCE_INLINE_ void _record_draw_call_info(RenderingMethod::RenderInfo *r_rendering_info) {
 		if (!r_rendering_info) {
 			return;
 		}
@@ -1376,12 +1465,12 @@ private:
 
 	void scene_render_items_implementation(GeometryInstanceSurface **p_surfaces, int p_count, const Transform3D &p_camera_transform, bool p_transparent);
 
-	void _batch_get_hardware_limits(RasterizerSceneBatcherCommon<BatcherAPISceneGLES1>::BatchLimits &r_limits);
+	void _batch_get_hardware_limits(BatchType::BatchLimits &r_limits);
 	void _batch_get_instance_geometry_capacity(const GeometryInstanceSurface *p_surface, uint32_t &r_vertex_count, uint32_t &r_index_count);
 	float _batch_get_item_depth(const GeometryInstanceSurface *p_surface, const Transform3D &p_camera_transform);
 	uint64_t _batch_get_state_hash(const GeometryInstanceSurface *p_surface);
 	uint32_t _batch_get_surface_flags(const GeometryInstanceSurface *p_surface) const;
-	RasterizerSceneBatcherCommon<BatcherAPISceneGLES1>::BatchColor _batch_get_surface_modulate(const GeometryInstanceSurface *p_surface) const;
+	BatchType::BatchColor _batch_get_surface_modulate(const GeometryInstanceSurface *p_surface) const;
 	_FORCE_INLINE_ bool _batch_requires_palette_fvf() const {
 		return GLES1_CONFIG->support_matrix_palette && glIsEnabled(GL_MATRIX_PALETTE_OES);
 	}
@@ -1390,16 +1479,18 @@ private:
 	
 	GLES1::SceneMaterialData *_batch_get_material_data(const GeometryInstanceSurface *p_surface);
 
-	void _batch_fill_instance_tiered(const RasterizerSceneBatcherCommon<BatcherAPISceneGLES1>::BItemRef3D &p_ref, RasterizerSceneBatcherCommon<BatcherAPISceneGLES1>::BatchVertex3DTier1 *r_base, RasterizerSceneBatcherCommon<BatcherAPISceneGLES1>::BatchColor *r_col, RasterizerSceneBatcherCommon<BatcherAPISceneGLES1>::BatchVector2 *r_uv2, RasterizerSceneBatcherCommon<BatcherAPISceneGLES1>::BatchVector4 *r_tan, RasterizerSceneBatcherCommon<BatcherAPISceneGLES1>::BatchVector4 *r_weights, uint32_t *r_matrix_idx, uint16_t *r_inds, uint32_t p_start_vert, bool p_use_hardware_transform, uint32_t p_item_index);
-	void _batch_fill_multimesh_tiered(const RasterizerSceneBatcherCommon<BatcherAPISceneGLES1>::BItemRef3D &p_ref, RasterizerSceneBatcherCommon<BatcherAPISceneGLES1>::BatchVertex3DTier1 *r_base, RasterizerSceneBatcherCommon<BatcherAPISceneGLES1>::BatchColor *r_col, RasterizerSceneBatcherCommon<BatcherAPISceneGLES1>::BatchVector2 *r_uv2, RasterizerSceneBatcherCommon<BatcherAPISceneGLES1>::BatchVector4 *r_tan, RasterizerSceneBatcherCommon<BatcherAPISceneGLES1>::BatchVector4 *r_weights, uint32_t *r_matrix_idx, uint16_t *r_inds, uint32_t p_start_vert, bool p_use_hardware_transform, uint32_t p_item_index);
-	void _batch_fill_instance_depth(const RasterizerSceneBatcherCommon<BatcherAPISceneGLES1>::BItemRef3D &p_ref, uint8_t *r_bvs, uint16_t *r_inds, uint32_t p_start_vert, bool p_use_hardware_transform, uint32_t p_item_index);
-	void _batch_fill_multimesh_depth(const RasterizerSceneBatcherCommon<BatcherAPISceneGLES1>::BItemRef3D &p_ref, uint8_t *r_bvs, uint16_t *r_inds, uint32_t p_start_vert, bool p_use_hardware_transform, uint32_t p_item_index);
+	void _batch_fill_instance_tiered(const BatchType::BItemRef3D &p_ref, uint8_t *r_bvs, uint16_t *r_inds, uint32_t p_start_vert, bool p_use_hardware_transform, uint32_t p_item_index);
+	void _batch_fill_multimesh_tiered(const BatchType::BItemRef3D &p_ref, uint8_t *r_bvs, uint16_t *r_inds, uint32_t p_start_vert, bool p_use_hardware_transform, uint32_t p_item_index);
+	void _batch_fill_instance_depth(const BatchType::BItemRef3D &p_ref, uint8_t *r_bvs, uint16_t *r_inds, uint32_t p_start_vert, bool p_use_hardware_transform, uint32_t p_item_index);
+	void _batch_fill_multimesh_depth(const BatchType::BItemRef3D &p_ref, uint8_t *r_bvs, uint16_t *r_inds, uint32_t p_start_vert, bool p_use_hardware_transform, uint32_t p_item_index);
 
-	void _batch_upload_buffers_3d(RasterizerSceneBatcherCommon<BatcherAPISceneGLES1>::Batch3D &r_batch);
+	bool _batch_try_reuse_cached_vbo_slot_3d(BatchType::Batch3D &r_batch, uint64_t p_content_hash);
+	void _batch_upload_buffers_3d(BatchType::Batch3D &r_batch, uint64_t p_content_hash = 0);
 	void _batch_bind_material(GLES1::SceneMaterialData *p_material_data, const Transform3D &p_world_transform, bool p_transparent);
 	void _batch_render_generic(RS::PrimitiveType p_primitive, uint32_t p_offset = 0, uint32_t p_count = 0, bool p_has_color = true);
-	void _batch_render_items(GLES1::SceneMaterialData *p_material_data, RS::PrimitiveType p_primitive, RasterizerSceneBatcherCommon<BatcherAPISceneGLES1>::Batch3D &p_batch, bool p_transparent);
+	void _batch_render_items(GLES1::SceneMaterialData *p_material_data, RS::PrimitiveType p_primitive, BatchType::Batch3D &p_batch, bool p_transparent);
 	void _batch_render_single_mesh_fallback(RS::PrimitiveType p_primitive, uint32_t p_offset, uint32_t p_count, bool p_has_color);
+	void _batch_render_static_mesh_group(GLES1::SceneMaterialData *p_material_data, RS::PrimitiveType p_primitive, BatchType::Batch3D &p_batch, bool p_transparent);
 	void _batch_threshold_flush();
 
 	void _render_single_item_immediate(const GeometryInstanceSurface *p_surface);

@@ -61,12 +61,7 @@ void RasterizerSceneBatcherCommon<T_API>::batch_initialize() {
 	get_this()->_batch_get_hardware_limits(bdata.hardware_limits);
 
 	const uint32_t max_verts = bdata.hardware_limits.max_vertices_per_buffer;
-	bdata.base_vertices.create(max_verts);
-	bdata.vertex_colors.create(max_verts);
-	bdata.vertex_uv2s.create(max_verts);
-	bdata.vertex_tangents.create(max_verts);
-	bdata.vertex_weights.create(max_verts);
-	bdata.vertex_matrix_indices.create(max_verts);
+	bdata.unit_vertices.create(max_verts, sizeof(BatchVertex3DTier4));
 
 	bdata.unit_vertices.create(max_verts, sizeof(BatchVertex3DTier4));
 	bdata.unit_vertices.prepare(sizeof(BatchVertex3DTier1));
@@ -123,33 +118,7 @@ void RasterizerSceneBatcherCommon<T_API>::batch_scene_render_items(T_SURFACE **p
 			// Restore the FVF state for this specific batch so the driver knows 
 			// how to correctly interpret the VBO layout and apply transforms.
 			bdata.fvf = batch.fvf;
-			switch (batch.fvf) {
-				case BatcherEnums::FVF_UNBATCHED:
-					break;
-				case BatcherEnums::FVF_3D_DEPTH_MINIMAL:
-				case BatcherEnums::FVF_DEPTH_ONLY:
-					bdata.unit_vertices.prepare(sizeof(BatchVertex3DDepthMinimal));
-					break;
-				case BatcherEnums::FVF_3D_DEPTH_ALPHA_MINIMAL:
-				case BatcherEnums::FVF_DEPTH_ALPHA:
-					bdata.unit_vertices.prepare(sizeof(BatchVertex3DDepthAlphaMinimal));
-					break;
-				case BatcherEnums::FVF_3D_TIER1_BASE:
-					bdata.unit_vertices.prepare(sizeof(BatchVertex3DTier1));
-					break;
-				case BatcherEnums::FVF_3D_TIER2_COLOR:
-					bdata.unit_vertices.prepare(sizeof(BatchVertex3DTier2));
-					break;
-				case BatcherEnums::FVF_3D_TIER3_TANGENT:
-					bdata.unit_vertices.prepare(sizeof(BatchVertex3DTier3));
-					break;
-				case BatcherEnums::FVF_3D_TIER4_PALETTE:
-				case BatcherEnums::FVF_INSTANCED:
-				case BatcherEnums::FVF_REGULAR:
-				default:
-					bdata.unit_vertices.prepare(sizeof(BatchVertex3DTier4));
-					break;
-			}
+			_prepare_unit_vertices_for_fvf(batch.fvf);
 			_render_item_state.curr_batch = &batch;
 			get_this()->_batch_render_items(material, primitive, batch, p_transparent);
 		}
@@ -205,7 +174,6 @@ void RasterizerSceneBatcherCommon<T_API>::record_items(T_SURFACE **p_surfaces, i
 		if (instances == 0) {
 			continue;
 		}
-		uint32_t total_incoming_verts = base_verts * instances;
 
 		// Skeletons cannot be batched. If we find any in the mesh, don't even try.
 		bool has_deformation = false;
@@ -232,25 +200,21 @@ void RasterizerSceneBatcherCommon<T_API>::record_items(T_SURFACE **p_surfaces, i
 			!Math::is_finite(aabb.size.x) || !Math::is_finite(aabb.size.y) || !Math::is_finite(aabb.size.z) ||
 			Math::abs(aabb.size.x) > 1e6f || Math::abs(aabb.size.y) > 1e6f || Math::abs(aabb.size.z) > 1e6f
 		);
-		const bool prevent_baking = (
-			surface->shader &&
-			(surface->shader->uses_vertex || surface->shader->uses_position || surface->shader->uses_world_coordinates || surface->shader->writes_modelview_or_projection)
+		const bool is_particles = (surface->owner->data->base_type == RS::INSTANCE_PARTICLES);
+		const bool is_multimesh = (surface->owner->data->base_type == RS::INSTANCE_MULTIMESH);
+		const bool can_use_static_lane = (
+			bdata.settings_use_single_mesh_fallback &&
+			get_this()->_batch_can_use_single_mesh_fallback(surface)
 		);
-		const bool is_instanced = (
-			surface->owner->data->base_type == RS::INSTANCE_MULTIMESH ||
-			surface->owner->data->base_type == RS::INSTANCE_PARTICLES
-		);
+		const bool wants_static_lane = is_multimesh || (base_verts > bdata.settings_dynamic_vertex_limit);
 
-		// Do not batch if:
-		// 1. The base mesh passes the complexity limit
-		// 2. Some kind of skeleton mesh has been detected
-		// 3. Overflowing bounds
-		// 4. Instanced geometry that requires local shader vertex transforms
+		// Route deformed meshes, particles, extreme AABBs,
+		// or unsupported static-lane candidates to RSII bypass.
 		if (
-			total_incoming_verts > bdata.settings_dynamic_vertex_limit ||
 			has_deformation ||
+			is_particles ||
 			has_extreme_bounds ||
-			(prevent_baking && is_instanced)
+			(wants_static_lane && !can_use_static_lane)
 		) {
 			if (!p_transparent) {
 				// Opaque massive models don't need strict sorting. Just dump them in the bypass list.
@@ -295,7 +259,22 @@ void RasterizerSceneBatcherCommon<T_API>::record_items(T_SURFACE **p_surfaces, i
 
 template <typename T_API>
 bool RasterizerSceneBatcherCommon<T_API>::_sort_items_match_3d(const BSortItem3D &p_a, const BSortItem3D &p_b) const {
-	return (p_a.state_hash & MASK_ID) == (p_b.state_hash & MASK_ID);
+	if ((p_a.state_hash & MASK_ID) != (p_b.state_hash & MASK_ID)) {
+		return false;
+	}
+
+	const uint32_t limit = bdata.settings_dynamic_vertex_limit;
+	const uint32_t verts_a = p_a.item ? static_cast<const typename T_API::Scene::GeometryInstanceSurface *>(p_a.item)->vertex_cache.size() : 0;
+	const uint32_t verts_b = p_b.item ? static_cast<const typename T_API::Scene::GeometryInstanceSurface *>(p_b.item)->vertex_cache.size() : 0;
+	const bool static_a = (verts_a > limit) || (p_a.item && static_cast<const typename T_API::Scene::GeometryInstanceSurface *>(p_a.item)->owner->data->base_type == RS::INSTANCE_MULTIMESH);
+	const bool static_b = (verts_b > limit) || (p_b.item && static_cast<const typename T_API::Scene::GeometryInstanceSurface *>(p_b.item)->owner->data->base_type == RS::INSTANCE_MULTIMESH);
+	if (static_a != static_b) {
+		return false;
+	}
+	if (static_a) {
+		return (p_a.mesh_id == p_b.mesh_id) && (p_a.surface_index == p_b.surface_index);
+	}
+	return true;
 }
 
 template <typename T_API>
@@ -441,9 +420,11 @@ void RasterizerSceneBatcherCommon<T_API>::join_sorted_items() {
 		// Get the surface flags and base modulate
 		uint32_t surf_flags = get_this()->_batch_get_surface_flags(surface);
 		BatchColor surf_modulate = get_this()->_batch_get_surface_modulate(surface);
-		
+		const bool is_multimesh = (surf_flags & BatcherEnums::BTF_3D_USES_INSTANCING) != 0;
+		const bool item_uses_static_loop = is_multimesh || (base_verts > bdata.settings_dynamic_vertex_limit);
+
 		bool capacity_full = false;
-		if (curr_joined) {
+		if (curr_joined && !curr_joined->use_static_vbo_loop && !item_uses_static_loop) {
 			// A joined group must break if appending the new item would exceed:
 			// - The maximum allocated vertex buffer size.
 			// - The maximum allocated index buffer size.
@@ -456,35 +437,46 @@ void RasterizerSceneBatcherCommon<T_API>::join_sorted_items() {
 		}
 
 		bool can_join = false;
-		if (curr_joined && !capacity_full) {
+		if (curr_joined && !capacity_full && (curr_joined->use_static_vbo_loop == item_uses_static_loop)) {
 			uint64_t masked_item_hash = bdata.sort_items[i].state_hash & MASK_ID;
 			uint64_t masked_curr_hash = curr_joined->state_hash & MASK_ID;
-			bool is_multimesh = (surf_flags & BatcherEnums::BTF_3D_USES_INSTANCING) != 0;
 			bool curr_is_multimesh = (curr_joined->flags & BatcherEnums::BTF_3D_USES_INSTANCING) != 0;
 
-			// Triangle strips with an odd index count flip winding parity on subsequent strips
-			// when stitched with 2 degenerate indices, corrupting front/back face culling.
-			bool strip_winding_mismatch = (
-				surface->primitive == RS::PRIMITIVE_TRIANGLE_STRIP &&
-				(curr_joined->total_indices & 1) != 0
-			);
+			if (item_uses_static_loop) {
+				if (
+					is_multimesh == curr_is_multimesh &&
+					surface->primitive == _render_item_state.current_primitive &&
+					bdata.sort_items[i].state_hash == curr_joined->state_hash &&
+					bdata.sort_items[i].mesh_id == curr_joined->mesh_id &&
+					bdata.sort_items[i].surface_index == curr_joined->surface_index
+				) {
+					can_join = true;
+				}
+			} else {
+				// Triangle strips with an odd index count flip winding parity on subsequent strips
+				// when stitched with 2 degenerate indices, corrupting front/back face culling.
+				bool strip_winding_mismatch = (
+					surface->primitive == RS::PRIMITIVE_TRIANGLE_STRIP &&
+					(curr_joined->total_indices & 1) != 0
+				);
 
-			// Custom vertex shaders that rely on per-node model matrices or local coordinates
-			// (e.g., MODEL_MATRIX, NODE_POSITION_WORLD, VERTEX manipulation)
-			// must not join across items.
-			bool prevent_join = (
-				(surf_flags | curr_joined->flags) &
-				(BatcherEnums::BTF_3D_PREVENT_ITEM_JOINING | BatcherEnums::BTF_3D_PREVENT_VERTEX_BAKING)
-			) != 0;
+				// Custom vertex shaders that rely on per-node model matrices or local coordinates
+				// (e.g., MODEL_MATRIX, NODE_POSITION_WORLD, VERTEX manipulation)
+				// must not join across items.
+				bool prevent_join = (
+					(surf_flags | curr_joined->flags) &
+					(BatcherEnums::BTF_3D_PREVENT_ITEM_JOINING | BatcherEnums::BTF_3D_PREVENT_VERTEX_BAKING)
+				) != 0;
 
-			if (
-				!strip_winding_mismatch &&
-				!prevent_join &&
-				is_multimesh == curr_is_multimesh &&
-				surface->primitive == _render_item_state.current_primitive &&
-				masked_item_hash == masked_curr_hash
-			) {
-				can_join = true;
+				if (
+					!strip_winding_mismatch &&
+					!prevent_join &&
+					is_multimesh == curr_is_multimesh &&
+					surface->primitive == _render_item_state.current_primitive &&
+					masked_item_hash == masked_curr_hash
+				) {
+					can_join = true;
+				}
 			}
 		}
 
@@ -499,6 +491,13 @@ void RasterizerSceneBatcherCommon<T_API>::join_sorted_items() {
 			curr_joined->bounding_aabb = bdata.sort_items[i].aabb;
 			curr_joined->flags = surf_flags;
 			curr_joined->state_hash = bdata.sort_items[i].state_hash;
+			curr_joined->mesh_id = bdata.sort_items[i].mesh_id;
+			curr_joined->surface_index = bdata.sort_items[i].surface_index;
+			curr_joined->use_static_vbo_loop = item_uses_static_loop;
+			curr_joined->batch_content_hash = item_uses_static_loop ? 0 : _fnv1a_64_mix(14695981039346656037ULL, static_cast<uint64_t>(p_pass_mode));
+			if (curr_joined->batch_content_hash != 0) {
+				curr_joined->batch_content_hash = _fnv1a_64_mix(curr_joined->batch_content_hash, curr_joined->state_hash);
+			}
 			curr_joined->total_verts = 0;
 			curr_joined->total_indices = 0;
 			curr_joined->total_color_changes = 1;
@@ -506,13 +505,17 @@ void RasterizerSceneBatcherCommon<T_API>::join_sorted_items() {
 			_render_item_state.current_state_hash = bdata.sort_items[i].state_hash;
 			_render_item_state.current_material_data = get_this()->_batch_get_material_data(surface);
 			_render_item_state.current_primitive = surface->primitive;
+			_render_item_state.current_mesh_id = bdata.sort_items[i].mesh_id;
+			_render_item_state.current_surface_index = bdata.sort_items[i].surface_index;
 			_render_item_state.consumed_uniform_vectors = 0;
 			_render_item_state.last_modulate = surf_modulate;
 		} else {
 			// Extend existing joined item group and accumulate required FVF flags
 			curr_joined->bounding_aabb.merge_with(bdata.sort_items[i].aabb);
 			curr_joined->flags |= surf_flags;
-			curr_joined->total_indices += join_stitch_indices;
+			if (!curr_joined->use_static_vbo_loop) {
+				curr_joined->total_indices += join_stitch_indices;
+			}
 			if (surf_modulate != _render_item_state.last_modulate) {
 				curr_joined->total_color_changes++;
 				_render_item_state.last_modulate = surf_modulate;
@@ -527,8 +530,11 @@ void RasterizerSceneBatcherCommon<T_API>::join_sorted_items() {
 		// Pre-evaluate transform mode and cofactor matrix once per reference
 		ref->surface = (void *)surface;
 		ref->transform = surface->owner->transform;
-		ref->transform_mode = _find_transform_mode_3d(ref->transform);
-		if (ref->transform_mode == TM_3D_ALL) {
+		float inv_scale = 1.0f;
+		ref->transform_mode = _find_transform_mode_3d(ref->transform, &inv_scale);
+		if (ref->transform_mode == TM_3D_UNIFORM_SCALE) {
+			ref->normal_cofactor = ref->transform.basis * inv_scale;
+		} else if (ref->transform_mode == TM_3D_ALL) {
 			ref->normal_cofactor = _compute_normal_cofactor(ref->transform.basis);
 		} else {
 			ref->normal_cofactor = Basis();
@@ -537,6 +543,27 @@ void RasterizerSceneBatcherCommon<T_API>::join_sorted_items() {
 		ref->base_verts = base_verts;
 		ref->base_indices = base_indices;
 		ref->instance_count = instances;
+
+		// Rolling 64-bit content hash for persistent VBO sub-allocation matching across frames
+		if ((surf_flags & BatcherEnums::BTF_3D_USES_INSTANCING) != 0 || p_pass_mode == BatcherEnums::PASS_MODE_MATERIAL) {
+			// Disable cross-frame VBO caching for dynamic MultiMesh/Particles/UV2 passes
+			curr_joined->batch_content_hash = 0;
+		} else if (curr_joined->batch_content_hash != 0) {
+			const uint32_t xform_hash = _hash_transform_3d(ref->transform);
+			const uint32_t mod_packed = (
+				static_cast<uint32_t>(surf_modulate.r) |
+				(static_cast<uint32_t>(surf_modulate.g) << 8) |
+				(static_cast<uint32_t>(surf_modulate.b) << 16) |
+				(static_cast<uint32_t>(surf_modulate.a) << 24)
+			);
+			curr_joined->batch_content_hash = _fnv1a_64_mix(curr_joined->batch_content_hash, reinterpret_cast<uintptr_t>(surface));
+			curr_joined->batch_content_hash = _fnv1a_64_mix(curr_joined->batch_content_hash, reinterpret_cast<uintptr_t>(surface->surface));
+			curr_joined->batch_content_hash = _fnv1a_64_mix(curr_joined->batch_content_hash, (static_cast<uint64_t>(xform_hash) << 32) | mod_packed);
+			curr_joined->batch_content_hash = _fnv1a_64_mix(curr_joined->batch_content_hash, (static_cast<uint64_t>(base_verts) << 32) | base_indices);
+			if (unlikely(curr_joined->batch_content_hash == 0)) {
+				curr_joined->batch_content_hash = 1ULL;
+			}
+		}
 
 		curr_joined->num_item_refs++;
 		curr_joined->total_verts += incoming_verts;
@@ -583,13 +610,48 @@ void RasterizerSceneBatcherCommon<T_API>::join_and_flush_sorted_items(bool p_tra
 		batch->num_indices = 0;
 		batch->vbo_byte_offset = 0;
 		batch->ibo_byte_offset = 0;
-		batch->flags = joined.flags;
+		uint32_t effective_flags = joined.flags;
 		bdata.total_color_changes = joined.total_color_changes;
+
+		if (
+			!(effective_flags & BatcherEnums::BTF_3D_USES_COLORS) &&
+			!(effective_flags & BatcherEnums::BTF_3D_PREVENT_COLOR_BAKING) &&
+			joined.num_item_refs > 0
+		) {
+			float ratio = static_cast<float>(joined.total_color_changes > 0 ? (joined.total_color_changes - 1) : 0) / static_cast<float>(joined.num_item_refs);
+			if (ratio >= bdata.settings_colored_vertex_format_threshold) {
+				effective_flags |= BatcherEnums::BTF_3D_USES_COLORS;
+				bdata.use_colored_vertices = true;
+			}
+		}
+
+		batch->flags = effective_flags;
 
 		_render_item_state.curr_batch = batch;
 		_render_item_state.consumed_uniform_vectors = 0;
 
 		const bool use_hardware_transform = joined.use_hardware_transform();
+
+		if (
+			joined.use_static_vbo_loop &&
+			bdata.settings_use_single_mesh_fallback &&
+			get_this()->_batch_can_use_single_mesh_fallback(first_surface)
+		) {
+			// Single non-instanced static mesh uses FVF_UNBATCHED;
+			// multi-item static mesh runs and all MultiMesh items use FVF_STATIC_MESH_LOOP.
+			if (joined.num_item_refs == 1 && !(effective_flags & BatcherEnums::BTF_3D_USES_INSTANCING)) {
+				batch->fvf = BatcherEnums::FVF_UNBATCHED;
+				batch->num_verts = joined.total_verts;
+				batch->num_indices = joined.total_indices;
+			} else {
+				batch->fvf = BatcherEnums::FVF_STATIC_MESH_LOOP;
+				batch->num_verts = first_ref.base_verts;
+				batch->num_indices = first_ref.base_indices;
+			}
+			batch->vbo_index = 0xFFFFFFFF;
+			flush_render_batches<T_SURFACE>(material, primitive, *batch, p_transparent);
+			continue;
+		}
 
 		// If a joined group contains only a single non-instanced mesh surface (and the driver
 		// does not require CPU packing for UV2/material baking), skip copying vertices into
@@ -608,15 +670,40 @@ void RasterizerSceneBatcherCommon<T_API>::join_and_flush_sorted_items(bool p_tra
 			continue;
 		}
 
+		uint64_t final_content_hash = joined.batch_content_hash;
+		if (final_content_hash != 0) {
+			final_content_hash = _fnv1a_64_mix(
+				final_content_hash,
+				(static_cast<uint64_t>(effective_flags) << 32) | static_cast<uint64_t>(joined.num_item_refs)
+			);
+			if (unlikely(final_content_hash == 0)) {
+				final_content_hash = 1ULL;
+			}
+		}
+
+		// Check if the current VBO pool slot already holds identical geometry from frame N-1
+		if (
+			final_content_hash != 0 &&
+			get_this()->_batch_try_reuse_cached_vbo_slot_3d(*batch, final_content_hash)
+		) {
+			bdata.fvf = batch->fvf;
+			_prepare_unit_vertices_for_fvf(batch->fvf);
+			get_this()->_batch_render_items(material, primitive, *batch, p_transparent);
+			_calculate_draw_call_cost_or_flush(*batch);
+			bdata.reset_flush();
+			_render_item_state.consumed_uniform_vectors = 0;
+			continue;
+		}
+
 		for (uint32_t i = 0; i < joined.num_item_refs; i++) {
 			const BItemRef3D &ref = bdata.item_refs[joined.first_item_ref + i];
 
 			// Retry current item
-			prefill_joined_item<p_pass_mode, T_SURFACE>(ref, use_hardware_transform, i, joined.flags);
+			prefill_joined_item<p_pass_mode, T_SURFACE>(ref, use_hardware_transform, i, effective_flags);
 		}
 		
-		// Flush the batch
-		flush_render_batches<T_SURFACE>(material, primitive, *batch, p_transparent);
+		// Flush the batch and record its content hash in the VBO slot
+		flush_render_batches<T_SURFACE>(material, primitive, *batch, p_transparent, final_content_hash);
 	}
 }
 
@@ -682,108 +769,6 @@ bool RasterizerSceneBatcherCommon<T_API>::try_join_item(T_SURFACE *p_surface, Re
 }
 
 template <typename T_API>
-void RasterizerSceneBatcherCommon<T_API>::_translate_batches_to_vertex_colored_FVF_3d(const Batch3D &p_batch) {
-	// Promotes a Tier 1 batch directly to BatchVertex3DTier2 (FVF_3D_TIER2_COLOR),
-	// baking per-item modulate colors from BItemRef3D into the vertex payload when
-	// vertex_colors was not pre-populated during prefill.
-	bdata.unit_vertices.prepare(sizeof(BatchVertex3DTier2));
-	BatchVertex3DTier2 *dst = reinterpret_cast<BatchVertex3DTier2 *>(bdata.unit_vertices.request(p_batch.num_verts));
-	ERR_FAIL_NULL(dst);
-
-	const BatchVertex3DTier1 *src_base = bdata.base_vertices.get_data();
-	const BatchColor *src_col = bdata.vertex_colors.get_data();
-	const BatchVector2 *src_uv2 = bdata.vertex_uv2s.get_data();
-
-	const bool has_col = bdata.vertex_colors.size() >= (int)p_batch.num_verts;
-	const bool has_uv2 = bdata.vertex_uv2s.size() >= (int)p_batch.num_verts;
-
-	uint32_t v_cursor = 0;
-	for (uint32_t i = 0; i < p_batch.num_item_refs; i++) {
-		const BItemRef3D &ref = bdata.item_refs[p_batch.first_item_ref + i];
-		const uint32_t item_verts = ref.base_verts * ref.instance_count;
-		const uint32_t end_v = MIN(v_cursor + item_verts, p_batch.num_verts);
-
-		for (uint32_t v = v_cursor; v < end_v; v++) {
-			dst[v].pos = src_base[v].pos;
-			dst[v].normal = src_base[v].normal;
-			dst[v].uv = src_base[v].uv;
-			dst[v].pad0 = 0;
-			dst[v].color = has_col ? src_col[v] : ref.modulate;
-			if (has_uv2) {
-				dst[v].uv2 = src_uv2[v];
-			} else {
-				dst[v].uv2.set(0.0f, 0.0f);
-			}
-		}
-		v_cursor = end_v;
-	}
-}
-
-template <typename T_API>
-template <class T_BATCH_VERT, bool INCLUDE_COLOR_UV2, bool INCLUDE_TANGENT, bool INCLUDE_PALETTE>
-void RasterizerSceneBatcherCommon<T_API>::_translate_batches_to_larger_FVF_3d(uint32_t p_num_verts) {
-	// Interleaves the base Tier 1 vertex stream (pos, normal, uv) with any active
-	// auxiliary attribute streams (color, uv2, tangent, palette indices/weights) into
-	// the promoted target FVF struct inside unit_vertices prior to VBO upload.
-	bdata.unit_vertices.prepare(sizeof(T_BATCH_VERT));
-	T_BATCH_VERT *dst = reinterpret_cast<T_BATCH_VERT *>(bdata.unit_vertices.request(p_num_verts));
-	ERR_FAIL_NULL(dst);
-
-	const BatchVertex3DTier1 *src_base = bdata.base_vertices.get_data();
-	const BatchColor *src_col = bdata.vertex_colors.get_data();
-	const BatchVector2 *src_uv2 = bdata.vertex_uv2s.get_data();
-	const BatchVector4 *src_tan = bdata.vertex_tangents.get_data();
-	const BatchVector4 *src_weights = bdata.vertex_weights.get_data();
-	const uint32_t *src_m_idx = bdata.vertex_matrix_indices.get_data();
-
-	const bool has_col = bdata.vertex_colors.size() >= (int)p_num_verts;
-	const bool has_uv2 = bdata.vertex_uv2s.size() >= (int)p_num_verts;
-	const bool has_tan = bdata.vertex_tangents.size() >= (int)p_num_verts;
-	const bool has_weights = bdata.vertex_weights.size() >= (int)p_num_verts;
-	const bool has_m_idx = bdata.vertex_matrix_indices.size() >= (int)p_num_verts;
-
-	for (uint32_t v = 0; v < p_num_verts; v++) {
-		dst[v].pos = src_base[v].pos;
-		dst[v].normal = src_base[v].normal;
-		dst[v].uv = src_base[v].uv;
-
-		if constexpr (INCLUDE_COLOR_UV2) {
-			if (has_col) {
-				dst[v].color = src_col[v];
-			} else {
-				dst[v].color.set_white();
-			}
-			if (has_uv2) {
-				dst[v].uv2 = src_uv2[v];
-			} else {
-				dst[v].uv2.set(0.0f, 0.0f);
-			}
-		}
-
-		if constexpr (INCLUDE_TANGENT) {
-			if (has_tan) {
-				dst[v].tangent = src_tan[v];
-			} else {
-				dst[v].tangent.set(1.0f, 0.0f, 0.0f, 1.0f);
-			}
-		}
-
-		if constexpr (INCLUDE_PALETTE) {
-			if (has_m_idx) {
-				memcpy(dst[v].matrix_index, &src_m_idx[v], sizeof(uint32_t));
-			} else {
-				memset(dst[v].matrix_index, 0, sizeof(uint32_t));
-			}
-			if (has_weights) {
-				dst[v].weights = src_weights[v];
-			} else {
-				dst[v].weights.set(1.0f, 0.0f, 0.0f, 0.0f);
-			}
-		}
-	}
-}
-
-template <typename T_API>
 template <typename BatcherEnums::PassMode p_pass_mode, class T_SURFACE>
 void RasterizerSceneBatcherCommon<T_API>::prefill_joined_item(const BItemRef3D &p_ref, bool p_use_hardware_transform, uint32_t p_item_index, uint32_t p_joined_flags) {
 	T_SURFACE *surface = static_cast<T_SURFACE *>(p_ref.surface);
@@ -824,12 +809,16 @@ void RasterizerSceneBatcherCommon<T_API>::prefill_joined_item(const BItemRef3D &
 				get_this()->_batch_requires_palette_fvf()
 			) {
 				bdata.fvf = BatcherEnums::FVF_3D_TIER4_PALETTE;
+				bdata.unit_vertices.prepare(sizeof(BatchVertex3DTier4));
 			} else if (p_joined_flags & BatcherEnums::BTF_3D_USES_TANGENTS) {
 				bdata.fvf = BatcherEnums::FVF_3D_TIER3_TANGENT;
+				bdata.unit_vertices.prepare(sizeof(BatchVertex3DTier3));
 			} else if (p_joined_flags & (BatcherEnums::BTF_3D_USES_COLORS | BatcherEnums::BTF_3D_USES_UV2)) {
 				bdata.fvf = BatcherEnums::FVF_3D_TIER2_COLOR;
+				bdata.unit_vertices.prepare(sizeof(BatchVertex3DTier2));
 			} else {
 				bdata.fvf = BatcherEnums::FVF_3D_TIER1_BASE;
+				bdata.unit_vertices.prepare(sizeof(BatchVertex3DTier1));
 			}
 		}
 		_render_item_state.curr_batch->fvf = bdata.fvf;
@@ -840,35 +829,26 @@ void RasterizerSceneBatcherCommon<T_API>::prefill_joined_item(const BItemRef3D &
 	uint16_t *raw_inds = total_requested_indices > 0 ? bdata.indices.request(total_requested_indices) : nullptr;
 	uint16_t *inds = raw_inds ? (raw_inds + stitch_count) : nullptr;
 
+	uint8_t *dst_bvs = bdata.unit_vertices.request(incoming_verts);
+	if (!dst_bvs) {
+		return;
+	}
+
 	if constexpr (p_pass_mode == BatcherEnums::PASS_MODE_SHADOW || p_pass_mode == BatcherEnums::PASS_MODE_DEPTH) {
 		// Only perform the batch fill for shadow or
 		// depth pass modes
-		uint8_t *depth_bvs = bdata.unit_vertices.request(incoming_verts);
-		if (!depth_bvs) {
-			return;
-		}
 		if (is_multimesh) {
-			get_this()->_batch_fill_multimesh_depth(p_ref, depth_bvs, inds, start_vert, p_use_hardware_transform, p_item_index);
+			get_this()->_batch_fill_multimesh_depth(p_ref, dst_bvs, inds, start_vert, p_use_hardware_transform, p_item_index);
 		} else {
-			get_this()->_batch_fill_instance_depth(p_ref, depth_bvs, inds, start_vert, p_use_hardware_transform, p_item_index);
+			get_this()->_batch_fill_instance_depth(p_ref, dst_bvs, inds, start_vert, p_use_hardware_transform, p_item_index);
 		}
 	} else {
 		// Regular batch fill
-		BatchVertex3DTier1 *base_bvs = bdata.base_vertices.request(incoming_verts);
-		if (!base_bvs) {
-			return;
-		}
-
-		BatchColor *col_bvs = (bdata.fvf >= BatcherEnums::FVF_3D_TIER2_COLOR) ? bdata.vertex_colors.request(incoming_verts) : nullptr;
-		BatchVector2 *uv2_bvs = (bdata.fvf >= BatcherEnums::FVF_3D_TIER2_COLOR) ? bdata.vertex_uv2s.request(incoming_verts) : nullptr;
-		BatchVector4 *tan_bvs = (bdata.fvf >= BatcherEnums::FVF_3D_TIER3_TANGENT) ? bdata.vertex_tangents.request(incoming_verts) : nullptr;
-		BatchVector4 *w_bvs = (bdata.fvf >= BatcherEnums::FVF_3D_TIER4_PALETTE) ? bdata.vertex_weights.request(incoming_verts) : nullptr;
-		uint32_t *m_bvs = (bdata.fvf >= BatcherEnums::FVF_3D_TIER4_PALETTE) ? bdata.vertex_matrix_indices.request(incoming_verts) : nullptr;
-
+		// Write directly into unit_vertices at the target FVF stride
 		if (is_multimesh) {
-			get_this()->_batch_fill_multimesh_tiered(p_ref, base_bvs, col_bvs, uv2_bvs, tan_bvs, w_bvs, m_bvs, inds, start_vert, p_use_hardware_transform, p_item_index);
+			get_this()->_batch_fill_multimesh_tiered(p_ref, dst_bvs, inds, start_vert, p_use_hardware_transform, p_item_index);
 		} else {
-			get_this()->_batch_fill_instance_tiered(p_ref, base_bvs, col_bvs, uv2_bvs, tan_bvs, w_bvs, m_bvs, inds, start_vert, p_use_hardware_transform, p_item_index);
+			get_this()->_batch_fill_instance_tiered(p_ref, dst_bvs, inds, start_vert, p_use_hardware_transform, p_item_index);
 		}
 	}
 
@@ -887,15 +867,15 @@ void RasterizerSceneBatcherCommon<T_API>::prefill_joined_item(const BItemRef3D &
 
 template <typename T_API>
 template <class T_SURFACE>
-void RasterizerSceneBatcherCommon<T_API>::flush_render_batches(typename T_API::MaterialData *p_material_data, RS::PrimitiveType p_primitive, Batch3D &p_batch, bool p_transparent) {
+void RasterizerSceneBatcherCommon<T_API>::flush_render_batches(typename T_API::MaterialData *p_material_data, RS::PrimitiveType p_primitive, Batch3D &p_batch, bool p_transparent, uint64_t p_content_hash) {
 	if (p_batch.num_verts == 0 || p_primitive == RS::PRIMITIVE_MAX) {
 		bdata.reset_flush();
 		return;
 	}
 
-	// Intercept single-item batches flagged for the single-mesh direct draw fallback.
-	if (p_batch.fvf == BatcherEnums::FVF_UNBATCHED) {
-		bdata.fvf = BatcherEnums::FVF_UNBATCHED;
+	// Intercept batches flagged for the single-mesh direct draw fallback or static mesh loop lane.
+	if (p_batch.fvf == BatcherEnums::FVF_UNBATCHED || p_batch.fvf == BatcherEnums::FVF_STATIC_MESH_LOOP) {
+		bdata.fvf = p_batch.fvf;
 		get_this()->_batch_render_items(p_material_data, p_primitive, p_batch, p_transparent);
 
 		_calculate_draw_call_cost_or_flush(p_batch);
@@ -905,61 +885,8 @@ void RasterizerSceneBatcherCommon<T_API>::flush_render_batches(typename T_API::M
 		return;
 	}
 
-	// Determine FVF fragmentation and promote to coloured
-	bdata.use_colored_vertices = false;
-	if (bdata.fvf == BatcherEnums::FVF_3D_TIER1_BASE) {
-		if (p_batch.num_item_refs > 0 && !(p_batch.flags & BatcherEnums::BTF_3D_PREVENT_COLOR_BAKING)) {
-			float ratio = static_cast<float>(bdata.total_color_changes > 0 ? (bdata.total_color_changes - 1) : 0) / static_cast<float>(p_batch.num_item_refs);
-			if (ratio >= bdata.settings_colored_vertex_format_threshold) {
-				bdata.use_colored_vertices = true;
-				bdata.fvf = BatcherEnums::FVF_3D_TIER2_COLOR;
-				p_batch.fvf = BatcherEnums::FVF_3D_TIER2_COLOR;
-				p_batch.flags |= BatcherEnums::BTF_3D_USES_COLORS;
-			}
-		}
-
-		if (bdata.vertex_colors.size() > 0) {
-			bdata.use_colored_vertices = true;
-			bdata.fvf = BatcherEnums::FVF_3D_TIER2_COLOR;
-			p_batch.fvf = BatcherEnums::FVF_3D_TIER2_COLOR;
-			p_batch.flags |= BatcherEnums::BTF_3D_USES_COLORS;
-		}
-	}
-
-	// Prepare to upload the specific FVFs
-	switch (bdata.fvf) {
-		case BatcherEnums::FVF_3D_DEPTH_MINIMAL:
-		case BatcherEnums::FVF_3D_DEPTH_ALPHA_MINIMAL:
-		case BatcherEnums::FVF_DEPTH_ONLY:
-		case BatcherEnums::FVF_DEPTH_ALPHA:
-			break;
-		case BatcherEnums::FVF_3D_TIER1_BASE: {
-			bdata.unit_vertices.prepare(sizeof(BatchVertex3DTier1));
-			uint8_t *dst = bdata.unit_vertices.request(p_batch.num_verts);
-			if (dst) {
-				memcpy(dst, bdata.base_vertices.get_data(), p_batch.num_verts * sizeof(BatchVertex3DTier1));
-			}
-		} break;
-		case BatcherEnums::FVF_3D_TIER2_COLOR:
-			if (bdata.vertex_colors.size() >= (int)p_batch.num_verts) {
-				_translate_batches_to_larger_FVF_3d<BatchVertex3DTier2, true, false, false>(p_batch.num_verts);
-			} else {
-				_translate_batches_to_vertex_colored_FVF_3d(p_batch);
-			}
-			break;
-		case BatcherEnums::FVF_3D_TIER3_TANGENT:
-			_translate_batches_to_larger_FVF_3d<BatchVertex3DTier3, true, true, false>(p_batch.num_verts);
-			break;
-		case BatcherEnums::FVF_3D_TIER4_PALETTE:
-		case BatcherEnums::FVF_INSTANCED:
-		case BatcherEnums::FVF_REGULAR:
-		default:
-			_translate_batches_to_larger_FVF_3d<BatchVertex3DTier4, true, true, true>(p_batch.num_verts);
-			break;
-	}
-
 	// Upload batched VBOs
-	get_this()->_batch_upload_buffers_3d(p_batch);
+	get_this()->_batch_upload_buffers_3d(p_batch, p_content_hash);
 
 	// Delegate the API-specific state binding and multi-draw dispatching to the driver
 	get_this()->_batch_render_items(p_material_data, p_primitive, p_batch, p_transparent);
@@ -999,14 +926,15 @@ void RasterizerSceneBatcherCommon<T_API>::_software_transform_vertex(BatchVector
 }
 
 template <typename T_API>
-void RasterizerSceneBatcherCommon<T_API>::_software_transform_normal(BatchVector3 &r_n, const Transform3D &p_tr) const {
+void RasterizerSceneBatcherCommon<T_API>::_software_transform_normal(BatchNormal &r_n, const Transform3D &p_tr) const {
 	const Basis cofactor = _compute_normal_cofactor(p_tr.basis);
 	_software_transform_normal_precomputed(r_n, cofactor);
 }
 
 template <typename T_API>
-void RasterizerSceneBatcherCommon<T_API>::_software_transform_normal_precomputed(BatchVector3 &r_n, const Basis &p_cofactor) const {
-	Vector3 nc(r_n.x, r_n.y, r_n.z);
+void RasterizerSceneBatcherCommon<T_API>::_software_transform_normal_precomputed(BatchNormal &r_n, const Basis &p_cofactor) const {
+	Vector3 nc;
+	r_n.to(nc);
 	nc = p_cofactor.xform(nc).normalized();
 	r_n.set(nc);
 }
@@ -1015,11 +943,10 @@ template <typename T_API>
 void RasterizerSceneBatcherCommon<T_API>::_calculate_draw_call_cost_or_flush(Batch3D &p_batch) const {
 	RasterizerSceneBatcherCommon<T_API> *self = const_cast<RasterizerSceneBatcherCommon<T_API> *>(this);
 
-	if (p_batch.fvf != BatcherEnums::FVF_UNBATCHED) {
+	if (p_batch.fvf != BatcherEnums::FVF_UNBATCHED && p_batch.fvf != BatcherEnums::FVF_STATIC_MESH_LOOP) {
 		// Calculate the cost of this call
 		// and verify if we can keep it in the GPU "inventory."
-		// Don't count unbatched since they bypass the batcher
-		// anyway.
+		// Don't count unbatched or static mesh loop batches since they bypass dynamic VBO uploads.
 		self->bdata.dynamic_upload_accumulator += (
 			p_batch.num_verts * self->bdata.unit_vertices.get_unit_size_bytes()
 		) + (p_batch.num_indices * sizeof(uint16_t));
