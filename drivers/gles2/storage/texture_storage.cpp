@@ -1104,6 +1104,7 @@ Ref<Image> TextureStorage::texture_2d_get(RID p_texture) const {
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+	tex->gl_reset_filter_and_repeat_state();
 	GL_CHECK_ERROR("GLES2::TextureStorage::texture_2d_get: glBindTexture (target)");
 
 	glViewport(0, 0, tex->alloc_width, tex->alloc_height);
@@ -1617,6 +1618,7 @@ void TextureStorage::_texture_set_data(RID p_texture, const Ref<Image> &p_image,
 	glTexParameteri(texture->target, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
 	glTexParameteri(texture->target, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 	GL_CHECK_ERROR("GLES2::TextureStorage::_texture_set_data: glTexParameteri");
+	texture->gl_reset_filter_and_repeat_state();
 
 	int mipmaps = img->has_mipmaps() ? img->get_mipmap_count() + 1 : 1;
 

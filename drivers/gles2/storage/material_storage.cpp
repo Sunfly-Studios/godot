@@ -818,6 +818,53 @@ _FORCE_INLINE_ static void bind_uniforms_and_textures_generic_gles2(
 			if (texture && texture->tex_id != 0) {
 				glBindTexture(texture->target, texture->tex_id);
 				GL_CHECK_ERROR("GLES2::MaterialStorage::bind_uniforms_and_textures_generic_gles2: glBindTexture");
+
+				// Set texture filter
+				RS::CanvasItemTextureFilter filter = RS::CANVAS_ITEM_TEXTURE_FILTER_LINEAR_WITH_MIPMAPS;
+				switch (texture_uniform.filter) {
+					case ShaderLanguage::FILTER_NEAREST:
+						filter = RS::CANVAS_ITEM_TEXTURE_FILTER_NEAREST;
+						break;
+					case ShaderLanguage::FILTER_LINEAR:
+						filter = RS::CANVAS_ITEM_TEXTURE_FILTER_LINEAR;
+						break;
+					case ShaderLanguage::FILTER_NEAREST_MIPMAP:
+						filter = RS::CANVAS_ITEM_TEXTURE_FILTER_NEAREST_WITH_MIPMAPS;
+						break;
+					case ShaderLanguage::FILTER_LINEAR_MIPMAP:
+						filter = RS::CANVAS_ITEM_TEXTURE_FILTER_LINEAR_WITH_MIPMAPS;
+						break;
+					case ShaderLanguage::FILTER_NEAREST_MIPMAP_ANISOTROPIC:
+						filter = RS::CANVAS_ITEM_TEXTURE_FILTER_NEAREST_WITH_MIPMAPS_ANISOTROPIC;
+						break;
+					case ShaderLanguage::FILTER_LINEAR_MIPMAP_ANISOTROPIC:
+						filter = RS::CANVAS_ITEM_TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC;
+						break;
+					case ShaderLanguage::FILTER_DEFAULT:
+						filter = RS::CANVAS_ITEM_TEXTURE_FILTER_LINEAR_WITH_MIPMAPS;
+						break;
+				}
+
+				// Set texture repeat mode
+				RS::CanvasItemTextureRepeat repeat = RS::CANVAS_ITEM_TEXTURE_REPEAT_ENABLED;
+				switch (texture_uniform.repeat) {
+					case ShaderLanguage::REPEAT_DISABLE:
+						repeat = RS::CANVAS_ITEM_TEXTURE_REPEAT_DISABLED;
+						break;
+					case ShaderLanguage::REPEAT_ENABLE:
+						repeat = RS::CANVAS_ITEM_TEXTURE_REPEAT_ENABLED;
+						break;
+					case ShaderLanguage::REPEAT_DEFAULT:
+						repeat = RS::CANVAS_ITEM_TEXTURE_REPEAT_ENABLED;
+						break;
+				}
+
+				if (texture->target == GL_TEXTURE_CUBE_MAP) {
+					repeat = RS::CANVAS_ITEM_TEXTURE_REPEAT_DISABLED;
+				}
+
+				texture->gl_set_filter(filter);
+				texture->gl_set_repeat(repeat);
 			} else {
 				glBindTexture(GL_TEXTURE_2D, 0);
 				GL_CHECK_ERROR("GLES2::MaterialStorage::bind_uniforms_and_textures_generic_gles2: glBindTexture 0");

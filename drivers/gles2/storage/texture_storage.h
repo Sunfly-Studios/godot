@@ -374,6 +374,11 @@ struct Texture {
 		glBindTexture(target, prev_tex);
 	}
 
+	void gl_reset_filter_and_repeat_state() {
+		state_filter = RS::CANVAS_ITEM_TEXTURE_FILTER_MAX;
+		state_repeat = RS::CANVAS_ITEM_TEXTURE_REPEAT_MAX;
+	}
+
 private:
 	RS::CanvasItemTextureFilter state_filter = RS::CANVAS_ITEM_TEXTURE_FILTER_MAX;
 	RS::CanvasItemTextureRepeat state_repeat = RS::CANVAS_ITEM_TEXTURE_REPEAT_MAX;

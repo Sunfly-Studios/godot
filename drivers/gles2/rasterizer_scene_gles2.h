@@ -594,6 +594,14 @@ private:
 		void reset_gl_state() {
 			glDisable(GL_BLEND);
 			current_blend_enabled = false;
+			current_blend_mode = GLES2::SceneShaderData::BLEND_MODE_MIX;
+
+			glBlendEquation(GL_FUNC_ADD);
+			if (transparent_bg) {
+				glBlendFuncSeparate(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
+			} else {
+				glBlendFuncSeparate(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_ZERO, GL_ONE);
+			}
 
 			glDisable(GL_SCISSOR_TEST);
 			current_scissor_test_enabled = false;
@@ -606,6 +614,44 @@ private:
 			current_depth_draw_enabled = false;
 			glDisable(GL_DEPTH_TEST);
 			current_depth_test_enabled = false;
+		}
+
+		void set_gl_blend_mode(GLES2::SceneShaderData::BlendMode p_mode) {
+			if (current_blend_mode == p_mode) {
+				return;
+			}
+			switch (p_mode) {
+				case GLES2::SceneShaderData::BLEND_MODE_MIX:
+				case GLES2::SceneShaderData::BLEND_MODE_ALPHA_TO_COVERAGE: {
+					glBlendEquation(GL_FUNC_ADD);
+					if (transparent_bg) {
+						glBlendFuncSeparate(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
+					} else {
+						glBlendFuncSeparate(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_ZERO, GL_ONE);
+					}
+				} break;
+				case GLES2::SceneShaderData::BLEND_MODE_ADD: {
+					glBlendEquation(GL_FUNC_ADD);
+					glBlendFuncSeparate(GL_SRC_ALPHA, GL_ONE, GL_SRC_ALPHA, GL_ONE);
+				} break;
+				case GLES2::SceneShaderData::BLEND_MODE_SUB: {
+					glBlendEquation(GL_FUNC_REVERSE_SUBTRACT);
+					glBlendFuncSeparate(GL_SRC_ALPHA, GL_ONE, GL_ZERO, GL_ONE);
+				} break;
+				case GLES2::SceneShaderData::BLEND_MODE_MUL: {
+					glBlendEquation(GL_FUNC_ADD);
+					glBlendFuncSeparate(GL_DST_COLOR, GL_ZERO, GL_ZERO, GL_ONE);
+				} break;
+				case GLES2::SceneShaderData::BLEND_MODE_PREMULT_ALPHA: {
+					glBlendEquation(GL_FUNC_ADD);
+					if (transparent_bg) {
+						glBlendFuncSeparate(GL_ONE, GL_ONE_MINUS_SRC_ALPHA, GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
+					} else {
+						glBlendFuncSeparate(GL_ONE, GL_ONE_MINUS_SRC_ALPHA, GL_ZERO, GL_ONE);
+					}
+				} break;
+			}
+			current_blend_mode = p_mode;
 		}
 
 		void set_gl_cull_mode(RS::CullMode p_mode) {

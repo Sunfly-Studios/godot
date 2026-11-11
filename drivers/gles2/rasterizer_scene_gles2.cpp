@@ -2594,6 +2594,11 @@ void RasterizerSceneGLES2::_batch_bind_material(GLES2::SceneMaterialData *p_mate
 			scene_state.set_gl_cull_mode(p_material_data->shader_data->cull_mode);
 			scene_state.enable_gl_depth_test(p_material_data->shader_data->depth_test == GLES2::SceneShaderData::DEPTH_TEST_ENABLED);
 
+			if (p_transparent) {
+				scene_state.enable_gl_blend(true);
+				scene_state.set_gl_blend_mode(p_material_data->shader_data->blend_mode);
+			}
+
 			if (p_material_data->shader_data->depth_draw == GLES2::SceneShaderData::DEPTH_DRAW_OPAQUE) {
 				scene_state.enable_gl_depth_draw(!p_transparent);
 			} else {
@@ -2652,6 +2657,15 @@ void RasterizerSceneGLES2::_batch_render_items(GLES2::SceneMaterialData *p_mater
 
 		_render_additive_light_passes<true>(first_surf, p_material_data, scene_state.current_spec_constants, promote_to_instancing, world_xform, p_primitive);
 	}
+
+	// Clean up
+	for (int i = 0; i < RS::ARRAY_INDEX; i++) {
+		glDisableVertexAttribArray(i);
+	}
+	glBindBuffer(GL_ARRAY_BUFFER, 0);
+	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+	glVertexAttrib4f(RS::ARRAY_COLOR, 1.0f, 1.0f, 1.0f, 1.0f);
+	GL_CHECK_ERROR("GLES2::RasterizerSceneGLES2::_batch_render_items: state cleanup");
 
 	// Always invalidate the state hash cache after a batched draw call
 	// so any subsequent single-mesh direct draw fallback or bypassed immediate item
@@ -3246,6 +3260,11 @@ void RasterizerSceneGLES2::_render_single_item_immediate(const GeometryInstanceS
 		scene_state.set_gl_cull_mode(shader->cull_mode);
 		scene_state.enable_gl_depth_test(shader->depth_test == GLES2::SceneShaderData::DEPTH_TEST_ENABLED);
 
+		if (bdata.pass_mode == PASS_MODE_COLOR_TRANSPARENT || (p_surface->flags & GeometryInstanceSurface::FLAG_PASS_ALPHA)) {
+			scene_state.enable_gl_blend(true);
+			scene_state.set_gl_blend_mode(shader->blend_mode);
+		}
+
 		if (shader->depth_draw == GLES2::SceneShaderData::DEPTH_DRAW_OPAQUE) {
 			scene_state.enable_gl_depth_draw(!(p_surface->flags & GeometryInstanceSurface::FLAG_PASS_ALPHA));
 		} else {
@@ -3632,6 +3651,7 @@ void RasterizerSceneGLES2::_setup_environment(const RenderDataGLES2 *p_render_da
 	scene_state.ubo.screen_pixel_size[1] = screen_pixel_size.y;
 
 	scene_state.ubo.time = time;
+	scene_state.ubo.emissive_exposure_normalization = 1.0f;
 
 	scene_state.tonemap_ubo.exposure = 1.0;
 	scene_state.tonemap_ubo.white = 1.0;
@@ -4275,6 +4295,7 @@ void RasterizerSceneGLES2::_bind_scene_camera_uniforms(RID p_version, SceneShade
 	material_storage->shaders.scene_shader.version_set_uniform(SceneShaderGLES2::SCREEN_PIXEL_SIZE, screen_pixel_size, p_version, p_variant, p_spec_constants);
 
 	material_storage->shaders.scene_shader.version_set_uniform(SceneShaderGLES2::TIME, (float)scene_state.ubo.time, p_version, p_variant, p_spec_constants);
+	material_storage->shaders.scene_shader.version_set_uniform(SceneShaderGLES2::EMISSIVE_EXPOSURE_NORMALIZATION, scene_state.ubo.emissive_exposure_normalization, p_version, p_variant, p_spec_constants);
 
 	material_storage->shaders.scene_shader.version_set_uniform(SceneShaderGLES2::AMBIENT_LIGHT_COLOR_ENERGY, Color(scene_state.ubo.ambient_light_color_energy[0], scene_state.ubo.ambient_light_color_energy[1], scene_state.ubo.ambient_light_color_energy[2], scene_state.ubo.ambient_light_color_energy[3]), p_version, p_variant, p_spec_constants);
 	material_storage->shaders.scene_shader.version_set_uniform(SceneShaderGLES2::AMBIENT_COLOR_SKY_MIX, scene_state.ubo.ambient_color_sky_mix, p_version, p_variant, p_spec_constants);
@@ -4786,7 +4807,15 @@ void RasterizerSceneGLES2::_execute_additive_light_draw(uint32_t p_light_gl_id, 
 
 	if constexpr (p_is_batch) {
 		material_storage->shaders.scene_shader.version_set_uniform(SceneShaderGLES2::WORLD_TRANSFORM, p_world_xform, shader->version, p_variant, p_spec_constants);
-		_batch_render_generic(p_primitive, 0, 0, true);
+		const bool has_vertex_colors = (
+			(bdata.fvf == BatcherEnums::FVF_UNBATCHED && _render_item_state.curr_batch && (_render_item_state.curr_batch->flags & BatcherEnums::BTF_3D_USES_COLORS) != 0) ||
+			bdata.fvf == BatcherEnums::FVF_3D_TIER2_COLOR ||
+			bdata.fvf == BatcherEnums::FVF_3D_TIER3_TANGENT ||
+			bdata.fvf == BatcherEnums::FVF_3D_TIER4_PALETTE ||
+			bdata.fvf == BatcherEnums::FVF_REGULAR ||
+			bdata.fvf == BatcherEnums::FVF_INSTANCED
+		);
+		_batch_render_generic(p_primitive, 0, 0, has_vertex_colors);
 	} else {
 		Color inst_color(1.0f, 1.0f, 1.0f, 1.0f);
 		bool is_multimesh = p_base_type == RS::INSTANCE_MULTIMESH;
@@ -4828,7 +4857,11 @@ void RasterizerSceneGLES2::_execute_additive_light_draw(uint32_t p_light_gl_id, 
 
 template <bool p_is_batch>
 void RasterizerSceneGLES2::_render_additive_light_passes(const GeometryInstanceSurface *p_surf, GLES2::SceneMaterialData *p_material, uint64_t p_spec_constants, bool p_instancing, const Transform3D &p_world_xform, RS::PrimitiveType p_primitive, int p_instances, const MultiMeshInstanceData *p_mm, const Transform3D *p_owner_transform, bool p_use_index_buffer, GLenum p_primitive_gl, int p_drawn_count, GLenum p_index_type) {
-	if (!p_surf || !p_surf->owner) {
+	if (!p_surf || !p_surf->owner || !p_material || !p_material->shader_data) {
+		return;
+	}
+
+	if (p_material->shader_data->unshaded) {
 		return;
 	}
 
@@ -4842,11 +4875,13 @@ void RasterizerSceneGLES2::_render_additive_light_passes(const GeometryInstanceS
 	}
 
 	bool was_blend = scene_state.current_blend_enabled;
+	GLES2::SceneShaderData::BlendMode was_blend_mode = scene_state.current_blend_mode;
 	bool was_depth_draw = scene_state.current_depth_draw_enabled;
 
 	scene_state.enable_gl_blend(true);
 	glBlendEquation(GL_FUNC_ADD);
 	glBlendFuncSeparate(GL_SRC_ALPHA, GL_ONE, GL_ZERO, GL_ONE);
+	GL_CHECK_ERROR("GLES2::RasterizerSceneGLES2::_render_additive_light_passes: glBlendFuncSeparate additive");
 	scene_state.enable_gl_depth_draw(false);
 	glDepthFunc(GL_GEQUAL);
 
@@ -4854,35 +4889,33 @@ void RasterizerSceneGLES2::_render_additive_light_passes(const GeometryInstanceS
 	SceneShaderGLES2::ShaderVariant dir_additive_variant = p_instancing ? SceneShaderGLES2::MODE_ADDITIVE_DIRECTIONAL_INSTANCING : SceneShaderGLES2::MODE_ADDITIVE_DIRECTIONAL;
 
 	RS::InstanceType base_type = p_surf->owner->data->base_type;
+	uint64_t additive_base_spec = p_spec_constants & ~SceneShaderGLES2::BASE_PASS;
 
 	// Directional lights
 	// There can only be 1 thanks to our multi-pass architecture
 	for (int i = 0; i < dir_count && i < 1; i++) {
-		uint64_t dir_spec = p_spec_constants & ~SceneShaderGLES2::DISABLE_LIGHT_DIRECTIONAL;
+		uint64_t dir_spec = (additive_base_spec & ~SceneShaderGLES2::DISABLE_LIGHT_DIRECTIONAL) | SceneShaderGLES2::USE_ADDITIVE_LIGHTING;
 		_execute_additive_light_draw<ADDITIVE_LIGHT_DIRECTIONAL, p_is_batch>(0, p_material, dir_additive_variant, dir_spec, p_world_xform, p_primitive, p_instances, p_mm, p_owner_transform, p_use_index_buffer, p_primitive_gl, p_drawn_count, p_index_type, base_type);
 	}
 
 	// Omni lights
 	for (int i = 0; i < omni_count; i++) {
-		uint64_t omni_spec = p_spec_constants | SceneShaderGLES2::ADDITIVE_OMNI;
+		uint64_t omni_spec = additive_base_spec | SceneShaderGLES2::USE_ADDITIVE_LIGHTING | SceneShaderGLES2::ADDITIVE_OMNI;
 		uint32_t gl_id = p_surf->owner->omni_light_gl_cache[i];
 		_execute_additive_light_draw<ADDITIVE_LIGHT_OMNI, p_is_batch>(gl_id, p_material, additive_variant, omni_spec, p_world_xform, p_primitive, p_instances, p_mm, p_owner_transform, p_use_index_buffer, p_primitive_gl, p_drawn_count, p_index_type, base_type);
 	}
 
 	// Spot lights
 	for (int i = 0; i < spot_count; i++) {
-		uint64_t spot_spec = p_spec_constants | SceneShaderGLES2::ADDITIVE_SPOT;
+		uint64_t spot_spec = additive_base_spec | SceneShaderGLES2::USE_ADDITIVE_LIGHTING | SceneShaderGLES2::ADDITIVE_SPOT;
 		uint32_t gl_id = p_surf->owner->spot_light_gl_cache[i];
 		_execute_additive_light_draw<ADDITIVE_LIGHT_SPOT, p_is_batch>(gl_id, p_material, additive_variant, spot_spec, p_world_xform, p_primitive, p_instances, p_mm, p_owner_transform, p_use_index_buffer, p_primitive_gl, p_drawn_count, p_index_type, base_type);
 	}
 
 	scene_state.enable_gl_blend(was_blend);
 	if (was_blend) {
-		if (scene_state.transparent_bg) {
-			glBlendFuncSeparate(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
-		} else {
-			glBlendFuncSeparate(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_ZERO, GL_ONE);
-		}
+		scene_state.current_blend_mode = GLES2::SceneShaderData::BLEND_MODE_ADD;
+		scene_state.set_gl_blend_mode(was_blend_mode);
 	}
 	scene_state.enable_gl_depth_draw(was_depth_draw);
 }
