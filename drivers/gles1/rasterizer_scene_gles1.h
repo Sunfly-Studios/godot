@@ -243,6 +243,7 @@ private:
 		glPopMatrix();
 
 		glColor4f(1.0f, 1.0f, 1.0f, 1.0f);
+		scene_state.reset_gl_state();
 	}
 #endif
 
@@ -664,6 +665,8 @@ private:
 			p_material_data->approx_type != GLES1::SceneMaterialData::APPROX_NONE
 		) && p_material_data->approx_data;
 
+		glDisable(GL_COLOR_MATERIAL);
+
 		if (!has_approx) {
 			glColor4f(mat_default_albedo[0], mat_default_albedo[1], mat_default_albedo[2], mat_default_albedo[3]);
 			glMaterialfv(GL_FRONT_AND_BACK, GL_DIFFUSE, mat_default_albedo);
@@ -677,30 +680,53 @@ private:
 				glMaterialfv(GL_FRONT_AND_BACK, GL_AMBIENT, mat_default_albedo);
 				glMaterialfv(GL_FRONT_AND_BACK, GL_EMISSION, mat_zero);
 			}
-		} else if (p_is_additive) {
-			glMaterialfv(GL_FRONT_AND_BACK, GL_AMBIENT, mat_zero);
-			glMaterialfv(GL_FRONT_AND_BACK, GL_EMISSION, mat_zero);
+		} else {
+			const GLES1::StandardMaterialState *state = static_cast<const GLES1::StandardMaterialState *>(p_material_data->approx_data);
+			glColor4f(state->albedo[0], state->albedo[1], state->albedo[2], state->albedo[3]);
+			glMaterialfv(GL_FRONT_AND_BACK, GL_DIFFUSE, state->albedo);
+			glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, state->specular);
+			glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, state->shininess);
+
+			if (p_is_additive) {
+				glMaterialfv(GL_FRONT_AND_BACK, GL_AMBIENT, mat_zero);
+				glMaterialfv(GL_FRONT_AND_BACK, GL_EMISSION, mat_zero);
+			} else {
+				glMaterialfv(GL_FRONT_AND_BACK, GL_AMBIENT, state->albedo);
+				glMaterialfv(GL_FRONT_AND_BACK, GL_EMISSION, state->emission);
+			}
 		}
 
 		// For FVF_UNBATCHED and SMDDF, only enable GL_COLOR_MATERIAL if the batch actually
 		// uses vertex colors AND the shader requests them. Otherwise, material albedo is
 		// supplied directly via glColor4f and glMaterialfv below without a colour array bound.
+		const bool is_immediate_draw = (_render_item_state.curr_batch == nullptr);
 		const uint32_t batch_flags = _render_item_state.curr_batch ? _render_item_state.curr_batch->flags : 0;
 		const bool unbatched_uses_color = (
+			!is_immediate_draw &&
 			bdata.fvf == BatcherEnums::FVF_UNBATCHED &&
 			(batch_flags & BatcherEnums::BTF_3D_USES_COLORS) != 0 &&
 			p_material_data &&
 			p_material_data->shader_data &&
 			p_material_data->shader_data->uses_color
 		);
+		const bool immediate_uses_color = (
+			is_immediate_draw &&
+			scene_state.immediate_surface_has_colors &&
+			p_material_data &&
+			p_material_data->shader_data &&
+			p_material_data->shader_data->uses_color
+		);
 
 		bool use_color_material = (
+			immediate_uses_color ||
 			unbatched_uses_color ||
-			bdata.fvf == BatcherEnums::FVF_3D_TIER2_COLOR ||
-			bdata.fvf == BatcherEnums::FVF_3D_TIER3_TANGENT ||
-			bdata.fvf == BatcherEnums::FVF_3D_TIER4_PALETTE ||
-			bdata.fvf == BatcherEnums::FVF_REGULAR ||
-			bdata.fvf == BatcherEnums::FVF_INSTANCED
+			(!is_immediate_draw && (
+				bdata.fvf == BatcherEnums::FVF_3D_TIER2_COLOR ||
+				bdata.fvf == BatcherEnums::FVF_3D_TIER3_TANGENT ||
+				bdata.fvf == BatcherEnums::FVF_3D_TIER4_PALETTE ||
+				bdata.fvf == BatcherEnums::FVF_REGULAR ||
+				bdata.fvf == BatcherEnums::FVF_INSTANCED
+			))
 		);
 
 		if (use_color_material) {
@@ -713,18 +739,6 @@ private:
 				glMaterialfv(GL_FRONT_AND_BACK, GL_AMBIENT, mat_white);
 			}
 			glEnable(GL_COLOR_MATERIAL);
-		} else {
-			// Always load the approximated material albedo into glColor4f and GL_DIFFUSE/GL_AMBIENT
-			// so both uncoloured SMDDF meshes and unlit passes inherit the exact base material color.
-			if (has_approx) {
-				const GLES1::StandardMaterialState *state = static_cast<const GLES1::StandardMaterialState *>(p_material_data->approx_data);
-				glColor4f(state->albedo[0], state->albedo[1], state->albedo[2], state->albedo[3]);
-				glMaterialfv(GL_FRONT_AND_BACK, GL_DIFFUSE, state->albedo);
-				if (!p_is_additive) {
-					glMaterialfv(GL_FRONT_AND_BACK, GL_AMBIENT, state->albedo);
-				}
-			}
-			glDisable(GL_COLOR_MATERIAL);
 		}
 		GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_gl_setup_material_pass: material pass state");
 	}
@@ -866,6 +880,99 @@ private:
 		} else {
 			glDisable(GL_FOG);
 		}
+	}
+
+	_FORCE_INLINE_ void _gl_batch_material_manage_texture_shadows() {
+		// TU1
+		glActiveTexture(GL_TEXTURE1);
+		glEnable(GL_TEXTURE_2D);
+		glBindTexture(GL_TEXTURE_2D, scene_state.current_shadow_texture);
+		glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE);
+		GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_gl_batch_material_manage_texture_shadows: GL_TEXTURE1 projective texture restore");
+
+		if (GLES1_CONFIG->max_texture_units > 2) {
+			// TU2
+			glActiveTexture(GL_TEXTURE2);
+			glEnable(GL_TEXTURE_2D);
+			glBindTexture(GL_TEXTURE_2D, scene_state.z_bound_texture);
+			glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE);
+			GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_gl_batch_material_manage_texture_shadows: GL_TEXTURE2 projective texture restore");
+		}
+
+		glActiveTexture(GL_TEXTURE0);
+	}
+
+	_FORCE_INLINE_ void _gl_rsii_setup_shadow_projection_texcoords(const GeometryInstanceSurface *p_surface, uint64_t p_input_mask, bool p_use_deformed_instance) {
+		if (GLES1_CONFIG->max_texture_units <= 1) {
+			return;
+		}
+
+		GLES1::MeshStorage *mesh_storage = GLES1::MeshStorage::get_singleton();
+		GLuint dummy_vao = 0;
+		GLES1::Mesh::Surface::Version *ver = nullptr;
+		GLuint proj_vbo = 0;
+		const uint8_t *proj_ptr = nullptr;
+
+		// Skinned or blend-shaped meshes store their deformed vertex positions in the
+		// MeshInstance's surface buffer rather than the static base Mesh surface.
+		// Resolve the deformed stream first so projected shadows match animated poses.
+		if (p_use_deformed_instance) {
+			GLES1::MeshInstance *mi = mesh_storage->get_mesh_instance(p_surface->owner->mesh_instance);
+			if (mi && p_surface->surface_index < mi->surfaces.size()) {
+				const GLES1::MeshInstance::Surface &mis = mi->surfaces[p_surface->surface_index];
+				if (mis.vertex_buffer != 0 || !mis.vertex_buffer_fallback.is_empty()) {
+					ver = mesh_storage->mesh_instance_surface_get_vertex_arrays_and_format(p_surface->owner->mesh_instance, p_surface->surface_index, p_input_mask, dummy_vao);
+					proj_vbo = GLES1_CONFIG->support_vbo ? mis.vertex_buffer : 0;
+					proj_ptr = (proj_vbo == 0) ? mis.vertex_buffer_fallback.ptr() : nullptr;
+				}
+			}
+		}
+
+		// Fallback to the static mesh surface if no instance deformation buffer is active.
+		if (!ver) {
+			ver = mesh_storage->mesh_surface_get_vertex_arrays_and_format(p_surface->surface, p_input_mask, dummy_vao);
+			proj_vbo = GLES1_CONFIG->support_vbo ? mesh_storage->mesh_surface_get_vertex_buffer(p_surface->surface) : 0;
+			proj_ptr = (proj_vbo == 0) ? mesh_storage->mesh_surface_get_vertex_array(p_surface->surface) : nullptr;
+		}
+
+		if (!ver || (proj_vbo == 0 && proj_ptr == nullptr)) {
+			// Nothing to do if we find nothing...
+			return;
+		}
+
+		if (proj_vbo != 0) {
+			glBindBuffer(GL_ARRAY_BUFFER, proj_vbo);
+		} else if (GLES1_CONFIG->support_vbo) {
+			glBindBuffer(GL_ARRAY_BUFFER, 0);
+		}
+
+		const GLES1::Mesh::Surface::Attrib &v_attrib = ver->attribs[RS::ARRAY_VERTEX];
+		const void *v_ofs_ptr = nullptr;
+		if (proj_vbo != 0) {
+			v_ofs_ptr = reinterpret_cast<void *>(static_cast<uintptr_t>(v_attrib.offset));
+		} else {
+			v_ofs_ptr = reinterpret_cast<const void *>(proj_ptr + v_attrib.offset);
+		}
+
+		// Route the 3D vertex positions into TU1 (shadow map silhouette) and TU2 (Z-bound gradient)
+		// texture coordinates so the GL_TEXTURE matrix projects local vertices into light clip-space.
+		glClientActiveTexture(GL_TEXTURE1);
+		glEnableClientState(GL_TEXTURE_COORD_ARRAY);
+		glTexCoordPointer(v_attrib.size, v_attrib.type, v_attrib.stride, v_ofs_ptr);
+
+		if (GLES1_CONFIG->max_texture_units > 2) {
+			glClientActiveTexture(GL_TEXTURE2);
+			glEnableClientState(GL_TEXTURE_COORD_ARRAY);
+			glTexCoordPointer(v_attrib.size, v_attrib.type, v_attrib.stride, v_ofs_ptr);
+		}
+
+		glClientActiveTexture(GL_TEXTURE0);
+
+		if (proj_vbo != 0) {
+			glBindBuffer(GL_ARRAY_BUFFER, 0);
+		}
+
+		GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_gl_rsii_setup_shadow_projection_texcoords: bind projective texcoords");
 	}
 
 	// Tracks the chuncked lights
@@ -1059,20 +1166,28 @@ private:
 
 			glDisable(GL_FOG);
 
-			if (GLES1_CONFIG->max_texture_units > 1) {
-				glActiveTexture(GL_TEXTURE1);
+			const int max_tu = GLES1_CONFIG->max_texture_units;
+			for (int i = 0; i < max_tu; i++) {
+				if (max_tu > 1) {
+					glActiveTexture(GL_TEXTURE0 + i);
+					glClientActiveTexture(GL_TEXTURE0 + i);
+				}
+				glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE);
 				glDisable(GL_TEXTURE_2D);
 				glBindTexture(GL_TEXTURE_2D, 0);
 				if (GLES1_CONFIG->support_cubemap) {
+					glDisable(GL_TEXTURE_CUBE_MAP);
 					glBindTexture(GL_TEXTURE_CUBE_MAP, 0);
 				}
+				glDisableClientState(GL_TEXTURE_COORD_ARRAY);
+			}
+			if (max_tu > 1) {
 				glActiveTexture(GL_TEXTURE0);
+				glClientActiveTexture(GL_TEXTURE0);
 			}
-			glDisable(GL_TEXTURE_2D);
-			glBindTexture(GL_TEXTURE_2D, 0);
-			if (GLES1_CONFIG->support_cubemap) {
-				glBindTexture(GL_TEXTURE_CUBE_MAP, 0);
-			}
+			glDisable(GL_COLOR_MATERIAL);
+			glDisable(GL_LIGHTING);
+			GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::reset_gl_state: texture and lighting scrub");
 		}
 
 		void set_gl_cull_mode(RS::CullMode p_mode) {
@@ -1135,6 +1250,7 @@ private:
 		bool used_normal_texture = false;
 		bool used_depth_texture = false;
 		bool is_additive_pass = false;
+		bool immediate_surface_has_colors = false;
 
 		GLuint current_shadow_texture = 0;
 		float current_shadow_matrix[16] = {};

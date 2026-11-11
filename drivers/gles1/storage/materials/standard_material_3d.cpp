@@ -83,6 +83,7 @@ void StandardMaterialProcessor::update_state(StandardMaterialState &r_state, con
 }
 
 void StandardMaterialProcessor::bind_state(const StandardMaterialState &p_state) {
+	glDisable(GL_COLOR_MATERIAL);
 	glColor4f(p_state.albedo[0], p_state.albedo[1], p_state.albedo[2], p_state.albedo[3]);
 	glMaterialfv(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE, p_state.albedo);
 	GL_CHECK_ERROR("GLES1::StandardMaterialProcessor::bind_state: glMaterialfv ALBEDO");

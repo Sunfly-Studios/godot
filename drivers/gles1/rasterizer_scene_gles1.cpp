@@ -2228,17 +2228,31 @@ uint32_t RasterizerSceneGLES1::_batch_get_surface_flags(const GeometryInstanceSu
 
 BATCH_TYPE::BatchColor RasterizerSceneGLES1::_batch_get_surface_modulate(const GeometryInstanceSurface *p_surface) const {
 	BATCH_TYPE::BatchColor col{};
-	col.set_white();
-	
-	// Extract and quantize the material's base albedo color once per BItemRef3D
+	// HACK: 0.6 (grey) is kind of a magic number here, but anything beyond it
+	// blows out the brightness whenever 2+ default-material
+	// meshes are joined into a multi-item batch and promoted to tier2.
+	col.set(0.6f, 0.6f, 0.6f, 1.0f);
+
+	// Extract and quantise the material's base albedo color once per BItemRef3D
 	// so Tier 1 (uncolored) and Tier 2+ (colored) vertices have pre-evaluated modulation.
-	if (
-		p_surface->material &&
-		p_surface->material->approx_type != GLES1::SceneMaterialData::APPROX_NONE &&
-		p_surface->material->approx_data
-	) {
-		const GLES1::StandardMaterialState *state = static_cast<const GLES1::StandardMaterialState *>(p_surface->material->approx_data);
-		col.set(state->albedo[0], state->albedo[1], state->albedo[2], state->albedo[3]);
+	if (p_surface->material) {
+		GLES1::SceneMaterialData *spatial_material_data = static_cast<GLES1::SceneMaterialData *>(
+			GLES1::MaterialStorage::get_singleton()->material_get_data(
+				scene_globals.default_material,
+				RS::SHADER_SPATIAL
+			)
+		);
+
+		if (
+			p_surface->material->approx_type != GLES1::SceneMaterialData::APPROX_NONE &&
+			p_surface->material->approx_data
+		) {
+			const GLES1::StandardMaterialState *state = static_cast<const GLES1::StandardMaterialState *>(p_surface->material->approx_data);
+			col.set(state->albedo[0], state->albedo[1], state->albedo[2], state->albedo[3]);
+		} else if (p_surface->material != spatial_material_data) {
+			// Promote to white for this tier if our materials are different.
+			col.set_white();
+		}
 	}
 	return col;
 }
@@ -2947,6 +2961,10 @@ void RasterizerSceneGLES1::_batch_bind_material(GLES1::SceneMaterialData *p_mate
 			p_material_data->bind_uniforms();
 		}
 
+		if (GLES1_CONFIG->max_texture_units > 1 && bdata.pass_mode == PASS_MODE_SHADOW_PROJECTION) {
+			_gl_batch_material_manage_texture_shadows();
+		}
+
 		if (p_material_data->shader_data) {
 			if (bdata.pass_mode != PASS_MODE_SHADOW) {
 				_bind_scene_camera_uniforms(p_material_data->shader_data->version, SceneShaderGLES1::MODE_COLOR, spec_constants);
@@ -3004,21 +3022,12 @@ void RasterizerSceneGLES1::_batch_bind_material(GLES1::SceneMaterialData *p_mate
 		}
 	}
 
-	if (GLES1_CONFIG->max_texture_units > 2 && bdata.pass_mode == PASS_MODE_SHADOW_PROJECTION) {
-		// TU1
-		glActiveTexture(GL_TEXTURE1);
-		glEnable(GL_TEXTURE_2D);
-		glBindTexture(GL_TEXTURE_2D, scene_state.current_shadow_texture);
-		glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE);
-
-		// TU2
-		glActiveTexture(GL_TEXTURE2);
-		glEnable(GL_TEXTURE_2D);
-		glBindTexture(GL_TEXTURE_2D, scene_state.z_bound_texture);
-		glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE);
-		GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_batch_bind_material: GL_TEXTURE2 projective texture restore");
-
-		glActiveTexture(GL_TEXTURE0);
+	if (
+		GLES1_CONFIG->max_texture_units > 1 &&
+		bdata.pass_mode == PASS_MODE_SHADOW_PROJECTION &&
+		!p_material_data
+	) {
+		_gl_batch_material_manage_texture_shadows();
 	}
 }
 
@@ -3687,8 +3696,18 @@ void RasterizerSceneGLES1::_render_single_item_immediate(const GeometryInstanceS
 		spec_constants |= SceneShaderGLES1::RENDER_MATERIAL;
 	}
 
-	const bool is_transparent = (bdata.pass_mode == PASS_MODE_COLOR_TRANSPARENT) || ((p_surface->flags & GeometryInstanceSurface::FLAG_PASS_ALPHA) != 0);
+	const bool is_transparent = (
+		bdata.pass_mode == PASS_MODE_COLOR_TRANSPARENT
+	) || ((p_surface->flags & GeometryInstanceSurface::FLAG_PASS_ALPHA) != 0);
+	_render_item_state.curr_batch = nullptr;
+	scene_state.immediate_surface_has_colors = (
+		!p_surface->color_cache.is_empty() ||
+		(p_surface->owner->data->base_type == RS::INSTANCE_MULTIMESH && GLES1::MeshStorage::get_singleton()->multimesh_uses_colors(p_surface->owner->data->base))
+	);
 	_batch_bind_material(p_surface->material, p_surface->owner->transform, is_transparent);
+
+	// Immediately reset for the rest of the pipeline
+	scene_state.immediate_surface_has_colors = false;
 	GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_render_single_item_immediate: _batch_bind_material");
 
 	// Sync the surface flags with the batcher
@@ -3743,28 +3762,16 @@ void RasterizerSceneGLES1::_render_single_item_immediate(const GeometryInstanceS
 	}
 
 	int blend_count = is_mesh ? mesh_storage->mesh_get_blend_shape_count(p_surface->owner->data->base) : 0;
+	const bool use_deformed_instance = is_mesh && has_mi && (has_skel || blend_count > 0);
 
-	if (is_mesh && has_mi && (has_skel || blend_count > 0)) {
+	if (use_deformed_instance) {
 		mesh_storage->mesh_instance_surface_bind_arrays_gles1(p_surface->owner->mesh_instance, p_surface->surface_index, input_mask);
 	} else {
 		mesh_storage->mesh_surface_bind_arrays_gles1(p_surface->surface, input_mask);
 	}
 
 	if (bdata.pass_mode == PASS_MODE_SHADOW_PROJECTION) {
-		if (GLES1_CONFIG->support_vbo) {
-			glBindBuffer(GL_ARRAY_BUFFER, 0);
-		}
-		if (GLES1_CONFIG->max_texture_units > 1) {
-			glClientActiveTexture(GL_TEXTURE1);
-			glEnableClientState(GL_TEXTURE_COORD_ARRAY);
-			glTexCoordPointer(3, GL_FLOAT, sizeof(Vector3), p_surface->vertex_cache.ptr());
-		}
-		if (GLES1_CONFIG->max_texture_units > 2) {
-			glClientActiveTexture(GL_TEXTURE2);
-			glEnableClientState(GL_TEXTURE_COORD_ARRAY);
-			glTexCoordPointer(3, GL_FLOAT, sizeof(Vector3), p_surface->vertex_cache.ptr());
-		}
-		glClientActiveTexture(GL_TEXTURE0);
+		_gl_rsii_setup_shadow_projection_texcoords(p_surface, input_mask, use_deformed_instance);
 	}
 
 	uint32_t index_count = mesh_storage->mesh_surface_get_index_count(p_surface->surface, p_surface->lod_index);
@@ -3956,28 +3963,16 @@ void RasterizerSceneGLES1::_draw_editor_gizmos(const RenderDataGLES1 *p_render_d
 
 		// Correctly cull
 		if (surf->shader) {
-			if (surf->shader->cull_mode == RS::CULL_MODE_DISABLED) {
-				glDisable(GL_CULL_FACE);
-			} else {
-				glEnable(GL_CULL_FACE);
-				glCullFace(surf->shader->cull_mode == RS::CULL_MODE_FRONT ? GL_FRONT : GL_BACK);
-			}
-
-			if (surf->shader->depth_test == GLES1::SceneShaderData::DEPTH_TEST_DISABLED) {
-				glDisable(GL_DEPTH_TEST);
-			} else {
-				glEnable(GL_DEPTH_TEST);
-			}
-
-			if (surf->shader->depth_draw == GLES1::SceneShaderData::DEPTH_DRAW_DISABLED || (surf->flags & GeometryInstanceSurface::FLAG_PASS_ALPHA)) {
-				glDepthMask(GL_FALSE);
-			} else {
-				glDepthMask(GL_TRUE);
-			}
+			scene_state.set_gl_cull_mode(surf->shader->cull_mode);
+			scene_state.enable_gl_depth_test(surf->shader->depth_test != GLES1::SceneShaderData::DEPTH_TEST_DISABLED);
+			scene_state.enable_gl_depth_draw(
+				surf->shader->depth_draw != GLES1::SceneShaderData::DEPTH_DRAW_DISABLED &&
+				!(surf->flags & GeometryInstanceSurface::FLAG_PASS_ALPHA)
+			);
 		} else {
-			glDisable(GL_CULL_FACE);
-			glEnable(GL_DEPTH_TEST);
-			glDepthMask(GL_FALSE);
+			scene_state.set_gl_cull_mode(RS::CULL_MODE_DISABLED);
+			scene_state.enable_gl_depth_test(true);
+			scene_state.enable_gl_depth_draw(false);
 		}
 		GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_draw_editor_gizmos: surface state setup");
 
@@ -4243,10 +4238,10 @@ void RasterizerSceneGLES1::_draw_editor_gizmos(const RenderDataGLES1 *p_render_d
 		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
 	}
 
-	glDepthMask(GL_TRUE);
-	glDisable(GL_BLEND);
-	glEnable(GL_DEPTH_TEST);
-	glDisable(GL_CULL_FACE);
+	scene_state.enable_gl_depth_draw(true);
+	scene_state.enable_gl_blend(false);
+	scene_state.enable_gl_depth_test(true);
+	scene_state.set_gl_cull_mode(RS::CULL_MODE_DISABLED);
 
 	_gl_teardown_editor_state();
 	GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_draw_editor_gizmos: cleanup");
@@ -5666,11 +5661,7 @@ void RasterizerSceneGLES1::render_scene(const Ref<RenderSceneBuffers> &p_render_
 
 			_setup_sky(&render_data, *render_data.lights, projection, render_data.cam_transform, screen_size);
 
-			if (environment_get_sky(render_data.environment).is_valid()) {
-				if (environment_get_reflection_source(render_data.environment) == RS::ENV_REFLECTION_SOURCE_SKY || environment_get_ambient_source(render_data.environment) == RS::ENV_AMBIENT_SOURCE_SKY || (environment_get_reflection_source(render_data.environment) == RS::ENV_REFLECTION_SOURCE_BG && environment_get_background(render_data.environment) == RS::ENV_BG_SKY)) {
-					_update_sky_radiance(render_data.environment, projection, render_data.cam_transform, sky_energy_multiplier);
-				}
-			} else {
+			if (!environment_get_sky(render_data.environment).is_valid()) {
 				draw_sky = false;
 			}
 		}
@@ -5695,6 +5686,23 @@ void RasterizerSceneGLES1::render_scene(const Ref<RenderSceneBuffers> &p_render_
 		// Sorry...
 		WARN_PRINT_ONCE("Shadows cannot be rendered on this device. Visual changes may occur.");
 	}
+
+	if (draw_sky || draw_sky_fog_only || (is_environment(render_data.environment) && (environment_get_reflection_source(render_data.environment) == RS::ENV_REFLECTION_SOURCE_SKY || environment_get_ambient_source(render_data.environment) == RS::ENV_AMBIENT_SOURCE_SKY || (environment_get_reflection_source(render_data.environment) == RS::ENV_REFLECTION_SOURCE_BG && environment_get_background(render_data.environment) == RS::ENV_BG_SKY)))) {
+		Projection sky_proj = render_data.cam_projection;
+		if (render_data.reflection_probe.is_valid()) {
+			Projection correction;
+			correction.set_depth_correction(true, true, false);
+			sky_proj = correction * render_data.cam_projection;
+		}
+
+		if (
+			is_environment(render_data.environment) &&
+			environment_get_sky(render_data.environment).is_valid()
+		) {
+			_update_sky_radiance(render_data.environment, sky_proj, render_data.cam_transform, sky_energy_multiplier);
+		}
+	}
+
 	_setup_lights(&render_data, can_render_shadows, render_data.directional_light_count, render_data.omni_light_count, render_data.spot_light_count, render_data.directional_shadow_count);
 	_setup_environment(&render_data, false, screen_size, flip_y, clear_color, false);
 
@@ -5753,6 +5761,11 @@ void RasterizerSceneGLES1::render_scene(const Ref<RenderSceneBuffers> &p_render_
 	_gl_setup_light(false);
 	_gl_setup_ambient_model(scene_state.ground_bottom_color);
 	GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::render_scene: opaque base pass glLightModelfv");
+
+	// Ensure the camera view matrix is loaded on GL_MODELVIEW before specifying
+	// world-space light directions so GL transforms them into eye space.
+	glMatrixMode(GL_MODELVIEW);
+	glLoadMatrixf(_gl_load_transform(render_data.inv_cam_transform));
 
 	// Disable all standard light slots (0 to max_lights - 2) for the base pass.
 	_gl_set_light_chunk_state(0);
@@ -6081,11 +6094,13 @@ void RasterizerSceneGLES1::_render_light_shadows(RenderListParameters *p_params,
 				}
 			}
 
-			// Determine active splits by checking offset uniqueness.
-			if (scene_state.directional_shadows[shadow_idx].shadow_split_offsets[1] != scene_state.directional_shadows[shadow_idx].shadow_split_offsets[0]) {
-				num_splits = 2;
-				if (scene_state.directional_shadows[shadow_idx].shadow_split_offsets[3] != scene_state.directional_shadows[shadow_idx].shadow_split_offsets[1]) {
-					num_splits = 4;
+			if (GLES1_CONFIG->max_clip_planes > 1) {
+				// Determine active splits by checking offset uniqueness.
+				if (scene_state.directional_shadows[shadow_idx].shadow_split_offsets[1] != scene_state.directional_shadows[shadow_idx].shadow_split_offsets[0]) {
+					num_splits = 2;
+					if (scene_state.directional_shadows[shadow_idx].shadow_split_offsets[3] != scene_state.directional_shadows[shadow_idx].shadow_split_offsets[1]) {
+						num_splits = 4;
+					}
 				}
 			}
 		}
@@ -6191,6 +6206,9 @@ void RasterizerSceneGLES1::_render_light_shadows(RenderListParameters *p_params,
 
 		GLClipPlaneScope clip_scope(false, plane_near, plane_far);
 		if (use_clip_planes) {
+			// Split [split_near, split_far] corresponds to eye_z in [-split_far, -split_near]:
+			//   Near clip plane: -eye_z - split_near >= 0  -> (0, 0, -1, -split_near)
+			//   Far clip plane:   eye_z + split_far  >= 0  -> (0, 0,  1,  split_far)
 			GLMatrixScope mod_scope(GL_MODELVIEW, true);
 			glLoadIdentity();
 			clip_scope.enable(plane_near, plane_far);
