@@ -260,7 +260,6 @@ struct Texture {
 		if (p_filter == state_filter) {
 			return;
 		}
-		GLES1::Config *config = GLES1::Config::get_singleton();
 		state_filter = p_filter;
 		GLenum pmin = GL_NEAREST;
 		GLenum pmag = GL_NEAREST;
@@ -276,28 +275,28 @@ struct Texture {
 				pmag = GL_LINEAR;
 			} break;
 			case RS::CANVAS_ITEM_TEXTURE_FILTER_NEAREST_WITH_MIPMAPS_ANISOTROPIC: {
-				anisotropy = config->anisotropic_level;
+				anisotropy = GLES1_CONFIG->anisotropic_level;
 			};
 				[[fallthrough]];
 			case RS::CANVAS_ITEM_TEXTURE_FILTER_NEAREST_WITH_MIPMAPS: {
 				pmag = GL_NEAREST;
 				if (mipmaps <= 1) {
 					pmin = GL_NEAREST;
-				} else if (config->use_nearest_mip_filter) {
+				} else if (GLES1_CONFIG->use_nearest_mip_filter) {
 					pmin = GL_NEAREST_MIPMAP_NEAREST;
 				} else {
 					pmin = GL_NEAREST_MIPMAP_LINEAR;
 				}
 			} break;
 			case RS::CANVAS_ITEM_TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC: {
-				anisotropy = config->anisotropic_level;
+				anisotropy = GLES1_CONFIG->anisotropic_level;
 			};
 				[[fallthrough]];
 			case RS::CANVAS_ITEM_TEXTURE_FILTER_LINEAR_WITH_MIPMAPS: {
 				pmag = GL_LINEAR;
 				if (mipmaps <= 1) {
 					pmin = GL_LINEAR;
-				} else if (config->use_nearest_mip_filter) {
+				} else if (GLES1_CONFIG->use_nearest_mip_filter) {
 					pmin = GL_LINEAR_MIPMAP_NEAREST;
 				} else {
 					pmin = GL_LINEAR_MIPMAP_LINEAR;
@@ -311,7 +310,7 @@ struct Texture {
 		glTexParameteri(target, GL_TEXTURE_MAG_FILTER, pmag);
 		GL_CHECK_ERROR("GLES1::Texture::gl_set_filter: glTexParameteri");
 
-		if (config->support_anisotropic_filter) {
+		if (GLES1_CONFIG->support_anisotropic_filter) {
 			glTexParameterf(target, _GL_TEXTURE_MAX_ANISOTROPY_EXT, anisotropy);
 			GL_CHECK_ERROR("GLES1::Texture::gl_set_filter: glTexParameterf anisotropy");
 		}
@@ -331,7 +330,7 @@ struct Texture {
 				prep = GL_REPEAT;
 			} break;
 			case RS::CANVAS_ITEM_TEXTURE_REPEAT_MIRROR: {
-				prep = GL_MIRRORED_REPEAT;
+				prep = GLES1_CONFIG->support_mirrored_repeat ? GL_MIRRORED_REPEAT : GL_REPEAT;
 			} break;
 			default: {
 				return;

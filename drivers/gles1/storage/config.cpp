@@ -186,10 +186,6 @@ Config::Config() {
 	support_shadow = extensions.has("GL_ARB_shadow") || extensions.has("GL_OES_shadow") || extensions.has("GL_EXT_shadow");
 	support_texture_env_combine = extensions.has("GL_OES_texture_env_crossbar") || extensions.has("GL_ARB_texture_env_combine") || extensions.has("GL_EXT_texture_env_combine");
 
-	// Decompression
-	bptc_supported = extensions.has("GL_ARB_texture_compression_bptc") || extensions.has("EXT_texture_compression_bptc");
-	rgtc_supported = extensions.has("GL_EXT_texture_compression_rgtc") || extensions.has("GL_ARB_texture_compression_rgtc");
-
 	if (support_texture_env_combine) {
 		if (!_probe_texture_envi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_COMBINE)) {
 			support_texture_env_combine = false;
@@ -210,22 +206,18 @@ Config::Config() {
 
 	if (RasterizerGLES1::is_gles_over_gl()) {
 		// Emulating GLES1 over desktop GL
-		float_texture_supported = true;
-		etc1_supported = false;
-		s3tc_supported = true;
-		support_3d_textures = extensions.has("GL_EXT_texture3D") || extensions.has("GL_ARB_texture3D");
 
-		// Desktop OpenGL almost universally supports these
-		support_fbo = true;
-		support_blend_func_separate = true;
-		support_texture_env_combine = true;
-		support_point_sprite = true;
-		support_cubemap = true;
-		support_generate_mipmap = true;
+		support_texture_compression = extensions.has("GL_ARB_texture_compression");
+		float_texture_supported = extensions.has("GL_ARB_texture_float") || extensions.has("GL_OES_texture_float") || extensions.has("GL_ATI_texture_float");
+		etc1_supported = extensions.has("GL_OES_compressed_ETC1_RGB8_texture");
+		pvrtc_supported = extensions.has("GL_IMG_texture_compression_pvrtc");
+		s3tc_supported = support_texture_compression && (extensions.has("GL_EXT_texture_compression_s3tc") || extensions.has("GL_S3_s3tc"));
+		bptc_supported = support_texture_compression && bptc_supported;
+		rgtc_supported = support_texture_compression && rgtc_supported;
+		support_3d_textures = extensions.has("GL_EXT_texture3D") || extensions.has("GL_ARB_texture3D");
 		support_32_bits_indices = true;
-		support_npot_repeat_mipmap = true;
-		support_mapbuffer = true;
 	} else {
+		support_texture_compression = true;
 		float_texture_supported = extensions.has("GL_OES_texture_float") || extensions.has("GL_EXT_color_buffer_float");
 		etc1_supported = extensions.has("GL_OES_compressed_ETC1_RGB8_texture");
 		pvrtc_supported = extensions.has("GL_IMG_texture_compression_pvrtc");

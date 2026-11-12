@@ -92,6 +92,7 @@ public:
 	bool support_npot_repeat_mipmap = false; // GL_OES_texture_npot
 	bool support_blend_func_separate = false; // GL_OES_blend_func_separate
 	bool support_texture_env_combine = false; // GL_OES_texture_env_crossbar
+	bool support_texture_compression = false; // GL_ARB_texture_compression
 	bool support_point_sprite = false; // GL_OES_point_sprite
 	bool support_matrix_palette = false; // GL_OES_matrix_palette / GL_OES_extended_matrix_palette
 	bool support_draw_texture = false; // GL_OES_draw_texture

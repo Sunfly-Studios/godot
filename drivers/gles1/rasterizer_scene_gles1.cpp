@@ -576,8 +576,6 @@ uint32_t RasterizerSceneGLES1::geometry_instance_get_pair_mask() {
 }
 
 void RasterizerSceneGLES1::GeometryInstanceGLES1::pair_light_instances(const RID *p_light_instances, uint32_t p_light_instance_count) {
-	GLES1::Config *config = GLES1::Config::get_singleton();
-
 	paired_omni_light_count = 0;
 	paired_spot_light_count = 0;
 	paired_omni_lights.clear();
@@ -587,13 +585,13 @@ void RasterizerSceneGLES1::GeometryInstanceGLES1::pair_light_instances(const RID
 		RS::LightType type = GLES1::LightStorage::get_singleton()->light_instance_get_type(p_light_instances[i]);
 		switch (type) {
 			case RS::LIGHT_OMNI: {
-				if (paired_omni_light_count < (uint32_t)config->max_lights_per_object) {
+				if (paired_omni_light_count < (uint32_t)GLES1_CONFIG->max_lights_per_object) {
 					paired_omni_lights.push_back(p_light_instances[i]);
 					paired_omni_light_count++;
 				}
 			} break;
 			case RS::LIGHT_SPOT: {
-				if (paired_spot_light_count < (uint32_t)config->max_lights_per_object) {
+				if (paired_spot_light_count < (uint32_t)GLES1_CONFIG->max_lights_per_object) {
 					paired_spot_lights.push_back(p_light_instances[i]);
 					paired_spot_light_count++;
 				}
@@ -3805,8 +3803,8 @@ void RasterizerSceneGLES1::_batch_render_single_mesh_fallback(RS::PrimitiveType 
 	if (!has_uv_attrib && !is_depth_only) {
 		if (GLES1_CONFIG->max_texture_units > 1) {
 			glClientActiveTexture(GL_TEXTURE0);
+			glMultiTexCoord4f(GL_TEXTURE0, 0.0f, 0.0f, 0.0f, 1.0f);
 		}
-		glMultiTexCoord4f(GL_TEXTURE0, 0.0f, 0.0f, 0.0f, 1.0f);
 	}
 
 	// Bind position & normal stream
@@ -5408,7 +5406,6 @@ void RasterizerSceneGLES1::_setup_environment(const RenderDataGLES1 *p_render_da
 // Puts lights into Uniform Buffers. Needs to be called before _fill_list as this caches the index of each light in the Uniform Buffer
 void RasterizerSceneGLES1::_setup_lights(const RenderDataGLES1 *p_render_data, bool p_using_shadows, uint32_t &r_directional_light_count, uint32_t &r_omni_light_count, uint32_t &r_spot_light_count, uint32_t &r_directional_shadow_count) {
 	GLES1::LightStorage *light_storage = GLES1::LightStorage::get_singleton();
-	GLES1::Config *config = GLES1::Config::get_singleton();
 
 	const PagedArray<RID> &lights = *p_render_data->lights;
 
@@ -5507,7 +5504,7 @@ void RasterizerSceneGLES1::_setup_lights(const RenderDataGLES1 *p_render_data, b
 				r_directional_light_count++;
 			} break;
 			case RS::LIGHT_OMNI: {
-				if (r_omni_light_count >= (uint32_t)config->max_renderable_lights) {
+				if (r_omni_light_count >= (uint32_t)GLES1_CONFIG->max_renderable_lights) {
 					continue;
 				}
 				const real_t distance = p_render_data->cam_transform.origin.distance_to(li->transform.origin);
@@ -5528,7 +5525,7 @@ void RasterizerSceneGLES1::_setup_lights(const RenderDataGLES1 *p_render_data, b
 				r_omni_light_count++;
 			} break;
 			case RS::LIGHT_SPOT: {
-				if (r_spot_light_count >= (uint32_t)config->max_renderable_lights) {
+				if (r_spot_light_count >= (uint32_t)GLES1_CONFIG->max_renderable_lights) {
 					continue;
 				}
 				const real_t distance = p_render_data->cam_transform.origin.distance_to(li->transform.origin);
@@ -5649,7 +5646,7 @@ void RasterizerSceneGLES1::_setup_lights(const RenderDataGLES1 *p_render_data, b
 
 		if (needs_shadow && in_shadow_range) {
 			uint32_t shadow_idx = (type == RS::LIGHT_OMNI) ? i : r_omni_light_count + (i - r_omni_light_count);
-			if (shadow_idx < config->max_renderable_lights * 2) {
+			if (shadow_idx < (uint32_t)GLES1_CONFIG->max_renderable_lights * 2) {
 				ShadowData &shadow_data = scene_state.positional_shadows[shadow_idx];
 				li->shadow_id = shadow_idx;
 

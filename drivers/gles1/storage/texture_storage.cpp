@@ -103,7 +103,7 @@ TextureStorage::~TextureStorage() {
 	}
 	texture_atlas.texture = 0;
 
-	if (Config::get_singleton()->support_fbo && texture_atlas.framebuffer != 0) {
+	if (GLES1_CONFIG->support_fbo && texture_atlas.framebuffer != 0) {
 		glDeleteFramebuffersOES(1, &texture_atlas.framebuffer);
 	}
 	texture_atlas.framebuffer = 0;
@@ -167,7 +167,6 @@ void TextureStorage::canvas_texture_set_texture_repeat(RID p_canvas_texture, RS:
 /* Texture API */
 
 Ref<Image> TextureStorage::_get_gl_image_and_format(const Ref<Image> &p_image, Image::Format p_format, Image::Format &r_real_format, GLenum &r_gl_format, GLenum &r_gl_internal_format, GLenum &r_gl_type, bool &r_compressed, bool p_force_decompress) const {
-	Config *config = Config::get_singleton();
 	r_gl_format = 0;
 	Ref<Image> image = p_image;
 	r_compressed = false;
@@ -230,7 +229,7 @@ Ref<Image> TextureStorage::_get_gl_image_and_format(const Ref<Image> &p_image, I
 			r_gl_type = GL_UNSIGNED_BYTE;
 		} break;
 		case Image::FORMAT_RGF: {
-			if (config->float_texture_supported) {
+			if (GLES1_CONFIG->float_texture_supported) {
 				r_real_format = Image::FORMAT_RGBF;
 				if (image.is_valid()) {
 					if (image == p_image) {
@@ -260,7 +259,7 @@ Ref<Image> TextureStorage::_get_gl_image_and_format(const Ref<Image> &p_image, I
 			}
 		} break;
 		case Image::FORMAT_RGBF: {
-			if (config->float_texture_supported) {
+			if (GLES1_CONFIG->float_texture_supported) {
 				r_gl_internal_format = GL_RGB;
 				r_gl_format = GL_RGB;
 				r_gl_type = GL_FLOAT;
@@ -282,7 +281,7 @@ Ref<Image> TextureStorage::_get_gl_image_and_format(const Ref<Image> &p_image, I
 			}
 		} break;
 		case Image::FORMAT_RGBAF: {
-			if (config->float_texture_supported) {
+			if (GLES1_CONFIG->float_texture_supported) {
 				r_gl_internal_format = GL_RGBA;
 				r_gl_format = GL_RGBA;
 				r_gl_type = GL_FLOAT;
@@ -319,7 +318,7 @@ Ref<Image> TextureStorage::_get_gl_image_and_format(const Ref<Image> &p_image, I
 			return image;
 		} break;
 		case Image::FORMAT_DXT1: {
-			if (config->s3tc_supported) {
+			if (GLES1_CONFIG->s3tc_supported) {
 				r_gl_internal_format = _EXT_COMPRESSED_RGBA_S3TC_DXT1_EXT;
 				r_gl_format = GL_RGBA;
 				r_gl_type = GL_UNSIGNED_BYTE;
@@ -329,7 +328,7 @@ Ref<Image> TextureStorage::_get_gl_image_and_format(const Ref<Image> &p_image, I
 			}
 		} break;
 		case Image::FORMAT_DXT3: {
-			if (config->s3tc_supported) {
+			if (GLES1_CONFIG->s3tc_supported) {
 				r_gl_internal_format = _EXT_COMPRESSED_RGBA_S3TC_DXT3_EXT;
 				r_gl_format = GL_RGBA;
 				r_gl_type = GL_UNSIGNED_BYTE;
@@ -339,7 +338,7 @@ Ref<Image> TextureStorage::_get_gl_image_and_format(const Ref<Image> &p_image, I
 			}
 		} break;
 		case Image::FORMAT_DXT5: {
-			if (config->s3tc_supported) {
+			if (GLES1_CONFIG->s3tc_supported) {
 				r_gl_internal_format = _EXT_COMPRESSED_RGBA_S3TC_DXT5_EXT;
 				r_gl_format = GL_RGBA;
 				r_gl_type = GL_UNSIGNED_BYTE;
@@ -349,7 +348,7 @@ Ref<Image> TextureStorage::_get_gl_image_and_format(const Ref<Image> &p_image, I
 			}
 		} break;
 		case Image::FORMAT_RGTC_R: {
-			if (config->rgtc_supported) {
+			if (GLES1_CONFIG->rgtc_supported) {
 				r_gl_internal_format = _EXT_COMPRESSED_RED_RGTC1_EXT;
 				r_gl_format = GL_RGBA;
 				r_gl_type = GL_UNSIGNED_BYTE;
@@ -359,7 +358,7 @@ Ref<Image> TextureStorage::_get_gl_image_and_format(const Ref<Image> &p_image, I
 			}
 		} break;
 		case Image::FORMAT_RGTC_RG: {
-			if (config->rgtc_supported) {
+			if (GLES1_CONFIG->rgtc_supported) {
 				r_gl_internal_format = _EXT_COMPRESSED_RED_GREEN_RGTC2_EXT;
 				r_gl_format = GL_RGBA;
 				r_gl_type = GL_UNSIGNED_BYTE;
@@ -369,7 +368,7 @@ Ref<Image> TextureStorage::_get_gl_image_and_format(const Ref<Image> &p_image, I
 			}
 		} break;
 		case Image::FORMAT_BPTC_RGBA: {
-			if (config->bptc_supported) {
+			if (GLES1_CONFIG->bptc_supported) {
 				r_gl_internal_format = _EXT_COMPRESSED_RGBA_BPTC_UNORM;
 				r_gl_format = GL_RGBA;
 				r_gl_type = GL_UNSIGNED_BYTE;
@@ -379,7 +378,7 @@ Ref<Image> TextureStorage::_get_gl_image_and_format(const Ref<Image> &p_image, I
 			}
 		} break;
 		case Image::FORMAT_BPTC_RGBF: {
-			if (config->bptc_supported) {
+			if (GLES1_CONFIG->bptc_supported) {
 				r_gl_internal_format = _EXT_COMPRESSED_RGB_BPTC_SIGNED_FLOAT;
 				r_gl_format = GL_RGB;
 				r_gl_type = GL_FLOAT;
@@ -389,10 +388,20 @@ Ref<Image> TextureStorage::_get_gl_image_and_format(const Ref<Image> &p_image, I
 			}
 		} break;
 		case Image::FORMAT_BPTC_RGBFU: {
-			if (config->bptc_supported) {
+			if (GLES1_CONFIG->bptc_supported) {
 				r_gl_internal_format = _EXT_COMPRESSED_RGB_BPTC_UNSIGNED_FLOAT;
 				r_gl_format = GL_RGB;
 				r_gl_type = GL_FLOAT;
+				r_compressed = true;
+			} else {
+				need_decompress = true;
+			}
+		} break;
+		case Image::FORMAT_ETC: {
+			if (GLES1_CONFIG->etc1_supported) {
+				r_gl_internal_format = _EXT_ETC1_RGB8_OES;
+				r_gl_format = GL_RGB;
+				r_gl_type = GL_UNSIGNED_BYTE;
 				r_compressed = true;
 			} else {
 				need_decompress = true;
@@ -439,16 +448,18 @@ Ref<Image> TextureStorage::_get_gl_image_and_format(const Ref<Image> &p_image, I
 				image->clear_mipmaps();
 			}
 
-			image->decompress();
-			ERR_FAIL_COND_V_MSG(image->is_compressed(), image, "GLES1: Image decompression failed.");
-
-			if (had_mipmaps) {
-				image->generate_mipmaps();
+			if (image->is_compressed()) {
+				image->decompress();
+				ERR_FAIL_COND_V_MSG(image->is_compressed(), image, "GLES1: Image decompression failed.");
 			}
 
 			if (decompress_ra_to_rg) {
 				image->convert_ra_rgba8_to_rg();
 				image->convert(Image::FORMAT_RG8);
+			}
+
+			if (had_mipmaps && !p_force_decompress) {
+				image->generate_mipmaps();
 			}
 			switch (image->get_format()) {
 				case Image::FORMAT_RG8: {
@@ -570,23 +581,31 @@ void TextureStorage::texture_2d_initialize(RID p_texture, const Ref<Image> &p_im
 	ERR_FAIL_NULL(texture);
 	ERR_FAIL_COND(p_image.is_null());
 
-	Config *config = Config::get_singleton();
-
-	int max_size = config->max_texture_size;
+	int max_size = GLES1_CONFIG->max_texture_size;
 	Ref<Image> image = p_image;
 
 	// Texture atlas / max size enforcer
 	if (image->get_width() > max_size || image->get_height() > max_size) {
 		WARN_PRINT(vformat("GLES1: Texture size (%dx%d) exceeds hardware maximum (%d). Downscaling.", image->get_width(), image->get_height(), max_size));
-		
+
 		if (image == p_image) {
 			image = p_image->duplicate();
 			ERR_FAIL_COND_MSG(image.is_null(), "GLES1: Failed to duplicate image for downscaling. Out of memory.");
 		}
-		
+
+		bool had_mipmaps = image->has_mipmaps();
+		if (had_mipmaps) {
+			image->clear_mipmaps();
+		}
+
+		if (image->is_compressed()) {
+			image->decompress();
+			ERR_FAIL_COND_MSG(image->is_compressed(), "GLES1: Failed to decompress oversized texture prior to downscaling.");
+		}
+
 		int new_w = MIN(image->get_width(), max_size);
 		int new_h = MIN(image->get_height(), max_size);
-		
+
 		float aspect = (float)image->get_width() / (float)image->get_height();
 		if (image->get_width() > image->get_height()) {
 			new_w = max_size;
@@ -595,8 +614,11 @@ void TextureStorage::texture_2d_initialize(RID p_texture, const Ref<Image> &p_im
 			new_h = max_size;
 			new_w = MAX(1, (int)(max_size * aspect));
 		}
-		
+
 		image->resize(new_w, new_h, Image::INTERPOLATE_BILINEAR);
+		if (had_mipmaps) {
+			image->generate_mipmaps();
+		}
 	}
 
 	texture->type = Texture::TYPE_2D;
@@ -613,7 +635,7 @@ void TextureStorage::texture_2d_initialize(RID p_texture, const Ref<Image> &p_im
 	// Always force NPOT textures to be POT for 1.3,
 	// while letting the higher versions handle it
 	// gracefully.
-	if (!config->support_npot_repeat_mipmap || GLES1_CONFIG->gl_minor_version < 4) {
+	if (!GLES1_CONFIG->support_npot_repeat_mipmap || GLES1_CONFIG->gl_minor_version < 4) {
 		if (_gl_is_npot(texture->width, texture->height)) {
 			texture->alloc_width = next_power_of_2(texture->width);
 			texture->alloc_height = next_power_of_2(texture->height);
@@ -943,9 +965,8 @@ Ref<Image> TextureStorage::texture_2d_get(RID p_texture) const {
 	glGetFloatv(GL_COLOR_CLEAR_VALUE, prev_clear_color);
 
 	GLint prev_active_tex = 0;
-	glGetIntegerv(GL_ACTIVE_TEXTURE, &prev_active_tex);
-
-	if (Config::get_singleton()->max_texture_units > 1) {
+	if (GLES1_CONFIG->max_texture_units > 1) {
+		glGetIntegerv(GL_ACTIVE_TEXTURE, &prev_active_tex);
 		glActiveTexture(GL_TEXTURE0);
 	}
 	GLint prev_bound_tex = 0;
@@ -978,7 +999,7 @@ Ref<Image> TextureStorage::texture_2d_get(RID p_texture) const {
 		glClearColor(prev_clear_color[0], prev_clear_color[1], prev_clear_color[2], prev_clear_color[3]);
 		glBindTexture(GL_TEXTURE_2D, prev_bound_tex);
 
-		if (Config::get_singleton()->max_texture_units > 1) {
+		if (GLES1_CONFIG->max_texture_units > 1) {
 			glActiveTexture(prev_active_tex);
 		}
 
@@ -1058,7 +1079,7 @@ Ref<Image> TextureStorage::texture_2d_get(RID p_texture) const {
 
 	glBindTexture(GL_TEXTURE_2D, prev_bound_tex);
 
-	if (Config::get_singleton()->max_texture_units > 1) {
+	if (GLES1_CONFIG->max_texture_units > 1) {
 		glActiveTexture(prev_active_tex);
 	}
 	GL_CHECK_ERROR("GLES1::TextureStorage::texture_2d_get: state restore");
@@ -1398,7 +1419,7 @@ void TextureStorage::_texture_set_data(RID p_texture, const Ref<Image> &p_image,
 	ERR_FAIL_COND(!texture->active);
 	ERR_FAIL_COND(texture->is_render_target);
 	ERR_FAIL_COND(p_image.is_null());
-	ERR_FAIL_COND(texture->format != p_image->get_format());
+	ERR_FAIL_COND(texture->format != p_image->get_format() && texture->real_format != p_image->get_format());
 	ERR_FAIL_COND(!p_image->get_width() || !p_image->get_height());
 
 	GLenum type;
@@ -1410,7 +1431,7 @@ void TextureStorage::_texture_set_data(RID p_texture, const Ref<Image> &p_image,
 	Ref<Image> img = _get_gl_image_and_format(p_image, p_image->get_format(), real_format, format, internal_format, type, compressed, texture->resize_to_po2);
 	ERR_FAIL_COND(img.is_null());
 
-	if (texture->resize_to_po2) {
+	if (texture->resize_to_po2 && _gl_is_npot(img->get_width(), img->get_height())) {
 		if (p_image->is_compressed()) {
 			ERR_PRINT("Texture '" + texture->path + "' is required to be a power of 2 because it uses either mipmaps or repeat, so it was decompressed. This will hurt performance and memory usage.");
 		}
@@ -1418,7 +1439,16 @@ void TextureStorage::_texture_set_data(RID p_texture, const Ref<Image> &p_image,
 			img = img->duplicate();
 		}
 		img->resize_to_po2(false);
+		if (p_image->has_mipmaps() && !img->has_mipmaps()) {
+			img->generate_mipmaps();
+		}
 	}
+
+	texture->real_format = real_format;
+	texture->gl_format_cache = format;
+	texture->gl_internal_format_cache = internal_format;
+	texture->gl_type_cache = type;
+	texture->compressed = compressed;
 
 	// Cache the image so texture_2d_get() can return it later without GPU readback
 	texture->image_cache_2d = img;
@@ -1480,13 +1510,17 @@ void TextureStorage::_texture_set_data(RID p_texture, const Ref<Image> &p_image,
 
 	// Capture previous state
 	GLint prev_active_tex = 0;
-	
-	if (Config::get_singleton()->max_texture_units > 1) {
+
+	if (GLES1_CONFIG->max_texture_units > 1) {
 		glGetIntegerv(GL_ACTIVE_TEXTURE, &prev_active_tex);
 		glActiveTexture(GL_TEXTURE0);
 	}
 	GLint prev_bound_tex = 0;
+	GLint prev_bound_cube = 0;
 	glGetIntegerv(GL_TEXTURE_BINDING_2D, &prev_bound_tex);
+	if (texture->target == GL_TEXTURE_CUBE_MAP && GLES1_CONFIG->support_cubemap) {
+		glGetIntegerv(GL_TEXTURE_BINDING_CUBE_MAP_OES, &prev_bound_cube);
+	}
 	GL_CHECK_ERROR("GLES1::TextureStorage::_texture_set_data: texture state capture");
 
 	glBindTexture(texture->target, texture->tex_id);
@@ -1508,7 +1542,7 @@ void TextureStorage::_texture_set_data(RID p_texture, const Ref<Image> &p_image,
 		int64_t size, ofs;
 		img->get_mipmap_offset_and_size(i, ofs, size);
 
-		if (compressed) {
+		if (compressed && GLES1_CONFIG->support_texture_compression) {
 			glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
 			glCompressedTexImage2D(blit_target, i, internal_format, w, h, 0, size, read_ptr + ofs);
 			GL_CHECK_ERROR("GLES1::TextureStorage::_texture_set_data: glCompressedTexImage2D");
@@ -1529,8 +1563,8 @@ void TextureStorage::_texture_set_data(RID p_texture, const Ref<Image> &p_image,
 
 	// Restore state
 	glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
-	if (texture->target == GL_TEXTURE_CUBE_MAP) {
-		glBindTexture(GL_TEXTURE_CUBE_MAP, 0);
+	if (texture->target == GL_TEXTURE_CUBE_MAP && GLES1_CONFIG->support_cubemap) {
+		glBindTexture(GL_TEXTURE_CUBE_MAP, prev_bound_cube);
 	}
 	glBindTexture(GL_TEXTURE_2D, prev_bound_tex);
 
@@ -1587,8 +1621,8 @@ uint32_t TextureStorage::texture_get_depth(RID p_texture) const {
 void TextureStorage::texture_bind(RID p_texture, uint32_t p_texture_no) {
 	Texture *tex = texture_owner.get_or_null(p_texture);
 	ERR_FAIL_NULL(tex);
-	
-	if (Config::get_singleton()->max_texture_units > 1) {
+
+	if (GLES1_CONFIG->max_texture_units > 1) {
 		glActiveTexture(GL_TEXTURE0 + p_texture_no);
 	}
 	glBindTexture(tex->target, tex->tex_id);
@@ -1610,7 +1644,9 @@ GLES1::Texture *TextureStorage::texture_bind_and_validate(RID p_texture, GLenum 
 			glGenTextures(1, &texture->tex_id);
 			if (likely(texture->tex_id != 0)) {
 				_texture_set_data(p_texture, texture->image_cache_2d, 0, false);
-				glActiveTexture(p_texture_unit);
+				if (GLES1_CONFIG->max_texture_units > 1) {
+					glActiveTexture(p_texture_unit);
+				}
 				glBindTexture(texture->target, texture->tex_id);
 				if (!GLES1::Utilities::get_singleton()->has_texture_data(texture->tex_id)) {
 					GLES1::Utilities::get_singleton()->texture_allocated_data(texture->tex_id, texture->total_data_size, "Resurrected Texture");
@@ -1775,24 +1811,22 @@ void TextureStorage::_update_render_target(RenderTarget *rt) {
 		return;
 	}
 
-	Config *config = Config::get_singleton();
-
 	// Clamp RT size to max viewport dimensions.
 	// Old drivers may silently ignore rendering if FBO > Max Viewport.
-	if (rt->size.x > config->max_viewport_size[0] || rt->size.y > config->max_viewport_size[1]) {
-		WARN_PRINT(vformat("GLES1: RenderTarget size (%dx%d) exceeds hardware maximum viewport size (%dx%d). Clamping.", rt->size.x, rt->size.y, config->max_viewport_size[0], config->max_viewport_size[1]));
-		rt->size.x = MIN(rt->size.x, config->max_viewport_size[0]);
-		rt->size.y = MIN(rt->size.y, config->max_viewport_size[1]);
+	if (rt->size.x > GLES1_CONFIG->max_viewport_size[0] || rt->size.y > GLES1_CONFIG->max_viewport_size[1]) {
+		WARN_PRINT(vformat("GLES1: RenderTarget size (%dx%d) exceeds hardware maximum viewport size (%dx%d). Clamping.", rt->size.x, rt->size.y, GLES1_CONFIG->max_viewport_size[0], GLES1_CONFIG->max_viewport_size[1]));
+		rt->size.x = MIN(rt->size.x, GLES1_CONFIG->max_viewport_size[0]);
+		rt->size.y = MIN(rt->size.y, GLES1_CONFIG->max_viewport_size[1]);
 	}
 
 	// If drawing directly to the screen, or
 	// the GPU flat out doesn't support FBOs
-	if (rt->direct_to_screen || !config->support_fbo) {
+	if (rt->direct_to_screen || !GLES1_CONFIG->support_fbo) {
 		rt->fbo = system_fbo;
 		rt->direct_to_screen = true;
 		return;
 	}
-	
+
 	// Capture state
 	GLint prev_scissor_test = 0;
 	glGetIntegerv(GL_SCISSOR_TEST, &prev_scissor_test);
@@ -1807,8 +1841,8 @@ void TextureStorage::_update_render_target(RenderTarget *rt) {
 	glGetFloatv(GL_COLOR_CLEAR_VALUE, prev_clear_color);
 
 	GLint prev_active_tex = 0;
-	
-	if (config->max_texture_units > 1) {
+
+	if (GLES1_CONFIG->max_texture_units > 1) {
 		glGetIntegerv(GL_ACTIVE_TEXTURE, &prev_active_tex);
 		glActiveTexture(GL_TEXTURE0);
 	}
@@ -1817,7 +1851,7 @@ void TextureStorage::_update_render_target(RenderTarget *rt) {
 	glGetIntegerv(GL_TEXTURE_BINDING_2D, &prev_bound_tex);
 
 	GLint prev_renderbuffer = 0;
-	if (config->support_fbo) {
+	if (GLES1_CONFIG->support_fbo) {
 		glGetIntegerv(GL_RENDERBUFFER_BINDING_OES, &prev_renderbuffer);
 	}
 	GL_CHECK_ERROR("GLES1::TextureStorage::_update_render_target: state capture");
@@ -1841,12 +1875,12 @@ void TextureStorage::_update_render_target(RenderTarget *rt) {
 		glDepthMask(prev_depth_mask);
 		glColorMask(prev_color_mask[0], prev_color_mask[1], prev_color_mask[2], prev_color_mask[3]);
 		glClearColor(prev_clear_color[0], prev_clear_color[1], prev_clear_color[2], prev_clear_color[3]);
-		if (config->support_fbo) {
+		if (GLES1_CONFIG->support_fbo) {
 			glBindRenderbufferOES(GL_RENDERBUFFER_OES, prev_renderbuffer);
 		}
 		glBindTexture(GL_TEXTURE_2D, prev_bound_tex);
-		
-		if (config->max_texture_units > 1) {
+
+		if (GLES1_CONFIG->max_texture_units > 1) {
 			glActiveTexture(prev_active_tex);
 		}
 
@@ -1986,12 +2020,12 @@ void TextureStorage::_update_render_target(RenderTarget *rt) {
 		glDepthMask(prev_depth_mask);
 		glColorMask(prev_color_mask[0], prev_color_mask[1], prev_color_mask[2], prev_color_mask[3]);
 		glClearColor(prev_clear_color[0], prev_clear_color[1], prev_clear_color[2], prev_clear_color[3]);
-		if (config->support_fbo) {
+		if (GLES1_CONFIG->support_fbo) {
 			glBindRenderbufferOES(GL_RENDERBUFFER_OES, prev_renderbuffer);
 		}
 		glBindTexture(GL_TEXTURE_2D, prev_bound_tex);
-		
-		if (config->max_texture_units > 1) {
+
+		if (GLES1_CONFIG->max_texture_units > 1) {
 			glActiveTexture(prev_active_tex);
 		}
 
@@ -2048,19 +2082,19 @@ void TextureStorage::_update_render_target(RenderTarget *rt) {
 	glDepthMask(prev_depth_mask);
 	glColorMask(prev_color_mask[0], prev_color_mask[1], prev_color_mask[2], prev_color_mask[3]);
 	glClearColor(prev_clear_color[0], prev_clear_color[1], prev_clear_color[2], prev_clear_color[3]);
-	if (config->support_fbo) {
+	if (GLES1_CONFIG->support_fbo) {
 		glBindRenderbufferOES(GL_RENDERBUFFER_OES, prev_renderbuffer);
 	}
 	glBindTexture(GL_TEXTURE_2D, prev_bound_tex);
 	
-	if (config->max_texture_units > 1) {
+	if (GLES1_CONFIG->max_texture_units > 1) {
 		glActiveTexture(prev_active_tex);
 	}
 	GL_CHECK_ERROR("GLES1::TextureStorage::_update_render_target: state restore");
 }
 
 void TextureStorage::_create_render_target_backbuffer(RenderTarget *rt) {
-	if (!Config::get_singleton()->support_fbo) {
+	if (!GLES1_CONFIG->support_fbo) {
 		return;
 	}
 
@@ -2116,7 +2150,7 @@ void TextureStorage::_clear_render_target(RenderTarget *rt) {
 		return;
 	}
 
-	if (Config::get_singleton()->support_fbo) {
+	if (GLES1_CONFIG->support_fbo) {
 		if (rt->fbo != 0 && rt->fbo != system_fbo) {
 			glDeleteFramebuffersOES(1, &rt->fbo);
 			GL_CHECK_ERROR("GLES1::TextureStorage::_clear_render_target: glDeleteFramebuffersOES");
@@ -2187,7 +2221,7 @@ void TextureStorage::render_target_free(RID p_rid) {
 		for (const KeyValue<uint32_t, RenderTarget::RTOverridden::FBOCacheEntry> &E : rt->overridden.fbo_cache) {
 			GLuint fbo_id = E.value.fbo;
 			if (fbo_id != 0 && fbo_id != system_fbo) {
-				if (Config::get_singleton()->support_fbo) {
+				if (GLES1_CONFIG->support_fbo) {
 					glDeleteFramebuffersOES(1, &fbo_id);
 					GL_CHECK_ERROR("GLES1::TextureStorage::render_target_free: glDeleteFramebuffersOES cache");
 				}
@@ -2598,7 +2632,7 @@ void TextureStorage::render_target_copy_to_back_buffer(RID p_render_target, cons
 	ERR_FAIL_NULL(rt);
 
 	GLint prev_active_tex = 0;
-	if (Config::get_singleton()->max_texture_units > 1) {
+	if (GLES1_CONFIG->max_texture_units > 1) {
 		glGetIntegerv(GL_ACTIVE_TEXTURE, &prev_active_tex);
 		glActiveTexture(GL_TEXTURE0);
 	}
@@ -2613,8 +2647,8 @@ void TextureStorage::render_target_copy_to_back_buffer(RID p_render_target, cons
 		if (unlikely(rt->backbuffer == 0)) {
 			// Restore hijacked active texture
 			glBindTexture(GL_TEXTURE_2D, prev_bound_tex);
-			
-			if (Config::get_singleton()->max_texture_units > 1) {
+
+			if (GLES1_CONFIG->max_texture_units > 1) {
 				glActiveTexture(prev_active_tex);
 			}
 			ERR_FAIL_MSG("GLES1: Failed to allocate backbuffer texture.");
@@ -2657,8 +2691,8 @@ void TextureStorage::render_target_copy_to_back_buffer(RID p_render_target, cons
 
 	// Clean up
 	glBindTexture(GL_TEXTURE_2D, prev_bound_tex);
-	
-	if (Config::get_singleton()->max_texture_units > 1) {
+
+	if (GLES1_CONFIG->max_texture_units > 1) {
 		glActiveTexture(prev_active_tex);
 	}
 	GL_CHECK_ERROR("GLES1::TextureStorage::render_target_copy_to_back_buffer: glGetIntegerv GL_TEXTURE0 texture state restore");
@@ -2668,7 +2702,7 @@ void TextureStorage::render_target_clear_back_buffer(RID p_render_target, const 
 	RenderTarget *rt = render_target_owner.get_or_null(p_render_target);
 	ERR_FAIL_NULL(rt);
 	ERR_FAIL_COND(rt->direct_to_screen);
-	if (!Config::get_singleton()->support_fbo) {
+	if (!GLES1_CONFIG->support_fbo) {
 		return;
 	}
 
@@ -2710,7 +2744,7 @@ void TextureStorage::render_target_gen_back_buffer_mipmaps(RID p_render_target, 
 		return;
 	}
 
-	if (Config::get_singleton()->max_texture_units > 1) {
+	if (GLES1_CONFIG->max_texture_units > 1) {
 		glActiveTexture(GL_TEXTURE0);
 	}
 	glBindTexture(GL_TEXTURE_2D, rt->backbuffer);
