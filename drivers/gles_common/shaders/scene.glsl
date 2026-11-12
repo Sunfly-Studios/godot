@@ -457,7 +457,6 @@ void main() {
 
 // Replace standard GLES3 texture functions with GLES2 equivalents
 #define texture texture2D
-#define textureCube textureCube
 
 #ifndef MODE_RENDER_DEPTH
 #include "tonemap_inc.glsl"
