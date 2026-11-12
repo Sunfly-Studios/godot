@@ -79,6 +79,10 @@ namespace GLES1 {
 		// Multitexture extensions
 		static PFNGLACTIVETEXTUREPROC activeTexture;
 		static PFNGLCLIENTACTIVETEXTUREPROC clientActiveTexture;
+		static PFNGLMULTITEXCOORD4FPROC multiTexCoord4f;
+
+		// Texture compression extensions
+		static PFNGLCOMPRESSEDTEXIMAGE2DPROC compressedTexImage2D;
 
 		Polyfill();
 		~Polyfill() = default;
@@ -267,6 +271,22 @@ namespace GLES1 {
 	do {                                                   \
 		if (likely(GLES1::Polyfill::clientActiveTexture))  \
 			GLES1::Polyfill::clientActiveTexture(texture); \
+	} while (0)
+
+#undef glMultiTexCoord4f
+#define glMultiTexCoord4f(target, s, t, r, q)                     \
+	do {                                                          \
+		if (likely(GLES1::Polyfill::multiTexCoord4f))             \
+			GLES1::Polyfill::multiTexCoord4f(target, s, t, r, q); \
+		else if ((target) == GL_TEXTURE0)                         \
+			glTexCoord4f(s, t, r, q);                             \
+	} while (0)
+
+#undef glCompressedTexImage2D
+#define glCompressedTexImage2D(target, level, internalformat, width, height, border, imageSize, data)                     \
+	do {                                                                                                                  \
+		if (likely(GLES1::Polyfill::compressedTexImage2D))                                                                \
+			GLES1::Polyfill::compressedTexImage2D(target, level, internalformat, width, height, border, imageSize, data); \
 	} while (0)
 
 #endif // POLYFILL_GLES1_IMPL

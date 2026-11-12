@@ -45,6 +45,7 @@
 #include "servers/rendering/storage/utilities.h"
 
 #include "platform_gl.h"
+#include "drivers/gles1/polyfill_gles1.h"
 
 namespace GLES1 {
 

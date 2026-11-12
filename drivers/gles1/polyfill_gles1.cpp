@@ -66,6 +66,10 @@ namespace GLES1 {
 	// Multitexture
 	PFNGLACTIVETEXTUREPROC Polyfill::activeTexture = nullptr;
 	PFNGLCLIENTACTIVETEXTUREPROC Polyfill::clientActiveTexture = nullptr;
+	PFNGLMULTITEXCOORD4FPROC Polyfill::multiTexCoord4f = nullptr;
+
+	// Texture compression
+	PFNGLCOMPRESSEDTEXIMAGE2DPROC Polyfill::compressedTexImage2D = nullptr;
 
 Polyfill::Polyfill() {
 #if defined(ANDROID_ENABLED) || defined(IOS_ENABLED)
@@ -101,6 +105,8 @@ Polyfill::Polyfill() {
 	// Multitexture (Core in mobile)
 	activeTexture = glActiveTexture;
 	clientActiveTexture = glClientActiveTexture;
+	multiTexCoord4f = glMultiTexCoord4f;
+	compressedTexImage2D = glCompressedTexImage2D;
 #else
 	// ===============================
 	// Desktop Dynamic Loading (GLAD)
@@ -279,6 +285,18 @@ Polyfill::Polyfill() {
 		clientActiveTexture = glClientActiveTexture;
 	} else if (glClientActiveTextureARB != nullptr) {
 		clientActiveTexture = (PFNGLCLIENTACTIVETEXTUREPROC)glClientActiveTextureARB;
+	}
+
+	if (glMultiTexCoord4f != nullptr) {
+		multiTexCoord4f = glMultiTexCoord4f;
+	} else if (glMultiTexCoord4fARB != nullptr) {
+		multiTexCoord4f = (PFNGLMULTITEXCOORD4FPROC)glMultiTexCoord4fARB;
+	}
+
+	if (glCompressedTexImage2D != nullptr) {
+		compressedTexImage2D = glCompressedTexImage2D;
+	} else if (glCompressedTexImage2DARB != nullptr) {
+		compressedTexImage2D = (PFNGLCOMPRESSEDTEXIMAGE2DPROC)glCompressedTexImage2DARB;
 	}
 #endif
 }
