@@ -805,8 +805,18 @@ void TextureStorage::texture_2d_layered_initialize(RID p_texture, const Vector<R
 		texture->alloc_height = texture->height * texture->layers;
 	}
 
-	_get_gl_image_and_format(Ref<Image>(), texture->format, texture->real_format, texture->gl_format_cache, texture->gl_internal_format_cache, texture->gl_type_cache, texture->compressed, false);
-	texture->total_data_size = p_layers[0]->get_image_data_size(texture->width, texture->height, texture->format, texture->mipmaps) * texture->layers;
+	Ref<Image> first_img = _get_gl_image_and_format(p_layers[0], texture->format, texture->real_format, texture->gl_format_cache, texture->gl_internal_format_cache, texture->gl_type_cache, texture->compressed, false);
+	ERR_FAIL_COND(first_img.is_null());
+
+	if (texture->target == GL_TEXTURE_2D) {
+		int max_size = Config::get_singleton()->max_texture_size;
+		texture->alloc_width = MIN(texture->width, max_size);
+		int max_layers = MAX(1, max_size / MAX(1, texture->height));
+		texture->layers = MIN((int)p_layers.size(), max_layers);
+		texture->alloc_height = texture->height * texture->layers;
+	}
+
+	texture->total_data_size = Image::get_image_data_size(texture->alloc_width, texture->height, texture->real_format, texture->target == GL_TEXTURE_CUBE_MAP ? (texture->mipmaps > 1) : false) * texture->layers;
 	texture->active = true;
 
 	if (texture->tex_id == 0) {
@@ -823,39 +833,81 @@ void TextureStorage::texture_2d_layered_initialize(RID p_texture, const Vector<R
 			_texture_set_data(p_texture, p_layers[i], i, i == 0);
 		}
 	} else {
+		GLint prev_active_tex = 0;
+		glGetIntegerv(GL_ACTIVE_TEXTURE, &prev_active_tex);
+		GL_CHECK_ERROR("GLES2::TextureStorage::texture_2d_layered_initialize: glGetIntegerv GL_ACTIVE_TEXTURE");
+
+		glActiveTexture(GL_TEXTURE0);
+		GL_CHECK_ERROR("GLES2::TextureStorage::texture_2d_layered_initialize: glActiveTexture");
+
+		GLint prev_tex_binding = 0;
+		glGetIntegerv(GL_TEXTURE_BINDING_2D, &prev_tex_binding);
+		GL_CHECK_ERROR("GLES2::TextureStorage::texture_2d_layered_initialize: glGetIntegerv GL_TEXTURE_BINDING_2D");
+
 		glBindTexture(GL_TEXTURE_2D, texture->tex_id);
+		GL_CHECK_ERROR("GLES2::TextureStorage::texture_2d_layered_initialize: glBindTexture");
+
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+		texture->gl_reset_filter_and_repeat_state();
+		GL_CHECK_ERROR("GLES2::TextureStorage::texture_2d_layered_initialize: glTexParameteri");
+
 		if (!texture->compressed) {
+			glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
 			glTexImage2D(GL_TEXTURE_2D, 0, texture->gl_internal_format_cache, texture->alloc_width, texture->alloc_height, 0, texture->gl_format_cache, texture->gl_type_cache, nullptr);
 			GL_CHECK_ERROR("GLES2::TextureStorage::texture_2d_layered_initialize: glTexImage2D (atlas)");
-			for (int i = 0; i < p_layers.size(); i++) {
-				Vector<uint8_t> layer_data = p_layers[i]->get_data();
-				glTexSubImage2D(GL_TEXTURE_2D, 0, 0, texture->height * i, texture->width, texture->height, texture->gl_format_cache, texture->gl_type_cache, layer_data.ptr());
+			for (int i = 0; i < texture->layers; i++) {
+				Image::Format layer_real_format;
+				GLenum layer_gl_format;
+				GLenum layer_gl_internal_format;
+				GLenum layer_gl_type;
+				bool layer_compressed = false;
+				Ref<Image> layer_img = (i == 0) ? first_img : _get_gl_image_and_format(p_layers[i], texture->format, layer_real_format, layer_gl_format, layer_gl_internal_format, layer_gl_type, layer_compressed, false);
+				if (layer_img.is_null()) {
+					continue;
+				}
+				Vector<uint8_t> layer_data = layer_img->get_data();
+				glTexSubImage2D(GL_TEXTURE_2D, 0, 0, texture->height * i, texture->alloc_width, texture->height, texture->gl_format_cache, texture->gl_type_cache, layer_data.ptr());
+				GL_CHECK_ERROR("GLES2::TextureStorage::texture_2d_layered_initialize: glTexSubImage2D");
 			}
+			glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
+			GL_CHECK_ERROR("GLES2::TextureStorage::texture_2d_layered_initialize: glPixelStorei 4");
 		} else {
 			_texture_set_data(p_texture, p_layers[0], 0, true);
 		}
-		glBindTexture(GL_TEXTURE_2D, 0);
+		glBindTexture(GL_TEXTURE_2D, prev_tex_binding);
+		glActiveTexture(prev_active_tex);
+		GL_CHECK_ERROR("GLES2::TextureStorage::texture_2d_layered_initialize: restore state bindings");
 	}
 }
 
 void TextureStorage::texture_3d_initialize(RID p_texture, Image::Format p_format, int p_width, int p_height, int p_depth, bool p_mipmaps, const Vector<Ref<Image>> &p_data) {
 	Texture *texture = texture_owner.get_or_null(p_texture);
 	ERR_FAIL_NULL(texture);
+	ERR_FAIL_COND(p_data.is_empty());
+
+	Config *config = Config::get_singleton();
+	int max_size = config->max_texture_size;
 
 	texture->width = p_width;
 	texture->height = p_height;
 	texture->depth = p_depth;
-	texture->alloc_width = p_width;
-	texture->alloc_height = p_height * p_depth; // Vertical atlas fallback
+	texture->alloc_width = MIN(p_width, max_size);
+	int max_layers = MAX(1, max_size / MAX(1, p_height));
+	int uploaded_layers = MIN(p_depth, MIN((int)p_data.size(), max_layers));
+	texture->alloc_height = p_height * uploaded_layers; // Clamped vertical atlas fallback
 	texture->mipmaps = p_mipmaps ? p_data[0]->get_mipmap_count() + 1 : 1;
 	texture->format = p_format;
 	texture->type = GLES2::Texture::TYPE_3D;
 	texture->target = GL_TEXTURE_2D;
-	texture->layers = p_depth;
+	texture->layers = uploaded_layers;
 
-	_get_gl_image_and_format(Ref<Image>(), texture->format, texture->real_format, texture->gl_format_cache, texture->gl_internal_format_cache, texture->gl_type_cache, texture->compressed, false);
+	Ref<Image> first_img = _get_gl_image_and_format(p_data[0], texture->format, texture->real_format, texture->gl_format_cache, texture->gl_internal_format_cache, texture->gl_type_cache, texture->compressed, false);
+	ERR_FAIL_COND(first_img.is_null());
 
-	texture->total_data_size = p_data[0]->get_image_data_size(texture->width, texture->height, texture->format, texture->mipmaps) * texture->layers;
+	texture->total_data_size = Image::get_image_data_size(texture->alloc_width, p_height, texture->real_format, false) * uploaded_layers;
 	texture->active = true;
 
 	if (texture->tex_id == 0) {
@@ -867,18 +919,54 @@ void TextureStorage::texture_3d_initialize(RID p_texture, Image::Format p_format
 
 	GLES2::Utilities::get_singleton()->texture_allocated_data(texture->tex_id, texture->total_data_size, "Texture 3D (Fallback)");
 
+	GLint prev_active_tex = 0;
+	glGetIntegerv(GL_ACTIVE_TEXTURE, &prev_active_tex);
+	GL_CHECK_ERROR("GLES2::TextureStorage::texture_3d_initialize: glGetIntegerv GL_ACTIVE_TEXTURE");
+
+	glActiveTexture(GL_TEXTURE0);
+	GL_CHECK_ERROR("GLES2::TextureStorage::texture_3d_initialize: glActiveTexture");
+
+	GLint prev_tex_binding = 0;
+	glGetIntegerv(GL_TEXTURE_BINDING_2D, &prev_tex_binding);
+	GL_CHECK_ERROR("GLES2::TextureStorage::texture_3d_initialize: glGetIntegerv GL_TEXTURE_BINDING_2D");
+
 	glBindTexture(GL_TEXTURE_2D, texture->tex_id);
+	GL_CHECK_ERROR("GLES2::TextureStorage::texture_3d_initialize: glBindTexture");
+
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+	texture->gl_reset_filter_and_repeat_state();
+	GL_CHECK_ERROR("GLES2::TextureStorage::texture_3d_initialize: glTexParameteri");
+
 	if (!texture->compressed) {
+		glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
 		glTexImage2D(GL_TEXTURE_2D, 0, texture->gl_internal_format_cache, texture->alloc_width, texture->alloc_height, 0, texture->gl_format_cache, texture->gl_type_cache, nullptr);
 		GL_CHECK_ERROR("GLES2::TextureStorage::texture_3d_initialize: glTexImage2D (atlas)");
-		for (int i = 0; i < p_data.size(); i++) {
-			Vector<uint8_t> layer_data = p_data[i]->get_data();
-			glTexSubImage2D(GL_TEXTURE_2D, 0, 0, texture->height * i, texture->width, texture->height, texture->gl_format_cache, texture->gl_type_cache, layer_data.ptr());
+		for (int i = 0; i < uploaded_layers; i++) {
+			Image::Format layer_real_format;
+			GLenum layer_gl_format;
+			GLenum layer_gl_internal_format;
+			GLenum layer_gl_type;
+			bool layer_compressed = false;
+			Ref<Image> layer_img = (i == 0) ? first_img : _get_gl_image_and_format(p_data[i], texture->format, layer_real_format, layer_gl_format, layer_gl_internal_format, layer_gl_type, layer_compressed, false);
+			if (layer_img.is_null()) {
+				continue;
+			}
+			Vector<uint8_t> layer_data = layer_img->get_data();
+			glTexSubImage2D(GL_TEXTURE_2D, 0, 0, p_height * i, texture->alloc_width, p_height, texture->gl_format_cache, texture->gl_type_cache, layer_data.ptr());
+			GL_CHECK_ERROR("GLES2::TextureStorage::texture_3d_initialize: glTexSubImage2D");
 		}
+		glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
+		GL_CHECK_ERROR("GLES2::TextureStorage::texture_3d_initialize: glPixelStorei 4");
 	} else {
 		_texture_set_data(p_texture, p_data[0], 0, true);
 	}
-	glBindTexture(GL_TEXTURE_2D, 0);
+
+	glBindTexture(GL_TEXTURE_2D, prev_tex_binding);
+	glActiveTexture(prev_active_tex);
+	GL_CHECK_ERROR("GLES2::TextureStorage::texture_3d_initialize: restore state bindings");
 }
 
 // Called internally when texture_proxy_create(p_base) is called.
@@ -929,18 +1017,47 @@ void TextureStorage::texture_3d_update(RID p_texture, const Vector<Ref<Image>> &
 	Texture *texture = texture_owner.get_or_null(p_texture);
 	ERR_FAIL_NULL(texture);
 	ERR_FAIL_COND(texture->type != GLES2::Texture::TYPE_3D);
+	ERR_FAIL_COND(p_data.is_empty());
+
+	GLint prev_active_tex = 0;
+	glGetIntegerv(GL_ACTIVE_TEXTURE, &prev_active_tex);
+	GL_CHECK_ERROR("GLES2::TextureStorage::texture_3d_update: glGetIntegerv GL_ACTIVE_TEXTURE");
+
+	glActiveTexture(GL_TEXTURE0);
+	GL_CHECK_ERROR("GLES2::TextureStorage::texture_3d_update: glActiveTexture");
+
+	GLint prev_tex_binding = 0;
+	glGetIntegerv(GL_TEXTURE_BINDING_2D, &prev_tex_binding);
+	GL_CHECK_ERROR("GLES2::TextureStorage::texture_3d_update: glGetIntegerv GL_TEXTURE_BINDING_2D");
 
 	glBindTexture(GL_TEXTURE_2D, texture->tex_id);
+	GL_CHECK_ERROR("GLES2::TextureStorage::texture_3d_update: glBindTexture");
+
 	if (!texture->compressed) {
-		for (int i = 0; i < p_data.size(); i++) {
-			Vector<uint8_t> layer_data = p_data[i]->get_data();
-			glTexSubImage2D(GL_TEXTURE_2D, 0, 0, texture->height * i, texture->width, texture->height, texture->gl_format_cache, texture->gl_type_cache, layer_data.ptr());
+		glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+		int uploaded_layers = MIN(texture->layers, (int)p_data.size());
+		for (int i = 0; i < uploaded_layers; i++) {
+			Image::Format layer_real_format;
+			GLenum layer_gl_format;
+			GLenum layer_gl_internal_format;
+			GLenum layer_gl_type;
+			bool layer_compressed = false;
+			Ref<Image> layer_img = _get_gl_image_and_format(p_data[i], texture->format, layer_real_format, layer_gl_format, layer_gl_internal_format, layer_gl_type, layer_compressed, false);
+			if (layer_img.is_null()) {
+				continue;
+			}
+			Vector<uint8_t> layer_data = layer_img->get_data();
+			glTexSubImage2D(GL_TEXTURE_2D, 0, 0, texture->height * i, texture->alloc_width, texture->height, texture->gl_format_cache, texture->gl_type_cache, layer_data.ptr());
+			GL_CHECK_ERROR("GLES2::TextureStorage::texture_3d_update: glTexSubImage2D");
 		}
+		glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
+		GL_CHECK_ERROR("GLES2::TextureStorage::texture_3d_update: glPixelStorei 4");
 	} else {
 		_texture_set_data(p_texture, p_data[0], 0, false);
 	}
-	glBindTexture(GL_TEXTURE_2D, 0);
-	GL_CHECK_ERROR("GLES2::TextureStorage::texture_3d_update: glTexSubImage2D");
+	glBindTexture(GL_TEXTURE_2D, prev_tex_binding);
+	glActiveTexture(prev_active_tex);
+	GL_CHECK_ERROR("GLES2::TextureStorage::texture_3d_update: restore state bindings");
 }
 
 void TextureStorage::texture_external_update(RID p_texture, int p_width, int p_height, uint64_t p_external_buffer) {
