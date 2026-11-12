@@ -48,6 +48,9 @@ int GLAD_GL_ARB_matrix_palette = 0;
 int GLAD_GL_ARB_multitexture = 0;
 int GLAD_GL_ARB_point_sprite = 0;
 int GLAD_GL_ARB_shadow = 0;
+int GLAD_GL_ARB_texture_compression = 0;
+int GLAD_GL_ARB_texture_compression_bptc = 0;
+int GLAD_GL_ARB_texture_compression_rgtc = 0;
 int GLAD_GL_ARB_texture_cube_map = 0;
 int GLAD_GL_ARB_texture_env_add = 0;
 int GLAD_GL_ARB_texture_env_dot3 = 0;
@@ -203,11 +206,17 @@ PFNGLCOLORP4UIVPROC glad_glColorP4uiv = NULL;
 PFNGLCOLORPOINTERPROC glad_glColorPointer = NULL;
 PFNGLCOMPILESHADERPROC glad_glCompileShader = NULL;
 PFNGLCOMPRESSEDTEXIMAGE1DPROC glad_glCompressedTexImage1D = NULL;
+PFNGLCOMPRESSEDTEXIMAGE1DARBPROC glad_glCompressedTexImage1DARB = NULL;
 PFNGLCOMPRESSEDTEXIMAGE2DPROC glad_glCompressedTexImage2D = NULL;
+PFNGLCOMPRESSEDTEXIMAGE2DARBPROC glad_glCompressedTexImage2DARB = NULL;
 PFNGLCOMPRESSEDTEXIMAGE3DPROC glad_glCompressedTexImage3D = NULL;
+PFNGLCOMPRESSEDTEXIMAGE3DARBPROC glad_glCompressedTexImage3DARB = NULL;
 PFNGLCOMPRESSEDTEXSUBIMAGE1DPROC glad_glCompressedTexSubImage1D = NULL;
+PFNGLCOMPRESSEDTEXSUBIMAGE1DARBPROC glad_glCompressedTexSubImage1DARB = NULL;
 PFNGLCOMPRESSEDTEXSUBIMAGE2DPROC glad_glCompressedTexSubImage2D = NULL;
+PFNGLCOMPRESSEDTEXSUBIMAGE2DARBPROC glad_glCompressedTexSubImage2DARB = NULL;
 PFNGLCOMPRESSEDTEXSUBIMAGE3DPROC glad_glCompressedTexSubImage3D = NULL;
+PFNGLCOMPRESSEDTEXSUBIMAGE3DARBPROC glad_glCompressedTexSubImage3DARB = NULL;
 PFNGLCOPYBUFFERSUBDATAPROC glad_glCopyBufferSubData = NULL;
 PFNGLCOPYPIXELSPROC glad_glCopyPixels = NULL;
 PFNGLCOPYTEXIMAGE1DPROC glad_glCopyTexImage1D = NULL;
@@ -342,6 +351,7 @@ PFNGLGETBUFFERSUBDATAPROC glad_glGetBufferSubData = NULL;
 PFNGLGETBUFFERSUBDATAARBPROC glad_glGetBufferSubDataARB = NULL;
 PFNGLGETCLIPPLANEPROC glad_glGetClipPlane = NULL;
 PFNGLGETCOMPRESSEDTEXIMAGEPROC glad_glGetCompressedTexImage = NULL;
+PFNGLGETCOMPRESSEDTEXIMAGEARBPROC glad_glGetCompressedTexImageARB = NULL;
 PFNGLGETDEBUGMESSAGELOGARBPROC glad_glGetDebugMessageLogARB = NULL;
 PFNGLGETDOUBLEVPROC glad_glGetDoublev = NULL;
 PFNGLGETERRORPROC glad_glGetError = NULL;
@@ -2480,6 +2490,16 @@ static void glad_gl_load_GL_ARB_multitexture( GLADuserptrloadfunc load, void* us
     glad_glMultiTexCoord4sARB = (PFNGLMULTITEXCOORD4SARBPROC) load(userptr, "glMultiTexCoord4sARB");
     glad_glMultiTexCoord4svARB = (PFNGLMULTITEXCOORD4SVARBPROC) load(userptr, "glMultiTexCoord4svARB");
 }
+static void glad_gl_load_GL_ARB_texture_compression( GLADuserptrloadfunc load, void* userptr) {
+    if(!GLAD_GL_ARB_texture_compression) return;
+    glad_glCompressedTexImage1DARB = (PFNGLCOMPRESSEDTEXIMAGE1DARBPROC) load(userptr, "glCompressedTexImage1DARB");
+    glad_glCompressedTexImage2DARB = (PFNGLCOMPRESSEDTEXIMAGE2DARBPROC) load(userptr, "glCompressedTexImage2DARB");
+    glad_glCompressedTexImage3DARB = (PFNGLCOMPRESSEDTEXIMAGE3DARBPROC) load(userptr, "glCompressedTexImage3DARB");
+    glad_glCompressedTexSubImage1DARB = (PFNGLCOMPRESSEDTEXSUBIMAGE1DARBPROC) load(userptr, "glCompressedTexSubImage1DARB");
+    glad_glCompressedTexSubImage2DARB = (PFNGLCOMPRESSEDTEXSUBIMAGE2DARBPROC) load(userptr, "glCompressedTexSubImage2DARB");
+    glad_glCompressedTexSubImage3DARB = (PFNGLCOMPRESSEDTEXSUBIMAGE3DARBPROC) load(userptr, "glCompressedTexSubImage3DARB");
+    glad_glGetCompressedTexImageARB = (PFNGLGETCOMPRESSEDTEXIMAGEARBPROC) load(userptr, "glGetCompressedTexImageARB");
+}
 static void glad_gl_load_GL_ARB_timer_query( GLADuserptrloadfunc load, void* userptr) {
     if(!GLAD_GL_ARB_timer_query) return;
     glad_glGetQueryObjecti64v = (PFNGLGETQUERYOBJECTI64VPROC) load(userptr, "glGetQueryObjecti64v");
@@ -2789,6 +2809,9 @@ static int glad_gl_find_extensions_gl(void) {
     GLAD_GL_ARB_multitexture = glad_gl_has_extension(exts, exts_i, "GL_ARB_multitexture");
     GLAD_GL_ARB_point_sprite = glad_gl_has_extension(exts, exts_i, "GL_ARB_point_sprite");
     GLAD_GL_ARB_shadow = glad_gl_has_extension(exts, exts_i, "GL_ARB_shadow");
+    GLAD_GL_ARB_texture_compression = glad_gl_has_extension(exts, exts_i, "GL_ARB_texture_compression");
+    GLAD_GL_ARB_texture_compression_bptc = glad_gl_has_extension(exts, exts_i, "GL_ARB_texture_compression_bptc");
+    GLAD_GL_ARB_texture_compression_rgtc = glad_gl_has_extension(exts, exts_i, "GL_ARB_texture_compression_rgtc");
     GLAD_GL_ARB_texture_cube_map = glad_gl_has_extension(exts, exts_i, "GL_ARB_texture_cube_map");
     GLAD_GL_ARB_texture_env_add = glad_gl_has_extension(exts, exts_i, "GL_ARB_texture_env_add");
     GLAD_GL_ARB_texture_env_dot3 = glad_gl_has_extension(exts, exts_i, "GL_ARB_texture_env_dot3");
@@ -2885,6 +2908,7 @@ int gladLoadGLUserPtr( GLADuserptrloadfunc load, void *userptr) {
     glad_gl_load_GL_ARB_framebuffer_object(load, userptr);
     glad_gl_load_GL_ARB_matrix_palette(load, userptr);
     glad_gl_load_GL_ARB_multitexture(load, userptr);
+    glad_gl_load_GL_ARB_texture_compression(load, userptr);
     glad_gl_load_GL_ARB_timer_query(load, userptr);
     glad_gl_load_GL_ARB_transform_feedback2(load, userptr);
     glad_gl_load_GL_ARB_vertex_array_object(load, userptr);
