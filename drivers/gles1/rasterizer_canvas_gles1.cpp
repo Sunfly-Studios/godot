@@ -2464,8 +2464,15 @@ void RasterizerCanvasGLES1::_batch_render_generic(const Batch &p_batch, GLES1::C
 
 	_set_canvas_uniforms();
 
-	if (rebind && p_material) {
+	bool is_color_picker_mat = (
+		p_material && p_material->shader_data &&
+		p_material->shader_data->color_picker_mode != GLES1::ColorPickerMaterialState::MODE_NONE
+	);
+	if ((rebind && p_material) || is_color_picker_mat) {
 		p_material->bind_uniforms();
+		if (is_color_picker_mat) {
+			state.state_dirty = true;
+		}
 	}
 
 	bool use_vbo = bdata.gl_vertex_buffer != 0 && bdata.gl_index_buffer != 0;
@@ -2568,7 +2575,9 @@ void RasterizerCanvasGLES1::_batch_render_generic(const Batch &p_batch, GLES1::C
 		}
 	}
 
-	if (!colored_verts) {
+	if (is_color_picker_mat) {
+		glDisableClientState(GL_COLOR_ARRAY);
+	} else if (!colored_verts) {
 		glDisableClientState(GL_COLOR_ARRAY);
 		glColor4f(
 			p_batch.color.r / 255.0f,
@@ -2643,8 +2652,9 @@ void RasterizerCanvasGLES1::_batch_render_generic(const Batch &p_batch, GLES1::C
 		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
 	}
 
-	// Restore baseline color if the vertex array messed it up
-	if (colored_verts) {
+	// Restore baseline color if the vertex array or
+	// material override messed it up
+	if (colored_verts || is_color_picker_mat) {
 		glColor4f(
 			state.uniforms.final_modulate.r,
 			state.uniforms.final_modulate.g,
@@ -2804,14 +2814,21 @@ void RasterizerCanvasGLES1::render_batches(Item::Command *const *p_commands, Ite
 							// Must be called every single draw in immediate mode to update the matrices.
 							_set_canvas_uniforms();
 
-							if (rebind && p_material) {
-								p_material->bind_uniforms();
-							}
-
 							// Get the color now after the uniforms to not
 							// overwrite it
 							Color combined_color = r->modulate * state.uniforms.final_modulate;
 							glColor4f(combined_color.r, combined_color.g, combined_color.b, combined_color.a);
+
+							bool is_color_picker_mat = (
+								p_material && p_material->shader_data &&
+								p_material->shader_data->color_picker_mode != GLES1::ColorPickerMaterialState::MODE_NONE
+							);
+							if ((rebind && p_material) || is_color_picker_mat) {
+								p_material->bind_uniforms();
+								if (is_color_picker_mat) {
+									state.state_dirty = true;
+								}
+							}
 
 							// Bind the default quad buffer
 							_bind_quad_buffer();

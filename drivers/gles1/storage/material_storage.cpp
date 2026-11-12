@@ -1383,6 +1383,8 @@ void CanvasShaderData::set_code(const String &p_code) {
 	uses_custom0 = false;
 	uses_custom1 = false;
 
+	color_picker_mode = ColorPickerMaterialProcessor::detect_shader_mode(p_code);
+
 	if (code.is_empty()) {
 		return; // Just invalid, but no error
 	}
@@ -1474,6 +1476,7 @@ CanvasShaderData::CanvasShaderData() {
 	uses_time = false;
 	uses_custom0 = false;
 	uses_custom1 = false;
+	color_picker_mode = ColorPickerMaterialState::MODE_NONE;
 	vertex_input_mask = 0;
 	blend_mode = BLEND_MODE_MIX;
 	ubo_size = 0;
@@ -1502,6 +1505,17 @@ void CanvasMaterialData::update_parameters(const HashMap<StringName, Variant> &p
 	if (p_parameters.has("particles_anim_loop")) {
 		particles_anim_loop = p_parameters["particles_anim_loop"];
 	}
+
+	if (shader_data && shader_data->color_picker_mode != ColorPickerMaterialState::MODE_NONE) {
+		if (!color_picker_state) {
+			color_picker_state = memnew(ColorPickerMaterialState);
+		}
+		ColorPickerMaterialProcessor::update_state(*color_picker_state, shader_data->color_picker_mode, p_parameters);
+	} else if (color_picker_state) {
+		ColorPickerMaterialProcessor::free_state(*color_picker_state);
+		memdelete(color_picker_state);
+		color_picker_state = nullptr;
+	}
 }
 
 void CanvasMaterialData::bind_uniforms() {
@@ -1512,6 +1526,28 @@ void CanvasMaterialData::bind_uniforms() {
 	}
 
 	int max_texture_units = GLES1_CONFIG->max_texture_units;
+	if (shader_data->color_picker_mode != ColorPickerMaterialState::MODE_NONE) {
+		if (!color_picker_state) {
+			color_picker_state = memnew(ColorPickerMaterialState);
+			ColorPickerMaterialProcessor::update_state(*color_picker_state, shader_data->color_picker_mode, HashMap<StringName, Variant>());
+		}
+		ColorPickerMaterialProcessor::bind_state(*color_picker_state);
+
+		for (int i = 3; i < max_texture_units; i++) {
+			glActiveTexture(GL_TEXTURE0 + i);
+			glBindTexture(GL_TEXTURE_2D, 0);
+			glDisable(GL_TEXTURE_2D);
+		}
+		if (max_texture_units > 1) {
+			glActiveTexture(GL_TEXTURE0);
+		}
+		GL_CHECK_ERROR("GLES1::CanvasMaterialData::bind_uniforms: color_picker_state scrub");
+		
+		// Return early since the processor binds its own
+		// procedurally generated texture to GL_TEXTURE0 and mutates it,
+		// and the ColorPicker shaders declare no texture uniforms.
+		return;
+	}
 
 	if (texture_cache.is_empty()) {
 		// We return early for standard items, but we sweep any units
@@ -1574,6 +1610,11 @@ void CanvasMaterialData::bind_uniforms() {
 }
 
 CanvasMaterialData::~CanvasMaterialData() {
+	if (color_picker_state) {
+		ColorPickerMaterialProcessor::free_state(*color_picker_state);
+		memdelete(color_picker_state);
+		color_picker_state = nullptr;
+	}
 }
 
 GLES1::MaterialData *GLES1::_create_canvas_material_func(ShaderData *p_shader) {

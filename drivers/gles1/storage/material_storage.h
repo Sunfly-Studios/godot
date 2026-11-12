@@ -41,8 +41,9 @@
 #include "servers/rendering/storage/utilities.h"
 
 #include "drivers/gles1/transpiler/shader_transpiler_gles1.h"
-#include "drivers/gles1/storage/materials/standard_material_3d.h"
-#include "drivers/gles1/storage/materials/orm_material_3d.h"
+#include "drivers/gles1/storage/materials/2d/color_picker_material_2d.h"
+#include "drivers/gles1/storage/materials/3d/standard_material_3d.h"
+#include "drivers/gles1/storage/materials/3d/orm_material_3d.h"
 #include "drivers/gles1/shaders/canvas.glsl.gen.h"
 #include "drivers/gles1/shaders/particles.glsl.gen.h"
 #include "drivers/gles1/shaders/scene.glsl.gen.h"
@@ -174,6 +175,7 @@ struct CanvasShaderData : public ShaderData {
 	bool uses_time;
 	bool uses_custom0;
 	bool uses_custom1;
+	ColorPickerMaterialState::Mode color_picker_mode;
 
 	uint64_t vertex_input_mask;
 
@@ -196,6 +198,9 @@ struct CanvasMaterialData : public MaterialData {
 	int particles_anim_h_frames = 1;
 	int particles_anim_v_frames = 1;
 	bool particles_anim_loop = false;
+
+	// Colour picker
+	ColorPickerMaterialState *color_picker_state = nullptr;
 
 	virtual void set_render_priority(int p_priority) {}
 	virtual void set_next_pass(RID p_pass) {}
