@@ -29,45 +29,79 @@
 /**************************************************************************/
 
 /*
- * CORE PIPELINE:
- * [ Incoming Surface ]   -> Exceeds dynamic limits? -> [ Bypass queue (Direct immediate render) ]
- *          | (No)
+ * 3D SCENE BATCHER EXECUTION ARCHITECTURE:
+ * The batcher is divided in 4 paths or "lanes" that will be executed
+ * at any given point in the pipeline:
+ *
+ * [ Incoming Surface ]
+ *          |
+ *          +--> Deformed (Skeleton / BlendShapes), Particles, Extreme AABB, or unsupported static fallback?
+ *          |             |
+ *          |             +--> (Yes) --> [ LANE 3: RSII (Render Single Item Immediate) ]
+ *          |                            Bypass queue. Rendered after batched bypasses via `_render_single_item_immediate`.
+ *          |
+ *          v (No)
+ * [ Record & Evaluate ]  --> Computes planar depth along camera forward vector, 64-bit `state_hash`,
+ *          |                 `mesh_id`, `surface_index`, and world-space AABB into `BSortItem3D`.
  *          v
- * [   Hash & Depth   ]   -> Driver calculates a planar depth by projecting the instance's bounds onto the camera's forward vecto.
- *          |                Eliminates issues regarding distortion artifacts.
+ * [ Sort & Reorder    ]  --> Opaque:      Sorted by `state_hash -> mesh_id -> surface_index -> depth (FTB)`.
+ *          |                 Transparent: Sorted BTF by depth, followed by a bounded AABB intersection
+ *          |                              look-ahead window (`sort_items_from_3d`) to reunite matching states.
  *          v
- * [    Sort Queue    ]   -> Opaque items are FTB (Front-to-Back) sorted to maximise early-Z rejection.
- *          |             -> Transparent items are BTF (Back-to-Front) sorted (Painter's Algorithm, following the 2D batcher logic),
- *          |                which is required for alpha blending.
+ * [ Stage 1: Joining  ]  --> Groups compatible adjacent items into `BItemJoined3D` and `BItemRef3D`:
+ *          |                 - Pre-evaluates `TransformMode3D` (None, Translate, Orthogonal, Uniform Scale, All)
+ *          |                   and precomputes inverse-transpose normal cofactor matrices.
+ *          |                 - Accumulates `BatchFlags3D`, color change ratios, and a rolling 64-bit FNV-1a
+ *          |                   hash for cross-frame VBO slot reuse.
+ *          |                 - Enforces strict `(state_hash, mesh_id, surface_index)` matching for static-loop items
+ *          |                   and `MASK_ID` state matching for dynamic-merge items.
  *          v
- * [    Pack VBOs     ]   -> Transforms instances and packs them into a RasterizerUnitArray.
- *          |                Forces a batch break if it exceeds the device's uniform vector's limit.
- *          v
- * [   Flush to GPU   ]   -> Triggers the draw call. VBOs are retained in a memory pool for pass reuse (such as on additive lights/shadows).
- *                           Bypass queues are intentionally omitted here so multiple flushes don't break, and are only cleared by reset_scene().
+ * [ Stage 2: Dispatch ]  --> Routes each `BItemJoined3D` into one of the 3 batcher lanes:
+ *          |
+ *          +--> [ LANE 1: BRI (Batch Render Items - Multi-Item Dynamic VBO) ]
+ *          |    Target: Multiple static meshes with that are within the default limit in `settings_dynamic_vertex_limit`
+ *          |            sharing material/shader state (`num_item_refs > 1`).
+ *          |    Action: 1. Checks `VBOPool::cached_slots` via `batch_content_hash` for zero-upload frame-to-frame reuse.
+ *          |            2. Selects minimal FVF tier (`TIER1_BASE` [24B], `TIER2_COLOR` [36B], `TIER3_TANGENT` [40B],
+ *          |               `TIER4_PALETTE` [64B], or `DEPTH_MINIMAL` [16B] / `DEPTH_ALPHA_MINIMAL` [32B]).
+ *          |            3. Software-transforms vertices into `unit_vertices` (caching world-transformed vertices in
+ *          |               `GeometryInstanceSurface::baked_world_cache` and `baked_tangent_cache`), uploads to
+ *          |               `VBOPool`, and issues a single merged `glDrawElements`.
+ *          |
+ *          +--> [ LANE 2: SMDD (Single Mesh Direct Draw - `FVF_UNBATCHED`) ]
+ *          |    Target: Isolated single-instance static meshes (`num_item_refs == 1`, non-MultiMesh) that cannot
+ *          |            be joined with neighbours. Acts as the shock absorber for Lane 1.
+ *          |    Action: Skips CPU vertex transformation and dynamic VBO staging. Binds the mesh's native static
+ *          |            VBO/IBO directly via `_batch_render_single_mesh_fallback` and issues 1 hardware-transformed draw.
+ *          |
+ *          +--> [ LANE 4: SMSG (Static Mesh State Grouping - `FVF_STATIC_MESH_LOOP`) ]
+ *               Target: Repeated heavy static meshes (`base_verts > settings_dynamic_vertex_limit`, `num_item_refs > 1`)
+ *                       and all eligible `MultiMesh` instances regardless of vertex count. Acts as the shock absorber
+ *                       for Lane 3 (`RSII`) and eliminates CPU vertex expansion for `MultiMesh`.
+ *               Action: Binds the material, shader, and the mesh's native static VBO/ABO/IBO once for the entire
+ *                       contiguous run in `_batch_render_static_mesh_group`, loops over all joined `BItemRef3D`
+ *                       and `MultiMesh` instances updating only the hardware transform and instance color, and
+ *                       unbinds once at the end of the run.
+ *
+ * MULTI-PASS REPLAY (`p_replay == true`):
+ * During multi-pass rendering (GLES1 additive light chunks/shadow projections, or `_render_uv2` lightmap baking),
+ * `batch_scene_render_items` bypasses recording, sorting, and VBO packing, re-dispatching the existing `bdata.batches`
+ * list (Lanes 1, 2, and 4) and bypassed render itmes (Lane 3) directly against the new pass state.
  *
  * 64-BIT STATE HASHING:
- * The state_hash is a 64-bit integer which contains the most expensive operations in the higher bits, while the least expensive
- * operations in the lower bits. This is done to exploit standard `<` operator in the opaque sort for speed.
- * Placing the most expensive state changes in the highest bits natively groups identical configurations and prevents state thrashin.
- * 
- *  63          52 51                  32 31                    16 15                 0
- *  +-------------+----------------------+------------------------+-------------------+
- *  |  Shader ID  |      Material ID     | Source mesh surface ID | Surface/Primitive |
- *  +-------------+----------------------+------------------------+-------------------+
+ * `state_hash` orders pipeline states from most expensive (MSB) to least expensive (LSB) so standard `<` comparisons
+ * in `SortOpaque` naturally minimise driver state changes:
  *
- * - Bits 63-52: Shader version ID / state mask (12 bits).
- *   Note: For GLES1, this includes cull modes and depth testing.
- * - Bits 51-32: Material ID (texture bindings, uniform blocks) (20 bits).
- * - Bits 31-16: Source mesh surface ID (groups identical source geometry).
- * - Bits 15-0: Surface index & primitive topology (16 bits).
+ *  63          52 51                  32 31          31 30                  16 15                 0
+ *  +-------------+----------------------+--------------+----------------------+-------------------+
+ *  |  Shader ID  |      Material ID     |  Has Texture |   Instance Base Type | Primitive Topology|
+ *  +-------------+----------------------+--------------+----------------------+-------------------+
  *
- * To guarantee optimal vertex fetching speeds, the FVF definitions intentionally pad these byte arrays to 16-byte boundaries.
- *
- * For hardware lacking matrix palettes, we execute CPU-side spatial baking similar to Ogre3D's StaticGeometry.
- * The Transform3D matrix is applied directly to the vertex payload before pushing to the VBO.
- * For accurate lighting without distorting normals under non-uniform scaling, the inverse-transpose
- * of the Basis matrix is precalculated once per instance and passed to the software transform loop.
+ * - Bits 63-52: Shader version ID (and cull/depth state mask in GLES1) (12 bits).
+ * - Bits 51-32: Material pointer ID (textures, uniform state) (20 bits).
+ * - Bit  31   : Texture presence flag (1 bit).
+ * - Bits 30-16: `RS::InstanceType` base type (masked out by `MASK_ID` during Lane 1 joining) (15 bits).
+ * - Bits 15-0 : `RS::PrimitiveType` topology (16 bits).
  */
 
 #ifndef RASTERIZER_SCENE_BATCHER_COMMON_H
