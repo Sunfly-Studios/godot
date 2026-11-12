@@ -299,10 +299,19 @@ Config::Config() {
 		disable_transform_feedback_shader_cache = true;
 	}
 	
+	// Liar compilers workaround
+
 	// Mesa 9 GLSL compiler liar workaround
-	if (rendering_device_name.contains("llvmpipe") && version_string.contains("Mesa 9")) {
-		support_instancing = false;
-		texture_lod_supported = false;
+	const bool is_llvmpipe = rendering_device_name.contains("llvmpipe");
+	if (is_llvmpipe) {
+		if (version_string.contains("Mesa 9")) {
+			support_instancing = false;
+			texture_lod_supported = false;
+		}
+
+		if (version_string.contains("Mesa 7")) {
+			texture_lod_supported = false;
+		}
 	}
 
 	if (rendering_device_name.contains("Mali")) {

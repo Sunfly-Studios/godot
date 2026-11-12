@@ -44,13 +44,13 @@ vec3 tonemap_aces(vec3 color, float p_white) {
 	const float E = 0.238081;
 
 	// Exposure bias (1.8) baked into transform
-	const mat3 rgb_to_rrt = mat3(
+	mat3 rgb_to_rrt = mat3(
 		vec3(1.074942, 0.638244, 0.086814),
 		vec3(0.1368, 1.635012, 0.028188),
 		vec3(0.05112, 0.240894, 1.507986)
 	);
 
-	const mat3 odt_to_rgb = mat3(
+	mat3 odt_to_rgb = mat3(
 		vec3(1.60475, -0.53108, -0.07367),
 		vec3(-0.10208, 1.10813, -0.00605),
 		vec3(-0.00327, -0.07276, 1.07602)
@@ -76,12 +76,12 @@ vec3 agx_contrast_approx(vec3 x) {
 // This is an approximation and simplification of EaryChow's AgX implementation that is used by Blender.
 // Source: https://github.com/EaryChow/AgX_LUT_Gen/blob/main/AgXBasesRGB.py
 vec3 tonemap_agx(vec3 color) {
-	const mat3 srgb_to_rec2020_agx_inset_matrix = mat3(
+	mat3 srgb_to_rec2020_agx_inset_matrix = mat3(
 			0.54490813676363087053, 0.14044005884001287035, 0.088827411851915368603,
 			0.37377945959812267119, 0.75410959864013760045, 0.17887712465043811023,
 			0.081384976686407536266, 0.10543358536857773485, 0.73224999956948382528);
 
-	const mat3 agx_outset_rec2020_to_srgb_matrix = mat3(
+	mat3 agx_outset_rec2020_to_srgb_matrix = mat3(
 			1.9645509602733325934, -0.29932243390911083839, -0.16436833806080403409,
 			-0.85585845117807513559, 1.3264510741502356555, -0.23822464068860595117,
 			-0.10886710826831608324, -0.027084020983874825605, 1.402665347143271889);

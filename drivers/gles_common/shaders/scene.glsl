@@ -451,8 +451,8 @@ void main() {
 #endif // !USE_GLES_OVER_GL
 
 #if !defined(GL_EXT_shader_texture_lod)
-#define texture2DLod(img, coord, lod) texture2D(img, coord, lod)
-#define textureCubeLod(img, coord, lod) textureCube(img, coord, lod)
+#define texture2DLod(img, coord, lod) texture2D(img, coord)
+#define textureCubeLod(img, coord, lod) textureCube(img, coord)
 #endif
 
 // Replace standard GLES3 texture functions with GLES2 equivalents
