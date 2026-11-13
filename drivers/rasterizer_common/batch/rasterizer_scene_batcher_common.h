@@ -31,7 +31,8 @@
 /*
  * 3D SCENE BATCHER EXECUTION ARCHITECTURE:
  * The batcher is divided in 4 paths or "lanes" that will be executed
- * at any given point in the pipeline:
+ * at any given point in the pipeline; where a "lane" represents a
+ * distinct execution and memory strategy:
  *
  * [ Incoming Surface ]
  *          |
@@ -348,6 +349,7 @@ public:
 		uint32_t ibo_byte_offset;
 		BatcherEnums::FVF fvf;
 		uint32_t flags;
+		AABB bounding_aabb;
 	};
 
 	// Items in a list to be sorted prior to joining.
@@ -361,6 +363,7 @@ public:
 			state_hash = o.state_hash;
 			mesh_id = o.mesh_id;
 			surface_index = o.surface_index;
+			use_static_vbo_loop = o.use_static_vbo_loop;
 		}
 		void *item;
 		AABB aabb;
@@ -368,6 +371,7 @@ public:
 		uint64_t state_hash;
 		uint32_t mesh_id;
 		uint32_t surface_index;
+		bool use_static_vbo_loop;
 	};
 
 	// Batch joined item may represent 1 or more surfaces sharing compatible render state.
@@ -598,16 +602,24 @@ protected:
 
 	struct SortOpaque {
 		_FORCE_INLINE_ bool operator()(const BSortItem3D &A, const BSortItem3D &B) const {
-			if (A.state_hash == B.state_hash) {
-				if (A.mesh_id == B.mesh_id) {
-					if (A.surface_index == B.surface_index) {
-						return A.depth < B.depth;
-					}
-					return A.surface_index < B.surface_index;
-				}
+			const uint64_t masked_a = A.state_hash & MASK_ID;
+			const uint64_t masked_b = B.state_hash & MASK_ID;
+			if (masked_a != masked_b) {
+				return masked_a < masked_b;
+			}
+			if (A.use_static_vbo_loop != B.use_static_vbo_loop) {
+				return !A.use_static_vbo_loop;
+			}
+			if (A.use_static_vbo_loop && A.state_hash != B.state_hash) {
+				return A.state_hash < B.state_hash;
+			}
+			if (A.mesh_id != B.mesh_id) {
 				return A.mesh_id < B.mesh_id;
 			}
-			return A.state_hash < B.state_hash;
+			if (A.surface_index != B.surface_index) {
+				return A.surface_index < B.surface_index;
+			}
+			return A.depth < B.depth;
 		}
 	};
 
@@ -749,6 +761,8 @@ protected:
 				break;
 		}
 	}
+	uint32_t _get_effective_dynamic_vertex_limit() const;
+	bool _should_use_static_vbo_loop(uint32_t p_base_verts, uint32_t p_base_indices, uint32_t p_instances, bool p_is_multimesh, bool p_is_strip) const;
 	void _software_transform_vertex(BatchVector3 &r_v, const Transform3D &p_tr) const;
 	void _software_transform_normal(BatchNormal &r_n, const Transform3D &p_tr) const;
 	void _software_transform_normal_precomputed(BatchNormal &r_n, const Basis &p_cofactor) const;

@@ -2163,32 +2163,114 @@ float RasterizerSceneGLES1::_batch_get_item_depth(const GeometryInstanceSurface 
 	return look_vector.dot(to_object) - p_surface->owner->sorting_offset;
 }
 
+void RasterizerSceneGLES1::_batch_resolve_pass_surface_state(const GeometryInstanceSurface *p_surface, GLES1::SceneMaterialData *&r_material, GLES1::SceneShaderData *&r_shader, RS::CullMode &r_cull_mode) const {
+	if (!p_surface) {
+		r_material = nullptr;
+		r_shader = nullptr;
+		r_cull_mode = RS::CULL_MODE_BACK;
+		return;
+	}
+
+	const bool use_shadow_override = (bdata.pass_mode == PASS_MODE_SHADOW);
+	r_material = (use_shadow_override && p_surface->material_shadow) ? p_surface->material_shadow : p_surface->material;
+	r_shader = (use_shadow_override && p_surface->shader_shadow) ? p_surface->shader_shadow : p_surface->shader;
+
+	if (use_shadow_override && (p_surface->flags & GeometryInstanceSurface::FLAG_USES_DOUBLE_SIDED_SHADOWS)) {
+		r_cull_mode = RS::CULL_MODE_DISABLED;
+	} else if (p_surface->shader) {
+		r_cull_mode = p_surface->shader->cull_mode;
+	} else if (r_shader) {
+		r_cull_mode = r_shader->cull_mode;
+	} else {
+		r_cull_mode = RS::CULL_MODE_BACK;
+	}
+}
+
+uint64_t RasterizerSceneGLES1::_batch_compute_canonical_material_id(const GLES1::SceneMaterialData *p_material, const GLES1::SceneShaderData *p_shader) const {
+	if (!p_material) {
+		return 0;
+	}
+	if (bdata.pass_mode == PASS_MODE_SHADOW) {
+		return static_cast<uint64_t>((uintptr_t)p_material >> 4) & 0xFFFFFULL;
+	}
+
+	// Only unify materials that use a standard approximation, do not use distance fade,
+	// and have zero specular/emission so their sole per-material difference is base albedo
+	// (which FORCE_BAKE_MODULATE bakes into Tier 2 vertex colors) and optional primary texture.
+	if (
+		p_material->use_distance_fade ||
+		p_material->approx_type == GLES1::SceneMaterialData::APPROX_NONE ||
+		!p_material->approx_data ||
+		p_material->texture_cache.size() > 1 ||
+		(p_shader && p_shader->uses_alpha_clip)
+	) {
+		return static_cast<uint64_t>((uintptr_t)p_material >> 4) & 0xFFFFFULL;
+	}
+
+	const GLES1::StandardMaterialState *state = static_cast<const GLES1::StandardMaterialState *>(p_material->approx_data);
+	const bool has_non_zero_specular_or_emission = (
+		state->specular[0] != 0.0f ||
+		state->specular[1] != 0.0f ||
+		state->specular[2] != 0.0f ||
+		state->shininess != 0.0f ||
+		state->emission[0] != 0.0f ||
+		state->emission[1] != 0.0f ||
+		state->emission[2] != 0.0f
+	);
+	if (has_non_zero_specular_or_emission) {
+		return static_cast<uint64_t>((uintptr_t)p_material >> 4) & 0xFFFFFULL;
+	}
+
+	const uint32_t unshaded_bit = (p_shader && p_shader->unshaded) ? 1U : 0U;
+	const uint32_t depth_draw_bits = p_shader ? (static_cast<uint32_t>(p_shader->depth_draw) & 0x3U) : 0U;
+	const uint32_t state_tag = (unshaded_bit << 2) | depth_draw_bits;
+
+	if (p_material->texture_cache.is_empty()) {
+		// Reserve canonical IDs 0xFFFF0..0xFFFF7 for untextured modulate-only materials.
+		return static_cast<uint64_t>(0xFFFF0U | (state_tag & 0x7U));
+	}
+
+	// Single-texture material: mix the bound GL texture ID with the shading state tag.
+	const uint64_t tex_id = p_material->texture_cache[0].get_id();
+	uint32_t h = (tex_id * 2654435761U) ^ (state_tag * 2246822519U);
+	h &= 0xFFFFFU;
+	if (h == 0U || (h >= 0xFFFF0U && h <= 0xFFFF7U)) {
+		h = 1U;
+	}
+	return static_cast<uint64_t>(h);
+}
+
 uint64_t RasterizerSceneGLES1::_batch_get_state_hash(const GeometryInstanceSurface *p_surface) {
 	uint64_t hash = 0;
+
+	GLES1::SceneMaterialData *active_mat = nullptr;
+	GLES1::SceneShaderData *active_shader = nullptr;
+	RS::CullMode active_cull = RS::CULL_MODE_BACK;
+	_batch_resolve_pass_surface_state(p_surface, active_mat, active_shader, active_cull);
 
 	// Bits 63-52:
 	// - Cull mode
 	// - Depth test
 	// - Shader version ID + state mask
 	// Overall 12 bits
-	uint64_t cull_mode = p_surface->shader ? p_surface->shader->cull_mode : 0;
+	uint64_t cull_mode = static_cast<uint64_t>(active_cull);
 	uint64_t depth_test = 0;
-	if (p_surface->shader && p_surface->shader->depth_test == GLES1::SceneShaderData::DEPTH_TEST_ENABLED) {
+	if (active_shader && active_shader->depth_test == GLES1::SceneShaderData::DEPTH_TEST_ENABLED) {
 		depth_test = 1;
 	}
-	uint64_t shader_id = p_surface->shader ? p_surface->shader->version.get_id() : 0;
+	uint64_t shader_id = active_shader ? active_shader->version.get_id() : 0;
 
 	hash |= (cull_mode & 0x3) << 62; // Cull Mode
 	hash |= (depth_test & 0x1) << 61; // Depth Test
 	hash |= (shader_id & 0x1FF) << 52; // Shader ID + state mask
 
 	// Bits 51-32: Material ID (texture bindings, uniform blocks, 20 bits)
-	uint64_t mat_id = p_surface->material ? static_cast<uint64_t>((uintptr_t)p_surface->material >> 4) : 0;
+	uint64_t mat_id = _batch_compute_canonical_material_id(active_mat, active_shader);
 	hash |= (mat_id & 0xFFFFF) << 32;
 
-	// Bit 31: Has texture
+	// Bit 31: Has texture (1 bit)
 	uint64_t has_texture = 0;
-	if (p_surface->material && p_surface->material->texture_cache.size() > 0) {
+	if (bdata.pass_mode != PASS_MODE_SHADOW && active_mat && active_mat->texture_cache.size() > 0) {
 		has_texture = 1;
 	}
 	hash |= (has_texture & 0x1) << 31;
@@ -2210,30 +2292,44 @@ uint32_t RasterizerSceneGLES1::_batch_get_surface_flags(const GeometryInstanceSu
 	// minimal FVF tier needed for the batch.
 	uint32_t flags = BatcherEnums::BTF_3D_NONE;
 
+	GLES1::SceneMaterialData *active_mat = nullptr;
+	GLES1::SceneShaderData *active_shader = nullptr;
+	RS::CullMode active_cull = RS::CULL_MODE_BACK;
+	_batch_resolve_pass_surface_state(p_surface, active_mat, active_shader, active_cull);
+
+	const bool is_depth_pass = (
+		bdata.pass_mode == PASS_MODE_SHADOW ||
+		bdata.pass_mode == PASS_MODE_DEPTH
+	);
+
 	if (p_surface->owner && p_surface->owner->data->base_type == RS::INSTANCE_MULTIMESH) {
 		flags |= BatcherEnums::BTF_3D_USES_INSTANCING;
-		GLES1::MultiMesh *mm = GLES1::MeshStorage::get_singleton()->get_multimesh(p_surface->owner->data->base);
-		if (mm && mm->uses_colors) {
-			flags |= BatcherEnums::BTF_3D_USES_COLORS;
+		if (!is_depth_pass) {
+			GLES1::MultiMesh *mm = GLES1::MeshStorage::get_singleton()->get_multimesh(p_surface->owner->data->base);
+			if (mm && mm->uses_colors) {
+				flags |= BatcherEnums::BTF_3D_USES_COLORS;
+			}
 		}
 	}
 
-	if (p_surface->shader && p_surface->shader->uses_color && !p_surface->color_cache.is_empty()) {
-		flags |= BatcherEnums::BTF_3D_USES_COLORS;
-	}
-
-	if (!p_surface->uv2_cache.is_empty() || bdata.pass_mode == PASS_MODE_MATERIAL) {
-		flags |= BatcherEnums::BTF_3D_USES_UV2;
-		if (scene_state.current_spec_constants & SceneShaderGLES1::RENDER_MATERIAL_NORMAL) {
+	if (!is_depth_pass) {
+		if (active_shader && active_shader->uses_color && !p_surface->color_cache.is_empty()) {
 			flags |= BatcherEnums::BTF_3D_USES_COLORS;
+		}
+
+		if (!p_surface->uv2_cache.is_empty() || bdata.pass_mode == PASS_MODE_MATERIAL) {
+			flags |= BatcherEnums::BTF_3D_USES_UV2;
+			if (scene_state.current_spec_constants & SceneShaderGLES1::RENDER_MATERIAL_NORMAL) {
+				flags |= BatcherEnums::BTF_3D_USES_COLORS;
+			}
+		}
+
+		if (!p_surface->tangent_cache.is_empty() && active_shader && active_shader->uses_tangent) {
+			flags |= BatcherEnums::BTF_3D_USES_TANGENTS;
 		}
 	}
 
-	if (!p_surface->tangent_cache.is_empty() && p_surface->shader && p_surface->shader->uses_tangent) {
-		flags |= BatcherEnums::BTF_3D_USES_TANGENTS;
-	}
-
-	if (p_surface->material && p_surface->material->shader_data && p_surface->material->shader_data->uses_alpha_clip) {
+	if (active_shader && active_shader->uses_alpha_clip) {
 		flags |= BatcherEnums::BTF_3D_USES_ALPHA_CLIP;
 	}
 
@@ -2246,6 +2342,13 @@ uint32_t RasterizerSceneGLES1::_batch_get_surface_flags(const GeometryInstanceSu
 
 RasterizerSceneGLES1::BatchType::BatchColor RasterizerSceneGLES1::_batch_get_surface_modulate(const GeometryInstanceSurface *p_surface) const {
 	BatchType::BatchColor col{};
+
+	// For shadow passes, the value doesn't matter.
+	if (bdata.pass_mode == PASS_MODE_SHADOW || bdata.pass_mode == PASS_MODE_DEPTH) {
+		col.set_white();
+		return col;
+	}
+
 	// HACK: 0.6 (grey) is kind of a magic number here, but anything beyond it
 	// blows out the brightness whenever 2+ default-material
 	// meshes are joined into a multi-item batch and promoted to tier2.
@@ -2276,7 +2379,11 @@ RasterizerSceneGLES1::BatchType::BatchColor RasterizerSceneGLES1::_batch_get_sur
 }
 
 GLES1::SceneMaterialData *RasterizerSceneGLES1::_batch_get_material_data(const GeometryInstanceSurface *p_surface) {
-	return p_surface->material;
+	GLES1::SceneMaterialData *active_mat = nullptr;
+	GLES1::SceneShaderData *active_shader = nullptr;
+	RS::CullMode active_cull = RS::CULL_MODE_BACK;
+	_batch_resolve_pass_surface_state(p_surface, active_mat, active_shader, active_cull);
+	return active_mat;
 }
 
 bool RasterizerSceneGLES1::_batch_can_use_single_mesh_fallback(const GeometryInstanceSurface *p_surface) const {
@@ -2339,6 +2446,61 @@ bool RasterizerSceneGLES1::_batch_can_use_single_mesh_fallback(const GeometryIns
 	}
 
 	return true;
+}
+
+void RasterizerSceneGLES1::_batch_prepare_surface_world_cache(const GeometryInstanceSurface *p_surface, const BatchType::BItemRef3D &p_ref, BatchType::TransformMode3D p_effective_mode, bool p_need_tangents) {
+	const uint32_t v_count = p_surface->vertex_cache.size();
+	const Vector3 *pos_ptr = p_surface->vertex_cache.ptr();
+	const Vector3 *norm_ptr = p_surface->normal_cache.size() > 0 ? p_surface->normal_cache.ptr() : nullptr;
+	const float *tan_ptr = p_surface->tangent_cache.size() > 0 ? p_surface->tangent_cache.ptr() : nullptr;
+	const Vector2 *uv_ptr = p_surface->uv_cache.size() > 0 ? p_surface->uv_cache.ptr() : nullptr;
+
+	const uint32_t xform_hash = BatchType::_hash_transform_3d(p_ref.transform);
+	const bool cache_valid = (
+		p_surface->cached_transform_hash == xform_hash &&
+		p_surface->baked_world_cache.size() == v_count &&
+		p_surface->cached_transform == p_ref.transform
+	);
+
+	if (!cache_valid) {
+		p_surface->baked_world_cache.resize(v_count);
+		BatchType::BatchVertex3DTier1 *RESTRICT cache_base = p_surface->baked_world_cache.ptr();
+		for (uint32_t i = 0; i < v_count; i++) {
+			_batch_transform_pos_norm(cache_base[i].pos, cache_base[i].normal, pos_ptr[i], norm_ptr, i, p_effective_mode, p_ref.transform, p_ref.normal_cofactor);
+			if (uv_ptr) {
+				cache_base[i].uv.set(uv_ptr[i]);
+			} else {
+				cache_base[i].uv.set(0.0f, 0.0f);
+			}
+		}
+		p_surface->baked_tangent_cache.clear();
+		p_surface->cached_transform = p_ref.transform;
+		p_surface->cached_transform_hash = xform_hash;
+	}
+
+	if (p_need_tangents && p_surface->baked_tangent_cache.size() != v_count) {
+		p_surface->baked_tangent_cache.resize(v_count);
+		BatchType::BatchTangent *RESTRICT cache_tan = p_surface->baked_tangent_cache.ptr();
+		if (tan_ptr) {
+			for (uint32_t i = 0; i < v_count; i++) {
+				Vector3 t(tan_ptr[i * 4 + 0], tan_ptr[i * 4 + 1], tan_ptr[i * 4 + 2]);
+				if (p_effective_mode == BatchType::TM_3D_ORTHOGONAL) {
+					t = p_ref.transform.basis.xform(t);
+				} else if (p_effective_mode == BatchType::TM_3D_UNIFORM_SCALE) {
+					t = p_ref.normal_cofactor.xform(t);
+				} else if (p_effective_mode == BatchType::TM_3D_ALL) {
+					t = p_ref.normal_cofactor.xform(t);
+					float len_sq = t.length_squared();
+					t = len_sq > 0.0f ? t * (1.0f / Math::sqrt(len_sq)) : Vector3(1.0f, 0.0f, 0.0f);
+				}
+				cache_tan[i].set(t.x, t.y, t.z, tan_ptr[i * 4 + 3]);
+			}
+		} else {
+			for (uint32_t i = 0; i < v_count; i++) {
+				cache_tan[i].set(1.0f, 0.0f, 0.0f, 1.0f);
+			}
+		}
+	}
 }
 
 void RasterizerSceneGLES1::_batch_fill_instance_tiered(const BatchType::BItemRef3D &p_ref, uint8_t *r_bvs, uint16_t *r_inds, uint32_t p_start_vert, bool p_use_hardware_transform, uint32_t p_item_index) {
@@ -2474,55 +2636,119 @@ void RasterizerSceneGLES1::_batch_fill_instance_tiered(const BatchType::BItemRef
 				}
 			}
 		}
-	} else {
-		const Transform3D active_xform = p_use_hardware_transform ? Transform3D() : p_ref.transform;
-		const uint32_t xform_hash = p_use_hardware_transform ? 1U : BatchType::_hash_transform_3d(p_ref.transform);
-		const bool cache_valid = (
-			p_surface->cached_transform_hash == xform_hash &&
-			p_surface->baked_world_cache.size() == v_count &&
-			(p_use_hardware_transform || p_surface->cached_transform == p_ref.transform)
-		);
-
-		if (!cache_valid) {
-			p_surface->baked_world_cache.resize(v_count);
-			BatchType::BatchVertex3DTier1 *RESTRICT cache_base = p_surface->baked_world_cache.ptr();
+	} else if (p_use_hardware_transform) {
+		// Write untransformed local-space vertices directly into the staging buffer
+		// without overwriting baked_world_cache or baked_tangent_cache.
+		if (bdata.fvf == BatcherEnums::FVF_3D_TIER1_BASE) {
+			BatchType::BatchVertex3DTier1 *RESTRICT dst = reinterpret_cast<BatchType::BatchVertex3DTier1 *>(r_bvs);
 			for (uint32_t i = 0; i < v_count; i++) {
-				_batch_transform_pos_norm(cache_base[i].pos, cache_base[i].normal, pos_ptr[i], norm_ptr, i, effective_mode, p_ref.transform, p_ref.normal_cofactor);
-				if (uv_ptr) {
-					cache_base[i].uv.set(uv_ptr[i]);
+				dst[i].pos.set(pos_ptr[i]);
+				if (norm_ptr) {
+					dst[i].normal.set(norm_ptr[i]);
 				} else {
-					cache_base[i].uv.set(0.0f, 0.0f);
+					dst[i].normal.set(0.0f, 1.0f, 0.0f);
+				}
+				if (uv_ptr) {
+					dst[i].uv.set(uv_ptr[i]);
+				} else {
+					dst[i].uv.set(0.0f, 0.0f);
 				}
 			}
-			p_surface->baked_tangent_cache.clear();
-			p_surface->cached_transform = active_xform;
-			p_surface->cached_transform_hash = xform_hash;
+		} else if (bdata.fvf == BatcherEnums::FVF_3D_TIER2_COLOR) {
+			BatchType::BatchVertex3DTier2 *RESTRICT dst = reinterpret_cast<BatchType::BatchVertex3DTier2 *>(r_bvs);
+			for (uint32_t i = 0; i < v_count; i++) {
+				dst[i].pos.set(pos_ptr[i]);
+				if (col_ptr) {
+					dst[i].color.set(col_ptr[i] * mat_albedo);
+				} else {
+					dst[i].color = p_ref.modulate;
+				}
+				if (norm_ptr) {
+					dst[i].normal.set(norm_ptr[i]);
+				} else {
+					dst[i].normal.set(0.0f, 1.0f, 0.0f);
+				}
+				if (uv_ptr) {
+					dst[i].uv.set(uv_ptr[i]);
+				} else {
+					dst[i].uv.set(0.0f, 0.0f);
+				}
+				if (uv2_ptr) {
+					dst[i].uv2.set(uv2_ptr[i]);
+				} else {
+					dst[i].uv2.set(0.0f, 0.0f);
+				}
+			}
+		} else if (bdata.fvf == BatcherEnums::FVF_3D_TIER3_TANGENT) {
+			BatchType::BatchVertex3DTier3 *RESTRICT dst = reinterpret_cast<BatchType::BatchVertex3DTier3 *>(r_bvs);
+			for (uint32_t i = 0; i < v_count; i++) {
+				dst[i].pos.set(pos_ptr[i]);
+				if (col_ptr) {
+					dst[i].color.set(col_ptr[i] * mat_albedo);
+				} else {
+					dst[i].color = p_ref.modulate;
+				}
+				if (norm_ptr) {
+					dst[i].normal.set(norm_ptr[i]);
+				} else {
+					dst[i].normal.set(0.0f, 1.0f, 0.0f);
+				}
+				if (tan_ptr) {
+					dst[i].tangent.set(tan_ptr[i * 4 + 0], tan_ptr[i * 4 + 1], tan_ptr[i * 4 + 2], tan_ptr[i * 4 + 3]);
+				} else {
+					dst[i].tangent.set(1.0f, 0.0f, 0.0f, 1.0f);
+				}
+				if (uv_ptr) {
+					dst[i].uv.set(uv_ptr[i]);
+				} else {
+					dst[i].uv.set(0.0f, 0.0f);
+				}
+				if (uv2_ptr) {
+					dst[i].uv2.set(uv2_ptr[i]);
+				} else {
+					dst[i].uv2.set(0.0f, 0.0f);
+				}
+			}
+		} else {
+			BatchType::BatchVertex3DTier4 *RESTRICT dst = reinterpret_cast<BatchType::BatchVertex3DTier4 *>(r_bvs);
+			for (uint32_t i = 0; i < v_count; i++) {
+				dst[i].pos.set(pos_ptr[i]);
+				if (col_ptr) {
+					dst[i].color.set(col_ptr[i] * mat_albedo);
+				} else {
+					dst[i].color = p_ref.modulate;
+				}
+				if (norm_ptr) {
+					dst[i].normal.set(norm_ptr[i]);
+				} else {
+					dst[i].normal.set(0.0f, 1.0f, 0.0f);
+				}
+				if (tan_ptr) {
+					dst[i].tangent.set(tan_ptr[i * 4 + 0], tan_ptr[i * 4 + 1], tan_ptr[i * 4 + 2], tan_ptr[i * 4 + 3]);
+				} else {
+					dst[i].tangent.set(1.0f, 0.0f, 0.0f, 1.0f);
+				}
+				dst[i].matrix_index[0] = m_idx;
+				dst[i].matrix_index[1] = 0;
+				dst[i].matrix_index[2] = 0;
+				dst[i].matrix_index[3] = 0;
+				dst[i].pad0 = 0;
+				if (uv_ptr) {
+					dst[i].uv.set(uv_ptr[i]);
+				} else {
+					dst[i].uv.set(0.0f, 0.0f);
+				}
+				if (uv2_ptr) {
+					dst[i].uv2.set(uv2_ptr[i]);
+				} else {
+					dst[i].uv2.set(0.0f, 0.0f);
+				}
+				dst[i].weights.set(1.0f, 0.0f, 0.0f, 0.0f);
+			}
 		}
-
+	} else {
+		_batch_prepare_surface_world_cache(p_surface, p_ref, effective_mode, bdata.fvf >= BatcherEnums::FVF_3D_TIER3_TANGENT);
 		const BatchType::BatchVertex3DTier1 *RESTRICT cache_base = p_surface->baked_world_cache.ptr();
-		if (bdata.fvf >= BatcherEnums::FVF_3D_TIER3_TANGENT && p_surface->baked_tangent_cache.size() != v_count) {
-			p_surface->baked_tangent_cache.resize(v_count);
-			BatchType::BatchTangent *RESTRICT cache_tan = p_surface->baked_tangent_cache.ptr();
-			if (tan_ptr) {
-				for (uint32_t i = 0; i < v_count; i++) {
-					Vector3 t(tan_ptr[i * 4 + 0], tan_ptr[i * 4 + 1], tan_ptr[i * 4 + 2]);
-					if (effective_mode == BatchType::TM_3D_ORTHOGONAL) {
-						t = p_ref.transform.basis.xform(t);
-					} else if (effective_mode == BatchType::TM_3D_UNIFORM_SCALE) {
-						t = p_ref.normal_cofactor.xform(t);
-					} else if (effective_mode == BatchType::TM_3D_ALL) {
-						t = p_ref.normal_cofactor.xform(t);
-						float len_sq = t.length_squared();
-						t = len_sq > 0.0f ? t * (1.0f / Math::sqrt(len_sq)) : Vector3(1.0f, 0.0f, 0.0f);
-					}
-					cache_tan[i].set(t.x, t.y, t.z, tan_ptr[i * 4 + 3]);
-				}
-			} else {
-				for (uint32_t i = 0; i < v_count; i++) {
-					cache_tan[i].set(1.0f, 0.0f, 0.0f, 1.0f);
-				}
-			}
-		}
 
 		if (bdata.fvf == BatcherEnums::FVF_3D_TIER1_BASE) {
 			memcpy(r_bvs, cache_base, v_count * sizeof(BatchType::BatchVertex3DTier1));
@@ -3347,14 +3573,22 @@ void RasterizerSceneGLES1::_batch_bind_material(GLES1::SceneMaterialData *p_mate
 				return;
 			}
 
+			RS::CullMode resolved_cull = p_material_data->shader_data->cull_mode;
+			if (_render_item_state.curr_batch && _render_item_state.curr_batch->first_item_ref < (uint32_t)bdata.item_refs.size()) {
+				const GeometryInstanceSurface *first_surf = static_cast<const GeometryInstanceSurface *>(bdata.item_refs[_render_item_state.curr_batch->first_item_ref].surface);
+				GLES1::SceneMaterialData *dummy_mat = nullptr;
+				GLES1::SceneShaderData *dummy_shader = nullptr;
+				_batch_resolve_pass_surface_state(first_surf, dummy_mat, dummy_shader, resolved_cull);
+			}
+
 			if (bdata.pass_mode == PASS_MODE_SHADOW) {
-				if (p_material_data->shader_data->cull_mode == RS::CULL_MODE_DISABLED) {
+				if (resolved_cull == RS::CULL_MODE_DISABLED) {
 					scene_state.set_gl_cull_mode(RS::CULL_MODE_DISABLED);
 				} else {
 					scene_state.set_gl_cull_mode(RS::CULL_MODE_FRONT);
 				}
 			} else {
-				scene_state.set_gl_cull_mode(p_material_data->shader_data->cull_mode);
+				scene_state.set_gl_cull_mode(resolved_cull);
 			}
 
 			scene_state.enable_gl_depth_test(p_material_data->shader_data->depth_test == GLES1::SceneShaderData::DEPTH_TEST_ENABLED);
@@ -3396,6 +3630,10 @@ void RasterizerSceneGLES1::_batch_bind_material(GLES1::SceneMaterialData *p_mate
 }
 
 void RasterizerSceneGLES1::_batch_render_items(GLES1::SceneMaterialData *p_material_data, RS::PrimitiveType p_primitive, BatchType::Batch3D &p_batch, bool p_transparent) {
+	if (_is_aabb_culled_by_active_light(p_batch.bounding_aabb)) {
+		return;
+	}
+
 	if (p_batch.fvf == BatcherEnums::FVF_STATIC_MESH_LOOP) {
 		_batch_render_static_mesh_group(p_material_data, p_primitive, p_batch, p_transparent);
 		return;
@@ -4082,6 +4320,9 @@ void RasterizerSceneGLES1::_batch_render_static_mesh_group(GLES1::SceneMaterialD
 			if (!surf || !surf->owner || ref.instance_count == 0) {
 				continue;
 			}
+			if (_is_aabb_culled_by_active_light(surf->owner->transformed_aabb)) {
+				continue;
+			}
 
 			const bool is_multimesh = (surf->owner->data->base_type == RS::INSTANCE_MULTIMESH);
 			if (!is_multimesh) {
@@ -4193,6 +4434,10 @@ void RasterizerSceneGLES1::_render_single_item_immediate(const GeometryInstanceS
 		return;
 	}
 
+	if (_is_aabb_culled_by_active_light(p_surface->owner->transformed_aabb)) {
+		return;
+	}
+
 	// Save state
 	RS::CullMode prev_cull_mode = scene_state.cull_mode;
 	bool prev_depth_draw = scene_state.current_depth_draw_enabled;
@@ -4211,14 +4456,22 @@ void RasterizerSceneGLES1::_render_single_item_immediate(const GeometryInstanceS
 		!p_surface->color_cache.is_empty() ||
 		(p_surface->owner->data->base_type == RS::INSTANCE_MULTIMESH && GLES1::MeshStorage::get_singleton()->multimesh_uses_colors(p_surface->owner->data->base))
 	);
-	_batch_bind_material(p_surface->material, p_surface->owner->transform, is_transparent);
+	GLES1::SceneMaterialData *active_mat = nullptr;
+	GLES1::SceneShaderData *active_shader = nullptr;
+	RS::CullMode active_cull = RS::CULL_MODE_BACK;
+	_batch_resolve_pass_surface_state(p_surface, active_mat, active_shader, active_cull);
+
+	_batch_bind_material(active_mat, p_surface->owner->transform, is_transparent);
+	if (bdata.pass_mode == PASS_MODE_SHADOW) {
+		scene_state.set_gl_cull_mode(active_cull == RS::CULL_MODE_DISABLED ? RS::CULL_MODE_DISABLED : RS::CULL_MODE_FRONT);
+	}
 
 	// Immediately reset for the rest of the pipeline
 	scene_state.immediate_surface_has_colors = false;
 	GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_render_single_item_immediate: _batch_bind_material");
 
 	// Sync the surface flags with the batcher
-	uint64_t input_mask = _set_rendering_input_mask<false>(p_surface->material, p_surface);
+	uint64_t input_mask = _set_rendering_input_mask<false>(active_mat, p_surface);
 
 	if (bdata.pass_mode == PASS_MODE_MATERIAL) {
 		input_mask |= (1ULL << RS::ARRAY_TEX_UV2);
@@ -6492,25 +6745,49 @@ void RasterizerSceneGLES1::_render_additive_light_passes(RenderListParameters *p
 			glMatrixMode(GL_MODELVIEW);
 			glLoadMatrixf(_gl_load_transform(p_render_data->inv_cam_transform));
 
+			bool chunk_has_directional = false;
+			bool chunk_bounds_init = false;
+			AABB chunk_bounds;
+
 			for (int i = 0; i < chunk_count; i++) {
 				const GlActiveLight &al = active_lights[chunk_start + i];
 				if (al.type == RS::LIGHT_DIRECTIONAL) {
 					_gl_setup_directional_light(scene_state.directional_lights[al.index], i);
+					chunk_has_directional = true;
 				} else if (al.type == RS::LIGHT_OMNI) {
 					_gl_setup_omni_light(scene_state.omni_lights[al.index], i);
+					const AABB l_aabb = _compute_positional_light_aabb(scene_state.omni_lights[al.index]);
+					if (!chunk_bounds_init) {
+						chunk_bounds = l_aabb;
+						chunk_bounds_init = true;
+					} else {
+						chunk_bounds.merge_with(l_aabb);
+					}
 				} else if (al.type == RS::LIGHT_SPOT) {
 					_gl_setup_spot_light(scene_state.spot_lights[al.index], i);
+					const AABB l_aabb = _compute_positional_light_aabb(scene_state.spot_lights[al.index]);
+					if (!chunk_bounds_init) {
+						chunk_bounds = l_aabb;
+						chunk_bounds_init = true;
+					} else {
+						chunk_bounds.merge_with(l_aabb);
+					}
 				}
 			}
+
+			scene_state.has_active_light_bounds = !chunk_has_directional && chunk_bounds_init;
+			scene_state.active_light_bounds = chunk_bounds;
 
 			// We flag this as a replay pass so the batcher bypasses geometry repacking
 			// and uses the VBO offsets calculated during the base pass.
 			_render_list_template<p_pass_mode>(p_params, p_render_data, 0, p_element_count, p_alpha_pass, true);
+			scene_state.has_active_light_bounds = false;
 			GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_render_additive_light_passes: chunk boundary end");
 		}
 	}
 
 	// Clean up lights
+	scene_state.has_active_light_bounds = false;
 	_gl_set_light_chunk_state(0);
 
 	// Process shadowed lights.
@@ -6573,10 +6850,15 @@ void RasterizerSceneGLES1::_render_light_shadows(RenderListParameters *p_params,
 
 	if (p_light.type == RS::LIGHT_DIRECTIONAL) {
 		_gl_setup_directional_light(scene_state.directional_lights[p_light.index], 0);
+		scene_state.has_active_light_bounds = false;
 	} else if (p_light.type == RS::LIGHT_OMNI) {
 		_gl_setup_omni_light(scene_state.omni_lights[p_light.index], 0);
+		scene_state.active_light_bounds = _compute_positional_light_aabb(scene_state.omni_lights[p_light.index]);
+		scene_state.has_active_light_bounds = true;
 	} else if (p_light.type == RS::LIGHT_SPOT) {
 		_gl_setup_spot_light(scene_state.spot_lights[p_light.index], 0);
+		scene_state.active_light_bounds = _compute_positional_light_aabb(scene_state.spot_lights[p_light.index]);
+		scene_state.has_active_light_bounds = true;
 	}
 
 	// Begin the splits
@@ -6674,6 +6956,7 @@ void RasterizerSceneGLES1::_render_light_shadows(RenderListParameters *p_params,
 	}
 
 	// Clean up
+	scene_state.has_active_light_bounds = false;
 	glMatrixMode(GL_MODELVIEW);
 
 	_gl_set_light_chunk_state(0);
@@ -6717,6 +7000,13 @@ void RasterizerSceneGLES1::_render_list_template(RenderListParameters *p_params,
 			}
 			p_render_data->render_info->info[info_type][RS::VIEWPORT_RENDER_INFO_OBJECTS_IN_FRAME] += count;
 		}
+	}
+
+	// For client-side memory management, we always
+	// want to reset the offsets so that.
+	if (!p_replay && !GLES1_CONFIG->support_vbo) {
+		bdata.current_vbo_byte_offset = 0;
+		bdata.current_ibo_byte_offset = 0;
 	}
 
 	// Dispatch batch processor or immediate drawer

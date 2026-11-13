@@ -208,7 +208,7 @@ private:
 		float specular_amount;
 		float shadow_opacity;
 
-		float pad[3];
+		float world_position[3];
 		uint32_t bake_mode;
 	};
 	static_assert(sizeof(LightData) % 16 == 0, "LightData size must be a multiple of 16 bytes");
@@ -337,15 +337,6 @@ private:
 		bool using_projectors = false;
 		bool using_softshadows = false;
 
-		struct LightPass {
-			int32_t light_id = -1; // Position in the light uniform buffer.
-			int32_t shadow_id = -1; // Position in the shadow uniform buffer.
-			RID light_instance_rid;
-			bool is_omni = false;
-		};
-
-		LocalVector<LightPass> light_passes;
-
 		uint32_t paired_omni_light_count = 0;
 		uint32_t paired_spot_light_count = 0;
 		LocalVector<RID> paired_omni_lights;
@@ -354,8 +345,6 @@ private:
 		LocalVector<uint32_t> spot_light_gl_cache;
 
 		LocalVector<RID> paired_reflection_probes;
-		LocalVector<RID> reflection_probe_rid_cache;
-		LocalVector<Transform3D> reflection_probes_local_transform_cache;
 
 		RID skeleton;
 		RID lightmap_instance;
@@ -434,6 +423,9 @@ private:
 	}
 
 	_FORCE_INLINE_ void _gl_reset_instancing_attributes() {
+		if (!scene_state.instancing_attribs_dirty) {
+			return;
+		}
 		glDisableVertexAttribArray(12);
 		glDisableVertexAttribArray(13);
 		glDisableVertexAttribArray(14);
@@ -442,6 +434,7 @@ private:
 		glVertexAttrib4f(13, 0.0f, 1.0f, 0.0f, 0.0f);
 		glVertexAttrib4f(14, 0.0f, 0.0f, 1.0f, 0.0f);
 		glVertexAttrib4f(15, 1.0f, 1.0f, 1.0f, 1.0f);
+		scene_state.instancing_attribs_dirty = false;
 	}
 
 	/* UTILITIES */
@@ -452,6 +445,13 @@ private:
 		bool uses_colors = false;
 		RS::MultimeshTransformFormat format = RS::MULTIMESH_TRANSFORM_3D;
 	};
+
+	enum AdditiveLightType {
+		ADDITIVE_LIGHT_DIRECTIONAL,
+		ADDITIVE_LIGHT_OMNI,
+		ADDITIVE_LIGHT_SPOT
+	};
+
 	MultiMeshInstanceData _get_multimesh_data(const GeometryInstanceSurface *p_surface);
 
 	bool _promote_batch_to_instancing(BatcherEnums::FVF p_fvf, const Transform3D &p_world_transform) const {
@@ -459,6 +459,17 @@ private:
 			return (_render_item_state.curr_batch->flags & BatcherEnums::BTF_3D_USES_INSTANCING) != 0;
 		}
 		return p_fvf == BatcherEnums::FVF_INSTANCED;
+	}
+
+	_FORCE_INLINE_ AABB _compute_positional_light_aabb(const LightData &p_light) const {
+		const float radius = (p_light.inv_radius > 0.0f) ? (1.0f / p_light.inv_radius) : 0.0f;
+		const Vector3 pos(p_light.world_position[0], p_light.world_position[1], p_light.world_position[2]);
+		const Vector3 ext(radius, radius, radius);
+		return AABB(pos - ext, ext * 2.0f);
+	}
+
+	_FORCE_INLINE_ bool _is_aabb_culled_by_positional_light(const AABB &p_aabb, const LightData &p_light) const {
+		return !_compute_positional_light_aabb(p_light).intersects(p_aabb);
 	}
 
 	void _record_draw_call_info(RenderingMethod::RenderInfo* r_rendering_info) {
@@ -478,11 +489,80 @@ private:
 		}
 	}
 
-	enum AdditiveLightType {
-		ADDITIVE_LIGHT_DIRECTIONAL,
-		ADDITIVE_LIGHT_OMNI,
-		ADDITIVE_LIGHT_SPOT
-	};
+	template <AdditiveLightType p_additive_light_type, bool p_is_batch>
+	_FORCE_INLINE_ void _get_unique_light_vector(
+		LocalVector<uint32_t> &r_unique_lights,
+		const GeometryInstanceSurface *p_surf = nullptr
+	) {
+		r_unique_lights.clear();
+
+		if constexpr (p_is_batch) {
+			if (_render_item_state.curr_batch) {
+				const BatchType::Batch3D &batch = *_render_item_state.curr_batch;
+				for (uint32_t r = 0; r < batch.num_item_refs; r++) {
+					const BatchType::BItemRef3D &ref = bdata.item_refs[batch.first_item_ref + r];
+					const GeometryInstanceSurface *surf = static_cast<const GeometryInstanceSurface *>(ref.surface);
+					if (!surf || !surf->owner || ref.instance_count == 0) {
+						continue;
+					}
+
+					if constexpr (p_additive_light_type == ADDITIVE_LIGHT_OMNI) {
+						const uint32_t s_omni_count = surf->owner->omni_light_gl_cache.size();
+						for (uint32_t l = 0; l < s_omni_count; l++) {
+							const uint32_t gl_id = surf->owner->omni_light_gl_cache[l];
+							if (
+								gl_id < scene_state.omni_light_count &&
+								!r_unique_lights.has(gl_id) &&
+								!_is_aabb_culled_by_positional_light(batch.bounding_aabb, scene_state.omni_lights[gl_id])
+							) {
+								r_unique_lights.push_back(gl_id);
+							}
+						}
+					} else if constexpr (p_additive_light_type == ADDITIVE_LIGHT_SPOT) {
+						const uint32_t s_spot_count = surf->owner->spot_light_gl_cache.size();
+						for (uint32_t l = 0; l < s_spot_count; l++) {
+							const uint32_t gl_id = surf->owner->spot_light_gl_cache[l];
+							if (
+								gl_id < scene_state.spot_light_count &&
+								!r_unique_lights.has(gl_id) &&
+								!_is_aabb_culled_by_positional_light(batch.bounding_aabb, scene_state.spot_lights[gl_id])
+							) {
+								r_unique_lights.push_back(gl_id);
+							}
+						}
+					}
+				}
+			}
+		} else if (p_surf && p_surf->owner) {
+			const AABB &inst_aabb = p_surf->owner->transformed_aabb;
+
+			if constexpr (p_additive_light_type == ADDITIVE_LIGHT_OMNI) {
+				const uint32_t s_omni_count = p_surf->owner->omni_light_gl_cache.size();
+				for (uint32_t l = 0; l < s_omni_count; l++) {
+					const uint32_t gl_id = p_surf->owner->omni_light_gl_cache[l];
+					if (
+						gl_id < scene_state.omni_light_count &&
+						!r_unique_lights.has(gl_id) &&
+						!_is_aabb_culled_by_positional_light(inst_aabb, scene_state.omni_lights[gl_id])
+					) {
+						r_unique_lights.push_back(gl_id);
+					}
+				}
+			} else if constexpr (p_additive_light_type == ADDITIVE_LIGHT_SPOT) {
+				const uint32_t s_spot_count = p_surf->owner->spot_light_gl_cache.size();
+				for (uint32_t l = 0; l < s_spot_count; l++) {
+					const uint32_t gl_id = p_surf->owner->spot_light_gl_cache[l];
+					if (
+						gl_id < scene_state.spot_light_count &&
+						!r_unique_lights.has(gl_id) &&
+						!_is_aabb_culled_by_positional_light(inst_aabb, scene_state.spot_lights[gl_id])
+					) {
+						r_unique_lights.push_back(gl_id);
+					}
+				}
+			}
+		}
+	}
 
 	/* REST OF GEOMETRY FUNCTIONS */
 
@@ -574,12 +654,27 @@ private:
 		};
 		static_assert(sizeof(TonemapUBO) % 16 == 0, "Tonemap UBO size must be a multiple of 16 bytes");
 
+		struct ProgramCameraStateKey {
+			uint64_t version_id = 0;
+			uint64_t spec_constants = 0;
+			uint32_t variant = 0;
+			uint32_t generation = 0;
+		};
+
 		UBO ubo;
 		GLuint ubo_buffer = 0;
 		MultiviewUBO multiview_ubo;
 		GLuint multiview_buffer = 0;
 		TonemapUBO tonemap_ubo;
 		GLuint tonemap_buffer = 0;
+
+		Projection cached_projection;
+		Projection cached_inv_projection;
+		Transform3D cached_view_matrix;
+		Transform3D cached_inv_view_matrix;
+		Transform3D cached_main_cam_inv_view_matrix;
+		Basis cached_radiance_inverse_xform;
+		Projection cached_directional_shadow_matrices[4];
 
 		bool used_depth_prepass = false;
 
@@ -590,6 +685,60 @@ private:
 		bool current_depth_draw_enabled = false;
 		bool current_depth_test_enabled = false;
 		bool current_scissor_test_enabled = false;
+
+		// VBO, IBO, attribute mask and FVF layout tracker(s).
+		GLuint current_array_buffer = 0;
+		GLuint current_element_array_buffer = 0;
+		uint32_t enabled_vertex_attrib_mask = 0;
+		bool instancing_attribs_dirty = true;
+
+		void bind_gl_array_buffer(GLuint p_buffer) {
+			if (current_array_buffer != p_buffer) {
+				glBindBuffer(GL_ARRAY_BUFFER, p_buffer);
+				current_array_buffer = p_buffer;
+			}
+		}
+
+		void bind_gl_element_array_buffer(GLuint p_buffer) {
+			if (current_element_array_buffer != p_buffer) {
+				glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, p_buffer);
+				current_element_array_buffer = p_buffer;
+			}
+		}
+
+		void set_gl_vertex_attrib_mask(uint32_t p_mask) {
+			uint32_t diff = enabled_vertex_attrib_mask ^ p_mask;
+			if (diff == 0) {
+				return;
+			}
+			for (uint32_t i = 0; i < RS::ARRAY_INDEX; i++) {
+				const uint32_t bit = (1U << i);
+				if (diff & bit) {
+					if (p_mask & bit) {
+						glEnableVertexAttribArray(i);
+					} else {
+						glDisableVertexAttribArray(i);
+					}
+				}
+			}
+			enabled_vertex_attrib_mask = p_mask;
+		}
+
+		void reset_gl_vertex_buffer_state() {
+			if (GLES2_CONFIG->support_vao) {
+				glBindVertexArray(0);
+			}
+			for (uint32_t i = 0; i < RS::ARRAY_INDEX; i++) {
+				glDisableVertexAttribArray(i);
+			}
+			enabled_vertex_attrib_mask = 0;
+			glBindBuffer(GL_ARRAY_BUFFER, 0);
+			glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+			current_array_buffer = 0;
+			current_element_array_buffer = 0;
+			instancing_attribs_dirty = true;
+			glVertexAttrib4f(RS::ARRAY_COLOR, 1.0f, 1.0f, 1.0f, 1.0f);
+		}
 
 		void reset_gl_state() {
 			glDisable(GL_BLEND);
@@ -614,6 +763,11 @@ private:
 			current_depth_draw_enabled = false;
 			glDisable(GL_DEPTH_TEST);
 			current_depth_test_enabled = false;
+
+			current_array_buffer = 0;
+			current_element_array_buffer = 0;
+			enabled_vertex_attrib_mask = 0;
+			instancing_attribs_dirty = true;
 		}
 
 		void set_gl_blend_mode(GLES2::SceneShaderData::BlendMode p_mode) {
@@ -709,18 +863,61 @@ private:
 			}
 		}
 
+		bool check_and_mark_program_camera_bound(RID p_version, SceneShaderGLES2::ShaderVariant p_variant, uint64_t p_spec_constants) {
+			// Verify that this pass actually requires uniforms to be
+			// binded.
+			// 
+			// Improves performance by not rebinding all of the 30+ uniforms
+			// in every single pass.
+			const uint64_t ver_id = p_version.get_id();
+			const uint32_t var_id = static_cast<uint32_t>(p_variant);
+			ProgramCameraStateKey *keys = program_camera_state_cache.ptr();
+			const uint32_t count = program_camera_state_cache.size();
+
+			for (uint32_t i = 0; i < count; i++) {
+				if (
+					keys[i].version_id == ver_id &&
+					keys[i].variant == var_id &&
+					keys[i].spec_constants == p_spec_constants
+				) {
+					if (keys[i].generation == camera_pass_generation) {
+						return true;
+					}
+					keys[i].generation = camera_pass_generation;
+					return false;
+				}
+			}
+
+			ProgramCameraStateKey new_key;
+			new_key.version_id = ver_id;
+			new_key.spec_constants = p_spec_constants;
+			new_key.variant = var_id;
+			new_key.generation = camera_pass_generation;
+			program_camera_state_cache.push_back(new_key);
+			return false;
+		}
+
 		bool texscreen_copied = false;
 		bool used_screen_texture = false;
 		bool used_normal_texture = false;
 		bool used_depth_texture = false;
 		uint64_t current_spec_constants = 0;
+		SceneShaderGLES2::ShaderVariant current_shader_variant = SceneShaderGLES2::MODE_COLOR;
+		bool additive_pass_mutated_state = false;
+		bool is_directional_additive_replay = false;
 		Vector2 current_uv_offset = Vector2(0, 0);
 		bool transparent_bg = false;
 		RenderingMethod::RenderInfo *current_render_info = nullptr;
 
+		uint32_t camera_pass_generation = 0;
+		LocalVector<ProgramCameraStateKey> program_camera_state_cache;
+
 		LightData *omni_lights = nullptr;
 		LightData *spot_lights = nullptr;
 		ShadowData *positional_shadows = nullptr;
+
+		LocalVector<uint32_t> group_omni_lights_scratch;
+		LocalVector<uint32_t> group_spot_lights_scratch;
 
 		InstanceSort<GLES2::LightInstance> *omni_light_sort;
 		InstanceSort<GLES2::LightInstance> *spot_light_sort;
@@ -830,18 +1027,38 @@ private:
 	template <PassMode p_pass_mode>
 	_FORCE_INLINE_ void _render_list_template(RenderListParameters *p_params, const RenderDataGLES2 *p_render_data, uint32_t p_from_element, uint32_t p_to_element, bool p_alpha_pass = false, bool p_replay = false);
 
+	template <PassMode p_pass_mode>
+	_FORCE_INLINE_ void _render_directional_light_replay_pass(RenderListParameters *p_params, const RenderDataGLES2 *p_render_data, uint32_t p_from_element, uint32_t p_to_element, bool p_alpha_pass = false);
+
+	// TODO: This is ugly. To prettify later.
+	struct BatchBoundGeometryStateGLES2;
+
 	template <AdditiveLightType p_light_type, bool p_is_batch>
-	_FORCE_INLINE_ void _execute_additive_light_draw(uint32_t p_light_gl_id, GLES2::SceneMaterialData *p_material, SceneShaderGLES2::ShaderVariant p_variant, uint64_t p_spec_constants, const Transform3D &p_world_xform, RS::PrimitiveType p_primitive, int p_instances, const MultiMeshInstanceData *p_mm, const Transform3D *p_owner_transform, bool p_use_index_buffer, GLenum p_primitive_gl, int p_drawn_count, GLenum p_index_type, RS::InstanceType p_base_type);
+	_FORCE_INLINE_ void _execute_additive_light_draw(uint32_t p_light_gl_id, GLES2::SceneMaterialData *p_material, SceneShaderGLES2::ShaderVariant p_variant, uint64_t p_spec_constants, const Transform3D &p_world_xform, RS::PrimitiveType p_primitive, int p_instances, const MultiMeshInstanceData *p_mm, const Transform3D *p_owner_transform, bool p_use_index_buffer, GLenum p_primitive_gl, int p_drawn_count, GLenum p_index_type, RS::InstanceType p_base_type, const BatchBoundGeometryStateGLES2 *p_bound_state = nullptr);
 
 	template <bool p_is_batch>
-	_FORCE_INLINE_ void _render_additive_light_passes(const GeometryInstanceSurface *p_surf, GLES2::SceneMaterialData *p_material, uint64_t p_spec_constants, bool p_instancing, const Transform3D &p_world_xform, RS::PrimitiveType p_primitive, int p_instances = 1, const MultiMeshInstanceData *p_mm = nullptr, const Transform3D *p_owner_transform = nullptr, bool p_use_index_buffer = false, GLenum p_primitive_gl = 0, int p_drawn_count = 0, GLenum p_index_type = 0);
+	_FORCE_INLINE_ void _render_additive_light_passes(const GeometryInstanceSurface *p_surf, GLES2::SceneMaterialData *p_material, uint64_t p_spec_constants, bool p_instancing, const Transform3D &p_world_xform, RS::PrimitiveType p_primitive, int p_instances = 1, const MultiMeshInstanceData *p_mm = nullptr, const Transform3D *p_owner_transform = nullptr, bool p_use_index_buffer = false, GLenum p_primitive_gl = 0, int p_drawn_count = 0, GLenum p_index_type = 0, const BatchBoundGeometryStateGLES2 *p_bound_state = nullptr);
+
+	template <AdditiveLightType p_light_type>
+	_FORCE_INLINE_ void _upload_additive_light_uniforms(uint32_t p_light_gl_id, RID p_version, SceneShaderGLES2::ShaderVariant p_variant, uint64_t p_spec_constants);
 
 	/* Batch API */
+
+	struct BatchBoundGeometryStateGLES2 {
+		bool valid = false;
+		bool is_single_mesh_fallback = false;
+		bool use_index_buffer = false;
+		GLenum index_type = GL_UNSIGNED_SHORT;
+		uint32_t index_size = sizeof(uint16_t);
+		uint32_t default_draw_count = 0;
+		size_t ibo_byte_ofs = 0;
+	};
 
 	void scene_render_items_implementation(GeometryInstanceSurface **p_surfaces, int p_count, const Transform3D &p_camera_transform, bool p_transparent);
 
 	void _batch_get_hardware_limits(BatchType::BatchLimits &r_limits);
 	void _batch_get_instance_geometry_capacity(const GeometryInstanceSurface *p_surface, uint32_t &r_vertex_count, uint32_t &r_index_count);
+	void _batch_resolve_pass_surface_state(const GeometryInstanceSurface *p_surface, GLES2::SceneMaterialData *&r_material, GLES2::SceneShaderData *&r_shader, RS::CullMode &r_cull_mode) const;
 	float _batch_get_item_depth(const GeometryInstanceSurface *p_surface, const Transform3D &p_camera_transform);
 	uint64_t _batch_get_state_hash(const GeometryInstanceSurface *p_surface);
 	uint32_t _batch_get_surface_flags(const GeometryInstanceSurface *p_surface) const;
@@ -852,13 +1069,18 @@ private:
 	}
 	bool _batch_can_use_single_mesh_fallback(const GeometryInstanceSurface *p_surface) const;
 	_FORCE_INLINE_ bool _batch_buffer_orphan_and_upload_3d(unsigned int p_buffer_size_bytes, unsigned int p_offset_bytes, unsigned int p_data_size_bytes, const void *p_data, GLenum p_target, GLenum p_usage, bool p_optional_orphan) const;
-	
+
 	GLES2::SceneMaterialData *_batch_get_material_data(const GeometryInstanceSurface *p_surface);
 
+	void _batch_prepare_surface_world_cache(const GeometryInstanceSurface *p_surface, const BatchType::BItemRef3D &p_ref, BatchType::TransformMode3D p_effective_mode, bool p_need_tangents);
 	void _batch_fill_instance_tiered(const BatchType::BItemRef3D &p_ref, uint8_t *r_bvs, uint16_t *r_inds, uint32_t p_start_vert, bool p_use_hardware_transform, uint32_t p_item_index);
 	void _batch_fill_multimesh_tiered(const BatchType::BItemRef3D &p_ref, uint8_t *r_bvs, uint16_t *r_inds, uint32_t p_start_vert, bool p_use_hardware_transform, uint32_t p_item_index);
 	void _batch_fill_instance_depth(const BatchType::BItemRef3D &p_ref, uint8_t *r_bvs, uint16_t *r_inds, uint32_t p_start_vert, bool p_use_hardware_transform, uint32_t p_item_index);
 	void _batch_fill_multimesh_depth(const BatchType::BItemRef3D &p_ref, uint8_t *r_bvs, uint16_t *r_inds, uint32_t p_start_vert, bool p_use_hardware_transform, uint32_t p_item_index);
+
+	bool _batch_bind_generic_buffers(bool p_has_color, BatchBoundGeometryStateGLES2 &r_state);
+	bool _batch_bind_single_mesh_fallback_buffers(bool p_has_color, BatchBoundGeometryStateGLES2 &r_state);
+	void _batch_draw_bound_buffers(RS::PrimitiveType p_primitive, uint32_t p_offset, uint32_t p_count, const BatchBoundGeometryStateGLES2 &p_state);
 
 	void _batch_upload_buffers_3d(BatchType::Batch3D &r_batch, uint64_t p_content_hash);
 	bool _batch_try_reuse_cached_vbo_slot_3d(RasterizerSceneBatcherCommon<BatcherAPISceneGLES2>::Batch3D &r_batch, uint64_t p_content_hash);
@@ -869,6 +1091,7 @@ private:
 	void _batch_render_static_mesh_group(GLES2::SceneMaterialData *p_material_data, RS::PrimitiveType p_primitive, BatchType::Batch3D &p_batch, bool p_transparent);
 	void _batch_threshold_flush();
 
+	void _render_static_mesh_group_additive_light_passes(BatchType::Batch3D &p_batch, GLES2::SceneMaterialData *p_material_data, GLES2::SceneShaderData *p_shader, uint64_t p_spec_constants, bool p_promote_to_instancing, bool p_use_index_buffer, GLenum p_primitive_gl, int p_drawn_count, GLenum p_index_type);
 	void _render_single_item_immediate(const GeometryInstanceSurface *p_surface);
 	void _bind_scene_camera_uniforms(RID p_version, SceneShaderGLES2::ShaderVariant p_variant, uint64_t p_spec_constants);
 	void _bind_sky_directional_lights(RID p_version, SkyShaderGLES2::ShaderVariant p_variant, uint64_t p_spec_constants);

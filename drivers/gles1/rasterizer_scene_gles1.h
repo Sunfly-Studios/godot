@@ -1147,6 +1147,20 @@ private:
 		return input_mask;
 	}
 
+	_FORCE_INLINE_ AABB _compute_positional_light_aabb(const LightData &p_light) const {
+		const float radius = (p_light.inv_radius > 0.0f) ? (1.0f / p_light.inv_radius) : 0.0f;
+		const Vector3 pos(p_light.position[0], p_light.position[1], p_light.position[2]);
+		const Vector3 ext(radius, radius, radius);
+		return AABB(pos - ext, ext * 2.0f);
+	}
+
+	_FORCE_INLINE_ bool _is_aabb_culled_by_active_light(const AABB &p_aabb) const {
+		if (!scene_state.is_additive_pass || !scene_state.has_active_light_bounds) {
+			return false;
+		}
+		return !scene_state.active_light_bounds.intersects(p_aabb);
+	}
+
 	_FORCE_INLINE_ void _record_draw_call_info(RenderingMethod::RenderInfo *r_rendering_info) {
 		if (!r_rendering_info) {
 			return;
@@ -1383,6 +1397,8 @@ private:
 		bool used_normal_texture = false;
 		bool used_depth_texture = false;
 		bool is_additive_pass = false;
+		bool has_active_light_bounds = false;
+		AABB active_light_bounds;
 		bool immediate_surface_has_colors = false;
 
 		GLuint current_shadow_texture = 0;
@@ -1511,7 +1527,9 @@ private:
 
 	void _batch_get_hardware_limits(BatchType::BatchLimits &r_limits);
 	void _batch_get_instance_geometry_capacity(const GeometryInstanceSurface *p_surface, uint32_t &r_vertex_count, uint32_t &r_index_count);
+	void _batch_resolve_pass_surface_state(const GeometryInstanceSurface *p_surface, GLES1::SceneMaterialData *&r_material, GLES1::SceneShaderData *&r_shader, RS::CullMode &r_cull_mode) const;
 	float _batch_get_item_depth(const GeometryInstanceSurface *p_surface, const Transform3D &p_camera_transform);
+	uint64_t _batch_compute_canonical_material_id(const GLES1::SceneMaterialData *p_material, const GLES1::SceneShaderData *p_shader) const;
 	uint64_t _batch_get_state_hash(const GeometryInstanceSurface *p_surface);
 	uint32_t _batch_get_surface_flags(const GeometryInstanceSurface *p_surface) const;
 	BatchType::BatchColor _batch_get_surface_modulate(const GeometryInstanceSurface *p_surface) const;
@@ -1520,9 +1538,10 @@ private:
 	}
 	bool _batch_can_use_single_mesh_fallback(const GeometryInstanceSurface *p_surface) const;
 	_FORCE_INLINE_ bool _batch_buffer_orphan_and_upload_3d(unsigned int p_buffer_size_bytes, unsigned int p_offset_bytes, unsigned int p_data_size_bytes, const void *p_data, GLenum p_target, GLenum p_usage, bool p_optional_orphan) const;
-	
+
 	GLES1::SceneMaterialData *_batch_get_material_data(const GeometryInstanceSurface *p_surface);
 
+	void _batch_prepare_surface_world_cache(const GeometryInstanceSurface *p_surface, const BatchType::BItemRef3D &p_ref, BatchType::TransformMode3D p_effective_mode, bool p_need_tangents);
 	void _batch_fill_instance_tiered(const BatchType::BItemRef3D &p_ref, uint8_t *r_bvs, uint16_t *r_inds, uint32_t p_start_vert, bool p_use_hardware_transform, uint32_t p_item_index);
 	void _batch_fill_multimesh_tiered(const BatchType::BItemRef3D &p_ref, uint8_t *r_bvs, uint16_t *r_inds, uint32_t p_start_vert, bool p_use_hardware_transform, uint32_t p_item_index);
 	void _batch_fill_instance_depth(const BatchType::BItemRef3D &p_ref, uint8_t *r_bvs, uint16_t *r_inds, uint32_t p_start_vert, bool p_use_hardware_transform, uint32_t p_item_index);

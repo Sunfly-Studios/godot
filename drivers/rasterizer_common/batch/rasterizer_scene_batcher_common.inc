@@ -202,11 +202,15 @@ void RasterizerSceneBatcherCommon<T_API>::record_items(T_SURFACE **p_surfaces, i
 		);
 		const bool is_particles = (surface->owner->data->base_type == RS::INSTANCE_PARTICLES);
 		const bool is_multimesh = (surface->owner->data->base_type == RS::INSTANCE_MULTIMESH);
+		const bool is_strip = (
+			surface->primitive == RS::PRIMITIVE_TRIANGLE_STRIP ||
+			surface->primitive == RS::PRIMITIVE_LINE_STRIP
+		);
 		const bool can_use_static_lane = (
 			bdata.settings_use_single_mesh_fallback &&
 			get_this()->_batch_can_use_single_mesh_fallback(surface)
 		);
-		const bool wants_static_lane = is_multimesh || (base_verts > bdata.settings_dynamic_vertex_limit);
+		const bool wants_static_lane = _should_use_static_vbo_loop(base_verts, base_indices, instances, is_multimesh, is_strip);
 
 		// Route deformed meshes, particles, extreme AABBs,
 		// or unsupported static-lane candidates to RSII bypass.
@@ -226,6 +230,9 @@ void RasterizerSceneBatcherCommon<T_API>::record_items(T_SURFACE **p_surfaces, i
 				bypassed_trans.item = (void*)surface;
 				bypassed_trans.depth = get_this()->_batch_get_item_depth(surface, p_camera_transform);
 				bypassed_trans.state_hash = 0; // Don't care for bypass transparent
+				bypassed_trans.mesh_id = 0;
+				bypassed_trans.surface_index = 0;
+				bypassed_trans.use_static_vbo_loop = false;
 				bdata.bypassed_transparent_items.push_back(bypassed_trans);
 			}
 			continue;
@@ -254,6 +261,7 @@ void RasterizerSceneBatcherCommon<T_API>::record_items(T_SURFACE **p_surfaces, i
 		// Get mesh ID
 		s->mesh_id = surface->surface ? static_cast<uint32_t>((uintptr_t)surface->surface >> 4) : 0;
 		s->surface_index = surface->surface_index;
+		s->use_static_vbo_loop = wants_static_lane;
 	}
 }
 
@@ -262,17 +270,15 @@ bool RasterizerSceneBatcherCommon<T_API>::_sort_items_match_3d(const BSortItem3D
 	if ((p_a.state_hash & MASK_ID) != (p_b.state_hash & MASK_ID)) {
 		return false;
 	}
-
-	const uint32_t limit = bdata.settings_dynamic_vertex_limit;
-	const uint32_t verts_a = p_a.item ? static_cast<const typename T_API::Scene::GeometryInstanceSurface *>(p_a.item)->vertex_cache.size() : 0;
-	const uint32_t verts_b = p_b.item ? static_cast<const typename T_API::Scene::GeometryInstanceSurface *>(p_b.item)->vertex_cache.size() : 0;
-	const bool static_a = (verts_a > limit) || (p_a.item && static_cast<const typename T_API::Scene::GeometryInstanceSurface *>(p_a.item)->owner->data->base_type == RS::INSTANCE_MULTIMESH);
-	const bool static_b = (verts_b > limit) || (p_b.item && static_cast<const typename T_API::Scene::GeometryInstanceSurface *>(p_b.item)->owner->data->base_type == RS::INSTANCE_MULTIMESH);
-	if (static_a != static_b) {
+	if (p_a.use_static_vbo_loop != p_b.use_static_vbo_loop) {
 		return false;
 	}
-	if (static_a) {
-		return (p_a.mesh_id == p_b.mesh_id) && (p_a.surface_index == p_b.surface_index);
+	if (p_a.use_static_vbo_loop) {
+		return (
+			(p_a.state_hash == p_b.state_hash) &&
+			(p_a.mesh_id == p_b.mesh_id) &&
+			(p_a.surface_index == p_b.surface_index)
+		);
 	}
 	return true;
 }
@@ -421,15 +427,16 @@ void RasterizerSceneBatcherCommon<T_API>::join_sorted_items() {
 		uint32_t surf_flags = get_this()->_batch_get_surface_flags(surface);
 		BatchColor surf_modulate = get_this()->_batch_get_surface_modulate(surface);
 		const bool is_multimesh = (surf_flags & BatcherEnums::BTF_3D_USES_INSTANCING) != 0;
-		const bool item_uses_static_loop = is_multimesh || (base_verts > bdata.settings_dynamic_vertex_limit);
+		const bool item_uses_static_loop = bdata.sort_items[i].use_static_vbo_loop;
+		const uint32_t max_safe_verts = MIN((uint32_t)bdata.unit_vertices.max_size(), 65535U);
 
 		bool capacity_full = false;
 		if (curr_joined && !curr_joined->use_static_vbo_loop && !item_uses_static_loop) {
 			// A joined group must break if appending the new item would exceed:
-			// - The maximum allocated vertex buffer size.
+			// - The maximum allocated vertex buffer size (capped at 65535 for uint16_t indices).
 			// - The maximum allocated index buffer size.
 			// - The maximum number of uniforms available on the hardware for matrix palettes.
-			if ((curr_joined->total_verts + incoming_verts > (uint32_t)bdata.unit_vertices.max_size()) ||
+			if ((curr_joined->total_verts + incoming_verts > max_safe_verts) ||
 				(curr_joined->total_indices + incoming_indices + join_stitch_indices > (uint32_t)bdata.indices.max_size()) ||
 				(_render_item_state.consumed_uniform_vectors + incoming_uniform_vectors > bdata.hardware_limits.max_matrix_palette_vectors)) {
 				capacity_full = true;
@@ -610,6 +617,7 @@ void RasterizerSceneBatcherCommon<T_API>::join_and_flush_sorted_items(bool p_tra
 		batch->num_indices = 0;
 		batch->vbo_byte_offset = 0;
 		batch->ibo_byte_offset = 0;
+		batch->bounding_aabb = joined.bounding_aabb;
 		uint32_t effective_flags = joined.flags;
 		bdata.total_color_changes = joined.total_color_changes;
 
@@ -618,10 +626,17 @@ void RasterizerSceneBatcherCommon<T_API>::join_and_flush_sorted_items(bool p_tra
 			!(effective_flags & BatcherEnums::BTF_3D_PREVENT_COLOR_BAKING) &&
 			joined.num_item_refs > 0
 		) {
-			float ratio = static_cast<float>(joined.total_color_changes > 0 ? (joined.total_color_changes - 1) : 0) / static_cast<float>(joined.num_item_refs);
-			if (ratio >= bdata.settings_colored_vertex_format_threshold) {
+			if (T_API::FORCE_BAKE_MODULATE && joined.total_color_changes > 1) {
+				// When FORCE_BAKE_MODULATE merges distinct material albedos into a single batch,
+				// promote to Tier 2 unconditionally so per-item colors are preserved in the VBO.
 				effective_flags |= BatcherEnums::BTF_3D_USES_COLORS;
 				bdata.use_colored_vertices = true;
+			} else {
+				float ratio = static_cast<float>(joined.total_color_changes > 0 ? (joined.total_color_changes - 1) : 0) / static_cast<float>(joined.num_item_refs);
+				if (ratio >= bdata.settings_colored_vertex_format_threshold) {
+					effective_flags |= BatcherEnums::BTF_3D_USES_COLORS;
+					bdata.use_colored_vertices = true;
+				}
 			}
 		}
 
@@ -937,6 +952,53 @@ void RasterizerSceneBatcherCommon<T_API>::_software_transform_normal_precomputed
 	r_n.to(nc);
 	nc = p_cofactor.xform(nc).normalized();
 	r_n.set(nc);
+}
+
+template <typename T_API>
+uint32_t RasterizerSceneBatcherCommon<T_API>::_get_effective_dynamic_vertex_limit() const {
+	const bool is_depth_pass = (
+		bdata.pass_mode == BatcherEnums::PASS_MODE_SHADOW ||
+		bdata.pass_mode == BatcherEnums::PASS_MODE_DEPTH
+	);
+	const uint32_t limit = is_depth_pass
+		? (bdata.settings_dynamic_vertex_limit * 4U)
+		: bdata.settings_dynamic_vertex_limit;
+	const uint32_t max_safe_verts = MIN((uint32_t)bdata.unit_vertices.max_size(), 65535U);
+	return MIN(limit, max_safe_verts);
+}
+
+template <typename T_API>
+bool RasterizerSceneBatcherCommon<T_API>::_should_use_static_vbo_loop(uint32_t p_base_verts, uint32_t p_base_indices, uint32_t p_instances, bool p_is_multimesh, bool p_is_strip) const {
+	const uint32_t effective_limit = _get_effective_dynamic_vertex_limit();
+	if (!p_is_multimesh) {
+		return p_base_verts > effective_limit;
+	}
+	if (p_base_verts > effective_limit) {
+		return true;
+	}
+
+	const uint64_t total_verts = static_cast<uint64_t>(p_base_verts) * static_cast<uint64_t>(p_instances);
+	const uint64_t stitch_indices = (p_is_strip && p_instances > 1) ? (static_cast<uint64_t>(p_instances - 1) * 2ULL) : 0ULL;
+	const uint64_t total_indices = (static_cast<uint64_t>(p_base_indices) * static_cast<uint64_t>(p_instances)) + stitch_indices;
+	const uint64_t uniform_vectors = static_cast<uint64_t>(p_instances) * 3ULL;
+
+	const uint64_t max_safe_verts = MIN(static_cast<uint64_t>(bdata.unit_vertices.max_size()), 65535ULL);
+	if (
+		total_verts > static_cast<uint64_t>(effective_limit) ||
+		total_verts > max_safe_verts ||
+		total_indices > static_cast<uint64_t>(bdata.indices.max_size()) ||
+		uniform_vectors > static_cast<uint64_t>(bdata.hardware_limits.max_matrix_palette_vectors)
+	) {
+		return true;
+	}
+
+	// Triangle strips with odd per-instance index counts flip
+	// winding parity across stitched instances.
+	if (p_is_strip && p_instances > 1 && (p_base_indices & 1U) != 0U) {
+		return true;
+	}
+
+	return false;
 }
 
 template <typename T_API>
