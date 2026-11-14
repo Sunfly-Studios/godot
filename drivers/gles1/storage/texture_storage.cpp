@@ -1629,6 +1629,13 @@ void TextureStorage::texture_bind(RID p_texture, uint32_t p_texture_no) {
 }
 
 GLES1::Texture *TextureStorage::texture_bind_and_validate(RID p_texture, GLenum p_texture_unit, RS::CanvasItemTextureFilter p_filter, RS::CanvasItemTextureRepeat p_repeat) {
+	if (p_texture.is_null()) {
+		p_texture = texture_gl_get_default(DEFAULT_GL_TEXTURE_WHITE);
+	} else if (owns_canvas_texture(p_texture)) {
+		CanvasTexture *ct = get_canvas_texture(p_texture);
+		p_texture = (ct && ct->diffuse.is_valid()) ? ct->diffuse : texture_gl_get_default(DEFAULT_GL_TEXTURE_WHITE);
+	}
+
 	Texture *texture = get_texture(p_texture);
 
 	if (texture && texture->context_generation != GLES1_CONFIG->context_generation) {
@@ -2102,6 +2109,18 @@ void TextureStorage::_create_render_target_backbuffer(RenderTarget *rt) {
 		return;
 	}
 
+	// Save state
+	GLint previous_fbo = 0;
+	glGetIntegerv(GL_FRAMEBUFFER_BINDING_OES, &previous_fbo);
+
+	GLint prev_active_tex = 0;
+	if (GLES1_CONFIG->max_texture_units > 1) {
+		glGetIntegerv(GL_ACTIVE_TEXTURE, &prev_active_tex);
+		glActiveTexture(GL_TEXTURE0);
+	}
+	GLint previous_tex = 0;
+	glGetIntegerv(GL_TEXTURE_BINDING_2D, &previous_tex);
+
 	glGenFramebuffersOES(1, &rt->backbuffer_fbo);
 	bind_framebuffer(rt->backbuffer_fbo);
 	GL_CHECK_ERROR("GLES1::TextureStorage::_create_render_target_backbuffer: backbuffer FBO");
@@ -2132,7 +2151,11 @@ void TextureStorage::_create_render_target_backbuffer(RenderTarget *rt) {
 		WARN_PRINT("Could not create render target backbuffer FBO, status: " + get_framebuffer_error(status));
 	}
 
-	bind_framebuffer(system_fbo);
+	glBindTexture(GL_TEXTURE_2D, previous_tex);
+	if (GLES1_CONFIG->max_texture_units > 1) {
+		glActiveTexture(prev_active_tex);
+	}
+	bind_framebuffer(previous_fbo);
 }
 
 void GLES1::TextureStorage::check_backbuffer(RenderTarget *rt, const bool uses_screen_texture, const bool uses_depth_texture) {
@@ -2192,6 +2215,14 @@ void TextureStorage::_clear_render_target(RenderTarget *rt) {
 		}
 		GL_CHECK_ERROR("GLES1::TextureStorage::_clear_render_target: glDeleteTextures (backbuffer)");
 		rt->backbuffer = 0;
+	}
+
+	if (rt->backbuffer_fbo != 0) {
+		if (GLES1_CONFIG->support_fbo) {
+			glDeleteFramebuffersOES(1, &rt->backbuffer_fbo);
+			GL_CHECK_ERROR("GLES1::TextureStorage::_clear_render_target: glDeleteFramebuffersOES (backbuffer_fbo)");
+		}
+		rt->backbuffer_fbo = 0;
 	}
 }
 
@@ -2631,6 +2662,15 @@ void TextureStorage::render_target_copy_to_back_buffer(RID p_render_target, cons
 	RenderTarget *rt = render_target_owner.get_or_null(p_render_target);
 	ERR_FAIL_NULL(rt);
 
+	if (rt->backbuffer_fbo == 0 && GLES1_CONFIG->support_fbo && !rt->direct_to_screen) {
+		_create_render_target_backbuffer(rt);
+	}
+
+	GLint previous_fbo = 0;
+	if (GLES1_CONFIG->support_fbo) {
+		glGetIntegerv(GL_FRAMEBUFFER_BINDING_OES, &previous_fbo);
+	}
+
 	GLint prev_active_tex = 0;
 	if (GLES1_CONFIG->max_texture_units > 1) {
 		glGetIntegerv(GL_ACTIVE_TEXTURE, &prev_active_tex);
@@ -2640,17 +2680,19 @@ void TextureStorage::render_target_copy_to_back_buffer(RID p_render_target, cons
 	glGetIntegerv(GL_TEXTURE_BINDING_2D, &prev_bound_tex);
 	GL_CHECK_ERROR("GLES1::TextureStorage::render_target_copy_to_back_buffer: glGetIntegerv GL_TEXTURE0 texture state hijack");
 
-	// Generate the backbuffer texture
+	bind_framebuffer(rt->fbo);
+
+	// Generate the backbuffer texture if FBOs are unsupported or it wasn't created yet
 	if (rt->backbuffer == 0) {
 		glGenTextures(1, &rt->backbuffer);
 
 		if (unlikely(rt->backbuffer == 0)) {
 			// Restore hijacked active texture
 			glBindTexture(GL_TEXTURE_2D, prev_bound_tex);
-
 			if (GLES1_CONFIG->max_texture_units > 1) {
 				glActiveTexture(prev_active_tex);
 			}
+			bind_framebuffer(previous_fbo);
 			ERR_FAIL_MSG("GLES1: Failed to allocate backbuffer texture.");
 		}
 
@@ -2665,7 +2707,7 @@ void TextureStorage::render_target_copy_to_back_buffer(RID p_render_target, cons
 
 		// Allocate the VRAM for the texture,
 		// matching the FBO's format and size
-		glTexImage2D(GL_TEXTURE_2D, 0, rt->color_internal_format, rt->size.width, rt->size.height, 0, rt->color_format, GL_UNSIGNED_BYTE, nullptr);
+		glTexImage2D(GL_TEXTURE_2D, 0, rt->color_internal_format, rt->size.width, rt->size.height, 0, rt->color_format, rt->color_type, nullptr);
 		GL_CHECK_ERROR("GLES1::TextureStorage::render_target_copy_to_back_buffer: glTexImage2D backbuffer allocation");
 
 		if (!GLES1::Utilities::get_singleton()->has_texture_data(rt->backbuffer)) {
@@ -2675,26 +2717,68 @@ void TextureStorage::render_target_copy_to_back_buffer(RID p_render_target, cons
 		glBindTexture(GL_TEXTURE_2D, rt->backbuffer);
 	}
 
+	Rect2i region = p_region;
+	if (region == Rect2i()) {
+		region = Rect2i(0, 0, rt->size.width, rt->size.height);
+	} else {
+		// Clip region against render target bounds using Rect2i::intersection
+		// so negative offsets or out-of-bounds sizes never produce negative width/height
+		region = Rect2i(Size2i(), rt->size).intersection(region);
+		if (rt->direct_to_screen || rt->overridden.color.is_valid()) {
+			region.position.y = rt->size.height - (region.position.y + region.size.height);
+		}
+	}
+
+	if (region.size.width <= 0 || region.size.height <= 0) {
+		// Assume invalid
+		glBindTexture(GL_TEXTURE_2D, prev_bound_tex);
+		if (GLES1_CONFIG->max_texture_units > 1) {
+			glActiveTexture(prev_active_tex);
+		}
+		bind_framebuffer(previous_fbo);
+		return;
+	}
+
 	// The FBO we want to copy from is already bound by the engine at this exact moment.
 	// We simply command OpenGL to rip the pixels from the FBO and write them into our bound texture.
 	glCopyTexSubImage2D(GL_TEXTURE_2D, 0,
 		// Destination x, y in the texture
-		p_region.position.x, p_region.position.y,
+		region.position.x, region.position.y,
 
 		// Source x, y from the FBO
-		p_region.position.x, p_region.position.y,
+		region.position.x, region.position.y,
 
 		// Width and height to copy
-		p_region.size.width, p_region.size.height
+		region.size.width, region.size.height
 	);
 	GL_CHECK_ERROR("GLES1::TextureStorage::render_target_copy_to_back_buffer: glCopyTexSubImage2D");
 
-	// Clean up
+	if (p_gen_mipmaps) {
+		render_target_gen_back_buffer_mipmaps(p_render_target, region);
+	} else {
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+	}
+
+	// Restore TU0 first before touching screen_tex_unit
 	glBindTexture(GL_TEXTURE_2D, prev_bound_tex);
+
+	// Bind the backbuffer to the screen texture unit as well
+	GLenum screen_tex_unit = GL_TEXTURE0;
+	if (GLES1_CONFIG->max_texture_units >= 4) {
+		screen_tex_unit = GL_TEXTURE3;
+	} else if (GLES1_CONFIG->max_texture_units >= 2) {
+		screen_tex_unit = GL_TEXTURE1;
+	}
+	if (GLES1_CONFIG->max_texture_units > 1 && screen_tex_unit != GL_TEXTURE0) {
+		glActiveTexture(screen_tex_unit);
+		glBindTexture(GL_TEXTURE_2D, rt->backbuffer);
+	}
 
 	if (GLES1_CONFIG->max_texture_units > 1) {
 		glActiveTexture(prev_active_tex);
 	}
+	bind_framebuffer(previous_fbo);
 	GL_CHECK_ERROR("GLES1::TextureStorage::render_target_copy_to_back_buffer: glGetIntegerv GL_TEXTURE0 texture state restore");
 }
 
@@ -2710,30 +2794,66 @@ void TextureStorage::render_target_clear_back_buffer(RID p_render_target, const 
 		_create_render_target_backbuffer(rt);
 	}
 
-	// Store previous FBO and clear color to prevent leak
-	GLint prev_fbo;
+	// Store previous FBO, clear color, color mask, and scissor state to prevent leaks
+	GLint prev_fbo = 0;
 	glGetIntegerv(GL_FRAMEBUFFER_BINDING_OES, &prev_fbo);
-	GLfloat prev_clear_color[4];
+	GL_CHECK_ERROR("GLES1::TextureStorage::render_target_clear_back_buffer: glGetIntegerv GL_FRAMEBUFFER_BINDING_OES");
+
+	GLfloat prev_clear_color[4] = {};
 	glGetFloatv(GL_COLOR_CLEAR_VALUE, prev_clear_color);
+	GL_CHECK_ERROR("GLES1::TextureStorage::render_target_clear_back_buffer: glGetFloatv GL_COLOR_CLEAR_VALUE");
+
+	GLboolean prev_color_mask[4] = {};
+	glGetBooleanv(GL_COLOR_WRITEMASK, prev_color_mask);
+	GL_CHECK_ERROR("GLES1::TextureStorage::render_target_clear_back_buffer: glGetBooleanv GL_COLOR_WRITEMASK");
+
+	GLboolean prev_scissor_enabled = glIsEnabled(GL_SCISSOR_TEST);
+	GLint prev_scissor_box[4] = {};
+	if (prev_scissor_enabled) {
+		glGetIntegerv(GL_SCISSOR_BOX, prev_scissor_box);
+		GL_CHECK_ERROR("GLES1::TextureStorage::render_target_clear_back_buffer: glGetIntegerv GL_SCISSOR_BOX");
+	}
+
+	glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
 
 	Rect2i region;
 	if (p_region == Rect2i()) {
-		// Just do a full screen clear;
+		// Full backbuffer clear with scissor disabled so it is not clipped
+		if (prev_scissor_enabled) {
+			glDisable(GL_SCISSOR_TEST);
+		}
 		bind_framebuffer(rt->backbuffer_fbo);
 		glClearColor(p_color.r, p_color.g, p_color.b, p_color.a);
 		glClear(GL_COLOR_BUFFER_BIT);
 		GL_CHECK_ERROR("GLES1::TextureStorage::render_target_clear_back_buffer: clear screen");
 	} else {
 		region = Rect2i(Size2i(), rt->size).intersection(p_region);
-		if (region.size == Size2i()) {
+		if (region.size.width <= 0 || region.size.height <= 0) {
+			glColorMask(prev_color_mask[0], prev_color_mask[1], prev_color_mask[2], prev_color_mask[3]);
 			return; // nothing to do
 		}
+		if (rt->overridden.color.is_valid()) {
+			region.position.y = rt->size.height - (region.position.y + region.size.height);
+		}
 		bind_framebuffer(rt->backbuffer_fbo);
-		GLES1::CopyEffects::get_singleton()->set_color(p_color, region);
+		glEnable(GL_SCISSOR_TEST);
+		glScissor(region.position.x, region.position.y, region.size.width, region.size.height);
+		glClearColor(p_color.r, p_color.g, p_color.b, p_color.a);
+		glClear(GL_COLOR_BUFFER_BIT);
+		GL_CHECK_ERROR("GLES1::TextureStorage::render_target_clear_back_buffer: clear region");
 	}
 
+	// Restore state
+	if (prev_scissor_enabled) {
+		glEnable(GL_SCISSOR_TEST);
+		glScissor(prev_scissor_box[0], prev_scissor_box[1], prev_scissor_box[2], prev_scissor_box[3]);
+	} else {
+		glDisable(GL_SCISSOR_TEST);
+	}
+	glColorMask(prev_color_mask[0], prev_color_mask[1], prev_color_mask[2], prev_color_mask[3]);
 	bind_framebuffer(prev_fbo);
 	glClearColor(prev_clear_color[0], prev_clear_color[1], prev_clear_color[2], prev_clear_color[3]);
+	GL_CHECK_ERROR("GLES1::TextureStorage::render_target_clear_back_buffer: restore state");
 }
 
 void TextureStorage::render_target_gen_back_buffer_mipmaps(RID p_render_target, const Rect2i &p_region) {
@@ -2744,9 +2864,15 @@ void TextureStorage::render_target_gen_back_buffer_mipmaps(RID p_render_target, 
 		return;
 	}
 
+	GLint prev_active_tex = 0;
 	if (GLES1_CONFIG->max_texture_units > 1) {
+		glGetIntegerv(GL_ACTIVE_TEXTURE, &prev_active_tex);
 		glActiveTexture(GL_TEXTURE0);
 	}
+	GLint prev_bound_tex = 0;
+	glGetIntegerv(GL_TEXTURE_BINDING_2D, &prev_bound_tex);
+	GL_CHECK_ERROR("GLES1::TextureStorage::render_target_gen_back_buffer_mipmaps: state capture");
+
 	glBindTexture(GL_TEXTURE_2D, rt->backbuffer);
 
 	if (_gl_is_npot(rt->size.width, rt->size.height) && !GLES1_CONFIG->support_generate_mipmap) {
@@ -2761,6 +2887,12 @@ void TextureStorage::render_target_gen_back_buffer_mipmaps(RID p_render_target, 
 			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
 		}
 	}
+
+	glBindTexture(GL_TEXTURE_2D, prev_bound_tex);
+	if (GLES1_CONFIG->max_texture_units > 1) {
+		glActiveTexture(prev_active_tex);
+	}
+	GL_CHECK_ERROR("GLES1::TextureStorage::render_target_gen_back_buffer_mipmaps: state restore");
 }
 
 #endif // GLES1_ENABLED

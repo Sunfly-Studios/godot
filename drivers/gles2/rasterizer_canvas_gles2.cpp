@@ -828,6 +828,11 @@ void fragment() {
 	// Allocate the default white texture for untextured polygons/rects
 	default_canvas_texture = texture_storage->canvas_texture_allocate();
 	texture_storage->canvas_texture_initialize(default_canvas_texture);
+	texture_storage->canvas_texture_set_channel(
+		default_canvas_texture,
+		RS::CANVAS_TEXTURE_CHANNEL_DIFFUSE,
+		texture_storage->texture_gl_get_default(GLES2::DEFAULT_GL_TEXTURE_WHITE)
+	);
 }
 
 void RasterizerCanvasGLES2::update() {
@@ -885,7 +890,8 @@ void RasterizerCanvasGLES2::_bind_canvas_texture(RID p_texture, RS::CanvasItemTe
 	// Bind Diffuse (Texture Unit 0)
 	glActiveTexture(GL_TEXTURE0);
 	GL_CHECK_ERROR("GLES2::RasterizerCanvasGLES2::_bind_canvas_texture: glActiveTexture 0");
-	GLES2::Texture *texture = GLES2::TextureStorage::get_singleton()->get_texture(ct->diffuse);
+	RID diffuse_rid = ct->diffuse.is_valid() ? ct->diffuse : GLES2::TextureStorage::get_singleton()->texture_gl_get_default(GLES2::DEFAULT_GL_TEXTURE_WHITE);
+	GLES2::Texture *texture = GLES2::TextureStorage::get_singleton()->get_texture(diffuse_rid);
 
 	if (!texture || texture->tex_id == 0 || texture->width == 0 || texture->height == 0) {
 		// Something went very wrong if we're here.
@@ -1126,10 +1132,14 @@ void RasterizerCanvasGLES2::_set_canvas_uniforms() {
 
 	if (state.render_target != RID()) {
 		GLES2::RenderTarget *rt = GLES2::TextureStorage::get_singleton()->get_render_target(state.render_target);
-		if (rt) {
-			Vector2 screen_pixel_size;
-			screen_pixel_size.x = 1.0 / rt->size.width;
-			screen_pixel_size.y = 1.0 / rt->size.height;
+		if (rt && rt->size.width > 0 && rt->size.height > 0) {
+			Vector2 screen_pixel_size(1.0f / float(rt->size.width), 1.0f / float(rt->size.height));
+			state.canvas_shader->version_set_uniform(CanvasShaderGLES2::SCREEN_PIXEL_SIZE, screen_pixel_size, state.shader_version, state.mode_variant, state.specialization);
+		}
+	} else {
+		Size2i win_size = DisplayServer::get_singleton()->window_get_size();
+		if (win_size.width > 0 && win_size.height > 0) {
+			Vector2 screen_pixel_size(1.0f / float(win_size.width), 1.0f / float(win_size.height));
 			state.canvas_shader->version_set_uniform(CanvasShaderGLES2::SCREEN_PIXEL_SIZE, screen_pixel_size, state.shader_version, state.mode_variant, state.specialization);
 		}
 	}
@@ -1164,10 +1174,18 @@ void RasterizerCanvasGLES2::canvas_begin(RID p_to_render_target, bool p_to_backb
 
 	// Bind the correct Framebuffer
 	if (p_to_backbuffer) {
-		GLES2::TextureStorage::get_singleton()->bind_framebuffer(render_target ? render_target->backbuffer_fbo : 0);
+		if (render_target && render_target->backbuffer_fbo == 0) {
+			GLES2::TextureStorage::get_singleton()->check_backbuffer(render_target, true, false);
+		}
+		if (render_target && render_target->backbuffer_fbo != 0) {
+			GLES2::TextureStorage::get_singleton()->bind_framebuffer(render_target->backbuffer_fbo);
+		} else {
+			GLES2::TextureStorage::get_singleton()->bind_framebuffer(render_target ? render_target->fbo : 0);
+		}
 		GL_CHECK_ERROR("GLES2::RasterizerCanvasGLES2::canvas_begin: bind backbuffer fbo");
 		glActiveTexture(GL_TEXTURE0 + config->max_texture_image_units - 4);
-		GLES2::Texture *tex = GLES2::TextureStorage::get_singleton()->get_texture(default_canvas_texture);
+		GLES2::Texture *tex = GLES2::TextureStorage::get_singleton()->get_texture(
+				GLES2::TextureStorage::get_singleton()->texture_gl_get_default(GLES2::DEFAULT_GL_TEXTURE_WHITE));
 		if (tex) {
 			glBindTexture(GL_TEXTURE_2D, tex->tex_id);
 		}
@@ -1199,7 +1217,7 @@ void RasterizerCanvasGLES2::canvas_begin(RID p_to_render_target, bool p_to_backb
 	glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
 	GL_CHECK_ERROR("GLES2::RasterizerCanvasGLES2::canvas_begin: glColorMask");
 
-	if (render_target && render_target->clear_requested) {
+	if (!p_to_backbuffer && render_target && render_target->clear_requested) {
 		const Color &col = render_target->clear_color;
 		glClearColor(col.r, col.g, col.b, render_target->is_transparent ? col.a : 1.0f);
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
@@ -1257,11 +1275,13 @@ void RasterizerCanvasGLES2::canvas_begin(RID p_to_render_target, bool p_to_backb
 	// In Godot 4, the default Y-scale for OpenGL is positive 2.0.
 	// We only flip it to -2.0 if there is an overridden color texture (like XR).
 	float y_scale = 2.0f;
-	if (state.render_target != RID()) {
-		RID override_color = GLES2::TextureStorage::get_singleton()->render_target_get_override_color(state.render_target);
+	if (!p_to_backbuffer || !render_target || render_target->backbuffer_fbo == 0) {
+		if (state.render_target != RID()) {
+			RID override_color = GLES2::TextureStorage::get_singleton()->render_target_get_override_color(state.render_target);
 
-		if (override_color.is_valid()) {
-			y_scale = -2.0f;
+			if (override_color.is_valid()) {
+				y_scale = -2.0f;
+			}
 		}
 	}
 
@@ -1385,19 +1405,46 @@ void RasterizerCanvasGLES2::canvas_render_items(RID p_to_render_target, Item *p_
 	int current_z = 0;
 
 	while (current_item) {
-		Item *next_item = current_item->next;
+		if (current_item->canvas_group_owner != nullptr) {
+			Item *group_owner = current_item->canvas_group_owner;
+			Item *span_end = current_item;
+			int span_count = 1;
+			while (span_end->next && span_end != group_owner) {
+				span_end = span_end->next;
+				span_count++;
+			}
 
-		// Break the list temporarily to feed it cleanly into the batcher
-		current_item->next = nullptr;
+			// Flush any pending batched items before switching FBOs for the CanvasGroup span.
+			canvas_render_items_end();
+			canvas_render_items_begin(p_modulate, nullptr, p_canvas_transform);
 
-		canvas_render_items_internal(current_item, current_z, p_modulate, nullptr, p_canvas_transform);
+			Item *next_item = span_end->next;
+			span_end->next = nullptr;
 
-		// Restore the chain for any subsequent passes
-		current_item->next = next_item;
-		current_item = next_item;
-		current_z++;
+			canvas_render_items_implementation(current_item, current_z, p_modulate, nullptr, p_canvas_transform);
+
+			span_end->next = next_item;
+			current_item = next_item;
+			current_z += span_count;
+
+			// Restore clean batching state after immediate CanvasGroup execution.
+			canvas_render_items_begin(p_modulate, nullptr, p_canvas_transform);
+		} else if (current_item->canvas_group != nullptr && current_item->canvas_group->mode != RS::CANVAS_GROUP_MODE_CLIP_AND_DRAW) {
+			// Empty CanvasGroup with no children: CLIP_ONLY / TRANSPARENT draws nothing.
+			current_item = current_item->next;
+			current_z++;
+		} else {
+			Item *next_item = current_item->next;
+			current_item->next = nullptr;
+
+			canvas_render_items_internal(current_item, current_z, p_modulate, nullptr, p_canvas_transform);
+
+			// Restore the chain for any subsequent passes
+			current_item->next = next_item;
+			current_item = next_item;
+			current_z++;
+		}
 	}
-
 	canvas_render_items_end();
 
 	// ==========================================
@@ -1416,22 +1463,31 @@ void RasterizerCanvasGLES2::canvas_render_items(RID p_to_render_target, Item *p_
 
 		canvas_render_items_begin(p_modulate, current_directional_light, p_canvas_transform);
 
+		// Build a filtered linked list of items matching the directional light mask
+		// while preserving original next pointers to restore afterwards.
+		LocalVector<Item *> matched_items;
+		LocalVector<Item *> original_nexts;
 		current_item = p_item_list;
-		current_z = 0;
-
 		while (current_item) {
-			// Directional lights affect the whole canvas;
-			// only check the mask
 			if (current_item->light_mask & current_directional_light->item_mask) {
-				Item *next_item = current_item->next;
-				current_item->next = nullptr;
-
-				canvas_render_items_internal(current_item, current_z, p_modulate, current_directional_light, p_canvas_transform);
-
-				current_item->next = next_item;
+				matched_items.push_back(current_item);
+				original_nexts.push_back(current_item->next);
 			}
 			current_item = current_item->next;
-			current_z++;
+		}
+
+		if (!matched_items.is_empty()) {
+			for (uint32_t i = 0; i < matched_items.size() - 1; i++) {
+				matched_items[i]->next = matched_items[i + 1];
+			}
+			matched_items[matched_items.size() - 1]->next = nullptr;
+
+			canvas_render_items_internal(matched_items[0], 0, p_modulate, current_directional_light, p_canvas_transform);
+
+			// Restore the original chain
+			for (uint32_t i = 0; i < matched_items.size(); i++) {
+				matched_items[i]->next = original_nexts[i];
+			}
 		}
 
 		canvas_render_items_end();
@@ -1457,27 +1513,34 @@ void RasterizerCanvasGLES2::canvas_render_items(RID p_to_render_target, Item *p_
 
 		canvas_render_items_begin(p_modulate, current_light, p_canvas_transform);
 
+		LocalVector<Item *> matched_items;
+		LocalVector<Item *> original_nexts;
 		current_item = p_item_list;
-		current_z = 0;
-
 		while (current_item) {
-			// Intersection and Mask Test
 			if (current_item->light_mask & current_light->item_mask) {
 				Rect2 light_rect = current_light->rect_cache;
 				Rect2 item_rect = current_item->global_rect_cache;
 
 				if (light_rect.intersects(item_rect)) {
-					Item *next_item = current_item->next;
-					current_item->next = nullptr;
-
-					canvas_render_items_internal(current_item, current_z, p_modulate, current_light, p_canvas_transform);
-
-					current_item->next = next_item;
+					matched_items.push_back(current_item);
+					original_nexts.push_back(current_item->next);
 				}
 			}
-
 			current_item = current_item->next;
-			current_z++;
+		}
+
+		if (!matched_items.is_empty()) {
+			for (uint32_t i = 0; i < matched_items.size() - 1; i++) {
+				matched_items[i]->next = matched_items[i + 1];
+			}
+			matched_items[matched_items.size() - 1]->next = nullptr;
+
+			canvas_render_items_internal(matched_items[0], 0, p_modulate, current_light, p_canvas_transform);
+
+			// Restore the original chain
+			for (uint32_t i = 0; i < matched_items.size(); i++) {
+				matched_items[i]->next = original_nexts[i];
+			}
 		}
 
 		canvas_render_items_end();
@@ -1521,6 +1584,7 @@ void RasterizerCanvasGLES2::canvas_render_items_implementation(Item *p_item_list
 
 	GLES2::TextureStorage *texture_storage = GLES2::TextureStorage::get_singleton();
 	GLES2::MeshStorage *mesh_storage = GLES2::MeshStorage::get_singleton();
+	GLES2::MaterialStorage *material_storage = GLES2::MaterialStorage::get_singleton();
 	GLES2::Config *config = GLES2::Config::get_singleton();
 
 	if (p_light) {
@@ -1633,7 +1697,7 @@ void RasterizerCanvasGLES2::canvas_render_items_implementation(Item *p_item_list
 			// Extract the CanvasMaterialData
 			GLES2::CanvasMaterialData *mat_data = nullptr;
 			if (first_item->material.is_valid()) {
-				GLES2::Material *material = GLES2::MaterialStorage::get_singleton()->get_material(first_item->material);
+				GLES2::Material *material = material_storage->get_material(first_item->material);
 				if (material && material->data) {
 					mat_data = static_cast<GLES2::CanvasMaterialData *>(material->data);
 					GLES2::CanvasShaderData *shader_data = mat_data->shader_data;
@@ -1662,10 +1726,12 @@ void RasterizerCanvasGLES2::canvas_render_items_implementation(Item *p_item_list
 		// Legacy / Immediate render fallback
 		Item *ci = p_item_list;
 		Item *canvas_group_owner = nullptr;
+		bool backbuffer_cleared = false;
+		LocalVector<Item *> group_restore_owners;
+		LocalVector<Item *> group_restore_targets;
 
 		while (ci) {
 			bool skip_item = false;
-			bool backbuffer_cleared = false;
 
 			if (ci->skeleton.is_valid()) {
 				const Item::Command *c = ci->first_command;
@@ -1674,7 +1740,7 @@ void RasterizerCanvasGLES2::canvas_render_items_implementation(Item *p_item_list
 					if (c->type == Item::Command::TYPE_MESH) {
 						const Item::CommandMesh *cm = static_cast<const Item::CommandMesh *>(c);
 						Transform2D canvas_transform_inverse = p_base_transform.affine_inverse();
-	
+
 						if (cm->mesh_instance.is_valid()) {
 							mesh_storage->mesh_instance_check_for_update(cm->mesh_instance);
 							mesh_storage->mesh_instance_set_canvas_item_transform(
@@ -1689,9 +1755,24 @@ void RasterizerCanvasGLES2::canvas_render_items_implementation(Item *p_item_list
 
 			if (ci->canvas_group_owner != nullptr) {
 				if (canvas_group_owner == nullptr) {
+					// Disable active scissor before copying or clearing the backbuffer
+					if (ris.current_clip) {
+						disable_scissor();
+						ris.current_clip = nullptr;
+						reclip = true;
+					}
+
 					if (ci->canvas_group_owner->canvas_group->mode != RS::CANVAS_GROUP_MODE_TRANSPARENT) {
+						// Copy the clean scene background from the main framebuffer into the backbuffer first,
+						// before drawing the owner item.
 						Rect2i group_rect = ci->canvas_group_owner->global_rect_cache;
 						GLES2::TextureStorage::get_singleton()->render_target_copy_to_back_buffer(state.render_target, group_rect, false);
+
+						// Switch to the backbuffer now so that in CLIP_AND_DRAW mode the owner item draws
+						// directly into the backbuffer over the copied background, followed by its children.
+						canvas_begin(state.render_target, true);
+						reclip = true;
+						ris.current_clip = nullptr;
 
 						if (ci->canvas_group_owner->canvas_group->mode == RS::CANVAS_GROUP_MODE_CLIP_AND_DRAW) {
 							ci->canvas_group_owner->use_canvas_group = false;
@@ -1738,14 +1819,26 @@ void RasterizerCanvasGLES2::canvas_render_items_implementation(Item *p_item_list
 							}
 						}
 					} else if (!backbuffer_cleared) {
-						GLES2::TextureStorage::get_singleton()->render_target_clear_back_buffer(state.render_target, Rect2i(), Color(0, 0, 0, 0));
+						texture_storage->render_target_clear_back_buffer(state.render_target, Rect2i(), Color(0, 0, 0, 0));
 						backbuffer_cleared = true;
+
+						// Switch rendering to the cleared backbuffer for transparent mode.
+						canvas_begin(state.render_target, true);
+						reclip = true;
+						ris.current_clip = nullptr;
+					} else {
+						// Ensure backbuffer is bound if already cleared earlier in the group.
+						canvas_begin(state.render_target, true);
+						reclip = true;
+						ris.current_clip = nullptr;
 					}
 
 					canvas_group_owner = ci->canvas_group_owner; //continue until owner found
 				}
 
-				ci->canvas_group_owner = nullptr; //must be cleared
+				group_restore_owners.push_back(ci);
+				group_restore_targets.push_back(ci->canvas_group_owner);
+				ci->canvas_group_owner = nullptr; // temporarily cleared for current pass
 			}
 
 			if (canvas_group_owner == nullptr && ci->canvas_group != nullptr && ci->canvas_group->mode != RS::CANVAS_GROUP_MODE_CLIP_AND_DRAW) {
@@ -1753,12 +1846,23 @@ void RasterizerCanvasGLES2::canvas_render_items_implementation(Item *p_item_list
 			}
 
 			if (ci == canvas_group_owner) {
+				if (ris.current_clip) {
+					disable_scissor();
+					ris.current_clip = nullptr;
+				}
+
 				if (ci->canvas_group->blur_mipmaps) {
-					GLES2::TextureStorage::get_singleton()->render_target_gen_back_buffer_mipmaps(state.render_target, ci->global_rect_cache);
+					texture_storage->render_target_gen_back_buffer_mipmaps(state.render_target, ci->global_rect_cache);
 				}
 
 				canvas_group_owner = nullptr;
 				backbuffer_cleared = false;
+
+				// Switch back to the main render target FBO and bind the populated backbuffer
+				// texture to the screen_texture unit so the owner item can composite/mask it.
+				canvas_begin(state.render_target, false);
+				reclip = true;
+
 				ci->use_canvas_group = true;
 			} else {
 				ci->use_canvas_group = false;
@@ -1766,9 +1870,9 @@ void RasterizerCanvasGLES2::canvas_render_items_implementation(Item *p_item_list
 
 			if (
 				ci->skeleton.is_valid() &&
-				GLES2::MeshStorage::get_singleton()->owns_skeleton(ci->skeleton)
+				mesh_storage->owns_skeleton(ci->skeleton)
 			) {
-				GLES2::Skeleton *skeleton = GLES2::MeshStorage::get_singleton()->get_skeleton(ci->skeleton);
+				GLES2::Skeleton *skeleton = mesh_storage->get_skeleton(ci->skeleton);
 				if (skeleton && skeleton->use_2d) {
 					mesh_storage->update_mesh_instances();
 				}
@@ -1815,10 +1919,23 @@ void RasterizerCanvasGLES2::canvas_render_items_implementation(Item *p_item_list
 				reclip = false;
 			}
 
+			// Resolve the material RID: if this item is a CanvasGroup/clip_children owner
+			// without a custom material, assign the appropriate default compositing/clipping material.
+			RID material_rid = ci->material;
+			if (ci->use_canvas_group) {
+				if (material_rid.is_null() && ci->canvas_group != nullptr) {
+					if (ci->canvas_group->mode == RS::CANVAS_GROUP_MODE_TRANSPARENT) {
+						material_rid = default_canvas_group_material;
+					} else {
+						material_rid = default_clip_children_material;
+					}
+				}
+			}
+
 			// Extract the CanvasMaterialData for legacy rendering too.
 			GLES2::CanvasMaterialData *mat_data = nullptr;
-			if (ci->material.is_valid()) {
-				GLES2::Material *material = GLES2::MaterialStorage::get_singleton()->get_material(ci->material);
+			if (material_rid.is_valid()) {
+				GLES2::Material *material = material_storage->get_material(material_rid);
 				if (material && material->data) {
 					mat_data = static_cast<GLES2::CanvasMaterialData *>(material->data);
 					GLES2::CanvasShaderData *shader_data = mat_data->shader_data;
@@ -1827,8 +1944,13 @@ void RasterizerCanvasGLES2::canvas_render_items_implementation(Item *p_item_list
 						if (shader_data->uses_time) {
 							time_used = true;
 						}
-						if (shader_data->uses_screen_texture && canvas_group_owner == nullptr) {
-							GLES2::TextureStorage::get_singleton()->render_target_copy_to_back_buffer(state.render_target, Rect2i(), shader_data->uses_screen_texture_mipmaps);
+						if (shader_data->uses_screen_texture && canvas_group_owner == nullptr && !ci->use_canvas_group) {
+							if (ris.current_clip) {
+								disable_scissor();
+								ris.current_clip = nullptr;
+								reclip = true;
+							}
+							texture_storage->render_target_copy_to_back_buffer(state.render_target, Rect2i(), shader_data->uses_screen_texture_mipmaps);
 						}
 					}
 				}
@@ -1842,6 +1964,10 @@ void RasterizerCanvasGLES2::canvas_render_items_implementation(Item *p_item_list
 			}
 
 			ci = ci->next;
+		}
+
+		for (uint32_t i = 0; i < group_restore_owners.size(); i++) {
+			group_restore_owners[i]->canvas_group_owner = group_restore_targets[i];
 		}
 	}
 
@@ -2257,6 +2383,8 @@ void RasterizerCanvasGLES2::render_batches(Item::Command *const *p_commands, Ite
 						state.uniforms.final_modulate = batch.item->final_modulate * _render_item_state.item_group_modulate;
 					}
 					state.uniforms.extra_matrix = Transform2D();
+					state.using_canvas_group = batch.item->use_canvas_group && batch.item->canvas_group != nullptr;
+					state.canvas_group_mode = state.using_canvas_group ? batch.item->canvas_group->mode : RS::CANVAS_GROUP_MODE_DISABLED;
 				} else {
 					state.uniforms.modelview_matrix = _render_item_state.item_group_base_transform;
 					if (state.using_light) {
@@ -2265,6 +2393,8 @@ void RasterizerCanvasGLES2::render_batches(Item::Command *const *p_commands, Ite
 						state.uniforms.final_modulate = _render_item_state.item_group_modulate;
 					}
 					state.uniforms.extra_matrix = Transform2D();
+					state.using_canvas_group = false;
+					state.canvas_group_mode = RS::CANVAS_GROUP_MODE_DISABLED;
 				}
 
 				Item::Command *command = batch.first_command;
@@ -2308,7 +2438,7 @@ void RasterizerCanvasGLES2::render_batches(Item::Command *const *p_commands, Ite
 
 							// Shader setup
 							_set_texture_rect_mode(true);
-
+							
 							bool rebind = state.canvas_shader->version_bind_shader(state.shader_version, state.mode_variant, state.specialization);
 
 							// Must be called every single draw in immediate mode to update the matrices.
@@ -3050,6 +3180,8 @@ void RasterizerCanvasGLES2::render_batches(Item::Command *const *p_commands, Ite
 				state.uniforms.modelview_matrix = prev_matrix;
 				state.uniforms.extra_matrix = base_extra;
 				state.uniforms.final_modulate = prev_modulate;
+				state.using_canvas_group = false;
+				state.canvas_group_mode = RS::CANVAS_GROUP_MODE_DISABLED;
 
 				state.using_skeleton = prev_using_skeleton;
 				if (!prev_using_skeleton) {
@@ -3415,6 +3547,13 @@ void RasterizerCanvasGLES2::_set_texture_rect_mode(bool p_texture_rect, bool p_l
 	}
 	if (state.normal_used) {
 		spec |= CanvasShaderGLES2::USE_DEFAULT_NORMAL;
+	}
+	if (!state.using_light && state.using_canvas_group) {
+		if (state.canvas_group_mode == RS::CANVAS_GROUP_MODE_TRANSPARENT) {
+			spec |= CanvasShaderGLES2::USE_CANVAS_GROUP_TRANSPARENT;
+		} else {
+			spec |= CanvasShaderGLES2::USE_CANVAS_GROUP_CLIP;
+		}
 	}
 	if (state.using_light) {
 		spec |= CanvasShaderGLES2::USE_LIGHTING;

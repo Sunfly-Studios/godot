@@ -163,6 +163,8 @@ protected:
 
 		bool using_ninepatch = false;
 		bool using_skeleton = false;
+		bool using_canvas_group = false;
+		RS::CanvasGroupMode canvas_group_mode = RS::CANVAS_GROUP_MODE_DISABLED;
 
 		Transform2D skeleton_transform;
 		Transform2D skeleton_transform_inverse;

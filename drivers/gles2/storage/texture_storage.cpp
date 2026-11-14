@@ -2112,29 +2112,40 @@ void TextureStorage::_update_render_target(RenderTarget *rt) {
 }
 
 void TextureStorage::_create_render_target_backbuffer(RenderTarget *rt) {
-	ERR_FAIL_COND_MSG(rt->backbuffer_fbo != 0, "Cannot allocate RenderTarget backbuffer: already initialized.");
+	ERR_FAIL_NULL(rt);
 	ERR_FAIL_COND(rt->direct_to_screen);
+	ERR_FAIL_COND_MSG(rt->backbuffer_fbo != 0, "Cannot allocate RenderTarget backbuffer: already initialized.");
+	if (rt->size.width <= 0 || rt->size.height <= 0) {
+		return;
+	}
 
 	GLint previous_fbo = 0;
 	glGetIntegerv(GL_FRAMEBUFFER_BINDING, &previous_fbo);
+
+	GLint prev_active_tex = 0;
+	glGetIntegerv(GL_ACTIVE_TEXTURE, &prev_active_tex);
 
 	// Protect active texture.
 	glActiveTexture(GL_TEXTURE0);
 	GLint previous_tex = 0;
 	glGetIntegerv(GL_TEXTURE_BINDING_2D, &previous_tex);
+	GL_CHECK_ERROR("GLES2::TextureStorage::_create_render_target_backbuffer: state capture");
 
-	glGenTextures(1, &rt->backbuffer);
+	if (rt->backbuffer == 0) {
+		glGenTextures(1, &rt->backbuffer);
+	}
 	glBindTexture(GL_TEXTURE_2D, rt->backbuffer);
 
-	// Allocate the texture memory to match the FBO
-	glTexImage2D(GL_TEXTURE_2D, 0, rt->color_internal_format, rt->size.width, rt->size.height, 0, rt->color_format, rt->color_type, nullptr);
+	// Use GL_RGBA for the backbuffer so CanvasGroup transparent clears and alpha masking work
+	// even when the main RenderTarget is opaque (GL_RGB) or direct_to_screen.
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, rt->size.width, rt->size.height, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
 
 	if (!GLES2::Utilities::get_singleton()->has_texture_data(rt->backbuffer)) {
-		GLES2::Utilities::get_singleton()->texture_allocated_data(rt->backbuffer, rt->size.width * rt->size.height * rt->color_format_size, "Render target backbuffer");
+		GLES2::Utilities::get_singleton()->texture_allocated_data(rt->backbuffer, rt->size.width * rt->size.height * 4, "Render target backbuffer");
 	}
 
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 	GL_CHECK_ERROR("GLES2::TextureStorage::_create_render_target_backbuffer: texture alloc");
@@ -2142,17 +2153,20 @@ void TextureStorage::_create_render_target_backbuffer(RenderTarget *rt) {
 	glGenFramebuffers(1, &rt->backbuffer_fbo);
 	bind_framebuffer(rt->backbuffer_fbo);
 	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, rt->backbuffer, 0);
+	GL_CHECK_ERROR("GLES2::TextureStorage::_create_render_target_backbuffer: glFramebufferTexture2D");
 
 	GLenum status = glCheckFramebufferStatus(GL_FRAMEBUFFER);
 	if (status != GL_FRAMEBUFFER_COMPLETE) {
-		WARN_PRINT("GLES2: Backbuffer FBO incomplete.");
+		WARN_PRINT("GLES2: Backbuffer FBO incomplete, status: " + get_framebuffer_error(status));
 	}
 
 	// Clean previous bind
 	glBindTexture(GL_TEXTURE_2D, previous_tex);
+	glActiveTexture(prev_active_tex);
 
 	// Safely return to previous FBO
 	bind_framebuffer(previous_fbo);
+	GL_CHECK_ERROR("GLES2::TextureStorage::_create_render_target_backbuffer: state restore");
 }
 
 void GLES2::TextureStorage::check_backbuffer(RenderTarget *rt, const bool uses_screen_texture, const bool uses_depth_texture) {
@@ -2996,34 +3010,47 @@ void TextureStorage::render_target_copy_to_back_buffer(RID p_render_target, cons
 	RenderTarget *rt = render_target_owner.get_or_null(p_render_target);
 	ERR_FAIL_NULL(rt);
 
-	if (rt->backbuffer == 0) {
+	if (rt->backbuffer_fbo == 0) {
 		_create_render_target_backbuffer(rt);
 	}
 
-	// Save previous FBO state to be safe
+	// Save previous FBO and active texture state to prevent leaks
 	GLint previous_fbo = 0;
 	glGetIntegerv(GL_FRAMEBUFFER_BINDING, &previous_fbo);
+
+	GLint prev_active_tex = 0;
+	glGetIntegerv(GL_ACTIVE_TEXTURE, &prev_active_tex);
 
 	// Prevent GL_TEXTURE0 being overwritten mid-draw
 	glActiveTexture(GL_TEXTURE0);
 	GLint previous_tex0 = 0;
 	glGetIntegerv(GL_TEXTURE_BINDING_2D, &previous_tex0);
+	GL_CHECK_ERROR("GLES2::TextureStorage::render_target_copy_to_back_buffer: state capture");
 
 	bind_framebuffer(rt->fbo);
 
-	glActiveTexture(GL_TEXTURE0);
 	glBindTexture(GL_TEXTURE_2D, rt->backbuffer);
 
 	Rect2i region = p_region;
 	if (region == Rect2i()) {
 		region = Rect2i(0, 0, rt->size.width, rt->size.height);
+	} else {
+		// Clip region against render target bounds so negative offsets or
+		// out-of-bounds sizes never produce negative width/height
+		region = Rect2i(Size2i(), rt->size).intersection(region);
+		if (rt->overridden.color.is_valid()) {
+			// Flip Y when an overridden color attachment (Y-flipped projection) is active.
+			region.position.y = rt->size.height - (region.position.y + region.size.height);
+		}
 	}
 
-	// Ensure region is within physical bounds
-	region.position.x = MAX(0, region.position.x);
-	region.position.y = MAX(0, region.position.y);
-	region.size.width = MIN(region.size.width, rt->size.width - region.position.x);
-	region.size.height = MIN(region.size.height, rt->size.height - region.position.y);
+	if (region.size.width <= 0 || region.size.height <= 0) {
+		// Assume invalid texture.
+		glBindTexture(GL_TEXTURE_2D, previous_tex0);
+		glActiveTexture(prev_active_tex);
+		bind_framebuffer(previous_fbo);
+		return;
+	}
 
 	// Fast GLES2 sub image copy from the active framebuffer
 	glCopyTexSubImage2D(
@@ -3042,18 +3069,22 @@ void TextureStorage::render_target_copy_to_back_buffer(RID p_render_target, cons
 		render_target_gen_back_buffer_mipmaps(p_render_target, region);
 	} else {
 		// Ensure we aren't expecting mipmaps if they weren't generated
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
 	}
+
+	// Restore TU0 first before touching the screen_texture unit
+	glBindTexture(GL_TEXTURE_2D, previous_tex0);
 
 	// Re-bind the backbuffer to the engine's reserved screen_texture unit
 	// so the custom shader can actually read it when drawing
 	// occurs immediately after this.
 	glActiveTexture(GL_TEXTURE0 + GLES2_CONFIG->max_texture_image_units - 4);
 	glBindTexture(GL_TEXTURE_2D, rt->backbuffer);
-	glActiveTexture(GL_TEXTURE0);
-	glBindTexture(GL_TEXTURE_2D, previous_tex0);
 
+	glActiveTexture(prev_active_tex);
 	bind_framebuffer(previous_fbo);
+	GL_CHECK_ERROR("GLES2::TextureStorage::render_target_copy_to_back_buffer: state restore");
 }
 
 void TextureStorage::render_target_clear_back_buffer(RID p_render_target, const Rect2i &p_region, const Color &p_color) {
@@ -3065,30 +3096,66 @@ void TextureStorage::render_target_clear_back_buffer(RID p_render_target, const 
 		_create_render_target_backbuffer(rt);
 	}
 
-	// Store previous FBO and clear color to prevent leak
-	GLint prev_fbo;
+	// Store previous FBO, clear color, color mask, and scissor state to prevent leaks
+	GLint prev_fbo = 0;
 	glGetIntegerv(GL_FRAMEBUFFER_BINDING, &prev_fbo);
-	GLfloat prev_clear_color[4];
+	GL_CHECK_ERROR("GLES2::TextureStorage::render_target_clear_back_buffer: glGetIntegerv GL_FRAMEBUFFER_BINDING");
+
+	GLfloat prev_clear_color[4] = {};
 	glGetFloatv(GL_COLOR_CLEAR_VALUE, prev_clear_color);
+	GL_CHECK_ERROR("GLES2::TextureStorage::render_target_clear_back_buffer: glGetFloatv GL_COLOR_CLEAR_VALUE");
+
+	GLboolean prev_color_mask[4] = {};
+	glGetBooleanv(GL_COLOR_WRITEMASK, prev_color_mask);
+	GL_CHECK_ERROR("GLES2::TextureStorage::render_target_clear_back_buffer: glGetBooleanv GL_COLOR_WRITEMASK");
+
+	GLboolean prev_scissor_enabled = glIsEnabled(GL_SCISSOR_TEST);
+	GLint prev_scissor_box[4] = {};
+	if (prev_scissor_enabled) {
+		glGetIntegerv(GL_SCISSOR_BOX, prev_scissor_box);
+		GL_CHECK_ERROR("GLES2::TextureStorage::render_target_clear_back_buffer: glGetIntegerv GL_SCISSOR_BOX");
+	}
+
+	glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
 
 	Rect2i region;
 	if (p_region == Rect2i()) {
-		// Just do a full screen clear;
+		// Full backbuffer clear with scissor disabled so it is not clipped
+		if (prev_scissor_enabled) {
+			glDisable(GL_SCISSOR_TEST);
+		}
 		bind_framebuffer(rt->backbuffer_fbo);
 		glClearColor(p_color.r, p_color.g, p_color.b, p_color.a);
 		glClear(GL_COLOR_BUFFER_BIT);
 		GL_CHECK_ERROR("GLES2::TextureStorage::render_target_clear_back_buffer: clear screen");
 	} else {
 		region = Rect2i(Size2i(), rt->size).intersection(p_region);
-		if (region.size == Size2i()) {
+		if (region.size.width <= 0 || region.size.height <= 0) {
+			glColorMask(prev_color_mask[0], prev_color_mask[1], prev_color_mask[2], prev_color_mask[3]);
 			return; // nothing to do
 		}
+		if (rt->overridden.color.is_valid()) {
+			region.position.y = rt->size.height - (region.position.y + region.size.height);
+		}
 		bind_framebuffer(rt->backbuffer_fbo);
-		GLES2::CopyEffects::get_singleton()->set_color(p_color, region);
+		glEnable(GL_SCISSOR_TEST);
+		glScissor(region.position.x, region.position.y, region.size.width, region.size.height);
+		glClearColor(p_color.r, p_color.g, p_color.b, p_color.a);
+		glClear(GL_COLOR_BUFFER_BIT);
+		GL_CHECK_ERROR("GLES2::TextureStorage::render_target_clear_back_buffer: clear region");
 	}
 
+	// Restore state
+	if (prev_scissor_enabled) {
+		glEnable(GL_SCISSOR_TEST);
+		glScissor(prev_scissor_box[0], prev_scissor_box[1], prev_scissor_box[2], prev_scissor_box[3]);
+	} else {
+		glDisable(GL_SCISSOR_TEST);
+	}
+	glColorMask(prev_color_mask[0], prev_color_mask[1], prev_color_mask[2], prev_color_mask[3]);
 	bind_framebuffer(prev_fbo);
 	glClearColor(prev_clear_color[0], prev_clear_color[1], prev_clear_color[2], prev_clear_color[3]);
+	GL_CHECK_ERROR("GLES2::TextureStorage::render_target_clear_back_buffer: restore state");
 }
 
 void TextureStorage::render_target_gen_back_buffer_mipmaps(RID p_render_target, const Rect2i &p_region) {
@@ -3099,7 +3166,15 @@ void TextureStorage::render_target_gen_back_buffer_mipmaps(RID p_render_target, 
 		return;
 	}
 
+	// Save state
+	GLint prev_active_tex = 0;
+	glGetIntegerv(GL_ACTIVE_TEXTURE, &prev_active_tex);
 	glActiveTexture(GL_TEXTURE0);
+
+	GLint prev_bound_tex = 0;
+	glGetIntegerv(GL_TEXTURE_BINDING_2D, &prev_bound_tex);
+	GL_CHECK_ERROR("GLES2::TextureStorage::render_target_gen_back_buffer_mipmaps: state capture");
+
 	glBindTexture(GL_TEXTURE_2D, rt->backbuffer);
 
 	if (_gl_is_npot(rt->size.width, rt->size.height) && !GLES2_CONFIG->support_npot_repeat_mipmap) {
@@ -3110,6 +3185,10 @@ void TextureStorage::render_target_gen_back_buffer_mipmaps(RID p_render_target, 
 		glGenerateMipmap(GL_TEXTURE_2D);
 		GL_CHECK_ERROR("GLES2::TextureStorage::render_target_gen_back_buffer_mipmaps: glGenerateMipmap");
 	}
+
+	glBindTexture(GL_TEXTURE_2D, prev_bound_tex);
+	glActiveTexture(prev_active_tex);
+	GL_CHECK_ERROR("GLES2::TextureStorage::render_target_gen_back_buffer_mipmaps: state restore");
 }
 
 #endif // GLES2_ENABLED

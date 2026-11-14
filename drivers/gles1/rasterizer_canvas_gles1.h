@@ -189,7 +189,9 @@ protected:
 
 		bool state_dirty = true;
 		bool transparent_render = false;
+		bool using_canvas_group = false;
 
+		RS::CanvasGroupMode canvas_group_mode = RS::CANVAS_GROUP_MODE_DISABLED;
 		RS::CanvasItemTextureFilter default_filter = RS::CANVAS_ITEM_TEXTURE_FILTER_NEAREST;
 		RS::CanvasItemTextureRepeat default_repeat = RS::CANVAS_ITEM_TEXTURE_REPEAT_DISABLED;
 		RS::CanvasItemTextureFilter current_filter = RS::CANVAS_ITEM_TEXTURE_FILTER_MAX;
@@ -237,6 +239,9 @@ protected:
 	void _bind_quad_buffer() const;
 
 	_FORCE_INLINE_ bool _buffer_orphan_and_upload_2d(unsigned int p_buffer_size_bytes, unsigned int p_offset_bytes, unsigned int p_data_size_bytes, const void *p_data, GLenum p_target, GLenum p_usage, bool p_optional_orphan) const;
+
+	void _setup_canvas_group_combiners();
+	void _cleanup_canvas_group_combiners();
 	void _legacy_draw_polygon(Item::CommandPolygon *p_poly, GLES1::CanvasMaterialData *p_material);
 	void _legacy_draw_primitive(Item::CommandPrimitive *p_pr, GLES1::CanvasMaterialData *p_material);
 	void _legacy_draw_line(Item::CommandPrimitive *p_pr, GLES1::CanvasMaterialData *p_material);

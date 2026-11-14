@@ -200,7 +200,7 @@ void RasterizerCanvasBatcherCommon<T_API>::batch_canvas_end() {
 
 template <typename T_API>
 void RasterizerCanvasBatcherCommon<T_API>::batch_canvas_render_items_end() {
-	if (!bdata.settings_use_batching) {
+	if (!bdata.settings_use_batching || bdata.sort_items.size() == 0) {
 		return;
 	}
 
@@ -1226,7 +1226,7 @@ bool RasterizerCanvasBatcherCommon<T_API>::_detect_item_batch_break(RenderItemSt
 	while (command) {
 		switch (command->type) {
 			case RendererCanvasRender::Item::Command::TYPE_RECT: {
-				if (_disallow_item_join_if_batch_types_too_different(r_ris, BatcherEnums::BTF_LINE | BatcherEnums::BTF_LINE_AA)) {
+				if (_disallow_item_join_if_batch_types_too_different(r_ris, BatcherEnums::BTF_RECT)) {
 					return true;
 				}
 			} break;

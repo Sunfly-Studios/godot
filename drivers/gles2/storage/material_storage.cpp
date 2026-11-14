@@ -772,7 +772,11 @@ _FORCE_INLINE_ static void bind_uniforms_and_textures_generic_gles2(
 	int current_tex_unit = 1;
 
 	for (int ti = 0; ti < p_texture_cache.size(); ti++) {
+		if (texture_uniform_index >= p_texture_uniforms.size()) {
+			break;
+		}
 		const ShaderCompiler::GeneratedCode::Texture &texture_uniform = texture_uniforms[texture_uniform_index];
+		int array_span = texture_uniform.array_size > 0 ? texture_uniform.array_size : 1;
 
 		// Tell the custom shader which texture unit to read from
 		String clean_name = String(texture_uniform.name).replace("__", "_dus_").replace("__", "_dus_");
@@ -885,7 +889,7 @@ _FORCE_INLINE_ static void bind_uniforms_and_textures_generic_gles2(
 		}
 
 		texture_uniform_count++;
-		if (texture_uniform_count >= texture_uniform.array_size) {
+		if (texture_uniform_count >= array_span) {
 			texture_uniform_index++;
 			texture_uniform_count = 0;
 		}

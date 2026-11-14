@@ -1577,20 +1577,29 @@ void CanvasMaterialData::bind_uniforms() {
 			break;
 		}
 
-		glActiveTexture(GL_TEXTURE0 + ti);
+		if (texture_uniform_index >= shader_data->texture_uniforms.size()) {
+			break;
+		}
+		const ShaderCompiler::GeneratedCode::Texture &texture_uniform = texture_uniforms[texture_uniform_index];
+		int array_span = texture_uniform.array_size > 0 ? texture_uniform.array_size : 1;
 
-		GLES1::Texture *texture = GLES1::TextureStorage::get_singleton()->get_texture(textures[ti]);
-		if (texture && texture->tex_id != 0) {
-			glEnable(GL_TEXTURE_2D);
-			glBindTexture(GL_TEXTURE_2D, texture->tex_id);
-		} else {
-			glBindTexture(GL_TEXTURE_2D, 0);
-			glDisable(GL_TEXTURE_2D);
+		// Skip binding to TU0 if this uniform is a screen_texture or sdf,
+		// or if user shader textures would clobber the item's diffuse texture on TU0.
+		if (ti > 0) {
+			glActiveTexture(GL_TEXTURE0 + ti);
+
+			GLES1::Texture *texture = GLES1::TextureStorage::get_singleton()->get_texture(textures[ti]);
+			if (texture && texture->tex_id != 0) {
+				glEnable(GL_TEXTURE_2D);
+				glBindTexture(GL_TEXTURE_2D, texture->tex_id);
+			} else {
+				glBindTexture(GL_TEXTURE_2D, 0);
+				glDisable(GL_TEXTURE_2D);
+			}
 		}
 
-		const ShaderCompiler::GeneratedCode::Texture &texture_uniform = texture_uniforms[texture_uniform_index];
 		texture_uniform_count++;
-		if (texture_uniform_count >= texture_uniform.array_size) {
+		if (texture_uniform_count >= array_span) {
 			texture_uniform_index++;
 			texture_uniform_count = 0;
 		}
@@ -1605,7 +1614,9 @@ void CanvasMaterialData::bind_uniforms() {
 	}
 
 	// Reset the active texture
-	glActiveTexture(GL_TEXTURE0);
+	if (max_texture_units > 1) {
+		glActiveTexture(GL_TEXTURE0);
+	}
 	GL_CHECK_ERROR("GLES1::CanvasMaterialData::bind_uniforms: glActiveTexture");
 }
 

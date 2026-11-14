@@ -24,6 +24,8 @@ USE_INSTANCING = false
 USE_INSTANCE_CUSTOM = false
 USE_RGBA_SHADOWS = false
 USE_DEFAULT_NORMAL = false
+USE_CANVAS_GROUP_TRANSPARENT = false
+USE_CANVAS_GROUP_CLIP = false
 
 #[vertex]
 
@@ -366,15 +368,15 @@ uniform highp float time;
 
 uniform mediump vec4 final_modulate;
 
-#ifdef SCREEN_TEXTURE_USED
+#if defined(SCREEN_TEXTURE_USED) || defined(USE_CANVAS_GROUP_TRANSPARENT) || defined(USE_CANVAS_GROUP_CLIP)
 
 uniform sampler2D screen_texture; // texunit:-4
 
 #endif
 
-#ifdef SCREEN_UV_USED
+#if defined(SCREEN_UV_USED) || defined(USE_CANVAS_GROUP_TRANSPARENT) || defined(USE_CANVAS_GROUP_CLIP)
 
-uniform vec2 screen_pixel_size;
+uniform highp vec2 screen_pixel_size;
 
 #endif
 
@@ -506,8 +508,8 @@ void main() {
 	color *= texture2D(color_texture, uv);
 #endif
 
-#ifdef SCREEN_UV_USED
-	vec2 screen_uv = gl_FragCoord.xy * screen_pixel_size;
+#if defined(SCREEN_UV_USED) || defined(USE_CANVAS_GROUP_TRANSPARENT) || defined(USE_CANVAS_GROUP_CLIP)
+	highp vec2 screen_uv = gl_FragCoord.xy * screen_pixel_size;
 #endif
 
 	vec3 normal;
@@ -549,6 +551,17 @@ void main() {
 #if !defined(MODULATE_USED)
 	color *= final_modulate;
 #endif
+#endif
+
+#if defined(USE_CANVAS_GROUP_TRANSPARENT)
+	vec4 group_c = texture2DLod(screen_texture, screen_uv, 0.0);
+	if (group_c.a > 0.0001) {
+		group_c.rgb /= group_c.a;
+	}
+	color *= group_c;
+#elif defined(USE_CANVAS_GROUP_CLIP)
+	vec4 group_c = texture2DLod(screen_texture, screen_uv, 0.0);
+	color.rgb = group_c.rgb;
 #endif
 
 #ifdef USE_LIGHTING
