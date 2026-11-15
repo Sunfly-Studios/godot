@@ -285,6 +285,13 @@ struct SceneShaderData : public ShaderData {
 		ALPHA_ANTIALIASING_ALPHA_TO_COVERAGE_AND_TO_ONE
 	};
 
+	enum BillboardMode {
+		BILLBOARD_DISABLED,
+		BILLBOARD_ENABLED,
+		BILLBOARD_FIXED_Y,
+		BILLBOARD_PARTICLES
+	};
+
 	// All these members are (re)initialized in `set_code`.
 	// Make sure to add the init to `set_code` whenever adding new members.
 
@@ -329,6 +336,9 @@ struct SceneShaderData : public ShaderData {
 	bool uses_fragment_time;
 	bool writes_modelview_or_projection;
 	bool uses_world_coordinates;
+	BillboardMode billboard_mode;
+	bool billboard_keep_scale;
+	bool uses_fixed_size;
 	bool uses_tangent;
 	bool uses_color;
 	bool uses_uv;
@@ -341,6 +351,10 @@ struct SceneShaderData : public ShaderData {
 	bool uses_weights;
 
 	uint64_t vertex_input_mask;
+
+	_FORCE_INLINE_ bool uses_billboard_or_fixed_size() const {
+		return billboard_mode != BILLBOARD_DISABLED || uses_fixed_size;
+	}
 
 	virtual void set_code(const String &p_Code);
 	virtual bool is_animated() const;

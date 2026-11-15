@@ -44,6 +44,8 @@ struct StandardMaterialState {
 	GLfloat emission[4] = { 0.0f, 0.0f, 0.0f, 1.0f };
 	GLfloat specular[4] = { 0.0f, 0.0f, 0.0f, 1.0f };
 	GLfloat shininess = 0.0f;
+	GLfloat alpha_scissor_threshold = 0.5f;
+	bool use_alpha_scissor = false;
 };
 
 class StandardMaterialProcessor {

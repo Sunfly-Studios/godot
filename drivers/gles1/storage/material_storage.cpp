@@ -1796,6 +1796,9 @@ void SceneShaderData::set_code(const String &p_code) {
 	uses_fragment_time = false;
 	writes_modelview_or_projection = false;
 	uses_world_coordinates = false;
+	billboard_mode = BILLBOARD_DISABLED;
+	billboard_keep_scale = false;
+	uses_fixed_size = false;
 	uses_tangent = false;
 	uses_color = false;
 	uses_uv = false;
@@ -1922,6 +1925,17 @@ void SceneShaderData::set_code(const String &p_code) {
 	uses_fragment_time = gen_code.uses_fragment_time;
 	uses_world_coordinates = p_code.find("world_vertex_coords") != -1;
 
+	if (p_code.find("// Billboard Mode: Enabled") != -1) {
+		billboard_mode = BILLBOARD_ENABLED;
+	} else if (p_code.find("// Billboard Mode: Y-Billboard") != -1) {
+		billboard_mode = BILLBOARD_FIXED_Y;
+	} else if (p_code.find("// Billboard Mode: Particles") != -1) {
+		billboard_mode = BILLBOARD_PARTICLES;
+	}
+
+	billboard_keep_scale = p_code.find("// Billboard Keep Scale: Enabled") != -1;
+	uses_fixed_size = p_code.find("// Fixed Size: Enabled") != -1;
+
 	LocalVector<ShaderGLES1::TextureUniformData> texture_uniform_data = get_texture_uniform_data(gen_code.texture_uniforms);
 
 	MaterialStorage::get_singleton()->shaders.scene_shader.version_set_code(version, gen_code.code, gen_code.uniforms, gen_code.stage_globals[ShaderCompiler::STAGE_VERTEX], gen_code.stage_globals[ShaderCompiler::STAGE_FRAGMENT], gen_code.defines, texture_uniform_data);
@@ -1980,6 +1994,9 @@ SceneShaderData::SceneShaderData() {
 	uses_transmittance = false;
 	writes_modelview_or_projection = false;
 	uses_world_coordinates = false;
+	billboard_mode = BILLBOARD_DISABLED;
+	billboard_keep_scale = false;
+	uses_fixed_size = false;
 	uses_tangent = false;
 	uses_color = false;
 	uses_uv = false;
@@ -2048,7 +2065,8 @@ void SceneMaterialData::update_parameters(const HashMap<StringName, Variant> &p_
 		p_parameters.has("texture_albedo") ||
 		p_parameters.has("roughness") ||
 		p_parameters.has("metallic") ||
-		p_parameters.has("emission")
+		p_parameters.has("emission") ||
+		p_parameters.has("alpha_scissor_threshold")
 	);
 
 	if (has_orm) {
@@ -2056,13 +2074,17 @@ void SceneMaterialData::update_parameters(const HashMap<StringName, Variant> &p_
 		if (!approx_data) {
 			approx_data = memnew(StandardMaterialState);
 		}
-		ORMMaterialProcessor::update_state(*static_cast<StandardMaterialState *>(approx_data), p_parameters);
+		StandardMaterialState *st = static_cast<StandardMaterialState *>(approx_data);
+		ORMMaterialProcessor::update_state(*st, p_parameters);
+		st->use_alpha_scissor = st->use_alpha_scissor && shader_data && shader_data->uses_alpha_clip;
 	} else if (has_std) {
 		approx_type = APPROX_STANDARD;
 		if (!approx_data) {
 			approx_data = memnew(StandardMaterialState);
 		}
-		StandardMaterialProcessor::update_state(*static_cast<StandardMaterialState *>(approx_data), p_parameters);
+		StandardMaterialState *st = static_cast<StandardMaterialState *>(approx_data);
+		StandardMaterialProcessor::update_state(*st, p_parameters);
+		st->use_alpha_scissor = st->use_alpha_scissor && shader_data && shader_data->uses_alpha_clip;
 	} else {
 		approx_type = APPROX_NONE;
 	}

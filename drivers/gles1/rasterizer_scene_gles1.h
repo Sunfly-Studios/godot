@@ -334,6 +334,7 @@ private:
 		bool gizmo_cached = false;
 		GLuint gizmo_vertex_buffer = 0;
 		GLuint gizmo_color_buffer = 0;
+		GLuint gizmo_uv_buffer = 0;
 		GLuint gizmo_index_buffer = 0;
 		float *gizmo_vertex_array = nullptr;
 		uint16_t *gizmo_index_array = nullptr;
@@ -429,6 +430,7 @@ private:
 	void _draw_editor_lines(const RenderDataGLES1 *p_render_data, bool p_flip_y);
 	void _draw_editor_grid(const RenderDataGLES1 *p_render_data, bool p_flip_y);
 	void _draw_editor_gizmos(const RenderDataGLES1 *p_render_data, bool p_flip_y);
+	void _setup_gizmo_surface_material(const GeometryInstanceSurface *p_surf, Color &r_base_albedo, bool &r_has_texture);
 
 	_FORCE_INLINE_ RID _editor_resolve_surface_material(const GeometryInstanceSurface *p_surf) const {
 		RID mat_rid = RID();
@@ -696,6 +698,37 @@ private:
 		}
 	}
 
+	_FORCE_INLINE_ void _gl_setup_alpha_scissor(const GLES1::SceneMaterialData *p_material_data) {
+		bool use_scissor = false;
+		float threshold = 0.5f;
+
+		if (
+			p_material_data &&
+			p_material_data->shader_data &&
+			p_material_data->shader_data->uses_alpha_clip
+		) {
+			use_scissor = true;
+
+			if (
+				p_material_data->approx_type != GLES1::SceneMaterialData::APPROX_NONE &&
+				p_material_data->approx_data
+			) {
+				GLES1::StandardMaterialState *state = static_cast<GLES1::StandardMaterialState *>(p_material_data->approx_data);
+				if (state->use_alpha_scissor) {
+					threshold = state->alpha_scissor_threshold;
+				}
+			}
+		}
+
+		if (use_scissor) {
+			glEnable(GL_ALPHA_TEST);
+			glAlphaFunc(GL_GEQUAL, threshold);
+		} else {
+			glDisable(GL_ALPHA_TEST);
+		}
+		GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_gl_setup_alpha_scissor");
+	}
+
 	_FORCE_INLINE_ void _gl_setup_material_pass(const GLES1::SceneMaterialData *p_material_data, bool p_is_additive) {
 		constexpr GLfloat mat_default_albedo[] = { 0.6f, 0.6f, 0.6f, 1.0f };
 		constexpr GLfloat mat_specular[] = { 0.0f, 0.0f, 0.0f, 1.0f };
@@ -724,6 +757,8 @@ private:
 		) && p_material_data->approx_data;
 
 		glDisable(GL_COLOR_MATERIAL);
+
+		_gl_setup_alpha_scissor(p_material_data);
 
 		if (!has_approx) {
 			glColor4f(mat_default_albedo[0], mat_default_albedo[1], mat_default_albedo[2], mat_default_albedo[3]);
@@ -1380,6 +1415,9 @@ private:
 			glDisable(GL_SCISSOR_TEST);
 			current_scissor_test_enabled = false;
 
+			glDisable(GL_ALPHA_TEST);
+			glAlphaFunc(GL_ALWAYS, 0.0f);
+
 			glCullFace(GL_BACK);
 			glEnable(GL_CULL_FACE);
 			cull_mode = RS::CULL_MODE_BACK;
@@ -1645,13 +1683,17 @@ private:
 
 	void _render_single_item_immediate(const GeometryInstanceSurface *p_surface);
 
+	/* OTHER */
+
 	void _bind_surface_static_arrays_and_ibo(const GeometryInstanceSurface *p_surface, uint64_t p_input_mask, bool p_allow_deformed_instance, bool &r_has_indices, bool &r_use_index_buffer, int &r_drawn_count, GLenum &r_index_type, const uint8_t *&r_index_client_ptr);
+	void _bind_scene_camera_uniforms(RID p_version, SceneShaderGLES1::ShaderVariant p_variant, uint64_t p_spec_constants);
+	void _bind_sky_directional_lights(RID p_version, SkyShaderGLES1::ShaderVariant p_variant, uint64_t p_spec_constants);
 	void _unbind_surface_static_arrays_and_ibo(const GeometryInstanceSurface *p_surface, bool p_use_index_buffer, RS::CullMode p_prev_cull_mode, bool p_prev_depth_draw, bool p_prev_depth_test);
 	void _draw_surface_instances(const GeometryInstanceSurface *p_surface, const Transform3D &p_base_transform, const Transform3D &p_view_matrix, int p_instances, const MultiMeshInstanceData *p_mm, bool p_has_indices, bool p_use_index_buffer, GLenum p_primitive_gl, int p_drawn_count, GLenum p_index_type, const uint8_t *p_index_client_ptr);
 	void _draw_item_ref_instances(const BatchType::BItemRef3D &p_ref, const Transform3D &p_view_matrix, bool p_has_indices, bool p_use_index_buffer, GLenum p_primitive_gl, int p_drawn_count, GLenum p_index_type, const uint8_t *p_index_client_ptr);
-	void _bind_scene_camera_uniforms(RID p_version, SceneShaderGLES1::ShaderVariant p_variant, uint64_t p_spec_constants);
-	void _bind_sky_directional_lights(RID p_version, SkyShaderGLES1::ShaderVariant p_variant, uint64_t p_spec_constants);
 
+	void _resolve_surface_transforms(const Transform3D &p_model_matrix, const Transform3D &p_view_matrix, const GLES1::SceneShaderData *p_shader, Transform3D &r_model_view, Transform3D &r_world_matrix) const;
+	Transform3D _compute_billboard_modelview(const Transform3D &p_model_matrix, const Transform3D &p_view_matrix, const Transform3D &p_main_cam_inv_view_matrix, const Projection &p_projection, const GLES1::SceneShaderData *p_shader) const;
 
 protected:
 	double time;

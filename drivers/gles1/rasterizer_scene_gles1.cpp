@@ -596,6 +596,9 @@ void RasterizerSceneGLES1::_remove_cached_surface(GeometryInstanceSurface *p_sur
 		if (p_surface->gizmo_color_buffer != 0) {
 			glDeleteBuffers(1, &p_surface->gizmo_color_buffer);
 		}
+		if (p_surface->gizmo_uv_buffer != 0) {
+			glDeleteBuffers(1, &p_surface->gizmo_uv_buffer);
+		}
 		if (p_surface->gizmo_index_buffer != 0) {
 			glDeleteBuffers(1, &p_surface->gizmo_index_buffer);
 		}
@@ -2247,6 +2250,10 @@ uint32_t RasterizerSceneGLES1::_batch_get_surface_flags(const GeometryInstanceSu
 		flags |= BatcherEnums::BTF_3D_USES_ALPHA_CLIP;
 	}
 
+	if (active_shader && (active_shader->writes_modelview_or_projection || active_shader->uses_billboard_or_fixed_size())) {
+		flags |= BatcherEnums::BTF_3D_PREVENT_VERTEX_BAKING | BatcherEnums::BTF_3D_PREVENT_ITEM_JOINING;
+	}
+
 	if (_batch_requires_palette_fvf()) {
 		flags |= BatcherEnums::BTF_3D_USES_SKINNING;
 	}
@@ -2931,11 +2938,18 @@ void RasterizerSceneGLES1::_batch_bind_material(GLES1::SceneMaterialData *p_mate
 				_gl_setup_material_pass(p_material_data, scene_state.is_additive_pass);
 				GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_batch_bind_material: _gl_setup_material_pass");
 			} else {
-				if (GLES1_CONFIG->max_texture_units > 1) {
-					glActiveTexture(GL_TEXTURE0);
+				if (p_material_data->shader_data->uses_alpha_clip) {
+					p_material_data->bind_uniforms();
+					_gl_setup_alpha_scissor(p_material_data);
+				} else {
+					if (GLES1_CONFIG->max_texture_units > 1) {
+						glActiveTexture(GL_TEXTURE0);
+					}
+					glDisable(GL_TEXTURE_2D);
+					glDisable(GL_ALPHA_TEST);
 				}
-				glDisable(GL_TEXTURE_2D);
 				glDisable(GL_COLOR_MATERIAL);
+				GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_batch_bind_material: PASS_MODE_SHADOW setup");
 			}
 
 			if (!scene_state.is_additive_pass) {
@@ -3045,16 +3059,17 @@ void RasterizerSceneGLES1::_batch_render_items(GLES1::SceneMaterialData *p_mater
 		GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_batch_render_items: multi draw");
 	} else {
 		// Single-item draw
-		Transform3D world_xform = first_ref.transform;
-		Transform3D model_view = view_matrix * world_xform;
-
-		_batch_bind_material(p_material_data, world_xform, p_transparent);
+		GLES1::SceneShaderData *active_shader = p_material_data ? p_material_data->shader_data : first_surf->shader;
+		Transform3D model_view;
+		Transform3D effective_world;
+		_resolve_surface_transforms(first_ref.transform, view_matrix, active_shader, model_view, effective_world);
+		_batch_bind_material(p_material_data, effective_world, p_transparent);
 
 		GLMatrixScope mod_scope(GL_MODELVIEW);
 		glLoadMatrixf(_gl_load_transform(model_view));
 		GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_batch_render_items: glLoadMatrixf MODELVIEW single-item");
 
-		_gl_push_shadow_projection_matrices(world_xform);
+		_gl_push_shadow_projection_matrices(effective_world);
 		_batch_render_generic(p_primitive, 0, p_batch.num_indices, has_vertex_colors);
 		_gl_pop_shadow_projection_matrices();
 
@@ -3731,17 +3746,25 @@ void RasterizerSceneGLES1::_draw_surface_instances(const GeometryInstanceSurface
 	const RS::InstanceType base_type = p_surface->owner->data->base_type;
 	const bool is_multimesh = (base_type == RS::INSTANCE_MULTIMESH);
 
+	GLES1::SceneShaderData *active_shader = (
+		bdata.pass_mode == PASS_MODE_SHADOW &&
+		p_surface->shader_shadow
+	) ? p_surface->shader_shadow : p_surface->shader;
+
 	if (!is_multimesh && p_instances == 1) {
 		GLMatrixScope proj_scope(GL_PROJECTION, bdata.pass_mode == PASS_MODE_MATERIAL);
+		Transform3D model_view;
+		Transform3D effective_world = p_base_transform;
+
 		if (bdata.pass_mode == PASS_MODE_MATERIAL) {
 			_gl_setup_uv2_projection(scene_state.current_uv_offset);
 		} else {
-			const Transform3D model_view = p_view_matrix * p_base_transform;
+			_resolve_surface_transforms(p_base_transform, p_view_matrix, active_shader, model_view, effective_world);
 			glLoadMatrixf(_gl_load_transform(model_view));
 			GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_draw_surface_instances: glLoadMatrixf");
 		}
 
-		_gl_push_shadow_projection_matrices(p_base_transform);
+		_gl_push_shadow_projection_matrices(effective_world);
 
 		if (p_has_indices) {
 			if (p_use_index_buffer) {
@@ -3780,17 +3803,20 @@ void RasterizerSceneGLES1::_draw_surface_instances(const GeometryInstanceSurface
 			_gl_batch_decode_multimesh_instance(mm->data + (inst * mm->stride), mm->format, mm->uses_colors, mm->color_offset, xform, inst_color);
 		}
 
-		const Transform3D final_xform = p_base_transform * xform;
+		Transform3D final_xform = p_base_transform * xform;
+		Transform3D model_view;
+		Transform3D effective_world = final_xform;
 		GLMatrixScope proj_scope(GL_PROJECTION, bdata.pass_mode == PASS_MODE_MATERIAL);
+
 		if (bdata.pass_mode == PASS_MODE_MATERIAL) {
 			_gl_setup_uv2_projection(scene_state.current_uv_offset);
 		} else {
-			const Transform3D model_view = p_view_matrix * final_xform;
+			_resolve_surface_transforms(final_xform, p_view_matrix, active_shader, model_view, effective_world);
 			glLoadMatrixf(_gl_load_transform(model_view));
 			GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_draw_surface_instances: glLoadMatrixf multimesh");
 		}
 
-		_gl_push_shadow_projection_matrices(final_xform);
+		_gl_push_shadow_projection_matrices(effective_world);
 
 		if (apply_inst_color) {
 			glColor4f(inst_color.r, inst_color.g, inst_color.b, inst_color.a);
@@ -3823,6 +3849,98 @@ void RasterizerSceneGLES1::_draw_item_ref_instances(const BatchType::BItemRef3D 
 	const bool is_multimesh = (surf->owner->data->base_type == RS::INSTANCE_MULTIMESH);
 	const int instances = is_multimesh ? static_cast<int>(p_ref.instance_count) : 1;
 	_draw_surface_instances(surf, p_ref.transform, p_view_matrix, instances, nullptr, p_has_indices, p_use_index_buffer, p_primitive_gl, p_drawn_count, p_index_type, p_index_client_ptr);
+}
+
+Transform3D RasterizerSceneGLES1::_compute_billboard_modelview(
+	const Transform3D &p_model_matrix,
+	const Transform3D &p_view_matrix,
+	const Transform3D &p_main_cam_inv_view_matrix,
+	const Projection &p_projection,
+	const GLES1::SceneShaderData *p_shader
+) const {
+	Transform3D model_view = p_view_matrix * p_model_matrix;
+	if (!p_shader) {
+		// We need the shader to tell us what it wants.
+		return model_view;
+	}
+
+	if (
+		p_shader->billboard_mode == GLES1::SceneShaderData::BILLBOARD_ENABLED ||
+		p_shader->billboard_mode == GLES1::SceneShaderData::BILLBOARD_PARTICLES
+	) {
+		Transform3D mat_world(p_main_cam_inv_view_matrix.basis, p_model_matrix.origin);
+		model_view = p_view_matrix * mat_world;
+	} else if (p_shader->billboard_mode == GLES1::SceneShaderData::BILLBOARD_FIXED_Y) {
+		Vector3 up(0.0f, 1.0f, 0.0f);
+		Vector3 cam_forward = p_main_cam_inv_view_matrix.basis.get_column(2);
+		Vector3 cam_right = p_main_cam_inv_view_matrix.basis.get_column(0);
+
+		Vector3 col0 = up.cross(cam_forward);
+		if (col0.length_squared() > 1e-8f) {
+			col0.normalize();
+		} else {
+			col0 = Vector3(1.0f, 0.0f, 0.0f);
+		}
+
+		Vector3 col2 = cam_right.cross(up);
+		if (col2.length_squared() > 1e-8f) {
+			col2.normalize();
+		} else {
+			col2 = Vector3(0.0f, 0.0f, 1.0f);
+		}
+
+		Basis bb_basis;
+		bb_basis.set_column(0, col0);
+		bb_basis.set_column(1, up);
+		bb_basis.set_column(2, col2);
+
+		Transform3D mat_world(bb_basis, p_model_matrix.origin);
+		model_view = p_view_matrix * mat_world;
+	}
+
+	if (p_shader->billboard_mode != GLES1::SceneShaderData::BILLBOARD_DISABLED && p_shader->billboard_keep_scale) {
+		Vector3 scale(
+			p_model_matrix.basis.get_column(0).length(),
+			p_model_matrix.basis.get_column(1).length(),
+			p_model_matrix.basis.get_column(2).length()
+		);
+		model_view.basis.scale_local(scale);
+	}
+
+	if (p_shader->uses_fixed_size) {
+		float scale_factor = 1.0f;
+		if (p_projection.columns[3][3] != 0.0f) {
+			float denom = 2.0f * p_projection.columns[1][1];
+			float h = Math::abs(denom) > 1e-8f ? Math::abs(1.0f / denom) : 1.0f;
+			scale_factor = h * 2.0f;
+		} else {
+			scale_factor = -model_view.origin.z;
+		}
+		model_view.basis.scale_local(Vector3(scale_factor, scale_factor, scale_factor));
+	}
+
+	return model_view;
+}
+
+void RasterizerSceneGLES1::_resolve_surface_transforms(
+	const Transform3D &p_model_matrix,
+	const Transform3D &p_view_matrix,
+	const GLES1::SceneShaderData *p_shader,
+	Transform3D &r_model_view,
+	Transform3D &r_world_matrix
+) const {
+	if (!p_shader || !p_shader->uses_billboard_or_fixed_size()) {
+		r_model_view = p_view_matrix * p_model_matrix;
+		r_world_matrix = p_model_matrix;
+		return;
+	}
+
+	Transform3D main_cam_inv_view;
+	_gl_reconstruct_view_matrix(main_cam_inv_view, scene_state.ubo.main_cam_inv_view_matrix);
+	Projection proj = _gl_array_to_projection(scene_state.ubo.projection_matrix);
+
+	r_model_view = _compute_billboard_modelview(p_model_matrix, p_view_matrix, main_cam_inv_view, proj, p_shader);
+	r_world_matrix = p_view_matrix.affine_inverse() * r_model_view;
 }
 
 /* EDITOR DRAW */
@@ -3869,24 +3987,9 @@ void RasterizerSceneGLES1::_draw_editor_gizmos(const RenderDataGLES1 *p_render_d
 		uint32_t instances = is_multimesh ? surf->owner->instance_count : 1;
 		RID base_rid = surf->owner->data->base;
 
-		Color base_albedo = Color(1.0f, 1.0f, 1.0f, 1.0f);
-		const RID mat_rid = _editor_resolve_surface_material(surf);
-
-		if (mat_rid.is_valid()) {
-			Variant albedo_var = GLES1::MaterialStorage::get_singleton()->material_get_param(mat_rid, "albedo");
-			if (albedo_var.get_type() == Variant::COLOR) {
-				base_albedo = albedo_var;
-			}
-
-			if (surf->primitive == RS::PRIMITIVE_POINTS) {
-				Variant pt_size = GLES1::MaterialStorage::get_singleton()->material_get_param(mat_rid, "point_size");
-				if (pt_size.get_type() == Variant::FLOAT) {
-					glPointSize(pt_size);
-				} else {
-					glPointSize(1.0f);
-				}
-			}
-		}
+		Color base_albedo(1.0f, 1.0f, 1.0f, 1.0f);
+		bool has_gizmo_tex = false;
+		_setup_gizmo_surface_material(surf, base_albedo, has_gizmo_tex);
 
 		GLenum primitive_gl = _gl_get_primitive_type(surf->primitive);
 
@@ -3936,6 +4039,12 @@ void RasterizerSceneGLES1::_draw_editor_gizmos(const RenderDataGLES1 *p_render_d
 					glBufferData(GL_ARRAY_BUFFER, surf->color_cache.size() * sizeof(Color), surf->color_cache.ptr(), GL_STATIC_DRAW);
 				}
 
+				if (!surf->uv_cache.is_empty()) {
+					glGenBuffers(1, &surf->gizmo_uv_buffer);
+					glBindBuffer(GL_ARRAY_BUFFER, surf->gizmo_uv_buffer);
+					glBufferData(GL_ARRAY_BUFFER, surf->uv_cache.size() * sizeof(Vector2), surf->uv_cache.ptr(), GL_STATIC_DRAW);
+				}
+
 				if (surf->gizmo_index_array) {
 					glGenBuffers(1, &surf->gizmo_index_buffer);
 					glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, surf->gizmo_index_buffer);
@@ -3961,7 +4070,14 @@ void RasterizerSceneGLES1::_draw_editor_gizmos(const RenderDataGLES1 *p_render_d
 			}
 
 			Transform3D final_xform = surf->owner->transform * xform;
-			glMultMatrixf(_gl_mult_transform(final_xform));
+			if (surf->shader && surf->shader->uses_billboard_or_fixed_size()) {
+				Transform3D model_view;
+				Transform3D effective_world;
+				_resolve_surface_transforms(final_xform, p_render_data->inv_cam_transform, surf->shader, model_view, effective_world);
+				glLoadMatrixf(_gl_load_transform(model_view));
+			} else {
+				glMultMatrixf(_gl_mult_transform(final_xform));
+			}
 
 			// Rotation rings
 			if (is_rotate_gizmo) {
@@ -4058,6 +4174,14 @@ void RasterizerSceneGLES1::_draw_editor_gizmos(const RenderDataGLES1 *p_render_d
 						glColor4f(final_color.r, final_color.g, final_color.b, final_color.a);
 					}
 
+					if (has_gizmo_tex && surf->gizmo_uv_buffer != 0) {
+						glEnableClientState(GL_TEXTURE_COORD_ARRAY);
+						glBindBuffer(GL_ARRAY_BUFFER, surf->gizmo_uv_buffer);
+						glTexCoordPointer(2, GL_FLOAT, 0, nullptr);
+					} else {
+						glDisableClientState(GL_TEXTURE_COORD_ARRAY);
+					}
+
 					if (surf->gizmo_index_buffer != 0) {
 						glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, surf->gizmo_index_buffer);
 						glDrawElements(primitive_gl, surf->index_cache.size(), GL_UNSIGNED_SHORT, nullptr);
@@ -4082,6 +4206,13 @@ void RasterizerSceneGLES1::_draw_editor_gizmos(const RenderDataGLES1 *p_render_d
 						glColor4f(final_color.r, final_color.g, final_color.b, final_color.a);
 					}
 
+					if (has_gizmo_tex && !surf->uv_cache.is_empty()) {
+						glEnableClientState(GL_TEXTURE_COORD_ARRAY);
+						glTexCoordPointer(2, GL_FLOAT, 0, surf->uv_cache.ptr());
+					} else {
+						glDisableClientState(GL_TEXTURE_COORD_ARRAY);
+					}
+
 					if (surf->gizmo_index_array) {
 						if (GLES1_CONFIG->support_vbo) {
 							glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
@@ -4104,6 +4235,13 @@ void RasterizerSceneGLES1::_draw_editor_gizmos(const RenderDataGLES1 *p_render_d
 	// Clean up
 	glLineWidth(1.0f);
 	glPointSize(1.0f);
+	glDisable(GL_ALPHA_TEST);
+	glAlphaFunc(GL_ALWAYS, 0.0f);
+	if (GLES1_CONFIG->max_texture_units > 1) {
+		glActiveTexture(GL_TEXTURE0);
+	}
+	glDisable(GL_TEXTURE_2D);
+	glBindTexture(GL_TEXTURE_2D, 0);
 	_gl_set_client_states(0);
 
 	if (GLES1_CONFIG->support_vbo) {
@@ -4118,6 +4256,61 @@ void RasterizerSceneGLES1::_draw_editor_gizmos(const RenderDataGLES1 *p_render_d
 
 	_gl_teardown_editor_state();
 	GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_draw_editor_gizmos: cleanup");
+}
+
+void RasterizerSceneGLES1::_setup_gizmo_surface_material(const GeometryInstanceSurface *p_surf, Color &r_base_albedo, bool &r_has_texture) {
+	r_base_albedo = Color(1.0f, 1.0f, 1.0f, 1.0f);
+	r_has_texture = false;
+
+	RID mat_rid = _editor_resolve_surface_material(p_surf);
+	RID albedo_tex_rid;
+
+	if (mat_rid.is_valid()) {
+		GLES1::MaterialStorage *mat_storage = GLES1::MaterialStorage::get_singleton();
+
+		Variant albedo_var = mat_storage->material_get_param(mat_rid, "albedo");
+		if (albedo_var.get_type() == Variant::COLOR) {
+			r_base_albedo = albedo_var;
+		}
+
+		Variant tex_var = mat_storage->material_get_param(mat_rid, "texture_albedo");
+		if (tex_var.get_type() == Variant::RID) {
+			albedo_tex_rid = tex_var;
+		}
+
+		if (p_surf->primitive == RS::PRIMITIVE_POINTS) {
+			Variant pt_size = mat_storage->material_get_param(mat_rid, "point_size");
+			if (pt_size.get_type() == Variant::FLOAT) {
+				glPointSize(pt_size);
+			} else {
+				glPointSize(1.0f);
+			}
+		}
+	}
+
+	if (!albedo_tex_rid.is_valid() && p_surf->material && !p_surf->material->texture_cache.is_empty()) {
+		albedo_tex_rid = p_surf->material->texture_cache[0];
+	}
+
+	r_has_texture = albedo_tex_rid.is_valid() && !p_surf->uv_cache.is_empty();
+	if (r_has_texture) {
+		GLES1::TextureStorage::get_singleton()->texture_bind_and_validate(
+			albedo_tex_rid,
+			GL_TEXTURE0,
+			RS::CANVAS_ITEM_TEXTURE_FILTER_LINEAR_WITH_MIPMAPS,
+			RS::CANVAS_ITEM_TEXTURE_REPEAT_DISABLED
+		);
+		glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE);
+	} else {
+		if (GLES1_CONFIG->max_texture_units > 1) {
+			glActiveTexture(GL_TEXTURE0);
+		}
+		glDisable(GL_TEXTURE_2D);
+		glBindTexture(GL_TEXTURE_2D, 0);
+	}
+
+	_gl_setup_alpha_scissor(p_surf->material);
+	GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_setup_gizmo_surface_material");
 }
 
 void RasterizerSceneGLES1::_draw_editor_lines(const RenderDataGLES1 *p_render_data, bool p_flip_y) {
@@ -4649,6 +4842,7 @@ void RasterizerSceneGLES1::_setup_environment(const RenderDataGLES1 *p_render_da
 	GLES1::MaterialStorage::store_camera(projection.inverse(), scene_state.ubo.inv_projection_matrix);
 	GLES1::MaterialStorage::store_transform(p_render_data->cam_transform, scene_state.ubo.inv_view_matrix);
 	GLES1::MaterialStorage::store_transform(p_render_data->inv_cam_transform, scene_state.ubo.view_matrix);
+	GLES1::MaterialStorage::store_transform(p_render_data->main_cam_transform, scene_state.ubo.main_cam_inv_view_matrix);
 	scene_state.ubo.camera_visible_layers = p_render_data->camera_visible_layers;
 
 	scene_state.ubo.z_far = p_render_data->z_far;

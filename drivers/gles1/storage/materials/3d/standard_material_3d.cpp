@@ -80,6 +80,14 @@ void StandardMaterialProcessor::update_state(StandardMaterialState &r_state, con
 
 	// Invert roughness for GL_SHININESS (0.0 to 128.0)
 	r_state.shininess = CLAMP((1.0f - roughness) * 128.0f, 0.0f, 128.0f);
+
+	if (p_parameters.has("alpha_scissor_threshold")) {
+		r_state.use_alpha_scissor = true;
+		r_state.alpha_scissor_threshold = CLAMP(static_cast<float>(p_parameters["alpha_scissor_threshold"]), 0.0f, 1.0f);
+	} else {
+		r_state.use_alpha_scissor = false;
+		r_state.alpha_scissor_threshold = 0.5f;
+	}
 }
 
 void StandardMaterialProcessor::bind_state(const StandardMaterialState &p_state) {
@@ -96,6 +104,15 @@ void StandardMaterialProcessor::bind_state(const StandardMaterialState &p_state)
 
 	glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, p_state.shininess);
 	GL_CHECK_ERROR("GLES1::StandardMaterialProcessor::bind_state: glMaterialf SHININESS");
+
+	if (p_state.use_alpha_scissor) {
+		glEnable(GL_ALPHA_TEST);
+		glAlphaFunc(GL_GEQUAL, p_state.alpha_scissor_threshold);
+		GL_CHECK_ERROR("GLES1::StandardMaterialProcessor::bind_state: glAlphaFunc");
+	} else {
+		glDisable(GL_ALPHA_TEST);
+		GL_CHECK_ERROR("GLES1::StandardMaterialProcessor::bind_state: glDisable GL_ALPHA_TEST");
+	}
 }
 
 } // namespace GLES1
