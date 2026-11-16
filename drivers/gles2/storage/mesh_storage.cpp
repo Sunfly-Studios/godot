@@ -2662,6 +2662,7 @@ void MeshStorage::_multimesh_allocate_data(RID p_multimesh, int p_instances, RS:
 	}
 
 	multimesh->buffer_set = false;
+	multimesh->buffer_version++;
 
 	// Orphan the VRAM buffer and allocate the correct size
 	glBindBuffer(GL_ARRAY_BUFFER, multimesh->buffer);
@@ -2701,6 +2702,7 @@ void MeshStorage::_multimesh_make_local(MultiMesh *multimesh) const {
 }
 
 void MeshStorage::_multimesh_mark_dirty(MultiMesh *multimesh, int p_index, bool p_aabb) {
+	multimesh->buffer_version++;
 	if (p_aabb) {
 		multimesh->aabb_dirty = true;
 	}
@@ -2980,6 +2982,7 @@ void MeshStorage::_multimesh_set_buffer(RID p_multimesh, const Vector<float> &p_
 	}
 
 	multimesh->buffer_set = true;
+	multimesh->buffer_version++;
 
 	// Generate the AABB.
 	if (multimesh->mesh.is_valid() && multimesh->custom_aabb == AABB()) {

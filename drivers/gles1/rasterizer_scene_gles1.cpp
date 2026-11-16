@@ -584,7 +584,6 @@ void RasterizerSceneGLES1::_update_dirty_geometry_instances() {
 }
 
 void RasterizerSceneGLES1::_remove_cached_surface(GeometryInstanceSurface *p_surface) {
-	bdata.invalidate_vbo_cache();
 	p_surface->baked_world_cache.clear();
 	p_surface->baked_tangent_cache.clear();
 	p_surface->cached_transform_hash = 0;
@@ -2506,6 +2505,7 @@ void RasterizerSceneGLES1::_batch_fill_multimesh_tiered(const BatchType::BItemRe
 	const int instances = p_ref.instance_count;
 	MultiMeshInstanceData mm = _get_multimesh_data(p_surface);
 	const bool is_multimesh = (p_surface->owner->data->base_type == RS::INSTANCE_MULTIMESH && mm.data != nullptr);
+	const float *mm_chunk_data = is_multimesh ? (mm.data + (p_ref.instance_offset * mm.stride)) : nullptr;
 	const bool need_normals = (norm_ptr != nullptr || tan_ptr != nullptr);
 
 	// Sequential Pass 1: Pre-compute contiguous SoA streams of instance transforms,
@@ -2534,12 +2534,12 @@ void RasterizerSceneGLES1::_batch_fill_multimesh_tiered(const BatchType::BItemRe
 		Transform3D xform;
 		Color raw_color(1.0f, 1.0f, 1.0f, 1.0f);
 		if (is_multimesh) {
-			_gl_batch_decode_multimesh_instance(mm.data + (inst * mm.stride), mm.format, mm.uses_colors, mm.color_offset, xform, raw_color);
+			_gl_batch_decode_multimesh_instance(mm_chunk_data + (inst * mm.stride), mm.format, mm.uses_colors, mm.color_offset, xform, raw_color);
 		} else if (p_surface->owner->data->base_type == RS::INSTANCE_PARTICLES) {
 			xform = Transform3D();
 		}
 
-		const Transform3D world_xform = p_ref.transform * xform;
+		const Transform3D world_xform = p_use_hardware_transform ? xform : (p_ref.transform * xform);
 		float inv_scale = 1.0f;
 		const BatchType::TransformMode3D mode = BatchType::_find_transform_mode_3d(world_xform, &inv_scale);
 		xform_dst[inst] = world_xform;
@@ -2562,13 +2562,13 @@ void RasterizerSceneGLES1::_batch_fill_multimesh_tiered(const BatchType::BItemRe
 
 	// Sequential Pass 2: Populate aligned FVF staging buffer from contiguous SoA streams.
 	if (bdata.fvf == BatcherEnums::FVF_3D_TIER1_BASE) {
-		_batch_fill_multimesh_tier(reinterpret_cast<BatchType::BatchVertex3DTier1 *>(r_bvs), instances, v_count, is_multimesh, mm.uses_colors, mm.data, mm.stride, mm.color_offset, pos_ptr, norm_ptr, tan_ptr, uv_ptr, uv2_ptr, col_ptr, xform_dst, mode_dst, cofactor_dst, color_dst, m_idx);
+		_batch_fill_multimesh_tier(reinterpret_cast<BatchType::BatchVertex3DTier1 *>(r_bvs), instances, v_count, is_multimesh, mm.uses_colors, mm_chunk_data, mm.stride, mm.color_offset, pos_ptr, norm_ptr, tan_ptr, uv_ptr, uv2_ptr, col_ptr, xform_dst, mode_dst, cofactor_dst, color_dst, m_idx);
 	} else if (bdata.fvf == BatcherEnums::FVF_3D_TIER2_COLOR) {
-		_batch_fill_multimesh_tier(reinterpret_cast<BatchType::BatchVertex3DTier2 *>(r_bvs), instances, v_count, is_multimesh, mm.uses_colors, mm.data, mm.stride, mm.color_offset, pos_ptr, norm_ptr, tan_ptr, uv_ptr, uv2_ptr, col_ptr, xform_dst, mode_dst, cofactor_dst, color_dst, m_idx);
+		_batch_fill_multimesh_tier(reinterpret_cast<BatchType::BatchVertex3DTier2 *>(r_bvs), instances, v_count, is_multimesh, mm.uses_colors, mm_chunk_data, mm.stride, mm.color_offset, pos_ptr, norm_ptr, tan_ptr, uv_ptr, uv2_ptr, col_ptr, xform_dst, mode_dst, cofactor_dst, color_dst, m_idx);
 	} else if (bdata.fvf == BatcherEnums::FVF_3D_TIER3_TANGENT) {
-		_batch_fill_multimesh_tier(reinterpret_cast<BatchType::BatchVertex3DTier3 *>(r_bvs), instances, v_count, is_multimesh, mm.uses_colors, mm.data, mm.stride, mm.color_offset, pos_ptr, norm_ptr, tan_ptr, uv_ptr, uv2_ptr, col_ptr, xform_dst, mode_dst, cofactor_dst, color_dst, m_idx);
+		_batch_fill_multimesh_tier(reinterpret_cast<BatchType::BatchVertex3DTier3 *>(r_bvs), instances, v_count, is_multimesh, mm.uses_colors, mm_chunk_data, mm.stride, mm.color_offset, pos_ptr, norm_ptr, tan_ptr, uv_ptr, uv2_ptr, col_ptr, xform_dst, mode_dst, cofactor_dst, color_dst, m_idx);
 	} else {
-		_batch_fill_multimesh_tier(reinterpret_cast<BatchType::BatchVertex3DTier4 *>(r_bvs), instances, v_count, is_multimesh, mm.uses_colors, mm.data, mm.stride, mm.color_offset, pos_ptr, norm_ptr, tan_ptr, uv_ptr, uv2_ptr, col_ptr, xform_dst, mode_dst, cofactor_dst, color_dst, m_idx);
+		_batch_fill_multimesh_tier(reinterpret_cast<BatchType::BatchVertex3DTier4 *>(r_bvs), instances, v_count, is_multimesh, mm.uses_colors, mm_chunk_data, mm.stride, mm.color_offset, pos_ptr, norm_ptr, tan_ptr, uv_ptr, uv2_ptr, col_ptr, xform_dst, mode_dst, cofactor_dst, color_dst, m_idx);
 	}
 
 	_batch_fill_indices_multimesh(r_inds, indices, v_count, instances, p_start_vert, p_surface->primitive);
@@ -2628,12 +2628,13 @@ void RasterizerSceneGLES1::_batch_fill_multimesh_depth(const BatchType::BItemRef
 	const int instances = p_ref.instance_count;
 	MultiMeshInstanceData mm = _get_multimesh_data(p_surface);
 	const bool is_multimesh = (p_surface->owner->data->base_type == RS::INSTANCE_MULTIMESH && mm.data != nullptr);
+	const float *mm_chunk_data = is_multimesh ? (mm.data + (p_ref.instance_offset * mm.stride)) : nullptr;
 	const uint8_t m_idx = static_cast<uint8_t>(p_item_index);
 
 	if (_batch_util_is_depth_alpha_fvf(bdata.fvf)) {
-		_batch_fill_multimesh_depth_vertices(reinterpret_cast<BatchType::BatchVertex3DDepthAlphaMinimal *>(r_bvs), instances, v_count, is_multimesh, mm.data, mm.stride, mm.format, p_ref.transform, pos_ptr, uv_ptr, m_idx);
+		_batch_fill_multimesh_depth_vertices(reinterpret_cast<BatchType::BatchVertex3DDepthAlphaMinimal *>(r_bvs), instances, v_count, is_multimesh, mm_chunk_data, mm.stride, mm.format, p_use_hardware_transform, p_ref.transform, pos_ptr, uv_ptr, m_idx);
 	} else {
-		_batch_fill_multimesh_depth_vertices(reinterpret_cast<BatchType::BatchVertex3DDepthMinimal *>(r_bvs), instances, v_count, is_multimesh, mm.data, mm.stride, mm.format, p_ref.transform, pos_ptr, uv_ptr, m_idx);
+		_batch_fill_multimesh_depth_vertices(reinterpret_cast<BatchType::BatchVertex3DDepthMinimal *>(r_bvs), instances, v_count, is_multimesh, mm_chunk_data, mm.stride, mm.format, p_use_hardware_transform, p_ref.transform, pos_ptr, uv_ptr, m_idx);
 	}
 
 	_batch_fill_indices_multimesh(r_inds, indices, v_count, instances, p_start_vert, p_surface->primitive);
@@ -2646,70 +2647,66 @@ bool RasterizerSceneGLES1::_batch_try_reuse_cached_vbo_slot_3d(BatchType::Batch3
 		return false;
 	}
 
-	// We reached the maximum allowed pool size.
-	if (bdata.current_vbo_index >= bdata.vbo_pool.size()) {
-		return false;
+	// Fast-path: check current sequential slot cursor first.
+	if (bdata.current_vbo_index < bdata.vbo_pool.size()) {
+		const BatchType::VBOPool &pool = bdata.vbo_pool[bdata.current_vbo_index];
+		if (pool.gl_vertex_buffer != 0 && pool.gl_index_buffer != 0) {
+			if (bdata.current_vbo_slot_index < pool.cached_slots.size()) {
+				const BatchType::CachedBatchSlot3D &slot = pool.cached_slots[bdata.current_vbo_slot_index];
+				if (
+					slot.content_hash == p_content_hash &&
+					slot.vbo_byte_offset == bdata.current_vbo_byte_offset &&
+					slot.ibo_byte_offset == bdata.current_ibo_byte_offset
+				) {
+					r_batch.vbo_index = bdata.current_vbo_index;
+					r_batch.vbo_byte_offset = slot.vbo_byte_offset;
+					r_batch.ibo_byte_offset = slot.ibo_byte_offset;
+					r_batch.num_verts = slot.num_verts;
+					r_batch.num_indices = slot.num_indices;
+					r_batch.fvf = slot.fvf;
+					r_batch.flags = slot.flags;
+
+					bdata.current_vbo_byte_offset += slot.aligned_vbo_bytes;
+					bdata.current_ibo_byte_offset += slot.aligned_ibo_bytes;
+					bdata.current_vbo_slot_index++;
+					return true;
+				}
+			}
+		}
 	}
 
-	const BatchType::VBOPool &pool = bdata.vbo_pool[bdata.current_vbo_index];
-	if (pool.gl_vertex_buffer == 0 || pool.gl_index_buffer == 0) {
-		return false;
-	}
-
-	// If the current pool's cached slots were exhausted,
-	// check if the batch spilled into the next pool last frame.
-	if (bdata.current_vbo_slot_index >= pool.cached_slots.size() && bdata.current_vbo_slot_index > 0) {
-		const uint32_t next_vbo_idx = bdata.current_vbo_index + 1;
-		if (next_vbo_idx < bdata.vbo_pool.size()) {
-			const BatchType::VBOPool &next_pool = bdata.vbo_pool[next_vbo_idx];
-
-			if (
-				next_pool.gl_vertex_buffer != 0 &&
-				next_pool.gl_index_buffer != 0 &&
-				next_pool.cached_slots.size() > 0 &&
-				next_pool.cached_slots[0].content_hash == p_content_hash &&
-				next_pool.cached_slots[0].vbo_byte_offset == 0 &&
-				next_pool.cached_slots[0].ibo_byte_offset == 0
-			) {
-				const BatchType::CachedBatchSlot3D &slot = next_pool.cached_slots[0];
-				bdata.current_vbo_index = next_vbo_idx;
-				r_batch.vbo_index = next_vbo_idx;
-				r_batch.vbo_byte_offset = 0;
-				r_batch.ibo_byte_offset = 0;
+	// Search all existing valid VBO pools for any cached slot with matching the hash.
+	for (uint32_t p = 0; p < bdata.vbo_pool.size(); p++) {
+		const BatchType::VBOPool &search_pool = bdata.vbo_pool[p];
+		if (search_pool.gl_vertex_buffer == 0 || search_pool.gl_index_buffer == 0) {
+			continue;
+		}
+		const uint32_t slot_count = search_pool.cached_slots.size();
+		for (uint32_t s = 0; s < slot_count; s++) {
+			const BatchType::CachedBatchSlot3D &slot = search_pool.cached_slots[s];
+			if (slot.content_hash == p_content_hash) {
+				r_batch.vbo_index = p;
+				r_batch.vbo_byte_offset = slot.vbo_byte_offset;
+				r_batch.ibo_byte_offset = slot.ibo_byte_offset;
 				r_batch.num_verts = slot.num_verts;
 				r_batch.num_indices = slot.num_indices;
 				r_batch.fvf = slot.fvf;
 				r_batch.flags = slot.flags;
 
-				bdata.current_vbo_byte_offset = slot.aligned_vbo_bytes;
-				bdata.current_ibo_byte_offset = slot.aligned_ibo_bytes;
-				bdata.current_vbo_slot_index = 1;
+				// Advance the write cursor past this slot if it resides in the active pool
+				// so subsequent new uploads append cleanly after it.
+				if (p == bdata.current_vbo_index && s >= bdata.current_vbo_slot_index) {
+					bdata.current_vbo_byte_offset = slot.vbo_byte_offset + slot.aligned_vbo_bytes;
+					bdata.current_ibo_byte_offset = slot.ibo_byte_offset + slot.aligned_ibo_bytes;
+					bdata.current_vbo_slot_index = s + 1;
+				} else if (p > bdata.current_vbo_index) {
+					bdata.current_vbo_index = p;
+					bdata.current_vbo_byte_offset = slot.vbo_byte_offset + slot.aligned_vbo_bytes;
+					bdata.current_ibo_byte_offset = slot.ibo_byte_offset + slot.aligned_ibo_bytes;
+					bdata.current_vbo_slot_index = s + 1;
+				}
 				return true;
 			}
-		}
-		return false;
-	}
-
-	if (bdata.current_vbo_slot_index < pool.cached_slots.size()) {
-		const BatchType::CachedBatchSlot3D &slot = pool.cached_slots[bdata.current_vbo_slot_index];
-
-		if (
-			slot.content_hash == p_content_hash &&
-			slot.vbo_byte_offset == bdata.current_vbo_byte_offset &&
-			slot.ibo_byte_offset == bdata.current_ibo_byte_offset
-		) {
-			r_batch.vbo_index = bdata.current_vbo_index;
-			r_batch.vbo_byte_offset = slot.vbo_byte_offset;
-			r_batch.ibo_byte_offset = slot.ibo_byte_offset;
-			r_batch.num_verts = slot.num_verts;
-			r_batch.num_indices = slot.num_indices;
-			r_batch.fvf = slot.fvf;
-			r_batch.flags = slot.flags;
-
-			bdata.current_vbo_byte_offset += slot.aligned_vbo_bytes;
-			bdata.current_ibo_byte_offset += slot.aligned_ibo_bytes;
-			bdata.current_vbo_slot_index++;
-			return true;
 		}
 	}
 
@@ -2757,18 +2754,38 @@ void RasterizerSceneGLES1::_batch_upload_buffers_3d(BatchType::Batch3D &r_batch,
 		bdata.current_vbo_byte_offset = 0;
 		bdata.current_ibo_byte_offset = 0;
 		bdata.current_vbo_slot_index = 0;
-	} else if (bdata.current_vbo_byte_offset > 0 || bdata.current_ibo_byte_offset > 0) {
+	} else {
+		// If the current pool still has valid cached slots from earlier this frame or last frame,
+		// append after the last cached slot.
 		if (
-			(bdata.current_vbo_byte_offset + aligned_vbo_bytes > max_vbo_bytes) ||
-			(bdata.current_ibo_byte_offset + aligned_ibo_bytes > max_ibo_bytes)
+			bdata.current_vbo_index < bdata.vbo_pool.size() &&
+			bdata.current_vbo_slot_index < bdata.vbo_pool[bdata.current_vbo_index].cached_slots.size()
 		) {
-			if (bdata.current_vbo_index < bdata.vbo_pool.size()) {
-				bdata.vbo_pool[bdata.current_vbo_index].cached_slots.resize(bdata.current_vbo_slot_index);
-			}
+			const BatchType::VBOPool &cur_pool = bdata.vbo_pool[bdata.current_vbo_index];
+			const BatchType::CachedBatchSlot3D &last_slot = cur_pool.cached_slots[cur_pool.cached_slots.size() - 1];
+			bdata.current_vbo_byte_offset = last_slot.vbo_byte_offset + last_slot.aligned_vbo_bytes;
+			bdata.current_ibo_byte_offset = last_slot.ibo_byte_offset + last_slot.aligned_ibo_bytes;
+			bdata.current_vbo_slot_index = cur_pool.cached_slots.size();
+		}
+
+		while (
+			bdata.current_vbo_index < bdata.vbo_pool.size() &&
+			(bdata.current_vbo_byte_offset > 0 || bdata.current_ibo_byte_offset > 0) &&
+			((bdata.current_vbo_byte_offset + aligned_vbo_bytes > max_vbo_bytes) ||
+				(bdata.current_ibo_byte_offset + aligned_ibo_bytes > max_ibo_bytes))
+		) {
 			bdata.current_vbo_index++;
-			bdata.current_vbo_byte_offset = 0;
-			bdata.current_ibo_byte_offset = 0;
-			bdata.current_vbo_slot_index = 0;
+			if (bdata.current_vbo_index < bdata.vbo_pool.size() && bdata.vbo_pool[bdata.current_vbo_index].cached_slots.size() > 0) {
+				const BatchType::VBOPool &next_pool = bdata.vbo_pool[bdata.current_vbo_index];
+				const BatchType::CachedBatchSlot3D &last_slot = next_pool.cached_slots[next_pool.cached_slots.size() - 1];
+				bdata.current_vbo_byte_offset = last_slot.vbo_byte_offset + last_slot.aligned_vbo_bytes;
+				bdata.current_ibo_byte_offset = last_slot.ibo_byte_offset + last_slot.aligned_ibo_bytes;
+				bdata.current_vbo_slot_index = next_pool.cached_slots.size();
+			} else {
+				bdata.current_vbo_byte_offset = 0;
+				bdata.current_ibo_byte_offset = 0;
+				bdata.current_vbo_slot_index = 0;
+			}
 		}
 	}
 
@@ -3029,8 +3046,7 @@ void RasterizerSceneGLES1::_batch_render_items(GLES1::SceneMaterialData *p_mater
 		return;
 	}
 
-	const bool is_instanced = (p_batch.flags & BatcherEnums::BTF_3D_USES_INSTANCING) != 0;
-	const bool use_hardware_transform = (p_batch.num_item_refs == 1 && !is_instanced);
+	const bool use_hardware_transform = (p_batch.num_item_refs == 1);
 	// For FVF_UNBATCHED, only flag vertex colors if the mesh itself provides a color array;
 	// material-only albedo colors are handled via glColor4f/glMaterialfv without GL_COLOR_ARRAY.
 	const bool has_vertex_colors = (
@@ -3848,7 +3864,14 @@ void RasterizerSceneGLES1::_draw_item_ref_instances(const BatchType::BItemRef3D 
 	}
 	const bool is_multimesh = (surf->owner->data->base_type == RS::INSTANCE_MULTIMESH);
 	const int instances = is_multimesh ? static_cast<int>(p_ref.instance_count) : 1;
-	_draw_surface_instances(surf, p_ref.transform, p_view_matrix, instances, nullptr, p_has_indices, p_use_index_buffer, p_primitive_gl, p_drawn_count, p_index_type, p_index_client_ptr);
+	MultiMeshInstanceData mm;
+	if (is_multimesh) {
+		mm = _get_multimesh_data(surf);
+		if (mm.data) {
+			mm.data += (p_ref.instance_offset * mm.stride);
+		}
+	}
+	_draw_surface_instances(surf, p_ref.transform, p_view_matrix, instances, is_multimesh ? &mm : nullptr, p_has_indices, p_use_index_buffer, p_primitive_gl, p_drawn_count, p_index_type, p_index_client_ptr);
 }
 
 Transform3D RasterizerSceneGLES1::_compute_billboard_modelview(

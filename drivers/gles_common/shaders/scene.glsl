@@ -165,13 +165,17 @@ uniform highp float positional_shadow_normal_bias;
 uniform highp float positional_shadow_atlas_pixel_size;
 #endif
 
-#if defined(USE_ADDITIVE_LIGHTING) && defined(ADDITIVE_DIRECTIONAL)
+#if !defined(DISABLE_LIGHT_DIRECTIONAL) && (defined(BASE_PASS) || (defined(USE_ADDITIVE_LIGHTING) && defined(ADDITIVE_DIRECTIONAL)))
 uniform highp vec3 directional_shadow_direction;
 uniform highp float directional_shadow_atlas_pixel_size;
 uniform highp vec4 directional_shadow_normal_bias;
 uniform highp vec4 directional_shadow_split_offsets;
 uniform highp mat4 directional_shadow_matrix1;
 uniform highp mat4 directional_shadow_matrix2;
+#endif
+
+#if defined(USE_INSTANCING)
+uniform highp vec4 multimesh_palette[96];
 #endif
 
 uniform mat3 radiance_inverse_xform;
@@ -226,7 +230,7 @@ varying vec3 tangent_interp;
 varying vec3 binormal_interp;
 #endif
 
-#if defined(USE_ADDITIVE_LIGHTING)
+#if defined(USE_ADDITIVE_LIGHTING) || (!defined(DISABLE_LIGHT_DIRECTIONAL) && defined(BASE_PASS))
 varying highp vec4 shadow_coord;
 #if defined(LIGHT_USE_PSSM2)
 varying highp vec4 shadow_coord2;
@@ -253,7 +257,19 @@ void main() {
 	highp vec3 vertex = vertex_attrib;
 
 	highp mat4 model_matrix = world_transform;
-#if defined(USE_INSTANCING) || defined(USE_FAT_VERTEX)
+#if defined(USE_INSTANCING)
+	int mm_ofs = int(instance_xform0.x + 0.5) * 3;
+	highp vec4 row0 = multimesh_palette[mm_ofs + 0];
+	highp vec4 row1 = multimesh_palette[mm_ofs + 1];
+	highp vec4 row2 = multimesh_palette[mm_ofs + 2];
+	highp mat4 m = mat4(
+		vec4(row0.x, row1.x, row2.x, 0.0),
+		vec4(row0.y, row1.y, row2.y, 0.0),
+		vec4(row0.z, row1.z, row2.z, 0.0),
+		vec4(row0.w, row1.w, row2.w, 1.0)
+	);
+	model_matrix = model_matrix * m;
+#elif defined(USE_FAT_VERTEX)
 	// GLES2 doesn't have transpose(). We manually transpose the incoming row vectors.
 	highp mat4 m = mat4(
 		vec4(instance_xform0.x, instance_xform1.x, instance_xform2.x, 0.0),
@@ -393,7 +409,7 @@ void main() {
 #endif
 #endif
 
-#if defined(USE_ADDITIVE_LIGHTING) && defined(ADDITIVE_DIRECTIONAL)
+#if !defined(DISABLE_LIGHT_DIRECTIONAL) && (defined(BASE_PASS) || (defined(USE_ADDITIVE_LIGHTING) && defined(ADDITIVE_DIRECTIONAL)))
 #ifdef NORMAL_USED
 	vec3 base_normal_bias = normalize(normal) * (1.0 - max(0.0, dot(directional_shadow_direction, -normalize(normal))));
 	vec3 normal_offset = base_normal_bias * directional_shadow_normal_bias.x;
@@ -511,7 +527,7 @@ varying vec3 normal_interp;
 
 varying highp vec3 vertex_interp;
 
-#if defined(USE_ADDITIVE_LIGHTING)
+#if defined(USE_ADDITIVE_LIGHTING) || (!defined(DISABLE_LIGHT_DIRECTIONAL) && defined(BASE_PASS))
 varying highp vec4 shadow_coord;
 
 #if defined(LIGHT_USE_PSSM2)
@@ -575,7 +591,7 @@ uniform highp float positional_shadow_normal_bias;
 uniform highp float positional_shadow_atlas_pixel_size;
 #endif
 
-#if defined(USE_ADDITIVE_LIGHTING) && defined(ADDITIVE_DIRECTIONAL)
+#if !defined(DISABLE_LIGHT_DIRECTIONAL) && (defined(BASE_PASS) || (defined(USE_ADDITIVE_LIGHTING) && defined(ADDITIVE_DIRECTIONAL)))
 uniform highp vec3 directional_shadow_direction;
 uniform highp float directional_shadow_atlas_pixel_size;
 uniform highp vec4 directional_shadow_normal_bias;
@@ -930,23 +946,25 @@ void main() {
 #endif // BASE_PASS
 
 #ifndef DISABLE_LIGHT_DIRECTIONAL
-#if defined(USE_ADDITIVE_LIGHTING) && defined(ADDITIVE_DIRECTIONAL)
+#if defined(BASE_PASS) || (defined(USE_ADDITIVE_LIGHTING) && defined(ADDITIVE_DIRECTIONAL))
 	if (directional_light_count > 0) {
 		float directional_shadow = 1.0;
+		if (directional_lights.data[0].extended_data.z > 0.001) {
 #if !defined(LIGHT_USE_PSSM2)
-		directional_shadow = sample_shadow(directional_shadow_atlas, directional_shadow_atlas_pixel_size, shadow_coord);
+			directional_shadow = sample_shadow(directional_shadow_atlas, directional_shadow_atlas_pixel_size, shadow_coord);
 #endif
 #ifdef LIGHT_USE_PSSM2
-		float depth_z = -vertex.z;
-		directional_shadow = depth_z < directional_shadow_split_offsets.x ? sample_shadow(directional_shadow_atlas, directional_shadow_atlas_pixel_size, shadow_coord) : sample_shadow(directional_shadow_atlas, directional_shadow_atlas_pixel_size, shadow_coord2);
+			float depth_z = -vertex.z;
+			directional_shadow = depth_z < directional_shadow_split_offsets.x ? sample_shadow(directional_shadow_atlas, directional_shadow_atlas_pixel_size, shadow_coord) : sample_shadow(directional_shadow_atlas, directional_shadow_atlas_pixel_size, shadow_coord2);
 #endif
 
-		directional_shadow = mix(directional_shadow, 1.0, 1.0 - smoothstep(directional_shadow_fade_to, directional_shadow_fade_from, vertex.z));
-		directional_shadow = mix(1.0, directional_shadow, directional_lights.data[0].extended_data.z);
+			directional_shadow = mix(directional_shadow, 1.0, 1.0 - smoothstep(directional_shadow_fade_to, directional_shadow_fade_from, vertex.z));
+			directional_shadow = mix(1.0, directional_shadow, directional_lights.data[0].extended_data.z);
+		}
 
 		light_compute(normal, normalize(directional_lights.data[0].direction_energy.xyz), normalize(view), directional_lights.data[0].color_size.w, directional_lights.data[0].color_size.xyz * directional_lights.data[0].direction_energy.w * directional_shadow, 1.0, f0, roughness, metallic, 1.0, albedo, alpha, diffuse_light, specular_light);
 	}
-#endif // USE_ADDITIVE_LIGHTING && ADDITIVE_DIRECTIONAL
+#endif // BASE_PASS || (USE_ADDITIVE_LIGHTING && ADDITIVE_DIRECTIONAL)
 #endif // !DISABLE_LIGHT_DIRECTIONAL
 
 #ifndef DISABLE_LIGHT_OMNI

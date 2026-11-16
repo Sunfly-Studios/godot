@@ -397,7 +397,7 @@ public:
 		_FORCE_INLINE_ bool use_hardware_transform() const {
 			return (
 				use_static_vbo_loop ||
-				(num_item_refs == 1 && !(flags & BatcherEnums::BTF_3D_USES_INSTANCING)) ||
+				(num_item_refs == 1) ||
 				((flags & BatcherEnums::BTF_3D_PREVENT_VERTEX_BAKING) != 0 && !(flags & BatcherEnums::BTF_3D_USES_INSTANCING))
 			);
 		}
@@ -413,6 +413,7 @@ public:
 		TransformMode3D transform_mode;
 		uint32_t base_verts;
 		uint32_t base_indices;
+		uint32_t instance_offset;
 		uint32_t instance_count;
 	};
 
@@ -762,11 +763,13 @@ protected:
 		}
 	}
 	uint32_t _get_effective_dynamic_vertex_limit() const;
-	bool _should_use_static_vbo_loop(uint32_t p_base_verts, uint32_t p_base_indices, uint32_t p_instances, bool p_is_multimesh, bool p_is_strip) const;
+	bool _should_use_static_vbo_loop(uint32_t p_base_verts, uint32_t p_base_indices, uint32_t p_instances, bool p_is_multimesh, bool p_is_strip, uint32_t p_surf_flags) const;
+
+	// Software transforms
 	void _software_transform_vertex(BatchVector3 &r_v, const Transform3D &p_tr) const;
 	void _software_transform_normal(BatchNormal &r_n, const Transform3D &p_tr) const;
 	void _software_transform_normal_precomputed(BatchNormal &r_n, const Basis &p_cofactor) const;
-	void _calculate_draw_call_cost_or_flush(Batch3D &p_batch) const;
+	void _calculate_draw_call_cost_or_flush(Batch3D &p_batch, bool p_was_cached_vbo = false) const;
 
 public:
 	Batch3D *_batch_request_new(bool p_blank = true) {

@@ -7,7 +7,7 @@ uniform highp sampler2D spot_shadow_texture; // texunit:-3
 #endif
 #endif
 
-#if defined(USE_ADDITIVE_LIGHTING) && defined(ADDITIVE_DIRECTIONAL)
+#if !defined(DISABLE_LIGHT_DIRECTIONAL) && (defined(BASE_PASS) || (defined(USE_ADDITIVE_LIGHTING) && defined(ADDITIVE_DIRECTIONAL)))
 uniform highp sampler2D directional_shadow_atlas; // texunit:-3
 uniform mediump float directional_shadow_fade_from;
 uniform mediump float directional_shadow_fade_to;

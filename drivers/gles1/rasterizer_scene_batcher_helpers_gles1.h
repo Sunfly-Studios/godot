@@ -436,6 +436,7 @@ _FORCE_INLINE_ void _batch_fill_multimesh_depth_vertices(
 	const float *p_mm_data,
 	uint32_t p_mm_stride,
 	RS::MultimeshTransformFormat p_mm_format,
+	bool p_use_local_xform,
 	const Transform3D &p_ref_xform,
 	const Vector3 *p_pos_ptr,
 	const Vector2 *p_uv_ptr,
@@ -460,11 +461,12 @@ _FORCE_INLINE_ void _batch_fill_multimesh_depth_vertices(
 				xform.origin.y = d[7];
 			}
 		}
-		const Transform3D world_xform = p_ref_xform * xform;
+		const Transform3D world_xform = p_use_local_xform ? xform : (p_ref_xform * xform);
 		const RasterizerSceneGLES1::BatchType::TransformMode3D mode = RasterizerSceneGLES1::_batch_find_transform_mode_3d(world_xform);
 
+		const uint8_t inst_m_idx = static_cast<uint8_t>(inst & 0xFF);
 		for (uint32_t i = 0; i < p_v_count; i++) {
-			_batch_write_depth_vertex(p_dst[bvs_idx], i, p_pos_ptr, p_uv_ptr, nullptr, mode, world_xform, p_m_idx);
+			_batch_write_depth_vertex(p_dst[bvs_idx], i, p_pos_ptr, p_uv_ptr, nullptr, mode, world_xform, inst_m_idx);
 			bvs_idx++;
 		}
 	}

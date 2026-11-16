@@ -325,6 +325,7 @@ _FORCE_INLINE_ void _batch_fill_multimesh_tier(
 			raw_col = Color(cdata[0], cdata[1], cdata[2], cdata[3]);
 		}
 
+		const uint8_t inst_m_idx = static_cast<uint8_t>(inst & 0xFF);
 		for (uint32_t i = 0; i < p_v_count; i++) {
 			_batch_transform_pos_norm(p_dst[bvs_idx].pos, p_dst[bvs_idx].normal, p_pos_ptr[i], p_norm_ptr, i, mode, world_xform, cofactor);
 			_batch_write_tier_secondary_attribs(
@@ -341,7 +342,7 @@ _FORCE_INLINE_ void _batch_fill_multimesh_tier(
 				mode,
 				world_xform,
 				cofactor,
-				p_m_idx
+				inst_m_idx
 			);
 			bvs_idx++;
 		}
@@ -401,8 +402,9 @@ _FORCE_INLINE_ void _batch_fill_multimesh_depth_vertices(
 		const Transform3D world_xform = p_use_local_xform ? xform : (p_ref_xform * xform);
 		const RasterizerSceneGLES2::BatchType::TransformMode3D mode = RasterizerSceneGLES2::_batch_find_transform_mode_3d(world_xform);
 
+		const uint8_t inst_m_idx = static_cast<uint8_t>(inst & 0xFF);
 		for (uint32_t i = 0; i < p_v_count; i++) {
-			_batch_write_depth_vertex(p_dst[bvs_idx], i, p_pos_ptr, p_uv_ptr, nullptr, mode, world_xform, p_m_idx);
+			_batch_write_depth_vertex(p_dst[bvs_idx], i, p_pos_ptr, p_uv_ptr, nullptr, mode, world_xform, inst_m_idx);
 			bvs_idx++;
 		}
 	}

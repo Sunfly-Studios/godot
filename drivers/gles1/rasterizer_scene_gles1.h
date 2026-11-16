@@ -116,6 +116,7 @@ struct BatcherAPISceneGLES1 {
 	using CanvasTexture = GLES1::CanvasTexture;
 	using Shader = GLES1::Shader;
 	using MeshInstance = GLES1::MeshInstance;
+	using MultiMesh = GLES1::MultiMesh;
 
 	static constexpr bool FORCE_BAKE_MODULATE = true;
 };
@@ -1451,6 +1452,11 @@ private:
 			if (max_tu > 1) {
 				glActiveTexture(GL_TEXTURE0);
 				glClientActiveTexture(GL_TEXTURE0);
+			}
+			if (GLES1_CONFIG->support_matrix_palette) {
+				glDisable(GL_MATRIX_PALETTE_OES);
+				glDisableClientState(GL_MATRIX_INDEX_ARRAY_OES);
+				glDisableClientState(GL_WEIGHT_ARRAY_OES);
 			}
 			glDisable(GL_COLOR_MATERIAL);
 			glDisable(GL_LIGHTING);

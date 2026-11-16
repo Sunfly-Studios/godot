@@ -234,6 +234,7 @@ struct MultiMesh {
 	Vector<float> data_cache; //used if individual setting is used
 	bool *data_cache_dirty_regions = nullptr;
 	uint32_t data_cache_used_dirty_regions = 0;
+	uint64_t buffer_version = 1;
 
 	GLuint buffer = 0;
 

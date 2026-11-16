@@ -1624,6 +1624,10 @@ uint32_t RasterizerSceneGLES2::_batch_get_surface_flags(const GeometryInstanceSu
 	// WORLD_TRANSFORM uniform stays intact and is not applied twice.
 	if (_shader_prevents_vertex_baking(active_shader)) {
 		flags |= BatcherEnums::BTF_3D_PREVENT_VERTEX_BAKING | BatcherEnums::BTF_3D_PREVENT_ITEM_JOINING;
+		if (flags & BatcherEnums::BTF_3D_USES_INSTANCING) {
+			// Promote MultiMesh with custom vertex shader to Tier 4 instancing (32 instances/draw).
+			flags |= BatcherEnums::BTF_3D_USES_SKINNING;
+		}
 	}
 
 	return flags;
@@ -1788,6 +1792,7 @@ void RasterizerSceneGLES2::_batch_fill_multimesh_tiered(const BatchType::BItemRe
 	const int instances = p_ref.instance_count;
 	MultiMeshInstanceData mm = _get_multimesh_data(p_surface);
 	const bool is_multimesh = (p_surface->owner->data->base_type == RS::INSTANCE_MULTIMESH && mm.data != nullptr);
+	const float *mm_chunk_data = is_multimesh ? (mm.data + (p_ref.instance_offset * mm.stride)) : nullptr;
 	const bool need_normals = (norm_ptr != nullptr || tan_ptr != nullptr);
 
 	// Sequential Pass 1: Pre-compute contiguous SoA streams of instance transforms,
@@ -1818,12 +1823,12 @@ void RasterizerSceneGLES2::_batch_fill_multimesh_tiered(const BatchType::BItemRe
 		Transform3D xform;
 		Color raw_color(1.0f, 1.0f, 1.0f, 1.0f);
 		if (is_multimesh) {
-			_gl_batch_decode_multimesh_instance(mm.data + (inst * mm.stride), mm.format, mm.uses_colors, mm.color_offset, xform, raw_color);
+			_gl_batch_decode_multimesh_instance(mm_chunk_data + (inst * mm.stride), mm.format, mm.uses_colors, mm.color_offset, xform, raw_color);
 		}
 
-		const Transform3D world_xform = (p_use_hardware_transform || prevent_vertex_baking) ? xform : (p_ref.transform * xform);
+		const Transform3D world_xform = prevent_vertex_baking ? Transform3D() : (p_use_hardware_transform ? xform : (p_ref.transform * xform));
 		float inv_scale = 1.0f;
-		const BatchType::TransformMode3D mode = BatchType::_find_transform_mode_3d(world_xform, &inv_scale);
+		const BatchType::TransformMode3D mode = prevent_vertex_baking ? BatchType::TM_3D_NONE : BatchType::_find_transform_mode_3d(world_xform, &inv_scale);
 		xform_dst[inst] = world_xform;
 		mode_dst[inst] = mode;
 
@@ -1844,13 +1849,13 @@ void RasterizerSceneGLES2::_batch_fill_multimesh_tiered(const BatchType::BItemRe
 
 	// Sequential Pass 2: Populate aligned FVF staging buffer from contiguous SoA streams.
 	if (bdata.fvf == BatcherEnums::FVF_3D_TIER1_BASE) {
-		_batch_fill_multimesh_tier(reinterpret_cast<BatchType::BatchVertex3DTier1 *>(r_bvs), instances, v_count, is_multimesh, mm.uses_colors, mm.data, mm.stride, mm.color_offset, pos_ptr, norm_ptr, tan_ptr, uv_ptr, uv2_ptr, col_ptr, xform_dst, mode_dst, cofactor_dst, color_dst, m_idx);
+		_batch_fill_multimesh_tier(reinterpret_cast<BatchType::BatchVertex3DTier1 *>(r_bvs), instances, v_count, is_multimesh, mm.uses_colors, mm_chunk_data, mm.stride, mm.color_offset, pos_ptr, norm_ptr, tan_ptr, uv_ptr, uv2_ptr, col_ptr, xform_dst, mode_dst, cofactor_dst, color_dst, m_idx);
 	} else if (bdata.fvf == BatcherEnums::FVF_3D_TIER2_COLOR) {
-		_batch_fill_multimesh_tier(reinterpret_cast<BatchType::BatchVertex3DTier2 *>(r_bvs), instances, v_count, is_multimesh, mm.uses_colors, mm.data, mm.stride, mm.color_offset, pos_ptr, norm_ptr, tan_ptr, uv_ptr, uv2_ptr, col_ptr, xform_dst, mode_dst, cofactor_dst, color_dst, m_idx);
+		_batch_fill_multimesh_tier(reinterpret_cast<BatchType::BatchVertex3DTier2 *>(r_bvs), instances, v_count, is_multimesh, mm.uses_colors, mm_chunk_data, mm.stride, mm.color_offset, pos_ptr, norm_ptr, tan_ptr, uv_ptr, uv2_ptr, col_ptr, xform_dst, mode_dst, cofactor_dst, color_dst, m_idx);
 	} else if (bdata.fvf == BatcherEnums::FVF_3D_TIER3_TANGENT) {
-		_batch_fill_multimesh_tier(reinterpret_cast<BatchType::BatchVertex3DTier3 *>(r_bvs), instances, v_count, is_multimesh, mm.uses_colors, mm.data, mm.stride, mm.color_offset, pos_ptr, norm_ptr, tan_ptr, uv_ptr, uv2_ptr, col_ptr, xform_dst, mode_dst, cofactor_dst, color_dst, m_idx);
+		_batch_fill_multimesh_tier(reinterpret_cast<BatchType::BatchVertex3DTier3 *>(r_bvs), instances, v_count, is_multimesh, mm.uses_colors, mm_chunk_data, mm.stride, mm.color_offset, pos_ptr, norm_ptr, tan_ptr, uv_ptr, uv2_ptr, col_ptr, xform_dst, mode_dst, cofactor_dst, color_dst, m_idx);
 	} else {
-		_batch_fill_multimesh_tier(reinterpret_cast<BatchType::BatchVertex3DTier4 *>(r_bvs), instances, v_count, is_multimesh, mm.uses_colors, mm.data, mm.stride, mm.color_offset, pos_ptr, norm_ptr, tan_ptr, uv_ptr, uv2_ptr, col_ptr, xform_dst, mode_dst, cofactor_dst, color_dst, m_idx);
+		_batch_fill_multimesh_tier(reinterpret_cast<BatchType::BatchVertex3DTier4 *>(r_bvs), instances, v_count, is_multimesh, mm.uses_colors, mm_chunk_data, mm.stride, mm.color_offset, pos_ptr, norm_ptr, tan_ptr, uv_ptr, uv2_ptr, col_ptr, xform_dst, mode_dst, cofactor_dst, color_dst, m_idx);
 	}
 
 	_batch_fill_indices_multimesh(r_inds, indices, v_count, instances, p_start_vert, p_surface->primitive);
@@ -1910,14 +1915,17 @@ void RasterizerSceneGLES2::_batch_fill_multimesh_depth(const BatchType::BItemRef
 	const int instances = p_ref.instance_count;
 	MultiMeshInstanceData mm = _get_multimesh_data(p_surface);
 	const bool is_multimesh = (p_surface->owner->data->base_type == RS::INSTANCE_MULTIMESH && mm.data != nullptr);
+	const float *mm_chunk_data = is_multimesh ? (mm.data + (p_ref.instance_offset * mm.stride)) : nullptr;
 	const uint8_t m_idx = static_cast<uint8_t>(p_item_index);
 
-	const bool use_local_xform = p_use_hardware_transform || _shader_prevents_vertex_baking(p_surface->shader);
+	const bool prevent_vertex_baking = _shader_prevents_vertex_baking(p_surface->shader);
+	const bool use_local_xform = p_use_hardware_transform || prevent_vertex_baking;
+	const bool keep_unbaked = is_multimesh && prevent_vertex_baking;
 
 	if (_batch_util_is_depth_alpha_fvf(bdata.fvf)) {
-		_batch_fill_multimesh_depth_vertices(reinterpret_cast<BatchType::BatchVertex3DDepthAlphaMinimal *>(r_bvs), instances, v_count, is_multimesh, mm.data, mm.stride, mm.format, use_local_xform, p_ref.transform, pos_ptr, uv_ptr, m_idx);
+		_batch_fill_multimesh_depth_vertices(reinterpret_cast<BatchType::BatchVertex3DDepthAlphaMinimal *>(r_bvs), instances, v_count, is_multimesh && !keep_unbaked, mm_chunk_data, mm.stride, mm.format, use_local_xform, p_ref.transform, pos_ptr, uv_ptr, m_idx);
 	} else {
-		_batch_fill_multimesh_depth_vertices(reinterpret_cast<BatchType::BatchVertex3DDepthMinimal *>(r_bvs), instances, v_count, is_multimesh, mm.data, mm.stride, mm.format, use_local_xform, p_ref.transform, pos_ptr, uv_ptr, m_idx);
+		_batch_fill_multimesh_depth_vertices(reinterpret_cast<BatchType::BatchVertex3DDepthMinimal *>(r_bvs), instances, v_count, is_multimesh && !keep_unbaked, mm_chunk_data, mm.stride, mm.format, use_local_xform, p_ref.transform, pos_ptr, uv_ptr, m_idx);
 	}
 
 	_batch_fill_indices_multimesh(r_inds, indices, v_count, instances, p_start_vert, p_surface->primitive);
@@ -1930,69 +1938,68 @@ bool RasterizerSceneGLES2::_batch_try_reuse_cached_vbo_slot_3d(BatchType::Batch3
 		return false;
 	}
 
-	// We reached the maximum allowed pool size.
-	if (bdata.current_vbo_index >= bdata.vbo_pool.size()) {
-		return false;
+	// Fast-path: check current sequential slot cursor first.
+	if (bdata.current_vbo_index < bdata.vbo_pool.size()) {
+		const BatchType::VBOPool &pool = bdata.vbo_pool[bdata.current_vbo_index];
+		if (pool.gl_vertex_buffer != 0 && pool.gl_index_buffer != 0) {
+			if (bdata.current_vbo_slot_index < pool.cached_slots.size()) {
+				const BatchType::CachedBatchSlot3D &slot = pool.cached_slots[bdata.current_vbo_slot_index];
+				if (
+					slot.content_hash == p_content_hash &&
+					slot.vbo_byte_offset == bdata.current_vbo_byte_offset &&
+					slot.ibo_byte_offset == bdata.current_ibo_byte_offset
+				) {
+					r_batch.vbo_index = bdata.current_vbo_index;
+					r_batch.vbo_byte_offset = slot.vbo_byte_offset;
+					r_batch.ibo_byte_offset = slot.ibo_byte_offset;
+					r_batch.num_verts = slot.num_verts;
+					r_batch.num_indices = slot.num_indices;
+					r_batch.fvf = slot.fvf;
+					r_batch.flags = slot.flags;
+
+					bdata.current_vbo_byte_offset += slot.aligned_vbo_bytes;
+					bdata.current_ibo_byte_offset += slot.aligned_ibo_bytes;
+					bdata.current_vbo_slot_index++;
+					return true;
+				}
+			}
+		}
 	}
 
-	const BatchType::VBOPool &pool = bdata.vbo_pool[bdata.current_vbo_index];
-	if (pool.gl_vertex_buffer == 0 || pool.gl_index_buffer == 0) {
-		return false;
-	}
-
-	// If the current pool's cached slots were exhausted,
-	// check if the batch spilled into the next pool last frame.
-	if (bdata.current_vbo_slot_index >= pool.cached_slots.size() && bdata.current_vbo_slot_index > 0) {
-		const uint32_t next_vbo_idx = bdata.current_vbo_index + 1;
-		if (next_vbo_idx < bdata.vbo_pool.size()) {
-			const BatchType::VBOPool &next_pool = bdata.vbo_pool[next_vbo_idx];
-
-			if (
-				next_pool.gl_vertex_buffer != 0 &&
-				next_pool.gl_index_buffer != 0 &&
-				next_pool.cached_slots.size() > 0 &&
-				next_pool.cached_slots[0].content_hash == p_content_hash &&
-				next_pool.cached_slots[0].vbo_byte_offset == 0 &&
-				next_pool.cached_slots[0].ibo_byte_offset == 0
-			) {
-				const BatchType::CachedBatchSlot3D &slot = next_pool.cached_slots[0];
-				bdata.current_vbo_index = next_vbo_idx;
-				r_batch.vbo_index = next_vbo_idx;
-				r_batch.vbo_byte_offset = 0;
-				r_batch.ibo_byte_offset = 0;
+	// Search all existing valid VBO pools for any cached slot with matching content_hash.
+	// This allows 32-instance Tier 4 MultiMesh chunks and depth-reordered static batches
+	// to share or reuse already-uploaded VBO data without re-uploading or invalidating the pool.
+	for (uint32_t p = 0; p < bdata.vbo_pool.size(); p++) {
+		const BatchType::VBOPool &search_pool = bdata.vbo_pool[p];
+		if (search_pool.gl_vertex_buffer == 0 || search_pool.gl_index_buffer == 0) {
+			continue;
+		}
+		const uint32_t slot_count = search_pool.cached_slots.size();
+		for (uint32_t s = 0; s < slot_count; s++) {
+			const BatchType::CachedBatchSlot3D &slot = search_pool.cached_slots[s];
+			if (slot.content_hash == p_content_hash) {
+				r_batch.vbo_index = p;
+				r_batch.vbo_byte_offset = slot.vbo_byte_offset;
+				r_batch.ibo_byte_offset = slot.ibo_byte_offset;
 				r_batch.num_verts = slot.num_verts;
 				r_batch.num_indices = slot.num_indices;
 				r_batch.fvf = slot.fvf;
 				r_batch.flags = slot.flags;
 
-				bdata.current_vbo_byte_offset = slot.aligned_vbo_bytes;
-				bdata.current_ibo_byte_offset = slot.aligned_ibo_bytes;
-				bdata.current_vbo_slot_index = 1;
+				// Advance the write cursor past this slot if it resides in the active pool
+				// so subsequent new uploads append cleanly after it.
+				if (p == bdata.current_vbo_index && s >= bdata.current_vbo_slot_index) {
+					bdata.current_vbo_byte_offset = slot.vbo_byte_offset + slot.aligned_vbo_bytes;
+					bdata.current_ibo_byte_offset = slot.ibo_byte_offset + slot.aligned_ibo_bytes;
+					bdata.current_vbo_slot_index = s + 1;
+				} else if (p > bdata.current_vbo_index) {
+					bdata.current_vbo_index = p;
+					bdata.current_vbo_byte_offset = slot.vbo_byte_offset + slot.aligned_vbo_bytes;
+					bdata.current_ibo_byte_offset = slot.ibo_byte_offset + slot.aligned_ibo_bytes;
+					bdata.current_vbo_slot_index = s + 1;
+				}
 				return true;
 			}
-		}
-		return false;
-	}
-
-	if (bdata.current_vbo_slot_index < pool.cached_slots.size()) {
-		const BatchType::CachedBatchSlot3D &slot = pool.cached_slots[bdata.current_vbo_slot_index];
-		if (
-			slot.content_hash == p_content_hash &&
-			slot.vbo_byte_offset == bdata.current_vbo_byte_offset &&
-			slot.ibo_byte_offset == bdata.current_ibo_byte_offset
-		) {
-			r_batch.vbo_index = bdata.current_vbo_index;
-			r_batch.vbo_byte_offset = slot.vbo_byte_offset;
-			r_batch.ibo_byte_offset = slot.ibo_byte_offset;
-			r_batch.num_verts = slot.num_verts;
-			r_batch.num_indices = slot.num_indices;
-			r_batch.fvf = slot.fvf;
-			r_batch.flags = slot.flags;
-
-			bdata.current_vbo_byte_offset += slot.aligned_vbo_bytes;
-			bdata.current_ibo_byte_offset += slot.aligned_ibo_bytes;
-			bdata.current_vbo_slot_index++;
-			return true;
 		}
 	}
 
@@ -2011,18 +2018,38 @@ void RasterizerSceneGLES2::_batch_upload_buffers_3d(BatchType::Batch3D &r_batch,
 		bdata.current_vbo_byte_offset = 0;
 		bdata.current_ibo_byte_offset = 0;
 		bdata.current_vbo_slot_index = 0;
-	} else if (bdata.current_vbo_byte_offset > 0 || bdata.current_ibo_byte_offset > 0) {
+	} else {
+		// If the current pool still has valid cached slots from earlier this frame or last frame,
+		// append after the last cached slot.
 		if (
-			(bdata.current_vbo_byte_offset + aligned_vbo_bytes > max_vbo_bytes) ||
-			(bdata.current_ibo_byte_offset + aligned_ibo_bytes > max_ibo_bytes)
+			bdata.current_vbo_index < bdata.vbo_pool.size() &&
+			bdata.current_vbo_slot_index < bdata.vbo_pool[bdata.current_vbo_index].cached_slots.size()
 		) {
-			if (bdata.current_vbo_index < bdata.vbo_pool.size()) {
-				bdata.vbo_pool[bdata.current_vbo_index].cached_slots.resize(bdata.current_vbo_slot_index);
-			}
+			const BatchType::VBOPool &cur_pool = bdata.vbo_pool[bdata.current_vbo_index];
+			const BatchType::CachedBatchSlot3D &last_slot = cur_pool.cached_slots[cur_pool.cached_slots.size() - 1];
+			bdata.current_vbo_byte_offset = last_slot.vbo_byte_offset + last_slot.aligned_vbo_bytes;
+			bdata.current_ibo_byte_offset = last_slot.ibo_byte_offset + last_slot.aligned_ibo_bytes;
+			bdata.current_vbo_slot_index = cur_pool.cached_slots.size();
+		}
+
+		while (
+			bdata.current_vbo_index < bdata.vbo_pool.size() &&
+			(bdata.current_vbo_byte_offset > 0 || bdata.current_ibo_byte_offset > 0) &&
+			((bdata.current_vbo_byte_offset + aligned_vbo_bytes > max_vbo_bytes) ||
+				(bdata.current_ibo_byte_offset + aligned_ibo_bytes > max_ibo_bytes))
+		) {
 			bdata.current_vbo_index++;
-			bdata.current_vbo_byte_offset = 0;
-			bdata.current_ibo_byte_offset = 0;
-			bdata.current_vbo_slot_index = 0;
+			if (bdata.current_vbo_index < bdata.vbo_pool.size() && bdata.vbo_pool[bdata.current_vbo_index].cached_slots.size() > 0) {
+				const BatchType::VBOPool &next_pool = bdata.vbo_pool[bdata.current_vbo_index];
+				const BatchType::CachedBatchSlot3D &last_slot = next_pool.cached_slots[next_pool.cached_slots.size() - 1];
+				bdata.current_vbo_byte_offset = last_slot.vbo_byte_offset + last_slot.aligned_vbo_bytes;
+				bdata.current_ibo_byte_offset = last_slot.ibo_byte_offset + last_slot.aligned_ibo_bytes;
+				bdata.current_vbo_slot_index = next_pool.cached_slots.size();
+			} else {
+				bdata.current_vbo_byte_offset = 0;
+				bdata.current_ibo_byte_offset = 0;
+				bdata.current_vbo_slot_index = 0;
+			}
 		}
 	}
 
@@ -2125,6 +2152,58 @@ _FORCE_INLINE_ bool RasterizerSceneGLES2::_batch_buffer_orphan_and_upload_3d(uns
 	return true;
 }
 
+void RasterizerSceneGLES2::_batch_upload_batch_multimesh_palette_3d(const BatchType::Batch3D &p_batch, RID p_shader_version, SceneShaderGLES2::ShaderVariant p_variant, uint64_t p_spec_constants) {
+	if (p_batch.first_item_ref >= (uint32_t)bdata.item_refs.size()) {
+		return;
+	}
+	const BatchType::BItemRef3D &ref = bdata.item_refs[p_batch.first_item_ref];
+	const GeometryInstanceSurface *surf = static_cast<const GeometryInstanceSurface *>(ref.surface);
+	if (!surf || !surf->owner || surf->owner->data->base_type != RS::INSTANCE_MULTIMESH) {
+		return;
+	}
+
+	MultiMeshInstanceData mm = _get_multimesh_data(surf);
+	if (!mm.data || ref.instance_count == 0) {
+		return;
+	}
+
+	const GLint palette_loc = GLES2::MaterialStorage::get_singleton()->shaders.scene_shader.version_get_uniform(SceneShaderGLES2::MULTIMESH_PALETTE, p_shader_version, p_variant, p_spec_constants);
+	if (palette_loc == -1) {
+		return;
+	}
+
+	const uint32_t count = MIN(ref.instance_count, 32U);
+	const float *src_base = mm.data + (ref.instance_offset * mm.stride);
+
+	if (mm.format == RS::MULTIMESH_TRANSFORM_3D && mm.stride == 12) {
+		glUniform4fv(palette_loc, count * 3, src_base);
+	} else {
+		float palette_buf[96 * 4] = {};
+		for (uint32_t i = 0; i < count; i++) {
+			const float *s = src_base + (i * mm.stride);
+			float *d = palette_buf + (i * 12);
+			if (mm.format == RS::MULTIMESH_TRANSFORM_3D) {
+				memcpy(d, s, sizeof(float) * 12);
+			} else {
+				d[0] = s[0];
+				d[1] = s[1];
+				d[2] = 0.0f;
+				d[3] = s[3];
+				d[4] = s[4];
+				d[5] = s[5];
+				d[6] = 0.0f;
+				d[7] = s[7];
+				d[8] = 0.0f;
+				d[9] = 0.0f;
+				d[10] = 1.0f;
+				d[11] = 0.0f;
+			}
+		}
+		glUniform4fv(palette_loc, count * 3, palette_buf);
+	}
+	GL_CHECK_ERROR("GLES2::RasterizerSceneGLES2::_upload_batch_multimesh_palette: glUniform4fv");
+}
+
 void RasterizerSceneGLES2::_batch_threshold_flush() {
 	glFlush();
 	GL_CHECK_ERROR("GLES2::RasterizerSceneGLES2::RasterizerSceneGLES2::_batch_threshold_flush: glFlush");
@@ -2224,6 +2303,10 @@ void RasterizerSceneGLES2::_batch_bind_material(GLES2::SceneMaterialData *p_mate
 	}
 
 	GLES2::MaterialStorage::get_singleton()->shaders.scene_shader.version_set_uniform(SceneShaderGLES2::WORLD_TRANSFORM, p_world_transform, p_material_data->shader_data->version, variant, spec_constants);
+
+	if (_render_item_state.curr_batch && _batch_util_promote_to_instancing(bdata.fvf, _render_item_state.curr_batch->flags)) {
+		_batch_upload_batch_multimesh_palette_3d(*_render_item_state.curr_batch, p_material_data->shader_data->version, variant, spec_constants);
+	}
 }
 
 bool RasterizerSceneGLES2::_batch_bind_generic_buffers(bool p_has_color, BatchBoundGeometryStateGLES2 &r_state) {
@@ -2257,12 +2340,15 @@ bool RasterizerSceneGLES2::_batch_bind_generic_buffers(bool p_has_color, BatchBo
 	size_t uv2_ofs = vbo_byte_ofs;
 	size_t col_ofs = vbo_byte_ofs;
 	size_t tan_ofs = vbo_byte_ofs;
+	size_t m_idx_ofs = vbo_byte_ofs;
 
 	if (is_depth_only) {
 		pos_ofs += offsetof(BatchType::BatchVertex3DDepthMinimal, pos);
+		m_idx_ofs += offsetof(BatchType::BatchVertex3DDepthMinimal, matrix_index);
 	} else if (is_depth_alpha) {
 		pos_ofs += offsetof(BatchType::BatchVertex3DDepthAlphaMinimal, pos);
 		uv_ofs += offsetof(BatchType::BatchVertex3DDepthAlphaMinimal, uv);
+		m_idx_ofs += offsetof(BatchType::BatchVertex3DDepthAlphaMinimal, matrix_index);
 	} else if (is_tier1) {
 		pos_ofs += offsetof(BatchType::BatchVertex3DTier1, pos);
 		norm_ofs += offsetof(BatchType::BatchVertex3DTier1, normal);
@@ -2287,6 +2373,7 @@ bool RasterizerSceneGLES2::_batch_bind_generic_buffers(bool p_has_color, BatchBo
 		uv_ofs += offsetof(BatchType::BatchVertex3DTier4, uv);
 		uv2_ofs += offsetof(BatchType::BatchVertex3DTier4, uv2);
 		tan_ofs += offsetof(BatchType::BatchVertex3DTier4, tangent);
+		m_idx_ofs += offsetof(BatchType::BatchVertex3DTier4, matrix_index);
 	}
 
 	uint32_t desired_mask = (1U << RS::ARRAY_VERTEX);
@@ -2327,6 +2414,14 @@ bool RasterizerSceneGLES2::_batch_bind_generic_buffers(bool p_has_color, BatchBo
 	// Ensure instancing attribute slots (12-15) are disabled and set to identity defaults
 	// so no state leaks occur from immediate MultiMesh draws.
 	_gl_reset_instancing_attributes();
+
+	const uint32_t batch_flags = _render_item_state.curr_batch ? _render_item_state.curr_batch->flags : 0U;
+	if (_batch_util_promote_to_instancing(bdata.fvf, batch_flags)) {
+		glEnableVertexAttribArray(12);
+		glVertexAttribPointer(12, 4, GL_UNSIGNED_BYTE, GL_FALSE, stride, (const void *)m_idx_ofs);
+		glVertexAttrib4f(15, 1.0f, 1.0f, 1.0f, 1.0f);
+		scene_state.instancing_attribs_dirty = true;
+	}
 	GL_CHECK_ERROR("GLES2::RasterizerSceneGLES2::_batch_bind_generic_buffers: glVertexAttribPointers setup");
 
 	scene_state.bind_gl_element_array_buffer(gl_ibo);
@@ -2569,12 +2664,7 @@ void RasterizerSceneGLES2::_batch_render_items(GLES2::SceneMaterialData *p_mater
 		return;
 	}
 
-	const bool is_instanced = (p_batch.flags & BatcherEnums::BTF_3D_USES_INSTANCING) != 0;
-	const bool prevent_vertex_baking = (p_batch.flags & BatcherEnums::BTF_3D_PREVENT_VERTEX_BAKING) != 0;
-	const bool use_hardware_transform = (
-		(p_batch.num_item_refs == 1 && !is_instanced) ||
-		(p_batch.num_item_refs == 1 && prevent_vertex_baking)
-	);
+	const bool use_hardware_transform = (p_batch.num_item_refs == 1);
 	// Include FVF_UNBATCHED batches that flagged BTF_3D_USES_COLORS so their static
 	// color attribute stream is enabled during the SMDDF call.
 	const bool has_vertex_colors = _batch_util_has_vertex_colors(bdata.fvf, p_batch.flags);
@@ -2758,7 +2848,7 @@ void RasterizerSceneGLES2::_render_single_item_immediate(const GeometryInstanceS
 	}
 
 	const uint64_t item_hash = _batch_get_state_hash(p_surface);
-	const bool promote_to_instancing = p_surface->owner->instance_count > 0;
+	const bool promote_to_instancing = _batch_util_promote_to_instancing(bdata.fvf, p_surface->flags);
 	const SceneShaderGLES2::ShaderVariant variant = _get_shader_variant(promote_to_instancing);
 	const uint64_t spec_constants = _get_pass_spec_constants();
 	const bool is_transparent = (
@@ -2940,11 +3030,16 @@ void RasterizerSceneGLES2::_draw_surface_instances(const GeometryInstanceSurface
 	}
 
 	GLES2::MaterialStorage *material_storage = GLES2::MaterialStorage::get_singleton();
+	const GLint world_xform_loc = material_storage->shaders.scene_shader.version_get_uniform(SceneShaderGLES2::WORLD_TRANSFORM, p_shader_version, p_variant, p_spec_constants);
 	const RS::InstanceType base_type = p_surface->owner->data->base_type;
 	const bool is_multimesh = (base_type == RS::INSTANCE_MULTIMESH);
 
 	if (!is_multimesh && p_instances == 1) {
-		material_storage->shaders.scene_shader.version_set_uniform(SceneShaderGLES2::WORLD_TRANSFORM, p_base_transform, p_shader_version, p_variant, p_spec_constants);
+		if (world_xform_loc != -1) {
+			float mat_buf[16] = {};
+			GLES2::MaterialStorage::store_transform(p_base_transform, mat_buf);
+			glUniformMatrix4fv(world_xform_loc, 1, GL_FALSE, mat_buf);
+		}
 		if (p_set_instancing_color) {
 			glVertexAttrib4f(15, 1.0f, 1.0f, 1.0f, 1.0f);
 		}
@@ -2964,18 +3059,26 @@ void RasterizerSceneGLES2::_draw_surface_instances(const GeometryInstanceSurface
 		mm = &local_mm;
 	}
 
+	const bool has_mesh_color_array = !p_surface->color_cache.is_empty();
+	const bool apply_inst_color = is_multimesh && mm && mm->uses_colors && (p_set_instancing_color || !has_mesh_color_array);
+	const GLuint color_attrib_slot = p_set_instancing_color ? 15U : static_cast<GLuint>(RS::ARRAY_COLOR);
+
 	Color inst_color(1.0f, 1.0f, 1.0f, 1.0f);
+	float mat_buf[16] = {};
 	for (int inst = 0; inst < p_instances; inst++) {
 		Transform3D xform;
 		if (is_multimesh && mm && mm->data) {
 			_gl_batch_decode_multimesh_instance(mm->data + (inst * mm->stride), mm->format, mm->uses_colors, mm->color_offset, xform, inst_color);
 		}
 
-		const Transform3D write_xform = p_base_transform * xform;
-		material_storage->shaders.scene_shader.version_set_uniform(SceneShaderGLES2::WORLD_TRANSFORM, write_xform, p_shader_version, p_variant, p_spec_constants);
+		if (world_xform_loc != -1) {
+			const Transform3D write_xform = p_base_transform * xform;
+			GLES2::MaterialStorage::store_transform(write_xform, mat_buf);
+			glUniformMatrix4fv(world_xform_loc, 1, GL_FALSE, mat_buf);
+		}
 
-		if (p_set_instancing_color) {
-			glVertexAttrib4f(15, inst_color.r, inst_color.g, inst_color.b, inst_color.a);
+		if (apply_inst_color) {
+			glVertexAttrib4f(color_attrib_slot, inst_color.r, inst_color.g, inst_color.b, inst_color.a);
 		}
 
 		if (p_use_index_buffer) {
@@ -2994,7 +3097,14 @@ void RasterizerSceneGLES2::_draw_item_ref_instances(const BatchType::BItemRef3D 
 	}
 	const bool is_multimesh = (surf->owner->data->base_type == RS::INSTANCE_MULTIMESH);
 	const int instances = is_multimesh ? static_cast<int>(p_ref.instance_count) : 1;
-	_draw_surface_instances(surf, p_ref.transform, instances, nullptr, p_shader_version, p_variant, p_spec_constants, is_multimesh && p_promote_to_instancing, p_use_index_buffer, p_primitive_gl, p_drawn_count, p_index_type);
+	MultiMeshInstanceData mm;
+	if (is_multimesh) {
+		mm = _get_multimesh_data(surf);
+		if (mm.data) {
+			mm.data += (p_ref.instance_offset * mm.stride);
+		}
+	}
+	_draw_surface_instances(surf, p_ref.transform, instances, is_multimesh ? &mm : nullptr, p_shader_version, p_variant, p_spec_constants, is_multimesh && p_promote_to_instancing, p_use_index_buffer, p_primitive_gl, p_drawn_count, p_index_type);
 }
 
 /* REST OF RENDERING METHODS */
@@ -3413,9 +3523,7 @@ void RasterizerSceneGLES2::_setup_lights(const RenderDataGLES2 *p_render_data, b
 						shadow_data.shadow_split_offsets[j] = split;
 						shadow_data.shadow_normal_bias[j] = light_storage->light_get_param(base, RS::LIGHT_PARAM_SHADOW_NORMAL_BIAS) * li->shadow_transform[j].shadow_texel_size;
 						GLES2::MaterialStorage::store_camera(shadow_mtx, shadow_data.shadow_matrices[j]);
-						if (r_directional_shadow_count == 0) {
-							scene_state.cached_directional_shadow_matrices[j] = _gl_array_to_projection(shadow_data.shadow_matrices[j]);
-						}
+						scene_state.cached_directional_shadow_matrices[r_directional_shadow_count][j] = _gl_array_to_projection(shadow_data.shadow_matrices[j]);
 					}
 					float fade_start = light_storage->light_get_param(base, RS::LIGHT_PARAM_SHADOW_FADE_START);
 					shadow_data.fade_from = -shadow_data.shadow_split_offsets[3] * MIN(fade_start, 0.999f);
@@ -3904,27 +4012,40 @@ void RasterizerSceneGLES2::_bind_scene_camera_uniforms(RID p_version, SceneShade
 	material_storage->shaders.scene_shader.version_set_uniform(SceneShaderGLES2::TONEMAPPER, (int)scene_state.tonemap_ubo.tonemapper, p_version, p_variant, p_spec_constants);
 
 	if (!(p_spec_constants & SceneShaderGLES2::DISABLE_LIGHT_DIRECTIONAL)) {
-		if (scene_state.ubo.directional_light_count > 0) {
+		const uint32_t d_idx = scene_state.is_directional_additive_replay ? scene_state.current_directional_light_index : 0U;
+		if (d_idx < scene_state.ubo.directional_light_count) {
+			const DirectionalLightData &dir_light = scene_state.directional_lights[d_idx];
 			int base_idx = SceneShaderGLES2::DIRECTIONAL_LIGHTS_DATA_0_DIRECTION_ENERGY;
-			material_storage->shaders.scene_shader.version_set_uniform(SceneShaderGLES2::Uniforms(base_idx + 0), Vector4(scene_state.directional_lights[0].direction[0], scene_state.directional_lights[0].direction[1], scene_state.directional_lights[0].direction[2], scene_state.directional_lights[0].energy), p_version, p_variant, p_spec_constants);
-			material_storage->shaders.scene_shader.version_set_uniform(SceneShaderGLES2::Uniforms(base_idx + 1), Vector4(scene_state.directional_lights[0].color[0], scene_state.directional_lights[0].color[1], scene_state.directional_lights[0].color[2], scene_state.directional_lights[0].size), p_version, p_variant, p_spec_constants);
+			material_storage->shaders.scene_shader.version_set_uniform(SceneShaderGLES2::Uniforms(base_idx + 0), Vector4(dir_light.direction[0], dir_light.direction[1], dir_light.direction[2], dir_light.energy), p_version, p_variant, p_spec_constants);
+			material_storage->shaders.scene_shader.version_set_uniform(SceneShaderGLES2::Uniforms(base_idx + 1), Vector4(dir_light.color[0], dir_light.color[1], dir_light.color[2], dir_light.size), p_version, p_variant, p_spec_constants);
 
-			Vector4 extended_data(1.0f, (float)scene_state.directional_lights[0].bake_mode, scene_state.directional_lights[0].shadow_opacity, scene_state.directional_lights[0].specular);
+			Vector4 extended_data(1.0f, (float)dir_light.bake_mode, dir_light.shadow_opacity, dir_light.specular);
 			material_storage->shaders.scene_shader.version_set_uniform(SceneShaderGLES2::Uniforms(base_idx + 2), extended_data, p_version, p_variant, p_spec_constants);
-		}
 
-		if (scene_state.ubo.directional_light_count > 0 && scene_state.directional_shadows != nullptr) {
-			DirectionalShadowData &shadow_data = scene_state.directional_shadows[0];
-			material_storage->shaders.scene_shader.version_set_uniform(SceneShaderGLES2::DIRECTIONAL_SHADOW_DIRECTION, Vector3(shadow_data.direction[0], shadow_data.direction[1], shadow_data.direction[2]), p_version, p_variant, p_spec_constants);
-			material_storage->shaders.scene_shader.version_set_uniform(SceneShaderGLES2::DIRECTIONAL_SHADOW_ATLAS_PIXEL_SIZE, shadow_data.shadow_atlas_pixel_size, p_version, p_variant, p_spec_constants);
-			material_storage->shaders.scene_shader.version_set_uniform(SceneShaderGLES2::DIRECTIONAL_SHADOW_NORMAL_BIAS, Vector4(shadow_data.shadow_normal_bias[0], shadow_data.shadow_normal_bias[1], shadow_data.shadow_normal_bias[2], shadow_data.shadow_normal_bias[3]), p_version, p_variant, p_spec_constants);
-			material_storage->shaders.scene_shader.version_set_uniform(SceneShaderGLES2::DIRECTIONAL_SHADOW_SPLIT_OFFSETS, Vector4(shadow_data.shadow_split_offsets[0], shadow_data.shadow_split_offsets[1], shadow_data.shadow_split_offsets[2], shadow_data.shadow_split_offsets[3]), p_version, p_variant, p_spec_constants);
+			if (dir_light.shadow_opacity > 0.0f && scene_state.directional_shadows != nullptr) {
+				uint32_t shadow_idx = 0;
+				for (uint32_t s = 0; s < MAX_DIRECTIONAL_LIGHTS; s++) {
+					if (
+						scene_state.directional_shadows[s].direction[0] == dir_light.direction[0] &&
+						scene_state.directional_shadows[s].direction[1] == dir_light.direction[1] &&
+						scene_state.directional_shadows[s].direction[2] == dir_light.direction[2]
+					) {
+						shadow_idx = s;
+						break;
+					}
+				}
+				DirectionalShadowData &shadow_data = scene_state.directional_shadows[shadow_idx];
+				material_storage->shaders.scene_shader.version_set_uniform(SceneShaderGLES2::DIRECTIONAL_SHADOW_DIRECTION, Vector3(shadow_data.direction[0], shadow_data.direction[1], shadow_data.direction[2]), p_version, p_variant, p_spec_constants);
+				material_storage->shaders.scene_shader.version_set_uniform(SceneShaderGLES2::DIRECTIONAL_SHADOW_ATLAS_PIXEL_SIZE, shadow_data.shadow_atlas_pixel_size, p_version, p_variant, p_spec_constants);
+				material_storage->shaders.scene_shader.version_set_uniform(SceneShaderGLES2::DIRECTIONAL_SHADOW_NORMAL_BIAS, Vector4(shadow_data.shadow_normal_bias[0], shadow_data.shadow_normal_bias[1], shadow_data.shadow_normal_bias[2], shadow_data.shadow_normal_bias[3]), p_version, p_variant, p_spec_constants);
+				material_storage->shaders.scene_shader.version_set_uniform(SceneShaderGLES2::DIRECTIONAL_SHADOW_SPLIT_OFFSETS, Vector4(shadow_data.shadow_split_offsets[0], shadow_data.shadow_split_offsets[1], shadow_data.shadow_split_offsets[2], shadow_data.shadow_split_offsets[3]), p_version, p_variant, p_spec_constants);
 
-			material_storage->shaders.scene_shader.version_set_uniform(SceneShaderGLES2::DIRECTIONAL_SHADOW_MATRIX1, scene_state.cached_directional_shadow_matrices[0], p_version, p_variant, p_spec_constants);
-			material_storage->shaders.scene_shader.version_set_uniform(SceneShaderGLES2::DIRECTIONAL_SHADOW_MATRIX2, scene_state.cached_directional_shadow_matrices[1], p_version, p_variant, p_spec_constants);
+				material_storage->shaders.scene_shader.version_set_uniform(SceneShaderGLES2::DIRECTIONAL_SHADOW_MATRIX1, scene_state.cached_directional_shadow_matrices[shadow_idx][0], p_version, p_variant, p_spec_constants);
+				material_storage->shaders.scene_shader.version_set_uniform(SceneShaderGLES2::DIRECTIONAL_SHADOW_MATRIX2, scene_state.cached_directional_shadow_matrices[shadow_idx][1], p_version, p_variant, p_spec_constants);
 
-			material_storage->shaders.scene_shader.version_set_uniform(SceneShaderGLES2::DIRECTIONAL_SHADOW_FADE_FROM, shadow_data.fade_from, p_version, p_variant, p_spec_constants);
-			material_storage->shaders.scene_shader.version_set_uniform(SceneShaderGLES2::DIRECTIONAL_SHADOW_FADE_TO, shadow_data.fade_to, p_version, p_variant, p_spec_constants);
+				material_storage->shaders.scene_shader.version_set_uniform(SceneShaderGLES2::DIRECTIONAL_SHADOW_FADE_FROM, shadow_data.fade_from, p_version, p_variant, p_spec_constants);
+				material_storage->shaders.scene_shader.version_set_uniform(SceneShaderGLES2::DIRECTIONAL_SHADOW_FADE_TO, shadow_data.fade_to, p_version, p_variant, p_spec_constants);
+			}
 		}
 	}
 }
@@ -4379,7 +4500,9 @@ void RasterizerSceneGLES2::_upload_additive_light_uniforms(uint32_t p_light_gl_i
 
 template <RasterizerSceneGLES2::PassMode p_pass_mode>
 void RasterizerSceneGLES2::_render_directional_light_replay_pass(RenderListParameters *p_params, const RenderDataGLES2 *p_render_data, uint32_t p_from_element, uint32_t p_to_element, bool p_alpha_pass) {
-	if (p_from_element >= p_to_element || scene_state.ubo.directional_light_count == 0) {
+	// Directional Light 0 is computed directly in BASE_PASS.
+	// Only replay when there are 2 or more directional lights.
+	if (p_from_element >= p_to_element || scene_state.ubo.directional_light_count <= 1) {
 		return;
 	}
 
@@ -4390,10 +4513,43 @@ void RasterizerSceneGLES2::_render_directional_light_replay_pass(RenderListParam
 	scene_state.is_directional_additive_replay = true;
 	_batch_util_begin_additive_light_gl_state(was_blend, was_blend_mode, was_depth_draw);
 
-	// Flag as a replay pass (p_replay = true) so the batcher bypasses geometry repacking
-	// and reuses the VBOs and batch list established during the base pass.
-	_render_list_template<p_pass_mode>(p_params, p_render_data, p_from_element, p_to_element, p_alpha_pass, true);
+	const uint64_t saved_base_flags = p_params->spec_constant_base_flags;
 
+	for (uint32_t d_idx = 1; d_idx < scene_state.ubo.directional_light_count; d_idx++) {
+		scene_state.current_directional_light_index = d_idx;
+
+		// Bump camera_pass_generation so scene binds uploads this directional light's data.
+		scene_state.camera_pass_generation++;
+		if (unlikely(scene_state.camera_pass_generation == 0)) {
+			scene_state.program_camera_state_cache.clear();
+			scene_state.camera_pass_generation = 1;
+		}
+
+		uint64_t light_spec = saved_base_flags & ~SceneShaderGLES2::LIGHT_USE_PSSM2;
+		const DirectionalLightData &dir_light = scene_state.directional_lights[d_idx];
+		if (dir_light.shadow_opacity > 0.0f && scene_state.directional_shadows != nullptr) {
+			for (uint32_t s = 0; s < MAX_DIRECTIONAL_LIGHTS; s++) {
+				if (
+					scene_state.directional_shadows[s].direction[0] == dir_light.direction[0] &&
+					scene_state.directional_shadows[s].direction[1] == dir_light.direction[1] &&
+					scene_state.directional_shadows[s].direction[2] == dir_light.direction[2]
+				) {
+					if (scene_state.directional_shadows[s].shadow_split_offsets[0] != scene_state.directional_shadows[s].shadow_split_offsets[1]) {
+						light_spec |= SceneShaderGLES2::LIGHT_USE_PSSM2;
+					}
+					break;
+				}
+			}
+		}
+		p_params->spec_constant_base_flags = light_spec;
+
+		// Flag as a replay pass (p_replay = true) so the batcher bypasses geometry repacking
+		// and reuses the VBOs and batch list established during the base pass.
+		_render_list_template<p_pass_mode>(p_params, p_render_data, p_from_element, p_to_element, p_alpha_pass, true);
+	}
+
+	p_params->spec_constant_base_flags = saved_base_flags;
+	scene_state.current_directional_light_index = 0;
 	scene_state.is_directional_additive_replay = false;
 	_batch_util_end_additive_light_gl_state(was_blend, was_blend_mode, was_depth_draw);
 	GL_CHECK_ERROR("GLES2::RasterizerSceneGLES2::_render_directional_light_replay_pass: state restore");
@@ -4470,6 +4626,9 @@ void RasterizerSceneGLES2::_render_additive_light_type_pass(const LocalVector<ui
 	_bind_scene_camera_uniforms(shader->version, p_additive_variant, pass_spec);
 	if constexpr (p_is_batch) {
 		material_storage->shaders.scene_shader.version_set_uniform(SceneShaderGLES2::WORLD_TRANSFORM, p_world_xform, shader->version, p_additive_variant, pass_spec);
+		if (_render_item_state.curr_batch && _batch_util_promote_to_instancing(bdata.fvf, _render_item_state.curr_batch->flags)) {
+			_batch_upload_batch_multimesh_palette_3d(*_render_item_state.curr_batch, shader->version, p_additive_variant, pass_spec);
+		}
 	}
 
 	for (uint32_t i = 0; i < light_count; i++) {

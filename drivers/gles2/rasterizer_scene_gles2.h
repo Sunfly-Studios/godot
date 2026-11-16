@@ -114,6 +114,7 @@ struct BatcherAPISceneGLES2 {
 	using CanvasTexture = GLES2::CanvasTexture;
 	using Shader = GLES2::Shader;
 	using MeshInstance = GLES2::MeshInstance;
+	using MultiMesh = GLES2::MultiMesh;
 
 	static constexpr bool FORCE_BAKE_MODULATE = false;
 };
@@ -581,8 +582,15 @@ private:
 	}
 
 	_FORCE_INLINE_ bool _batch_util_promote_to_instancing(BatcherEnums::FVF p_fvf, uint32_t p_flags) const {
-		if (p_fvf == BatcherEnums::FVF_STATIC_MESH_LOOP) {
-			return (p_flags & BatcherEnums::BTF_3D_USES_INSTANCING) != 0;
+		if (
+			p_fvf == BatcherEnums::FVF_3D_TIER4_PALETTE ||
+			p_fvf == BatcherEnums::FVF_3D_DEPTH_MINIMAL ||
+			p_fvf == BatcherEnums::FVF_3D_DEPTH_ALPHA_MINIMAL
+		) {
+			return (
+				(p_flags & BatcherEnums::BTF_3D_USES_INSTANCING) != 0 &&
+				(p_flags & BatcherEnums::BTF_3D_PREVENT_VERTEX_BAKING) != 0
+			);
 		}
 		return p_fvf == BatcherEnums::FVF_INSTANCED;
 	}
@@ -788,7 +796,7 @@ private:
 		Transform3D cached_inv_view_matrix;
 		Transform3D cached_main_cam_inv_view_matrix;
 		Basis cached_radiance_inverse_xform;
-		Projection cached_directional_shadow_matrices[4];
+		Projection cached_directional_shadow_matrices[MAX_DIRECTIONAL_LIGHTS][4];
 
 		bool used_depth_prepass = false;
 
@@ -1019,6 +1027,7 @@ private:
 		SceneShaderGLES2::ShaderVariant current_shader_variant = SceneShaderGLES2::MODE_COLOR;
 		bool additive_pass_mutated_state = false;
 		bool is_directional_additive_replay = false;
+		uint32_t current_directional_light_index = 0;
 		Vector2 current_uv_offset = Vector2(0, 0);
 		bool transparent_bg = false;
 		RenderingMethod::RenderInfo *current_render_info = nullptr;
@@ -1189,7 +1198,7 @@ private:
 	}
 	bool _batch_can_use_single_mesh_fallback(const GeometryInstanceSurface *p_surface) const;
 	_FORCE_INLINE_ bool _batch_buffer_orphan_and_upload_3d(unsigned int p_buffer_size_bytes, unsigned int p_offset_bytes, unsigned int p_data_size_bytes, const void *p_data, GLenum p_target, GLenum p_usage, bool p_optional_orphan) const;
-
+	_FORCE_INLINE_ void _batch_upload_batch_multimesh_palette_3d(const BatchType::Batch3D &p_batch, RID p_shader_version, SceneShaderGLES2::ShaderVariant p_variant, uint64_t p_spec_constants);
 	GLES2::SceneMaterialData *_batch_get_material_data(const GeometryInstanceSurface *p_surface);
 
 	void _batch_prepare_surface_world_cache(const GeometryInstanceSurface *p_surface, const BatchType::BItemRef3D &p_ref, BatchType::TransformMode3D p_effective_mode, bool p_need_tangents);
