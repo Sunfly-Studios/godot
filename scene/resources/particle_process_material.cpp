@@ -173,6 +173,10 @@ void ParticleProcessMaterial::_update_shader() {
 
 	// Add a comment to describe the shader origin (useful when converting to ShaderMaterial).
 	String code = "// NOTE: Shader automatically converted from " VERSION_NAME " " VERSION_FULL_CONFIG "'s ParticleProcessMaterial.\n\n";
+	const String render_method = RS::get_singleton()->get_current_rendering_method();
+
+	// gl_legacy and gl_classic are detected here.
+	const bool is_legacy_render_method = render_method.ends_with("classic") || render_method.ends_with("legacy");
 
 	code += "shader_type particles;\n";
 	code += "render_mode disable_velocity;\n";
@@ -491,32 +495,61 @@ void ParticleProcessMaterial::_update_shader() {
 	code += "}\n\n";
 
 	// Random functions.
-	code += "float rand_from_seed(inout uint seed) {\n";
-	code += "	int k;\n";
-	code += "	int s = int(seed);\n";
-	code += "	if (s == 0) {\n";
-	code += "		s = 305420679;\n";
-	code += "	}\n";
-	code += "	k = s / 127773;\n";
-	code += "	s = 16807 * (s - k * 127773) - 2836 * k;\n";
-	code += "	if (s < 0) {\n";
-	code += "		s += 2147483647;\n";
-	code += "	}\n";
-	code += "	seed = uint(s);\n";
-	code += "	return float(seed % uint(65536)) / 65535.0;\n";
-	code += "}\n\n";
+	if (is_legacy_render_method) {
+		code += "float rand_from_seed(inout int seed) {\n";
+		code += "	int k;\n";
+		code += "	int s = int(seed);\n";
+		code += "	if (s == 0) {\n";
+		code += "		s = 305420679;\n";
+		code += "	}\n";
+		code += "	k = s / 127773;\n";
+		code += "	s = 16807 * (s - k * 127773) - 2836 * k;\n";
+		code += "	if (s < 0) {\n";
+		code += "		s += 2147483647;\n";
+		code += "	}\n";
+		code += "	seed = int(s);\n";
+		code += "	return float(seed == 0 ? 0 : (seed - 65536 * (seed / 65536))) / 65535.0;\n";
+		code += "}\n\n";
 
-	code += "float rand_from_seed_m1_p1(inout uint seed) {\n";
-	code += "	return rand_from_seed(seed) * 2.0 - 1.0;\n";
-	code += "}\n\n";
+		code += "float rand_from_seed_m1_p1(inout int seed) {\n";
+		code += "	return rand_from_seed(seed) * 2.0 - 1.0;\n";
+		code += "}\n\n";
 
-	// Improve seed quality.
-	code += "uint hash(uint x) {\n";
-	code += "	x = ((x >> uint(16)) ^ x) * uint(73244475);\n";
-	code += "	x = ((x >> uint(16)) ^ x) * uint(73244475);\n";
-	code += "	x = (x >> uint(16)) ^ x;\n";
-	code += "	return x;\n";
-	code += "}\n\n";
+		// Improve seed quality.
+		code += "int hash(int x) {\n";
+		code += "	x = int(mod(float((x ^ (x / 65536)) * 73244475), 2147483647.0));\n";
+		code += "	x = int(mod(float((x ^ (x / 65536)) * 73244475), 2147483647.0));\n";
+		code += "	x = x ^ (x / 65536);\n";
+		code += "	return x;\n";
+		code += "}\n\n";
+	} else {
+		code += "float rand_from_seed(inout uint seed) {\n";
+		code += "	int k;\n";
+		code += "	int s = int(seed);\n";
+		code += "	if (s == 0) {\n";
+		code += "		s = 305420679;\n";
+		code += "	}\n";
+		code += "	k = s / 127773;\n";
+		code += "	s = 16807 * (s - k * 127773) - 2836 * k;\n";
+		code += "	if (s < 0) {\n";
+		code += "		s += 2147483647;\n";
+		code += "	}\n";
+		code += "	seed = uint(s);\n";
+		code += "	return float(seed % uint(65536)) / 65535.0;\n";
+		code += "}\n\n";
+
+		code += "float rand_from_seed_m1_p1(inout uint seed) {\n";
+		code += "	return rand_from_seed(seed) * 2.0 - 1.0;\n";
+		code += "}\n\n";
+
+		// Improve seed quality.
+		code += "uint hash(uint x) {\n";
+		code += "	x = ((x >> uint(16)) ^ x) * uint(73244475);\n";
+		code += "	x = ((x >> uint(16)) ^ x) * uint(73244475);\n";
+		code += "	x = (x >> uint(16)) ^ x;\n";
+		code += "	return x;\n";
+		code += "}\n\n";
+	}
 
 	// Define structs.
 
@@ -549,14 +582,22 @@ void ParticleProcessMaterial::_update_shader() {
 	code += "	float damping;\n";
 	code += "};\n\n";
 
-	code += "void calculate_initial_physical_params(inout PhysicalParameters params, inout uint alt_seed) {\n";
+	if (is_legacy_render_method) {
+		code += "void calculate_initial_physical_params(inout PhysicalParameters params, inout int alt_seed) {\n";
+	} else {
+		code += "void calculate_initial_physical_params(inout PhysicalParameters params, inout uint alt_seed) {\n";
+	}
 	code += "	params.linear_accel = mix(linear_accel_min, linear_accel_max, rand_from_seed(alt_seed));\n";
 	code += "	params.radial_accel = mix(radial_accel_min, radial_accel_max, rand_from_seed(alt_seed));\n";
 	code += "	params.tangent_accel = mix(tangent_accel_min, tangent_accel_max, rand_from_seed(alt_seed));\n";
 	code += "	params.damping = mix(damping_min, damping_max, rand_from_seed(alt_seed));\n";
 	code += "}\n\n";
 
-	code += "void calculate_initial_dynamics_params(inout DynamicsParameters params, inout uint alt_seed) {\n";
+	if (is_legacy_render_method) {
+		code += "void calculate_initial_dynamics_params(inout DynamicsParameters params, inout int alt_seed) {\n";
+	} else {
+		code += "void calculate_initial_dynamics_params(inout DynamicsParameters params, inout uint alt_seed) {\n";
+	}
 	code += "	// -------------------- DO NOT REORDER OPERATIONS, IT BREAKS VISUAL COMPATIBILITY\n";
 	code += "	// -------------------- ADD NEW OPERATIONS AT THE BOTTOM\n";
 	code += "	params.angle = mix(initial_angle_min, initial_angle_max, rand_from_seed(alt_seed));\n";
@@ -570,7 +611,11 @@ void ParticleProcessMaterial::_update_shader() {
 	}
 	code += "}\n\n";
 
-	code += "void calculate_initial_display_params(inout DisplayParameters params, inout uint alt_seed) {\n";
+	if (is_legacy_render_method) {
+		code += "void calculate_initial_display_params(inout DisplayParameters params, inout int alt_seed) {\n";
+	} else {
+		code += "void calculate_initial_display_params(inout DisplayParameters params, inout uint alt_seed) {\n";
+	}
 	code += "	// -------------------- DO NOT REORDER OPERATIONS, IT BREAKS VISUAL COMPATIBILITY\n";
 	code += "	// -------------------- ADD NEW OPERATIONS AT THE BOTTOM\n";
 	code += "	float pi = 3.14159;\n";
@@ -623,7 +668,11 @@ void ParticleProcessMaterial::_update_shader() {
 	}
 	code += "}\n\n";
 
-	code += "vec3 calculate_initial_position(inout DisplayParameters params, inout uint alt_seed) {\n";
+	if (is_legacy_render_method) {
+		code += "vec3 calculate_initial_position(inout DisplayParameters params, inout int alt_seed) {\n";
+	} else {
+		code += "vec3 calculate_initial_position(inout DisplayParameters params, inout uint alt_seed) {\n";
+	}
 	code += "	float pi = 3.14159;\n";
 	code += "	vec3 pos = vec3(0.0);\n";
 	code += "	{ // Emission shape.\n";
@@ -686,7 +735,11 @@ void ParticleProcessMaterial::_update_shader() {
 	code += "}\n\n";
 
 	if (tex_parameters[PARAM_ORBIT_VELOCITY].is_valid() || particle_flags[PARTICLE_FLAG_DISABLE_Z]) {
-		code += "vec3 process_orbit_displacement(DynamicsParameters param, float lifetime, inout uint alt_seed, mat4 transform, mat4 emission_transform, float delta, float total_lifetime) {\n";
+		if (is_legacy_render_method) {
+			code += "vec3 process_orbit_displacement(DynamicsParameters param, float lifetime, inout int alt_seed, mat4 transform, mat4 emission_transform, float delta, float total_lifetime) {\n";
+		} else {
+			code += "vec3 process_orbit_displacement(DynamicsParameters param, float lifetime, inout uint alt_seed, mat4 transform, mat4 emission_transform, float delta, float total_lifetime) {\n";
+		}
 		// No reason to run all these expensive calculation below if we have no orbit velocity
 		// HOWEVER
 		// May be a bad idea for fps consistency?
@@ -760,7 +813,11 @@ void ParticleProcessMaterial::_update_shader() {
 		code += "}\n\n";
 	}
 
-	code += "vec3 get_random_direction_from_spread(inout uint alt_seed, float spread_angle) {\n";
+	if (is_legacy_render_method) {
+		code += "vec3 get_random_direction_from_spread(inout int alt_seed, float spread_angle) {\n";
+	} else {
+		code += "vec3 get_random_direction_from_spread(inout uint alt_seed, float spread_angle) {\n";
+	}
 	code += "	float pi = 3.14159;\n";
 	code += "	float degree_to_rad = pi / 180.0;\n";
 	code += "	float spread_rad = spread_angle * degree_to_rad;\n";
@@ -792,7 +849,11 @@ void ParticleProcessMaterial::_update_shader() {
 	}
 	code += "}\n\n";
 
-	code += "vec3 process_radial_displacement(DynamicsParameters param, float lifetime, inout uint alt_seed, mat4 transform, mat4 emission_transform, float delta) {\n";
+	if (is_legacy_render_method) {
+		code += "vec3 process_radial_displacement(DynamicsParameters param, float lifetime, inout int alt_seed, mat4 transform, mat4 emission_transform, float delta) {\n";
+	} else {
+		code += "vec3 process_radial_displacement(DynamicsParameters param, float lifetime, inout uint alt_seed, mat4 transform, mat4 emission_transform, float delta) {\n";
+	}
 	code += "	vec3 radial_displacement = vec3(0.0);\n";
 	code += "	if (delta < 0.001) {\n";
 	code += "		return radial_displacement;\n";
@@ -839,9 +900,15 @@ void ParticleProcessMaterial::_update_shader() {
 	}
 	code += "}\n\n";
 
-	code += "void start() {\n";
-	code += "	uint base_number = NUMBER;\n";
-	code += "	uint alt_seed = hash(base_number + uint(1) + RANDOM_SEED);\n";
+	if (is_legacy_render_method) {
+		code += "void start() {\n";
+		code += "	int base_number = int(NUMBER);\n";
+		code += "	int alt_seed = hash(base_number + 1 + int(RANDOM_SEED));\n";
+	} else {
+		code += "void start() {\n";
+		code += "	uint base_number = NUMBER;\n";
+		code += "	uint alt_seed = hash(base_number + uint(1) + RANDOM_SEED);\n";
+	}
 	code += "	DisplayParameters params;\n";
 	code += "	calculate_initial_display_params(params, alt_seed);\n";
 	code += "	// Reset alt seed?\n";
@@ -910,13 +977,23 @@ void ParticleProcessMaterial::_update_shader() {
 	}
 	code += "}\n\n";
 
-	code += "void process() {\n";
-	code += "	uint base_number = NUMBER;\n";
-	// TODO: Add optional determinism here.
-	code += "	//if (repeatable) {\n";
-	code += "	//	base_number = INDEX;\n";
-	code += "	//}\n";
-	code += "	uint alt_seed = hash(base_number + uint(1) + RANDOM_SEED);\n";
+	if (is_legacy_render_method) {
+		code += "void process() {\n";
+		code += "	int base_number = int(NUMBER);\n";
+		// TODO: Add optional determinism here.
+		code += "	//if (repeatable) {\n";
+		code += "	//	base_number = INDEX;\n";
+		code += "	//}\n";
+		code += "	int alt_seed = hash(base_number + 1 + int(RANDOM_SEED));\n";
+	} else {
+		code += "void process() {\n";
+		code += "	uint base_number = NUMBER;\n";
+		// TODO: Add optional determinism here.
+		code += "	//if (repeatable) {\n";
+		code += "	//	base_number = INDEX;\n";
+		code += "	//}\n";
+		code += "	uint alt_seed = hash(base_number + uint(1) + RANDOM_SEED);\n";
+	}
 	code += "	DisplayParameters params;\n";
 	code += "	calculate_initial_display_params(params, alt_seed);\n";
 	code += "	DynamicsParameters dynamic_params;\n";
@@ -927,7 +1004,7 @@ void ParticleProcessMaterial::_update_shader() {
 	code += "	float pi = 3.14159;\n";
 	code += "	float degree_to_rad = pi / 180.0;\n\n";
 
-	if (sub_emitter_mode == SUB_EMITTER_AT_START && !RenderingServer::get_singleton()->is_low_end()) {
+	if (sub_emitter_mode == SUB_EMITTER_AT_START && !RS::get_singleton()->is_low_end()) {
 		code += "	bool just_spawned = CUSTOM.y == 0.0;\n";
 	}
 
@@ -1127,7 +1204,7 @@ void ParticleProcessMaterial::_update_shader() {
 	code += "\n";
 	code += "	CUSTOM.z = params.animation_offset + lifetime_percent * params.animation_speed;\n\n";
 
-	if (sub_emitter_mode != SUB_EMITTER_DISABLED && !RenderingServer::get_singleton()->is_low_end()) {
+	if (sub_emitter_mode != SUB_EMITTER_DISABLED && !RS::get_singleton()->is_low_end()) {
 		code += "	int emit_count = 0;\n";
 		switch (sub_emitter_mode) {
 			case SUB_EMITTER_CONSTANT: {
@@ -1156,7 +1233,11 @@ void ParticleProcessMaterial::_update_shader() {
 			}
 		}
 		code += "	for (int i = 0; i < emit_count; i++) {\n";
-		code += "		uint flags = FLAG_EMIT_POSITION | FLAG_EMIT_ROT_SCALE;\n";
+		if (is_legacy_render_method) {
+			code += "		int flags = FLAG_EMIT_POSITION | FLAG_EMIT_ROT_SCALE;\n";
+		} else {
+			code += "		uint flags = FLAG_EMIT_POSITION | FLAG_EMIT_ROT_SCALE;\n";
+		}
 		code += "		if (sub_emitter_keep_velocity) {\n";
 		code += "			flags |= FLAG_EMIT_VELOCITY;\n";
 		code += "		}\n";

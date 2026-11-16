@@ -61,8 +61,26 @@ static String f2sp0(float p_float) {
 }
 
 static String _typestr(ShaderLanguage::DataType p_type) {
-	if (p_type == ShaderLanguage::TYPE_SAMPLER2DARRAY) {
-		return "sampler2D";
+	switch (p_type) {
+		case ShaderLanguage::TYPE_UINT:
+			return "int";
+		case ShaderLanguage::TYPE_UVEC2:
+			return "ivec2";
+		case ShaderLanguage::TYPE_UVEC3:
+			return "ivec3";
+		case ShaderLanguage::TYPE_UVEC4:
+			return "ivec4";
+		case ShaderLanguage::TYPE_USAMPLER2D:
+		case ShaderLanguage::TYPE_ISAMPLER2D:
+		case ShaderLanguage::TYPE_SAMPLER2DARRAY:
+		case ShaderLanguage::TYPE_USAMPLER2DARRAY:
+		case ShaderLanguage::TYPE_ISAMPLER2DARRAY:
+			return "sampler2D";
+		//case ShaderLanguage::TYPE_USAMPLERCUBE:
+		//case ShaderLanguage::TYPE_ISAMPLERCUBE:
+			//return "samplerCube";
+		default:
+			break;
 	}
 	return ShaderLanguage::get_datatype_name(p_type);
 }
@@ -123,7 +141,7 @@ static String get_constant_text(ShaderLanguage::DataType p_type, const Vector<Sh
 
 		// GLSL ES 2 doesn't support uints, so we just use signed ints instead...
 		case ShaderLanguage::TYPE_UINT:
-			return itos(p_values[0].uint);
+			return itos((int32_t)p_values[0].uint);
 		case ShaderLanguage::TYPE_UVEC2:
 		case ShaderLanguage::TYPE_UVEC3:
 		case ShaderLanguage::TYPE_UVEC4: {
@@ -138,7 +156,7 @@ static String get_constant_text(ShaderLanguage::DataType p_type, const Vector<Sh
 					text += ",";
 				}
 
-				text += itos(p_values[i].uint);
+				text += itos((int32_t)p_values[i].uint);
 			}
 			text += ")";
 			return text.as_string();
@@ -465,13 +483,49 @@ String ShaderCompilerGLES2::_dump_node_code(ShaderLanguage::Node *p_node, int p_
 				fragment_global += final_code;
 			}
 
+			// structs
+			for (int i = 0; i < snode->vstructs.size(); i++) {
+				ShaderLanguage::StructNode *stnode = snode->vstructs[i].shader_struct;
+				String gcode;
+				gcode += "struct ";
+				gcode += _mkid(snode->vstructs[i].name);
+				gcode += " {\n";
+				for (ShaderLanguage::MemberNode *mnode : stnode->members) {
+					gcode += "\t";
+					gcode += _prestr(mnode->precision);
+					if (mnode->datatype == ShaderLanguage::TYPE_STRUCT) {
+						gcode += _mkid(mnode->struct_name);
+					} else {
+						gcode += _typestr(mnode->datatype);
+					}
+					gcode += " ";
+					gcode += _mkid(mnode->name);
+					if (mnode->array_size > 0) {
+						gcode += "[";
+						gcode += itos(mnode->array_size);
+						gcode += "]";
+					}
+					gcode += ";\n";
+				}
+				gcode += "};\n";
+				vertex_global += gcode;
+				fragment_global += gcode;
+			}
+
 			// constants
 			for (int i = 0; i < snode->vconstants.size(); i++) {
 				String gcode;
 				gcode += "const ";
 				gcode += _prestr(snode->vconstants[i].precision);
-				gcode += _typestr(snode->vconstants[i].type);
+				if (snode->vconstants[i].type == ShaderLanguage::TYPE_STRUCT) {
+					gcode += _mkid(snode->vconstants[i].struct_name);
+				} else {
+					gcode += _typestr(snode->vconstants[i].type);
+				}
 				gcode += " " + _mkid(String(snode->vconstants[i].name));
+				if (snode->vconstants[i].array_size > 0) {
+					gcode += "[" + itos(snode->vconstants[i].array_size) + "]";
+				}
 				gcode += "=";
 				gcode += _dump_node_code(snode->vconstants[i].initializer, p_level, r_gen_code, p_actions, p_default_actions, p_assigning);
 				gcode += ";\n";
@@ -482,8 +536,8 @@ String ShaderCompilerGLES2::_dump_node_code(ShaderLanguage::Node *p_node, int p_
 			// functions
 			HashMap<StringName, String> function_code;
 
-			for (const KeyValue<StringName, ShaderLanguage::ShaderNode::Function> &E : snode->functions) {
-				ShaderLanguage::FunctionNode *fnode = E.value.function;
+			for (int i = 0; i < snode->vfunctions.size(); i++) {
+				ShaderLanguage::FunctionNode *fnode = snode->vfunctions[i].function;
 				current_func_name = fnode->name;
 				function_code[fnode->name] = _dump_node_code(fnode->body, 1, r_gen_code, p_actions, p_default_actions, p_assigning);
 			}
@@ -491,8 +545,8 @@ String ShaderCompilerGLES2::_dump_node_code(ShaderLanguage::Node *p_node, int p_
 			StringBuilder forward_decls;
 			StringBuilder custom_functions;
 
-			for (const KeyValue<StringName, ShaderLanguage::ShaderNode::Function> &E : snode->functions) {
-				ShaderLanguage::FunctionNode *fnode = E.value.function;
+			for (int j = 0; j < snode->vfunctions.size(); j++) {
+				ShaderLanguage::FunctionNode *fnode = snode->vfunctions[j].function;
 				StringName name = fnode->name;
 
 				// Skip the entry points.
@@ -501,7 +555,11 @@ String ShaderCompilerGLES2::_dump_node_code(ShaderLanguage::Node *p_node, int p_
 				}
 
 				StringBuffer<128> header;
-				header += _typestr(fnode->return_type);
+				if (fnode->return_type == ShaderLanguage::TYPE_STRUCT) {
+					header += _mkid(fnode->return_struct_name);
+				} else {
+					header += _typestr(fnode->return_type);
+				}
 				header += " ";
 				header += _mkid(name);
 				header += "(";
@@ -512,9 +570,18 @@ String ShaderCompilerGLES2::_dump_node_code(ShaderLanguage::Node *p_node, int p_
 					}
 					header += _qualstr(fnode->arguments[i].qualifier);
 					header += _prestr(fnode->arguments[i].precision);
-					header += _typestr(fnode->arguments[i].type);
+					if (fnode->arguments[i].type == ShaderLanguage::TYPE_STRUCT) {
+						header += _mkid(fnode->arguments[i].struct_name);
+					} else {
+						header += _typestr(fnode->arguments[i].type);
+					}
 					header += " ";
 					header += _mkid(fnode->arguments[i].name);
+					if (fnode->arguments[i].array_size > 0) {
+						header += "[";
+						header += itos(fnode->arguments[i].array_size);
+						header += "]";
+					}
 				}
 				header += ")";
 
@@ -529,7 +596,7 @@ String ShaderCompilerGLES2::_dump_node_code(ShaderLanguage::Node *p_node, int p_
 
 			// Inject the custom functions into the global scope
 			if (custom_functions.get_string_length() > 0) {
-				vertex_global += "#ifdef VERTEX_CODE_USED\n";
+				vertex_global += "#if defined(VERTEX_CODE_USED) || defined(START_CODE_USED) || defined(PROCESS_CODE_USED)\n";
 				vertex_global += forward_decls.as_string();
 				vertex_global += custom_functions.as_string();
 				vertex_global += "#endif\n";
@@ -771,12 +838,7 @@ String ShaderCompilerGLES2::_dump_node_code(ShaderLanguage::Node *p_node, int p_
 				case ShaderLanguage::OP_ASSIGN_ADD:
 				case ShaderLanguage::OP_ASSIGN_SUB:
 				case ShaderLanguage::OP_ASSIGN_MUL:
-				case ShaderLanguage::OP_ASSIGN_DIV:
-				case ShaderLanguage::OP_ASSIGN_SHIFT_LEFT:
-				case ShaderLanguage::OP_ASSIGN_SHIFT_RIGHT:
-				case ShaderLanguage::OP_ASSIGN_BIT_AND:
-				case ShaderLanguage::OP_ASSIGN_BIT_OR:
-				case ShaderLanguage::OP_ASSIGN_BIT_XOR: {
+				case ShaderLanguage::OP_ASSIGN_DIV: {
 					code += _dump_node_code(op_node->arguments[0], p_level, r_gen_code, p_actions, p_default_actions, true);
 					code += " ";
 					code += _opstr(op_node->op);
@@ -784,15 +846,50 @@ String ShaderCompilerGLES2::_dump_node_code(ShaderLanguage::Node *p_node, int p_
 					code += _dump_node_code(op_node->arguments[1], p_level, r_gen_code, p_actions, p_default_actions, p_assigning);
 				} break;
 
+				case ShaderLanguage::OP_ASSIGN_SHIFT_LEFT:
+				case ShaderLanguage::OP_ASSIGN_SHIFT_RIGHT:
+				case ShaderLanguage::OP_ASSIGN_BIT_AND:
+				case ShaderLanguage::OP_ASSIGN_BIT_OR:
+				case ShaderLanguage::OP_ASSIGN_BIT_XOR: {
+					String a = _dump_node_code(op_node->arguments[0], p_level, r_gen_code, p_actions, p_default_actions, true);
+					String b = _dump_node_code(op_node->arguments[1], p_level, r_gen_code, p_actions, p_default_actions, p_assigning);
+					const char *fn = "_gles2_bit_xor";
+					StringName def_name = "BXOR_USED"; // See `math_inc.glsl`
+					if (op_node->op == ShaderLanguage::OP_ASSIGN_SHIFT_LEFT) {
+						fn = "_gles2_shl";
+						def_name = "LSHIFT_USED";
+					} else if (op_node->op == ShaderLanguage::OP_ASSIGN_SHIFT_RIGHT) {
+						fn = "_gles2_shr";
+						def_name = "RSHIFT_USED";
+					} else if (op_node->op == ShaderLanguage::OP_ASSIGN_BIT_AND) {
+						fn = "_gles2_bit_and";
+						def_name = "BAND_USED";
+					} else if (op_node->op == ShaderLanguage::OP_ASSIGN_BIT_OR) {
+						fn = "_gles2_bit_or";
+						def_name = "BOR_USED";
+					}
+					if (!used_name_defines.has(def_name)) {
+						r_gen_code.defines.push_back(String("#define ") + String(def_name) + "\n");
+						used_name_defines.insert(def_name);
+					}
+					code += a + " = " + fn + "(" + a + ", " + b + ")";
+				} break;
+
 				case ShaderLanguage::OP_ASSIGN_MOD: {
-					String a = _dump_node_code(op_node->arguments[0], p_level, r_gen_code, p_actions, p_default_actions, p_assigning);
+					String a = _dump_node_code(op_node->arguments[0], p_level, r_gen_code, p_actions, p_default_actions, true);
 					String n = _dump_node_code(op_node->arguments[1], p_level, r_gen_code, p_actions, p_default_actions, p_assigning);
-					code += a + " = " + n + " == 0 ? 0 : ";
-					code += a + " - " + n + " * (" + a + " / " + n + ")";
+					code += a + " = (" + n + " == 0 ? 0 : (" + a + " - (" + n + ") * ((" + a + ") / (" + n + "))))";
 				} break;
 				case ShaderLanguage::OP_EMPTY: {
 				} break;
-				case ShaderLanguage::OP_BIT_INVERT:
+				case ShaderLanguage::OP_BIT_INVERT: {
+					StringName def_name = "BNOT_USED";
+					if (!used_name_defines.has(def_name)) {
+						r_gen_code.defines.push_back("#define BNOT_USED\n");
+						used_name_defines.insert(def_name);
+					}
+					code += "_gles2_bit_not(" + _dump_node_code(op_node->arguments[0], p_level, r_gen_code, p_actions, p_default_actions, p_assigning) + ")";
+				} break;
 				case ShaderLanguage::OP_NEGATE:
 				case ShaderLanguage::OP_NOT:
 				case ShaderLanguage::OP_DECREMENT:
@@ -806,7 +903,6 @@ String ShaderCompilerGLES2::_dump_node_code(ShaderLanguage::Node *p_node, int p_
 					}
 					code += _dump_node_code(op_node->arguments[0], p_level, r_gen_code, p_actions, p_default_actions, p_assigning);
 				} break;
-
 				case ShaderLanguage::OP_POST_DECREMENT:
 				case ShaderLanguage::OP_POST_INCREMENT: {
 					code += _dump_node_code(op_node->arguments[0], p_level, r_gen_code, p_actions, p_default_actions, p_assigning);
@@ -850,7 +946,11 @@ String ShaderCompilerGLES2::_dump_node_code(ShaderLanguage::Node *p_node, int p_
 					}
 
 					if (op_node->op == ShaderLanguage::OP_CONSTRUCT) {
-						code += var_node->name;
+						if (op_node->get_datatype() == ShaderLanguage::TYPE_STRUCT) {
+							code += _mkid(var_node->name);
+						} else {
+							code += _typestr(op_node->get_datatype());
+						}
 					} else {
 						if (var_node->name == "texture") {
 							// emit texture call
@@ -969,8 +1069,36 @@ String ShaderCompilerGLES2::_dump_node_code(ShaderLanguage::Node *p_node, int p_
 				case ShaderLanguage::OP_MOD: {
 					String a = _dump_node_code(op_node->arguments[0], p_level, r_gen_code, p_actions, p_default_actions, p_assigning);
 					String n = _dump_node_code(op_node->arguments[1], p_level, r_gen_code, p_actions, p_default_actions, p_assigning);
-					code += "(" + n + " == 0 ? 0 : ";
-					code += a + " - " + n + " * (" + a + " / " + n + "))";
+					code += "((" + n + ") == 0 ? 0 : ((" + a + ") - (" + n + ") * ((" + a + ") / (" + n + "))))";
+				} break;
+
+				case ShaderLanguage::OP_SHIFT_LEFT:
+				case ShaderLanguage::OP_SHIFT_RIGHT:
+				case ShaderLanguage::OP_BIT_AND:
+				case ShaderLanguage::OP_BIT_OR:
+				case ShaderLanguage::OP_BIT_XOR: {
+					String a = _dump_node_code(op_node->arguments[0], p_level, r_gen_code, p_actions, p_default_actions, p_assigning);
+					String b = _dump_node_code(op_node->arguments[1], p_level, r_gen_code, p_actions, p_default_actions, p_assigning);
+					const char *fn = "_gles2_bit_xor";
+					StringName def_name = "BXOR_USED";
+					if (op_node->op == ShaderLanguage::OP_SHIFT_LEFT) {
+						fn = "_gles2_shl";
+						def_name = "LSHIFT_USED";
+					} else if (op_node->op == ShaderLanguage::OP_SHIFT_RIGHT) {
+						fn = "_gles2_shr";
+						def_name = "RSHIFT_USED";
+					} else if (op_node->op == ShaderLanguage::OP_BIT_AND) {
+						fn = "_gles2_bit_and";
+						def_name = "BAND_USED";
+					} else if (op_node->op == ShaderLanguage::OP_BIT_OR) {
+						fn = "_gles2_bit_or";
+						def_name = "BOR_USED";
+					}
+					if (!used_name_defines.has(def_name)) {
+						r_gen_code.defines.push_back(String("#define ") + String(def_name) + "\n");
+						used_name_defines.insert(def_name);
+					}
+					code += String(fn) + "(" + a + ", " + b + ")";
 				} break;
 
 				default: {

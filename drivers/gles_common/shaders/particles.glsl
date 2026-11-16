@@ -86,14 +86,6 @@ float rand_from_seed(float seed) {
 	return fract(sin(dot(vec2(seed, seed * 1.341), vec2(12.9898, 78.233))) * 43758.5453);
 }
 
-vec3 safe_normalize(vec3 direction) {
-	const float EPSILON = 0.001;
-	if (length(direction) < EPSILON) {
-		return vec3(0.0);
-	}
-	return normalize(direction);
-}
-
 #GLOBALS
 
 void main() {
@@ -140,7 +132,8 @@ void main() {
 	}
 #endif
 
-	float index_normalized = custom.w; 
+	float index_normalized = custom.w;
+	int particle_number = int(index_normalized * float(total_particles));
 
 	if (emitting) {
 		float restart_phase = index_normalized;
