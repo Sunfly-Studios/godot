@@ -508,7 +508,11 @@ private:
 		if (p_is_depth_only) {
 			input_mask &= (1ULL << RS::ARRAY_VERTEX);
 		} else if (p_is_depth_alpha) {
-			input_mask &= ((1ULL << RS::ARRAY_VERTEX) | (1ULL << RS::ARRAY_TEX_UV));
+			input_mask &= (
+				(1ULL << RS::ARRAY_VERTEX) |
+				(1ULL << RS::ARRAY_TEX_UV) |
+				(1ULL << RS::ARRAY_COLOR)
+			);
 		}
 		return input_mask;
 	}
@@ -572,7 +576,8 @@ private:
 
 	_FORCE_INLINE_ static bool _batch_util_has_vertex_colors(BatcherEnums::FVF p_fvf, uint32_t p_batch_flags) {
 		return (
-			(p_fvf == BatcherEnums::FVF_UNBATCHED && (p_batch_flags & BatcherEnums::BTF_3D_USES_COLORS) != 0) ||
+			((p_fvf == BatcherEnums::FVF_UNBATCHED || p_fvf == BatcherEnums::FVF_3D_DEPTH_ALPHA_MINIMAL || p_fvf == BatcherEnums::FVF_DEPTH_ALPHA) &&
+			 (p_batch_flags & BatcherEnums::BTF_3D_USES_COLORS) != 0) ||
 			p_fvf == BatcherEnums::FVF_3D_TIER2_COLOR ||
 			p_fvf == BatcherEnums::FVF_3D_TIER3_TANGENT ||
 			p_fvf == BatcherEnums::FVF_3D_TIER4_PALETTE ||

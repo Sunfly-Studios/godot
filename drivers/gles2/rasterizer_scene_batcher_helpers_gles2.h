@@ -161,6 +161,8 @@ _FORCE_INLINE_ void _batch_write_depth_vertex(
 	uint32_t p_idx,
 	const Vector3 *p_pos_ptr,
 	const Vector2 *p_uv_ptr,
+	const Color *p_col_ptr,
+	const RasterizerSceneGLES2::BatchType::BatchColor &p_fallback_color,
 	const RasterizerSceneGLES2::BatchType::BatchVertex3DTier1 *p_world_cache,
 	RasterizerSceneGLES2::BatchType::TransformMode3D p_mode,
 	const Transform3D &p_xform,
@@ -185,7 +187,11 @@ _FORCE_INLINE_ void _batch_write_depth_vertex(
 			r_dst.uv.set(0.0f, 0.0f);
 		}
 		r_dst.weight = 1.0f;
-		r_dst.pad0 = 0.0f;
+		if (p_col_ptr) {
+			r_dst.color.set(p_col_ptr[p_idx]);
+		} else {
+			r_dst.color = p_fallback_color;
+		}
 	}
 }
 
@@ -355,13 +361,15 @@ _FORCE_INLINE_ void _batch_fill_depth(
 	uint32_t p_v_count,
 	const Vector3 *p_pos_ptr,
 	const Vector2 *p_uv_ptr,
+	const Color *p_col_ptr,
+	const RasterizerSceneGLES2::BatchType::BatchColor &p_fallback_color,
 	const RasterizerSceneGLES2::BatchType::BatchVertex3DTier1 *RESTRICT p_world_cache,
 	RasterizerSceneGLES2::BatchType::TransformMode3D p_effective_mode,
 	const Transform3D &p_xform,
 	uint8_t p_m_idx
 ) {
 	for (uint32_t i = 0; i < p_v_count; i++) {
-		_batch_write_depth_vertex(p_dst[i], i, p_pos_ptr, p_uv_ptr, p_world_cache, p_effective_mode, p_xform, p_m_idx);
+		_batch_write_depth_vertex(p_dst[i], i, p_pos_ptr, p_uv_ptr, p_col_ptr, p_fallback_color, p_world_cache, p_effective_mode, p_xform, p_m_idx);
 	}
 }
 
@@ -378,6 +386,8 @@ _FORCE_INLINE_ void _batch_fill_multimesh_depth_vertices(
 	const Transform3D &p_ref_xform,
 	const Vector3 *p_pos_ptr,
 	const Vector2 *p_uv_ptr,
+	const Color *p_col_ptr,
+	const RasterizerSceneGLES2::BatchType::BatchColor &p_fallback_color,
 	uint8_t p_m_idx
 ) {
 	uint32_t bvs_idx = 0;
@@ -404,7 +414,7 @@ _FORCE_INLINE_ void _batch_fill_multimesh_depth_vertices(
 
 		const uint8_t inst_m_idx = static_cast<uint8_t>(inst & 0xFF);
 		for (uint32_t i = 0; i < p_v_count; i++) {
-			_batch_write_depth_vertex(p_dst[bvs_idx], i, p_pos_ptr, p_uv_ptr, nullptr, mode, world_xform, inst_m_idx);
+			_batch_write_depth_vertex(p_dst[bvs_idx], i, p_pos_ptr, p_uv_ptr, p_col_ptr, p_fallback_color, nullptr, mode, world_xform, inst_m_idx);
 			bvs_idx++;
 		}
 	}

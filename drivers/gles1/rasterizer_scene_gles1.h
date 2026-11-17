@@ -703,20 +703,25 @@ private:
 		bool use_scissor = false;
 		float threshold = 0.5f;
 
-		if (
-			p_material_data &&
-			p_material_data->shader_data &&
-			p_material_data->shader_data->uses_alpha_clip
-		) {
-			use_scissor = true;
+		if (p_material_data && p_material_data->shader_data) {
+			if (p_material_data->shader_data->uses_alpha_clip) {
+				use_scissor = true;
 
-			if (
-				p_material_data->approx_type != GLES1::SceneMaterialData::APPROX_NONE &&
-				p_material_data->approx_data
-			) {
-				GLES1::StandardMaterialState *state = static_cast<GLES1::StandardMaterialState *>(p_material_data->approx_data);
-				if (state->use_alpha_scissor) {
-					threshold = state->alpha_scissor_threshold;
+				if (
+					p_material_data->approx_type != GLES1::SceneMaterialData::APPROX_NONE &&
+					p_material_data->approx_data
+				) {
+					GLES1::StandardMaterialState *state = static_cast<GLES1::StandardMaterialState *>(p_material_data->approx_data);
+					if (state->use_alpha_scissor) {
+						threshold = state->alpha_scissor_threshold;
+					}
+				}
+			} else if (p_material_data->shader_data->uses_depth_prepass_alpha) {
+				use_scissor = true;
+				if (bdata.pass_mode == PASS_MODE_SHADOW) {
+					threshold = 0.5f;
+				} else {
+					threshold = ((bdata.pass_mode == PASS_MODE_COLOR_TRANSPARENT) ? 0.1f : 0.99f);
 				}
 			}
 		}
@@ -1168,8 +1173,14 @@ private:
 
 		if (bdata.pass_mode == PASS_MODE_SHADOW || bdata.pass_mode == PASS_MODE_SHADOW_PROJECTION) {
 			input_mask &= ~(1ULL << RS::ARRAY_COLOR);
-			if ((shader && shader->uses_alpha_clip) || (eff_flags & BatcherEnums::BTF_3D_USES_ALPHA_CLIP)) {
+			if (
+				(shader && (shader->uses_alpha_clip || shader->uses_depth_prepass_alpha || shader->uses_discard)) ||
+				(eff_flags & BatcherEnums::BTF_3D_USES_ALPHA_CLIP)
+			) {
 				input_mask |= (1ULL << RS::ARRAY_TEX_UV);
+				if (bdata.pass_mode == PASS_MODE_SHADOW && (eff_flags & BatcherEnums::BTF_3D_USES_COLORS)) {
+					input_mask |= (1ULL << RS::ARRAY_COLOR);
+				}
 			}
 		} else {
 			input_mask |= (1ULL << RS::ARRAY_NORMAL);

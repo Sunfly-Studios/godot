@@ -430,12 +430,49 @@ void MeshStorage::mesh_surface_update_vertex_region(RID p_mesh, int p_surface, i
 
 	Mesh::Surface *s = mesh->surfaces[p_surface];
 	uint64_t data_size = p_data.size();
-	ERR_FAIL_COND(p_offset + data_size > s->vertex_buffer_size);
 	const uint8_t *r = p_data.ptr();
 
-	if (p_offset + data_size <= (uint64_t)s->uncompressed_buffer.size()) {
-		memcpy(s->uncompressed_buffer.ptrw() + p_offset, r, data_size);
+	uint64_t upload_offset = p_offset;
+	uint64_t upload_size = data_size;
+	const uint8_t *upload_ptr = r;
+
+	if (p_offset + data_size <= (uint64_t)s->original_vertex_data.size()) {
+		memcpy(s->original_vertex_data.ptrw() + p_offset, r, data_size);
 	}
+
+	const bool needs_decompression = (
+		s->vertex_count > 0 &&
+		s->uncompressed_stride > 0 &&
+		(s->original_vertex_data.size() != (int64_t)s->vertex_buffer_size ||
+			(s->original_format & (RS::ARRAY_FLAG_COMPRESS_ATTRIBUTES | RS::ARRAY_FORMAT_NORMAL | RS::ARRAY_FORMAT_TANGENT)) != 0)
+	);
+
+	if (needs_decompression && p_offset + data_size <= (uint64_t)s->original_vertex_data.size()) {
+		RS::SurfaceData sd;
+		sd.format = s->original_format;
+		sd.vertex_data = s->original_vertex_data;
+		sd.vertex_count = s->vertex_count;
+		sd.aabb = (mesh->custom_aabb != AABB()) ? mesh->custom_aabb : s->aabb;
+
+		if (sd.format & RS::ARRAY_FLAG_USE_2D_VERTICES) {
+			_decompress_surface_data_2d(sd, s);
+		} else {
+			_decompress_surface_data_3d(sd, s);
+		}
+
+		upload_offset = 0;
+		upload_size = s->uncompressed_buffer.size();
+		upload_ptr = s->uncompressed_buffer.ptr();
+	} else {
+		ERR_FAIL_COND(p_offset + data_size > s->vertex_buffer_size);
+		if (p_offset + data_size <= (uint64_t)s->uncompressed_buffer.size()) {
+			memcpy(s->uncompressed_buffer.ptrw() + p_offset, r, data_size);
+		}
+	}
+
+	ERR_FAIL_COND(upload_offset + upload_size > s->vertex_buffer_size);
+
+	_invalidate_surface_cpu_array_caches(s);
 
 	// Protect active
 	GLint prev_buffer = 0;
@@ -446,15 +483,16 @@ void MeshStorage::mesh_surface_update_vertex_region(RID p_mesh, int p_surface, i
 	GLES2::Utilities::get_singleton()->buffer_update_data(
 		GL_ARRAY_BUFFER,
 		s->vertex_buffer,
-		p_offset,
-		data_size,
-		r
+		upload_offset,
+		upload_size,
+		upload_ptr
 	);
 	GL_CHECK_ERROR("GLES2::MeshStorage::mesh_surface_update_vertex_region: buffer_update_data");
 
 	// Restore state
 	glBindBuffer(GL_ARRAY_BUFFER, prev_buffer);
 	GL_CHECK_ERROR("GLES2::MeshStorage::mesh_surface_update_vertex_region: glBindBuffer restore");
+	mesh->dependency.changed_notify(Dependency::DEPENDENCY_CHANGED_MESH);
 }
 
 void MeshStorage::mesh_surface_update_attribute_region(RID p_mesh, int p_surface, int p_offset, const Vector<uint8_t> &p_data) {
@@ -463,28 +501,62 @@ void MeshStorage::mesh_surface_update_attribute_region(RID p_mesh, int p_surface
 	ERR_FAIL_UNSIGNED_INDEX((uint32_t)p_surface, mesh->surface_count);
 	ERR_FAIL_COND(p_data.is_empty());
 
+	Mesh::Surface *s = mesh->surfaces[p_surface];
 	uint64_t data_size = p_data.size();
-	ERR_FAIL_COND(p_offset + data_size > mesh->surfaces[p_surface]->attribute_buffer_size);
 	const uint8_t *r = p_data.ptr();
+
+	if (p_offset + data_size <= (uint64_t)s->original_attribute_data.size()) {
+		memcpy(s->original_attribute_data.ptrw() + p_offset, r, data_size);
+	}
+
+	uint64_t upload_offset = p_offset;
+	uint64_t upload_size = data_size;
+	const uint8_t *upload_ptr = r;
+	RS::SurfaceData sd;
+
+	const bool needs_decompression = (
+		s->vertex_count > 0 &&
+		(s->original_attribute_data.size() != (int64_t)s->attribute_buffer_size ||
+			(s->original_format & RS::ARRAY_FLAG_COMPRESS_ATTRIBUTES) != 0)
+	);
+
+	if (needs_decompression && p_offset + data_size <= (uint64_t)s->original_attribute_data.size()) {
+		sd.format = s->original_format;
+		sd.attribute_data = s->original_attribute_data;
+		sd.vertex_count = s->vertex_count;
+		sd.uv_scale = s->uv_scale;
+
+		_decompress_attribute_buffer_3d(sd, s->vertex_count);
+
+		upload_offset = 0;
+		upload_size = sd.attribute_data.size();
+		upload_ptr = sd.attribute_data.ptr();
+	}
+
+	ERR_FAIL_COND(upload_offset + upload_size > s->attribute_buffer_size);
+
+	_invalidate_surface_cpu_array_caches(s);
 
 	// Protect active
 	GLint prev_buffer = 0;
 	glGetIntegerv(GL_ARRAY_BUFFER_BINDING, &prev_buffer);
 	GL_CHECK_ERROR("GLES2::MeshStorage::mesh_surface_update_attribute_region: glGetIntegerv");
 
-	glBindBuffer(GL_ARRAY_BUFFER, mesh->surfaces[p_surface]->attribute_buffer);
+	glBindBuffer(GL_ARRAY_BUFFER, s->attribute_buffer);
 	GLES2::Utilities::get_singleton()->buffer_update_data(
 		GL_ARRAY_BUFFER,
-		mesh->surfaces[p_surface]->attribute_buffer,
-		p_offset,
-		data_size,
-		r
+		s->attribute_buffer,
+		upload_offset,
+		upload_size,
+		upload_ptr
 	);
 	GL_CHECK_ERROR("GLES2::MeshStorage::mesh_surface_update_attribute_region: buffer_update_data");
 
 	// Restore state
 	glBindBuffer(GL_ARRAY_BUFFER, prev_buffer);
 	GL_CHECK_ERROR("GLES2::MeshStorage::mesh_surface_update_attribute_region: glBindBuffer restore");
+
+	mesh->dependency.changed_notify(Dependency::DEPENDENCY_CHANGED_MESH);
 }
 
 void MeshStorage::mesh_surface_update_skin_region(RID p_mesh, int p_surface, int p_offset, const Vector<uint8_t> &p_data) {
@@ -1733,6 +1805,16 @@ void MeshStorage::_decompress_skin_buffer(RS::SurfaceData &r_surface, Mesh::Surf
 	}
 
 	r_surface.skin_data = new_skin_data;
+}
+
+void MeshStorage::_invalidate_surface_cpu_array_caches(Mesh::Surface *s) {
+	s->vertex_cache.clear();
+	s->normal_cache.clear();
+	s->tangent_cache.clear();
+	s->color_cache.clear();
+	s->uv_cache.clear();
+	s->uv2_cache.clear();
+	s->index_cache.clear();
 }
 
 Array MeshStorage::mesh_surface_get_arrays(RID p_mesh, int p_surface) const {

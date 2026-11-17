@@ -325,7 +325,7 @@ public:
 		uint8_t matrix_index[4];
 		BatchVector2 uv;
 		float weight;
-		float pad0;
+		BatchColor color;
 	};
 	static_assert(sizeof(BatchVertex3DDepthAlphaMinimal) == 32, "BatchVertex3DDepthAlphaMinimal must be 32 bytes.");
 

@@ -293,6 +293,7 @@ private:
 	void _decompress_3d_buffer(const uint8_t *p_src, uint8_t *p_dst, uint32_t p_vertex_count, uint64_t p_format, uint32_t p_compressed_stride, uint32_t p_uncompressed_stride, const AABB &p_aabb);
 	void _decompress_attribute_buffer_3d(RS::SurfaceData &r_surface, uint32_t p_vertex_count);
 	void _decompress_skin_buffer(RS::SurfaceData &r_surface, Mesh::Surface *s);
+	void _invalidate_surface_cpu_array_caches(Mesh::Surface *s);
 
 	/* Mesh Instance API */
 

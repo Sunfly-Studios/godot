@@ -675,6 +675,7 @@ void RasterizerSceneGLES1::_geometry_instance_add_surface_with_material(Geometry
 
 		if (p_material->shader_data->uses_depth_prepass_alpha && !is_depth_disabled) {
 			flags |= GeometryInstanceSurface::FLAG_PASS_DEPTH;
+			flags |= GeometryInstanceSurface::FLAG_PASS_OPAQUE;
 			flags |= GeometryInstanceSurface::FLAG_PASS_SHADOW;
 		}
 	} else {
@@ -2121,7 +2122,7 @@ uint64_t RasterizerSceneGLES1::_batch_compute_canonical_material_id(const GLES1:
 		p_material->approx_type == GLES1::SceneMaterialData::APPROX_NONE ||
 		!p_material->approx_data ||
 		p_material->texture_cache.size() > 1 ||
-		(p_shader && p_shader->uses_alpha_clip)
+		(p_shader && (p_shader->uses_alpha_clip || p_shader->uses_depth_prepass_alpha || p_shader->uses_discard))
 	) {
 		return static_cast<uint64_t>((uintptr_t)p_material >> 4) & 0xFFFFFULL;
 	}
@@ -2245,8 +2246,16 @@ uint32_t RasterizerSceneGLES1::_batch_get_surface_flags(const GeometryInstanceSu
 		}
 	}
 
-	if (active_shader && active_shader->uses_alpha_clip) {
+	if (
+		active_shader &&
+		(active_shader->uses_alpha_clip ||
+		 active_shader->uses_depth_prepass_alpha ||
+		 active_shader->uses_discard)
+	) {
 		flags |= BatcherEnums::BTF_3D_USES_ALPHA_CLIP;
+		if (is_depth_pass && !p_surface->color_cache.is_empty() && active_shader->uses_color) {
+			flags |= BatcherEnums::BTF_3D_USES_COLORS;
+		}
 	}
 
 	if (active_shader && (active_shader->writes_modelview_or_projection || active_shader->uses_billboard_or_fixed_size())) {
@@ -2599,10 +2608,12 @@ void RasterizerSceneGLES1::_batch_fill_instance_depth(const BatchType::BItemRef3
 	);
 	const BatchType::BatchVertex3DTier1 *RESTRICT world_cache = can_reuse_world_cache ? p_surface->baked_world_cache.ptr() : nullptr;
 
+	const Color *col_ptr = (p_surface->shader && p_surface->shader->uses_color && p_surface->color_cache.size() > 0) ? p_surface->color_cache.ptr() : nullptr;
+
 	if (_batch_util_is_depth_alpha_fvf(bdata.fvf)) {
-		_batch_fill_depth(reinterpret_cast<BatchType::BatchVertex3DDepthAlphaMinimal *>(r_bvs), v_count, pos_ptr, uv_ptr, world_cache, effective_mode, p_ref.transform, m_idx);
+		_batch_fill_depth(reinterpret_cast<BatchType::BatchVertex3DDepthAlphaMinimal *>(r_bvs), v_count, pos_ptr, uv_ptr, col_ptr, p_ref.modulate, world_cache, effective_mode, p_ref.transform, m_idx);
 	} else {
-		_batch_fill_depth(reinterpret_cast<BatchType::BatchVertex3DDepthMinimal *>(r_bvs), v_count, pos_ptr, uv_ptr, world_cache, effective_mode, p_ref.transform, m_idx);
+		_batch_fill_depth(reinterpret_cast<BatchType::BatchVertex3DDepthMinimal *>(r_bvs), v_count, pos_ptr, uv_ptr, col_ptr, p_ref.modulate, world_cache, effective_mode, p_ref.transform, m_idx);
 	}
 
 	_batch_fill_indices_single(r_inds, indices, v_count, p_start_vert);
@@ -2624,6 +2635,7 @@ void RasterizerSceneGLES1::_batch_fill_multimesh_depth(const BatchType::BItemRef
 	const uint32_t v_count = positions.size();
 	const Vector3 *pos_ptr = positions.ptr();
 	const Vector2 *uv_ptr = p_surface->uv_cache.size() > 0 ? p_surface->uv_cache.ptr() : nullptr;
+	const Color *col_ptr = (p_surface->shader && p_surface->shader->uses_color && p_surface->color_cache.size() > 0) ? p_surface->color_cache.ptr() : nullptr;
 	const PackedInt32Array &indices = p_surface->index_cache;
 	const int instances = p_ref.instance_count;
 	MultiMeshInstanceData mm = _get_multimesh_data(p_surface);
@@ -2632,9 +2644,9 @@ void RasterizerSceneGLES1::_batch_fill_multimesh_depth(const BatchType::BItemRef
 	const uint8_t m_idx = static_cast<uint8_t>(p_item_index);
 
 	if (_batch_util_is_depth_alpha_fvf(bdata.fvf)) {
-		_batch_fill_multimesh_depth_vertices(reinterpret_cast<BatchType::BatchVertex3DDepthAlphaMinimal *>(r_bvs), instances, v_count, is_multimesh, mm_chunk_data, mm.stride, mm.format, p_use_hardware_transform, p_ref.transform, pos_ptr, uv_ptr, m_idx);
+		_batch_fill_multimesh_depth_vertices(reinterpret_cast<BatchType::BatchVertex3DDepthAlphaMinimal *>(r_bvs), instances, v_count, is_multimesh, mm_chunk_data, mm.stride, mm.format, p_use_hardware_transform, p_ref.transform, pos_ptr, uv_ptr, col_ptr, p_ref.modulate, m_idx);
 	} else {
-		_batch_fill_multimesh_depth_vertices(reinterpret_cast<BatchType::BatchVertex3DDepthMinimal *>(r_bvs), instances, v_count, is_multimesh, mm_chunk_data, mm.stride, mm.format, p_use_hardware_transform, p_ref.transform, pos_ptr, uv_ptr, m_idx);
+		_batch_fill_multimesh_depth_vertices(reinterpret_cast<BatchType::BatchVertex3DDepthMinimal *>(r_bvs), instances, v_count, is_multimesh, mm_chunk_data, mm.stride, mm.format, p_use_hardware_transform, p_ref.transform, pos_ptr, uv_ptr, col_ptr, p_ref.modulate, m_idx);
 	}
 
 	_batch_fill_indices_multimesh(r_inds, indices, v_count, instances, p_start_vert, p_surface->primitive);
@@ -2955,8 +2967,17 @@ void RasterizerSceneGLES1::_batch_bind_material(GLES1::SceneMaterialData *p_mate
 				_gl_setup_material_pass(p_material_data, scene_state.is_additive_pass);
 				GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_batch_bind_material: _gl_setup_material_pass");
 			} else {
-				if (p_material_data->shader_data->uses_alpha_clip) {
+				if (
+					p_material_data->shader_data->uses_alpha_clip ||
+					p_material_data->shader_data->uses_depth_prepass_alpha ||
+					p_material_data->shader_data->uses_discard
+				) {
 					p_material_data->bind_uniforms();
+					if (p_material_data->texture_cache.size() > 0) {
+						glEnable(GL_TEXTURE_2D);
+					} else {
+						glDisable(GL_TEXTURE_2D);
+					}
 					_gl_setup_alpha_scissor(p_material_data);
 				} else {
 					if (GLES1_CONFIG->max_texture_units > 1) {
@@ -3050,7 +3071,9 @@ void RasterizerSceneGLES1::_batch_render_items(GLES1::SceneMaterialData *p_mater
 	// For FVF_UNBATCHED, only flag vertex colors if the mesh itself provides a color array;
 	// material-only albedo colors are handled via glColor4f/glMaterialfv without GL_COLOR_ARRAY.
 	const bool has_vertex_colors = (
-		(bdata.fvf == BatcherEnums::FVF_UNBATCHED &&
+		((bdata.fvf == BatcherEnums::FVF_UNBATCHED ||
+		  bdata.fvf == BatcherEnums::FVF_3D_DEPTH_ALPHA_MINIMAL ||
+		  bdata.fvf == BatcherEnums::FVF_DEPTH_ALPHA) &&
 		 (p_batch.flags & BatcherEnums::BTF_3D_USES_COLORS) != 0 &&
 		 first_surf->shader &&
 		 first_surf->shader->uses_color &&
@@ -3127,17 +3150,18 @@ void RasterizerSceneGLES1::_batch_render_generic(RS::PrimitiveType p_primitive, 
 		p_has_color &&
 		!is_tier1 &&
 		!is_depth_only &&
-		!is_depth_alpha &&
-		bdata.pass_mode != PASS_MODE_SHADOW &&
 		bdata.pass_mode != PASS_MODE_SHADOW_PROJECTION
 	);
 
 	if (is_depth_alpha) {
 		// Alpha-scissor depth passes only need positions and primary UVs.
 		flags |= GL_CLIENT_STATE_TEXCOORD;
+		if (use_color) {
+			flags |= GL_CLIENT_STATE_COLOR;
+		}
 	} else if (!is_depth_only) {
 		flags |= GL_CLIENT_STATE_TEXCOORD | GL_CLIENT_STATE_NORMAL;
-		if (use_color) {
+		if (use_color && bdata.pass_mode != PASS_MODE_SHADOW) {
 			flags |= GL_CLIENT_STATE_COLOR;
 		}
 	}
@@ -3210,6 +3234,7 @@ void RasterizerSceneGLES1::_batch_render_generic(RS::PrimitiveType p_primitive, 
 	} else if (is_depth_alpha) {
 		pos_ofs = offsetof(BatchType::BatchVertex3DDepthAlphaMinimal, pos);
 		uv_ofs = offsetof(BatchType::BatchVertex3DDepthAlphaMinimal, uv);
+		col_ofs = offsetof(BatchType::BatchVertex3DDepthAlphaMinimal, color);
 		m_idx_ofs = offsetof(BatchType::BatchVertex3DDepthAlphaMinimal, matrix_index);
 		weight_ofs = offsetof(BatchType::BatchVertex3DDepthAlphaMinimal, weight);
 	} else if (is_tier1) {
@@ -3240,6 +3265,9 @@ void RasterizerSceneGLES1::_batch_render_generic(RS::PrimitiveType p_primitive, 
 
 	if (is_depth_alpha) {
 		glTexCoordPointer(2, GL_FLOAT, stride, base_ptr + uv_ofs);
+		if (use_color) {
+			glColorPointer(4, GL_UNSIGNED_BYTE, stride, base_ptr + col_ofs);
+		}
 	} else if (!is_depth_only) {
 		glNormalPointer(GL_BYTE, stride, base_ptr + norm_ofs);
 		glTexCoordPointer(2, GL_FLOAT, stride, base_ptr + uv_ofs);
@@ -3316,6 +3344,9 @@ void RasterizerSceneGLES1::_batch_render_single_mesh_fallback(RS::PrimitiveType 
 	uint64_t input_mask = RS::ARRAY_FORMAT_VERTEX;
 	if (is_depth_alpha) {
 		input_mask |= RS::ARRAY_FORMAT_TEX_UV;
+		if (p_has_color && bdata.pass_mode != PASS_MODE_SHADOW_PROJECTION) {
+			input_mask |= RS::ARRAY_FORMAT_COLOR;
+		}
 	} else if (!is_depth_only) {
 		input_mask |= RS::ARRAY_FORMAT_NORMAL | RS::ARRAY_FORMAT_TEX_UV;
 		if (p_has_color && bdata.pass_mode != PASS_MODE_SHADOW_PROJECTION) {
@@ -3349,8 +3380,7 @@ void RasterizerSceneGLES1::_batch_render_single_mesh_fallback(RS::PrimitiveType 
 	const bool has_col_attrib = (
 		p_has_color &&
 		!is_depth_only &&
-		!is_depth_alpha &&
-		bdata.pass_mode != PASS_MODE_SHADOW &&
+		(is_depth_alpha || bdata.pass_mode != PASS_MODE_SHADOW) &&
 		bdata.pass_mode != PASS_MODE_SHADOW_PROJECTION &&
 		version->attribs[RS::ARRAY_COLOR].enabled &&
 		has_attrib_source

@@ -463,6 +463,7 @@ void RasterizerSceneGLES2::_geometry_instance_add_surface_with_material(Geometry
 
 		if (p_material->shader_data->uses_depth_prepass_alpha && !is_depth_disabled) {
 			flags |= GeometryInstanceSurface::FLAG_PASS_DEPTH;
+			flags |= GeometryInstanceSurface::FLAG_PASS_OPAQUE;
 			flags |= GeometryInstanceSurface::FLAG_PASS_SHADOW;
 		}
 	} else {
@@ -1615,8 +1616,18 @@ uint32_t RasterizerSceneGLES2::_batch_get_surface_flags(const GeometryInstanceSu
 		}
 	}
 
-	if (active_shader && active_shader->uses_alpha_clip) {
+	if (
+		active_shader &&
+		(active_shader->uses_alpha_clip ||
+		 active_shader->uses_depth_prepass_alpha ||
+		 active_shader->uses_discard)
+	) {
 		flags |= BatcherEnums::BTF_3D_USES_ALPHA_CLIP;
+		if (is_depth_pass && !p_surface->color_cache.is_empty()) {
+			if (active_shader->vertex_input_mask & (1ULL << RS::ARRAY_COLOR)) {
+				flags |= BatcherEnums::BTF_3D_USES_COLORS;
+			}
+		}
 	}
 
 	// Prevent CPU vertex baking and multi-item joining if the shader reads/writes VERTEX, POSITION,
@@ -1886,10 +1897,12 @@ void RasterizerSceneGLES2::_batch_fill_instance_depth(const BatchType::BItemRef3
 	);
 	const BatchType::BatchVertex3DTier1 *RESTRICT world_cache = can_reuse_world_cache ? p_surface->baked_world_cache.ptr() : nullptr;
 
+	const Color *col_ptr = p_surface->color_cache.size() > 0 ? p_surface->color_cache.ptr() : nullptr;
+
 	if (_batch_util_is_depth_alpha_fvf(bdata.fvf)) {
-		_batch_fill_depth(reinterpret_cast<BatchType::BatchVertex3DDepthAlphaMinimal *>(r_bvs), v_count, pos_ptr, uv_ptr, world_cache, effective_mode, p_ref.transform, m_idx);
+		_batch_fill_depth(reinterpret_cast<BatchType::BatchVertex3DDepthAlphaMinimal *>(r_bvs), v_count, pos_ptr, uv_ptr, col_ptr, p_ref.modulate, world_cache, effective_mode, p_ref.transform, m_idx);
 	} else {
-		_batch_fill_depth(reinterpret_cast<BatchType::BatchVertex3DDepthMinimal *>(r_bvs), v_count, pos_ptr, uv_ptr, world_cache, effective_mode, p_ref.transform, m_idx);
+		_batch_fill_depth(reinterpret_cast<BatchType::BatchVertex3DDepthMinimal *>(r_bvs), v_count, pos_ptr, uv_ptr, col_ptr, p_ref.modulate, world_cache, effective_mode, p_ref.transform, m_idx);
 	}
 
 	_batch_fill_indices_single(r_inds, indices, v_count, p_start_vert);
@@ -1911,6 +1924,7 @@ void RasterizerSceneGLES2::_batch_fill_multimesh_depth(const BatchType::BItemRef
 	const uint32_t v_count = positions.size();
 	const Vector3 *pos_ptr = positions.ptr();
 	const Vector2 *uv_ptr = p_surface->uv_cache.size() > 0 ? p_surface->uv_cache.ptr() : nullptr;
+	const Color *col_ptr = p_surface->color_cache.size() > 0 ? p_surface->color_cache.ptr() : nullptr;
 	const PackedInt32Array &indices = p_surface->index_cache;
 	const int instances = p_ref.instance_count;
 	MultiMeshInstanceData mm = _get_multimesh_data(p_surface);
@@ -1923,9 +1937,9 @@ void RasterizerSceneGLES2::_batch_fill_multimesh_depth(const BatchType::BItemRef
 	const bool keep_unbaked = is_multimesh && prevent_vertex_baking;
 
 	if (_batch_util_is_depth_alpha_fvf(bdata.fvf)) {
-		_batch_fill_multimesh_depth_vertices(reinterpret_cast<BatchType::BatchVertex3DDepthAlphaMinimal *>(r_bvs), instances, v_count, is_multimesh && !keep_unbaked, mm_chunk_data, mm.stride, mm.format, use_local_xform, p_ref.transform, pos_ptr, uv_ptr, m_idx);
+		_batch_fill_multimesh_depth_vertices(reinterpret_cast<BatchType::BatchVertex3DDepthAlphaMinimal *>(r_bvs), instances, v_count, is_multimesh && !keep_unbaked, mm_chunk_data, mm.stride, mm.format, use_local_xform, p_ref.transform, pos_ptr, uv_ptr, col_ptr, p_ref.modulate, m_idx);
 	} else {
-		_batch_fill_multimesh_depth_vertices(reinterpret_cast<BatchType::BatchVertex3DDepthMinimal *>(r_bvs), instances, v_count, is_multimesh && !keep_unbaked, mm_chunk_data, mm.stride, mm.format, use_local_xform, p_ref.transform, pos_ptr, uv_ptr, m_idx);
+		_batch_fill_multimesh_depth_vertices(reinterpret_cast<BatchType::BatchVertex3DDepthMinimal *>(r_bvs), instances, v_count, is_multimesh && !keep_unbaked, mm_chunk_data, mm.stride, mm.format, use_local_xform, p_ref.transform, pos_ptr, uv_ptr, col_ptr, p_ref.modulate, m_idx);
 	}
 
 	_batch_fill_indices_multimesh(r_inds, indices, v_count, instances, p_start_vert, p_surface->primitive);
@@ -2232,6 +2246,14 @@ bool RasterizerSceneGLES2::_batch_bind_pass_material_and_state(GLES2::SceneMater
 		}
 		_bind_scene_camera_uniforms(p_shader->version, p_variant, p_spec_constants);
 
+		if (p_shader->uses_depth_prepass_alpha) {
+			const float prepass_threshold = (bdata.pass_mode == PASS_MODE_SHADOW)
+					? 0.5f
+					: ((bdata.pass_mode == PASS_MODE_COLOR_TRANSPARENT) ? 0.1f : 0.99f);
+			material_storage->shaders.scene_shader.version_set_uniform(SceneShaderGLES2::OPAQUE_PREPASS_THRESHOLD, prepass_threshold, p_shader->version, p_variant, p_spec_constants);
+			GL_CHECK_ERROR("GLES2::RasterizerSceneGLES2::_batch_bind_pass_material_and_state: version_set_uniform OPAQUE_PREPASS_THRESHOLD");
+		}
+
 		if (
 			!scene_state.is_directional_additive_replay &&
 			(bdata.pass_mode == PASS_MODE_COLOR || bdata.pass_mode == PASS_MODE_COLOR_TRANSPARENT)
@@ -2348,6 +2370,7 @@ bool RasterizerSceneGLES2::_batch_bind_generic_buffers(bool p_has_color, BatchBo
 	} else if (is_depth_alpha) {
 		pos_ofs += offsetof(BatchType::BatchVertex3DDepthAlphaMinimal, pos);
 		uv_ofs += offsetof(BatchType::BatchVertex3DDepthAlphaMinimal, uv);
+		col_ofs += offsetof(BatchType::BatchVertex3DDepthAlphaMinimal, color);
 		m_idx_ofs += offsetof(BatchType::BatchVertex3DDepthAlphaMinimal, matrix_index);
 	} else if (is_tier1) {
 		pos_ofs += offsetof(BatchType::BatchVertex3DTier1, pos);
@@ -2382,6 +2405,12 @@ bool RasterizerSceneGLES2::_batch_bind_generic_buffers(bool p_has_color, BatchBo
 	if (is_depth_alpha) {
 		desired_mask |= (1U << RS::ARRAY_TEX_UV);
 		glVertexAttribPointer(RS::ARRAY_TEX_UV, 2, GL_FLOAT, GL_FALSE, stride, (const void *)uv_ofs);
+		if (p_has_color) {
+			desired_mask |= (1U << RS::ARRAY_COLOR);
+			glVertexAttribPointer(RS::ARRAY_COLOR, 4, GL_UNSIGNED_BYTE, GL_TRUE, stride, (const void *)col_ofs);
+		} else {
+			glVertexAttrib4f(RS::ARRAY_COLOR, 1.0f, 1.0f, 1.0f, 1.0f);
+		}
 	} else if (!is_depth_only) {
 		desired_mask |= (1U << RS::ARRAY_NORMAL) | (1U << RS::ARRAY_TEX_UV);
 		glVertexAttribPointer(RS::ARRAY_NORMAL, 3, GL_BYTE, GL_TRUE, stride, (const void *)norm_ofs);
@@ -2528,7 +2557,6 @@ bool RasterizerSceneGLES2::_batch_bind_single_mesh_fallback_buffers(bool p_has_c
 
 	if (
 		!is_depth_only &&
-		!is_depth_alpha &&
 		p_has_color &&
 		gl_abo != 0 &&
 		version->attribs[RS::ARRAY_COLOR].enabled
