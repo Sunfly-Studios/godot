@@ -1655,6 +1655,8 @@ private:
 	/* Batch API */
 
 	void scene_render_items_implementation(GeometryInstanceSurface **p_surfaces, int p_count, const Transform3D &p_camera_transform, bool p_transparent);
+	void _draw_surface_instances(const GeometryInstanceSurface *p_surface, const Transform3D &p_base_transform, const Transform3D &p_view_matrix, int p_instances, const MultiMeshInstanceData *p_mm, bool p_has_indices, bool p_use_index_buffer, GLenum p_primitive_gl, int p_drawn_count, GLenum p_index_type, const uint8_t *p_index_client_ptr);
+	void _draw_item_ref_instances(const BatchType::BItemRef3D &p_ref, const Transform3D &p_view_matrix, bool p_has_indices, bool p_use_index_buffer, GLenum p_primitive_gl, int p_drawn_count, GLenum p_index_type, const uint8_t *p_index_client_ptr);
 
 	void _batch_get_hardware_limits(BatchType::BatchLimits &r_limits);
 	void _batch_get_instance_geometry_capacity(const GeometryInstanceSurface *p_surface, uint32_t &r_vertex_count, uint32_t &r_index_count);
@@ -1681,23 +1683,31 @@ private:
 	bool _batch_try_reuse_cached_vbo_slot_3d(BatchType::Batch3D &r_batch, uint64_t p_content_hash);
 	void _batch_upload_buffers_3d(BatchType::Batch3D &r_batch, uint64_t p_content_hash = 0);
 	void _batch_bind_material(GLES1::SceneMaterialData *p_material_data, const Transform3D &p_world_transform, bool p_transparent);
-	void _batch_render_generic(RS::PrimitiveType p_primitive, uint32_t p_offset = 0, uint32_t p_count = 0, bool p_has_color = true);
-	void _batch_render_items(GLES1::SceneMaterialData *p_material_data, RS::PrimitiveType p_primitive, BatchType::Batch3D &p_batch, bool p_transparent);
-	void _batch_render_single_mesh_fallback(RS::PrimitiveType p_primitive, uint32_t p_offset, uint32_t p_count, bool p_has_color);
-	void _batch_render_static_mesh_group(GLES1::SceneMaterialData *p_material_data, RS::PrimitiveType p_primitive, BatchType::Batch3D &p_batch, bool p_transparent);
 	void _batch_threshold_flush();
 
+	/* BATCH LANES */
+
+	// Lane 1: BRI
+	void _batch_render_generic(RS::PrimitiveType p_primitive, uint32_t p_offset = 0, uint32_t p_count = 0, bool p_has_color = true);
+	void _batch_render_items(GLES1::SceneMaterialData *p_material_data, RS::PrimitiveType p_primitive, BatchType::Batch3D &p_batch, bool p_transparent);
+
+	// Lane 2: SMDD
+	void _batch_render_single_mesh_fallback(RS::PrimitiveType p_primitive, uint32_t p_offset, uint32_t p_count, bool p_has_color);
+
+	// Lane 4: SMSG
+	void _batch_render_static_mesh_group(GLES1::SceneMaterialData *p_material_data, RS::PrimitiveType p_primitive, BatchType::Batch3D &p_batch, bool p_transparent);
+
+	// Lane 3: RSII
 	void _render_single_item_immediate(const GeometryInstanceSurface *p_surface);
 
-	/* OTHER */
+	/* BINDING */
 
 	void _bind_surface_static_arrays_and_ibo(const GeometryInstanceSurface *p_surface, uint64_t p_input_mask, bool p_allow_deformed_instance, bool &r_has_indices, bool &r_use_index_buffer, int &r_drawn_count, GLenum &r_index_type, const uint8_t *&r_index_client_ptr);
 	void _bind_scene_camera_uniforms(RID p_version, SceneShaderGLES1::ShaderVariant p_variant, uint64_t p_spec_constants);
 	void _bind_sky_directional_lights(RID p_version, SkyShaderGLES1::ShaderVariant p_variant, uint64_t p_spec_constants);
 	void _unbind_surface_static_arrays_and_ibo(const GeometryInstanceSurface *p_surface, bool p_use_index_buffer, RS::CullMode p_prev_cull_mode, bool p_prev_depth_draw, bool p_prev_depth_test);
-	void _draw_surface_instances(const GeometryInstanceSurface *p_surface, const Transform3D &p_base_transform, const Transform3D &p_view_matrix, int p_instances, const MultiMeshInstanceData *p_mm, bool p_has_indices, bool p_use_index_buffer, GLenum p_primitive_gl, int p_drawn_count, GLenum p_index_type, const uint8_t *p_index_client_ptr);
-	void _draw_item_ref_instances(const BatchType::BItemRef3D &p_ref, const Transform3D &p_view_matrix, bool p_has_indices, bool p_use_index_buffer, GLenum p_primitive_gl, int p_drawn_count, GLenum p_index_type, const uint8_t *p_index_client_ptr);
 
+	/* OTHER */
 	void _resolve_surface_transforms(const Transform3D &p_model_matrix, const Transform3D &p_view_matrix, const GLES1::SceneShaderData *p_shader, Transform3D &r_model_view, Transform3D &r_world_matrix) const;
 	Transform3D _compute_billboard_modelview(const Transform3D &p_model_matrix, const Transform3D &p_view_matrix, const Transform3D &p_main_cam_inv_view_matrix, const Projection &p_projection, const GLES1::SceneShaderData *p_shader) const;
 
