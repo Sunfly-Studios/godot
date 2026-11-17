@@ -3099,6 +3099,7 @@ void RasterizerSceneGLES1::_batch_render_generic(RS::PrimitiveType p_primitive, 
 		return;
 	}
 
+	// Resolve the pooled VBO and IBO handles assigned to the active batch.
 	uint32_t vbo_idx = _render_item_state.curr_batch ? _render_item_state.curr_batch->vbo_index : 0;
 	uint32_t gl_vbo = (GLES1_CONFIG->support_vbo && bdata.vbo_pool.size() > vbo_idx) ? bdata.vbo_pool[vbo_idx].gl_vertex_buffer : 0;
 	uint32_t gl_ibo = (GLES1_CONFIG->support_vbo && bdata.vbo_pool.size() > vbo_idx) ? bdata.vbo_pool[vbo_idx].gl_index_buffer : 0;
@@ -3115,6 +3116,7 @@ void RasterizerSceneGLES1::_batch_render_generic(RS::PrimitiveType p_primitive, 
 		}
 	}
 
+	// Identify the active FVF layout tier to configure client array states and byte offsets.
 	const bool is_depth_only = _batch_util_is_depth_only_fvf(bdata.fvf);
 	const bool is_depth_alpha = _batch_util_is_depth_alpha_fvf(bdata.fvf);
 	const bool is_tier1 = (bdata.fvf == BatcherEnums::FVF_3D_TIER1_BASE);
@@ -3131,6 +3133,7 @@ void RasterizerSceneGLES1::_batch_render_generic(RS::PrimitiveType p_primitive, 
 	);
 
 	if (is_depth_alpha) {
+		// Alpha-scissor depth passes only need positions and primary UVs.
 		flags |= GL_CLIENT_STATE_TEXCOORD;
 	} else if (!is_depth_only) {
 		flags |= GL_CLIENT_STATE_TEXCOORD | GL_CLIENT_STATE_NORMAL;
@@ -3141,6 +3144,8 @@ void RasterizerSceneGLES1::_batch_render_generic(RS::PrimitiveType p_primitive, 
 
 	_gl_set_client_states(flags);
 
+	// Configure secondary texture unit client states
+	// (TU1 for multi-texture/shadow map, TU2 for Z-bound gradient).
 	if (GLES1_CONFIG->max_texture_units > 1) {
 		glClientActiveTexture(GL_TEXTURE1);
 		if (bdata.pass_mode == PASS_MODE_SHADOW_PROJECTION) {
@@ -3175,6 +3180,7 @@ void RasterizerSceneGLES1::_batch_render_generic(RS::PrimitiveType p_primitive, 
 		GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_batch_render_generic: glEnableClientState GL_MATRIX_INDEX_ARRAY_OES");
 	}
 
+	// Resolve sub-allocation byte offsets within the pooled VBO/IBO (or client-side staging buffer).
 	const uint32_t vbo_byte_ofs = _render_item_state.curr_batch ? _render_item_state.curr_batch->vbo_byte_offset : 0;
 	const uint32_t ibo_byte_ofs = _render_item_state.curr_batch ? _render_item_state.curr_batch->ibo_byte_offset : 0;
 
@@ -3229,6 +3235,7 @@ void RasterizerSceneGLES1::_batch_render_generic(RS::PrimitiveType p_primitive, 
 		weight_ofs = offsetof(BatchType::BatchVertex3DTier4, weights);
 	}
 
+	// Bind interleaved attribute pointers for position, quantized SNORM8 normal, UV, and RGBA8 color.
 	glVertexPointer(3, GL_FLOAT, stride, base_ptr + pos_ofs);
 
 	if (is_depth_alpha) {
@@ -3241,6 +3248,9 @@ void RasterizerSceneGLES1::_batch_render_generic(RS::PrimitiveType p_primitive, 
 		}
 	}
 
+	// Route 3D vertex positions into TU1 and TU2 texture coordinates during shadow projection passes
+	// so the hardware texture matrices project world/local vertices into light clip-space.
+	// Otherwise, bind primary UVs to TU1 for multi-texture combine passes.
 	if (bdata.pass_mode == PASS_MODE_SHADOW_PROJECTION) {
 		if (GLES1_CONFIG->max_texture_units > 1) {
 			glClientActiveTexture(GL_TEXTURE1);
@@ -3264,6 +3274,7 @@ void RasterizerSceneGLES1::_batch_render_generic(RS::PrimitiveType p_primitive, 
 
 	GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_batch_render_generic: vertex attribute pointers");
 
+	// Issue draw call
 	if (gl_ibo != 0) {
 		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, gl_ibo);
 		glDrawElements(_gl_get_primitive_type(p_primitive), p_count, GL_UNSIGNED_SHORT, (void *)(uintptr_t)(ibo_byte_ofs + (p_offset * sizeof(uint16_t))));
@@ -3277,6 +3288,8 @@ void RasterizerSceneGLES1::_batch_render_generic(RS::PrimitiveType p_primitive, 
 		GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_batch_render_generic: glDrawElements Client");
 	}
 	_record_draw_call_info(scene_state.current_render_info);
+
+	// Clean up
 	_gl_cleanup_batch_draw_state(use_palette);
 }
 
@@ -3762,17 +3775,21 @@ void RasterizerSceneGLES1::_draw_surface_instances(const GeometryInstanceSurface
 	const RS::InstanceType base_type = p_surface->owner->data->base_type;
 	const bool is_multimesh = (base_type == RS::INSTANCE_MULTIMESH);
 
+	// Select the shadow shader variant during shadow map generation if available.
 	GLES1::SceneShaderData *active_shader = (
 		bdata.pass_mode == PASS_MODE_SHADOW &&
 		p_surface->shader_shadow
 	) ? p_surface->shader_shadow : p_surface->shader;
 
+	// Fast-path for single, non-MultiMesh geometry instances (RSII and SMSG).
+	// The surface's static VBO/IBO (or client arrays) and material are already bound by the caller.
 	if (!is_multimesh && p_instances == 1) {
 		GLMatrixScope proj_scope(GL_PROJECTION, bdata.pass_mode == PASS_MODE_MATERIAL);
 		Transform3D model_view;
 		Transform3D effective_world = p_base_transform;
 
 		if (bdata.pass_mode == PASS_MODE_MATERIAL) {
+			// Map [0, 1] UV2 coordinates (bound as vertex positions) to [-1, 1] NDC with sub-texel offset.
 			_gl_setup_uv2_projection(scene_state.current_uv_offset);
 		} else {
 			_resolve_surface_transforms(p_base_transform, p_view_matrix, active_shader, model_view, effective_world);
@@ -3780,6 +3797,9 @@ void RasterizerSceneGLES1::_draw_surface_instances(const GeometryInstanceSurface
 			GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_draw_surface_instances: glLoadMatrixf");
 		}
 
+		// During shadow projection pass, multiply onto the GL_TEXTURE matrices
+		// of TU1 (shadow map) and TU2 (Z-bound gradient) so local vertex
+		// positions project into light clip-space.
 		_gl_push_shadow_projection_matrices(effective_world);
 
 		if (p_has_indices) {
@@ -3798,6 +3818,9 @@ void RasterizerSceneGLES1::_draw_surface_instances(const GeometryInstanceSurface
 		return;
 	}
 
+	// Multi-instance / MultiMesh loop (SMSG and RSII).
+	// The mesh's static buffers remain bound once while we iterate over each instance,
+	// updating only the hardware modelview matrix and per-instance color before drawing.
 	MultiMeshInstanceData local_mm;
 	const MultiMeshInstanceData *mm = p_mm;
 	if (is_multimesh && !mm) {
@@ -3819,6 +3842,7 @@ void RasterizerSceneGLES1::_draw_surface_instances(const GeometryInstanceSurface
 			_gl_batch_decode_multimesh_instance(mm->data + (inst * mm->stride), mm->format, mm->uses_colors, mm->color_offset, xform, inst_color);
 		}
 
+		// Combine the node's base world transform with the per-instance local transform.
 		Transform3D final_xform = p_base_transform * xform;
 		Transform3D model_view;
 		Transform3D effective_world = final_xform;
@@ -3868,32 +3892,36 @@ void RasterizerSceneGLES1::_draw_item_ref_instances(const BatchType::BItemRef3D 
 	if (is_multimesh) {
 		mm = _get_multimesh_data(surf);
 		if (mm.data) {
+			// Offset
 			mm.data += (p_ref.instance_offset * mm.stride);
 		}
 	}
 	_draw_surface_instances(surf, p_ref.transform, p_view_matrix, instances, is_multimesh ? &mm : nullptr, p_has_indices, p_use_index_buffer, p_primitive_gl, p_drawn_count, p_index_type, p_index_client_ptr);
 }
 
-Transform3D RasterizerSceneGLES1::_compute_billboard_modelview(
-	const Transform3D &p_model_matrix,
-	const Transform3D &p_view_matrix,
-	const Transform3D &p_main_cam_inv_view_matrix,
-	const Projection &p_projection,
-	const GLES1::SceneShaderData *p_shader
-) const {
+Transform3D RasterizerSceneGLES1::_compute_billboard_modelview(const Transform3D &p_model_matrix, const Transform3D &p_view_matrix, const Transform3D &p_main_cam_inv_view_matrix, const Projection &p_projection, const GLES1::SceneShaderData *p_shader) const {
 	Transform3D model_view = p_view_matrix * p_model_matrix;
 	if (!p_shader) {
 		// We need the shader to tell us what it wants.
 		return model_view;
 	}
 
+	// Evaluate CPU-side billboard orientation to replicate Godot's spatial shader MODELVIEW_MATRIX
+	// construction before loading onto GL_MODELVIEW. Uses the main
+	// viewport camera's world transform rather than its inverse so billboards
+	// rendered during shadow passes still face the main camera and cast matching silhouettes.
 	if (
 		p_shader->billboard_mode == GLES1::SceneShaderData::BILLBOARD_ENABLED ||
 		p_shader->billboard_mode == GLES1::SceneShaderData::BILLBOARD_PARTICLES
 	) {
+		// Full spherical billboard: replace the instance's rotation/scale basis with the main
+		// camera's world basis while retaining the instance's world-space origin.
 		Transform3D mat_world(p_main_cam_inv_view_matrix.basis, p_model_matrix.origin);
 		model_view = p_view_matrix * mat_world;
 	} else if (p_shader->billboard_mode == GLES1::SceneShaderData::BILLBOARD_FIXED_Y) {
+		// Y-billboard: lock the local Y axis to world up (0, 1, 0) and construct an orthonormal
+		// XZ basis facing the main camera's forward/right vectors, guarding against degenerate cross products
+		// when the camera looks straight up or down.
 		Vector3 up(0.0f, 1.0f, 0.0f);
 		Vector3 cam_forward = p_main_cam_inv_view_matrix.basis.get_column(2);
 		Vector3 cam_right = p_main_cam_inv_view_matrix.basis.get_column(0);
@@ -3921,6 +3949,8 @@ Transform3D RasterizerSceneGLES1::_compute_billboard_modelview(
 		model_view = p_view_matrix * mat_world;
 	}
 
+	// Re-apply the original model matrix's per-axis scale if billboard_keep_scale is enabled,
+	// since replacing the basis with the orthonormal camera basis stripped the instance scale.
 	if (p_shader->billboard_mode != GLES1::SceneShaderData::BILLBOARD_DISABLED && p_shader->billboard_keep_scale) {
 		Vector3 scale(
 			p_model_matrix.basis.get_column(0).length(),
@@ -3930,6 +3960,8 @@ Transform3D RasterizerSceneGLES1::_compute_billboard_modelview(
 		model_view.basis.scale_local(scale);
 	}
 
+	// Fixed-size scaling: scale the local basis proportionally to camera distance (perspective)
+	// or frustum height (orthogonal) so the mesh maintains constant screen size.
 	if (p_shader->uses_fixed_size) {
 		float scale_factor = 1.0f;
 		if (p_projection.columns[3][3] != 0.0f) {
@@ -3945,23 +3977,22 @@ Transform3D RasterizerSceneGLES1::_compute_billboard_modelview(
 	return model_view;
 }
 
-void RasterizerSceneGLES1::_resolve_surface_transforms(
-	const Transform3D &p_model_matrix,
-	const Transform3D &p_view_matrix,
-	const GLES1::SceneShaderData *p_shader,
-	Transform3D &r_model_view,
-	Transform3D &r_world_matrix
-) const {
+void RasterizerSceneGLES1::_resolve_surface_transforms(const Transform3D &p_model_matrix, const Transform3D &p_view_matrix, const GLES1::SceneShaderData *p_shader, Transform3D &r_model_view, Transform3D &r_world_matrix) const {
+	// For standard meshes we just compute the eye-space modelview (V * M) and pass through
 	if (!p_shader || !p_shader->uses_billboard_or_fixed_size()) {
 		r_model_view = p_view_matrix * p_model_matrix;
 		r_world_matrix = p_model_matrix;
 		return;
 	}
 
+	// Unpack the main camera's world transform and active projection matrix.
 	Transform3D main_cam_inv_view;
 	_gl_reconstruct_view_matrix(main_cam_inv_view, scene_state.ubo.main_cam_inv_view_matrix);
 	Projection proj = _gl_array_to_projection(scene_state.ubo.projection_matrix);
 
+	// Compute the billboard/fixed-size adjusted eye-space modelview matrix (for GL_MODELVIEW)
+	// and back-solve the effective world matrix (V^-1 * MV) so projective shadow texture matrices
+	// match the billboarded geometry.
 	r_model_view = _compute_billboard_modelview(p_model_matrix, p_view_matrix, main_cam_inv_view, proj, p_shader);
 	r_world_matrix = p_view_matrix.affine_inverse() * r_model_view;
 }
