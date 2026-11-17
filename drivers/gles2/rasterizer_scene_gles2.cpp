@@ -2152,7 +2152,7 @@ _FORCE_INLINE_ bool RasterizerSceneGLES2::_batch_buffer_orphan_and_upload_3d(uns
 	return true;
 }
 
-void RasterizerSceneGLES2::_batch_upload_batch_multimesh_palette_3d(const BatchType::Batch3D &p_batch, RID p_shader_version, SceneShaderGLES2::ShaderVariant p_variant, uint64_t p_spec_constants) {
+void RasterizerSceneGLES2::_batch_upload_multimesh_palette_3d(const BatchType::Batch3D &p_batch, RID p_shader_version, SceneShaderGLES2::ShaderVariant p_variant, uint64_t p_spec_constants) {
 	if (p_batch.first_item_ref >= (uint32_t)bdata.item_refs.size()) {
 		return;
 	}
@@ -2305,7 +2305,7 @@ void RasterizerSceneGLES2::_batch_bind_material(GLES2::SceneMaterialData *p_mate
 	GLES2::MaterialStorage::get_singleton()->shaders.scene_shader.version_set_uniform(SceneShaderGLES2::WORLD_TRANSFORM, p_world_transform, p_material_data->shader_data->version, variant, spec_constants);
 
 	if (_render_item_state.curr_batch && _batch_util_promote_to_instancing(bdata.fvf, _render_item_state.curr_batch->flags)) {
-		_batch_upload_batch_multimesh_palette_3d(*_render_item_state.curr_batch, p_material_data->shader_data->version, variant, spec_constants);
+		_batch_upload_multimesh_palette_3d(*_render_item_state.curr_batch, p_material_data->shader_data->version, variant, spec_constants);
 	}
 }
 
@@ -4627,7 +4627,7 @@ void RasterizerSceneGLES2::_render_additive_light_type_pass(const LocalVector<ui
 	if constexpr (p_is_batch) {
 		material_storage->shaders.scene_shader.version_set_uniform(SceneShaderGLES2::WORLD_TRANSFORM, p_world_xform, shader->version, p_additive_variant, pass_spec);
 		if (_render_item_state.curr_batch && _batch_util_promote_to_instancing(bdata.fvf, _render_item_state.curr_batch->flags)) {
-			_batch_upload_batch_multimesh_palette_3d(*_render_item_state.curr_batch, shader->version, p_additive_variant, pass_spec);
+			_batch_upload_multimesh_palette_3d(*_render_item_state.curr_batch, shader->version, p_additive_variant, pass_spec);
 		}
 	}
 

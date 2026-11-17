@@ -1193,12 +1193,13 @@ private:
 	uint32_t _batch_get_surface_flags(const GeometryInstanceSurface *p_surface) const;
 	BatchType::BatchColor _batch_get_surface_modulate(const GeometryInstanceSurface *p_surface) const;
 	_FORCE_INLINE_ bool _batch_requires_palette_fvf() const {
-		// Not required for GLES2
+		// Not required for GLES2, and done in scene shader
+		// via uniform palettes
 		return false;
 	}
 	bool _batch_can_use_single_mesh_fallback(const GeometryInstanceSurface *p_surface) const;
 	_FORCE_INLINE_ bool _batch_buffer_orphan_and_upload_3d(unsigned int p_buffer_size_bytes, unsigned int p_offset_bytes, unsigned int p_data_size_bytes, const void *p_data, GLenum p_target, GLenum p_usage, bool p_optional_orphan) const;
-	_FORCE_INLINE_ void _batch_upload_batch_multimesh_palette_3d(const BatchType::Batch3D &p_batch, RID p_shader_version, SceneShaderGLES2::ShaderVariant p_variant, uint64_t p_spec_constants);
+	_FORCE_INLINE_ void _batch_upload_multimesh_palette_3d(const BatchType::Batch3D &p_batch, RID p_shader_version, SceneShaderGLES2::ShaderVariant p_variant, uint64_t p_spec_constants);
 	GLES2::SceneMaterialData *_batch_get_material_data(const GeometryInstanceSurface *p_surface);
 
 	void _batch_prepare_surface_world_cache(const GeometryInstanceSurface *p_surface, const BatchType::BItemRef3D &p_ref, BatchType::TransformMode3D p_effective_mode, bool p_need_tangents);
@@ -1223,6 +1224,8 @@ private:
 
 	void _render_static_mesh_group_additive_light_passes(BatchType::Batch3D &p_batch, GLES2::SceneMaterialData *p_material_data, GLES2::SceneShaderData *p_shader, uint64_t p_spec_constants, bool p_promote_to_instancing, bool p_use_index_buffer, GLenum p_primitive_gl, int p_drawn_count, GLenum p_index_type);
 	void _render_single_item_immediate(const GeometryInstanceSurface *p_surface);
+
+	/* OTHER */
 
 	void _bind_surface_static_arrays_and_ibo(const GeometryInstanceSurface *p_surface, uint64_t p_input_mask, bool p_allow_deformed_instance, bool &r_use_index_buffer, int &r_drawn_count, GLenum &r_index_type);
 	void _draw_surface_instances(const GeometryInstanceSurface *p_surface, const Transform3D &p_base_transform, int p_instances, const MultiMeshInstanceData *p_mm, RID p_shader_version, SceneShaderGLES2::ShaderVariant p_variant, uint64_t p_spec_constants, bool p_set_instancing_color, bool p_use_index_buffer, GLenum p_primitive_gl, int p_drawn_count, GLenum p_index_type);
