@@ -4451,156 +4451,184 @@ void RasterizerSceneGLES1::_draw_editor_grid(const RenderDataGLES1 *p_render_dat
 
 	// Setup the grid. The actual drawing is done after.
 
-	float grid_size = 100.0f;
-	Color grid_color = Color(0.5f, 0.5f, 0.5f, 0.5f);
-	bool found_grid = false;
-
-	for (uint32_t i = 0; i < render_list[RENDER_LIST_EDITOR_GRID].elements.size(); i++) {
-		GeometryInstanceSurface *surf = render_list[RENDER_LIST_EDITOR_GRID].elements[i];
-		if (!surf->material) {
-			continue;
-		}
-
-		const RID mat_rid = _editor_resolve_surface_material(surf);
-		Variant gs = GLES1::MaterialStorage::get_singleton()->material_get_param(mat_rid, "grid_size");
-		if (gs.get_type() == Variant::FLOAT) {
-			grid_size = gs;
-			found_grid = true;
-			if (surf->color_cache.size() > 0) {
-				grid_color = surf->color_cache[0];
-			}
-			break; // We only need the parameters, not to draw the actual mesh.
-		}
-	}
-
-	if (!found_grid) {
-		return;
-	}
-
-	Vector3 cam_pos = p_render_data->cam_transform.origin;
-	Vector2 cam_plane_pos = Vector2(cam_pos.x, cam_pos.z);
-
-	int min_x = Math::floor(cam_plane_pos.x - grid_size);
-	int max_x = Math::ceil(cam_plane_pos.x + grid_size);
-	int min_z = Math::floor(cam_plane_pos.y - grid_size);
-	int max_z = Math::ceil(cam_plane_pos.y + grid_size);
-
-	// Tessellate to bake distance fade.
-	float step = MAX(1.0f, grid_size / 20.0f);
-
-	// Calculate maximum possible vertices
-	// For each axis, we calculate the total lines and segments per line.
-	int num_lines_x = (max_x - min_x + 1);
-	int num_segs_z = Math::ceil((max_z - min_z) / step) + 1; // +1 to ensure safety bounds
-
-	int num_lines_z = (max_z - min_z + 1);
-	int num_segs_x = Math::ceil((max_x - min_x) / step) + 1;
-
-	// Each segment has 2 vertices
-	// resulting in (lines * segments * 2) vertices per axis.
-	int max_verts = (num_lines_x * num_segs_z * 2) + (num_lines_z * num_segs_x * 2);
-	max_verts = MIN(max_verts, 16384);
+	const Vector3 cam_pos = p_render_data->cam_transform.origin;
+	const Basis cam_basis = p_render_data->cam_transform.basis;
+	const Basis inv_cam_basis = p_render_data->inv_cam_transform.basis;
+	const Vector3 ortho_dir = cam_basis.xform(Vector3(0.0f, 0.0f, -1.0f));
 
 	LocalVector<float> grid_verts;
 	LocalVector<uint8_t> grid_colours;
 
-	grid_verts.resize(max_verts * 3);
-	grid_colours.resize(max_verts * 4);
+	constexpr int SUBDIV_SEGMENTS = 16;
 
-	int v_idx = 0;
-	int c_idx = 0;
+	for (uint32_t i = 0; i < render_list[RENDER_LIST_EDITOR_GRID].elements.size(); i++) {
+		GeometryInstanceSurface *surf = render_list[RENDER_LIST_EDITOR_GRID].elements[i];
+		if (!surf || !surf->owner || surf->primitive != RS::PRIMITIVE_LINES || surf->vertex_cache.is_empty()) {
+			continue;
+		}
 
-	uint8_t r = static_cast<uint8_t>(CLAMP(grid_color.r * 255.0f, 0.0f, 255.0f));
-	uint8_t g = static_cast<uint8_t>(CLAMP(grid_color.g * 255.0f, 0.0f, 255.0f));
-	uint8_t b = static_cast<uint8_t>(CLAMP(grid_color.b * 255.0f, 0.0f, 255.0f));
-	float base_a = grid_color.a * 255.0f;
+		const RID mat_rid = _editor_resolve_surface_material(surf);
+		if (!mat_rid.is_valid()) {
+			continue;
+		}
 
-	// Draw X and Z grid axies
-	for (int axis = 0; axis < 2; axis++) {
-		const bool is_x_fixed = (axis == 0);
-		const int outer_min = is_x_fixed ? min_x : min_z;
-		const int outer_max = is_x_fixed ? max_x : max_z;
-		const int inner_min = is_x_fixed ? min_z : min_x;
-		const int inner_max = is_x_fixed ? max_z : max_x;
+		// Filter out non-grid lines
+		Variant gs = GLES1::MaterialStorage::get_singleton()->material_get_param(mat_rid, "grid_size");
+		if (gs.get_type() != Variant::FLOAT) {
+			continue;
+		}
 
-		for (int fixed_coord = outer_min; fixed_coord <= outer_max; fixed_coord++) {
-			if (fixed_coord == 0) {
-				continue; // Skip origin line
+		const float grid_size = gs;
+		if (grid_size <= 0.0f) {
+			continue;
+		}
+
+		bool orthogonal = p_render_data->cam_orthogonal;
+		Variant ortho_var = GLES1::MaterialStorage::get_singleton()->material_get_param(mat_rid, "orthogonal");
+		if (ortho_var.get_type() == Variant::BOOL) {
+			orthogonal = ortho_var;
+		}
+
+		const uint32_t v_count = surf->vertex_cache.size();
+		const Vector3 *pos_ptr = surf->vertex_cache.ptr();
+		const Vector3 *norm_ptr = surf->normal_cache.size() == v_count ? surf->normal_cache.ptr() : nullptr;
+		const Color *col_ptr = surf->color_cache.size() == v_count ? surf->color_cache.ptr() : nullptr;
+		const Transform3D &model_xform = surf->owner->transform;
+
+		const uint32_t idx_count = surf->index_cache.size();
+		const int32_t *idx_ptr = idx_count > 0 ? surf->index_cache.ptr() : nullptr;
+		const uint32_t line_count = (idx_count > 0 ? idx_count : v_count) / 2;
+
+		// Iterate over each line segment in the editor's grid mesh (covers X, Y, and Z grid planes)
+		for (uint32_t l = 0; l < line_count; l++) {
+			const uint32_t i0 = idx_ptr ? static_cast<uint32_t>(idx_ptr[l * 2 + 0]) : (l * 2 + 0);
+			const uint32_t i1 = idx_ptr ? static_cast<uint32_t>(idx_ptr[l * 2 + 1]) : (l * 2 + 1);
+			if (i0 >= v_count || i1 >= v_count) {
+				continue;
 			}
 
-			for (float var_coord = inner_min; var_coord < inner_max; var_coord += step) {
-				const float v1 = var_coord;
-				const float v2 = MIN(var_coord + step, static_cast<float>(inner_max));
+			const Vector3 p0 = model_xform.xform(pos_ptr[i0]);
+			const Vector3 p1 = model_xform.xform(pos_ptr[i1]);
 
-				const float px1 = is_x_fixed ? static_cast<float>(fixed_coord) : v1;
-				const float pz1 = is_x_fixed ? v1 : static_cast<float>(fixed_coord);
-				const float px2 = is_x_fixed ? static_cast<float>(fixed_coord) : v2;
-				const float pz2 = is_x_fixed ? v2 : static_cast<float>(fixed_coord);
+			const Vector3 n0 = norm_ptr ? model_xform.basis.xform(norm_ptr[i0]).normalized() : Vector3(0.0f, 1.0f, 0.0f);
+			const Vector3 n1 = norm_ptr ? model_xform.basis.xform(norm_ptr[i1]).normalized() : Vector3(0.0f, 1.0f, 0.0f);
 
-				// Calculate radial fade-out distance from the camera projection
-				const float d1 = Vector2(px1, pz1).distance_to(cam_plane_pos);
-				float fade1 = Math::smoothstep(0.02f, 0.3f, 1.0f - (d1 / grid_size));
+			Color c0 = col_ptr ? col_ptr[i0] : Color(0.5f, 0.5f, 0.5f, 0.5f);
+			Color c1 = col_ptr ? col_ptr[i1] : Color(0.5f, 0.5f, 0.5f, 0.5f);
 
-				const float d2 = Vector2(px2, pz2).distance_to(cam_plane_pos);
-				float fade2 = Math::smoothstep(0.02f, 0.3f, 1.0f - (d2 / grid_size));
+			if (!GLES1_CONFIG->srgb_framebuffer_supported) {
+				c0 = c0.srgb_to_linear();
+				c1 = c1.srgb_to_linear();
+			}
 
-				if (!p_render_data->cam_orthogonal) {
-					const Vector3 dir1 = (cam_pos - Vector3(px1, 0.0f, pz1)).normalized();
-					fade1 *= Math::smoothstep(0.05f, 0.2f, Math::abs(dir1.y));
-					const Vector3 dir2 = (cam_pos - Vector3(px2, 0.0f, pz2)).normalized();
-					fade2 *= Math::smoothstep(0.05f, 0.2f, Math::abs(dir2.y));
+			for (int s = 0; s < SUBDIV_SEGMENTS; s++) {
+				const float t0 = static_cast<float>(s) / static_cast<float>(SUBDIV_SEGMENTS);
+				const float t1 = static_cast<float>(s + 1) / static_cast<float>(SUBDIV_SEGMENTS);
+
+				const Vector3 wp0 = p0.lerp(p1, t0);
+				const Vector3 wp1 = p0.lerp(p1, t1);
+
+				const Vector3 wn0 = n0.lerp(n1, t0).normalized();
+				const Vector3 wn1 = n0.lerp(n1, t1).normalized();
+
+				// Replicate the fragment shader's world normal and camera world calculation
+				const Vector3 view_n0 = inv_cam_basis.xform(wn0).normalized();
+				const Vector3 view_n1 = inv_cam_basis.xform(wn1).normalized();
+
+				const Vector3 world_n0 = cam_basis.xform(view_n0);
+				const Vector3 world_n1 = cam_basis.xform(view_n1);
+
+				const Vector3 plane_pos0 = cam_pos * (Vector3(1.0f, 1.0f, 1.0f) - world_n0);
+				const Vector3 plane_pos1 = cam_pos * (Vector3(1.0f, 1.0f, 1.0f) - world_n1);
+
+				// Calculate radial fade-out distance from the camera projection on the grid plane
+				const float dist_fade0 = Math::smoothstep(0.02f, 0.3f, 1.0f - (wp0.distance_to(plane_pos0) / grid_size));
+				const float dist_fade1 = Math::smoothstep(0.02f, 0.3f, 1.0f - (wp1.distance_to(plane_pos1) / grid_size));
+
+				if (dist_fade0 <= 0.0f && dist_fade1 <= 0.0f) {
+					continue;
 				}
 
-				// Push only visible geometry to the stack buffers
-				if (fade1 > 0.0f || fade2 > 0.0f) {
-					if ((v_idx / 3) + 2 > max_verts) {
-						break; // Prevent out-of-bounds writes
-					}
+				// Calculate grazing angle fade.
+				const Vector3 dir0 = orthogonal ? ortho_dir : (cam_pos - wp0).normalized();
+				const Vector3 dir1 = orthogonal ? ortho_dir : (cam_pos - wp1).normalized();
 
-					grid_verts[v_idx++] = px1;
-					grid_verts[v_idx++] = 0.0f;
-					grid_verts[v_idx++] = pz1;
-					grid_verts[v_idx++] = px2;
-					grid_verts[v_idx++] = 0.0f;
-					grid_verts[v_idx++] = pz2;
+				const float angle_fade0 = Math::smoothstep(0.05f, 0.2f, Math::abs(dir0.dot(wn0)));
+				const float angle_fade1 = Math::smoothstep(0.05f, 0.2f, Math::abs(dir1.dot(wn1)));
 
-					grid_colours[c_idx++] = r;
-					grid_colours[c_idx++] = g;
-					grid_colours[c_idx++] = b;
-					grid_colours[c_idx++] = static_cast<uint8_t>(CLAMP(base_a * fade1, 0.0f, 255.0f));
-					grid_colours[c_idx++] = r;
-					grid_colours[c_idx++] = g;
-					grid_colours[c_idx++] = b;
-					grid_colours[c_idx++] = static_cast<uint8_t>(CLAMP(base_a * fade2, 0.0f, 255.0f));
+				const Color sc0 = c0.lerp(c1, t0);
+				const Color sc1 = c0.lerp(c1, t1);
+
+				const float a0 = sc0.a * dist_fade0 * angle_fade0;
+				const float a1 = sc1.a * dist_fade1 * angle_fade1;
+
+				// Push only visible geometry to the buffers
+				if (a0 <= 0.0f && a1 <= 0.0f) {
+					continue;
 				}
+
+				const uint32_t v_base = grid_verts.size();
+				grid_verts.resize(v_base + 6);
+				grid_verts[v_base + 0] = wp0.x;
+				grid_verts[v_base + 1] = wp0.y;
+				grid_verts[v_base + 2] = wp0.z;
+				grid_verts[v_base + 3] = wp1.x;
+				grid_verts[v_base + 4] = wp1.y;
+				grid_verts[v_base + 5] = wp1.z;
+
+				const uint32_t c_base = grid_colours.size();
+				grid_colours.resize(c_base + 8);
+				grid_colours[c_base + 0] = static_cast<uint8_t>(CLAMP(sc0.r * 255.0f, 0.0f, 255.0f));
+				grid_colours[c_base + 1] = static_cast<uint8_t>(CLAMP(sc0.g * 255.0f, 0.0f, 255.0f));
+				grid_colours[c_base + 2] = static_cast<uint8_t>(CLAMP(sc0.b * 255.0f, 0.0f, 255.0f));
+				grid_colours[c_base + 3] = static_cast<uint8_t>(CLAMP(a0 * 255.0f, 0.0f, 255.0f));
+				grid_colours[c_base + 4] = static_cast<uint8_t>(CLAMP(sc1.r * 255.0f, 0.0f, 255.0f));
+				grid_colours[c_base + 5] = static_cast<uint8_t>(CLAMP(sc1.g * 255.0f, 0.0f, 255.0f));
+				grid_colours[c_base + 6] = static_cast<uint8_t>(CLAMP(sc1.b * 255.0f, 0.0f, 255.0f));
+				grid_colours[c_base + 7] = static_cast<uint8_t>(CLAMP(a1 * 255.0f, 0.0f, 255.0f));
 			}
 		}
+	}
+
+	if (grid_verts.is_empty()) {
+		return;
 	}
 
 	// Draw the grid
 	_gl_setup_editor_state(p_render_data, p_flip_y);
 
-	glEnable(GL_DEPTH_TEST);
-	glDepthMask(GL_FALSE);
-	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+	scene_state.enable_gl_depth_test(true);
+	scene_state.enable_gl_depth_draw(false);
+	scene_state.enable_gl_blend(true);
+	if (GLES1_CONFIG->support_blend_subtract) {
+		glBlendEquationOES(GL_FUNC_ADD_OES);
+	}
+	if (GLES1_CONFIG->support_blend_func_separate) {
+		glBlendFuncSeparateOES(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_ZERO, GL_ONE);
+	} else {
+		glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+	}
 	glLineWidth(1.0f);
+	GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_draw_editor_grid: state setup");
 
 	if (GLES1_CONFIG->support_vbo) {
 		glBindBuffer(GL_ARRAY_BUFFER, 0);
 		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+		GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_draw_editor_grid: unbind VBOs");
 	}
 	_gl_set_client_states(GL_CLIENT_STATE_VERTEX | GL_CLIENT_STATE_COLOR);
 
-	if (v_idx > 0) {
-		glVertexPointer(3, GL_FLOAT, 0, grid_verts.ptr());
-		glColorPointer(4, GL_UNSIGNED_BYTE, 0, grid_colours.ptr());
+	glVertexPointer(3, GL_FLOAT, 0, grid_verts.ptr());
+	glColorPointer(4, GL_UNSIGNED_BYTE, 0, grid_colours.ptr());
+	GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_draw_editor_grid: attribute pointers");
 
-		glDrawArrays(GL_LINES, 0, v_idx / 3);
-	}
+	glDrawArrays(GL_LINES, 0, grid_verts.size() / 3);
+	GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_draw_editor_grid: glDrawArrays");
 
+	// Reset states
 	_gl_set_client_states(0);
-	glDisable(GL_BLEND);
-	glDepthMask(GL_TRUE);
+	scene_state.enable_gl_blend(false);
+	scene_state.enable_gl_depth_draw(true);
 
 	_gl_teardown_editor_state();
 	GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_draw_editor_grid: cleanup");
