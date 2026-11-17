@@ -91,6 +91,10 @@ namespace GLES2 {
 #define GL_RASTERIZER_DISCARD_EXT 0x8C89
 #endif
 
+#ifndef GL_GPU_DISJOINT_EXT
+#define GL_GPU_DISJOINT_EXT 0x8FBB
+#endif
+
 // =========================================
 // Functions
 // =========================================

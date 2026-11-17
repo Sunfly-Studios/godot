@@ -31,6 +31,17 @@
 #define POLYFILL_GLES1_IMPL
 #include "polyfill_gles1.h"
 
+#if defined(ANDROID_ENABLED) || defined(IOS_ENABLED)
+// In mobile devices only the 16-bit (4xOES) API is available.
+static inline GLfixed float_to_fixed16(GLfloat p_val) {
+	return (GLfixed)(p_val * 65536.0f);
+}
+
+static void GL_APIENTRY mobile_glMultiTexCoord4f(GLenum target, GLfloat s, GLfloat t, GLfloat r, GLfloat q) {
+	glMultiTexCoord4xOES(target, float_to_fixed16(s), float_to_fixed16(t), float_to_fixed16(r), float_to_fixed16(q));
+}
+#endif
+
 namespace GLES1 {
 	// Define the static pointers
 
@@ -105,7 +116,7 @@ Polyfill::Polyfill() {
 	// Multitexture (Core in mobile)
 	activeTexture = glActiveTexture;
 	clientActiveTexture = glClientActiveTexture;
-	multiTexCoord4f = glMultiTexCoord4f;
+	multiTexCoord4f = mobile_glMultiTexCoord4f;
 	compressedTexImage2D = glCompressedTexImage2D;
 #else
 	// ===============================

@@ -34,14 +34,16 @@
 // This polyfill handles function resolution
 // between Desktop, OES, and EXT contexts transparently
 // in the background. Since one, OR the other, OR the other
-// may be available at any given time.
-//
-// !!! NOTE !!!
-// When using a new GLES1 function that isn't
-// here, ADD IT HERE AND ROUTE IT. Otherwise it may crash
-// with nullptr exceptions.
+// may be available in any given platform.
 
 #include "platform_gl.h"
+
+// Define some missing functions in Android / iOS
+#if defined(ANDROID_ENABLED) || defined(IOS_ENABLED)
+#ifndef PFNGLMULTITEXCOORD4FPROC
+typedef void(GL_APIENTRYP PFNGLMULTITEXCOORD4FPROC)(GLenum target, GLfloat s, GLfloat t, GLfloat r, GLfloat q);
+#endif
+#endif
 
 namespace GLES1 {
 	struct Polyfill {
@@ -278,8 +280,6 @@ namespace GLES1 {
 	do {                                                          \
 		if (likely(GLES1::Polyfill::multiTexCoord4f))             \
 			GLES1::Polyfill::multiTexCoord4f(target, s, t, r, q); \
-		else if ((target) == GL_TEXTURE0)                         \
-			glTexCoord4f(s, t, r, q);                             \
 	} while (0)
 
 #undef glCompressedTexImage2D

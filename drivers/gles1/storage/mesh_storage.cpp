@@ -982,7 +982,7 @@ void MeshStorage::mesh_surface_bind_arrays_gles1(void *p_surface, uint64_t p_inp
 		);
 	} else {
 		glDisableClientState(GL_VERTEX_ARRAY);
-		glColor3f(0.0f, 0.0f, 0.0f);
+		glColor4f(0.0f, 0.0f, 0.0f, 1.0f);
 	}
 
 	// Normal
@@ -1162,7 +1162,7 @@ void MeshStorage::mesh_instance_surface_bind_arrays_gles1(RID p_mesh_instance, u
 		);
 	} else {
 		glDisableClientState(GL_VERTEX_ARRAY);
-		glColor3f(0.0f, 0.0f, 0.0f);
+		glColor4f(0.0f, 0.0f, 0.0f, 1.0f);
 	}
 
 	// Normal
@@ -1200,7 +1200,7 @@ void MeshStorage::mesh_instance_surface_bind_arrays_gles1(RID p_mesh_instance, u
 		);
 	} else {
 		glDisableClientState(GL_COLOR_ARRAY);
-		glColor3f(1.0f, 1.0f, 1.0f);
+		glColor4f(1.0f, 1.0f, 1.0f, 1.0f);
 	}
 
 	if (GLES1_CONFIG->max_texture_units > 1) {
