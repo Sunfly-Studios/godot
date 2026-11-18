@@ -1236,7 +1236,7 @@ private:
 	void _batch_render_single_mesh_fallback(RS::PrimitiveType p_primitive, uint32_t p_offset, uint32_t p_count, bool p_has_color);
 
 	// Lane 4: SMSG
-	void _batch_render_static_mesh_group(GLES2::SceneMaterialData *p_material_data, RS::PrimitiveType p_primitive, BatchType::Batch3D &p_batch, bool p_transparent);
+	void _batch_render_same_mesh_group(GLES2::SceneMaterialData *p_material_data, RS::PrimitiveType p_primitive, BatchType::Batch3D &p_batch, bool p_transparent);
 
 	// Lane 3: RSII
 	void _render_single_item_immediate(const GeometryInstanceSurface *p_surface);

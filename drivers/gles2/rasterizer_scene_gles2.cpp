@@ -2681,8 +2681,8 @@ void RasterizerSceneGLES2::_batch_render_items(GLES2::SceneMaterialData *p_mater
 		return;
 	}
 
-	if (p_batch.fvf == BatcherEnums::FVF_STATIC_MESH_LOOP) {
-		_batch_render_static_mesh_group(p_material_data, p_primitive, p_batch, p_transparent);
+	if (p_batch.fvf == BatcherEnums::FVF_SAME_MESH_LOOP) {
+		_batch_render_same_mesh_group(p_material_data, p_primitive, p_batch, p_transparent);
 		return;
 	}
 
@@ -2771,8 +2771,8 @@ void RasterizerSceneGLES2::_batch_render_single_mesh_fallback(RS::PrimitiveType 
 	}
 }
 
-void RasterizerSceneGLES2::_batch_render_static_mesh_group(GLES2::SceneMaterialData *p_material_data, RS::PrimitiveType p_primitive, BatchType::Batch3D &p_batch, bool p_transparent) {
-	// Executes the static-mesh state grouping lane (FVF_STATIC_MESH_LOOP) for repeated
+void RasterizerSceneGLES2::_batch_render_same_mesh_group(GLES2::SceneMaterialData *p_material_data, RS::PrimitiveType p_primitive, BatchType::Batch3D &p_batch, bool p_transparent) {
+	// Executes the static-mesh state grouping lane (FVF_SAME_MESH_LOOP) for repeated
 	// heavy meshes (> 1024 vertices) and MultiMesh instances. Binds the shader, material
 	// uniforms, and the mesh's native static VBO, ABO, and IBO once for the entire
 	// contiguous run, then loops over each reference/instance updating only the
@@ -2810,7 +2810,7 @@ void RasterizerSceneGLES2::_batch_render_static_mesh_group(GLES2::SceneMaterialD
 
 	// Sterilise instancing attribute slots (12-15)
 	_gl_reset_instancing_attributes();
-	GL_CHECK_ERROR("GLES2::RasterizerSceneGLES2::_batch_render_static_mesh_group: setup instancing defaults");
+	GL_CHECK_ERROR("GLES2::RasterizerSceneGLES2::_batch_render_same_mesh_group: setup instancing defaults");
 
 	const GLenum primitive_gl = _gl_get_primitive_type(p_primitive);
 
@@ -2823,7 +2823,7 @@ void RasterizerSceneGLES2::_batch_render_static_mesh_group(GLES2::SceneMaterialD
 			_draw_item_ref_instances(ref, shader->version, variant, spec_constants, promote_to_instancing, use_index_buffer, primitive_gl, drawn_count, index_type);
 		}
 	}
-	GL_CHECK_ERROR("GLES2::RasterizerSceneGLES2::_batch_render_static_mesh_group: glDrawElements BASE_PASS");
+	GL_CHECK_ERROR("GLES2::RasterizerSceneGLES2::_batch_render_same_mesh_group: glDrawElements BASE_PASS");
 
 	// =====================================
 	// Additive passes (omni & spot lights)
@@ -2851,7 +2851,7 @@ void RasterizerSceneGLES2::_batch_render_static_mesh_group(GLES2::SceneMaterialD
 		glVertexAttrib4f(15, 1.0f, 1.0f, 1.0f, 1.0f);
 	}
 	glVertexAttrib4f(RS::ARRAY_COLOR, 1.0f, 1.0f, 1.0f, 1.0f);
-	GL_CHECK_ERROR("GLES2::RasterizerSceneGLES2::_batch_render_static_mesh_group: state cleanup");
+	GL_CHECK_ERROR("GLES2::RasterizerSceneGLES2::_batch_render_same_mesh_group: state cleanup");
 
 	_invalidate_state_if_additive_mutated();
 }

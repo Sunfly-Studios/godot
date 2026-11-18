@@ -712,13 +712,13 @@ void RasterizerSceneBatcherCommon<T_API>::join_and_flush_sorted_items(bool p_tra
 			get_this()->_batch_can_use_single_mesh_fallback(first_surface)
 		) {
 			// Single non-instanced static mesh uses FVF_UNBATCHED;
-			// multi-item static mesh runs and all MultiMesh items use FVF_STATIC_MESH_LOOP.
+			// multi-item static mesh runs and all MultiMesh items use FVF_SAME_MESH_LOOP.
 			if (joined.num_item_refs == 1 && !(effective_flags & BatcherEnums::BTF_3D_USES_INSTANCING)) {
 				batch->fvf = BatcherEnums::FVF_UNBATCHED;
 				batch->num_verts = joined.total_verts;
 				batch->num_indices = joined.total_indices;
 			} else {
-				batch->fvf = BatcherEnums::FVF_STATIC_MESH_LOOP;
+				batch->fvf = BatcherEnums::FVF_SAME_MESH_LOOP;
 				batch->num_verts = first_ref.base_verts;
 				batch->num_indices = first_ref.base_indices;
 			}
@@ -949,7 +949,7 @@ void RasterizerSceneBatcherCommon<T_API>::flush_render_batches(typename T_API::M
 	}
 
 	// Intercept batches flagged for the single-mesh direct draw fallback or static mesh loop lane.
-	if (p_batch.fvf == BatcherEnums::FVF_UNBATCHED || p_batch.fvf == BatcherEnums::FVF_STATIC_MESH_LOOP) {
+	if (p_batch.fvf == BatcherEnums::FVF_UNBATCHED || p_batch.fvf == BatcherEnums::FVF_SAME_MESH_LOOP) {
 		bdata.fvf = p_batch.fvf;
 		get_this()->_batch_render_items(p_material_data, p_primitive, p_batch, p_transparent);
 
@@ -1068,7 +1068,7 @@ void RasterizerSceneBatcherCommon<T_API>::_calculate_draw_call_cost_or_flush(Bat
 	if (
 		p_was_cached_vbo ||
 		p_batch.fvf == BatcherEnums::FVF_UNBATCHED ||
-		p_batch.fvf == BatcherEnums::FVF_STATIC_MESH_LOOP
+		p_batch.fvf == BatcherEnums::FVF_SAME_MESH_LOOP
 	) {
 		// Cached VBO slots and static mesh draws do not upload dynamic staging data.
 		return;

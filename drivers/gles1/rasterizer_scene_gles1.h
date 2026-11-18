@@ -802,7 +802,7 @@ private:
 		const uint32_t batch_flags = _render_item_state.curr_batch ? _render_item_state.curr_batch->flags : 0;
 		const bool unbatched_uses_color = (
 			!is_immediate_draw &&
-			(bdata.fvf == BatcherEnums::FVF_UNBATCHED || bdata.fvf == BatcherEnums::FVF_STATIC_MESH_LOOP) &&
+			(bdata.fvf == BatcherEnums::FVF_UNBATCHED || bdata.fvf == BatcherEnums::FVF_SAME_MESH_LOOP) &&
 			(batch_flags & BatcherEnums::BTF_3D_USES_COLORS) != 0 &&
 			(
 				(p_material_data && p_material_data->shader_data && p_material_data->shader_data->uses_color) ||
@@ -1706,7 +1706,7 @@ private:
 	void _batch_render_single_mesh_fallback(RS::PrimitiveType p_primitive, uint32_t p_offset, uint32_t p_count, bool p_has_color);
 
 	// Lane 4: SMSG
-	void _batch_render_static_mesh_group(GLES1::SceneMaterialData *p_material_data, RS::PrimitiveType p_primitive, BatchType::Batch3D &p_batch, bool p_transparent);
+	void _batch_render_same_mesh_group(GLES1::SceneMaterialData *p_material_data, RS::PrimitiveType p_primitive, BatchType::Batch3D &p_batch, bool p_transparent);
 
 	// Lane 3: RSII
 	void _render_single_item_immediate(const GeometryInstanceSurface *p_surface);

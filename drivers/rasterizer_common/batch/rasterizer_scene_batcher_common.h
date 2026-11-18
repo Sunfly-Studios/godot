@@ -75,12 +75,12 @@
  *          |    Action: Skips CPU vertex transformation and dynamic VBO staging. Binds the mesh's native static
  *          |            VBO/IBO directly via `_batch_render_single_mesh_fallback` and issues 1 hardware-transformed draw.
  *          |
- *          +--> [ LANE 4: SMSG (Static Mesh State Grouping - `FVF_STATIC_MESH_LOOP`) ]
+ *          +--> [ LANE 4: SMSG (Same Mesh State Grouping - `FVF_SAME_MESH_LOOP`) ]
  *               Target: Repeated heavy static meshes (`base_verts > settings_dynamic_vertex_limit`, `num_item_refs > 1`)
  *                       and all eligible `MultiMesh` instances regardless of vertex count. Acts as the shock absorber
  *                       for Lane 3 (`RSII`) and eliminates CPU vertex expansion for `MultiMesh`.
  *               Action: Binds the material, shader, and the mesh's native static VBO/ABO/IBO once for the entire
- *                       contiguous run in `_batch_render_static_mesh_group`, loops over all joined `BItemRef3D`
+ *                       contiguous run in `_batch_render_same_mesh_group`, loops over all joined `BItemRef3D`
  *                       and `MultiMesh` instances updating only the hardware transform and instance color, and
  *                       unbinds once at the end of the run.
  *
@@ -735,7 +735,7 @@ protected:
 	_FORCE_INLINE_ void _prepare_unit_vertices_for_fvf(BatcherEnums::FVF p_fvf) {
 		switch (p_fvf) {
 			case BatcherEnums::FVF_UNBATCHED:
-			case BatcherEnums::FVF_STATIC_MESH_LOOP:
+			case BatcherEnums::FVF_SAME_MESH_LOOP:
 				break;
 			case BatcherEnums::FVF_3D_DEPTH_MINIMAL:
 			case BatcherEnums::FVF_DEPTH_ONLY:

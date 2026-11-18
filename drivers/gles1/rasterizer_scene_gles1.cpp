@@ -3020,8 +3020,8 @@ void RasterizerSceneGLES1::_batch_render_items(GLES1::SceneMaterialData *p_mater
 		return;
 	}
 
-	if (p_batch.fvf == BatcherEnums::FVF_STATIC_MESH_LOOP) {
-		_batch_render_static_mesh_group(p_material_data, p_primitive, p_batch, p_transparent);
+	if (p_batch.fvf == BatcherEnums::FVF_SAME_MESH_LOOP) {
+		_batch_render_same_mesh_group(p_material_data, p_primitive, p_batch, p_transparent);
 		return;
 	}
 
@@ -3566,8 +3566,8 @@ void RasterizerSceneGLES1::_batch_render_single_mesh_fallback(RS::PrimitiveType 
 	_gl_cleanup_batch_draw_state(false);
 }
 
-void RasterizerSceneGLES1::_batch_render_static_mesh_group(GLES1::SceneMaterialData *p_material_data, RS::PrimitiveType p_primitive, BatchType::Batch3D &p_batch, bool p_transparent) {
-	// Executes the static-mesh state grouping (SMSG, FVF_STATIC_MESH_LOOP) for repeated
+void RasterizerSceneGLES1::_batch_render_same_mesh_group(GLES1::SceneMaterialData *p_material_data, RS::PrimitiveType p_primitive, BatchType::Batch3D &p_batch, bool p_transparent) {
+	// Executes the static-mesh state grouping (SMSG, FVF_SAME_MESH_LOOP) for repeated
 	// heavy meshes (> 1024 vertices) and MultiMesh instances. Binds the material and the
 	// mesh's native static VBO/IBO (or client arrays when VBOs are unsupported) once for
 	// the entire contiguous run, then loops over each reference/instance updating only
@@ -3594,7 +3594,7 @@ void RasterizerSceneGLES1::_batch_render_static_mesh_group(GLES1::SceneMaterialD
 
 	// Bind material once for the entire run
 	_batch_bind_material(p_material_data, first_ref.transform, p_transparent);
-	GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_batch_render_static_mesh_group: _batch_bind_material");
+	GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::_batch_render_same_mesh_group: _batch_bind_material");
 
 	const uint64_t input_mask = _set_rendering_input_mask<true>(p_material_data, first_surf, &p_batch);
 
