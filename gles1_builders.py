@@ -275,13 +275,39 @@ GL_1_5_MAPPINGS = {
         "\t\t\t\t}\n"
         "\t\t\t\tGL_CHECK_ERROR(\"GLES1::ShaderGLES1::_apply_gles1_state::glEnable_GL_FOG\");"
     ),
+    "fog_mode": (
+        "if ((int)p_value == 1) {\n"
+        "\t\t\t\t\tglFogf(GL_FOG_MODE, static_cast<GLfloat>(GL_LINEAR));\n"
+        "\t\t\t\t} else {\n"
+        "\t\t\t\t\tglFogf(GL_FOG_MODE, static_cast<GLfloat>(GL_EXP));\n"
+        "\t\t\t\t}\n"
+        "\t\t\t\tGL_CHECK_ERROR(\"GLES1::ShaderGLES1::_apply_gles1_state::glFogf_mode\");"
+    ),
     "fog_density": (
         "glFogf(GL_FOG_DENSITY, (float)p_value);\n"
         "\t\t\t\tGL_CHECK_ERROR(\"GLES1::ShaderGLES1::_apply_gles1_state::glFogf_density\");"
     ),
+    "fog_depth_begin": (
+        "glFogf(GL_FOG_START, (float)p_value);\n"
+        "\t\t\t\tGL_CHECK_ERROR(\"GLES1::ShaderGLES1::_apply_gles1_state::glFogf_start\");"
+    ),
+    "fog_depth_end": (
+        "glFogf(GL_FOG_END, (float)p_value);\n"
+        "\t\t\t\tGL_CHECK_ERROR(\"GLES1::ShaderGLES1::_apply_gles1_state::glFogf_end\");"
+    ),
     "fog_light_color": (
-        "Vector3 color = p_value;\n"
-        "\t\t\t\tGLfloat fog_col[4] = { color.x, color.y, color.z, 1.0f };\n"
+        "GLfloat fog_col[4] = { 0.0f, 0.0f, 0.0f, 1.0f };\n"
+        "\t\t\t\tif (p_value.get_type() == Variant::COLOR) {\n"
+        "\t\t\t\t\tColor color = p_value;\n"
+        "\t\t\t\t\tfog_col[0] = color.r;\n"
+        "\t\t\t\t\tfog_col[1] = color.g;\n"
+        "\t\t\t\t\tfog_col[2] = color.b;\n"
+        "\t\t\t\t} else {\n"
+        "\t\t\t\t\tVector3 color = p_value;\n"
+        "\t\t\t\t\tfog_col[0] = color.x;\n"
+        "\t\t\t\t\tfog_col[1] = color.y;\n"
+        "\t\t\t\t\tfog_col[2] = color.z;\n"
+        "\t\t\t\t}\n"
         "\t\t\t\tglFogfv(GL_FOG_COLOR, fog_col);\n"
         "\t\t\t\tGL_CHECK_ERROR(\"GLES1::ShaderGLES1::_apply_gles1_state::glFogfv_color\");"
     ),

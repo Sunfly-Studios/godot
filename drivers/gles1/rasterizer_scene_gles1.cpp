@@ -4737,13 +4737,23 @@ void RasterizerSceneGLES1::_bind_scene_camera_uniforms(RID p_version, SceneShade
 	material_storage->shaders.scene_shader.version_set_uniform(SceneShaderGLES1::Z_FAR, scene_state.ubo.z_far, p_version, p_variant, p_spec_constants);
 	material_storage->shaders.scene_shader.version_set_uniform(SceneShaderGLES1::Z_NEAR, scene_state.ubo.z_near, p_version, p_variant, p_spec_constants);
 
-	material_storage->shaders.scene_shader.version_set_uniform(SceneShaderGLES1::FOG_ENABLED, (bool)scene_state.ubo.fog_enabled, p_version, p_variant, p_spec_constants);
-	material_storage->shaders.scene_shader.version_set_uniform(SceneShaderGLES1::FOG_DENSITY, scene_state.ubo.fog_density, p_version, p_variant, p_spec_constants);
-	material_storage->shaders.scene_shader.version_set_uniform(SceneShaderGLES1::FOG_HEIGHT, scene_state.ubo.fog_height, p_version, p_variant, p_spec_constants);
-	material_storage->shaders.scene_shader.version_set_uniform(SceneShaderGLES1::FOG_HEIGHT_DENSITY, scene_state.ubo.fog_height_density, p_version, p_variant, p_spec_constants);
-	material_storage->shaders.scene_shader.version_set_uniform(SceneShaderGLES1::FOG_LIGHT_COLOR, Vector3(scene_state.ubo.fog_light_color[0], scene_state.ubo.fog_light_color[1], scene_state.ubo.fog_light_color[2]), p_version, p_variant, p_spec_constants);
-	material_storage->shaders.scene_shader.version_set_uniform(SceneShaderGLES1::FOG_SUN_SCATTER, scene_state.ubo.fog_sun_scatter, p_version, p_variant, p_spec_constants);
-	material_storage->shaders.scene_shader.version_set_uniform(SceneShaderGLES1::FOG_AERIAL_PERSPECTIVE, scene_state.ubo.fog_aerial_perspective, p_version, p_variant, p_spec_constants);
+	const bool fog_active = scene_state.ubo.fog_enabled && !(p_spec_constants & SceneShaderGLES1::DISABLE_FOG);
+	material_storage->shaders.scene_shader.version_set_uniform(SceneShaderGLES1::FOG_ENABLED, fog_active, p_version, p_variant, p_spec_constants);
+	if (fog_active) {
+		material_storage->shaders.scene_shader.version_set_uniform(SceneShaderGLES1::FOG_MODE, (int)scene_state.ubo.fog_mode, p_version, p_variant, p_spec_constants);
+		material_storage->shaders.scene_shader.version_set_uniform(SceneShaderGLES1::FOG_DENSITY, scene_state.ubo.fog_density, p_version, p_variant, p_spec_constants);
+		material_storage->shaders.scene_shader.version_set_uniform(SceneShaderGLES1::FOG_HEIGHT, scene_state.ubo.fog_height, p_version, p_variant, p_spec_constants);
+		material_storage->shaders.scene_shader.version_set_uniform(SceneShaderGLES1::FOG_HEIGHT_DENSITY, scene_state.ubo.fog_height_density, p_version, p_variant, p_spec_constants);
+		material_storage->shaders.scene_shader.version_set_uniform(SceneShaderGLES1::FOG_DEPTH_CURVE, scene_state.ubo.fog_depth_curve, p_version, p_variant, p_spec_constants);
+		material_storage->shaders.scene_shader.version_set_uniform(SceneShaderGLES1::FOG_DEPTH_BEGIN, scene_state.ubo.fog_depth_begin, p_version, p_variant, p_spec_constants);
+		material_storage->shaders.scene_shader.version_set_uniform(SceneShaderGLES1::FOG_DEPTH_END, scene_state.ubo.fog_depth_end, p_version, p_variant, p_spec_constants);
+		const Vector3 fog_color_vec = scene_state.is_additive_pass
+				? Vector3(0.0f, 0.0f, 0.0f)
+				: Vector3(scene_state.ubo.fog_light_color[0], scene_state.ubo.fog_light_color[1], scene_state.ubo.fog_light_color[2]);
+		material_storage->shaders.scene_shader.version_set_uniform(SceneShaderGLES1::FOG_LIGHT_COLOR, fog_color_vec, p_version, p_variant, p_spec_constants);
+		material_storage->shaders.scene_shader.version_set_uniform(SceneShaderGLES1::FOG_SUN_SCATTER, scene_state.ubo.fog_sun_scatter, p_version, p_variant, p_spec_constants);
+		material_storage->shaders.scene_shader.version_set_uniform(SceneShaderGLES1::FOG_AERIAL_PERSPECTIVE, scene_state.ubo.fog_aerial_perspective, p_version, p_variant, p_spec_constants);
+	}
 
 	material_storage->shaders.scene_shader.version_set_uniform(SceneShaderGLES1::EXPOSURE, scene_state.tonemap_ubo.exposure, p_version, p_variant, p_spec_constants);
 	material_storage->shaders.scene_shader.version_set_uniform(SceneShaderGLES1::WHITE, scene_state.tonemap_ubo.white, p_version, p_variant, p_spec_constants);
@@ -4983,9 +4993,21 @@ void RasterizerSceneGLES1::_setup_environment(const RenderDataGLES1 *p_render_da
 
 		scene_state.ubo.ambient_light_color_energy[3] = bg_energy_multiplier;
 		scene_state.ubo.ambient_color_sky_mix = environment_get_ambient_sky_contribution(p_render_data->environment);
-		scene_state.ubo.fog_enabled = environment_get_fog_enabled(p_render_data->environment);
+		scene_state.ubo.fog_enabled = !p_no_fog && environment_get_fog_enabled(p_render_data->environment);
+		scene_state.ubo.fog_mode = uint32_t(environment_get_fog_mode(p_render_data->environment));
 		scene_state.ubo.fog_density = environment_get_fog_density(p_render_data->environment);
-		Color fog_color = environment_get_fog_light_color(p_render_data->environment).srgb_to_linear();
+		scene_state.ubo.fog_height = environment_get_fog_height(p_render_data->environment);
+		scene_state.ubo.fog_height_density = environment_get_fog_height_density(p_render_data->environment);
+		scene_state.ubo.fog_depth_curve = environment_get_fog_depth_curve(p_render_data->environment);
+		scene_state.ubo.fog_depth_begin = environment_get_fog_depth_begin(p_render_data->environment);
+		float fog_depth_end = environment_get_fog_depth_end(p_render_data->environment);
+		if (fog_depth_end <= 0.0f) {
+			fog_depth_end = scene_state.ubo.z_far;
+		}
+		scene_state.ubo.fog_depth_end = fog_depth_end;
+		scene_state.ubo.fog_sun_scatter = environment_get_fog_sun_scatter(p_render_data->environment);
+		scene_state.ubo.fog_aerial_perspective = environment_get_fog_aerial_perspective(p_render_data->environment);
+		Color fog_color = environment_get_fog_light_color(p_render_data->environment).srgb_to_linear() * environment_get_fog_light_energy(p_render_data->environment);
 		scene_state.ubo.fog_light_color[0] = fog_color.r;
 		scene_state.ubo.fog_light_color[1] = fog_color.g;
 		scene_state.ubo.fog_light_color[2] = fog_color.b;

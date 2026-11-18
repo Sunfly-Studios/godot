@@ -186,9 +186,13 @@ uniform float z_near;
 uniform float IBL_exposure_normalization;
 
 uniform bool fog_enabled;
+uniform int fog_mode;
 uniform float fog_density;
 uniform float fog_height;
 uniform float fog_height_density;
+uniform float fog_depth_curve;
+uniform float fog_depth_begin;
+uniform float fog_depth_end;
 
 uniform vec3 fog_light_color;
 uniform float fog_sun_scatter;
@@ -608,9 +612,13 @@ uniform float z_near;
 uniform float IBL_exposure_normalization;
 
 uniform bool fog_enabled;
+uniform int fog_mode;
 uniform float fog_density;
 uniform float fog_height;
 uniform float fog_height_density;
+uniform float fog_depth_curve;
+uniform float fog_depth_begin;
+uniform float fog_depth_end;
 
 uniform vec3 fog_light_color;
 uniform float fog_sun_scatter;
@@ -669,7 +677,14 @@ vec4 fog_process(vec3 vertex) {
 	}
 #endif // !DISABLE_LIGHT_DIRECTIONAL
 
-	float fog_amount = 1.0 - exp(min(0.0, -length(vertex) * fog_density));
+	float fog_amount = 0.0;
+
+	if (fog_mode == 1) { // Depth fog mode
+		float fog_z = smoothstep(fog_depth_begin, fog_depth_end, length(vertex));
+		fog_amount = pow(fog_z, fog_depth_curve) * fog_density;
+	} else {
+		fog_amount = 1.0 - exp(min(0.0, -length(vertex) * fog_density));
+	}
 
 	if (abs(fog_height_density) >= 0.0001) {
 		float y = (inv_view_matrix * vec4(vertex, 1.0)).y;

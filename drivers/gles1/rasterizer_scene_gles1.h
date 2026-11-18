@@ -934,18 +934,28 @@ private:
 	}
 
 	_FORCE_INLINE_ void _gl_setup_fog(const GLES1::SceneMaterialData *p_material_data) {
-		const GLfloat fog_col[4] = { scene_state.ubo.fog_light_color[0], scene_state.ubo.fog_light_color[1], scene_state.ubo.fog_light_color[2], 1.0f };
+		const GLfloat fog_col[4] = {
+			scene_state.is_additive_pass ? 0.0f : scene_state.ubo.fog_light_color[0],
+			scene_state.is_additive_pass ? 0.0f : scene_state.ubo.fog_light_color[1],
+			scene_state.is_additive_pass ? 0.0f : scene_state.ubo.fog_light_color[2],
+			1.0f
+		};
 		if (p_material_data && p_material_data->use_distance_fade) {
 			glEnable(GL_FOG);
 			glFogf(GL_FOG_MODE, static_cast<GLfloat>(GL_LINEAR));
 			glFogf(GL_FOG_START, p_material_data->distance_fade_min);
 			glFogf(GL_FOG_END, p_material_data->distance_fade_max);
-
 			glFogfv(GL_FOG_COLOR, fog_col);
-		} else if (scene_state.ubo.fog_enabled) {
+		} else if (scene_state.ubo.fog_enabled && !(scene_state.current_spec_constants & SceneShaderGLES1::DISABLE_FOG)) {
 			glEnable(GL_FOG);
-			glFogf(GL_FOG_MODE, static_cast<GLfloat>(GL_EXP));
-			glFogf(GL_FOG_DENSITY, scene_state.ubo.fog_density);
+			if (scene_state.ubo.fog_mode == uint32_t(RS::ENV_FOG_MODE_DEPTH)) {
+				glFogf(GL_FOG_MODE, static_cast<GLfloat>(GL_LINEAR));
+				glFogf(GL_FOG_START, scene_state.ubo.fog_depth_begin);
+				glFogf(GL_FOG_END, scene_state.ubo.fog_depth_end);
+			} else {
+				glFogf(GL_FOG_MODE, static_cast<GLfloat>(GL_EXP));
+				glFogf(GL_FOG_DENSITY, scene_state.ubo.fog_density);
+			}
 			glFogfv(GL_FOG_COLOR, fog_col);
 		} else {
 			glDisable(GL_FOG);
