@@ -671,6 +671,28 @@ private:
 		}
 	};
 
+	struct GLMatrixPaletteScope {
+		bool active = false;
+		_FORCE_INLINE_ GLMatrixPaletteScope(bool p_enable = true) {
+			if (p_enable && GLES1_CONFIG->support_matrix_palette) {
+				active = true;
+				glEnable(GL_MATRIX_PALETTE_OES);
+				glEnableClientState(GL_MATRIX_INDEX_ARRAY_OES);
+				glEnableClientState(GL_WEIGHT_ARRAY_OES);
+				GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::GLMatrixPaletteScope: enable");
+			}
+		}
+		_FORCE_INLINE_ ~GLMatrixPaletteScope() {
+			if (active) {
+				glMatrixMode(GL_MODELVIEW);
+				glDisable(GL_MATRIX_PALETTE_OES);
+				glDisableClientState(GL_MATRIX_INDEX_ARRAY_OES);
+				glDisableClientState(GL_WEIGHT_ARRAY_OES);
+				GL_CHECK_ERROR("GLES1::RasterizerSceneGLES1::GLMatrixPaletteScope: disable");
+			}
+		}
+	};
+
 	enum GLClientStateFlags {
 		GL_CLIENT_STATE_VERTEX = 1 << 0,
 		GL_CLIENT_STATE_COLOR = 1 << 1,
@@ -1759,24 +1781,24 @@ private:
 	void _batch_fill_mpi_depth_template(const BatchType::BItemRef3D &p_ref, uint32_t p_palette_count, uint8_t *r_bvs, uint16_t *r_inds);
 
 	bool _batch_try_reuse_cached_vbo_slot_3d(BatchType::Batch3D &r_batch, uint64_t p_content_hash);
-	void _batch_upload_buffers_3d(BatchType::Batch3D &r_batch, uint64_t p_content_hash = 0);
+	bool _batch_upload_buffers_3d(BatchType::Batch3D &r_batch, uint64_t p_content_hash = 0);
 	void _batch_bind_material(GLES1::SceneMaterialData *p_material_data, const Transform3D &p_world_transform, bool p_transparent);
 	void _batch_threshold_flush();
 
 	/* BATCH LANES */
 
 	// Lane 1: BRI
-	void _batch_render_generic(RS::PrimitiveType p_primitive, uint32_t p_offset = 0, uint32_t p_count = 0, bool p_has_color = true);
-	void _batch_render_items(GLES1::SceneMaterialData *p_material_data, RS::PrimitiveType p_primitive, BatchType::Batch3D &p_batch, bool p_transparent);
+	bool _batch_render_generic(RS::PrimitiveType p_primitive, uint32_t p_offset = 0, uint32_t p_count = 0, bool p_has_color = true);
+	bool _batch_render_items(GLES1::SceneMaterialData *p_material_data, RS::PrimitiveType p_primitive, BatchType::Batch3D &p_batch, bool p_transparent);
 
 	// Lane 2: SMDD
-	void _batch_render_single_mesh_fallback(RS::PrimitiveType p_primitive, uint32_t p_offset, uint32_t p_count, bool p_has_color);
+	bool _batch_render_single_mesh_fallback(RS::PrimitiveType p_primitive, uint32_t p_offset, uint32_t p_count, bool p_has_color);
 
 	// Lane 4: SMSG
-	void _batch_render_same_mesh_group(GLES1::SceneMaterialData *p_material_data, RS::PrimitiveType p_primitive, BatchType::Batch3D &p_batch, bool p_transparent);
+	bool _batch_render_same_mesh_group(GLES1::SceneMaterialData *p_material_data, RS::PrimitiveType p_primitive, BatchType::Batch3D &p_batch, bool p_transparent);
 
 	// Lane 5: MPI
-	void _batch_render_mpi(GLES1::SceneMaterialData *p_material_data, RS::PrimitiveType p_primitive, BatchType::Batch3D &p_batch, bool p_transparent);
+	bool _batch_render_mpi(GLES1::SceneMaterialData *p_material_data, RS::PrimitiveType p_primitive, BatchType::Batch3D &p_batch, bool p_transparent);
 	void _batch_util_mpi_flush_chunk(uint32_t &r_chunk_count, GLenum p_primitive_gl, uint32_t p_base_indices, bool p_is_strip, GLuint p_gl_ibo, uint32_t p_ibo_byte_offset);
 	void _batch_util_mpi_push_transform(const Transform3D &p_world_xform, const Transform3D &p_view_matrix, const GLES1::SceneShaderData *p_active_shader, uint32_t &r_chunk_count, uint32_t p_cap, GLenum p_primitive_gl, uint32_t p_base_indices, bool p_is_strip, GLuint p_gl_ibo, uint32_t p_ibo_byte_offset);
 

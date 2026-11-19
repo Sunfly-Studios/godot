@@ -1246,9 +1246,9 @@ private:
 
 	bool _batch_bind_single_mesh_fallback_buffers(bool p_has_color, BatchBoundGeometryStateGLES2 &r_state);
 	
-	void _batch_upload_buffers_3d(BatchType::Batch3D &r_batch, uint64_t p_content_hash);
+	bool _batch_upload_buffers_3d(BatchType::Batch3D &r_batch, uint64_t p_content_hash);
 	bool _batch_try_reuse_cached_vbo_slot_3d(RasterizerSceneBatcherCommon<BatcherAPISceneGLES2>::Batch3D &r_batch, uint64_t p_content_hash);
-	void _batch_bind_material(GLES2::SceneMaterialData *p_material_data, const Transform3D &p_world_transform, bool p_transparent);
+	bool _batch_bind_material(GLES2::SceneMaterialData *p_material_data, const Transform3D &p_world_transform, bool p_transparent);
 	bool _batch_bind_pass_material_and_state(GLES2::SceneMaterialData *p_material_data, GLES2::SceneShaderData *p_shader, RS::CullMode p_cull_mode, uint64_t p_state_hash, SceneShaderGLES2::ShaderVariant p_variant, uint64_t p_spec_constants, bool p_transparent);
 	void _batch_threshold_flush();
 
@@ -1256,17 +1256,17 @@ private:
 
 	// Lane 1: BRI
 	void _batch_render_generic(RS::PrimitiveType p_primitive, uint32_t p_offset = 0, uint32_t p_count = 0, bool p_has_color = true);
-	void _batch_render_items(GLES2::SceneMaterialData *p_material_data, RS::PrimitiveType p_primitive, BatchType::Batch3D &p_batch, bool p_transparent);
+	bool _batch_render_items(GLES2::SceneMaterialData *p_material_data, RS::PrimitiveType p_primitive, BatchType::Batch3D &p_batch, bool p_transparent);
 
 	// Lane 2: SMDD
 	void _batch_render_single_mesh_fallback(RS::PrimitiveType p_primitive, uint32_t p_offset, uint32_t p_count, bool p_has_color);
 
 	// Lane 4: SMSG
-	void _batch_render_same_mesh_group(GLES2::SceneMaterialData *p_material_data, RS::PrimitiveType p_primitive, BatchType::Batch3D &p_batch, bool p_transparent);
+	bool _batch_render_same_mesh_group(GLES2::SceneMaterialData *p_material_data, RS::PrimitiveType p_primitive, BatchType::Batch3D &p_batch, bool p_transparent);
 
 	// Lane 5: MPI
-	void _batch_render_mpi(GLES2::SceneMaterialData *p_material_data, RS::PrimitiveType p_primitive, BatchType::Batch3D &p_batch, bool p_transparent);
-	void _batch_dispatch_mpi_chunks(const BatchType::Batch3D &p_batch, RS::PrimitiveType p_primitive, const BatchBoundGeometryStateGLES2 &p_bound_state, GLint p_palette_loc, const LightData *p_cull_light = nullptr);
+	bool _batch_render_mpi(GLES2::SceneMaterialData *p_material_data, RS::PrimitiveType p_primitive, BatchType::Batch3D &p_batch, bool p_transparent);
+	bool _batch_dispatch_mpi_chunks(const BatchType::Batch3D &p_batch, RS::PrimitiveType p_primitive, const BatchBoundGeometryStateGLES2 &p_bound_state, GLint p_palette_loc, const LightData *p_cull_light = nullptr);
 	void _batch_util_mpi_flush_chunk(GLint p_palette_loc, const float *p_palette_buf, uint32_t &r_chunk_count, RS::PrimitiveType p_primitive, uint32_t p_base_indices, bool p_is_strip, const BatchBoundGeometryStateGLES2 &p_bound_state);
 	void _batch_util_mpi_push_transform(const Transform3D &p_xform, GLint p_palette_loc, float *p_palette_buf, uint32_t &r_chunk_count, uint32_t p_cap, RS::PrimitiveType p_primitive, uint32_t p_base_indices, bool p_is_strip, const BatchBoundGeometryStateGLES2 &p_bound_state);
 

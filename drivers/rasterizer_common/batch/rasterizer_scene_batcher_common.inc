@@ -61,16 +61,21 @@ void RasterizerSceneBatcherCommon<T_API>::batch_initialize() {
 	get_this()->_batch_get_hardware_limits(bdata.hardware_limits);
 
 	const uint32_t max_verts = bdata.hardware_limits.max_vertices_per_buffer;
-	bdata.unit_vertices.create(max_verts, sizeof(BatchVertex3DTier4));
+	const bool ok = (
+		bdata.unit_vertices.create(max_verts, sizeof(BatchVertex3DTier4)) &&
+		bdata.indices.create(bdata.hardware_limits.max_indices_per_buffer) &&
+		bdata.batches.create(256) &&
+		bdata.items_joined.create(512) &&
+		bdata.item_refs.create(2048) &&
+		bdata.sort_items.create(2048)
+	);
 
-	bdata.unit_vertices.create(max_verts, sizeof(BatchVertex3DTier4));
-	bdata.unit_vertices.prepare(sizeof(BatchVertex3DTier1));
-	bdata.indices.create(bdata.hardware_limits.max_indices_per_buffer);
-
-	bdata.batches.create(256);
-	bdata.items_joined.create(512);
-	bdata.item_refs.create(2048);
-	bdata.sort_items.create(2048);
+	bdata.is_initialized = ok;
+	if (ok) {
+		bdata.unit_vertices.prepare(sizeof(BatchVertex3DTier1));
+	} else {
+		ERR_PRINT_ONCE("GLES Scene Batcher: Failed to allocate staging buffers. Falling back to immediate rendering.");
+	}
 }
 
 template <typename T_API>
@@ -88,22 +93,18 @@ void RasterizerSceneBatcherCommon<T_API>::batch_scene_end() {
 template <typename T_API>
 template <typename BatcherEnums::PassMode p_pass_mode, class T_SURFACE>
 void RasterizerSceneBatcherCommon<T_API>::batch_scene_render_items(T_SURFACE **p_surfaces, int p_count, const Transform3D &p_camera_transform, bool p_transparent, bool p_replay) {
-	if (!bdata.settings_use_batching || p_count == 0) {
+	if (!bdata.is_initialized || !bdata.settings_use_batching || p_count <= 0 || !p_surfaces) {
 		bdata.pass_mode = p_pass_mode;
 		_render_item_state.reset();
-		if (p_count > 0) {
+		if (p_count > 0 && p_surfaces) {
 			get_this()->scene_render_items_implementation(p_surfaces, p_count, p_camera_transform, p_transparent);
 		}
 		return;
 	}
 
-	// Only replay if the cached batches and item references are populated.
-	// Prevents replaying stale opaque batches when a subsequent pass has 0 items.
-	if (p_replay && bdata.batches.size() > 0 && bdata.item_refs.size() > 0) {
-		// During additive light or shadow passes, we can bypass the CPU overhead of 
-		// sorting and packing geometry. The VBOs were already populated during the 
-		// base opaque pass, so we just iterate over the established batch list and 
-		// re-issue the draw calls with the new pass state.
+	// Only replay if the base pass completed cleanly without client-buffer wraparound
+	// and the cached batches and item references are populated.
+	if (p_replay && bdata.replay_valid && !bdata.client_buffer_wrapped && bdata.batches.size() > 0 && bdata.item_refs.size() > 0) {
 		bdata.pass_mode = p_pass_mode;
 		_render_item_state.reset();
 		for (uint32_t b = 0; b < (uint32_t)bdata.batches.size(); b++) {
@@ -111,16 +112,27 @@ void RasterizerSceneBatcherCommon<T_API>::batch_scene_render_items(T_SURFACE **p
 			if (batch.num_verts == 0) {
 				continue;
 			}
+			if (
+				batch.first_item_ref >= (uint32_t)bdata.item_refs.size() ||
+				(batch.first_item_ref + batch.num_item_refs) > (uint32_t)bdata.item_refs.size()
+			) {
+				continue;
+			}
+
 			T_SURFACE *first_surface = static_cast<T_SURFACE *>(bdata.item_refs[batch.first_item_ref].surface);
+			if (unlikely(!first_surface)) {
+				continue;
+			}
+
 			typename T_API::MaterialData *material = get_this()->_batch_get_material_data(first_surface);
 			RS::PrimitiveType primitive = first_surface->primitive;
-			
-			// Restore the FVF state for this specific batch so the driver knows 
-			// how to correctly interpret the VBO layout and apply transforms.
+
 			bdata.fvf = batch.fvf;
 			_prepare_unit_vertices_for_fvf(batch.fvf);
 			_render_item_state.curr_batch = &batch;
-			get_this()->_batch_render_items(material, primitive, batch, p_transparent);
+			if (unlikely(!get_this()->_batch_render_items(material, primitive, batch, p_transparent))) {
+				_demote_item_refs_to_bypass<T_SURFACE>(batch.first_item_ref, batch.num_item_refs, p_transparent, true);
+			}
 		}
 		render_bypassed_items<T_SURFACE>(p_transparent);
 		return;
@@ -136,13 +148,14 @@ void RasterizerSceneBatcherCommon<T_API>::batch_scene_render_items(T_SURFACE **p
 	// Only sort the items that survived the filter
 	if (bdata.sort_items.size() > 0) {
 		sort_items(p_transparent);
-		
+
 		// Pack & Render: Build VBOs and fire draw calls
 		join_and_flush_sorted_items<p_pass_mode, T_SURFACE>(p_transparent);
 	}
 
 	// Draw the unbatchable meshes directly, bypassing the batcher overhead
 	render_bypassed_items<T_SURFACE>(p_transparent);
+	bdata.replay_valid = !bdata.client_buffer_wrapped;
 }
 
 template <typename T_API>
@@ -150,6 +163,11 @@ template <class T_SURFACE>
 void RasterizerSceneBatcherCommon<T_API>::record_items(T_SURFACE **p_surfaces, int p_count, const Transform3D &p_camera_transform, bool p_transparent) {
 	for (int i = 0; i < p_count; i++) {
 		T_SURFACE *surface = p_surfaces[i];
+		if (unlikely(!surface || !surface->owner || !surface->owner->data)) {
+			continue;
+		}
+		
+		// Skip depth-only pre-pass surfaces during the opaque color pass.
 		if (
 			bdata.pass_mode == BatcherEnums::PASS_MODE_COLOR &&
 			!(surface->flags & T_SURFACE::FLAG_PASS_OPAQUE)
@@ -233,34 +251,27 @@ void RasterizerSceneBatcherCommon<T_API>::record_items(T_SURFACE **p_surfaces, i
 			has_extreme_bounds ||
 			(wants_static_lane && !can_use_static_lane)
 		) {
-			if (!p_transparent) {
-				// Opaque massive models don't need strict sorting. Just dump them in the bypass list.
-				bdata.bypassed_opaque_items.push_back((void*)surface);
-			} else {
-				// Transparent massive models still need
-				// depth calculation for BTF rendering
-				BSortItem3D bypassed_trans;
-				bypassed_trans.item = (void*)surface;
-				bypassed_trans.depth = get_this()->_batch_get_item_depth(surface, p_camera_transform);
-				bypassed_trans.state_hash = 0; // Don't care for bypass transparent
-				bypassed_trans.mesh_id = 0;
-				bypassed_trans.surface_index = 0;
-				bypassed_trans.use_static_vbo_loop = false;
-				bypassed_trans.use_mpi = false;
-				bdata.bypassed_transparent_items.push_back(bypassed_trans);
-			}
+			const float depth = p_transparent ? get_this()->_batch_get_item_depth(surface, p_camera_transform) : 0.0f;
+			_bypass_surface(surface, depth, p_transparent);
 			continue;
 		}
 
 		// This is a small prop. Proceed with tracking.
-		BSortItem3D *s = bdata.sort_items.request();
-		if (!s) {
-			bdata.sort_items.grow();
-			s = bdata.sort_items.request();
-			if (unlikely(!s)) {
-				ERR_PRINT_ONCE("GLES Scene Batcher: Failed to allocate BSortItem even after growing array.");
-				break;
+		BSortItem3D *s = bdata.sort_items.request_with_grow();
+		if (unlikely(!s)) {
+			ERR_PRINT_ONCE("GLES Scene Batcher: Failed to allocate BSortItem. Demoting remaining surfaces to immediate lane.");
+			for (int rem = i; rem < p_count; rem++) {
+				T_SURFACE *rem_surface = p_surfaces[rem];
+				if (unlikely(!rem_surface || !rem_surface->owner || !rem_surface->owner->data)) {
+					continue;
+				}
+				if (bdata.pass_mode == BatcherEnums::PASS_MODE_COLOR && !(rem_surface->flags & T_SURFACE::FLAG_PASS_OPAQUE)) {
+					continue;
+				}
+				const float rem_depth = p_transparent ? get_this()->_batch_get_item_depth(rem_surface, p_camera_transform) : 0.0f;
+				_bypass_surface(rem_surface, rem_depth, p_transparent);
 			}
+			break;
 		}
 
 		s->item = (void *)surface;
@@ -393,7 +404,7 @@ void RasterizerSceneBatcherCommon<T_API>::sort_items(bool p_transparent) {
 
 template <typename T_API>
 template <typename BatcherEnums::PassMode p_pass_mode, class T_SURFACE>
-void RasterizerSceneBatcherCommon<T_API>::join_sorted_items() {
+void RasterizerSceneBatcherCommon<T_API>::join_sorted_items(bool p_transparent) {
 	// Stage 1 of delayed packing:
 	// Iterates over the sorted items and builds lightweight BItemJoined3D groups and BItemRef3D references.
 	// Pre-evaluates TransformMode3D, normal cofactor matrices, and required FVF feature flags
@@ -405,7 +416,7 @@ void RasterizerSceneBatcherCommon<T_API>::join_sorted_items() {
 	bdata.item_refs.reset();
 
 	BItemJoined3D *curr_joined = nullptr;
-	
+
 	// =========================
 	// Grouping pass
 	// =========================
@@ -414,6 +425,12 @@ void RasterizerSceneBatcherCommon<T_API>::join_sorted_items() {
 		if (!surface || !surface->owner) {
 			continue;
 		}
+
+		const int saved_joined_count = bdata.items_joined.size();
+		const int saved_refs_count = bdata.item_refs.size();
+		const BItemJoined3D saved_curr_joined_state = curr_joined ? *curr_joined : BItemJoined3D();
+		const bool had_curr_joined = (curr_joined != nullptr);
+		bool alloc_failed = false;
 
 		uint32_t base_verts = 0;
 		uint32_t base_indices = 0;
@@ -544,6 +561,7 @@ void RasterizerSceneBatcherCommon<T_API>::join_sorted_items() {
 				// Start a new joined item group
 				curr_joined = bdata.items_joined.request_with_grow();
 				if (unlikely(!curr_joined)) {
+					alloc_failed = true;
 					break;
 				}
 				curr_joined->first_item_ref = bdata.item_refs.size();
@@ -585,6 +603,7 @@ void RasterizerSceneBatcherCommon<T_API>::join_sorted_items() {
 
 			BItemRef3D *ref = bdata.item_refs.request_with_grow();
 			if (unlikely(!ref)) {
+				alloc_failed = true;
 				break;
 			}
 
@@ -647,6 +666,22 @@ void RasterizerSceneBatcherCommon<T_API>::join_sorted_items() {
 
 			inst_offset += chunk_instances;
 		}
+
+		if (unlikely(alloc_failed)) {
+			ERR_PRINT_ONCE("GLES Scene Batcher: Stage 1 pool exhausted. Rolling back partial group and demoting remaining items.");
+			bdata.items_joined.truncate(saved_joined_count);
+			bdata.item_refs.truncate(saved_refs_count);
+			if (had_curr_joined && saved_joined_count > 0) {
+				bdata.items_joined[saved_joined_count - 1] = saved_curr_joined_state;
+			}
+			for (uint32_t rem = i; rem < (uint32_t)bdata.sort_items.size(); rem++) {
+				T_SURFACE *rem_surface = static_cast<T_SURFACE *>(bdata.sort_items[rem].item);
+				if (rem_surface) {
+					_bypass_surface(rem_surface, bdata.sort_items[rem].depth, p_transparent);
+				}
+			}
+			break;
+		}
 	}
 }
 
@@ -654,7 +689,7 @@ template <typename T_API>
 template <typename BatcherEnums::PassMode p_pass_mode, class T_SURFACE>
 void RasterizerSceneBatcherCommon<T_API>::join_and_flush_sorted_items(bool p_transparent) {
 	// Stage 1: Build lightweight BItemJoined3D and BItemRef3D lists
-	join_sorted_items<p_pass_mode, T_SURFACE>();
+	join_sorted_items<p_pass_mode, T_SURFACE>(p_transparent);
 
 	// Reset the state tracker because join_sorted_items mutated it for CPU grouping.
 	_render_item_state.reset();
@@ -671,11 +706,19 @@ void RasterizerSceneBatcherCommon<T_API>::join_and_flush_sorted_items(bool p_tra
 
 		const BItemRef3D &first_ref = bdata.item_refs[joined.first_item_ref];
 		T_SURFACE *first_surface = static_cast<T_SURFACE *>(first_ref.surface);
+		if (unlikely(!first_surface)) {
+			continue;
+		}
 		typename T_API::MaterialData *material = get_this()->_batch_get_material_data(first_surface);
 		RS::PrimitiveType primitive = first_surface->primitive;
 
 		Batch3D *batch = _batch_request_new();
 		if (unlikely(!batch)) {
+			ERR_PRINT_ONCE("GLES Scene Batcher: Batch3D pool exhausted. Demoting remaining joined groups to immediate lane.");
+			for (uint32_t rem = j; rem < (uint32_t)bdata.items_joined.size(); rem++) {
+				const BItemJoined3D &rem_joined = bdata.items_joined[rem];
+				_demote_item_refs_to_bypass<T_SURFACE>(rem_joined.first_item_ref, rem_joined.num_item_refs, p_transparent, false);
+			}
 			break;
 		}
 
@@ -766,8 +809,22 @@ void RasterizerSceneBatcherCommon<T_API>::join_and_flush_sorted_items(bool p_tra
 
 				if (get_this()->_batch_try_reuse_cached_vbo_slot_3d(*batch, mpi_hash)) {
 					batch->mpi_palette_capacity = palette_cap;
-					get_this()->_batch_render_items(material, primitive, *batch, p_transparent);
-					_calculate_draw_call_cost_or_flush(*batch, true);
+					if (unlikely(!get_this()->_batch_render_items(material, primitive, *batch, p_transparent))) {
+						batch->mpi_palette_capacity = 0;
+						if (bdata.settings_use_single_mesh_fallback && get_this()->_batch_can_use_single_mesh_fallback(first_surface)) {
+							batch->fvf = BatcherEnums::FVF_SAME_MESH_LOOP;
+							batch->num_verts = first_ref.base_verts;
+							batch->num_indices = first_ref.base_indices;
+							batch->vbo_index = 0xFFFFFFFF;
+							flush_render_batches<T_SURFACE>(material, primitive, *batch, p_transparent);
+						} else {
+							batch->num_verts = 0;
+							batch->num_indices = 0;
+							_demote_item_refs_to_bypass<T_SURFACE>(joined.first_item_ref, joined.num_item_refs, p_transparent, false);
+						}
+					} else {
+						_calculate_draw_call_cost_or_flush(*batch, true);
+					}
 					bdata.reset_flush();
 					_render_item_state.consumed_uniform_vectors = 0;
 					continue;
@@ -777,8 +834,12 @@ void RasterizerSceneBatcherCommon<T_API>::join_and_flush_sorted_items(bool p_tra
 				const uint32_t template_verts = first_ref.base_verts * palette_cap;
 				const uint32_t template_indices = (first_ref.base_indices * palette_cap) + internal_stitches;
 
-				uint8_t *dst_bvs = bdata.unit_vertices.request(template_verts);
-				uint16_t *dst_inds = bdata.indices.request(template_indices);
+				const bool fits_staging = (
+					template_verts <= (uint32_t)bdata.unit_vertices.max_size() &&
+					template_indices <= (uint32_t)bdata.indices.max_size()
+				);
+				uint8_t *dst_bvs = fits_staging ? bdata.unit_vertices.request(template_verts) : nullptr;
+				uint16_t *dst_inds = (dst_bvs != nullptr) ? bdata.indices.request(template_indices) : nullptr;
 				if (dst_bvs && dst_inds) {
 					if constexpr (p_pass_mode == BatcherEnums::PASS_MODE_SHADOW || p_pass_mode == BatcherEnums::PASS_MODE_DEPTH) {
 						get_this()->_batch_fill_mpi_depth_template(first_ref, palette_cap, dst_bvs, dst_inds);
@@ -792,6 +853,18 @@ void RasterizerSceneBatcherCommon<T_API>::join_and_flush_sorted_items(bool p_tra
 					flush_render_batches<T_SURFACE>(material, primitive, *batch, p_transparent, mpi_hash);
 				} else {
 					bdata.reset_flush();
+					batch->mpi_palette_capacity = 0;
+					if (bdata.settings_use_single_mesh_fallback && get_this()->_batch_can_use_single_mesh_fallback(first_surface)) {
+						batch->fvf = BatcherEnums::FVF_SAME_MESH_LOOP;
+						batch->num_verts = first_ref.base_verts;
+						batch->num_indices = first_ref.base_indices;
+						batch->vbo_index = 0xFFFFFFFF;
+						flush_render_batches<T_SURFACE>(material, primitive, *batch, p_transparent);
+					} else {
+						batch->num_verts = 0;
+						batch->num_indices = 0;
+						_demote_item_refs_to_bypass<T_SURFACE>(joined.first_item_ref, joined.num_item_refs, p_transparent, false);
+					}
 				}
 				continue;
 			} else if (bdata.settings_use_single_mesh_fallback && get_this()->_batch_can_use_single_mesh_fallback(first_surface)) {
@@ -862,20 +935,38 @@ void RasterizerSceneBatcherCommon<T_API>::join_and_flush_sorted_items(bool p_tra
 		) {
 			bdata.fvf = batch->fvf;
 			_prepare_unit_vertices_for_fvf(batch->fvf);
-			get_this()->_batch_render_items(material, primitive, *batch, p_transparent);
-			_calculate_draw_call_cost_or_flush(*batch, true);
+			if (unlikely(!get_this()->_batch_render_items(material, primitive, *batch, p_transparent))) {
+				batch->num_verts = 0;
+				batch->num_indices = 0;
+				_demote_item_refs_to_bypass<T_SURFACE>(joined.first_item_ref, joined.num_item_refs, p_transparent, false);
+			} else {
+				_calculate_draw_call_cost_or_flush(*batch, true);
+			}
 			bdata.reset_flush();
 			_render_item_state.consumed_uniform_vectors = 0;
 			continue;
 		}
 
+		bool prefill_ok = true;
 		for (uint32_t i = 0; i < joined.num_item_refs; i++) {
 			const BItemRef3D &ref = bdata.item_refs[joined.first_item_ref + i];
+			const bool prefill_suceeded = prefill_joined_item<p_pass_mode, T_SURFACE>(ref, use_hardware_transform, i, effective_flags);
 
-			// Retry current item
-			prefill_joined_item<p_pass_mode, T_SURFACE>(ref, use_hardware_transform, i, effective_flags);
+			if (unlikely(!prefill_suceeded)) {
+				prefill_ok = false;
+				break;
+			}
 		}
-		
+
+		if (unlikely(!prefill_ok)) {
+			bdata.reset_flush();
+			_render_item_state.consumed_uniform_vectors = 0;
+			batch->num_verts = 0;
+			batch->num_indices = 0;
+			_demote_item_refs_to_bypass<T_SURFACE>(joined.first_item_ref, joined.num_item_refs, p_transparent, false);
+			continue;
+		}
+
 		// Flush the batch and record its content hash in the VBO slot
 		flush_render_batches<T_SURFACE>(material, primitive, *batch, p_transparent, final_content_hash);
 	}
@@ -944,10 +1035,10 @@ bool RasterizerSceneBatcherCommon<T_API>::try_join_item(T_SURFACE *p_surface, Re
 
 template <typename T_API>
 template <typename BatcherEnums::PassMode p_pass_mode, class T_SURFACE>
-void RasterizerSceneBatcherCommon<T_API>::prefill_joined_item(const BItemRef3D &p_ref, bool p_use_hardware_transform, uint32_t p_item_index, uint32_t p_joined_flags) {
+bool RasterizerSceneBatcherCommon<T_API>::prefill_joined_item(const BItemRef3D &p_ref, bool p_use_hardware_transform, uint32_t p_item_index, uint32_t p_joined_flags) {
 	T_SURFACE *surface = static_cast<T_SURFACE *>(p_ref.surface);
 	if (!surface || p_ref.base_verts == 0) {
-		return;
+		return true;
 	}
 
 	const bool is_multimesh = (p_joined_flags & BatcherEnums::BTF_3D_USES_INSTANCING) != 0;
@@ -999,14 +1090,25 @@ void RasterizerSceneBatcherCommon<T_API>::prefill_joined_item(const BItemRef3D &
 	}
 
 	const uint32_t start_vert = bdata.total_verts;
-	uint16_t prev_last_index = (stitch_count > 0) ? bdata.indices[bdata.total_indices - 1] : 0;
-	uint16_t *raw_inds = total_requested_indices > 0 ? bdata.indices.request(total_requested_indices) : nullptr;
-	uint16_t *inds = raw_inds ? (raw_inds + stitch_count) : nullptr;
-
-	uint8_t *dst_bvs = bdata.unit_vertices.request(incoming_verts);
-	if (!dst_bvs) {
-		return;
+	if (
+		(start_vert + incoming_verts) > 65536U ||
+		(bdata.unit_vertices.size() + static_cast<int>(incoming_verts)) > bdata.unit_vertices.max_size() ||
+		(bdata.indices.size() + static_cast<int>(total_requested_indices)) > bdata.indices.max_size()
+	) {
+		return false;
 	}
+
+	uint16_t prev_last_index = (stitch_count > 0) ? bdata.indices[bdata.total_indices - 1] : 0;
+	uint8_t *dst_bvs = bdata.unit_vertices.request(incoming_verts);
+	if (unlikely(!dst_bvs)) {
+		return false;
+	}
+
+	uint16_t *raw_inds = total_requested_indices > 0 ? bdata.indices.request(total_requested_indices) : nullptr;
+	if (unlikely(total_requested_indices > 0 && !raw_inds)) {
+		return false;
+	}
+	uint16_t *inds = raw_inds ? (raw_inds + stitch_count) : nullptr;
 
 	if constexpr (p_pass_mode == BatcherEnums::PASS_MODE_SHADOW || p_pass_mode == BatcherEnums::PASS_MODE_DEPTH) {
 		// Only perform the batch fill for shadow or
@@ -1037,6 +1139,7 @@ void RasterizerSceneBatcherCommon<T_API>::prefill_joined_item(const BItemRef3D &
 	_render_item_state.curr_batch->num_verts += incoming_verts;
 	_render_item_state.curr_batch->num_indices += total_requested_indices;
 	_render_item_state.consumed_uniform_vectors += incoming_uniform_vectors;
+	return true;
 }
 
 template <typename T_API>
@@ -1050,9 +1153,13 @@ void RasterizerSceneBatcherCommon<T_API>::flush_render_batches(typename T_API::M
 	// Intercept batches flagged for the single-mesh direct draw fallback or static mesh loop lane.
 	if (p_batch.fvf == BatcherEnums::FVF_UNBATCHED || p_batch.fvf == BatcherEnums::FVF_SAME_MESH_LOOP) {
 		bdata.fvf = p_batch.fvf;
-		get_this()->_batch_render_items(p_material_data, p_primitive, p_batch, p_transparent);
-
-		_calculate_draw_call_cost_or_flush(p_batch);
+		if (unlikely(!get_this()->_batch_render_items(p_material_data, p_primitive, p_batch, p_transparent))) {
+			p_batch.num_verts = 0;
+			p_batch.num_indices = 0;
+			_demote_item_refs_to_bypass<T_SURFACE>(p_batch.first_item_ref, p_batch.num_item_refs, p_transparent, false);
+		} else {
+			_calculate_draw_call_cost_or_flush(p_batch);
+		}
 
 		bdata.reset_flush();
 		_render_item_state.consumed_uniform_vectors = 0;
@@ -1060,13 +1167,42 @@ void RasterizerSceneBatcherCommon<T_API>::flush_render_batches(typename T_API::M
 	}
 
 	// Upload batched VBOs
-	get_this()->_batch_upload_buffers_3d(p_batch, p_content_hash);
+	if (unlikely(!get_this()->_batch_upload_buffers_3d(p_batch, p_content_hash))) {
+		bdata.reset_flush();
+		_render_item_state.consumed_uniform_vectors = 0;
+
+		if (p_batch.mpi_palette_capacity >= 2 && p_batch.first_item_ref < (uint32_t)bdata.item_refs.size()) {
+			const BItemRef3D &first_ref = bdata.item_refs[p_batch.first_item_ref];
+			T_SURFACE *first_surface = static_cast<T_SURFACE *>(first_ref.surface);
+			p_batch.mpi_palette_capacity = 0;
+			if (first_surface && bdata.settings_use_single_mesh_fallback && get_this()->_batch_can_use_single_mesh_fallback(first_surface)) {
+				p_batch.fvf = BatcherEnums::FVF_SAME_MESH_LOOP;
+				p_batch.num_verts = first_ref.base_verts;
+				p_batch.num_indices = first_ref.base_indices;
+				p_batch.vbo_index = 0xFFFFFFFF;
+				bdata.fvf = p_batch.fvf;
+				if (likely(get_this()->_batch_render_items(p_material_data, p_primitive, p_batch, p_transparent))) {
+					return;
+				}
+			}
+		}
+
+		p_batch.num_verts = 0;
+		p_batch.num_indices = 0;
+		_demote_item_refs_to_bypass<T_SURFACE>(p_batch.first_item_ref, p_batch.num_item_refs, p_transparent, false);
+		return;
+	}
 
 	// Delegate the API-specific state binding and multi-draw dispatching to the driver
-	get_this()->_batch_render_items(p_material_data, p_primitive, p_batch, p_transparent);
+	if (unlikely(!get_this()->_batch_render_items(p_material_data, p_primitive, p_batch, p_transparent))) {
+		p_batch.num_verts = 0;
+		p_batch.num_indices = 0;
+		p_batch.mpi_palette_capacity = 0;
+		_demote_item_refs_to_bypass<T_SURFACE>(p_batch.first_item_ref, p_batch.num_item_refs, p_transparent, false);
+	} else {
+		_calculate_draw_call_cost_or_flush(p_batch);
+	}
 
-	_calculate_draw_call_cost_or_flush(p_batch);
-	
 	// Reset VBO cursors
 	bdata.reset_flush();
 	_render_item_state.consumed_uniform_vectors = 0; // Release uniform locks for the next batch
@@ -1080,14 +1216,58 @@ void RasterizerSceneBatcherCommon<T_API>::render_bypassed_items(bool p_transpare
 
 	if (!p_transparent) {
 		for (uint32_t i = 0; i < (uint32_t)bdata.bypassed_opaque_items.size(); i++) {
-			get_this()->_render_single_item_immediate(static_cast<T_SURFACE*>(bdata.bypassed_opaque_items[i]));
+			get_this()->_render_single_item_immediate(static_cast<T_SURFACE *>(bdata.bypassed_opaque_items[i]));
 		}
 	} else {
 		SortArray<BSortItem3D, SortTransparent> sorter{};
 		sorter.sort(bdata.bypassed_transparent_items.ptr(), bdata.bypassed_transparent_items.size());
 
 		for (uint32_t i = 0; i < (uint32_t)bdata.bypassed_transparent_items.size(); i++) {
-			get_this()->_render_single_item_immediate(static_cast<T_SURFACE*>(bdata.bypassed_transparent_items[i].item));
+			get_this()->_render_single_item_immediate(static_cast<T_SURFACE *>(bdata.bypassed_transparent_items[i].item));
+		}
+	}
+}
+
+template <typename T_API>
+template <class T_SURFACE>
+void RasterizerSceneBatcherCommon<T_API>::_bypass_surface(T_SURFACE *p_surface, float p_depth, bool p_transparent) {
+	if (!p_surface) {
+		return;
+	}
+
+	if (!p_transparent) {
+		bdata.bypassed_opaque_items.push_back((void *)p_surface);
+	} else {
+		BSortItem3D bypassed_trans{};
+		bypassed_trans.item = (void *)p_surface;
+		bypassed_trans.depth = p_depth;
+		bdata.bypassed_transparent_items.push_back(bypassed_trans);
+	}
+}
+
+template <typename T_API>
+template <class T_SURFACE>
+void RasterizerSceneBatcherCommon<T_API>::_demote_item_refs_to_bypass(uint32_t p_first_ref, uint32_t p_num_refs, bool p_transparent, bool p_render_now) {
+	if (p_first_ref >= (uint32_t)bdata.item_refs.size()) {
+		return;
+	}
+	const uint32_t end_ref = MIN(p_first_ref + p_num_refs, (uint32_t)bdata.item_refs.size());
+	T_SURFACE *last_surface = nullptr;
+
+	for (uint32_t r = p_first_ref; r < end_ref; r++) {
+		T_SURFACE *surf = static_cast<T_SURFACE *>(bdata.item_refs[r].surface);
+		// MultiMesh chunks share the same surface pointer across contiguous item_refs;
+		// RSII draws all instances of the surface, so deduplicate per surface.
+		if (!surf || surf == last_surface) {
+			continue;
+		}
+		last_surface = surf;
+
+		if (p_render_now) {
+			get_this()->_render_single_item_immediate(surf);
+		} else {
+			const float depth = (p_transparent && surf->owner) ? surf->owner->depth : 0.0f;
+			_bypass_surface(surf, depth, p_transparent);
 		}
 	}
 }

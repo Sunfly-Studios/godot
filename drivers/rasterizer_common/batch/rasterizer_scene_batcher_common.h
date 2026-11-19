@@ -464,6 +464,9 @@ public:
 	struct BatchData3D {
 		BatchData3D() {
 			reset_scene();
+			is_initialized = false;
+			replay_valid = false;
+			client_buffer_wrapped = false;
 			settings_use_batching = true;
 			settings_use_single_mesh_fallback = true;
 			settings_dynamic_vertex_limit = 1024;
@@ -479,6 +482,9 @@ public:
 		}
 
 		BatchLimits hardware_limits;
+		bool is_initialized = false;
+		bool replay_valid = false;
+		bool client_buffer_wrapped = false;
 
 		void reset_scene() {
 			reset_flush();
@@ -489,6 +495,8 @@ public:
 			bypassed_transparent_items.clear();
 			sort_items.reset();
 			fvf = BatcherEnums::FVF_3D_TIER1_BASE;
+			replay_valid = false;
+			client_buffer_wrapped = false;
 		}
 
 		void reset_flush() {
@@ -514,6 +522,7 @@ public:
 			current_vbo_byte_offset = 0;
 			current_ibo_byte_offset = 0;
 			current_vbo_slot_index = 0;
+			replay_valid = false;
 		}
 
 		uint32_t max_vertices;
@@ -655,7 +664,7 @@ protected:
 	bool sort_items_from_3d(int p_start);
 
 	template <BatcherEnums::PassMode p_pass_mode, class T_SURFACE>
-	void join_sorted_items();
+	void join_sorted_items(bool p_transparent);
 
 	template <BatcherEnums::PassMode p_pass_mode, class T_SURFACE>
 	void join_and_flush_sorted_items(bool p_transparent);
@@ -664,13 +673,19 @@ protected:
 	bool try_join_item(T_SURFACE *p_surface, RenderItemState3D &r_ris);
 
 	template <BatcherEnums::PassMode p_pass_mode, class T_SURFACE>
-	void prefill_joined_item(const BItemRef3D &p_ref, bool p_use_hardware_transform, uint32_t p_item_index, uint32_t p_joined_flags);
+	bool prefill_joined_item(const BItemRef3D &p_ref, bool p_use_hardware_transform, uint32_t p_item_index, uint32_t p_joined_flags);
 
 	template <class T_SURFACE>
 	void flush_render_batches(typename T_API::MaterialData *p_material_data, RS::PrimitiveType p_primitive, Batch3D &p_batch, bool p_transparent, uint64_t p_content_hash = 0);
 
 	template <class T_SURFACE>
 	void render_bypassed_items(bool p_transparent);
+
+	template <class T_SURFACE>
+	void _bypass_surface(T_SURFACE *p_surface, float p_depth, bool p_transparent);
+
+	template <class T_SURFACE>
+	void _demote_item_refs_to_bypass(uint32_t p_first_ref, uint32_t p_num_refs, bool p_transparent, bool p_render_now);
 
 	// Evaluates the 3D transform once per instance to determine whether software vertex
 	// expansion can skip the 3x3 basis multiplication and normal cofactor generation.

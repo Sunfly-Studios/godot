@@ -1,9 +1,9 @@
 /**************************************************************************/
 /*  rasterizer_array.h                                                    */
 /**************************************************************************/
-/*                       This file is part of:                            */
-/*                           GODOT ENGINE                                 */
-/*                      https://godotengine.org                           */
+/*                         This file is part of:                          */
+/*                             GODOT ENGINE                               */
+/*                        https://godotengine.org                         */
 /**************************************************************************/
 /* Copyright (c) 2014-present Godot Engine contributors (see AUTHORS.md). */
 /* Copyright (c) 2007-2014 Juan Linietsky, Ariel Manzur.                  */
@@ -73,16 +73,23 @@ public:
 		_unit_size_bytes = 0;
 	}
 
-	void create(int p_max_size_units, int p_max_unit_size_bytes) {
+	bool create(int p_max_size_units, int p_max_unit_size_bytes) {
 		free();
+
+		if (p_max_size_units <= 0 || p_max_unit_size_bytes <= 0) {
+			return false;
+		}
+
+		const size_t total_bytes = static_cast<size_t>(p_max_size_units) * static_cast<size_t>(p_max_unit_size_bytes);
+		_list = static_cast<uint8_t *>(Memory::alloc_aligned_static(total_bytes, 16));
+		if (!_list) {
+			return false;
+		}
 
 		_max_unit_size_bytes = p_max_unit_size_bytes;
 		_max_size = p_max_size_units;
-		_max_size_bytes = p_max_size_units * p_max_unit_size_bytes;
-
-		if (_max_size_bytes) {
-			_list = static_cast<uint8_t *>(Memory::alloc_aligned_static(_max_size_bytes, 16));
-		}
+		_max_size_bytes = static_cast<int>(total_bytes);
+		return true;
 	}
 
 	void prepare(int p_unit_size_bytes) {
@@ -92,16 +99,14 @@ public:
 
 	// several items at a time
 	uint8_t *request(int p_num_items = 1) {
-		int old_size = _size;
-		_size += p_num_items;
-
-		if (_size <= _max_size) {
-			return get_unit(old_size);
+		if (!_list || p_num_items < 0 || _unit_size_bytes <= 0 || p_num_items > (_max_size - _size)) {
+			return nullptr;
 		}
 
 		// revert
-		_size = old_size;
-		return nullptr;
+		int old_size = _size;
+		_size += p_num_items;
+		return get_unit(old_size);
 	}
 
 private:
@@ -135,29 +140,46 @@ public:
 		_max_size = 0;
 	}
 
-	void create(int p_size) {
+	bool create(int p_size) {
 		free();
-		if (p_size) {
-			_list = memnew_arr(T, p_size);
+		if (p_size <= 0) {
+			return false;
 		}
+
+		_list = memnew_arr(T, p_size);
+		if (!_list) {
+			return false;
+		}
+
 		_size = 0;
 		_max_size = p_size;
+		return true;
 	}
 
 	void reset() { _size = 0; }
 
+	void truncate(int p_size) {
+		if (p_size < 0) {
+			_size = 0;
+		} else if (p_size < _size) {
+			_size = p_size;
+		}
+	}
+
 	T *request_with_grow() {
 		T *p = request();
 		if (!p) {
-			grow();
-			return request_with_grow();
+			if (unlikely(!grow())) {
+				return nullptr;
+			}
+			return request();
 		}
 		return p;
 	}
 
 	// none of that inefficient pass by value stuff here, thanks
 	T *request() {
-		if (_size < _max_size) {
+		if (_list && _size < _max_size) {
 			return &_list[_size++];
 		}
 		return nullptr;
@@ -165,16 +187,14 @@ public:
 
 	// several items at a time
 	T *request(int p_num_items) {
-		int old_size = _size;
-		_size += p_num_items;
-
-		if (_size <= _max_size) {
-			return &_list[old_size];
+		if (!_list || p_num_items < 0 || p_num_items > (_max_size - _size)) {
+			return nullptr;
 		}
 
 		// revert
-		_size = old_size;
-		return 0;
+		int old_size = _size;
+		_size += p_num_items;
+		return &_list[old_size];
 	}
 
 	int size() const { return _size; }
@@ -185,7 +205,7 @@ public:
 		// no resizing done here, it should be done manually
 		if (o.size() > _max_size) {
 			return false;
-        }
+		}
 
 		// pod types only please!
 		memcpy(_list, o.get_data(), o.size() * sizeof(T));
@@ -195,24 +215,28 @@ public:
 
 	// if you want this to be cheap, call reset before grow,
 	// to ensure there is no data to copy
-	void grow() {
-		unsigned int new_max_size = _max_size * 2;
+	bool grow() {
+		unsigned int new_max_size = static_cast<unsigned int>(_max_size) * 2U;
 		if (!new_max_size) {
 			new_max_size = 1;
-        }
-
-		T *new_list = memnew_arr(T, new_max_size);
-
-		// copy .. pod types only
-		if (_list) {
-			memcpy(new_list, _list, _size * sizeof(T));
 		}
 
-		unsigned int new_size = size();
+		T *new_list = memnew_arr(T, new_max_size);
+		if (!new_list) {
+			return false;
+		}
+
+		// copy .. pod types only
+		if (_list && _size > 0) {
+			memcpy(new_list, _list, static_cast<size_t>(_size) * sizeof(T));
+		}
+
+		int new_size = _size;
 		free();
 		_list = new_list;
 		_size = new_size;
-		_max_size = new_max_size;
+		_max_size = static_cast<int>(new_max_size);
+		return true;
 	}
 
 private:
