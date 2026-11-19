@@ -30,79 +30,90 @@
 
 /*
  * 3D SCENE BATCHER EXECUTION ARCHITECTURE:
- * The batcher is divided in 4 paths or "lanes" that will be executed
- * at any given point in the pipeline; where a "lane" represents a
- * distinct execution and memory strategy:
+ * The batcher is divided into 5 paths or "lanes", where each lane represents a
+ * distinct execution and memory strategy designed around a specific workload:
  *
  * [ Incoming Surface ]
  *          |
- *          +--> Deformed (Skeleton / BlendShapes), Particles, Extreme AABB, or unsupported static fallback?
+ *          +--> Deformed (Skeleton / BlendShapes), Particles, Extreme Bounds, unsupported static fallback, or straight up disabled?
  *          |             |
  *          |             +--> (Yes) --> [ LANE 3: RSII (Render Single Item Immediate) ]
- *          |                            Bypass queue. Rendered after batched bypasses via `_render_single_item_immediate`.
+ *          |                            Bypasses the batcher entirely and renders immediately after batched passes.
  *          |
  *          v (No)
- * [ Record & Evaluate ]  --> Computes planar depth along camera forward vector, 64-bit `state_hash`,
- *          |                 `mesh_id`, `surface_index`, and world-space AABB into `BSortItem3D`.
+ * [ Record & Evaluate ]  --> Evaluates planar camera depth, 64-bit pipeline state hash, mesh identity,
+ *          |                 world-space bounds, and frame-to-frame motion to determine lane eligibility.
  *          v
- * [ Sort & Reorder    ]  --> Opaque:      Sorted by `state_hash -> mesh_id -> surface_index -> depth (FTB)`.
- *          |                 Transparent: Sorted BTF by depth, followed by a bounded AABB intersection
- *          |                              look-ahead window (`sort_items_from_3d`) to reunite matching states.
+ * [  Sort  &  Reorder ]  --> Opaque:      Grouped by pipeline state, lane, and mesh identity, then sorted
+ *          |                              FTB (front-to-back) to maximise early-Z rejection.
+ *          |                 Transparent: Sorted BTF (back-to-front) by depth, followed by a bounded spatial
+ *          |                              look-ahead pass that reunites matching states across non-overlapping
+ *          |                              bounds without introducing alpha-sorting artifacts.
  *          v
- * [ Stage 1: Joining  ]  --> Groups compatible adjacent items into `BItemJoined3D` and `BItemRef3D`:
- *          |                 - Pre-evaluates `TransformMode3D` (None, Translate, Orthogonal, Uniform Scale, All)
- *          |                   and precomputes inverse-transpose normal cofactor matrices.
- *          |                 - Accumulates `BatchFlags3D`, color change ratios, and a rolling 64-bit FNV-1a
- *          |                   hash for cross-frame VBO slot reuse.
- *          |                 - Enforces strict `(state_hash, mesh_id, surface_index)` matching for static-loop items
- *          |                   and `MASK_ID` state matching for dynamic-merge items.
+ * [ Stage 1: Joining  ]  --> Builds lightweight logical groups before touching any GPU memory:
+ *          |                 - Classifies transform complexity (identity, translate, orthogonal, uniform, general)
+ *          |                   and precomputes normal cofactors once per instance.
+ *          |                 - Accumulates required vertex attribute tiers and rolling content hashes for
+ *          |                   cross-frame VBO reuse.
+ *          |                 - Enforces homogeneous mesh grouping for static loops and matrix palette instancing,
+ *          |                   while allowing heterogeneous meshes sharing a material to merge in the dynamic lane.
  *          v
- * [ Stage 2: Dispatch ]  --> Routes each `BItemJoined3D` into one of the 3 batcher lanes:
+ * [ Stage 2: Dispatch ]  --> Routes each logical group into one of the 4 batched lanes:
  *          |
- *          +--> [ LANE 1: BRI (Batch Render Items - Multi-Item Dynamic VBO) ]
- *          |    Target: Multiple static meshes with that are within the default limit in `settings_dynamic_vertex_limit`
- *          |            sharing material/shader state (`num_item_refs > 1`).
- *          |    Action: 1. Checks `VBOPool::cached_slots` via `batch_content_hash` for zero-upload frame-to-frame reuse.
- *          |            2. Selects minimal FVF tier (`TIER1_BASE` [24B], `TIER2_COLOR` [36B], `TIER3_TANGENT` [40B],
- *          |               `TIER4_PALETTE` [64B], or `DEPTH_MINIMAL` [16B] / `DEPTH_ALPHA_MINIMAL` [32B]).
- *          |            3. Software-transforms vertices into `unit_vertices` (caching world-transformed vertices in
- *          |               `GeometryInstanceSurface::baked_world_cache` and `baked_tangent_cache`), uploads to
- *          |               `VBOPool`, and issues a single merged `glDrawElements`.
+ *          +--> [ LANE 1: BRI (Batch Render Items - World-Space Static Merge) ]
+ *          |    Strategy: CPU-baked world-space geometry packed into a dynamic VBO pool.
+ *          |    Target:   Multiple static small/medium meshes sharing material and shader state.
+ *          |    Why:      When objects stay still, both the CPU world-space vertex cache and the GPU VBO slot
+ *          |              cache hit every frame; merging many distinct meshes into a single draw call with zero
+ *          |              per-frame transforms or uploads, using the smallest vertex layout tier the batch needs.
  *          |
- *          +--> [ LANE 2: SMDD (Single Mesh Direct Draw - `FVF_UNBATCHED`) ]
- *          |    Target: Isolated single-instance static meshes (`num_item_refs == 1`, non-MultiMesh) that cannot
- *          |            be joined with neighbours. Acts as the shock absorber for Lane 1.
- *          |    Action: Skips CPU vertex transformation and dynamic VBO staging. Binds the mesh's native static
- *          |            VBO/IBO directly via `_batch_render_single_mesh_fallback` and issues 1 hardware-transformed draw.
+ *          +--> [ LANE 2: SMDD (Single Mesh Direct Draw - Isolated Singletons) ]
+ *          |    Strategy: Direct native static VBO/IBO bind with a single hardware-transformed draw call.
+ *          |    Target:   Isolated single-instance meshes (static or moving) that cannot join with neighbours.
+ *          |    Why:      Acts as the shock absorber for BRI and MPI. Copying an isolated mesh into a staging
+ *          |              buffer or replicating it into a palette template wastes CPU and VRAM; drawing its
+ *          |              native buffer directly pays zero staging cost.
  *          |
- *          +--> [ LANE 4: SMSG (Same Mesh State Grouping - `FVF_SAME_MESH_LOOP`) ]
- *               Target: Repeated heavy static meshes (`base_verts > settings_dynamic_vertex_limit`, `num_item_refs > 1`)
- *                       and all eligible `MultiMesh` instances regardless of vertex count. Acts as the shock absorber
- *                       for Lane 3 (`RSII`) and eliminates CPU vertex expansion for `MultiMesh`.
- *               Action: Binds the material, shader, and the mesh's native static VBO/ABO/IBO once for the entire
- *                       contiguous run in `_batch_render_same_mesh_group`, loops over all joined `BItemRef3D`
- *                       and `MultiMesh` instances updating only the hardware transform and instance color, and
- *                       unbinds once at the end of the run.
+ *          +--> [ LANE 4: SMSG (Same Mesh State Grouping - Heavy Repeated Meshes) ]
+ *          |    Strategy: Bind material, shader, and native static buffers once; loop hardware transforms.
+ *          |    Target:   Repeated heavy meshes above the dynamic vertex limit, coloured MultiMeshes, and
+ *          |              MPI fallbacks (for GLES1) on hardware without matrix palette support.
+ *          |    Why:      Acts as the shock absorber for RSII. Replicating heavy geometry multiple times into
+ *          |              a VBO wastes VRAM; keeping the mesh bound once while streaming per-instance transforms
+ *          |              eliminates redundant state and buffer binds.
+ *          |
+ *          +--> [ LANE 5: MPI (Matrix Palette Instancing - Pseudo-Hardware Instancing) ]
+ *               Strategy: Decouples geometry lifetime from transform lifetime. Packs a reusable local-space
+ *                         template VBO tagged with per-vertex matrix indices, and streams only active transforms
+ *                         per frame into a hardware/uniform matrix palette.
+ *               Target:   Homogeneous moving small/medium meshes, eligible MultiMeshes, and repeated meshes
+ *                         whose shaders restrict CPU vertex baking.
+ *               Why:      Acts as the shock absorber between BRI and SMSG. Because the template VBO is cached
+ *                         under a transform-invariant key, it is uploaded once and reused even when every
+ *                         instance moves or frustum-culling changes the visible count (handled via sub-draw
+ *                         slicing). On GLES1 hardware that does not expose matrix palettes (such as desktop
+ *                         OpenGL 1.x), Stage 2 transparently demotes these runs to SMSG.
  *
- * MULTI-PASS REPLAY (`p_replay == true`):
- * During multi-pass rendering (GLES1 additive light chunks/shadow projections, or `_render_uv2` lightmap baking),
- * `batch_scene_render_items` bypasses recording, sorting, and VBO packing, re-dispatching the existing `bdata.batches`
- * list (Lanes 1, 2, and 4) and bypassed render itmes (Lane 3) directly against the new pass state.
+ * MULTI-PASS REPLAY:
+ * During secondary passes (GLES1 additive light chunks and shadow projections, GLES2 multi-directional
+ * light replays, or UV2 lightmap baking), the batcher skips recording, sorting, and VBO packing entirely,
+ * replaying the established batch list (Lanes 1, 2, 4, and 5) and bypassed items (Lane 3) directly
+ * against the new pass state.
  *
  * 64-BIT STATE HASHING:
- * `state_hash` orders pipeline states from most expensive (MSB) to least expensive (LSB) so standard `<` comparisons
- * in `SortOpaque` naturally minimise driver state changes:
+ * Pipeline state is packed from most expensive to change (MSB) to least expensive (LSB) so standard
+ * ascending sorts naturally minimise driver state churn:
  *
- *  63          52 51                  32 31          31 30                  16 15                 0
- *  +-------------+----------------------+--------------+----------------------+-------------------+
- *  |  Shader ID  |      Material ID     |  Has Texture |   Instance Base Type | Primitive Topology|
- *  +-------------+----------------------+--------------+----------------------+-------------------+
+ *  63          52 51                  32 31          31 30                  16 15                  0
+ *  +-------------+----------------------+--------------+----------------------+--------------------+
+ *  |  Shader ID  |      Material ID     | Has Texture  |  Instance Base Type  | Primitive Topology |
+ *  +-------------+----------------------+--------------+----------------------+--------------------+
  *
- * - Bits 63-52: Shader version ID (and cull/depth state mask in GLES1) (12 bits).
- * - Bits 51-32: Material pointer ID (textures, uniform state) (20 bits).
+ * - Bits 63-52: Shader version (and cull/depth state mask in GLES1) (12 bits).
+ * - Bits 51-32: Material identity (textures and uniform state) (20 bits).
  * - Bit  31   : Texture presence flag (1 bit).
- * - Bits 30-16: `RS::InstanceType` base type (masked out by `MASK_ID` during Lane 1 joining) (15 bits).
- * - Bits 15-0 : `RS::PrimitiveType` topology (16 bits).
+ * - Bits 30-16: Instance base type (masked out during heterogeneous BRI joining) (15 bits).
+ * - Bits 15-0 : Primitive topology (16 bits).
  */
 
 #ifndef RASTERIZER_SCENE_BATCHER_COMMON_H
@@ -119,6 +130,7 @@
 #include "rasterizer_asserts.h"
 #include "core/config/project_settings.h"
 #include "servers/rendering/renderer_scene_render.h"
+#include "servers/rendering/rendering_server_globals.h"
 #include "core/math/transform_3d.h"
 
 template <typename T_API>
@@ -347,6 +359,8 @@ public:
 		uint32_t vbo_index;
 		uint32_t vbo_byte_offset;
 		uint32_t ibo_byte_offset;
+		// Maximum instances packed into the cached local-space MPI VBO template.
+		uint32_t mpi_palette_capacity;
 		BatcherEnums::FVF fvf;
 		uint32_t flags;
 		AABB bounding_aabb;
@@ -364,6 +378,7 @@ public:
 			mesh_id = o.mesh_id;
 			surface_index = o.surface_index;
 			use_static_vbo_loop = o.use_static_vbo_loop;
+			use_mpi = o.use_mpi;
 		}
 		void *item;
 		AABB aabb;
@@ -372,6 +387,7 @@ public:
 		uint32_t mesh_id;
 		uint32_t surface_index;
 		bool use_static_vbo_loop;
+		bool use_mpi;
 	};
 
 	// Batch joined item may represent 1 or more surfaces sharing compatible render state.
@@ -391,6 +407,7 @@ public:
 		uint32_t total_indices;
 		uint32_t total_color_changes;
 		bool use_static_vbo_loop;
+		bool use_mpi;
 
 		// Single non-instanced items (or items that explicitly forbid CPU vertex baking)
 		// use the GPU modelview matrix directly rather than paying CPU software-transform overhead.
@@ -611,7 +628,10 @@ protected:
 			if (A.use_static_vbo_loop != B.use_static_vbo_loop) {
 				return !A.use_static_vbo_loop;
 			}
-			if (A.use_static_vbo_loop && A.state_hash != B.state_hash) {
+			if (A.use_mpi != B.use_mpi) {
+				return !A.use_mpi;
+			}
+			if ((A.use_static_vbo_loop || A.use_mpi) && A.state_hash != B.state_hash) {
 				return A.state_hash < B.state_hash;
 			}
 			if (A.mesh_id != B.mesh_id) {
@@ -755,6 +775,7 @@ protected:
 				bdata.unit_vertices.prepare(sizeof(BatchVertex3DTier3));
 				break;
 			case BatcherEnums::FVF_3D_TIER4_PALETTE:
+			case BatcherEnums::FVF_3D_PALETTE_INSTANCED:
 			case BatcherEnums::FVF_INSTANCED:
 			case BatcherEnums::FVF_REGULAR:
 			default:
@@ -764,6 +785,8 @@ protected:
 	}
 	uint32_t _get_effective_dynamic_vertex_limit() const;
 	bool _should_use_static_vbo_loop(uint32_t p_base_verts, uint32_t p_base_indices, uint32_t p_instances, bool p_is_multimesh, bool p_is_strip, uint32_t p_surf_flags) const;
+	bool _should_use_mpi(uint32_t p_base_verts, uint32_t p_base_indices, uint32_t p_instances, bool p_is_multimesh, bool p_is_strip, bool p_is_dynamic, uint32_t p_surf_flags) const;
+	uint32_t _compute_mpi_palette_capacity(uint32_t p_base_verts, uint32_t p_base_indices, bool p_is_strip) const;
 
 	// Software transforms
 	void _software_transform_vertex(BatchVector3 &r_v, const Transform3D &p_tr) const;

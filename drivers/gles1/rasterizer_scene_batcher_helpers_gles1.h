@@ -481,4 +481,80 @@ _FORCE_INLINE_ void _batch_fill_multimesh_depth_vertices(
 	}
 }
 
+template <typename T_BATCH_TYPE>
+_FORCE_INLINE_ void _batch_fill_mpi_tier(
+	T_BATCH_TYPE *RESTRICT p_dst,
+	uint32_t p_palette_count,
+	uint32_t p_v_count,
+	const Vector3 *p_pos_ptr,
+	const Vector3 *p_norm_ptr,
+	const float *p_tan_ptr,
+	const Vector2 *p_uv_ptr,
+	const Vector2 *p_uv2_ptr,
+	const Color *p_col_ptr,
+	const Color &p_mat_albedo,
+	const RasterizerSceneGLES1::BatchType::BatchColor &p_fallback_color
+) {
+	const Transform3D identity_xform;
+	const Basis identity_basis;
+	uint32_t bvs_idx = 0;
+
+	for (uint32_t inst = 0; inst < p_palette_count; inst++) {
+		const uint8_t m_idx = static_cast<uint8_t>(inst & 0xFF);
+		for (uint32_t i = 0; i < p_v_count; i++) {
+			_batch_transform_pos_norm(p_dst[bvs_idx].pos, p_dst[bvs_idx].normal, p_pos_ptr[i], p_norm_ptr, i, RasterizerSceneGLES1::BatchType::TM_3D_NONE, identity_xform, identity_basis);
+			_batch_write_tier_secondary_attribs(
+				p_dst[bvs_idx],
+				i,
+				p_uv_ptr,
+				p_uv2_ptr,
+				p_col_ptr,
+				p_mat_albedo,
+				true,
+				p_fallback_color,
+				p_tan_ptr,
+				nullptr,
+				RasterizerSceneGLES1::BatchType::TM_3D_NONE,
+				identity_xform,
+				identity_basis,
+				m_idx
+			);
+			bvs_idx++;
+		}
+	}
+}
+
+template <typename T_DEPTH_VERTEX>
+_FORCE_INLINE_ void _batch_fill_mpi_depth(
+	T_DEPTH_VERTEX *RESTRICT p_dst,
+	uint32_t p_palette_count,
+	uint32_t p_v_count,
+	const Vector3 *p_pos_ptr,
+	const Vector2 *p_uv_ptr,
+	const Color *p_col_ptr,
+	const RasterizerSceneGLES1::BatchType::BatchColor &p_fallback_color
+) {
+	const Transform3D identity_xform;
+	uint32_t bvs_idx = 0;
+
+	for (uint32_t inst = 0; inst < p_palette_count; inst++) {
+		const uint8_t m_idx = static_cast<uint8_t>(inst & 0xFF);
+		for (uint32_t i = 0; i < p_v_count; i++) {
+			_batch_write_depth_vertex(
+				p_dst[bvs_idx],
+				i,
+				p_pos_ptr,
+				p_uv_ptr,
+				p_col_ptr,
+				p_fallback_color,
+				nullptr,
+				RasterizerSceneGLES1::BatchType::TM_3D_NONE,
+				identity_xform,
+				m_idx
+			);
+			bvs_idx++;
+		}
+	}
+}
+
 #endif // RASTERIZER_SCENE_BATCHER_HELPERS_GLES1_H

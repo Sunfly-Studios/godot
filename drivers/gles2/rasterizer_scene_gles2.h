@@ -317,6 +317,11 @@ private:
 		mutable Transform3D cached_transform;
 		mutable uint32_t cached_transform_hash = 0;
 
+		// Independent per-frame transform tracking for MPI dynamic detection.
+		mutable uint32_t prev_frame_transform_hash = 0;
+		mutable uint64_t last_transform_frame = 0;
+		mutable bool is_dynamic_frame = false;
+
 		void *surface = nullptr;
 		GLES2::SceneShaderData *shader = nullptr;
 		GLES2::SceneMaterialData *material = nullptr;
@@ -460,6 +465,12 @@ private:
 		ADDITIVE_LIGHT_OMNI,
 		ADDITIVE_LIGHT_SPOT
 	};
+	enum BatchLaneGLES2 {
+		LANE_BRI_SMDD,
+		LANE_RSII,
+		LANE_SMSG,
+		LANE_MPI
+	};
 
 	MultiMeshInstanceData _get_multimesh_data(const GeometryInstanceSurface *p_surface);
 
@@ -552,7 +563,7 @@ private:
 		}
 	}
 
-	/* BATCH UTILITIES  */
+	/* BATCH INLINE UTILS  */
 
 	_FORCE_INLINE_ bool _batch_util_is_depth_pass() const {
 		return bdata.pass_mode == PASS_MODE_SHADOW || bdata.pass_mode == PASS_MODE_DEPTH;
@@ -581,23 +592,20 @@ private:
 			p_fvf == BatcherEnums::FVF_3D_TIER2_COLOR ||
 			p_fvf == BatcherEnums::FVF_3D_TIER3_TANGENT ||
 			p_fvf == BatcherEnums::FVF_3D_TIER4_PALETTE ||
+			p_fvf == BatcherEnums::FVF_3D_PALETTE_INSTANCED ||
 			p_fvf == BatcherEnums::FVF_REGULAR ||
 			p_fvf == BatcherEnums::FVF_INSTANCED
 		);
 	}
 
 	_FORCE_INLINE_ bool _batch_util_promote_to_instancing(BatcherEnums::FVF p_fvf, uint32_t p_flags) const {
-		if (
-			p_fvf == BatcherEnums::FVF_3D_TIER4_PALETTE ||
-			p_fvf == BatcherEnums::FVF_3D_DEPTH_MINIMAL ||
-			p_fvf == BatcherEnums::FVF_3D_DEPTH_ALPHA_MINIMAL
-		) {
-			return (
-				(p_flags & BatcherEnums::BTF_3D_USES_INSTANCING) != 0 &&
-				(p_flags & BatcherEnums::BTF_3D_PREVENT_VERTEX_BAKING) != 0
-			);
+		if (p_fvf == BatcherEnums::FVF_3D_PALETTE_INSTANCED || p_fvf == BatcherEnums::FVF_INSTANCED) {
+			return true;
 		}
-		return p_fvf == BatcherEnums::FVF_INSTANCED;
+		if (p_fvf == BatcherEnums::FVF_3D_DEPTH_MINIMAL || p_fvf == BatcherEnums::FVF_3D_DEPTH_ALPHA_MINIMAL) {
+			return _render_item_state.curr_batch && _render_item_state.curr_batch->mpi_palette_capacity >= 2;
+		}
+		return false;
 	}
 
 	_FORCE_INLINE_ SceneShaderGLES2::ShaderVariant _batch_util_get_batch_shader_variant() {
@@ -1158,25 +1166,7 @@ private:
 	template <PassMode p_pass_mode>
 	_FORCE_INLINE_ void _render_directional_light_replay_pass(RenderListParameters *p_params, const RenderDataGLES2 *p_render_data, uint32_t p_from_element, uint32_t p_to_element, bool p_alpha_pass = false);
 
-	// TODO: This is ugly. To prettify later.
-	struct BatchBoundGeometryStateGLES2;
-
-	template <AdditiveLightType p_light_type, bool p_is_batch>
-	_FORCE_INLINE_ void _execute_additive_light_draw(uint32_t p_light_gl_id, GLES2::SceneMaterialData *p_material, SceneShaderGLES2::ShaderVariant p_variant, uint64_t p_spec_constants, const Transform3D &p_world_xform, RS::PrimitiveType p_primitive, int p_instances, const MultiMeshInstanceData *p_mm, const Transform3D *p_owner_transform, bool p_use_index_buffer, GLenum p_primitive_gl, int p_drawn_count, GLenum p_index_type, RS::InstanceType p_base_type, const BatchBoundGeometryStateGLES2 *p_bound_state = nullptr);
-
-	template <bool p_is_batch>
-	_FORCE_INLINE_ void _render_additive_light_passes(const GeometryInstanceSurface *p_surf, GLES2::SceneMaterialData *p_material, uint64_t p_spec_constants, bool p_instancing, const Transform3D &p_world_xform, RS::PrimitiveType p_primitive, int p_instances = 1, const MultiMeshInstanceData *p_mm = nullptr, const Transform3D *p_owner_transform = nullptr, bool p_use_index_buffer = false, GLenum p_primitive_gl = 0, int p_drawn_count = 0, GLenum p_index_type = 0, const BatchBoundGeometryStateGLES2 *p_bound_state = nullptr);
-
-	template <AdditiveLightType p_light_type>
-	_FORCE_INLINE_ void _upload_additive_light_uniforms(uint32_t p_light_gl_id, RID p_version, SceneShaderGLES2::ShaderVariant p_variant, uint64_t p_spec_constants);
-
-	template <AdditiveLightType p_light_type>
-	_FORCE_INLINE_ void _render_static_mesh_group_light_type_pass(const LocalVector<uint32_t> &p_unique_lights, BatchType::Batch3D &p_batch, GLES2::SceneMaterialData *p_material_data, GLES2::SceneShaderData *p_shader, SceneShaderGLES2::ShaderVariant p_additive_variant, uint64_t p_additive_base_spec, bool p_promote_to_instancing, bool p_use_index_buffer, GLenum p_primitive_gl, int p_drawn_count, GLenum p_index_type);
-
-	template <AdditiveLightType p_light_type, bool p_is_batch>
-	_FORCE_INLINE_ void _render_additive_light_type_pass(const LocalVector<uint32_t> &p_unique_lights, GLES2::SceneMaterialData *p_material, SceneShaderGLES2::ShaderVariant p_additive_variant, uint64_t p_additive_base_spec, const Transform3D &p_world_xform, RS::PrimitiveType p_primitive, int p_instances, const MultiMeshInstanceData *p_mm, const Transform3D *p_owner_transform, bool p_use_index_buffer, GLenum p_primitive_gl, int p_drawn_count, GLenum p_index_type, RS::InstanceType p_base_type, const BatchBoundGeometryStateGLES2 *p_bound_state);
-
-	/* Batch API */
+	/* BATCH API */
 
 	struct BatchBoundGeometryStateGLES2 {
 		bool valid = false;
@@ -1188,10 +1178,42 @@ private:
 		size_t ibo_byte_ofs = 0;
 	};
 
+	// Unified execution context passed to lane-templated base and additive pass utilities.
+	struct LaneDrawContextGLES2 {
+		const BatchType::Batch3D *batch = nullptr;
+		const GeometryInstanceSurface *surface = nullptr;
+		GLES2::SceneMaterialData *material = nullptr;
+		GLES2::SceneShaderData *shader = nullptr;
+		RS::PrimitiveType primitive = RS::PRIMITIVE_MAX;
+		Transform3D world_xform;
+		const BatchBoundGeometryStateGLES2 *bound_state = nullptr;
+		uint32_t draw_count = 0;
+		bool promote_to_instancing = false;
+		bool use_index_buffer = false;
+		GLenum primitive_gl = 0;
+		int drawn_count = 0;
+		GLenum index_type = 0;
+		int instances = 1;
+		const MultiMeshInstanceData *mm = nullptr;
+	};
+
+	template <AdditiveLightType p_light_type>
+	_FORCE_INLINE_ void _upload_additive_light_uniforms(uint32_t p_light_gl_id, RID p_version, SceneShaderGLES2::ShaderVariant p_variant, uint64_t p_spec_constants);
+
+	template <BatchLaneGLES2 p_lane>
+	_FORCE_INLINE_ void _batch_util_dispatch_lane_draw(const LaneDrawContextGLES2 &p_ctx, SceneShaderGLES2::ShaderVariant p_variant, uint64_t p_spec_constants, GLint p_palette_loc = -1, const LightData *p_cull_light = nullptr, AdditiveLightType p_light_type = ADDITIVE_LIGHT_OMNI, uint32_t p_light_gl_id = 0);
+
+	template <BatchLaneGLES2 p_lane, AdditiveLightType p_light_type>
+	_FORCE_INLINE_ void _batch_util_render_lane_additive_light_type(const LocalVector<uint32_t> &p_unique_lights, const LaneDrawContextGLES2 &p_ctx, SceneShaderGLES2::ShaderVariant p_additive_variant, uint64_t p_additive_base_spec);
+
+	template <BatchLaneGLES2 p_lane>
+	_FORCE_INLINE_ void _batch_util_execute_lane_additive_passes(const LaneDrawContextGLES2 &p_ctx, uint64_t p_spec_constants);
+
+	template <BatchLaneGLES2 p_lane>
+	_FORCE_INLINE_ void _batch_util_execute_lane_passes(const LaneDrawContextGLES2 &p_ctx, SceneShaderGLES2::ShaderVariant p_base_variant, uint64_t p_spec_constants);
+
 	void scene_render_items_implementation(GeometryInstanceSurface **p_surfaces, int p_count, const Transform3D &p_camera_transform, bool p_transparent);
 	void _render_static_mesh_group_additive_light_passes(BatchType::Batch3D &p_batch, GLES2::SceneMaterialData *p_material_data, GLES2::SceneShaderData *p_shader, uint64_t p_spec_constants, bool p_promote_to_instancing, bool p_use_index_buffer, GLenum p_primitive_gl, int p_drawn_count, GLenum p_index_type);
-	void _draw_surface_instances(const GeometryInstanceSurface *p_surface, const Transform3D &p_base_transform, int p_instances, const MultiMeshInstanceData *p_mm, RID p_shader_version, SceneShaderGLES2::ShaderVariant p_variant, uint64_t p_spec_constants, bool p_set_instancing_color, bool p_use_index_buffer, GLenum p_primitive_gl, int p_drawn_count, GLenum p_index_type);
-	void _draw_item_ref_instances(const BatchType::BItemRef3D &p_ref, RID p_shader_version, SceneShaderGLES2::ShaderVariant p_variant, uint64_t p_spec_constants, bool p_promote_to_instancing, bool p_use_index_buffer, GLenum p_primitive_gl, int p_drawn_count, GLenum p_index_type);
 
 	void _batch_get_hardware_limits(BatchType::BatchLimits &r_limits);
 	void _batch_get_instance_geometry_capacity(const GeometryInstanceSurface *p_surface, uint32_t &r_vertex_count, uint32_t &r_index_count);
@@ -1202,12 +1224,16 @@ private:
 	BatchType::BatchColor _batch_get_surface_modulate(const GeometryInstanceSurface *p_surface) const;
 	_FORCE_INLINE_ bool _batch_requires_palette_fvf() const {
 		// Not required for GLES2, and done in scene shader
-		// via uniform palettes
+		// via array uniform palettes
 		return false;
+	}
+	_FORCE_INLINE_ uint32_t _batch_get_mpi_palette_capacity() const {
+		// Hardcoded to 32 instances to match the uniform palette array size
+		// in the scene shader
+		return 32U;
 	}
 	bool _batch_can_use_single_mesh_fallback(const GeometryInstanceSurface *p_surface) const;
 	_FORCE_INLINE_ bool _batch_buffer_orphan_and_upload_3d(unsigned int p_buffer_size_bytes, unsigned int p_offset_bytes, unsigned int p_data_size_bytes, const void *p_data, GLenum p_target, GLenum p_usage, bool p_optional_orphan) const;
-	_FORCE_INLINE_ void _batch_upload_multimesh_palette_3d(const BatchType::Batch3D &p_batch, RID p_shader_version, SceneShaderGLES2::ShaderVariant p_variant, uint64_t p_spec_constants);
 	GLES2::SceneMaterialData *_batch_get_material_data(const GeometryInstanceSurface *p_surface);
 
 	void _batch_prepare_surface_world_cache(const GeometryInstanceSurface *p_surface, const BatchType::BItemRef3D &p_ref, BatchType::TransformMode3D p_effective_mode, bool p_need_tangents);
@@ -1215,11 +1241,11 @@ private:
 	void _batch_fill_multimesh_tiered(const BatchType::BItemRef3D &p_ref, uint8_t *r_bvs, uint16_t *r_inds, uint32_t p_start_vert, bool p_use_hardware_transform, uint32_t p_item_index);
 	void _batch_fill_instance_depth(const BatchType::BItemRef3D &p_ref, uint8_t *r_bvs, uint16_t *r_inds, uint32_t p_start_vert, bool p_use_hardware_transform, uint32_t p_item_index);
 	void _batch_fill_multimesh_depth(const BatchType::BItemRef3D &p_ref, uint8_t *r_bvs, uint16_t *r_inds, uint32_t p_start_vert, bool p_use_hardware_transform, uint32_t p_item_index);
+	void _batch_fill_mpi_template(const BatchType::BItemRef3D &p_ref, uint32_t p_palette_count, uint8_t *r_bvs, uint16_t *r_inds);
+	void _batch_fill_mpi_depth_template(const BatchType::BItemRef3D &p_ref, uint32_t p_palette_count, uint8_t *r_bvs, uint16_t *r_inds);
 
-	bool _batch_bind_generic_buffers(bool p_has_color, BatchBoundGeometryStateGLES2 &r_state);
 	bool _batch_bind_single_mesh_fallback_buffers(bool p_has_color, BatchBoundGeometryStateGLES2 &r_state);
-	void _batch_draw_bound_buffers(RS::PrimitiveType p_primitive, uint32_t p_offset, uint32_t p_count, const BatchBoundGeometryStateGLES2 &p_state);
-
+	
 	void _batch_upload_buffers_3d(BatchType::Batch3D &r_batch, uint64_t p_content_hash);
 	bool _batch_try_reuse_cached_vbo_slot_3d(RasterizerSceneBatcherCommon<BatcherAPISceneGLES2>::Batch3D &r_batch, uint64_t p_content_hash);
 	void _batch_bind_material(GLES2::SceneMaterialData *p_material_data, const Transform3D &p_world_transform, bool p_transparent);
@@ -1238,12 +1264,25 @@ private:
 	// Lane 4: SMSG
 	void _batch_render_same_mesh_group(GLES2::SceneMaterialData *p_material_data, RS::PrimitiveType p_primitive, BatchType::Batch3D &p_batch, bool p_transparent);
 
+	// Lane 5: MPI
+	void _batch_render_mpi(GLES2::SceneMaterialData *p_material_data, RS::PrimitiveType p_primitive, BatchType::Batch3D &p_batch, bool p_transparent);
+	void _batch_dispatch_mpi_chunks(const BatchType::Batch3D &p_batch, RS::PrimitiveType p_primitive, const BatchBoundGeometryStateGLES2 &p_bound_state, GLint p_palette_loc, const LightData *p_cull_light = nullptr);
+	void _batch_util_mpi_flush_chunk(GLint p_palette_loc, const float *p_palette_buf, uint32_t &r_chunk_count, RS::PrimitiveType p_primitive, uint32_t p_base_indices, bool p_is_strip, const BatchBoundGeometryStateGLES2 &p_bound_state);
+	void _batch_util_mpi_push_transform(const Transform3D &p_xform, GLint p_palette_loc, float *p_palette_buf, uint32_t &r_chunk_count, uint32_t p_cap, RS::PrimitiveType p_primitive, uint32_t p_base_indices, bool p_is_strip, const BatchBoundGeometryStateGLES2 &p_bound_state);
+
 	// Lane 3: RSII
 	void _render_single_item_immediate(const GeometryInstanceSurface *p_surface);
 
+	/* BATCH GENERIC UTILS */
+
+	bool _batch_util_batch_bind_generic_buffers(bool p_has_color, BatchBoundGeometryStateGLES2 &r_state);
+	void _batch_util_batch_draw_bound_buffers(RS::PrimitiveType p_primitive, uint32_t p_offset, uint32_t p_count, const BatchBoundGeometryStateGLES2 &p_state);
+	void _batch_util_draw_surface_instances(const GeometryInstanceSurface *p_surface, const Transform3D &p_base_transform, int p_instances, const MultiMeshInstanceData *p_mm, RID p_shader_version, SceneShaderGLES2::ShaderVariant p_variant, uint64_t p_spec_constants, bool p_set_instancing_color, bool p_use_index_buffer, GLenum p_primitive_gl, int p_drawn_count, GLenum p_index_type);
+	void _batch_util_draw_item_ref_instances(const BatchType::BItemRef3D &p_ref, RID p_shader_version, SceneShaderGLES2::ShaderVariant p_variant, uint64_t p_spec_constants, bool p_promote_to_instancing, bool p_use_index_buffer, GLenum p_primitive_gl, int p_drawn_count, GLenum p_index_type);
+	void _batch_util_bind_surface_static_arrays_and_ibo(const GeometryInstanceSurface *p_surface, uint64_t p_input_mask, bool p_allow_deformed_instance, bool &r_use_index_buffer, int &r_drawn_count, GLenum &r_index_type);
+
 	/* BINDING */
 
-	void _bind_surface_static_arrays_and_ibo(const GeometryInstanceSurface *p_surface, uint64_t p_input_mask, bool p_allow_deformed_instance, bool &r_use_index_buffer, int &r_drawn_count, GLenum &r_index_type);
 	void _bind_scene_camera_uniforms(RID p_version, SceneShaderGLES2::ShaderVariant p_variant, uint64_t p_spec_constants);
 	void _bind_sky_directional_lights(RID p_version, SkyShaderGLES2::ShaderVariant p_variant, uint64_t p_spec_constants);
 

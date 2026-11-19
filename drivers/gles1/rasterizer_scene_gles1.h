@@ -324,6 +324,11 @@ private:
 		mutable Transform3D cached_transform;
 		mutable uint32_t cached_transform_hash = 0;
 
+		// Independent per-frame transform tracking for MPI dynamic detection.
+		mutable uint32_t prev_frame_transform_hash = 0;
+		mutable uint64_t last_transform_frame = 0;
+		mutable bool is_dynamic_frame = false;
+
 		void *surface = nullptr;
 		GLES1::SceneShaderData *shader = nullptr;
 		GLES1::SceneMaterialData *material = nullptr;
@@ -1145,6 +1150,15 @@ private:
 		RS::MultimeshTransformFormat format = RS::MULTIMESH_TRANSFORM_3D;
 	};
 
+	struct BatchFVFOffsetsGLES1 {
+		size_t pos = 0;
+		size_t norm = 0;
+		size_t uv = 0;
+		size_t col = 0;
+		size_t m_idx = 0;
+		size_t weight = 0;
+	};
+
 	MultiMeshInstanceData _get_multimesh_data(const GeometryInstanceSurface *p_surface);
 
 	_FORCE_INLINE_ void _sky_fetch_colour(const RID &sky_material, const StringName &p_name, Color &r_prop) {
@@ -1285,7 +1299,7 @@ private:
 		}
 	}
 
-	/* BATCH UTILITIES  */
+	/* BATCH INLINE UTILS  */
 
 	_FORCE_INLINE_ bool _batch_util_is_depth_pass() const {
 		return bdata.pass_mode == PASS_MODE_SHADOW || bdata.pass_mode == PASS_MODE_DEPTH;
@@ -1312,9 +1326,46 @@ private:
 			p_fvf == BatcherEnums::FVF_3D_TIER2_COLOR ||
 			p_fvf == BatcherEnums::FVF_3D_TIER3_TANGENT ||
 			p_fvf == BatcherEnums::FVF_3D_TIER4_PALETTE ||
+			p_fvf == BatcherEnums::FVF_3D_PALETTE_INSTANCED ||
 			p_fvf == BatcherEnums::FVF_REGULAR ||
 			p_fvf == BatcherEnums::FVF_INSTANCED
 		);
+	}
+
+	_FORCE_INLINE_ static BatchFVFOffsetsGLES1 _batch_util_get_fvf_offsets(BatcherEnums::FVF p_fvf) {
+		BatchFVFOffsetsGLES1 ofs{};
+		if (_batch_util_is_depth_only_fvf(p_fvf)) {
+			ofs.pos = offsetof(BatchType::BatchVertex3DDepthMinimal, pos);
+			ofs.m_idx = offsetof(BatchType::BatchVertex3DDepthMinimal, matrix_index);
+		} else if (_batch_util_is_depth_alpha_fvf(p_fvf)) {
+			ofs.pos = offsetof(BatchType::BatchVertex3DDepthAlphaMinimal, pos);
+			ofs.uv = offsetof(BatchType::BatchVertex3DDepthAlphaMinimal, uv);
+			ofs.col = offsetof(BatchType::BatchVertex3DDepthAlphaMinimal, color);
+			ofs.m_idx = offsetof(BatchType::BatchVertex3DDepthAlphaMinimal, matrix_index);
+			ofs.weight = offsetof(BatchType::BatchVertex3DDepthAlphaMinimal, weight);
+		} else if (p_fvf == BatcherEnums::FVF_3D_TIER1_BASE) {
+			ofs.pos = offsetof(BatchType::BatchVertex3DTier1, pos);
+			ofs.norm = offsetof(BatchType::BatchVertex3DTier1, normal);
+			ofs.uv = offsetof(BatchType::BatchVertex3DTier1, uv);
+		} else if (p_fvf == BatcherEnums::FVF_3D_TIER2_COLOR) {
+			ofs.pos = offsetof(BatchType::BatchVertex3DTier2, pos);
+			ofs.col = offsetof(BatchType::BatchVertex3DTier2, color);
+			ofs.norm = offsetof(BatchType::BatchVertex3DTier2, normal);
+			ofs.uv = offsetof(BatchType::BatchVertex3DTier2, uv);
+		} else if (p_fvf == BatcherEnums::FVF_3D_TIER3_TANGENT) {
+			ofs.pos = offsetof(BatchType::BatchVertex3DTier3, pos);
+			ofs.col = offsetof(BatchType::BatchVertex3DTier3, color);
+			ofs.norm = offsetof(BatchType::BatchVertex3DTier3, normal);
+			ofs.uv = offsetof(BatchType::BatchVertex3DTier3, uv);
+		} else {
+			ofs.pos = offsetof(BatchType::BatchVertex3DTier4, pos);
+			ofs.col = offsetof(BatchType::BatchVertex3DTier4, color);
+			ofs.norm = offsetof(BatchType::BatchVertex3DTier4, normal);
+			ofs.m_idx = offsetof(BatchType::BatchVertex3DTier4, matrix_index);
+			ofs.uv = offsetof(BatchType::BatchVertex3DTier4, uv);
+			ofs.weight = offsetof(BatchType::BatchVertex3DTier4, weights);
+		}
+		return ofs;
 	}
 
 	/* REST OF GEOMETRY FUNCTIONS */
@@ -1673,12 +1724,10 @@ private:
 	template <PassMode p_pass_mode>
 	void _render_light_shadows(RenderListParameters *p_params, const RenderDataGLES1 *p_render_data, uint32_t p_element_count, bool p_alpha_pass, const GlActiveLight &p_light);
 
-	/* Batch API */
+	/* BATCH API */
 
 	void scene_render_items_implementation(GeometryInstanceSurface **p_surfaces, int p_count, const Transform3D &p_camera_transform, bool p_transparent);
-	void _draw_surface_instances(const GeometryInstanceSurface *p_surface, const Transform3D &p_base_transform, const Transform3D &p_view_matrix, int p_instances, const MultiMeshInstanceData *p_mm, bool p_has_indices, bool p_use_index_buffer, GLenum p_primitive_gl, int p_drawn_count, GLenum p_index_type, const uint8_t *p_index_client_ptr);
-	void _draw_item_ref_instances(const BatchType::BItemRef3D &p_ref, const Transform3D &p_view_matrix, bool p_has_indices, bool p_use_index_buffer, GLenum p_primitive_gl, int p_drawn_count, GLenum p_index_type, const uint8_t *p_index_client_ptr);
-
+	
 	void _batch_get_hardware_limits(BatchType::BatchLimits &r_limits);
 	void _batch_get_instance_geometry_capacity(const GeometryInstanceSurface *p_surface, uint32_t &r_vertex_count, uint32_t &r_index_count);
 	void _batch_resolve_pass_surface_state(const GeometryInstanceSurface *p_surface, GLES1::SceneMaterialData *&r_material, GLES1::SceneShaderData *&r_shader, RS::CullMode &r_cull_mode) const;
@@ -1690,6 +1739,12 @@ private:
 	_FORCE_INLINE_ bool _batch_requires_palette_fvf() const {
 		return GLES1_CONFIG->support_matrix_palette && glIsEnabled(GL_MATRIX_PALETTE_OES);
 	}
+	_FORCE_INLINE_ uint32_t _batch_get_mpi_palette_capacity() const {
+		if (GLES1_CONFIG->support_matrix_palette && GLES1_CONFIG->max_palette_matrices > 0) {
+			return MIN(static_cast<uint32_t>(GLES1_CONFIG->max_palette_matrices), 32U);
+		}
+		return 0U;
+	}
 	bool _batch_can_use_single_mesh_fallback(const GeometryInstanceSurface *p_surface) const;
 	_FORCE_INLINE_ bool _batch_buffer_orphan_and_upload_3d(unsigned int p_buffer_size_bytes, unsigned int p_offset_bytes, unsigned int p_data_size_bytes, const void *p_data, GLenum p_target, GLenum p_usage, bool p_optional_orphan) const;
 
@@ -1700,6 +1755,8 @@ private:
 	void _batch_fill_multimesh_tiered(const BatchType::BItemRef3D &p_ref, uint8_t *r_bvs, uint16_t *r_inds, uint32_t p_start_vert, bool p_use_hardware_transform, uint32_t p_item_index);
 	void _batch_fill_instance_depth(const BatchType::BItemRef3D &p_ref, uint8_t *r_bvs, uint16_t *r_inds, uint32_t p_start_vert, bool p_use_hardware_transform, uint32_t p_item_index);
 	void _batch_fill_multimesh_depth(const BatchType::BItemRef3D &p_ref, uint8_t *r_bvs, uint16_t *r_inds, uint32_t p_start_vert, bool p_use_hardware_transform, uint32_t p_item_index);
+	void _batch_fill_mpi_template(const BatchType::BItemRef3D &p_ref, uint32_t p_palette_count, uint8_t *r_bvs, uint16_t *r_inds);
+	void _batch_fill_mpi_depth_template(const BatchType::BItemRef3D &p_ref, uint32_t p_palette_count, uint8_t *r_bvs, uint16_t *r_inds);
 
 	bool _batch_try_reuse_cached_vbo_slot_3d(BatchType::Batch3D &r_batch, uint64_t p_content_hash);
 	void _batch_upload_buffers_3d(BatchType::Batch3D &r_batch, uint64_t p_content_hash = 0);
@@ -1718,19 +1775,27 @@ private:
 	// Lane 4: SMSG
 	void _batch_render_same_mesh_group(GLES1::SceneMaterialData *p_material_data, RS::PrimitiveType p_primitive, BatchType::Batch3D &p_batch, bool p_transparent);
 
+	// Lane 5: MPI
+	void _batch_render_mpi(GLES1::SceneMaterialData *p_material_data, RS::PrimitiveType p_primitive, BatchType::Batch3D &p_batch, bool p_transparent);
+	void _batch_util_mpi_flush_chunk(uint32_t &r_chunk_count, GLenum p_primitive_gl, uint32_t p_base_indices, bool p_is_strip, GLuint p_gl_ibo, uint32_t p_ibo_byte_offset);
+	void _batch_util_mpi_push_transform(const Transform3D &p_world_xform, const Transform3D &p_view_matrix, const GLES1::SceneShaderData *p_active_shader, uint32_t &r_chunk_count, uint32_t p_cap, GLenum p_primitive_gl, uint32_t p_base_indices, bool p_is_strip, GLuint p_gl_ibo, uint32_t p_ibo_byte_offset);
+
 	// Lane 3: RSII
 	void _render_single_item_immediate(const GeometryInstanceSurface *p_surface);
 
+	/* GENERIC BATCH UTILS */
+	void _batch_util_bind_surface_static_arrays_and_ibo(const GeometryInstanceSurface *p_surface, uint64_t p_input_mask, bool p_allow_deformed_instance, bool &r_has_indices, bool &r_use_index_buffer, int &r_drawn_count, GLenum &r_index_type, const uint8_t *&r_index_client_ptr);
+	void _batch_util_unbind_surface_static_arrays_and_ibo(const GeometryInstanceSurface *p_surface, bool p_use_index_buffer, RS::CullMode p_prev_cull_mode, bool p_prev_depth_draw, bool p_prev_depth_test);
+	void _batch_util_resolve_surface_transforms(const Transform3D &p_model_matrix, const Transform3D &p_view_matrix, const GLES1::SceneShaderData *p_shader, Transform3D &r_model_view, Transform3D &r_world_matrix) const;
+	Transform3D _batch_util_compute_billboard_modelview(const Transform3D &p_model_matrix, const Transform3D &p_view_matrix, const Transform3D &p_main_cam_inv_view_matrix, const Projection &p_projection, const GLES1::SceneShaderData *p_shader) const;
+	void _batch_util_draw_surface_instances(const GeometryInstanceSurface *p_surface, const Transform3D &p_base_transform, const Transform3D &p_view_matrix, int p_instances, const MultiMeshInstanceData *p_mm, bool p_has_indices, bool p_use_index_buffer, GLenum p_primitive_gl, int p_drawn_count, GLenum p_index_type, const uint8_t *p_index_client_ptr);
+	void _batch_util_draw_item_ref_instances(const BatchType::BItemRef3D &p_ref, const Transform3D &p_view_matrix, bool p_has_indices, bool p_use_index_buffer, GLenum p_primitive_gl, int p_drawn_count, GLenum p_index_type, const uint8_t *p_index_client_ptr);
+
+
 	/* BINDING */
 
-	void _bind_surface_static_arrays_and_ibo(const GeometryInstanceSurface *p_surface, uint64_t p_input_mask, bool p_allow_deformed_instance, bool &r_has_indices, bool &r_use_index_buffer, int &r_drawn_count, GLenum &r_index_type, const uint8_t *&r_index_client_ptr);
 	void _bind_scene_camera_uniforms(RID p_version, SceneShaderGLES1::ShaderVariant p_variant, uint64_t p_spec_constants);
 	void _bind_sky_directional_lights(RID p_version, SkyShaderGLES1::ShaderVariant p_variant, uint64_t p_spec_constants);
-	void _unbind_surface_static_arrays_and_ibo(const GeometryInstanceSurface *p_surface, bool p_use_index_buffer, RS::CullMode p_prev_cull_mode, bool p_prev_depth_draw, bool p_prev_depth_test);
-
-	/* OTHER */
-	void _resolve_surface_transforms(const Transform3D &p_model_matrix, const Transform3D &p_view_matrix, const GLES1::SceneShaderData *p_shader, Transform3D &r_model_view, Transform3D &r_world_matrix) const;
-	Transform3D _compute_billboard_modelview(const Transform3D &p_model_matrix, const Transform3D &p_view_matrix, const Transform3D &p_main_cam_inv_view_matrix, const Projection &p_projection, const GLES1::SceneShaderData *p_shader) const;
 
 protected:
 	double time;

@@ -768,6 +768,7 @@ void RasterizerCanvasBatcherCommon<T_API>::flush_render_batches(RendererCanvasRe
 		case BatcherEnums::FVF_3D_TIER4_PALETTE:
 		case BatcherEnums::FVF_3D_DEPTH_MINIMAL:
 		case BatcherEnums::FVF_3D_DEPTH_ALPHA_MINIMAL:
+		case BatcherEnums::FVF_3D_PALETTE_INSTANCED:
 			break;
 		case BatcherEnums::FVF_COLOR: {
 			bool contains_non_polygons = (p_sequence_batch_type_flags & ~BatcherEnums::BTF_POLY) != 0;
