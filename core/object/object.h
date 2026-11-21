@@ -1020,8 +1020,11 @@ public:
 			}
 		}
 		Callable::CallError cerr;
-		const Variant ret = callp(p_method, sizeof...(p_args) == 0 ? nullptr : (const Variant **)argptrs, sizeof...(p_args), cerr);
-		return (cerr.error == Callable::CallError::CALL_OK) ? ret : Variant();
+		Variant ret = callp(p_method, sizeof...(p_args) == 0 ? nullptr : (const Variant **)argptrs, sizeof...(p_args), cerr);
+		if (cerr.error == Callable::CallError::CALL_OK) {
+			return ret;
+		}
+		return Variant();
 	}
 
 	void notification(int p_notification, bool p_reversed = false);
