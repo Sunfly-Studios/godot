@@ -258,9 +258,23 @@ public:
 	};
 	static_assert(sizeof(BatchTangent) == 4, "BatchTangent must be 4 bytes.");
 
+	// CONSTANTS
+
 	// ID magic number that masks out the bits 16-31 (source mesh/surface ID)
 	// so distinct meshes with identical materials can join.
 	static constexpr uint64_t MASK_ID = 0xFFFFFFFF0000FFFFULL;
+	
+	// FNV-1a hash magic numbers
+	static constexpr uint64_t FNV1A_64_OFFSET_BASIS = 14695981039346656037ULL;
+	static constexpr uint32_t FNV1A_32_OFFSET_BASIS = 2166136261U;
+	static constexpr uint64_t FNV1A_64_PRIME = 1099511628211ULL;
+	static constexpr uint32_t FNV1A_32_PRIME = 16777619U;
+
+	// Maximum number of vertices
+	static constexpr uint32_t MAX_VERTICES_32 = 65535U;
+	static constexpr uint64_t MAX_VERTICES_64 = 65535ULL;
+
+	// ENUMS
 
 	// Used to determine whether we use hardware transform (none),
 	// software transform just a translate (no rotate or scale),
@@ -272,6 +286,8 @@ public:
 		TM_3D_UNIFORM_SCALE = 3,
 		TM_3D_ALL = 4,
 	};
+
+	// FVF
 
 	// Simplest 3D FVF (Tier 1 - 24 bytes):
 	// local or baked position, quantized normal, and primary UV.
@@ -752,19 +768,19 @@ protected:
 	}
 	_FORCE_INLINE_ static uint32_t _hash_transform_3d(const Transform3D &p_tr) {
 		const uint32_t *words = reinterpret_cast<const uint32_t *>(&p_tr);
-		uint32_t h = 2166136261U;
+		uint32_t h = FNV1A_32_OFFSET_BASIS;
 		for (uint32_t i = 0; i < (sizeof(Transform3D) / sizeof(uint32_t)); i++) {
 			uint32_t w = words[i];
 			if (w == 0x80000000U) {
 				w = 0U; // Normalise -0.0f to +0.0f
 			}
-			h = (h ^ w) * 16777619U;
+			h = (h ^ w) * FNV1A_32_PRIME;
 		}
 		return h == 0U ? 1U : h;
 	}
 	_FORCE_INLINE_ static uint64_t _fnv1a_64_mix(uint64_t p_hash, uint64_t p_val) {
 		p_hash ^= p_val;
-		p_hash *= 1099511628211ULL;
+		p_hash *= FNV1A_64_PRIME;
 		return p_hash;
 	}
 	_FORCE_INLINE_ void _prepare_unit_vertices_for_fvf(BatcherEnums::FVF p_fvf) {

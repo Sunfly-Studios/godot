@@ -573,7 +573,7 @@ void RasterizerSceneBatcherCommon<T_API>::join_sorted_items(bool p_transparent) 
 				curr_joined->surface_index = bdata.sort_items[i].surface_index;
 				curr_joined->use_static_vbo_loop = item_uses_static_loop;
 				curr_joined->use_mpi = item_uses_mpi;
-				curr_joined->batch_content_hash = (item_uses_static_loop || item_uses_mpi) ? 0 : _fnv1a_64_mix(14695981039346656037ULL, static_cast<uint64_t>(p_pass_mode));
+				curr_joined->batch_content_hash = (item_uses_static_loop || item_uses_mpi) ? 0 : _fnv1a_64_mix(FNV1A_64_OFFSET_BASIS, static_cast<uint64_t>(p_pass_mode));
 				if (curr_joined->batch_content_hash != 0) {
 					curr_joined->batch_content_hash = _fnv1a_64_mix(curr_joined->batch_content_hash, curr_joined->state_hash);
 				}
@@ -798,7 +798,7 @@ void RasterizerSceneBatcherCommon<T_API>::join_and_flush_sorted_items(bool p_tra
 
 				// Transform-invariant hash keyed strictly by
 				// (pass_mode, mesh surface, surface_index, K, fvf, flags).
-				uint64_t mpi_hash = _fnv1a_64_mix(14695981039346656037ULL, 0x4D504935ULL); // "MPI5" domain tag
+				uint64_t mpi_hash = _fnv1a_64_mix(FNV1A_64_OFFSET_BASIS, 0x4D504935ULL); // "MPI5" domain tag
 				mpi_hash = _fnv1a_64_mix(mpi_hash, static_cast<uint64_t>(p_pass_mode));
 				mpi_hash = _fnv1a_64_mix(mpi_hash, reinterpret_cast<uintptr_t>(first_surface->surface));
 				mpi_hash = _fnv1a_64_mix(mpi_hash, (static_cast<uint64_t>(first_surface->surface_index) << 32) | palette_cap);
@@ -1091,7 +1091,7 @@ bool RasterizerSceneBatcherCommon<T_API>::prefill_joined_item(const BItemRef3D &
 
 	const uint32_t start_vert = bdata.total_verts;
 	if (
-		(start_vert + incoming_verts) > 65536U ||
+		(start_vert + incoming_verts) > (MAX_VERTICES_32 + 1U)  ||
 		(bdata.unit_vertices.size() + static_cast<int>(incoming_verts)) > bdata.unit_vertices.max_size() ||
 		(bdata.indices.size() + static_cast<int>(total_requested_indices)) > bdata.indices.max_size()
 	) {
@@ -1302,7 +1302,7 @@ uint32_t RasterizerSceneBatcherCommon<T_API>::_get_effective_dynamic_vertex_limi
 	const uint32_t limit = is_depth_pass
 		? (bdata.settings_dynamic_vertex_limit * 4U)
 		: bdata.settings_dynamic_vertex_limit;
-	const uint32_t max_safe_verts = MIN((uint32_t)bdata.unit_vertices.max_size(), 65535U);
+	const uint32_t max_safe_verts = MIN((uint32_t)bdata.unit_vertices.max_size(), MAX_VERTICES_32);
 	return MIN(limit, max_safe_verts);
 }
 
@@ -1320,7 +1320,7 @@ bool RasterizerSceneBatcherCommon<T_API>::_should_use_static_vbo_loop(uint32_t p
 		return true;
 	}
 
-	const uint64_t max_safe_verts = MIN(static_cast<uint64_t>(bdata.unit_vertices.max_size()), 65535ULL);
+	const uint64_t max_safe_verts = MIN(static_cast<uint64_t>(bdata.unit_vertices.max_size()), MAX_VERTICES_64);
 	if (
 		static_cast<uint64_t>(p_base_verts) > max_safe_verts ||
 		static_cast<uint64_t>(p_base_indices) > static_cast<uint64_t>(bdata.indices.max_size())
@@ -1344,7 +1344,7 @@ uint32_t RasterizerSceneBatcherCommon<T_API>::_compute_mpi_palette_capacity(uint
 		return 0;
 	}
 
-	const uint32_t max_safe_verts = MIN(static_cast<uint32_t>(bdata.unit_vertices.max_size()), 65535U);
+	const uint32_t max_safe_verts = MIN(static_cast<uint32_t>(bdata.unit_vertices.max_size()), MAX_VERTICES_32);
 	const uint32_t max_ibo_indices = static_cast<uint32_t>(bdata.indices.max_size());
 	const uint32_t max_by_verts = max_safe_verts / p_base_verts;
 	const uint32_t eff_idx_per_inst = p_base_indices + (p_is_strip ? 2U : 0U);
