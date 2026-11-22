@@ -684,8 +684,8 @@ protected:
 	template <class T_SURFACE>
 	void _bypass_surface(T_SURFACE *p_surface, float p_depth, bool p_transparent);
 
-	template <class T_SURFACE>
-	void _demote_item_refs_to_bypass(uint32_t p_first_ref, uint32_t p_num_refs, bool p_transparent, bool p_render_now);
+	template <bool p_render_now, class T_SURFACE>
+	void _demote_item_refs_to_bypass(uint32_t p_first_ref, uint32_t p_num_refs, bool p_transparent);
 
 	// Evaluates the 3D transform once per instance to determine whether software vertex
 	// expansion can skip the 3x3 basis multiplication and normal cofactor generation.

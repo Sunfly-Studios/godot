@@ -131,7 +131,7 @@ void RasterizerSceneBatcherCommon<T_API>::batch_scene_render_items(T_SURFACE **p
 			_prepare_unit_vertices_for_fvf(batch.fvf);
 			_render_item_state.curr_batch = &batch;
 			if (unlikely(!get_this()->_batch_render_items(material, primitive, batch, p_transparent))) {
-				_demote_item_refs_to_bypass<T_SURFACE>(batch.first_item_ref, batch.num_item_refs, p_transparent, true);
+				_demote_item_refs_to_bypass<true, T_SURFACE>(batch.first_item_ref, batch.num_item_refs, p_transparent);
 			}
 		}
 		render_bypassed_items<T_SURFACE>(p_transparent);
@@ -717,7 +717,7 @@ void RasterizerSceneBatcherCommon<T_API>::join_and_flush_sorted_items(bool p_tra
 			ERR_PRINT_ONCE("GLES Scene Batcher: Batch3D pool exhausted. Demoting remaining joined groups to immediate lane.");
 			for (uint32_t rem = j; rem < (uint32_t)bdata.items_joined.size(); rem++) {
 				const BItemJoined3D &rem_joined = bdata.items_joined[rem];
-				_demote_item_refs_to_bypass<T_SURFACE>(rem_joined.first_item_ref, rem_joined.num_item_refs, p_transparent, false);
+				_demote_item_refs_to_bypass<false, T_SURFACE>(rem_joined.first_item_ref, rem_joined.num_item_refs, p_transparent);
 			}
 			break;
 		}
@@ -820,7 +820,7 @@ void RasterizerSceneBatcherCommon<T_API>::join_and_flush_sorted_items(bool p_tra
 						} else {
 							batch->num_verts = 0;
 							batch->num_indices = 0;
-							_demote_item_refs_to_bypass<T_SURFACE>(joined.first_item_ref, joined.num_item_refs, p_transparent, false);
+							_demote_item_refs_to_bypass<false, T_SURFACE>(joined.first_item_ref, joined.num_item_refs, p_transparent);
 						}
 					} else {
 						_calculate_draw_call_cost_or_flush(*batch, true);
@@ -863,7 +863,7 @@ void RasterizerSceneBatcherCommon<T_API>::join_and_flush_sorted_items(bool p_tra
 					} else {
 						batch->num_verts = 0;
 						batch->num_indices = 0;
-						_demote_item_refs_to_bypass<T_SURFACE>(joined.first_item_ref, joined.num_item_refs, p_transparent, false);
+						_demote_item_refs_to_bypass<false, T_SURFACE>(joined.first_item_ref, joined.num_item_refs, p_transparent);
 					}
 				}
 				continue;
@@ -938,7 +938,7 @@ void RasterizerSceneBatcherCommon<T_API>::join_and_flush_sorted_items(bool p_tra
 			if (unlikely(!get_this()->_batch_render_items(material, primitive, *batch, p_transparent))) {
 				batch->num_verts = 0;
 				batch->num_indices = 0;
-				_demote_item_refs_to_bypass<T_SURFACE>(joined.first_item_ref, joined.num_item_refs, p_transparent, false);
+				_demote_item_refs_to_bypass<false, T_SURFACE>(joined.first_item_ref, joined.num_item_refs, p_transparent);
 			} else {
 				_calculate_draw_call_cost_or_flush(*batch, true);
 			}
@@ -963,7 +963,7 @@ void RasterizerSceneBatcherCommon<T_API>::join_and_flush_sorted_items(bool p_tra
 			_render_item_state.consumed_uniform_vectors = 0;
 			batch->num_verts = 0;
 			batch->num_indices = 0;
-			_demote_item_refs_to_bypass<T_SURFACE>(joined.first_item_ref, joined.num_item_refs, p_transparent, false);
+			_demote_item_refs_to_bypass<false, T_SURFACE>(joined.first_item_ref, joined.num_item_refs, p_transparent);
 			continue;
 		}
 
@@ -1156,7 +1156,7 @@ void RasterizerSceneBatcherCommon<T_API>::flush_render_batches(typename T_API::M
 		if (unlikely(!get_this()->_batch_render_items(p_material_data, p_primitive, p_batch, p_transparent))) {
 			p_batch.num_verts = 0;
 			p_batch.num_indices = 0;
-			_demote_item_refs_to_bypass<T_SURFACE>(p_batch.first_item_ref, p_batch.num_item_refs, p_transparent, false);
+			_demote_item_refs_to_bypass<false, T_SURFACE>(p_batch.first_item_ref, p_batch.num_item_refs, p_transparent);
 		} else {
 			_calculate_draw_call_cost_or_flush(p_batch);
 		}
@@ -1189,7 +1189,7 @@ void RasterizerSceneBatcherCommon<T_API>::flush_render_batches(typename T_API::M
 
 		p_batch.num_verts = 0;
 		p_batch.num_indices = 0;
-		_demote_item_refs_to_bypass<T_SURFACE>(p_batch.first_item_ref, p_batch.num_item_refs, p_transparent, false);
+		_demote_item_refs_to_bypass<false, T_SURFACE>(p_batch.first_item_ref, p_batch.num_item_refs, p_transparent);
 		return;
 	}
 
@@ -1198,7 +1198,7 @@ void RasterizerSceneBatcherCommon<T_API>::flush_render_batches(typename T_API::M
 		p_batch.num_verts = 0;
 		p_batch.num_indices = 0;
 		p_batch.mpi_palette_capacity = 0;
-		_demote_item_refs_to_bypass<T_SURFACE>(p_batch.first_item_ref, p_batch.num_item_refs, p_transparent, false);
+		_demote_item_refs_to_bypass<false, T_SURFACE>(p_batch.first_item_ref, p_batch.num_item_refs, p_transparent);
 	} else {
 		_calculate_draw_call_cost_or_flush(p_batch);
 	}
@@ -1246,8 +1246,8 @@ void RasterizerSceneBatcherCommon<T_API>::_bypass_surface(T_SURFACE *p_surface, 
 }
 
 template <typename T_API>
-template <class T_SURFACE>
-void RasterizerSceneBatcherCommon<T_API>::_demote_item_refs_to_bypass(uint32_t p_first_ref, uint32_t p_num_refs, bool p_transparent, bool p_render_now) {
+template <bool p_render_now, class T_SURFACE>
+void RasterizerSceneBatcherCommon<T_API>::_demote_item_refs_to_bypass(uint32_t p_first_ref, uint32_t p_num_refs, bool p_transparent) {
 	if (p_first_ref >= (uint32_t)bdata.item_refs.size()) {
 		return;
 	}
@@ -1263,7 +1263,7 @@ void RasterizerSceneBatcherCommon<T_API>::_demote_item_refs_to_bypass(uint32_t p
 		}
 		last_surface = surf;
 
-		if (p_render_now) {
+		if constexpr (p_render_now) {
 			get_this()->_render_single_item_immediate(surf);
 		} else {
 			const float depth = (p_transparent && surf->owner) ? surf->owner->depth : 0.0f;
