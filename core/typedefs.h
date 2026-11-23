@@ -46,6 +46,10 @@
 #include <utility>
 #include <functional> // for std::less
 
+#if defined(_MSC_VER)
+#include <intrin.h>
+#endif
+
 // Ensure that C++ standard is at least C++17. If on MSVC, also ensures that the `Zc:__cplusplus` flag is present.
 static_assert(__cplusplus >= 201703L);
 
@@ -265,6 +269,90 @@ constexpr T floor_log2(T x) {
 template <typename T>
 constexpr T get_num_bits(T x) {
 	return floor_log2(x);
+}
+
+#if defined(IS_32_BIT)
+typedef int32_t Size;
+typedef uint32_t USize;
+static constexpr USize MAX_INT = INT32_MAX;
+#else
+typedef int64_t Size;
+typedef uint64_t USize;
+static constexpr USize MAX_INT = INT64_MAX;
+#endif
+
+// Precondition: p_word != 0. Returns index of the least significant set bit (0 = LSB).
+_ALWAYS_INLINE_ static uint8_t find_first_trailing_set_bit(USize p_word) {
+#if defined(__GNUC__) || defined(__clang__)
+#if defined(IS_32_BIT)
+	return static_cast<uint8_t>(__builtin_ctz(p_word));
+#else
+	return static_cast<uint8_t>(__builtin_ctzll(p_word));
+#endif
+#elif defined(_MSC_VER)
+	unsigned long index;
+#if defined(IS_32_BIT)
+	_BitScanForward(&index, p_word);
+#else
+	_BitScanForward64(&index, p_word);
+#endif
+	return static_cast<uint8_t>(index);
+#else
+#if defined(IS_32_BIT)
+	static const uint8_t debruijn32[32] = {
+		0, 1, 28, 2, 29, 14, 24, 3, 30, 22, 20, 15, 25, 17, 4, 8,
+		31, 27, 13, 23, 21, 19, 16, 7, 26, 12, 18, 6, 11, 5, 10, 9
+	};
+	USize isolated_lowest_bit = p_word & (~p_word + 1U);
+	return debruijn32[(isolated_lowest_bit * 0x077CB531U) >> 27];
+#else
+	static const uint8_t debruijn64[64] = {
+		0, 1, 2, 53, 3, 7, 54, 27, 4, 38, 41, 8, 34, 55, 48, 28,
+		62, 5, 39, 46, 44, 42, 22, 9, 24, 35, 59, 56, 49, 18, 29, 11,
+		63, 52, 6, 26, 37, 40, 33, 47, 61, 45, 43, 21, 23, 58, 17, 10,
+		51, 25, 36, 32, 60, 20, 57, 16, 50, 31, 19, 15, 30, 14, 13, 12,
+	};
+	USize isolated_lowest_bit = p_word & (~p_word + 1ULL);
+	return debruijn64[(isolated_lowest_bit * 0x022FDD63CC95386DULL) >> 58];
+#endif
+#endif // (__GNUC__ || __clang__) || _MSC_VER
+}
+
+// Precondition: p_word != 0. Returns count of leading zero bits (0 = MSB).
+_ALWAYS_INLINE_ static uint8_t find_first_leading_set_bit(USize p_word) {
+#if defined(__GNUC__) || defined(__clang__)
+#if defined(IS_32_BIT)
+	return static_cast<uint8_t>(__builtin_clz(p_word));
+#else
+	return static_cast<uint8_t>(__builtin_clzll(p_word));
+#endif
+#elif defined(_MSC_VER)
+	unsigned long index;
+#if defined(IS_32_BIT)
+	_BitScanReverse(&index, p_word);
+	return static_cast<uint8_t>(31 - index);
+#else
+	_BitScanReverse64(&index, p_word);
+	return static_cast<uint8_t>(63 - index);
+#endif
+#else
+	uint8_t n = 0;
+#if defined(IS_32_BIT)
+	if ((p_word & 0xFFFF0000U) == 0) { n += 16; p_word <<= 16; }
+	if ((p_word & 0xFF000000U) == 0) { n += 8; p_word <<= 8; }
+	if ((p_word & 0xF0000000U) == 0) { n += 4; p_word <<= 4; }
+	if ((p_word & 0xC0000000U) == 0) { n += 2; p_word <<= 2; }
+	if ((p_word & 0x80000000U) == 0) { n += 1; }
+#else
+	if ((p_word & 0xFFFFFFFF00000000ULL) == 0) { n += 32; p_word <<= 32; }
+	if ((p_word & 0xFFFF000000000000ULL) == 0) { n += 16; p_word <<= 16; }
+	if ((p_word & 0xFF00000000000000ULL) == 0) { n += 8; p_word <<= 8; }
+	if ((p_word & 0xF000000000000000ULL) == 0) { n += 4; p_word <<= 4; }
+	if ((p_word & 0xC000000000000000ULL) == 0) { n += 2; p_word <<= 2; }
+	if ((p_word & 0x8000000000000000ULL) == 0) { n += 1; }
+#endif
+	return n;
+#endif // (__GNUC__ || __clang__) || _MSC_VER
 }
 
 // Swap 16, 32 and 64 bits value for endianness.

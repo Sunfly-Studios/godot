@@ -51,38 +51,11 @@
 
 // Copied from `cowdata.h`
 #if defined(IS_32_BIT)
-typedef uint32_t USize;
-static constexpr USize MAX_INT = INT32_MAX;
 static constexpr USize BITMAP_FULL = 0xFFFFFFFFU;
 static constexpr size_t OBJECTS_PER_SLAB = 32;
 #else
-typedef uint64_t USize;
-static constexpr USize MAX_INT = INT64_MAX;
 static constexpr USize BITMAP_FULL = 0xFFFFFFFFFFFFFFFFULL;
 static constexpr size_t OBJECTS_PER_SLAB = 64;
-#endif
-
-// Branchless De Brujin sequences
-#if defined(IS_32_BIT)
-_ALWAYS_INLINE_ static uint8_t find_first_trailing_set_bit(USize p_word) {
-	static const uint8_t debruijn32[32] = {
-		0, 1, 28, 2, 29, 14, 24, 3, 30, 22, 20, 15, 25, 17, 4, 8,
-		31, 27, 13, 23, 21, 19, 16, 7, 26, 12, 18, 6, 11, 5, 10, 9
-	};
-	USize isolated_lowest_bit = p_word & (~p_word + 1U);
-	return debruijn32[(isolated_lowest_bit * 0x077CB531U) >> 27];
-}
-#else
-_ALWAYS_INLINE_ static uint8_t find_first_trailing_set_bit(USize p_word) {
-	static const uint8_t debruijn64[64] = {
-		0, 1, 2, 53, 3, 7, 54, 27, 4, 38, 41, 8, 34, 55, 48, 28,
-		62, 5, 39, 46, 44, 42, 22, 9, 24, 35, 59, 56, 49, 18, 29, 11,
-		63, 52, 6, 26, 37, 40, 33, 47, 61, 45, 43, 21, 23, 58, 17, 10,
-		51, 25, 36, 32, 60, 20, 57, 16, 50, 31, 19, 15, 30, 14, 13, 12,
-	};
-	USize isolated_lowest_bit = p_word & (~p_word + 1ULL);
-	return debruijn64[(isolated_lowest_bit * 0x022FDD63CC95386DULL) >> 58];
-}
 #endif
 
 static constexpr size_t _slab_next_power_of_2(size_t v) {

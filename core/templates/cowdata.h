@@ -60,17 +60,6 @@ class CowData {
 	template <typename TV, typename VV>
 	friend class VMap;
 
-public:
-#if defined(IS_32_BIT)
-	typedef int32_t Size;
-	typedef uint32_t USize;
-	static constexpr USize MAX_INT = INT32_MAX;
-#else
-	typedef int64_t Size;
-	typedef uint64_t USize;
-	static constexpr USize MAX_INT = INT64_MAX;
-#endif
-
 private:
 
 	// Alignment:  ↓ max_align_t           ↓ USize          ↓ USize            ↓ MAX_ALIGN
@@ -347,7 +336,7 @@ void CowData<T>::_unref() {
 }
 
 template <typename T>
-typename CowData<T>::USize CowData<T>::_copy_on_write() {
+typename USize CowData<T>::_copy_on_write() {
 	if (!_ptr) {
 		return 0;
 	}
@@ -521,7 +510,7 @@ Error CowData<T>::_realloc(Size p_alloc_size) {
 }
 
 template <typename T>
-typename CowData<T>::Size CowData<T>::find(const T &p_val, Size p_from) const {
+typename Size CowData<T>::find(const T &p_val, Size p_from) const {
 	if (p_from < 0) {
 		return -1;
 	}
@@ -538,7 +527,7 @@ typename CowData<T>::Size CowData<T>::find(const T &p_val, Size p_from) const {
 }
 
 template <typename T>
-typename CowData<T>::Size CowData<T>::rfind(const T &p_val, Size p_from) const {
+typename Size CowData<T>::rfind(const T &p_val, Size p_from) const {
 	const Size s = size();
 
 	if (p_from < 0) {
@@ -557,7 +546,7 @@ typename CowData<T>::Size CowData<T>::rfind(const T &p_val, Size p_from) const {
 }
 
 template <typename T>
-typename CowData<T>::Size CowData<T>::count(const T &p_val) const {
+typename Size CowData<T>::count(const T &p_val) const {
 	Size amount = 0;
 	const Size s = size();
 	for (Size i = 0; i < s; i++) {

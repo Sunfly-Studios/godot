@@ -32,19 +32,8 @@
 #define A_HASH_MAP_H
 
 #include "core/templates/hash_map.h"
-
-struct HashMapData {
-	union {
-		uint64_t data;
-		struct
-		{
-			uint32_t hash;
-			uint32_t hash_to_key;
-		};
-	};
-};
-
-static_assert(sizeof(HashMapData) == 8);
+#include "core/templates/hashes.h"
+#include "core/templates/index_array.h"
 
 /**
  * An array-based implementation of a hash map. It is very efficient in terms of performance and
@@ -88,134 +77,76 @@ class AHashMap {
 public:
 	// Must be a power of two.
 	static constexpr uint32_t INITIAL_CAPACITY = 16;
-	static constexpr uint32_t EMPTY_HASH = 0;
-	static_assert(EMPTY_HASH == 0, "EMPTY_HASH must always be 0 for the memcpy() optimization.");
+
+	// Used by Hashes during lookup.
+	_FORCE_INLINE_ bool _compare_function(uint32_t p_pos, const TKey &p_key) const {
+		return Comparator::compare(std::launder(&elements[hashes_to_key.get_index(p_pos)])->key, p_key);
+	}
 
 private:
 	typedef KeyValue<TKey, TValue> MapKeyValue;
 	MapKeyValue *elements = nullptr;
-	HashMapData *map_data = nullptr;
+	Hashes hashes;
+	IndexArray hashes_to_key;
 
 	// Due to optimization, this is `capacity - 1`. Use + 1 to get normal capacity.
 	uint32_t capacity = 0;
+	uint32_t elements_capacity = 0;
 	uint32_t num_elements = 0;
 
 	uint32_t _hash(const TKey &p_key) const {
-		uint32_t hash = Hasher::hash(p_key);
-
-		if (unlikely(hash == EMPTY_HASH)) {
-			hash = EMPTY_HASH + 1;
-		}
-
-		return hash;
+		return Hasher::hash(p_key);
 	}
 
+	// 93.75% max load factor; always leaves at least 1 empty slot for capacity >= 15.
 	static _FORCE_INLINE_ uint32_t _get_resize_count(uint32_t p_capacity) {
-		return p_capacity ^ (p_capacity + 1) >> 2; // = get_capacity() * 0.75 - 1; Works only if p_capacity = 2^n - 1.
-	}
-
-	// Returns true when the probe length from `a` to `p_pos` is LESS THAN the probe length from `b` to `p_pos`.
-	_FORCE_INLINE_ static constexpr bool _probe_length_cmp(const uint32_t p_a, const uint32_t p_b, const uint32_t p_pos) {
-		if (unlikely(p_pos < p_b)) {
-			return likely(p_pos >= p_a) || p_b < p_a;
-		}
-		return p_b < p_a && likely(p_pos >= p_a);
+		return p_capacity - (p_capacity >> 4);
 	}
 
 	bool _lookup_pos(const TKey &p_key, uint32_t &r_pos, uint32_t &r_hash_pos) const {
-		if (unlikely(num_elements == 0)) {
-			return false; // Failed lookups, number of elements is 0.
+		if (unlikely(hashes.ptr == nullptr || num_elements == 0)) {
+			return false; // Failed lookups, no elements or number of elements is 0.
 		}
 		return _lookup_pos_with_hash(p_key, r_pos, r_hash_pos, _hash(p_key));
 	}
 
 	bool _lookup_pos_with_hash(const TKey &p_key, uint32_t &r_pos, uint32_t &r_hash_pos, uint32_t p_hash) const {
-		if (unlikely(elements == nullptr || num_elements == 0)) {
+		if (unlikely(hashes.ptr == nullptr || num_elements == 0)) {
 			return false; // Failed lookups, no elements or number of elements is 0.
 		}
-
-		const uint32_t start_pos = p_hash & capacity;
-		uint32_t pos = start_pos;
-		
-		HashMapData data = map_data[pos];
-		if (data.hash == p_hash && Comparator::compare(std::launder(&elements[data.hash_to_key])->key, p_key)) {
-			r_pos = data.hash_to_key;
-			r_hash_pos = pos;
-			return true;
+		bool found = hashes.lookup_pos_with_hash(this, p_key, p_hash, capacity, r_hash_pos);
+		if (found) {
+			r_pos = hashes_to_key.get_index(r_hash_pos);
 		}
-
-		if (data.data == EMPTY_HASH) {
-			return false;
-		}
-
-		// A collision occurred.
-		while (true) {
-			pos = (pos + 1) & capacity;
-			data = map_data[pos];
-			
-			if (data.data == EMPTY_HASH) {
-				return false;
-			}
-			
-			if (data.hash != p_hash) {
-				// Stop search if we probed further than this element.
-				if (_probe_length_cmp(data.hash & capacity, start_pos, pos)) {
-					return false;
-				}
-			} else if (Comparator::compare(std::launder(&elements[data.hash_to_key])->key, p_key)) {
-				r_pos = data.hash_to_key;
-				r_hash_pos = pos;
-				return true;
-			}
-		}
+		return found;
 	}
 
 	uint32_t _insert_with_hash(uint32_t p_hash, uint32_t p_index) {
-		uint32_t start_pos = p_hash & capacity;
-		uint32_t pos = start_pos;
-
-		if (map_data[pos].data == EMPTY_HASH) {
-			uint64_t data = ((uint64_t)p_index << 32) | p_hash;
-			map_data[pos].data = data;
-			return pos;
-		}
-
-		pos = (pos + 1) & capacity;
-		HashMapData c_data;
-		c_data.hash = p_hash;
-		c_data.hash_to_key = p_index;
-
-		while (true) {
-			if (map_data[pos].data == EMPTY_HASH) {
-				map_data[pos] = c_data;
-				return pos;
-			}
-
-			// Not an empty slot, let's check the probing length of the existing one.
-			uint32_t existing_start = map_data[pos].hash & capacity;
-			if (_probe_length_cmp(existing_start, start_pos, pos)) {
-				SWAP(c_data, map_data[pos]);
-				start_pos = existing_start;
-			}
-
-			pos = (pos + 1) & capacity;
-		}
+		uint32_t inserted_position = hashes.insert_hash(p_hash, capacity);
+		hashes_to_key.set_index(inserted_position, p_index);
+		return inserted_position;
 	}
 
-	void _resize_and_rehash(uint32_t p_new_capacity) {
-		uint32_t real_old_capacity = capacity + 1;
-		// Capacity can't be 0 and must be 2^n - 1.
-		capacity = MAX(4u, p_new_capacity);
-		uint32_t real_capacity = next_power_of_2(capacity);
-		capacity = real_capacity - 1;
-
-		HashMapData *old_map_data = map_data;
-		map_data = reinterpret_cast<HashMapData *>(Memory::alloc_aligned_static(sizeof(HashMapData) * real_capacity, alignof(HashMapData)));
+	void _realloc_elements(uint32_t p_new_elements_capacity) {
+		uint32_t old_elements_capacity = elements_capacity;
+		elements_capacity = p_new_elements_capacity;
 
 		if constexpr (std::is_trivially_copyable_v<MapKeyValue>) {
-			elements = reinterpret_cast<MapKeyValue *>(Memory::realloc_aligned_static(elements, sizeof(MapKeyValue) * (_get_resize_count(capacity) + 1), sizeof(MapKeyValue) * (_get_resize_count(real_old_capacity - 1) + 1), alignof(MapKeyValue)));
+			elements = reinterpret_cast<MapKeyValue *>(
+				Memory::realloc_aligned_static(
+					elements,
+					sizeof(MapKeyValue) * elements_capacity,
+					sizeof(MapKeyValue) * old_elements_capacity,
+					alignof(MapKeyValue)
+				)
+			);
 		} else {
-			MapKeyValue *new_elements = reinterpret_cast<MapKeyValue *>(Memory::alloc_aligned_static(sizeof(MapKeyValue) * (_get_resize_count(capacity) + 1), alignof(MapKeyValue)));
+			MapKeyValue *new_elements = reinterpret_cast<MapKeyValue *>(
+				Memory::alloc_aligned_static(
+					sizeof(MapKeyValue) * elements_capacity,
+					alignof(MapKeyValue)
+				)
+			);
 			if (elements != nullptr) {
 				for (uint32_t i = 0; i < num_elements; i++) {
 					unaligned_construct<MapKeyValue>(&new_elements[i], std::move(*std::launder(&elements[i])));
@@ -225,66 +156,74 @@ private:
 			}
 			elements = new_elements;
 		}
+	}
 
-		memset(map_data, EMPTY_HASH, real_capacity * sizeof(HashMapData));
+	void _resize_and_rehash(uint32_t p_new_capacity) {
+		// Capacity can't be 0 and must be 2^n - 1.
+		capacity = MAX(INITIAL_CAPACITY, p_new_capacity);
+		uint32_t real_capacity = next_power_of_2(capacity);
+		capacity = real_capacity - 1;
 
-		if (num_elements != 0) {
-			for (uint32_t i = 0; i < real_old_capacity; i++) {
-				HashMapData data = old_map_data[i];
-				if (data.data != EMPTY_HASH) {
-					_insert_with_hash(data.hash, data.hash_to_key);
-				}
-			}
+		hashes.allocate(real_capacity);
+		hashes_to_key.initialize(real_capacity, _get_resize_count(capacity));
+
+		for (uint32_t i = 0; i < num_elements; i++) {
+			uint32_t hash = _hash(std::launder(&elements[i])->key);
+			_insert_with_hash(hash, i);
 		}
+	}
 
-		Memory::free_aligned_static(old_map_data);
+	void _push_back_element(const TKey &p_key, const TValue &p_value) {
+		if (unlikely(num_elements == elements_capacity)) {
+			uint32_t new_cap = elements_capacity < 2 ? 2 : elements_capacity + (elements_capacity >> 1);
+			_realloc_elements(new_cap);
+		}
+		unaligned_construct<MapKeyValue>(&elements[num_elements], MapKeyValue(p_key, p_value));
+		num_elements++;
 	}
 
 	int32_t _insert_element(const TKey &p_key, const TValue &p_value, uint32_t p_hash) {
-		if (unlikely(elements == nullptr)) {
-			// Allocate on demand to save memory.
-
-			uint32_t real_capacity = capacity + 1;
-			map_data = reinterpret_cast<HashMapData *>(Memory::alloc_aligned_static(sizeof(HashMapData) * real_capacity, alignof(HashMapData)));
-			elements = reinterpret_cast<MapKeyValue *>(Memory::alloc_aligned_static(sizeof(MapKeyValue) * (_get_resize_count(capacity) + 1), alignof(MapKeyValue)));
-
-			memset(map_data, EMPTY_HASH, real_capacity * sizeof(HashMapData));
+		if (unlikely(hashes.ptr == nullptr)) {
+			_resize_and_rehash(capacity + 1);
 		}
 
-		if (unlikely(num_elements > _get_resize_count(capacity))) {
-			_resize_and_rehash(capacity * 2);
+		if (unlikely(num_elements + hashes.num_tombstones >= _get_resize_count(capacity))) {
+			if (num_elements * 2 >= _get_resize_count(capacity)) {
+				_resize_and_rehash((capacity + 1) * 4);
+			} else {
+				// Mostly tombstones: rehash in-place without growing.
+				_resize_and_rehash(capacity + 1);
+			}
 		}
 
-		unaligned_construct<MapKeyValue>(&elements[num_elements], MapKeyValue(p_key, p_value));
+		_push_back_element(p_key, p_value);
 
-		_insert_with_hash(p_hash, num_elements);
-		num_elements++;
+		_insert_with_hash(p_hash, num_elements - 1);
 		return num_elements - 1;
 	}
 
 	void _init_from(const AHashMap &p_other) {
 		capacity = p_other.capacity;
+		elements_capacity = p_other.elements_capacity;
 		uint32_t real_capacity = capacity + 1;
 		num_elements = p_other.num_elements;
 
 		if (p_other.num_elements == 0) {
+			elements_capacity = 0;
 			return;
 		}
 
-		map_data = reinterpret_cast<HashMapData *>(Memory::alloc_aligned_static(sizeof(HashMapData) * real_capacity, alignof(HashMapData)));
-		elements = reinterpret_cast<MapKeyValue *>(Memory::alloc_aligned_static(sizeof(MapKeyValue) * (_get_resize_count(capacity) + 1), alignof(MapKeyValue)));
+		hashes.copy_from(p_other.hashes, real_capacity);
+		hashes_to_key = p_other.hashes_to_key;
+		elements = reinterpret_cast<MapKeyValue *>(Memory::alloc_aligned_static(sizeof(MapKeyValue) * elements_capacity, alignof(MapKeyValue)));
 
 		if constexpr (std::is_trivially_copyable_v<MapKeyValue>) {
-			void *destination = elements;
-			const void *source = p_other.elements;
-			memcpy(destination, source, sizeof(MapKeyValue) * num_elements);
+			memcpy(elements, p_other.elements, sizeof(MapKeyValue) * num_elements);
 		} else {
 			for (uint32_t i = 0; i < num_elements; i++) {
 				unaligned_construct<MapKeyValue>(&elements[i], *std::launder(&p_other.elements[i]));
 			}
 		}
-
-		memcpy(map_data, p_other.map_data, sizeof(HashMapData) * real_capacity);
 	}
 
 public:
@@ -298,11 +237,11 @@ public:
 	}
 
 	void clear() {
-		if (elements == nullptr || num_elements == 0) {
+		if (hashes.ptr == nullptr || num_elements == 0) {
 			return;
 		}
 
-		memset(map_data, EMPTY_HASH, (capacity + 1) * sizeof(HashMapData));
+		hashes.clear(capacity + 1);
 		if constexpr (!std::is_trivially_destructible_v<MapKeyValue>) {
 			for (uint32_t i = 0; i < num_elements; i++) {
 				unaligned_destroy<MapKeyValue>(&elements[i]);
@@ -365,15 +304,7 @@ public:
 			return false;
 		}
 
-		uint32_t next_pos = (pos + 1) & capacity;
-		while (map_data[next_pos].hash != EMPTY_HASH && next_pos != (map_data[next_pos].hash & capacity)) {
-			SWAP(map_data[next_pos], map_data[pos]);
-
-			pos = next_pos;
-			next_pos = (next_pos + 1) & capacity;
-		}
-
-		map_data[pos].data = EMPTY_HASH;
+		hashes.delete_hash(pos);
 		if constexpr (!std::is_trivially_destructible_v<MapKeyValue>) {
 			unaligned_destroy<MapKeyValue>(&elements[element_pos]);
 		}
@@ -381,7 +312,7 @@ public:
 
 		if (element_pos < num_elements) {
 			uint32_t h_pos = 0;
-			_lookup_pos(elements[num_elements].key, pos, h_pos);
+			_lookup_pos(std::launder(&elements[num_elements])->key, pos, h_pos);
 
 			if constexpr (std::is_trivially_copyable_v<MapKeyValue>) {
 				memcpy(&elements[element_pos], &elements[num_elements], sizeof(MapKeyValue));
@@ -389,7 +320,7 @@ public:
 				unaligned_construct<MapKeyValue>(&elements[element_pos], std::move(*std::launder(&elements[num_elements])));
 				unaligned_destroy<MapKeyValue>(&elements[num_elements]);
 			}
-			map_data[h_pos].hash_to_key = element_pos;
+			hashes_to_key.set_index(h_pos, element_pos);
 		}
 
 		return true;
@@ -410,15 +341,7 @@ public:
 		unaligned_destroy<MapKeyValue>(&elements[element_pos]);
 		unaligned_construct<MapKeyValue>(&elements[element_pos], MapKeyValue(p_new_key, std::move(val)));
 
-		uint32_t next_pos = (pos + 1) & capacity;
-		while (map_data[next_pos].hash != EMPTY_HASH && next_pos != (map_data[next_pos].hash & capacity)) {
-			SWAP(map_data[next_pos], map_data[pos]);
-
-			pos = next_pos;
-			next_pos = (next_pos + 1) & capacity;
-		}
-
-		map_data[pos].data = EMPTY_HASH;
+		hashes.delete_hash(pos);
 
 		uint32_t hash = _hash(p_new_key);
 		_insert_with_hash(hash, element_pos);
@@ -429,13 +352,19 @@ public:
 	// Reserves space for a number of elements, useful to avoid many resizes and rehashes.
 	// If adding a known (possibly large) number of elements at once, must be larger than old capacity.
 	void reserve(uint32_t p_new_capacity) {
-		ERR_FAIL_COND_MSG(p_new_capacity < get_capacity(), "It is impossible to reserve less capacity than is currently available.");
-		if (elements == nullptr) {
-			capacity = MAX(4u, p_new_capacity);
-			capacity = next_power_of_2(capacity) - 1;
-			return; // Unallocated yet.
+		ERR_FAIL_COND_MSG(p_new_capacity < size(), "reserve() called with a capacity smaller than the current size. This is likely a mistake.");
+		if (elements_capacity < p_new_capacity) {
+			_realloc_elements(p_new_capacity);
 		}
-		_resize_and_rehash(p_new_capacity);
+
+		if (get_capacity() < p_new_capacity) {
+			if (hashes.ptr == nullptr) {
+				capacity = MAX(INITIAL_CAPACITY, p_new_capacity);
+				capacity = next_power_of_2(capacity) - 1;
+				return; // Unallocated yet.
+			}
+			_resize_and_rehash(p_new_capacity);
+		}
 	}
 
 	/** Iterator API **/
@@ -738,10 +667,12 @@ public:
 				}
 			}
 			Memory::free_aligned_static(elements);
-			Memory::free_aligned_static(map_data);
 			elements = nullptr;
 		}
+		hashes.reset();
+		hashes_to_key.reset();
 		capacity = INITIAL_CAPACITY - 1;
+		elements_capacity = 0;
 		num_elements = 0;
 	}
 

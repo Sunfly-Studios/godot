@@ -52,7 +52,7 @@
 template <typename T>
 class VectorWriteProxy {
 public:
-	_FORCE_INLINE_ T &operator[](typename CowData<T>::Size p_index) {
+	_FORCE_INLINE_ T &operator[](typename Size p_index) {
 		// Vector<T> is standard-layout and this is the first member.
 		Vector<T> *vec = reinterpret_cast<Vector<T> *>(this);
 		CRASH_BAD_INDEX(p_index, vec->_cowdata.size());
@@ -67,7 +67,6 @@ class Vector {
 
 public:
 	VectorWriteProxy<T> write;
-	typedef typename CowData<T>::Size Size;
 
 	// Moved to public to ensure Vector<T> satisfies std::is_standard_layout.
 	// This guarantees pointer-interconvertibility between Vector<T> and its first member (write).
@@ -171,7 +170,7 @@ public:
 		return ret;
 	}
 
-	Vector<T> slice(Size p_begin, Size p_end = CowData<T>::MAX_INT) const {
+	Vector<T> slice(Size p_begin, Size p_end = MAX_INT) const {
 		Vector<T> result;
 
 		const Size s = size();
