@@ -1010,17 +1010,9 @@ public:
 	virtual Variant call_const(const StringName &p_method, const Variant **p_args, int p_argcount, Callable::CallError &r_error);
 
 	template <typename... VarArgs>
-	Variant call(const StringName &p_method, VarArgs... p_args) {
-		Variant args[sizeof...(p_args) + 1] = { p_args..., Variant() }; // +1 makes sure zero sized arrays are also supported.
-		const Variant *argptrs[sizeof...(p_args) + 1] = {};
-
-		if constexpr (sizeof...(p_args) > 0) {
-			for (uint32_t i = 0; i < sizeof...(p_args); i++) {
-				argptrs[i] = &args[i];
-			}
-		}
+	Variant call(const StringName &p_method, const VarArgs &...p_args) {
 		Callable::CallError cerr;
-		Variant ret = callp(p_method, sizeof...(p_args) == 0 ? nullptr : (const Variant **)argptrs, sizeof...(p_args), cerr);
+		const Variant ret = callp(p_method, make_ptr_pack<Variant>(Variant(p_args)...).ptr(), sizeof...(p_args), cerr);
 		if (cerr.error == Callable::CallError::CALL_OK) {
 			return ret;
 		}
@@ -1069,16 +1061,8 @@ public:
 	void add_user_signal(const MethodInfo &p_signal);
 
 	template <typename... VarArgs>
-	Error emit_signal(const StringName &p_name, VarArgs... p_args) {
-		Variant args[sizeof...(p_args) + 1] = { p_args..., Variant() }; // +1 makes sure zero sized arrays are also supported.
-		const Variant *argptrs[sizeof...(p_args) + 1] = {};
-
-		if constexpr (sizeof...(p_args) > 0) {
-			for (uint32_t i = 0; i < sizeof...(p_args); i++) {
-				argptrs[i] = &args[i];
-			}
-		}
-		return emit_signalp(p_name, sizeof...(p_args) == 0 ? nullptr : (const Variant **)argptrs, sizeof...(p_args));
+	Error emit_signal(const StringName &p_name, const VarArgs &...p_args) {
+		return emit_signalp(p_name, make_ptr_pack<Variant>(Variant(p_args)...).ptr(), sizeof...(p_args));
 	}
 
 	MTVIRTUAL Error emit_signalp(const StringName &p_name, const Variant **p_args, int p_argcount);
@@ -1095,7 +1079,7 @@ public:
 	MTVIRTUAL bool has_connections(const StringName &p_signal) const;
 
 	template <typename... VarArgs>
-	void call_deferred(const StringName &p_name, VarArgs... p_args) {
+	void call_deferred(const StringName &p_name, const VarArgs &...p_args) {
 		MessageQueue::get_singleton()->push_call(this, p_name, p_args...);
 	}
 

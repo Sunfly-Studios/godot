@@ -52,6 +52,7 @@
 #endif // TOOLS_ENABLED
 
 const String ProjectSettings::PROJECT_DATA_DIR_NAME_SUFFIX = "godot";
+const int ProjectSettings::CONFIG_VERSION;
 
 ProjectSettings *ProjectSettings::singleton = nullptr;
 

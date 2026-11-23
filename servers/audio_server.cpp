@@ -199,6 +199,7 @@ AudioDriver *AudioDriverManager::drivers[MAX_DRIVERS] = {
 	&AudioDriverManager::dummy_driver,
 };
 int AudioDriverManager::driver_count = 1;
+const int AudioDriverManager::DEFAULT_MIX_RATE;
 
 void AudioDriverManager::add_driver(AudioDriver *p_driver) {
 	ERR_FAIL_COND(driver_count >= MAX_DRIVERS);

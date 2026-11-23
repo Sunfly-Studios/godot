@@ -55,6 +55,7 @@
 #include "core/os/keyboard.h"
 #include "core/string/node_path.h"
 #include "core/string/ustring.h"
+#include "core/templates/ptr_pack.h"
 #include "core/templates/rid.h"
 #include "core/templates/slab_allocator.h"
 #include "core/variant/array.h"
@@ -648,18 +649,11 @@ public:
 	void callp(const StringName &p_method, const Variant **p_args, int p_argcount, Variant &r_ret, Callable::CallError &r_error);
 
 	template <typename... VarArgs>
-	Variant call(const StringName &p_method, VarArgs... p_args) {
-		Variant args[sizeof...(p_args) + 1] = { p_args..., Variant() }; // +1 makes sure zero sized arrays are also supported.
-		const Variant *argptrs[sizeof...(p_args) + 1] = {};
-
-		if constexpr (sizeof...(p_args) > 0) {
-			for (uint32_t i = 0; i < sizeof...(p_args); i++) {
-				argptrs[i] = &args[i];
-			}
-		}
+	Variant call(const StringName &p_method, const VarArgs &...p_args) {
 		Callable::CallError cerr;
 		Variant ret;
-		callp(p_method, sizeof...(p_args) == 0 ? nullptr : (const Variant **)argptrs, sizeof...(p_args), ret, cerr);
+
+		callp(p_method, make_ptr_pack<Variant>(Variant(p_args)...).ptr(), sizeof...(p_args), ret, cerr);
 		if (cerr.error != Callable::CallError::CALL_OK) {
 			_variant_call_error(p_method, cerr);
 		}
@@ -936,7 +930,7 @@ const Variant::ObjData &Variant::_get_obj() const {
 }
 
 template <typename... VarArgs>
-String vformat(const String &p_text, const VarArgs... p_args) {
+inline String vformat(const String &p_text, const VarArgs &...p_args) {
 	Variant args[sizeof...(p_args) + 1] = { p_args..., Variant() }; // +1 makes sure zero sized arrays are also supported.
 	Array args_array;
 	args_array.resize(sizeof...(p_args));
@@ -947,7 +941,6 @@ String vformat(const String &p_text, const VarArgs... p_args) {
 		}
 	}
 
-
 	bool error = false;
 	String fmt = p_text.sprintf(args_array, &error);
 
@@ -956,34 +949,26 @@ String vformat(const String &p_text, const VarArgs... p_args) {
 	return fmt;
 }
 
+inline String vformat(const String &p_text) {
+	return p_text;
+}
+
 template <typename... VarArgs>
-Variant Callable::call(VarArgs... p_args) const {
-	Variant args[sizeof...(p_args) + 1] = { p_args..., 0 }; // +1 makes sure zero sized arrays are also supported.
-	const Variant *argptrs[sizeof...(p_args) + 1] = {};
-
-	// Compile-out the loop when there are no args.
-	if constexpr (sizeof...(p_args) > 0) {
-		for (uint32_t i = 0; i < sizeof...(p_args); i++) {
-			argptrs[i] = &args[i];
-		}
-	}
-
+Variant Callable::call(const VarArgs &...p_args) const {
 	Variant ret;
 	CallError ce;
-	callp(sizeof...(p_args) == 0 ? nullptr : (const Variant **)argptrs, sizeof...(p_args), ret, ce);
+	callp(make_ptr_pack<Variant>(Variant(p_args)...).ptr(), sizeof...(p_args), ret, ce);
 	return ret;
 }
 
 template <typename... VarArgs>
-Callable Callable::bind(VarArgs... p_args) const {
-	Variant args[sizeof...(p_args) + 1] = { p_args..., Variant() }; // +1 makes sure zero sized arrays are also supported.
-	const Variant *argptrs[sizeof...(p_args) + 1] = {};
-	if constexpr (sizeof...(p_args) > 0) {
-		for (uint32_t i = 0; i < sizeof...(p_args); i++) {
-			argptrs[i] = &args[i];
-		}
-	}
-	return bindp(sizeof...(p_args) == 0 ? nullptr : (const Variant **)argptrs, sizeof...(p_args));
+void Callable::call_deferred(const VarArgs &...p_args) const {
+	return call_deferredp(make_ptr_pack<Variant>(Variant(p_args)...).ptr(), sizeof...(p_args));
+}
+
+template <typename... VarArgs>
+Callable Callable::bind(const VarArgs &...p_args) const {
+	return bindp(make_ptr_pack<Variant>(Variant(p_args)...).ptr(), sizeof...(p_args));
 }
 
 Variant &Array::Iterator::operator*() const {
