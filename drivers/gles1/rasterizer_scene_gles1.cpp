@@ -2052,11 +2052,13 @@ void RasterizerSceneGLES1::scene_render_items_implementation(GeometryInstanceSur
 }
 
 void RasterizerSceneGLES1::_batch_get_hardware_limits(BatchType::BatchLimits &r_limits) {
-	// For GLES1 we do stuff manually via CPU-side transforms
-	r_limits.max_vertices_per_buffer = 65536;
-	r_limits.max_indices_per_buffer = 65536 * 2;
+	// Each VBO/IBO slab gets 2 MB VBO (32768 * 64B Tier 4) + 256 KB IBO
+	// to reduce internal fragmentation and per-slab spikes.
+	r_limits.max_vertices_per_buffer = 32768;
+	r_limits.max_indices_per_buffer = 131072;
 
-	// But we do heavily depend on matrix palettes to improve
+	// For GLES1 we do stuff manually via CPU-side transforms,
+	// but we do heavily depend on matrix palettes to improve
 	// instancing capabilities
 	if (GLES1_CONFIG->support_matrix_palette && GLES1_CONFIG->max_palette_matrices > 0) {
 		r_limits.max_matrix_palette_vectors = GLES1_CONFIG->max_palette_matrices * 3;
@@ -2722,6 +2724,7 @@ bool RasterizerSceneGLES1::_batch_try_reuse_cached_vbo_slot_3d(BatchType::Batch3
 					slot.vbo_byte_offset == bdata.current_vbo_byte_offset &&
 					slot.ibo_byte_offset == bdata.current_ibo_byte_offset
 				) {
+					r_batch.use_transient_vbo = false;
 					r_batch.vbo_index = bdata.current_vbo_index;
 					r_batch.vbo_byte_offset = slot.vbo_byte_offset;
 					r_batch.ibo_byte_offset = slot.ibo_byte_offset;
@@ -2730,6 +2733,7 @@ bool RasterizerSceneGLES1::_batch_try_reuse_cached_vbo_slot_3d(BatchType::Batch3
 					r_batch.fvf = slot.fvf;
 					r_batch.flags = slot.flags;
 
+					bdata.vbo_pool[bdata.current_vbo_index].last_used_frame = RSG::rasterizer->get_frame_number();
 					bdata.current_vbo_byte_offset += slot.aligned_vbo_bytes;
 					bdata.current_ibo_byte_offset += slot.aligned_ibo_bytes;
 					bdata.current_vbo_slot_index++;
@@ -2740,38 +2744,48 @@ bool RasterizerSceneGLES1::_batch_try_reuse_cached_vbo_slot_3d(BatchType::Batch3
 	}
 
 	// Search all existing valid VBO pools for any cached slot with matching the hash.
-	for (uint32_t p = 0; p < bdata.vbo_pool.size(); p++) {
-		const BatchType::VBOPool &search_pool = bdata.vbo_pool[p];
-		if (search_pool.gl_vertex_buffer == 0 || search_pool.gl_index_buffer == 0) {
-			continue;
-		}
-		const uint32_t slot_count = search_pool.cached_slots.size();
-		for (uint32_t s = 0; s < slot_count; s++) {
-			const BatchType::CachedBatchSlot3D &slot = search_pool.cached_slots[s];
-			if (slot.content_hash == p_content_hash) {
-				r_batch.vbo_index = p;
-				r_batch.vbo_byte_offset = slot.vbo_byte_offset;
-				r_batch.ibo_byte_offset = slot.ibo_byte_offset;
-				r_batch.num_verts = slot.num_verts;
-				r_batch.num_indices = slot.num_indices;
-				r_batch.fvf = slot.fvf;
-				r_batch.flags = slot.flags;
+	// This allows 32-instance Tier 4 MultiMesh chunks and depth-reordered static batches
+	// to share or reuse already-uploaded VBO data without re-uploading or invalidating the pool.
+	const BatchType::CachedSlotLocation3D *loc = bdata.vbo_slot_lookup.find(p_content_hash);
+	if (loc && loc->pool_index < bdata.vbo_pool.size()) {
+		const uint32_t p = loc->pool_index;
+		const uint32_t s = loc->slot_index;
+		BatchType::VBOPool &search_pool = bdata.vbo_pool[p];
 
-				// Advance the write cursor past this slot if it resides in the active pool
-				// so subsequent new uploads append cleanly after it.
-				if (p == bdata.current_vbo_index && s >= bdata.current_vbo_slot_index) {
-					bdata.current_vbo_byte_offset = slot.vbo_byte_offset + slot.aligned_vbo_bytes;
-					bdata.current_ibo_byte_offset = slot.ibo_byte_offset + slot.aligned_ibo_bytes;
-					bdata.current_vbo_slot_index = s + 1;
-				} else if (p > bdata.current_vbo_index) {
-					bdata.current_vbo_index = p;
-					bdata.current_vbo_byte_offset = slot.vbo_byte_offset + slot.aligned_vbo_bytes;
-					bdata.current_ibo_byte_offset = slot.ibo_byte_offset + slot.aligned_ibo_bytes;
-					bdata.current_vbo_slot_index = s + 1;
-				}
-				return true;
+		if (
+			search_pool.gl_vertex_buffer != 0 &&
+			search_pool.gl_index_buffer != 0 &&
+			s < search_pool.cached_slots.size() &&
+			search_pool.cached_slots[s].content_hash == p_content_hash
+		) {
+			const BatchType::CachedBatchSlot3D &slot = search_pool.cached_slots[s];
+			search_pool.last_used_frame = RSG::rasterizer->get_frame_number();
+			r_batch.use_transient_vbo = false;
+			r_batch.vbo_index = p;
+			r_batch.vbo_byte_offset = slot.vbo_byte_offset;
+			r_batch.ibo_byte_offset = slot.ibo_byte_offset;
+			r_batch.num_verts = slot.num_verts;
+			r_batch.num_indices = slot.num_indices;
+			r_batch.fvf = slot.fvf;
+			r_batch.flags = slot.flags;
+
+			// Advance the write cursor past this slot if it resides in the active pool
+			// so subsequent new uploads append cleanly after it.
+			if (p == bdata.current_vbo_index && s >= bdata.current_vbo_slot_index) {
+				bdata.current_vbo_byte_offset = slot.vbo_byte_offset + slot.aligned_vbo_bytes;
+				bdata.current_ibo_byte_offset = slot.ibo_byte_offset + slot.aligned_ibo_bytes;
+				bdata.current_vbo_slot_index = s + 1;
+			} else if (p > bdata.current_vbo_index) {
+				bdata.current_vbo_index = p;
+				bdata.current_vbo_byte_offset = slot.vbo_byte_offset + slot.aligned_vbo_bytes;
+				bdata.current_ibo_byte_offset = slot.ibo_byte_offset + slot.aligned_ibo_bytes;
+				bdata.current_vbo_slot_index = s + 1;
 			}
+			return true;
 		}
+
+		// Cleanup for any stale lookup entry.
+		bdata.vbo_slot_lookup.erase(p_content_hash);
 	}
 
 	return false;
@@ -2822,6 +2836,87 @@ bool RasterizerSceneGLES1::_batch_upload_buffers_3d(BatchType::Batch3D &r_batch,
 		return true;
 	}
 
+	// Route uncached/transient batches (content_hash == 0) into the fixed-size
+	// per-frame transient ring buffer so one-off dynamic uploads never pollute
+	// or grow the persistent VBO cache pool.
+	if (p_content_hash == 0 && !GLES1_CONFIG->is_android_emulator) {
+		// Advance to the next ring slab if this batch overflows the remaining space.
+		if (
+			(bdata.transient_vbo_byte_offset + aligned_vbo_bytes > max_vbo_bytes) ||
+			(bdata.transient_ibo_byte_offset + aligned_ibo_bytes > max_ibo_bytes)
+		) {
+			bdata.advance_transient_ring();
+			bdata.transient_ring_advances_in_pass++;
+			if (bdata.transient_ring_advances_in_pass >= BatchType::BatchData3D::TRANSIENT_RING_SIZE) {
+				bdata.client_buffer_wrapped = true;
+			}
+		}
+
+		BatchType::VBOPool &ring = bdata.transient_vbo_ring[bdata.transient_ring_frame_index];
+		bool ring_created = false;
+
+		// Lazily allocate the VBO/IBO pair for this frame's ring slot on first use.
+		if (ring.gl_vertex_buffer == 0 || ring.gl_index_buffer == 0) {
+			glGenBuffers(1, &ring.gl_vertex_buffer);
+			glGenBuffers(1, &ring.gl_index_buffer);
+			bool alloc_ok = (ring.gl_vertex_buffer != 0 && ring.gl_index_buffer != 0);
+			if (alloc_ok) {
+				glBindBuffer(GL_ARRAY_BUFFER, ring.gl_vertex_buffer);
+				glBufferData(GL_ARRAY_BUFFER, max_vbo_bytes, nullptr, GL_DYNAMIC_DRAW);
+				if (unlikely(glGetError() == GL_OUT_OF_MEMORY)) {
+					alloc_ok = false;
+				}
+			}
+			if (alloc_ok) {
+				glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ring.gl_index_buffer);
+				glBufferData(GL_ELEMENT_ARRAY_BUFFER, max_ibo_bytes, nullptr, GL_DYNAMIC_DRAW);
+				if (unlikely(glGetError() == GL_OUT_OF_MEMORY)) {
+					alloc_ok = false;
+				}
+			}
+			glBindBuffer(GL_ARRAY_BUFFER, 0);
+			glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+			if (unlikely(!alloc_ok)) {
+				if (ring.gl_vertex_buffer != 0) {
+					glDeleteBuffers(1, &ring.gl_vertex_buffer);
+					ring.gl_vertex_buffer = 0;
+				}
+				if (ring.gl_index_buffer != 0) {
+					glDeleteBuffers(1, &ring.gl_index_buffer);
+					ring.gl_index_buffer = 0;
+				}
+				return false;
+			}
+			ring_created = true;
+		}
+
+		const bool is_sub_alloc = (ring_created || bdata.transient_vbo_byte_offset > 0 || bdata.transient_ibo_byte_offset > 0);
+		glBindBuffer(GL_ARRAY_BUFFER, ring.gl_vertex_buffer);
+		const bool vbo_ok = _batch_buffer_orphan_and_upload_3d(max_vbo_bytes, bdata.transient_vbo_byte_offset, bytes_to_upload, bdata.unit_vertices.get_data(), GL_ARRAY_BUFFER, GL_DYNAMIC_DRAW, is_sub_alloc);
+
+		bool ibo_ok = false;
+		if (likely(vbo_ok)) {
+			glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ring.gl_index_buffer);
+			ibo_ok = _batch_buffer_orphan_and_upload_3d(max_ibo_bytes, bdata.transient_ibo_byte_offset, indices_bytes_to_upload, bdata.indices.get_data(), GL_ELEMENT_ARRAY_BUFFER, GL_DYNAMIC_DRAW, is_sub_alloc);
+		}
+
+		glBindBuffer(GL_ARRAY_BUFFER, 0);
+		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+		if (unlikely(!vbo_ok || !ibo_ok)) {
+			return false;
+		}
+
+		// Tag the batch to read from the active transient ring slot and advance cursors.
+		r_batch.use_transient_vbo = true;
+		r_batch.vbo_index = bdata.transient_ring_frame_index;
+		r_batch.vbo_byte_offset = bdata.transient_vbo_byte_offset;
+		r_batch.ibo_byte_offset = bdata.transient_ibo_byte_offset;
+		bdata.transient_vbo_byte_offset += aligned_vbo_bytes;
+		bdata.transient_ibo_byte_offset += aligned_ibo_bytes;
+		return true;
+	}
+
+	r_batch.use_transient_vbo = false;
 	if (GLES1_CONFIG->is_android_emulator) {
 		bdata.current_vbo_byte_offset = 0;
 		bdata.current_ibo_byte_offset = 0;
@@ -2861,7 +2956,26 @@ bool RasterizerSceneGLES1::_batch_upload_buffers_3d(BatchType::Batch3D &r_batch,
 		}
 	}
 
+	const uint64_t current_frame = RSG::rasterizer->get_frame_number();
 	bool pool_created = false;
+	if (bdata.current_vbo_index >= bdata.vbo_pool.size()) {
+		if (!GLES1_CONFIG->is_android_emulator && bdata.vbo_pool.size() >= BatchType::BatchData3D::MAX_PERSISTENT_VBO_POOLS) {
+			const int stale_idx = bdata.find_stale_vbo_pool(current_frame);
+			if (stale_idx >= 0) {
+				// Reclaim a stale persistent slab from offset 0.
+				bdata.current_vbo_index = static_cast<uint32_t>(stale_idx);
+				bdata.current_vbo_byte_offset = 0;
+				bdata.current_ibo_byte_offset = 0;
+				bdata.current_vbo_slot_index = 0;
+				bdata.clear_pool_cached_slots(bdata.current_vbo_index);
+			} else {
+				// All persistent slabs are active, so stream this overflow batch
+				// via the transient ring.
+				return _batch_upload_buffers_3d(r_batch, 0);
+			}
+		}
+	}
+
 	if (bdata.current_vbo_index >= bdata.vbo_pool.size()) {
 		BatchType::VBOPool new_pool{};
 		glGenBuffers(1, &new_pool.gl_vertex_buffer);
@@ -2918,10 +3032,10 @@ bool RasterizerSceneGLES1::_batch_upload_buffers_3d(BatchType::Batch3D &r_batch,
 
 	// If we orphan at offset 0, all subsequent cached slots in this VBO are invalidated.
 	if (!is_sub_alloc) {
-		pool.cached_slots.clear();
+		bdata.clear_pool_cached_slots(bdata.current_vbo_index);
 	} else if (bdata.current_vbo_slot_index < pool.cached_slots.size()) {
 		// A new upload at this offset invalidates any downstream cached slots that might overlap.
-		pool.cached_slots.resize(bdata.current_vbo_slot_index);
+		bdata.clear_pool_cached_slots(bdata.current_vbo_index, bdata.current_vbo_slot_index);
 	}
 
 	// Orphan and upload the vertex buffer
@@ -2943,9 +3057,9 @@ bool RasterizerSceneGLES1::_batch_upload_buffers_3d(BatchType::Batch3D &r_batch,
 
 	if (unlikely(!vbo_ok || !ibo_ok)) {
 		if (!is_sub_alloc) {
-			pool.cached_slots.clear();
+			bdata.clear_pool_cached_slots(bdata.current_vbo_index);
 		} else if (bdata.current_vbo_slot_index < pool.cached_slots.size()) {
-			pool.cached_slots.resize(bdata.current_vbo_slot_index);
+			bdata.clear_pool_cached_slots(bdata.current_vbo_index, bdata.current_vbo_slot_index);
 		}
 		return false;
 	}
@@ -2964,11 +3078,19 @@ bool RasterizerSceneGLES1::_batch_upload_buffers_3d(BatchType::Batch3D &r_batch,
 		slot.fvf = r_batch.fvf;
 		slot.flags = r_batch.flags;
 
-		if (bdata.current_vbo_slot_index < pool.cached_slots.size()) {
-			pool.cached_slots[bdata.current_vbo_slot_index] = slot;
+		const uint32_t written_slot_index = bdata.current_vbo_slot_index;
+		if (written_slot_index < pool.cached_slots.size()) {
+			pool.cached_slots[written_slot_index] = slot;
 		} else {
 			pool.cached_slots.push_back(slot);
 		}
+		if (p_content_hash != 0) {
+			bdata.vbo_slot_lookup.insert(
+				p_content_hash,
+				BatchType::CachedSlotLocation3D{ bdata.current_vbo_index, written_slot_index }
+			);
+		}
+		pool.last_used_frame = current_frame;
 		bdata.current_vbo_slot_index++;
 
 		bdata.current_vbo_byte_offset += aligned_vbo_bytes;
@@ -3235,9 +3357,22 @@ bool RasterizerSceneGLES1::_batch_render_generic(RS::PrimitiveType p_primitive, 
 	}
 
 	// Resolve the pooled VBO and IBO handles assigned to the active batch.
+	const bool use_transient = (
+		_render_item_state.curr_batch &&
+		_render_item_state.curr_batch->use_transient_vbo
+	);
 	uint32_t vbo_idx = _render_item_state.curr_batch ? _render_item_state.curr_batch->vbo_index : 0;
-	uint32_t gl_vbo = (GLES1_CONFIG->support_vbo && bdata.vbo_pool.size() > vbo_idx) ? bdata.vbo_pool[vbo_idx].gl_vertex_buffer : 0;
-	uint32_t gl_ibo = (GLES1_CONFIG->support_vbo && bdata.vbo_pool.size() > vbo_idx) ? bdata.vbo_pool[vbo_idx].gl_index_buffer : 0;
+	uint32_t gl_vbo = 0;
+	uint32_t gl_ibo = 0;
+	if (GLES1_CONFIG->support_vbo) {
+		if (use_transient && vbo_idx < BatchType::BatchData3D::TRANSIENT_RING_SIZE) {
+			gl_vbo = bdata.transient_vbo_ring[vbo_idx].gl_vertex_buffer;
+			gl_ibo = bdata.transient_vbo_ring[vbo_idx].gl_index_buffer;
+		} else if (!use_transient && bdata.vbo_pool.size() > vbo_idx) {
+			gl_vbo = bdata.vbo_pool[vbo_idx].gl_vertex_buffer;
+			gl_ibo = bdata.vbo_pool[vbo_idx].gl_index_buffer;
+		}
+	}
 
 	if (gl_vbo == 0 && bdata.unit_vertices.get_data() == nullptr) {
 		return false;
@@ -3761,8 +3896,17 @@ bool RasterizerSceneGLES1::_batch_render_mpi(GLES1::SceneMaterialData *p_materia
 	}
 
 	const uint32_t vbo_idx = p_batch.vbo_index;
-	const GLuint gl_vbo = (GLES1_CONFIG->support_vbo && bdata.vbo_pool.size() > vbo_idx) ? bdata.vbo_pool[vbo_idx].gl_vertex_buffer : 0;
-	const GLuint gl_ibo = (GLES1_CONFIG->support_vbo && bdata.vbo_pool.size() > vbo_idx) ? bdata.vbo_pool[vbo_idx].gl_index_buffer : 0;
+	GLuint gl_vbo = 0;
+	GLuint gl_ibo = 0;
+	if (GLES1_CONFIG->support_vbo) {
+		if (p_batch.use_transient_vbo && vbo_idx < BatchType::BatchData3D::TRANSIENT_RING_SIZE) {
+			gl_vbo = bdata.transient_vbo_ring[vbo_idx].gl_vertex_buffer;
+			gl_ibo = bdata.transient_vbo_ring[vbo_idx].gl_index_buffer;
+		} else if (!p_batch.use_transient_vbo && bdata.vbo_pool.size() > vbo_idx) {
+			gl_vbo = bdata.vbo_pool[vbo_idx].gl_vertex_buffer;
+			gl_ibo = bdata.vbo_pool[vbo_idx].gl_index_buffer;
+		}
+	}
 	if (gl_vbo == 0 && bdata.unit_vertices.get_data() == nullptr) {
 		return false;
 	}
@@ -6266,6 +6410,7 @@ void RasterizerSceneGLES1::render_scene(const Ref<RenderSceneBuffers> &p_render_
 	// Reset VBO index and sub-allocation cursors. We require this to
 	// preserve full-scene VBO caching for our multi-pass lighting replays
 	// while retaining cached_slots for frame N+1.
+	bdata.advance_transient_ring();
 	bdata.current_vbo_index = 0;
 	bdata.current_vbo_byte_offset = 0;
 	bdata.current_ibo_byte_offset = 0;
@@ -7420,10 +7565,20 @@ RasterizerSceneGLES1::~RasterizerSceneGLES1() {
 	singleton = nullptr;
 
 	// 3D batcher VBO pools
-	for (uint32_t i = 0; i < bdata.vbo_pool.size(); i++) {
-		if (bdata.vbo_pool[i].gl_vertex_buffer != 0) {
-			glDeleteBuffers(1, &bdata.vbo_pool[i].gl_vertex_buffer);
-			glDeleteBuffers(1, &bdata.vbo_pool[i].gl_index_buffer);
+	if (GLES1_CONFIG->support_vbo) {
+		for (uint32_t i = 0; i < BatchType::BatchData3D::TRANSIENT_RING_SIZE; i++) {
+			if (bdata.transient_vbo_ring[i].gl_vertex_buffer != 0) {
+				glDeleteBuffers(1, &bdata.transient_vbo_ring[i].gl_vertex_buffer);
+			}
+			if (bdata.transient_vbo_ring[i].gl_index_buffer != 0) {
+				glDeleteBuffers(1, &bdata.transient_vbo_ring[i].gl_index_buffer);
+			}
+		}
+		for (uint32_t i = 0; i < bdata.vbo_pool.size(); i++) {
+			if (bdata.vbo_pool[i].gl_vertex_buffer != 0) {
+				glDeleteBuffers(1, &bdata.vbo_pool[i].gl_vertex_buffer);
+				glDeleteBuffers(1, &bdata.vbo_pool[i].gl_index_buffer);
+			}
 		}
 	}
 

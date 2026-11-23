@@ -73,6 +73,7 @@ void RasterizerSceneBatcherCommon<T_API>::batch_initialize() {
 	bdata.is_initialized = ok;
 	if (ok) {
 		bdata.unit_vertices.prepare(sizeof(BatchVertex3DTier1));
+		bdata.vbo_slot_lookup.reserve(1024);
 	} else {
 		ERR_PRINT_ONCE("GLES Scene Batcher: Failed to allocate staging buffers. Falling back to immediate rendering.");
 	}
@@ -579,6 +580,7 @@ void RasterizerSceneBatcherCommon<T_API>::join_sorted_items(bool p_transparent) 
 				}
 				curr_joined->total_verts = 0;
 				curr_joined->total_indices = 0;
+				curr_joined->total_instances = 0;
 				curr_joined->total_color_changes = 1;
 
 				_render_item_state.current_state_hash = bdata.sort_items[i].state_hash;
@@ -662,6 +664,7 @@ void RasterizerSceneBatcherCommon<T_API>::join_sorted_items(bool p_transparent) 
 			}
 			curr_joined->total_verts += incoming_verts;
 			curr_joined->total_indices += incoming_indices;
+			curr_joined->total_instances += chunk_instances;
 			_render_item_state.consumed_uniform_vectors += incoming_uniform_vectors;
 
 			inst_offset += chunk_instances;
@@ -767,8 +770,21 @@ void RasterizerSceneBatcherCommon<T_API>::join_and_flush_sorted_items(bool p_tra
 				primitive == RS::PRIMITIVE_TRIANGLE_STRIP ||
 				primitive == RS::PRIMITIVE_LINE_STRIP
 			);
-			const uint32_t palette_cap = _compute_mpi_palette_capacity(first_ref.base_verts, first_ref.base_indices, is_strip);
-			const bool is_isolated_single = (joined.num_item_refs == 1 && first_ref.instance_count == 1 && !(effective_flags & BatcherEnums::BTF_3D_USES_INSTANCING));
+			const uint32_t max_palette_cap = _compute_mpi_palette_capacity(first_ref.base_verts, first_ref.base_indices, is_strip);
+			uint32_t palette_cap = 0;
+			if (max_palette_cap >= 2) {
+				// Bucket template capacity to the smallest power-of-two >= total_instances
+				uint32_t bucket = 2;
+				while (bucket < joined.total_instances && bucket < max_palette_cap) {
+					bucket <<= 1;
+				}
+				palette_cap = MIN(bucket, max_palette_cap);
+			}
+			const bool is_isolated_single = (
+				joined.num_item_refs == 1 &&
+				first_ref.instance_count == 1 &&
+				!(effective_flags & BatcherEnums::BTF_3D_USES_INSTANCING)
+			);
 
 			if (is_isolated_single && bdata.settings_use_single_mesh_fallback && get_this()->_batch_can_use_single_mesh_fallback(first_surface)) {
 				// Isolated single dynamic mesh avoids VBO replication.
@@ -796,18 +812,27 @@ void RasterizerSceneBatcherCommon<T_API>::join_and_flush_sorted_items(bool p_tra
 				bdata.fvf = mpi_fvf;
 				_prepare_unit_vertices_for_fvf(mpi_fvf);
 
-				// Transform-invariant hash keyed strictly by
-				// (pass_mode, mesh surface, surface_index, K, fvf, flags).
-				uint64_t mpi_hash = _fnv1a_64_mix(FNV1A_64_OFFSET_BASIS, 0x4D504935ULL); // "MPI5" domain tag
-				mpi_hash = _fnv1a_64_mix(mpi_hash, static_cast<uint64_t>(p_pass_mode));
-				mpi_hash = _fnv1a_64_mix(mpi_hash, reinterpret_cast<uintptr_t>(first_surface->surface));
-				mpi_hash = _fnv1a_64_mix(mpi_hash, (static_cast<uint64_t>(first_surface->surface_index) << 32) | palette_cap);
-				mpi_hash = _fnv1a_64_mix(mpi_hash, (static_cast<uint64_t>(mpi_fvf) << 32) | effective_flags);
-				if (unlikely(mpi_hash == 0)) {
-					mpi_hash = 1ULL;
+				// Only persist depth/shadow MPI templates in the persistent cache for high-instance runs.
+				// Small depth runs stream through the transient ring buffer.
+				const bool cache_mpi_template = (
+					(p_pass_mode != BatcherEnums::PASS_MODE_SHADOW && p_pass_mode != BatcherEnums::PASS_MODE_DEPTH) ||
+					joined.total_instances >= 8
+				);
+				uint64_t mpi_hash = 0;
+				if (cache_mpi_template) {
+					// Transform-invariant hash keyed strictly by
+					// (pass_mode, mesh surface, surface_index, K, fvf, flags).
+					mpi_hash = _fnv1a_64_mix(FNV1A_64_OFFSET_BASIS, 0x4D504935ULL); // "MPI5" domain tag
+					mpi_hash = _fnv1a_64_mix(mpi_hash, static_cast<uint64_t>(p_pass_mode));
+					mpi_hash = _fnv1a_64_mix(mpi_hash, reinterpret_cast<uintptr_t>(first_surface->surface));
+					mpi_hash = _fnv1a_64_mix(mpi_hash, (static_cast<uint64_t>(first_surface->surface_index) << 32) | palette_cap);
+					mpi_hash = _fnv1a_64_mix(mpi_hash, (static_cast<uint64_t>(mpi_fvf) << 32) | effective_flags);
+					if (unlikely(mpi_hash == 0)) {
+						mpi_hash = 1ULL;
+					}
 				}
 
-				if (get_this()->_batch_try_reuse_cached_vbo_slot_3d(*batch, mpi_hash)) {
+				if (mpi_hash != 0 && get_this()->_batch_try_reuse_cached_vbo_slot_3d(*batch, mpi_hash)) {
 					batch->mpi_palette_capacity = palette_cap;
 					if (unlikely(!get_this()->_batch_render_items(material, primitive, *batch, p_transparent))) {
 						batch->mpi_palette_capacity = 0;

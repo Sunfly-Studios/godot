@@ -379,6 +379,7 @@ public:
 		uint32_t mpi_palette_capacity;
 		BatcherEnums::FVF fvf;
 		uint32_t flags;
+		bool use_transient_vbo = false;
 		AABB bounding_aabb;
 	};
 
@@ -421,6 +422,7 @@ public:
 		uint32_t surface_index;
 		uint32_t total_verts;
 		uint32_t total_indices;
+		uint32_t total_instances;
 		uint32_t total_color_changes;
 		bool use_static_vbo_loop;
 		bool use_mpi;
@@ -470,10 +472,17 @@ public:
 		uint32_t flags = 0;
 	};
 
+	// Compact locator for cache VBO slot lookup
+	struct CachedSlotLocation3D {
+		uint32_t pool_index = 0;
+		uint32_t slot_index = 0;
+	};
+
 	// Tracker for VBOs
 	struct VBOPool {
 		uint32_t gl_vertex_buffer = 0;
 		uint32_t gl_index_buffer = 0;
+		uint64_t last_used_frame = 0;
 		LocalVector<CachedBatchSlot3D> cached_slots;
 	};
 
@@ -513,6 +522,7 @@ public:
 			fvf = BatcherEnums::FVF_3D_TIER1_BASE;
 			replay_valid = false;
 			client_buffer_wrapped = false;
+			transient_ring_advances_in_pass = 0;
 		}
 
 		void reset_flush() {
@@ -524,11 +534,70 @@ public:
 			use_colored_vertices = false;
 		}
 
+		static constexpr uint32_t TRANSIENT_RING_SIZE = 6;
+		static constexpr uint32_t MAX_PERSISTENT_VBO_POOLS = 64; // in MB
+		static constexpr uint64_t PERSISTENT_POOL_EVICT_AGE_FRAMES = 60;
+
+		VBOPool transient_vbo_ring[TRANSIENT_RING_SIZE];
+		uint32_t transient_ring_frame_index = 0;
+		uint32_t transient_ring_advances_in_pass = 0;
+		uint32_t transient_vbo_byte_offset = 0;
+		uint32_t transient_ibo_byte_offset = 0;
+
 		LocalVector<VBOPool> vbo_pool;
+		FlatMap<uint64_t, CachedSlotLocation3D> vbo_slot_lookup;
 		uint32_t current_vbo_index = 0;
 		uint32_t current_vbo_byte_offset = 0;
 		uint32_t current_ibo_byte_offset = 0;
 		uint32_t current_vbo_slot_index = 0;
+
+		void advance_transient_ring() {
+			transient_ring_frame_index = (transient_ring_frame_index + 1U) % TRANSIENT_RING_SIZE;
+			transient_vbo_byte_offset = 0;
+			transient_ibo_byte_offset = 0;
+		}
+
+		int find_stale_vbo_pool(uint64_t p_current_frame) const {
+			int lru_idx = -1;
+			uint64_t oldest_frame = UINT64_MAX;
+			for (uint32_t i = 0; i < vbo_pool.size(); i++) {
+				if (
+					vbo_pool[i].gl_vertex_buffer != 0 &&
+					vbo_pool[i].gl_index_buffer != 0 &&
+					p_current_frame > vbo_pool[i].last_used_frame &&
+					(p_current_frame - vbo_pool[i].last_used_frame) >= PERSISTENT_POOL_EVICT_AGE_FRAMES &&
+					vbo_pool[i].last_used_frame < oldest_frame
+				) {
+					oldest_frame = vbo_pool[i].last_used_frame;
+					lru_idx = static_cast<int>(i);
+				}
+			}
+			return lru_idx;
+		}
+
+		void clear_pool_cached_slots(uint32_t p_pool_index, uint32_t p_from_slot = 0) {
+			if (p_pool_index >= vbo_pool.size()) {
+				return;
+			}
+			LocalVector<CachedBatchSlot3D> &slots = vbo_pool[p_pool_index].cached_slots;
+			if (p_from_slot >= slots.size()) {
+				return;
+			}
+			for (uint32_t s = p_from_slot; s < slots.size(); s++) {
+				const uint64_t h = slots[s].content_hash;
+				if (h != 0) {
+					const CachedSlotLocation3D *loc = vbo_slot_lookup.find(h);
+					if (loc && loc->pool_index == p_pool_index && loc->slot_index == s) {
+						vbo_slot_lookup.erase(h);
+					}
+				}
+			}
+			if (p_from_slot == 0) {
+				slots.clear();
+			} else {
+				slots.resize(p_from_slot);
+			}
+		}
 
 		void invalidate_vbo_cache() {
 			for (uint32_t i = 0; i < vbo_pool.size(); i++) {
@@ -538,6 +607,7 @@ public:
 			current_vbo_byte_offset = 0;
 			current_ibo_byte_offset = 0;
 			current_vbo_slot_index = 0;
+			vbo_slot_lookup.clear();
 			replay_valid = false;
 		}
 
