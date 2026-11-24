@@ -52,7 +52,7 @@
 template <typename T>
 class VectorWriteProxy {
 public:
-	_FORCE_INLINE_ T &operator[](typename Size p_index) {
+	_FORCE_INLINE_ T &operator[](Size p_index) {
 		// Vector<T> is standard-layout and this is the first member.
 		Vector<T> *vec = reinterpret_cast<Vector<T> *>(this);
 		CRASH_BAD_INDEX(p_index, vec->_cowdata.size());
