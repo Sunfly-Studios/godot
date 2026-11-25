@@ -71,7 +71,9 @@ class GDScriptAnalyzer {
 	GDScriptParser::DataType resolve_datatype(GDScriptParser::TypeNode *p_type);
 
 	void decide_suite_type(GDScriptParser::Node *p_suite, GDScriptParser::Node *p_statement);
+	void update_suite_has_return(GDScriptParser::SuiteNode *p_suite, const GDScriptParser::Node *p_statement);
 
+	// Resolve functions.
 	void resolve_annotation(GDScriptParser::AnnotationNode *p_annotation);
 	void resolve_class_member(GDScriptParser::ClassNode *p_class, const StringName &p_name, const GDScriptParser::Node *p_source = nullptr);
 	void resolve_class_member(GDScriptParser::ClassNode *p_class, int p_index, const GDScriptParser::Node *p_source = nullptr);
@@ -95,6 +97,7 @@ class GDScriptAnalyzer {
 	void resolve_match_branch(GDScriptParser::MatchBranchNode *p_match_branch, GDScriptParser::ExpressionNode *p_match_test);
 	void resolve_match_pattern(GDScriptParser::PatternNode *p_match_pattern, GDScriptParser::ExpressionNode *p_match_test);
 	void resolve_return(GDScriptParser::ReturnNode *p_return);
+	bool resolve_constant_branch(GDScriptParser::IfNode *p_if);
 
 	// Reduction functions.
 	void reduce_expression(GDScriptParser::ExpressionNode *p_expression, bool p_is_root = false);

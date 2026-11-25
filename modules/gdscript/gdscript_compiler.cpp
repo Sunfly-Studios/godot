@@ -2127,6 +2127,23 @@ Error GDScriptCompiler::_parse_block(CodeGen &codegen, const GDScriptParser::Sui
 			case GDScriptParser::Node::IF: {
 				const GDScriptParser::IfNode *if_n = static_cast<const GDScriptParser::IfNode *>(s);
 
+				// Emit bytecode only for the taken branch. The discarded branch is not analyzed.
+				// This behaves similarly to `if constexpr` in C++.
+				if (if_n->condition != nullptr && if_n->condition->is_constant) {
+					if (if_n->condition->reduced_value.booleanize()) {
+						err = _parse_block(codegen, if_n->true_block);
+						if (err) {
+							return err;
+						}
+					} else if (if_n->false_block) {
+						err = _parse_block(codegen, if_n->false_block);
+						if (err) {
+							return err;
+						}
+					}
+					break;
+				}
+
 				// TAKEN jumps to true_block
 				gen->start_expr_cond_buffer(GDScriptCodeGenerator::BranchType::TAKEN);
 				// NOT_TAKEN jumps to false_block

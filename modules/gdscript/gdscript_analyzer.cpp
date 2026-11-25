@@ -1958,6 +1958,25 @@ void GDScriptAnalyzer::decide_suite_type(GDScriptParser::Node *p_suite, GDScript
 	}
 }
 
+void GDScriptAnalyzer::update_suite_has_return(GDScriptParser::SuiteNode *p_suite, const GDScriptParser::Node *p_statement) {
+	if (p_suite->has_return || p_statement == nullptr) {
+		return;
+	}
+
+	// Propagate `has_return` for constant `if` blocks whose dead branch was skipped.
+	if (p_statement->type == GDScriptParser::Node::IF) {
+		const GDScriptParser::IfNode *if_n = static_cast<const GDScriptParser::IfNode *>(p_statement);
+		if (if_n->condition != nullptr && if_n->condition->is_constant) {
+			const GDScriptParser::SuiteNode *taken_block = if_n->condition->reduced_value.booleanize() ? if_n->true_block : if_n->false_block;
+			if (taken_block != nullptr && taken_block->has_return) {
+				p_suite->has_return = true;
+			}
+		} else if (if_n->true_block->has_return && if_n->false_block != nullptr && if_n->false_block->has_return) {
+			p_suite->has_return = true;
+		}
+	}
+}
+
 void GDScriptAnalyzer::resolve_suite(GDScriptParser::SuiteNode *p_suite) {
 	for (int i = 0; i < p_suite->statements.size(); i++) {
 		GDScriptParser::Node *stmt = p_suite->statements[i];
@@ -1970,6 +1989,7 @@ void GDScriptAnalyzer::resolve_suite(GDScriptParser::SuiteNode *p_suite) {
 		resolve_node(stmt);
 		resolve_pending_lambda_bodies();
 		decide_suite_type(p_suite, stmt);
+		update_suite_has_return(p_suite, stmt);
 	}
 }
 
@@ -2141,6 +2161,26 @@ void GDScriptAnalyzer::resolve_constant(GDScriptParser::ConstantNode *p_constant
 #endif
 }
 
+bool GDScriptAnalyzer::resolve_constant_branch(GDScriptParser::IfNode *p_if) {
+	if (p_if->condition == nullptr) {
+		return false;
+	}
+
+	if (!p_if->condition->is_constant) {
+		return false;
+	}
+
+	// Only resolve the taken branch for constant conditions.
+	if (p_if->condition->reduced_value.booleanize()) {
+		resolve_suite(p_if->true_block);
+		p_if->set_datatype(p_if->true_block->get_datatype());
+	} else if (p_if->false_block != nullptr) {
+		resolve_suite(p_if->false_block);
+		p_if->set_datatype(p_if->false_block->get_datatype());
+	}
+	return true;
+}
+
 void GDScriptAnalyzer::resolve_parameter(GDScriptParser::ParameterNode *p_parameter) {
 	static constexpr const char *kind = "parameter";
 	resolve_assignable(p_parameter, kind);
@@ -2148,6 +2188,10 @@ void GDScriptAnalyzer::resolve_parameter(GDScriptParser::ParameterNode *p_parame
 
 void GDScriptAnalyzer::resolve_if(GDScriptParser::IfNode *p_if) {
 	reduce_expression(p_if->condition);
+
+	if (resolve_constant_branch(p_if)) {
+		return;
+	}
 
 	resolve_suite(p_if->true_block);
 	p_if->set_datatype(p_if->true_block->get_datatype());
