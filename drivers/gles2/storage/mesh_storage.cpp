@@ -185,7 +185,7 @@ void MeshStorage::mesh_add_surface(RID p_mesh, const RS::SurfaceData &p_surface)
 
 		// We must be absolutely certain that data the size is equal
 		// to our uncompressed size and that the resize matches.
-		ERR_FAIL_COND(s->uncompressed_buffer.size() != p_surface.vertex_count * s->uncompressed_stride);
+		ERR_FAIL_COND(s->uncompressed_buffer.size() != static_cast<int>(p_surface.vertex_count * s->uncompressed_stride));
 	}
 
 	// Store the data how it came in

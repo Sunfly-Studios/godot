@@ -3783,7 +3783,7 @@ bool RasterizerSceneGLES1::_batch_render_single_mesh_fallback(RS::PrimitiveType 
 }
 
 bool RasterizerSceneGLES1::_batch_render_same_mesh_group(GLES1::SceneMaterialData *p_material_data, RS::PrimitiveType p_primitive, BatchType::Batch3D &p_batch, bool p_transparent) {
-	// Executes the static-mesh state grouping (SMSG, FVF_SAME_MESH_LOOP) for repeated
+	// Executes the same-mesh state grouping (SMSG, FVF_SAME_MESH_LOOP) for repeated
 	// heavy meshes (> 1024 vertices) and MultiMesh instances. Binds the material and the
 	// mesh's native static VBO/IBO (or client arrays when VBOs are unsupported) once for
 	// the entire contiguous run, then loops over each reference/instance updating only
@@ -4963,8 +4963,8 @@ void RasterizerSceneGLES1::_draw_editor_grid(const RenderDataGLES1 *p_render_dat
 
 		const uint32_t v_count = surf->vertex_cache.size();
 		const Vector3 *pos_ptr = surf->vertex_cache.ptr();
-		const Vector3 *norm_ptr = surf->normal_cache.size() == v_count ? surf->normal_cache.ptr() : nullptr;
-		const Color *col_ptr = surf->color_cache.size() == v_count ? surf->color_cache.ptr() : nullptr;
+		const Vector3 *norm_ptr = (uint32_t)surf->normal_cache.size() == v_count ? surf->normal_cache.ptr() : nullptr;
+		const Color *col_ptr = (uint32_t)surf->color_cache.size() == v_count ? surf->color_cache.ptr() : nullptr;
 		const Transform3D &model_xform = surf->owner->transform;
 
 		const uint32_t idx_count = surf->index_cache.size();
@@ -5704,7 +5704,6 @@ void RasterizerSceneGLES1::_setup_lights(const RenderDataGLES1 *p_render_data, b
 		light_data.size = light_storage->light_get_param(base, RS::LIGHT_PARAM_SIZE);
 
 		float sign = light_storage->light_is_negative(base) ? -1 : 1;
-		Color linear_col = light_storage->light_get_color(base).srgb_to_linear();
 
 		real_t distance = (i < r_omni_light_count) ? scene_state.omni_light_sort[index].depth : scene_state.spot_light_sort[index].depth;
 		float fade = 1.0;

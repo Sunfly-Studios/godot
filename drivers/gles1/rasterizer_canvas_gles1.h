@@ -128,7 +128,7 @@ protected:
 
 		struct {
 			bool enabled = false;
-			float z_far;
+			float z_far = 0.0f;
 			Transform2D light_to_world;
 			Vector<float> shadow_volumes;
 			Vector<float> directional_shadow_volumes;
