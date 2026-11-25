@@ -315,6 +315,12 @@ public:
 		float children_fade_alpha = 1.0f;
 	};
 
+	struct CGComparator {
+		_FORCE_INLINE_ bool operator()(const Pair<float, RenderGeometryInstance *> &a, const Pair<float, RenderGeometryInstance *> &b) const {
+			return (a.first < b.first);
+		}
+	};
+
 	class VisibilityArray : public BinSortedArray<InstanceVisibilityData> {
 		_FORCE_INLINE_ virtual void _update_idx(InstanceVisibilityData &r_element, uint64_t p_idx) {
 			r_element.instance->visibility_index = p_idx;
@@ -1183,6 +1189,7 @@ public:
 	bool _render_reflection_probe_step(Instance *p_instance, int p_step);
 
 	void _render_scene(const RendererSceneRender::CameraData *p_camera_data, const Ref<RenderSceneBuffers> &p_render_buffers, RID p_environment, RID p_force_camera_attributes, RID p_compositor, uint32_t p_visible_layers, RID p_scenario, RID p_viewport, RID p_shadow_atlas, RID p_reflection_probe, int p_reflection_probe_pass, float p_screen_mesh_lod_threshold, bool p_using_shadows = true, RenderInfo *r_render_info = nullptr);
+	void _sort_culled_geometries_result(PagedArray<RenderGeometryInstance *> &p_culled_geometry_instances, const Vector3 &p_camera_position);
 	void render_empty_scene(const Ref<RenderSceneBuffers> &p_render_buffers, RID p_scenario, RID p_shadow_atlas);
 
 	void render_camera(const Ref<RenderSceneBuffers> &p_render_buffers, RID p_camera, RID p_scenario, RID p_viewport, Size2 p_viewport_size, uint32_t p_jitter_phase_count, float p_screen_mesh_lod_threshold, RID p_shadow_atlas, Ref<XRInterface> &p_xr_interface, RenderingMethod::RenderInfo *r_render_info = nullptr);
