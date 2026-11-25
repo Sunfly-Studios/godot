@@ -3186,6 +3186,87 @@ const char *check_for_renamed_identifier(String identifier, GDScriptParser::Node
 }
 #endif // SUGGEST_GODOT4_RENAMES
 
+bool GDScriptAnalyzer::is_builtin_method_pure_const(Variant::Type p_type, const StringName &p_method) {
+	// Disallow runtime handles, objects, and callables.
+	switch (p_type) {
+		case Variant::NIL:
+		case Variant::OBJECT:
+		case Variant::CALLABLE:
+		case Variant::SIGNAL:
+		case Variant::RID:
+		case Variant::VARIANT_MAX:
+			return false;
+		default:
+			break;
+	}
+
+	// Method must exist and be marked const.
+	if (!Variant::has_builtin_method(p_type, p_method) || !Variant::is_builtin_method_const(p_type, p_method)) {
+		return false;
+	}
+
+	// Method blacklist for constant folding.
+	// Exclude non-deterministic, callback-invoking, and OOM-prone methods.
+	switch (p_type) {
+		case Variant::ARRAY:
+			if (p_method == SNAME("pick_random") ||
+					p_method == SNAME("all") ||
+					p_method == SNAME("any") ||
+					p_method == SNAME("filter") ||
+					p_method == SNAME("map") ||
+					p_method == SNAME("reduce") ||
+					p_method == SNAME("bsearch_custom")) {
+				return false;
+			}
+			break;
+		case Variant::STRING:
+			if (p_method == SNAME("repeat") ||
+					p_method == SNAME("lpad") ||
+					p_method == SNAME("rpad")) {
+				return false;
+			}
+			break;
+		case Variant::PACKED_BYTE_ARRAY:
+			if (p_method == SNAME("decompress") ||
+					p_method == SNAME("decompress_dynamic")) {
+				return false;
+			}
+			break;
+		default:
+			break;
+	}
+
+	return true;
+}
+
+void GDScriptAnalyzer::freeze_constant_variant(Variant &p_value) {
+	// Mark containers read-only before recursing.
+	if (p_value.get_type() == Variant::ARRAY) {
+		Array arr = p_value;
+		if (arr.is_read_only()) {
+			return;
+		}
+		arr.make_read_only();
+		for (int i = 0; i < arr.size(); i++) {
+			Variant elem = arr[i];
+			freeze_constant_variant(elem);
+		}
+	} else if (p_value.get_type() == Variant::DICTIONARY) {
+		Dictionary dict = p_value;
+		if (dict.is_read_only()) {
+			return;
+		}
+		dict.make_read_only();
+		Array keys = dict.keys();
+		for (int i = 0; i < keys.size(); i++) {
+			Variant key = keys[i];
+			Variant val = dict[key];
+			freeze_constant_variant(key);
+			freeze_constant_variant(val);
+		}
+	}
+}
+
 void GDScriptAnalyzer::reduce_call(GDScriptParser::CallNode *p_call, bool p_is_await, bool p_is_root) {
 	bool all_is_constant = true;
 	HashMap<int, GDScriptParser::ArrayNode *> arrays; // For array literal to potentially type when passing.
@@ -3667,6 +3748,53 @@ void GDScriptAnalyzer::reduce_call(GDScriptParser::CallNode *p_call, bool p_is_a
 #endif // DEBUG_ENABLED
 
 		call_type = return_type;
+
+		// Fold pure const built-in method calls when base and arguments are constant.
+		if (!p_call->is_super && !p_call->is_static && callee_type == GDScriptParser::Node::SUBSCRIPT &&
+				!base_type.is_meta_type && base_type.is_hard_type() && base_type.kind == GDScriptParser::DataType::BUILTIN &&
+				is_builtin_method_pure_const(base_type.builtin_type, p_call->function_name)) {
+			GDScriptParser::SubscriptNode *subscript = static_cast<GDScriptParser::SubscriptNode *>(p_call->callee);
+			bool base_is_constant = subscript->base->is_constant;
+			Variant base_value = base_is_constant ? subscript->base->reduced_value : make_expression_reduced_value(subscript->base, base_is_constant);
+
+			if (base_is_constant && base_value.get_type() == base_type.builtin_type) {
+				Vector<Variant> arg_values;
+				arg_values.resize(p_call->arguments.size());
+				bool args_are_constant = true;
+
+				for (int i = 0; i < p_call->arguments.size(); i++) {
+					bool arg_const = p_call->arguments[i]->is_constant;
+					Variant arg_val = arg_const ? p_call->arguments[i]->reduced_value : make_expression_reduced_value(p_call->arguments[i], arg_const);
+					if (!arg_const) {
+						args_are_constant = false;
+						break;
+					}
+					arg_values.write[i] = arg_val;
+				}
+
+				if (args_are_constant) {
+					Vector<const Variant *> arg_ptrs;
+					arg_ptrs.resize(arg_values.size());
+					for (int i = 0; i < arg_values.size(); i++) {
+						arg_ptrs.write[i] = &arg_values[i];
+					}
+
+					Callable::CallError err;
+					Variant reduced_value;
+					base_value.callp(p_call->function_name, (const Variant **)arg_ptrs.ptr(), arg_ptrs.size(), reduced_value, err);
+
+					if (err.error == Callable::CallError::CALL_OK) {
+						freeze_constant_variant(reduced_value);
+						p_call->is_constant = true;
+						p_call->reduced_value = reduced_value;
+						if (call_type.is_variant()) {
+							// Narrow Variant return type so chained calls can continue folding.
+							call_type = type_from_variant(reduced_value, p_call);
+						}
+					}
+				}
+			}
+		}
 	} else {
 		bool found = false;
 
