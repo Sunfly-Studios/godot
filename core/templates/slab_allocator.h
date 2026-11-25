@@ -229,7 +229,7 @@ class SlabAllocator {
 		};
 
 		alignas(T) uint8_t objects[OBJECTS_PER_SLAB * sizeof(T)];
-		uint64_t bitmap = BITMAP_FULL;
+		USize bitmap = BITMAP_FULL;
 		Slab *next = nullptr;
 		Slab *next_available = nullptr;
 		slabstate state = IN_USE;
@@ -284,7 +284,7 @@ class SlabAllocator {
 		Slab *current = slabs;
 		while (current) {
 			Slab *next = current->next;
-			if (current->bitmap != UINT64_MAX) {
+			if (current->bitmap != BITMAP_FULL) {
 				return true;
 			}
 			current = next;
