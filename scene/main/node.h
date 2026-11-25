@@ -680,7 +680,7 @@ public:
 	bool get_scene_instance_load_placeholder() const;
 
 	template <typename... VarArgs>
-	Vector<Variant> make_binds(VarArgs... p_args) {
+	Vector<Variant> make_binds(const VarArgs &...p_args) {
 		Vector<Variant> binds = { p_args... };
 		return binds;
 	}
@@ -748,10 +748,10 @@ public:
 	Variant get_rpc_config() const;
 
 	template <typename... VarArgs>
-	Error rpc(const StringName &p_method, VarArgs... p_args);
+	Error rpc(const StringName &p_method, const VarArgs &...p_args);
 
 	template <typename... VarArgs>
-	Error rpc_id(int p_peer_id, const StringName &p_method, VarArgs... p_args);
+	Error rpc_id(int p_peer_id, const StringName &p_method, const VarArgs &...p_args);
 
 	Error rpcp(int p_peer_id, const StringName &p_method, const Variant **p_arg, int p_argcount);
 
@@ -836,21 +836,13 @@ typedef HashSet<Node *, Node::Comparator> NodeSet;
 // See this StackOverflow question for more information: https://stackoverflow.com/questions/495021/why-can-templates-only-be-implemented-in-the-header-file
 
 template <typename... VarArgs>
-Error Node::rpc(const StringName &p_method, VarArgs... p_args) {
+Error Node::rpc(const StringName &p_method, const VarArgs &...p_args) {
 	return rpc_id(0, p_method, p_args...);
 }
 
 template <typename... VarArgs>
-Error Node::rpc_id(int p_peer_id, const StringName &p_method, VarArgs... p_args) {
-	Variant args[sizeof...(p_args) + 1] = { p_args..., Variant() }; // +1 makes sure zero sized arrays are also supported.
-	const Variant *argptrs[sizeof...(p_args) + 1] = {};
-
-	if constexpr (sizeof...(p_args) > 0) {
-		for (uint32_t i = 0; i < sizeof...(p_args); i++) {
-			argptrs[i] = &args[i];
-		}
-	}
-	return rpcp(p_peer_id, p_method, sizeof...(p_args) == 0 ? nullptr : (const Variant **)argptrs, sizeof...(p_args));
+Error Node::rpc_id(int p_peer_id, const StringName &p_method, const VarArgs &...p_args) {
+	return rpcp(p_peer_id, p_method, make_ptr_pack<Variant>(Variant(p_args)...).ptr(), sizeof...(p_args));
 }
 
 #ifdef DEBUG_ENABLED
