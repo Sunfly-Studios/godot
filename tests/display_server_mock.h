@@ -131,9 +131,9 @@ public:
 	virtual void clipboard_set_primary(const String &p_text) override { primary_clipboard_text = p_text; }
 	virtual String clipboard_get_primary() const override { return primary_clipboard_text; }
 
-	virtual Size2i window_set_size(const Size2i p_size, WindowID p_window = MAIN_WINDOW_ID) const override {
-		size = p_size;
-	}
+	//virtual void window_set_size(const Size2i p_size, WindowID p_window = MAIN_WINDOW_ID) const {
+	//	size = p_size;
+	//}
 
 	virtual Size2i window_get_size(WindowID p_window = MAIN_WINDOW_ID) const override {
 		return size;
