@@ -117,6 +117,23 @@ static inline constexpr size_t _memory_get_aligned_address(size_t p_address, siz
 	return (n_bytes_unaligned == 0) ? p_address : (p_address + p_alignment - n_bytes_unaligned);
 }
 
+template <typename T>
+static inline constexpr size_t _check_align() {
+#if defined(__hppa__)
+	// On 32-bit PA-RISC, POSIX types like its pthread mutex still carry
+	// 16-byte alignment for legacy `LDCW` ABI compatibility, even though Linux
+	// now uses kernel lightweight syscalls for atomics and glibc malloc only
+	// guarantees 8-byte alignment.
+	//
+	// Clamp the runtime check to alignof(max_align_t) on HPPA so real hardware
+	// misalignments (< 8 bytes) still trap without false positives on heap
+	// allocations of 16-byte-aligned types.
+	return (alignof(T) > alignof(max_align_t)) ? alignof(max_align_t) : alignof(T);
+#else
+	return alignof(T);
+#endif
+}
+
 class Memory {
 public:
 	// Forwarder to the helper for external usage (e.g. cowdata.h)
@@ -245,7 +262,7 @@ _FORCE_INLINE_ T unaligned_read(const void *p_ptr) {
 	} else {
 #if defined(DEV_ENABLED) || defined(TOOLS_ENABLED)
 		const uintptr_t addr = reinterpret_cast<uintptr_t>(p_ptr);
-		if (unlikely((addr & (alignof(T) - 1)) != 0)) {
+		if (unlikely((addr & (_check_align<T>() - 1)) != 0)) {
 			CRASH_NOW_MSG("FATAL: Unaligned read of non-trivial type.");
 		}
 #endif
@@ -267,7 +284,7 @@ _FORCE_INLINE_ void unaligned_write(void *p_ptr, const T &p_val) {
 	} else {
 #if defined(DEV_ENABLED) || defined(TOOLS_ENABLED)
 		const uintptr_t addr = reinterpret_cast<uintptr_t>(p_ptr);
-		if (unlikely((addr & (alignof(T) - 1)) != 0)) {
+		if (unlikely((addr & (_check_align<T>() - 1)) != 0)) {
 			CRASH_NOW_MSG("FATAL: Unaligned write of non-trivial type.");
 		}
 #endif
@@ -278,7 +295,7 @@ _FORCE_INLINE_ void unaligned_write(void *p_ptr, const T &p_val) {
 template <typename ConstructT, typename... Args>
 _FORCE_INLINE_ void unaligned_construct(void *p_ptr, Args &&...p_args) {
 	const uintptr_t addr = reinterpret_cast<uintptr_t>(p_ptr);
-	const bool is_aligned = (addr & (alignof(ConstructT) - 1)) == 0;
+	const bool is_aligned = (addr & (_check_align<ConstructT>() - 1)) == 0;
 
 	if constexpr (std::is_trivially_copyable_v<ConstructT>) {
 		if (is_aligned) {
@@ -307,7 +324,7 @@ _FORCE_INLINE_ void unaligned_destroy(void *p_ptr) {
 	if constexpr (!std::is_trivially_destructible_v<T>) {
 #if defined(DEV_ENABLED) || defined(TOOLS_ENABLED)
 		const uintptr_t addr = reinterpret_cast<uintptr_t>(p_ptr);
-		if (unlikely((addr & (alignof(T) - 1)) != 0)) {
+		if (unlikely((addr & (_check_align<T>() - 1)) != 0)) {
 			CRASH_NOW_MSG("FATAL: Unaligned destruction of non-trivial type.");
 		}
 #endif
