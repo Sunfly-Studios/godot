@@ -1070,6 +1070,19 @@ else:  # GCC, Clang
     # to complain.
     common_warnings += ["-Wno-comment"]
 
+    if env["use_llvm"]:
+        # Our architecture uses NTTP, CRTP, and compile-time segragation
+        # methods to the core engine to keep things fast and to remove
+        # all runtime polymorphism out of it.
+        # 
+        # However, the front-end macros (like FUNCXX) are not touched
+        # to keep compatibility.
+        #
+        # Clang, however, complains that parent functions are marked as override
+        # but yet it doesn't really apply. However, it makes the terminal look
+        # like a festive of noise.
+        common_warnings += ["-Wno-inconsistent-missing-override"]
+
     # clang-cl will interpret `-Wall` as `-Weverything`, workaround with compatibility cast
     W_ALL = "-Wall" if not env.msvc else "-W3"
 
