@@ -4686,13 +4686,14 @@ void RasterizerCanvasGLES1::_draw_gui_primitive(int p_points, const Vector2 *p_v
 			vtx_f[i * 2 + 0] = static_cast<float>(p_vertices[i].x);
 			vtx_f[i * 2 + 1] = static_cast<float>(p_vertices[i].y);
 		}
+		const float* vert_ptr = vtx_f;
 		glVertexPointer(2, GL_FLOAT, 0, vtx_f);
 #else
 		const Vector2 *vert_ptr = p_vertices;
+		glVertexPointer(2, GL_FLOAT, 0, vert_ptr);
 #endif
 
 		glEnableClientState(GL_VERTEX_ARRAY);
-		glVertexPointer(2, GL_FLOAT, 0, vert_ptr);
 
 		// UV temporary
 #ifdef REAL_T_IS_DOUBLE
@@ -4701,7 +4702,7 @@ void RasterizerCanvasGLES1::_draw_gui_primitive(int p_points, const Vector2 *p_v
 			uv_f[i * 2 + 0] = static_cast<float>(p_uvs[i].x);
 			uv_f[i * 2 + 1] = static_cast<float>(p_uvs[i].y);
 		}
-		uv_ptr = uv_f;
+		const float* uv_ptr = uv_f;
 #else
 		const Vector2 *uv_ptr = p_uvs;
 #endif

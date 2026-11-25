@@ -540,7 +540,7 @@ private:
 			2.0f, 0.0f, 0.0f, 0.0f,
 			0.0f, 2.0f, 0.0f, 0.0f,
 			0.0f, 0.0f, 1.0f, 0.0f,
-			(p_uv_offset.x * 2.0f) - 1.0f, (p_uv_offset.y * 2.0f) - 1.0f, 0.0f, 1.0f
+			static_cast<float>((p_uv_offset.x * 2.0f) - 1.0f), static_cast<float>((p_uv_offset.y * 2.0f) - 1.0f), 0.0f, 1.0f
 		};
 		glMatrixMode(GL_PROJECTION);
 		glLoadMatrixf(m);

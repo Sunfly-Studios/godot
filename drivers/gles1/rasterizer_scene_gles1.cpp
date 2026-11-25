@@ -5014,8 +5014,8 @@ void RasterizerSceneGLES1::_draw_editor_grid(const RenderDataGLES1 *p_render_dat
 				const Vector3 plane_pos1 = cam_pos * (Vector3(1.0f, 1.0f, 1.0f) - world_n1);
 
 				// Calculate radial fade-out distance from the camera projection on the grid plane
-				const float dist_fade0 = Math::smoothstep(0.02f, 0.3f, 1.0f - (wp0.distance_to(plane_pos0) / grid_size));
-				const float dist_fade1 = Math::smoothstep(0.02f, 0.3f, 1.0f - (wp1.distance_to(plane_pos1) / grid_size));
+				const float dist_fade0 = Math::smoothstep(0.02f, 0.3f, 1.0f - static_cast<float>((wp0.distance_to(plane_pos0) / grid_size)));
+				const float dist_fade1 = Math::smoothstep(0.02f, 0.3f, 1.0f - static_cast<float>((wp1.distance_to(plane_pos1) / grid_size)));
 
 				if (dist_fade0 <= 0.0f && dist_fade1 <= 0.0f) {
 					continue;
@@ -5025,8 +5025,8 @@ void RasterizerSceneGLES1::_draw_editor_grid(const RenderDataGLES1 *p_render_dat
 				const Vector3 dir0 = orthogonal ? ortho_dir : (cam_pos - wp0).normalized();
 				const Vector3 dir1 = orthogonal ? ortho_dir : (cam_pos - wp1).normalized();
 
-				const float angle_fade0 = Math::smoothstep(0.05f, 0.2f, Math::abs(dir0.dot(wn0)));
-				const float angle_fade1 = Math::smoothstep(0.05f, 0.2f, Math::abs(dir1.dot(wn1)));
+				const float angle_fade0 = Math::smoothstep(0.05f, 0.2f, static_cast<float>(Math::abs(dir0.dot(wn0))));
+				const float angle_fade1 = Math::smoothstep(0.05f, 0.2f, static_cast<float>(Math::abs(dir1.dot(wn1))));
 
 				const Color sc0 = c0.lerp(c1, t0);
 				const Color sc1 = c0.lerp(c1, t1);
@@ -5247,13 +5247,7 @@ void RasterizerSceneGLES1::_fill_render_list(const RenderDataGLES1 *p_render_dat
 			}
 			inst->depth = p_render_data->cam_transform.origin.distance_to(center) - inst->sorting_offset;
 		}
-
 		uint32_t depth_layer = CLAMP(int(inst->depth * 16 / z_max), 0, 15);
-		uint32_t flags = inst->base_flags; //fill flags if appropriate
-
-		if (inst->non_uniform_scale) {
-			flags |= INSTANCE_DATA_FLAGS_NON_UNIFORM_SCALE;
-		}
 
 		if constexpr (p_pass_mode == PASS_MODE_COLOR) {
 			inst->light_passes.clear();

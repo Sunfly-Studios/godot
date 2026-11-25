@@ -3512,12 +3512,6 @@ void RasterizerSceneGLES2::_fill_render_list(const RenderDataGLES2 *p_render_dat
 		}
 		uint32_t depth_layer = z_max > 0.0f ? CLAMP(int(inst->depth * 16.0f / z_max), 0, 15) : 0;
 
-		uint32_t flags = inst->base_flags; //fill flags if appropriate
-
-		if (inst->non_uniform_scale) {
-			flags |= INSTANCE_DATA_FLAGS_NON_UNIFORM_SCALE;
-		}
-
 		if constexpr (p_pass_mode == PASS_MODE_COLOR) {
 			inst->omni_light_gl_cache.clear();
 			inst->spot_light_gl_cache.clear();
