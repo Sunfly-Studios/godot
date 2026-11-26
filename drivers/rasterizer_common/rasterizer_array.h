@@ -254,34 +254,45 @@ public:
 
 	const T &operator[](unsigned int ui) const { return _list[ui]; }
 
-	void create(int p_size) {
-		_list.resize(p_size);
+	bool create(int p_size) {
 		_size = 0;
+		if (p_size <= 0) {
+			_list.clear();
+			return false;
+		}
+		return _list.resize(p_size) == OK;
 	}
 	void reset() { _size = 0; }
 
-	void push_back(const T &val) {
-		while (true) {
-			if (_size < max_size()) {
-				_list.set(_size, val);
-				_size++;
-				return;
-			}
-
-			grow();
+	void truncate(int p_size) {
+		if (p_size < 0) {
+			_size = 0;
+		} else if (p_size < _size) {
+			_size = p_size;
 		}
+	}
+
+	bool push_back(const T &val) {
+		if (_size >= max_size()) {
+			if (unlikely(!grow())) {
+				return false;
+			}
+		}
+		_list.set(_size, val);
+		_size++;
+		return true;
 	}
 
 	int size() const { return _size; }
 	int max_size() const { return _list.size(); }
 
 private:
-	void grow() {
-		unsigned int new_max_size = _list.size() * 2;
+	bool grow() {
+		unsigned int new_max_size = static_cast<unsigned int>(_list.size()) * 2U;
 		if (!new_max_size) {
 			new_max_size = 1;
 		}
-		_list.resize(new_max_size);
+		return _list.resize(static_cast<int>(new_max_size)) == OK;
 	}
 
 	Vector<T> _list;

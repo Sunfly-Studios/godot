@@ -34,6 +34,7 @@
 #include "core/os/os.h"
 #include "core/templates/local_vector.h"
 #include "rasterizer_batcher_enum.h"
+#include "rasterizer_canvas_batcher_watermark.h"
 #include "drivers/rasterizer_common/rasterizer_array.h"
 #include "drivers/rasterizer_common/rasterizer_asserts.h"
 #include "core/config/project_settings.h"
@@ -252,6 +253,8 @@ public:
 			reset_flush();
 			reset_joined_item();
 
+			is_initialized = false;
+			use_client_memory_fallback = false;
 			gl_vertex_buffer = 0;
 			gl_index_buffer = 0;
 			max_quads = 0;
@@ -317,8 +320,14 @@ public:
 			use_light_angles = false;
 			use_modulate = false;
 			use_large_verts = false;
+			use_client_memory_fallback = false;
 			fvf = BatcherEnums::FVF_REGULAR;
 		}
+
+		bool is_initialized = false;
+		// Flipped per flush when dynamic VBO upload fails (e.g. VRAM OOM)
+		// so _batch_render_generic draws directly from CPU staging buffers.
+		bool use_client_memory_fallback = false;
 
 		uint32_t gl_vertex_buffer;
 		uint32_t gl_index_buffer;
@@ -344,6 +353,9 @@ public:
 		// we have a special array big enough for the biggest FVF
 		// which can have a changeable unit size, and reuse it.
 		RasterizerUnitArray<uint8_t> unit_vertices;
+
+		// Pre-populated CPU quad index buffer used by Tier 2 client-memory fallback.
+		RasterizerArray<uint16_t> fallback_indices;
 
 		RasterizerArray<Batch> batches;
 		RasterizerArray<Batch> batches_temp; // used for translating to colored vertex batches
@@ -544,9 +556,9 @@ protected:
 	void render_joined_item_commands(const BItemJoined &p_bij, RendererCanvasRender::Item *p_current_clip, bool &r_reclip, typename T_API::MaterialData *p_material, bool p_lit);
 
 private:
-	void flush_render_batches(RendererCanvasRender::Item *p_first_item, RendererCanvasRender::Item *p_current_clip, bool &r_reclip, typename T_API::MaterialData *p_material, uint32_t p_sequence_batch_type_flags);
+	bool flush_render_batches(RendererCanvasRender::Item *p_first_item, RendererCanvasRender::Item *p_current_clip, bool &r_reclip, typename T_API::MaterialData *p_material, uint32_t p_sequence_batch_type_flags);
 	bool prefill_joined_item(FillState &r_fill_state, RendererCanvasRender::Item::Command **r_first_command, RendererCanvasRender::Item *p_item, RendererCanvasRender::Item *p_current_clip, bool &r_reclip, typename T_API::MaterialData *p_material);
-	void _prefill_default_batch(FillState &r_fill_state, RendererCanvasRender::Item::Command *p_command, const RendererCanvasRender::Item &p_item);
+	bool _prefill_default_batch(FillState &r_fill_state, RendererCanvasRender::Item::Command *p_command, const RendererCanvasRender::Item &p_item);
 
 	template <bool SEND_LIGHT_ANGLES>
 	bool _prefill_rect(RendererCanvasRender::Item::CommandRect *rect, FillState &r_fill_state, RendererCanvasRender::Item::Command **p_command_start, RendererCanvasRender::Item::Command *p_command, RendererCanvasRender::Item *p_item, bool multiply_final_modulate);
@@ -566,10 +578,10 @@ protected:
 	void _calculate_scissor_threshold_area();
 
 private:
-	void _translate_batches_to_vertex_colored_FVF_2d();
+	bool _translate_batches_to_vertex_colored_FVF_2d();
 
 	template <class BATCH_VERTEX_TYPE, bool INCLUDE_LIGHT_ANGLES, bool INCLUDE_MODULATE, bool INCLUDE_LARGE>
-	void _translate_batches_to_larger_FVF_2d(uint32_t p_sequence_batch_type_flags);
+	bool _translate_batches_to_larger_FVF_2d(uint32_t p_sequence_batch_type_flags);
 
 protected:
 	void _software_transform_vertex(BatchVector2 &r_v, const Transform2D &p_tr) const;

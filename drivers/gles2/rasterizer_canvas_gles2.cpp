@@ -599,6 +599,49 @@ bool RasterizerCanvasGLES2::free(RID p_rid) {
 	return true;
 }
 
+#define _EIDX(y, x) (y * 4 + x)
+constexpr uint8_t NINEPATCH_ELEMENTS[3 * 2 * 9] = {
+	// first row
+	_EIDX(0, 0), _EIDX(0, 1), _EIDX(1, 1),
+	_EIDX(1, 1), _EIDX(1, 0), _EIDX(0, 0),
+
+	_EIDX(0, 1), _EIDX(0, 2), _EIDX(1, 2),
+	_EIDX(1, 2), _EIDX(1, 1), _EIDX(0, 1),
+
+	_EIDX(0, 2), _EIDX(0, 3), _EIDX(1, 3),
+	_EIDX(1, 3), _EIDX(1, 2), _EIDX(0, 2),
+
+	// second row
+	_EIDX(1, 0), _EIDX(1, 1), _EIDX(2, 1),
+	_EIDX(2, 1), _EIDX(2, 0), _EIDX(1, 0),
+
+	// center field
+	_EIDX(1, 2), _EIDX(1, 3), _EIDX(2, 3),
+	_EIDX(2, 3), _EIDX(2, 2), _EIDX(1, 2),
+
+	// third row
+	_EIDX(2, 0), _EIDX(2, 1), _EIDX(3, 1),
+	_EIDX(3, 1), _EIDX(3, 0), _EIDX(2, 0),
+
+	_EIDX(2, 1), _EIDX(2, 2), _EIDX(3, 2),
+	_EIDX(3, 2), _EIDX(3, 1), _EIDX(2, 1),
+
+	_EIDX(2, 2), _EIDX(2, 3), _EIDX(3, 3),
+	_EIDX(3, 3), _EIDX(3, 2), _EIDX(2, 2),
+
+	// center field
+	_EIDX(1, 1), _EIDX(1, 2), _EIDX(2, 2),
+	_EIDX(2, 2), _EIDX(2, 1), _EIDX(1, 1)
+};
+#undef _EIDX
+
+static constexpr float QV[8] = {
+	0, 0,
+	0, 1,
+	1, 1,
+	1, 0
+};
+
 void RasterizerCanvasGLES2::initialize() {
 	print_verbose("GLES2: Initializing Canvas Renderer");
 
@@ -608,14 +651,7 @@ void RasterizerCanvasGLES2::initialize() {
 		GL_CHECK_ERROR("GLES2::RasterizerCanvasGLES2::initialize: glGenBuffers quad");
 		glBindBuffer(GL_ARRAY_BUFFER, data.canvas_quad_vertices);
 
-		const constexpr float qv[8] = {
-			0, 0,
-			0, 1,
-			1, 1,
-			1, 0
-		};
-
-		GLES2::Utilities::get_singleton()->buffer_allocate_data(GL_ARRAY_BUFFER, data.canvas_quad_vertices, sizeof(float) * 8, qv, GL_STATIC_DRAW, "Canvas Quad");
+		GLES2::Utilities::get_singleton()->buffer_allocate_data(GL_ARRAY_BUFFER, data.canvas_quad_vertices, sizeof(float) * 8, QV, GL_STATIC_DRAW, "Canvas Quad");
 		GL_CHECK_ERROR("GLES2::RasterizerCanvasGLES2::initialize: buffer_allocate_data quad");
 		glBindBuffer(GL_ARRAY_BUFFER, 0);
 	}
@@ -660,43 +696,7 @@ void RasterizerCanvasGLES2::initialize() {
 		GL_CHECK_ERROR("GLES2::RasterizerCanvasGLES2::initialize: glGenBuffers ninepatch index");
 		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, data.ninepatch_elements);
 
-#define _EIDX(y, x) (y * 4 + x)
-		constexpr uint8_t elems[3 * 2 * 9] = {
-			// first row
-			_EIDX(0, 0), _EIDX(0, 1), _EIDX(1, 1),
-			_EIDX(1, 1), _EIDX(1, 0), _EIDX(0, 0),
-
-			_EIDX(0, 1), _EIDX(0, 2), _EIDX(1, 2),
-			_EIDX(1, 2), _EIDX(1, 1), _EIDX(0, 1),
-
-			_EIDX(0, 2), _EIDX(0, 3), _EIDX(1, 3),
-			_EIDX(1, 3), _EIDX(1, 2), _EIDX(0, 2),
-
-			// second row
-			_EIDX(1, 0), _EIDX(1, 1), _EIDX(2, 1),
-			_EIDX(2, 1), _EIDX(2, 0), _EIDX(1, 0),
-
-			// center field
-			_EIDX(1, 2), _EIDX(1, 3), _EIDX(2, 3),
-			_EIDX(2, 3), _EIDX(2, 2), _EIDX(1, 2),
-
-			// third row
-			_EIDX(2, 0), _EIDX(2, 1), _EIDX(3, 1),
-			_EIDX(3, 1), _EIDX(3, 0), _EIDX(2, 0),
-
-			_EIDX(2, 1), _EIDX(2, 2), _EIDX(3, 2),
-			_EIDX(3, 2), _EIDX(3, 1), _EIDX(2, 1),
-
-			_EIDX(2, 2), _EIDX(2, 3), _EIDX(3, 3),
-			_EIDX(3, 3), _EIDX(3, 2), _EIDX(2, 2),
-
-			// center field
-			_EIDX(1, 1), _EIDX(1, 2), _EIDX(2, 2),
-			_EIDX(2, 2), _EIDX(2, 1), _EIDX(1, 1)
-		};
-#undef _EIDX
-
-		GLES2::Utilities::get_singleton()->buffer_allocate_data(GL_ELEMENT_ARRAY_BUFFER, data.ninepatch_elements, sizeof(elems), elems, GL_STATIC_DRAW, "Canvas Ninepatch Elements");
+		GLES2::Utilities::get_singleton()->buffer_allocate_data(GL_ELEMENT_ARRAY_BUFFER, data.ninepatch_elements, sizeof(NINEPATCH_ELEMENTS), NINEPATCH_ELEMENTS, GL_STATIC_DRAW, "Canvas Ninepatch Elements");
 		GL_CHECK_ERROR("GLES2::RasterizerCanvasGLES2::initialize: buffer_allocate_data ninepatch index");
 		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
 	}
@@ -2043,9 +2043,12 @@ _FORCE_INLINE_ bool RasterizerCanvasGLES2::_buffer_orphan_and_upload_2d(unsigned
 	return true;
 }
 
-void RasterizerCanvasGLES2::_batch_upload_buffers_2d() {
+bool RasterizerCanvasGLES2::_batch_upload_buffers_2d() {
 	if (bdata.vertices.size() == 0) {
-		return;
+		return true;
+	}
+	if (bdata.gl_vertex_buffer == 0 || bdata.gl_index_buffer == 0) {
+		return false;
 	}
 
 	glBindBuffer(GL_ARRAY_BUFFER, bdata.gl_vertex_buffer);
@@ -2077,7 +2080,11 @@ void RasterizerCanvasGLES2::_batch_upload_buffers_2d() {
 				break;
 		}
 		buffer_bytes = bdata.vertices.size() * sizeof_vert;
-		ERR_FAIL_COND_MSG(buffer_bytes > bdata.vertex_buffer_size_bytes, "GLES2: Batch vertex buffer payload exceeds VRAM allocation! Aborting upload.");
+		if (unlikely(buffer_bytes > bdata.vertex_buffer_size_bytes)) {
+			ERR_PRINT_ONCE("GLES2: Batch vertex buffer payload exceeds VRAM allocation! Falling back to client memory.");
+			glBindBuffer(GL_ARRAY_BUFFER, 0);
+			return false;
+		}
 		data_ptr = bdata.unit_vertices.get_data();
 	}
 
@@ -2085,14 +2092,15 @@ void RasterizerCanvasGLES2::_batch_upload_buffers_2d() {
 	if (GLES2_CONFIG->is_android_emulator) {
 		alloc_size = buffer_bytes; // Emulator workaround: shrink allocation
 	}
-	_buffer_orphan_and_upload_2d(alloc_size, 0, buffer_bytes, data_ptr, GL_ARRAY_BUFFER, GL_DYNAMIC_DRAW, false);
+	const bool upload_ok = _buffer_orphan_and_upload_2d(alloc_size, 0, buffer_bytes, data_ptr, GL_ARRAY_BUFFER, GL_DYNAMIC_DRAW, false);
 
 	// Cleanup
 	glBindBuffer(GL_ARRAY_BUFFER, 0);
+	return upload_ok;
 }
 
-void RasterizerCanvasGLES2::_batch_render_generic(const Batch &p_batch, GLES2::CanvasMaterialData *p_material) {
-	ERR_FAIL_COND(p_batch.num_commands <= 0);
+bool RasterizerCanvasGLES2::_batch_render_generic(const Batch &p_batch, GLES2::CanvasMaterialData *p_material) {
+	ERR_FAIL_COND_V(p_batch.num_commands <= 0, false);
 
 	const bool use_light_angles = bdata.use_light_angles;
 	const bool use_modulate = bdata.use_modulate;
@@ -2106,7 +2114,7 @@ void RasterizerCanvasGLES2::_batch_render_generic(const Batch &p_batch, GLES2::C
 
 	switch (bdata.fvf) {
 		case BatcherEnums::FVF_UNBATCHED:
-			return;
+			return true;
 		case BatcherEnums::FVF_REGULAR:
 			sizeof_vert = sizeof(BatchVertex);
 			break;
@@ -2125,6 +2133,8 @@ void RasterizerCanvasGLES2::_batch_render_generic(const Batch &p_batch, GLES2::C
 		default:
 			break;
 	}
+
+	ERR_FAIL_COND_V_MSG(sizeof_vert == 0, false, "GLES2 batcher: Invalid FVF format size! Aborting draw");
 
 	const BatchTex &tex = bdata.batch_textures[p_batch.batch_texture_id];
 
@@ -2161,12 +2171,27 @@ void RasterizerCanvasGLES2::_batch_render_generic(const Batch &p_batch, GLES2::C
 		p_material->bind_uniforms();
 	}
 
+	bool use_vbo = !bdata.use_client_memory_fallback && bdata.gl_vertex_buffer != 0 && bdata.gl_index_buffer != 0;
 	uint64_t pointer_offset = p_batch.first_vert * sizeof_vert;
 
-	// Bind the massive dynamic buffer
-	glBindBuffer(GL_ARRAY_BUFFER, bdata.gl_vertex_buffer);
-	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, bdata.gl_index_buffer);
-	GL_CHECK_ERROR("GLES2::RasterizerCanvasGLES2::batch_render_generic: bind VBO/IBO");
+	if (use_vbo) {
+		// Bind the massive dynamic buffer
+		glBindBuffer(GL_ARRAY_BUFFER, bdata.gl_vertex_buffer);
+		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, bdata.gl_index_buffer);
+		GL_CHECK_ERROR("GLES2::RasterizerCanvasGLES2::batch_render_generic: bind VBO/IBO");
+	} else {
+		// If VBO/FBO fails, draw directly from CPU staging buffers.
+		glBindBuffer(GL_ARRAY_BUFFER, 0);
+		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+		const void *base_ptr = nullptr;
+		if (bdata.fvf == BatcherEnums::FVF_UNBATCHED || bdata.fvf == BatcherEnums::FVF_REGULAR) {
+			base_ptr = (const void *)bdata.vertices.get_data();
+		} else {
+			base_ptr = (const void *)bdata.unit_vertices.get_data();
+		}
+		ERR_FAIL_NULL_V(base_ptr, false);
+		pointer_offset += (uintptr_t)base_ptr;
+	}
 
 	glEnableVertexAttribArray(RS::ARRAY_VERTEX);
 	glVertexAttribPointer(RS::ARRAY_VERTEX, 2, GL_FLOAT, GL_FALSE, sizeof_vert, (const void *)(pointer_offset + offsetof(BatchVertex, pos)));
@@ -2223,11 +2248,25 @@ void RasterizerCanvasGLES2::_batch_render_generic(const Batch &p_batch, GLES2::C
 	// Send Pixel Size to the shader (using the state updated by _bind_canvas_texture)
 	state.canvas_shader->version_set_uniform(CanvasShaderGLES2::COLOR_TEXTURE_PIXEL_SIZE, state.texpixel_size, state.shader_version, state.mode_variant, state.specialization);
 
+	bool draw_ok = true;
 	switch (p_batch.type) {
 		case BatcherEnums::BT_RECT: {
 			// Offset is now handled by the AttribPointers. Start at index 0.
 			int num_elements = p_batch.num_commands * 6;
-			glDrawElements(GL_TRIANGLES, num_elements, GL_UNSIGNED_SHORT, nullptr);
+			if (use_vbo) {
+				glDrawElements(GL_TRIANGLES, num_elements, GL_UNSIGNED_SHORT, nullptr);
+			} else {
+				if (
+					unlikely(
+						num_elements > bdata.fallback_indices.size() ||
+						!bdata.fallback_indices.get_data()
+					)
+				) {
+					draw_ok = false;
+					break;
+				}
+				glDrawElements(GL_TRIANGLES, num_elements, GL_UNSIGNED_SHORT, bdata.fallback_indices.get_data());
+			}
 			if (current_render_info) {
 				current_render_info->info[RS::VIEWPORT_RENDER_INFO_TYPE_CANVAS][RS::VIEWPORT_RENDER_INFO_OBJECTS_IN_FRAME] += 1;
 				current_render_info->info[RS::VIEWPORT_RENDER_INFO_TYPE_CANVAS][RS::VIEWPORT_RENDER_INFO_PRIMITIVES_IN_FRAME] += num_elements / 3;
@@ -2269,9 +2308,10 @@ void RasterizerCanvasGLES2::_batch_render_generic(const Batch &p_batch, GLES2::C
 	glBindBuffer(GL_ARRAY_BUFFER, 0);
 	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
 	GL_CHECK_ERROR("GLES2::RasterizerCanvasGLES2::batch_render_generic: cleanup");
+	return draw_ok;
 }
 
-void RasterizerCanvasGLES2::render_batches(Item::Command *const *p_commands, Item *p_current_clip, bool &r_reclip, GLES2::CanvasMaterialData *p_material) {
+bool RasterizerCanvasGLES2::render_batches(Item::Command *const *p_commands, Item *p_current_clip, bool &r_reclip, GLES2::CanvasMaterialData *p_material) {
 	int num_batches = bdata.batches.size();
 	bool skipping = false;
 	Transform2D base_extra = state.uniforms.extra_matrix;
@@ -2722,24 +2762,34 @@ void RasterizerCanvasGLES2::render_batches(Item::Command *const *p_commands, Ite
 								}
 							}
 
-							glBindBuffer(GL_ARRAY_BUFFER, data.ninepatch_vertices);
-							constexpr uint32_t buffer_size = sizeof(float) * (16 + 16) * 2;
-							bool upload_sucess = _buffer_orphan_and_upload_2d(buffer_size, 0, buffer_size, buffer, GL_ARRAY_BUFFER, GL_DYNAMIC_DRAW, false);
-							if (!check_orphan_success(upload_sucess)) {
-								return;
+							bool use_ninepatch_vbo = (data.ninepatch_vertices != 0 && data.ninepatch_elements != 0);
+							if (use_ninepatch_vbo) {
+								glBindBuffer(GL_ARRAY_BUFFER, data.ninepatch_vertices);
+								constexpr uint32_t BUFFER_SIZE = sizeof(float) * (16 + 16) * 2;
+								if (unlikely(!_buffer_orphan_and_upload_2d(BUFFER_SIZE, 0, BUFFER_SIZE, buffer, GL_ARRAY_BUFFER, GL_DYNAMIC_DRAW, false))) {
+									// Drop to client memory instead of losing the ninepatch on VRAM OOM.
+									use_ninepatch_vbo = false;
+								}
 							}
-
-							glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, data.ninepatch_elements);
 
 							glEnableVertexAttribArray(RS::ARRAY_VERTEX);
 							glEnableVertexAttribArray(RS::ARRAY_TEX_UV);
 							glDisableVertexAttribArray(RS::ARRAY_COLOR);
 
-							glVertexAttribPointer(RS::ARRAY_VERTEX, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), nullptr);
-							glVertexAttribPointer(RS::ARRAY_TEX_UV, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (const void *)(sizeof(float) * 2));
-							GL_CHECK_ERROR("GLES2::RasterizerCanvasGLES2::render_batches: TYPE_NINEPATCH client states");
-
-							glDrawElements(GL_TRIANGLES, 18 * 3 - (np->draw_center ? 0 : 6), GL_UNSIGNED_BYTE, nullptr);
+							if (use_ninepatch_vbo) {
+								glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, data.ninepatch_elements);
+								glVertexAttribPointer(RS::ARRAY_VERTEX, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), nullptr);
+								glVertexAttribPointer(RS::ARRAY_TEX_UV, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (const void *)(sizeof(float) * 2));
+								GL_CHECK_ERROR("GLES2::RasterizerCanvasGLES2::render_batches: TYPE_NINEPATCH client states");
+								glDrawElements(GL_TRIANGLES, 18 * 3 - (np->draw_center ? 0 : 6), GL_UNSIGNED_BYTE, nullptr);
+							} else {
+								glBindBuffer(GL_ARRAY_BUFFER, 0);
+								glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+								glVertexAttribPointer(RS::ARRAY_VERTEX, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), buffer);
+								glVertexAttribPointer(RS::ARRAY_TEX_UV, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), buffer + 2);
+								GL_CHECK_ERROR("GLES2::RasterizerCanvasGLES2::render_batches: TYPE_NINEPATCH client states (fallback)");
+								glDrawElements(GL_TRIANGLES, 18 * 3 - (np->draw_center ? 0 : 6), GL_UNSIGNED_BYTE, NINEPATCH_ELEMENTS);
+							}
 							if (current_render_info) {
 								current_render_info->info[RS::VIEWPORT_RENDER_INFO_TYPE_CANVAS][RS::VIEWPORT_RENDER_INFO_OBJECTS_IN_FRAME]++;
 								current_render_info->info[RS::VIEWPORT_RENDER_INFO_TYPE_CANVAS][RS::VIEWPORT_RENDER_INFO_PRIMITIVES_IN_FRAME] += (18 * 3 - (np->draw_center ? 0 : 6)) / 3;
@@ -2810,7 +2860,7 @@ void RasterizerCanvasGLES2::render_batches(Item::Command *const *p_commands, Ite
 							uint32_t custom_data_ofs = multi_mesh->custom_data_offset_cache;
 
 							const float *base_buffer = multi_mesh->data_cache.ptr();
-							ERR_FAIL_NULL(base_buffer);
+							ERR_FAIL_NULL_V(base_buffer, false);
 
 							Transform2D mesh_base_extra = state.uniforms.extra_matrix;
 							Color base_modulate = state.uniforms.final_modulate;
@@ -3191,92 +3241,128 @@ void RasterizerCanvasGLES2::render_batches(Item::Command *const *p_commands, Ite
 
 			case BatcherEnums::BT_RECT:
 			case BatcherEnums::BT_POLY: {
-				_batch_render_generic(batch, p_material);
+				if (unlikely(!_batch_render_generic(batch, p_material))) {
+					return false;
+				}
 			} break;
 
 			default:
 				break;
 		}
 	}
+	return true;
 }
 
 void RasterizerCanvasGLES2::_draw_gui_primitive(int p_points, const Vector2 *p_vertices, const Color *p_colors, const Vector2 *p_uvs, const float *p_light_angles) {
 	if (unlikely(p_points <= 0)) {
 		return;
 	}
-	glBindBuffer(GL_ARRAY_BUFFER, data.polygon_buffer);
-
 	uint32_t vertex_size = p_points * 2 * sizeof(float);
 	uint32_t color_size = p_colors ? p_points * sizeof(Color) : 0;
 	uint32_t uv_size = p_uvs ? p_points * 2 * sizeof(float) : 0;
 	uint32_t total_size = vertex_size + color_size + uv_size;
 
-	// Lower VRAM fragmentation by only growing the buffer.
-	// If it fits, we pass the tracked size with
-	// nullptr to perform a zero-cost buffer orphan.
-	if (total_size > data.polygon_buffer_size) {
-		data.polygon_buffer_size = next_power_of_2(total_size);
-	}
-	uint32_t offset = 0;
-	bool upload_success = false;
-
-	// Vertices
 #ifdef REAL_T_IS_DOUBLE
 	float *vertex_f = SAFE_ALLOCA_ARRAY(float, p_points * 2);
 	for (int i = 0; i < p_points; i++) {
 		vertex_f[i * 2 + 0] = static_cast<float>(p_vertices[i].x);
 		vertex_f[i * 2 + 1] = static_cast<float>(p_vertices[i].y);
 	}
-	upload_success = _buffer_orphan_and_upload_2d(data.polygon_buffer_size, offset, vertex_size, vertex_f, GL_ARRAY_BUFFER, GL_DYNAMIC_DRAW, false);
-#else
-	upload_success = _buffer_orphan_and_upload_2d(data.polygon_buffer_size, offset, vertex_size, p_vertices, GL_ARRAY_BUFFER, GL_DYNAMIC_DRAW, false);
-#endif
-	if (!check_orphan_success(upload_success)) {
-		return;
-	}
+	const void *vert_data = vertex_f;
 
-	glEnableVertexAttribArray(RS::ARRAY_VERTEX);
-	glVertexAttribPointer(RS::ARRAY_VERTEX, 2, GL_FLOAT, GL_FALSE, 0, (const void *)(uintptr_t)offset);
-	offset += vertex_size;
-
-	// Colors
-	if (p_colors) {
-		upload_success = _buffer_orphan_and_upload_2d(data.polygon_buffer_size, offset, color_size, p_colors, GL_ARRAY_BUFFER, GL_DYNAMIC_DRAW, true);
-		if (!check_orphan_success(upload_success)) {
-			return;
-		}
-
-		glEnableVertexAttribArray(RS::ARRAY_COLOR);
-		glVertexAttribPointer(RS::ARRAY_COLOR, 4, GL_FLOAT, GL_FALSE, 0, (const void *)(uintptr_t)offset);
-		offset += color_size;
-	} else {
-		glDisableVertexAttribArray(RS::ARRAY_COLOR);
-		glVertexAttrib4f(RS::ARRAY_COLOR, 1.0f, 1.0f, 1.0f, 1.0f);
-	}
-
-	// UVs
+	float *uv_f = nullptr;
 	if (p_uvs) {
-#ifdef REAL_T_IS_DOUBLE
-		float *uv_f = SAFE_ALLOCA_ARRAY(float, p_points * 2);
+		uv_f = SAFE_ALLOCA_ARRAY(float, p_points * 2);
 		for (int i = 0; i < p_points; i++) {
 			uv_f[i * 2 + 0] = static_cast<float>(p_uvs[i].x);
 			uv_f[i * 2 + 1] = static_cast<float>(p_uvs[i].y);
 		}
-		upload_success = _buffer_orphan_and_upload_2d(data.polygon_buffer_size, offset, uv_size, uv_f, GL_ARRAY_BUFFER, GL_DYNAMIC_DRAW, true);
+	}
+	const void *uv_data = uv_f;
 #else
-		upload_success = _buffer_orphan_and_upload_2d(data.polygon_buffer_size, offset, uv_size, p_uvs, GL_ARRAY_BUFFER, GL_DYNAMIC_DRAW, true);
+	const void *vert_data = p_vertices;
+	const void *uv_data = p_uvs;
 #endif
-		if (!check_orphan_success(upload_success)) {
-			return;
+
+	bool use_vbo = data.polygon_buffer != 0;
+	if (use_vbo) {
+		glBindBuffer(GL_ARRAY_BUFFER, data.polygon_buffer);
+
+		// Lower VRAM fragmentation by only growing the buffer.
+		// If it fits, we pass the tracked size with
+		// nullptr to perform a zero-cost buffer orphan.
+		if (total_size > data.polygon_buffer_size) {
+			data.polygon_buffer_size = next_power_of_2(total_size);
+		}
+		uint32_t offset = 0;
+
+		// Vertices
+		if (unlikely(!_buffer_orphan_and_upload_2d(data.polygon_buffer_size, offset, vertex_size, vert_data, GL_ARRAY_BUFFER, GL_DYNAMIC_DRAW, false))) {
+			use_vbo = false;
+		} else {
+			glEnableVertexAttribArray(RS::ARRAY_VERTEX);
+			glVertexAttribPointer(RS::ARRAY_VERTEX, 2, GL_FLOAT, GL_FALSE, 0, (const void *)(uintptr_t)offset);
+			offset += vertex_size;
 		}
 
-		glEnableVertexAttribArray(RS::ARRAY_TEX_UV);
-		glVertexAttribPointer(RS::ARRAY_TEX_UV, 2, GL_FLOAT, GL_FALSE, 0, (const void *)(uintptr_t)offset);
-		offset += uv_size;
-	} else {
-		glDisableVertexAttribArray(RS::ARRAY_TEX_UV);
+		// Colors
+		if (use_vbo) {
+			if (p_colors) {
+				if (unlikely(!_buffer_orphan_and_upload_2d(data.polygon_buffer_size, offset, color_size, p_colors, GL_ARRAY_BUFFER, GL_DYNAMIC_DRAW, true))) {
+					use_vbo = false;
+				} else {
+					glEnableVertexAttribArray(RS::ARRAY_COLOR);
+					glVertexAttribPointer(RS::ARRAY_COLOR, 4, GL_FLOAT, GL_FALSE, 0, (const void *)(uintptr_t)offset);
+					offset += color_size;
+				}
+			} else {
+				glDisableVertexAttribArray(RS::ARRAY_COLOR);
+				glVertexAttrib4f(RS::ARRAY_COLOR, 1.0f, 1.0f, 1.0f, 1.0f);
+			}
+		}
+
+		// UVs
+		if (use_vbo) {
+			if (p_uvs) {
+				if (unlikely(!_buffer_orphan_and_upload_2d(data.polygon_buffer_size, offset, uv_size, uv_data, GL_ARRAY_BUFFER, GL_DYNAMIC_DRAW, true))) {
+					use_vbo = false;
+				} else {
+					glEnableVertexAttribArray(RS::ARRAY_TEX_UV);
+					glVertexAttribPointer(RS::ARRAY_TEX_UV, 2, GL_FLOAT, GL_FALSE, 0, (const void *)(uintptr_t)offset);
+					offset += uv_size;
+				}
+			} else {
+				glDisableVertexAttribArray(RS::ARRAY_TEX_UV);
+			}
+		}
+
+		if (use_vbo) {
+			GL_CHECK_ERROR("GLES2::RasterizerCanvasGLES2::draw_gui: buffer subdata and pointers");
+		}
 	}
-	GL_CHECK_ERROR("GLES2::RasterizerCanvasGLES2::draw_gui: buffer subdata and pointers");
+
+	if (!use_vbo) {
+		// Bind client-memory pointers directly on VRAM OOM.
+		glBindBuffer(GL_ARRAY_BUFFER, 0);
+		glEnableVertexAttribArray(RS::ARRAY_VERTEX);
+		glVertexAttribPointer(RS::ARRAY_VERTEX, 2, GL_FLOAT, GL_FALSE, 0, vert_data);
+
+		if (p_colors) {
+			glEnableVertexAttribArray(RS::ARRAY_COLOR);
+			glVertexAttribPointer(RS::ARRAY_COLOR, 4, GL_FLOAT, GL_FALSE, 0, p_colors);
+		} else {
+			glDisableVertexAttribArray(RS::ARRAY_COLOR);
+			glVertexAttrib4f(RS::ARRAY_COLOR, 1.0f, 1.0f, 1.0f, 1.0f);
+		}
+
+		if (p_uvs) {
+			glEnableVertexAttribArray(RS::ARRAY_TEX_UV);
+			glVertexAttribPointer(RS::ARRAY_TEX_UV, 2, GL_FLOAT, GL_FALSE, 0, uv_data);
+		} else {
+			glDisableVertexAttribArray(RS::ARRAY_TEX_UV);
+		}
+		GL_CHECK_ERROR("GLES2::RasterizerCanvasGLES2::draw_gui: client-memory fallback pointers");
+	}
 
 	// For Gizmos, we often draw Lines, Triangles, or Points depending on p_points
 	GLenum draw_mode = GL_INVALID_ENUM;
@@ -3353,9 +3439,6 @@ void RasterizerCanvasGLES2::_legacy_draw_polygon(Item::CommandPolygon *p_poly, G
 
 	state.canvas_shader->version_set_uniform(CanvasShaderGLES2::COLOR_TEXTURE_PIXEL_SIZE, state.texpixel_size, state.shader_version, state.mode_variant, state.specialization);
 
-	// Setup vertex attributes
-	glBindBuffer(GL_ARRAY_BUFFER, data.polygon_buffer);
-
 	uint32_t points_count = pd.points.size();
 	uint32_t points_size = points_count * 2 * sizeof(float);
 	uint32_t uvs_size = pd.uvs.size() * 2 * sizeof(float);
@@ -3367,65 +3450,31 @@ void RasterizerCanvasGLES2::_legacy_draw_polygon(Item::CommandPolygon *p_poly, G
 	uint32_t bones_size = pd.bones.size() * sizeof(float);
 	uint32_t weights_size = pd.weights.size() * sizeof(float);
 
-	// Orphan the buffer and upload new data
-	uint32_t total_size = points_size + uvs_size + colors_size + bones_size + weights_size;
-	if (total_size > data.polygon_buffer_size) {
-		data.polygon_buffer_size = next_power_of_2(total_size);
-	}
-	uint32_t offset = 0;
-	bool upload_success = false;
-
-	// Points
 #ifdef REAL_T_IS_DOUBLE
 	float *points_f = SAFE_ALLOCA_ARRAY(float, points_count * 2);
 	for (uint32_t i = 0; i < points_count; i++) {
 		points_f[i * 2 + 0] = static_cast<float>(pd.points[i].x);
 		points_f[i * 2 + 1] = static_cast<float>(pd.points[i].y);
 	}
-	upload_success = _buffer_orphan_and_upload_2d(data.polygon_buffer_size, offset, points_size, points_f, GL_ARRAY_BUFFER, GL_DYNAMIC_DRAW, false);
-#else
-	upload_success = _buffer_orphan_and_upload_2d(data.polygon_buffer_size, offset, points_size, pd.points.ptr(), GL_ARRAY_BUFFER, GL_DYNAMIC_DRAW, false);
-#endif
-	if (!check_orphan_success(upload_success)) {
-		return;
-	}
+	const void *points_data = points_f;
 
-	glEnableVertexAttribArray(RS::ARRAY_VERTEX);
-	glVertexAttribPointer(RS::ARRAY_VERTEX, 2, GL_FLOAT, GL_FALSE, 0, (const void *)(uintptr_t)offset);
-	offset += points_size;
-
-	// UVs
+	float *uv_f = nullptr;
 	if (uvs_size > 0) {
-#ifdef REAL_T_IS_DOUBLE
-		float *uv_f = SAFE_ALLOCA_ARRAY(float, pd.uvs.size() * 2);
+		uv_f = SAFE_ALLOCA_ARRAY(float, pd.uvs.size() * 2);
 		for (int i = 0; i < pd.uvs.size(); i++) {
 			uv_f[i * 2 + 0] = static_cast<float>(pd.uvs[i].x);
 			uv_f[i * 2 + 1] = static_cast<float>(pd.uvs[i].y);
 		}
-		upload_success = _buffer_orphan_and_upload_2d(data.polygon_buffer_size, offset, uvs_size, uv_f, GL_ARRAY_BUFFER, GL_DYNAMIC_DRAW, true);
-#else
-		upload_success = _buffer_orphan_and_upload_2d(data.polygon_buffer_size, offset, uvs_size, pd.uvs.ptr(), GL_ARRAY_BUFFER, GL_DYNAMIC_DRAW, true);
-#endif
-		if (!check_orphan_success(upload_success)) {
-			return;
-		}
-
-		glEnableVertexAttribArray(RS::ARRAY_TEX_UV);
-		glVertexAttribPointer(RS::ARRAY_TEX_UV, 2, GL_FLOAT, GL_FALSE, 0, (const void *)(uintptr_t)offset);
-		offset += uvs_size;
-	} else {
-		glDisableVertexAttribArray(RS::ARRAY_TEX_UV);
 	}
-	GL_CHECK_ERROR("GLES2::RasterizerCanvasGLES2::_legacy_draw_polygon: buffer subdata and pointers");
+	const void *uv_data = uv_f;
+#else
+	const void *points_data = pd.points.ptr();
+	const void *uv_data = uvs_size > 0 ? pd.uvs.ptr() : nullptr;
+#endif
 
-	// Colors
-	if (pd.colors.size() == 1) {
-		// Flat colored polygon (e.g., editor backgrounds)
-		glDisableVertexAttribArray(RS::ARRAY_COLOR);
-		glVertexAttrib4f(RS::ARRAY_COLOR, pd.colors[0].r, pd.colors[0].g, pd.colors[0].b, pd.colors[0].a);
-	} else if (use_vertex_colors) {
-		// Vertex colored polygon
-		Color *precalced_colors = SAFE_ALLOCA_ARRAY(Color, points_count);
+	Color *precalced_colors = nullptr;
+	if (use_vertex_colors) {
+		precalced_colors = SAFE_ALLOCA_ARRAY(Color, points_count);
 		if (precalced_colors) {
 			int num_colors_specified = MIN((int)pd.colors.size(), (int)points_count);
 			Color vcol = pd.colors[0];
@@ -3438,19 +3487,95 @@ void RasterizerCanvasGLES2::_legacy_draw_polygon(Item::CommandPolygon *p_poly, G
 			for (int n = num_colors_specified; n < (int)points_count; n++) {
 				precalced_colors[n] = vcol;
 			}
-
-			upload_success = _buffer_orphan_and_upload_2d(data.polygon_buffer_size, offset, colors_size, precalced_colors, GL_ARRAY_BUFFER, GL_DYNAMIC_DRAW, true);
-			if (!check_orphan_success(upload_success)) {
-				return;
-			}
-
-			glEnableVertexAttribArray(RS::ARRAY_COLOR);
-			glVertexAttribPointer(RS::ARRAY_COLOR, 4, GL_FLOAT, GL_FALSE, 0, (const void *)(uintptr_t)offset);
 		}
-	} else {
-		// No color
-		glDisableVertexAttribArray(RS::ARRAY_COLOR);
-		glVertexAttrib4f(RS::ARRAY_COLOR, 1.0f, 1.0f, 1.0f, 1.0f); // Default white
+	}
+
+	bool use_vbo = data.polygon_buffer != 0;
+	if (use_vbo) {
+		// Setup vertex attributes
+		glBindBuffer(GL_ARRAY_BUFFER, data.polygon_buffer);
+
+		// Orphan the buffer and upload new data
+		uint32_t total_size = points_size + uvs_size + colors_size + bones_size + weights_size;
+		if (total_size > data.polygon_buffer_size) {
+			data.polygon_buffer_size = next_power_of_2(total_size);
+		}
+		uint32_t offset = 0;
+
+		// Points
+		if (unlikely(!_buffer_orphan_and_upload_2d(data.polygon_buffer_size, offset, points_size, points_data, GL_ARRAY_BUFFER, GL_DYNAMIC_DRAW, false))) {
+			use_vbo = false;
+		} else {
+			glEnableVertexAttribArray(RS::ARRAY_VERTEX);
+			glVertexAttribPointer(RS::ARRAY_VERTEX, 2, GL_FLOAT, GL_FALSE, 0, (const void *)(uintptr_t)offset);
+			offset += points_size;
+		}
+
+		// UVs
+		if (use_vbo) {
+			if (uvs_size > 0) {
+				if (unlikely(!_buffer_orphan_and_upload_2d(data.polygon_buffer_size, offset, uvs_size, uv_data, GL_ARRAY_BUFFER, GL_DYNAMIC_DRAW, true))) {
+					use_vbo = false;
+				} else {
+					glEnableVertexAttribArray(RS::ARRAY_TEX_UV);
+					glVertexAttribPointer(RS::ARRAY_TEX_UV, 2, GL_FLOAT, GL_FALSE, 0, (const void *)(uintptr_t)offset);
+					offset += uvs_size;
+				}
+			} else {
+				glDisableVertexAttribArray(RS::ARRAY_TEX_UV);
+			}
+		}
+
+		// Colors
+		if (use_vbo) {
+			if (pd.colors.size() == 1) {
+				// Flat colored polygon (e.g., editor backgrounds)
+				glDisableVertexAttribArray(RS::ARRAY_COLOR);
+				glVertexAttrib4f(RS::ARRAY_COLOR, pd.colors[0].r, pd.colors[0].g, pd.colors[0].b, pd.colors[0].a);
+			} else if (use_vertex_colors && precalced_colors) {
+				// Vertex colored polygon
+				if (unlikely(!_buffer_orphan_and_upload_2d(data.polygon_buffer_size, offset, colors_size, precalced_colors, GL_ARRAY_BUFFER, GL_DYNAMIC_DRAW, true))) {
+					use_vbo = false;
+				} else {
+					glEnableVertexAttribArray(RS::ARRAY_COLOR);
+					glVertexAttribPointer(RS::ARRAY_COLOR, 4, GL_FLOAT, GL_FALSE, 0, (const void *)(uintptr_t)offset);
+				}
+			} else {
+				// No color
+				glDisableVertexAttribArray(RS::ARRAY_COLOR);
+				glVertexAttrib4f(RS::ARRAY_COLOR, 1.0f, 1.0f, 1.0f, 1.0f); // Default white
+			}
+		}
+
+		if (use_vbo) {
+			GL_CHECK_ERROR("GLES2::RasterizerCanvasGLES2::_legacy_draw_polygon: buffer subdata and pointers");
+		}
+	}
+
+	if (!use_vbo) {
+		// Tier 4 fallback: bind client-memory pointers directly on VRAM OOM.
+		glBindBuffer(GL_ARRAY_BUFFER, 0);
+		glEnableVertexAttribArray(RS::ARRAY_VERTEX);
+		glVertexAttribPointer(RS::ARRAY_VERTEX, 2, GL_FLOAT, GL_FALSE, 0, points_data);
+
+		if (uvs_size > 0) {
+			glEnableVertexAttribArray(RS::ARRAY_TEX_UV);
+			glVertexAttribPointer(RS::ARRAY_TEX_UV, 2, GL_FLOAT, GL_FALSE, 0, uv_data);
+		} else {
+			glDisableVertexAttribArray(RS::ARRAY_TEX_UV);
+		}
+
+		if (pd.colors.size() == 1) {
+			glDisableVertexAttribArray(RS::ARRAY_COLOR);
+			glVertexAttrib4f(RS::ARRAY_COLOR, pd.colors[0].r, pd.colors[0].g, pd.colors[0].b, pd.colors[0].a);
+		} else if (use_vertex_colors && precalced_colors) {
+			glEnableVertexAttribArray(RS::ARRAY_COLOR);
+			glVertexAttribPointer(RS::ARRAY_COLOR, 4, GL_FLOAT, GL_FALSE, 0, precalced_colors);
+		} else {
+			glDisableVertexAttribArray(RS::ARRAY_COLOR);
+			glVertexAttrib4f(RS::ARRAY_COLOR, 1.0f, 1.0f, 1.0f, 1.0f);
+		}
+		GL_CHECK_ERROR("GLES2::RasterizerCanvasGLES2::_legacy_draw_polygon: client-memory fallback pointers");
 	}
 
 	// Map primitive type
@@ -3470,25 +3595,34 @@ void RasterizerCanvasGLES2::_legacy_draw_polygon(Item::CommandPolygon *p_poly, G
 			return;
 		}
 
-		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, data.polygon_index_buffer);
-
 		uint16_t *indices_16 = SAFE_ALLOCA_ARRAY(uint16_t, index_count);
 
 		for (int i = 0; i < index_count; i++) {
 			indices_16[i] = (uint16_t)pd.indices[i];
 		}
 
-		uint32_t index_size = index_count * sizeof(uint16_t);
+		bool use_ibo = use_vbo && data.polygon_index_buffer != 0;
+		if (use_ibo) {
+			glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, data.polygon_index_buffer);
 
-		if (index_size > data.polygon_index_buffer_size) {
-			data.polygon_index_buffer_size = next_power_of_2(index_size);
+			uint32_t index_size = index_count * sizeof(uint16_t);
+
+			if (index_size > data.polygon_index_buffer_size) {
+				data.polygon_index_buffer_size = next_power_of_2(index_size);
+			}
+
+			if (unlikely(!_buffer_orphan_and_upload_2d(data.polygon_index_buffer_size, 0, index_size, indices_16, GL_ELEMENT_ARRAY_BUFFER, GL_DYNAMIC_DRAW, false))) {
+				// Unbind IBO and draw indices from client memory on VRAM OOM.
+				use_ibo = false;
+			}
 		}
 
-		upload_success = _buffer_orphan_and_upload_2d(data.polygon_index_buffer_size, 0, index_size, indices_16, GL_ELEMENT_ARRAY_BUFFER, GL_DYNAMIC_DRAW, false);
-		if (!check_orphan_success(upload_success)) {
-			return;
+		if (use_ibo) {
+			glDrawElements(gl_primitive, index_count, GL_UNSIGNED_SHORT, nullptr);
+		} else {
+			glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+			glDrawElements(gl_primitive, index_count, GL_UNSIGNED_SHORT, indices_16);
 		}
-		glDrawElements(gl_primitive, index_count, GL_UNSIGNED_SHORT, nullptr);
 		if (current_render_info) {
 			current_render_info->info[RS::VIEWPORT_RENDER_INFO_TYPE_CANVAS][RS::VIEWPORT_RENDER_INFO_OBJECTS_IN_FRAME]++;
 			current_render_info->info[RS::VIEWPORT_RENDER_INFO_TYPE_CANVAS][RS::VIEWPORT_RENDER_INFO_PRIMITIVES_IN_FRAME] += _gl_indices_to_primitives_2d(gl_primitive, index_count);
