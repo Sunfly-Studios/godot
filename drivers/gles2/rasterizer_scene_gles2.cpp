@@ -2673,7 +2673,7 @@ bool RasterizerSceneGLES2::batch_render_items(GLES2::SceneMaterialData *p_materi
 		return true;
 	}
 
-	if (p_batch.fvf == BatcherEnums::FVF_SAME_MESH_LOOP) {
+	if (p_batch.fvf == BatcherEnums::FVF_3D_SAME_MESH_LOOP) {
 		return _batch_render_same_mesh_group(p_material_data, p_primitive, p_batch, p_transparent);
 	}
 
@@ -2752,7 +2752,7 @@ void RasterizerSceneGLES2::_batch_render_single_mesh_fallback(RS::PrimitiveType 
 }
 
 bool RasterizerSceneGLES2::_batch_render_same_mesh_group(GLES2::SceneMaterialData *p_material_data, RS::PrimitiveType p_primitive, BatchType::Batch3D &p_batch, bool p_transparent) {
-	// Executes the static-mesh state grouping lane (FVF_SAME_MESH_LOOP) for repeated
+	// Executes the static-mesh state grouping lane (FVF_3D_SAME_MESH_LOOP) for repeated
 	// heavy meshes (> 1024 vertices) and MultiMesh instances. Binds the shader, material
 	// uniforms, and the mesh's native static VBO, ABO, and IBO once for the entire
 	// contiguous run, then loops over each reference/instance updating only the

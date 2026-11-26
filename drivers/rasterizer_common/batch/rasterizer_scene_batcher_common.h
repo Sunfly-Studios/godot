@@ -856,7 +856,7 @@ protected:
 	_FORCE_INLINE_ void _prepare_unit_vertices_for_fvf(BatcherEnums::FVF p_fvf) {
 		switch (p_fvf) {
 			case BatcherEnums::FVF_UNBATCHED:
-			case BatcherEnums::FVF_SAME_MESH_LOOP:
+			case BatcherEnums::FVF_3D_SAME_MESH_LOOP:
 				break;
 			case BatcherEnums::FVF_3D_DEPTH_MINIMAL:
 			case BatcherEnums::FVF_DEPTH_ONLY:

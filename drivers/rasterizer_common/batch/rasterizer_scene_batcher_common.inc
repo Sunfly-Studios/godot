@@ -841,7 +841,7 @@ void RasterizerSceneBatcherCommon<T_API>::join_and_flush_sorted_items(bool p_tra
 					if (unlikely(!get_this()->batch_render_items(material, primitive, *batch, p_transparent))) {
 						batch->mpi_palette_capacity = 0;
 						if (bdata.settings_use_single_mesh_fallback && get_this()->batch_can_use_single_mesh_fallback(first_surface)) {
-							batch->fvf = BatcherEnums::FVF_SAME_MESH_LOOP;
+							batch->fvf = BatcherEnums::FVF_3D_SAME_MESH_LOOP;
 							batch->num_verts = first_ref.base_verts;
 							batch->num_indices = first_ref.base_indices;
 							batch->vbo_index = 0xFFFFFFFF;
@@ -884,7 +884,7 @@ void RasterizerSceneBatcherCommon<T_API>::join_and_flush_sorted_items(bool p_tra
 					bdata.reset_flush();
 					batch->mpi_palette_capacity = 0;
 					if (bdata.settings_use_single_mesh_fallback && get_this()->batch_can_use_single_mesh_fallback(first_surface)) {
-						batch->fvf = BatcherEnums::FVF_SAME_MESH_LOOP;
+						batch->fvf = BatcherEnums::FVF_3D_SAME_MESH_LOOP;
 						batch->num_verts = first_ref.base_verts;
 						batch->num_indices = first_ref.base_indices;
 						batch->vbo_index = 0xFFFFFFFF;
@@ -898,7 +898,7 @@ void RasterizerSceneBatcherCommon<T_API>::join_and_flush_sorted_items(bool p_tra
 				continue;
 			} else if (bdata.settings_use_single_mesh_fallback && get_this()->batch_can_use_single_mesh_fallback(first_surface)) {
 				// Fallback when matrix palette hardware is unavailable: demote to SMSG.
-				batch->fvf = BatcherEnums::FVF_SAME_MESH_LOOP;
+				batch->fvf = BatcherEnums::FVF_3D_SAME_MESH_LOOP;
 				batch->num_verts = first_ref.base_verts;
 				batch->num_indices = first_ref.base_indices;
 				batch->vbo_index = 0xFFFFFFFF;
@@ -913,13 +913,13 @@ void RasterizerSceneBatcherCommon<T_API>::join_and_flush_sorted_items(bool p_tra
 			get_this()->batch_can_use_single_mesh_fallback(first_surface)
 		) {
 			// Single non-instanced static mesh uses FVF_UNBATCHED;
-			// multi-item static mesh runs and all MultiMesh items use FVF_SAME_MESH_LOOP.
+			// multi-item static mesh runs and all MultiMesh items use FVF_3D_SAME_MESH_LOOP.
 			if (joined.num_item_refs == 1 && !(effective_flags & BatcherEnums::BTF_3D_USES_INSTANCING)) {
 				batch->fvf = BatcherEnums::FVF_UNBATCHED;
 				batch->num_verts = joined.total_verts;
 				batch->num_indices = joined.total_indices;
 			} else {
-				batch->fvf = BatcherEnums::FVF_SAME_MESH_LOOP;
+				batch->fvf = BatcherEnums::FVF_3D_SAME_MESH_LOOP;
 				batch->num_verts = first_ref.base_verts;
 				batch->num_indices = first_ref.base_indices;
 			}
@@ -1180,7 +1180,7 @@ void RasterizerSceneBatcherCommon<T_API>::flush_render_batches(typename T_API::M
 	}
 
 	// Intercept batches flagged for the single-mesh direct draw fallback or static mesh loop lane.
-	if (p_batch.fvf == BatcherEnums::FVF_UNBATCHED || p_batch.fvf == BatcherEnums::FVF_SAME_MESH_LOOP) {
+	if (p_batch.fvf == BatcherEnums::FVF_UNBATCHED || p_batch.fvf == BatcherEnums::FVF_3D_SAME_MESH_LOOP) {
 		bdata.fvf = p_batch.fvf;
 		if (unlikely(!get_this()->batch_render_items(p_material_data, p_primitive, p_batch, p_transparent))) {
 			p_batch.num_verts = 0;
@@ -1205,7 +1205,7 @@ void RasterizerSceneBatcherCommon<T_API>::flush_render_batches(typename T_API::M
 			T_SURFACE *first_surface = static_cast<T_SURFACE *>(first_ref.surface);
 			p_batch.mpi_palette_capacity = 0;
 			if (first_surface && bdata.settings_use_single_mesh_fallback && get_this()->batch_can_use_single_mesh_fallback(first_surface)) {
-				p_batch.fvf = BatcherEnums::FVF_SAME_MESH_LOOP;
+				p_batch.fvf = BatcherEnums::FVF_3D_SAME_MESH_LOOP;
 				p_batch.num_verts = first_ref.base_verts;
 				p_batch.num_indices = first_ref.base_indices;
 				p_batch.vbo_index = 0xFFFFFFFF;
@@ -1418,7 +1418,7 @@ void RasterizerSceneBatcherCommon<T_API>::_calculate_draw_call_cost_or_flush(Bat
 	if (
 		p_was_cached_vbo ||
 		p_batch.fvf == BatcherEnums::FVF_UNBATCHED ||
-		p_batch.fvf == BatcherEnums::FVF_SAME_MESH_LOOP
+		p_batch.fvf == BatcherEnums::FVF_3D_SAME_MESH_LOOP
 	) {
 		// Cached VBO slots and static mesh draws do not upload dynamic staging data.
 		return;

@@ -829,7 +829,7 @@ private:
 		const uint32_t batch_flags = _render_item_state.curr_batch ? _render_item_state.curr_batch->flags : 0;
 		const bool unbatched_uses_color = (
 			!is_immediate_draw &&
-			(bdata.fvf == BatcherEnums::FVF_UNBATCHED || bdata.fvf == BatcherEnums::FVF_SAME_MESH_LOOP) &&
+			(bdata.fvf == BatcherEnums::FVF_UNBATCHED || bdata.fvf == BatcherEnums::FVF_3D_SAME_MESH_LOOP) &&
 			(batch_flags & BatcherEnums::BTF_3D_USES_COLORS) != 0 &&
 			(
 				(p_material_data && p_material_data->shader_data && p_material_data->shader_data->uses_color) ||
