@@ -48,11 +48,15 @@ static _FORCE_INLINE_ unsigned int __clz_32(unsigned int value) {
 	return 31 - num;
 }
 
+#if !defined(IS_32_BIT)
+// TODO: If we do ever use this, then this can become problematic
+// on 32-bit.
 static _FORCE_INLINE_ unsigned int __clz_64(unsigned long value) {
 	unsigned long num = 0;
 	_BitScanReverse64(&num, value);
 	return 63 - num;
 }
+#endif
 
 // Next power of 2 (32-bit)
 static _FORCE_INLINE_ unsigned int next_power_of_2(unsigned int x) {
@@ -70,6 +74,8 @@ static _FORCE_INLINE_ unsigned int previous_power_of_2(unsigned int x) {
 	return 0x80000000 >> __clz_32(x);
 }
 
+#if !defined(IS_32_BIT)
+
 // Next power of 2 (64-bit)
 static _FORCE_INLINE_ unsigned int next_power_of_2_64(unsigned long x) {
 	if (x == 0) {
@@ -85,6 +91,8 @@ static _FORCE_INLINE_ unsigned int previous_power_of_2_64(unsigned long x) {
 	}
 	return 0x8000000000000000 >> __clz_64(x);
 }
+
+#endif // !IS_32_BIT
 
 // Get a shift value from a power of 2.
 static _FORCE_INLINE_ int get_shift_from_power_of_2(unsigned int p_bits) {

@@ -1070,7 +1070,7 @@ else:  # GCC, Clang
     # to complain.
     common_warnings += ["-Wno-comment"]
 
-    if env["use_llvm"]:
+    if methods.using_clang(env):
         # Our architecture uses NTTP, CRTP, and compile-time segragation
         # methods to the core engine to keep things fast and to remove
         # all runtime polymorphism out of it.
