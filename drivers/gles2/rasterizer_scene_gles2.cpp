@@ -1495,11 +1495,11 @@ void RasterizerSceneGLES2::scene_render_items_implementation(GeometryInstanceSur
 		) {
 			continue;
 		}
-		_render_single_item_immediate(p_surfaces[i]);
+		render_single_item_immediate(p_surfaces[i]);
 	}
 }
 
-void RasterizerSceneGLES2::_batch_get_hardware_limits(BatchType::BatchLimits &r_limits) {
+void RasterizerSceneGLES2::batch_get_hardware_limits(BatchType::BatchLimits &r_limits) {
 	// In GLES2, we use vertex attributes for instancing.
 	// So we set the matrix palette to a high value so we don't prematurely flush.
 	r_limits.max_matrix_palette_vectors = 0xFFFFFF;
@@ -1510,7 +1510,7 @@ void RasterizerSceneGLES2::_batch_get_hardware_limits(BatchType::BatchLimits &r_
 	r_limits.max_indices_per_buffer = 131072;
 }
 
-void RasterizerSceneGLES2::_batch_get_instance_geometry_capacity(const GeometryInstanceSurface *p_surface, uint32_t &r_vertex_count, uint32_t &r_index_count) {
+void RasterizerSceneGLES2::batch_get_instance_geometry_capacity(const GeometryInstanceSurface *p_surface, uint32_t &r_vertex_count, uint32_t &r_index_count) {
 	r_vertex_count = p_surface->vertex_cache.size();
 	r_index_count = p_surface->index_cache.size();
 
@@ -1520,7 +1520,7 @@ void RasterizerSceneGLES2::_batch_get_instance_geometry_capacity(const GeometryI
 	}
 }
 
-float RasterizerSceneGLES2::_batch_get_item_depth(const GeometryInstanceSurface *p_surface, const Transform3D &p_camera_transform) {
+float RasterizerSceneGLES2::batch_get_item_depth(const GeometryInstanceSurface *p_surface, const Transform3D &p_camera_transform) {
 	// Use the pre-validated per-instance depth computed once during the render list.
 	return (p_surface && p_surface->owner) ? p_surface->owner->depth : 0.0f;
 }
@@ -1548,7 +1548,7 @@ void RasterizerSceneGLES2::_batch_resolve_pass_surface_state(const GeometryInsta
 	}
 }
 
-uint64_t RasterizerSceneGLES2::_batch_get_state_hash(const GeometryInstanceSurface *p_surface) {
+uint64_t RasterizerSceneGLES2::batch_get_state_hash(const GeometryInstanceSurface *p_surface) {
 	GLES2::SceneMaterialData *active_mat = nullptr;
 	GLES2::SceneShaderData *active_shader = nullptr;
 	RS::CullMode active_cull = RS::CULL_MODE_BACK;
@@ -1584,7 +1584,7 @@ uint64_t RasterizerSceneGLES2::_batch_get_state_hash(const GeometryInstanceSurfa
 	return hash;
 }
 
-uint32_t RasterizerSceneGLES2::_batch_get_surface_flags(const GeometryInstanceSurface *p_surface) const {
+uint32_t RasterizerSceneGLES2::batch_get_surface_flags(const GeometryInstanceSurface *p_surface) const {
 	// Inspects the surface's mesh caches, shader input mask, and MultiMesh configuration
 	// to build a bitmask of BatchFlags3D. Used during Stage 1 joining to determine the
 	// minimal FVF tier needed for the batch.
@@ -1649,7 +1649,7 @@ uint32_t RasterizerSceneGLES2::_batch_get_surface_flags(const GeometryInstanceSu
 	return flags;
 }
 
-RasterizerSceneGLES2::BatchType::BatchColor RasterizerSceneGLES2::_batch_get_surface_modulate(const GeometryInstanceSurface *p_surface) const {
+RasterizerSceneGLES2::BatchType::BatchColor RasterizerSceneGLES2::batch_get_surface_modulate(const GeometryInstanceSurface *p_surface) const {
 	// This is not needed for the GLES2 driver, as everything is done
 	// via shader uniforms instead of FFP vertex colour baking.
 
@@ -1659,7 +1659,7 @@ RasterizerSceneGLES2::BatchType::BatchColor RasterizerSceneGLES2::_batch_get_sur
 	return col;
 }
 
-GLES2::SceneMaterialData *RasterizerSceneGLES2::_batch_get_material_data(const GeometryInstanceSurface *p_surface) {
+GLES2::SceneMaterialData *RasterizerSceneGLES2::batch_get_material_data(const GeometryInstanceSurface *p_surface) {
 	GLES2::SceneMaterialData *active_mat = nullptr;
 	GLES2::SceneShaderData *active_shader = nullptr;
 	RS::CullMode active_cull = RS::CULL_MODE_BACK;
@@ -1667,7 +1667,7 @@ GLES2::SceneMaterialData *RasterizerSceneGLES2::_batch_get_material_data(const G
 	return active_mat;
 }
 
-bool RasterizerSceneGLES2::_batch_can_use_single_mesh_fallback(const GeometryInstanceSurface *p_surface) const {
+bool RasterizerSceneGLES2::batch_can_use_single_mesh_fallback(const GeometryInstanceSurface *p_surface) const {
 	if (!p_surface || !p_surface->surface || !p_surface->owner) {
 		return false;
 	}
@@ -1732,7 +1732,7 @@ void RasterizerSceneGLES2::_batch_prepare_surface_world_cache(const GeometryInst
 	}
 }
 
-void RasterizerSceneGLES2::_batch_fill_instance_tiered(const BatchType::BItemRef3D &p_ref, uint8_t *r_bvs, uint16_t *r_inds, uint32_t p_start_vert, bool p_use_hardware_transform, uint32_t p_item_index) {
+void RasterizerSceneGLES2::batch_fill_instance_tiered(const BatchType::BItemRef3D &p_ref, uint8_t *r_bvs, uint16_t *r_inds, uint32_t p_start_vert, bool p_use_hardware_transform, uint32_t p_item_index) {
 	// Writes transformed vertices directly into the interleaved target FVF tier.
 	const GeometryInstanceSurface *p_surface = static_cast<const GeometryInstanceSurface *>(p_ref.surface);
 	if (!p_surface || !p_surface->surface) {
@@ -1784,7 +1784,7 @@ void RasterizerSceneGLES2::_batch_fill_instance_tiered(const BatchType::BItemRef
 	_batch_fill_indices_single(r_inds, indices, v_count, p_start_vert);
 }
 
-void RasterizerSceneGLES2::_batch_fill_multimesh_tiered(const BatchType::BItemRef3D &p_ref, uint8_t *r_bvs, uint16_t *r_inds, uint32_t p_start_vert, bool p_use_hardware_transform, uint32_t p_item_index) {
+void RasterizerSceneGLES2::batch_fill_multimesh_tiered(const BatchType::BItemRef3D &p_ref, uint8_t *r_bvs, uint16_t *r_inds, uint32_t p_start_vert, bool p_use_hardware_transform, uint32_t p_item_index) {
 	// Two-pass SoA MultiMesh expansion directly into interleaved unit_vertices.
 	const GeometryInstanceSurface *p_surface = static_cast<const GeometryInstanceSurface *>(p_ref.surface);
 	if (!p_surface || !p_surface->surface || p_ref.instance_count == 0) {
@@ -1877,7 +1877,7 @@ void RasterizerSceneGLES2::_batch_fill_multimesh_tiered(const BatchType::BItemRe
 	_batch_fill_indices_multimesh(r_inds, indices, v_count, instances, p_start_vert, p_surface->primitive);
 }
 
-void RasterizerSceneGLES2::_batch_fill_instance_depth(const BatchType::BItemRef3D &p_ref, uint8_t *r_bvs, uint16_t *r_inds, uint32_t p_start_vert, bool p_use_hardware_transform, uint32_t p_item_index) {
+void RasterizerSceneGLES2::batch_fill_instance_depth(const BatchType::BItemRef3D &p_ref, uint8_t *r_bvs, uint16_t *r_inds, uint32_t p_start_vert, bool p_use_hardware_transform, uint32_t p_item_index) {
 	// Packs minimal depth-only (16-byte) or alpha-tested depth (32-byte) vertices
 	// directly into unit_vertices for shadow and depth pre-passes, bypassing normal/color/tangent streams.
 	const GeometryInstanceSurface *p_surface = static_cast<const GeometryInstanceSurface *>(p_ref.surface);
@@ -1913,7 +1913,7 @@ void RasterizerSceneGLES2::_batch_fill_instance_depth(const BatchType::BItemRef3
 	_batch_fill_indices_single(r_inds, indices, v_count, p_start_vert);
 }
 
-void RasterizerSceneGLES2::_batch_fill_multimesh_depth(const BatchType::BItemRef3D &p_ref, uint8_t *r_bvs, uint16_t *r_inds, uint32_t p_start_vert, bool p_use_hardware_transform, uint32_t p_item_index) {
+void RasterizerSceneGLES2::batch_fill_multimesh_depth(const BatchType::BItemRef3D &p_ref, uint8_t *r_bvs, uint16_t *r_inds, uint32_t p_start_vert, bool p_use_hardware_transform, uint32_t p_item_index) {
 	// Expands MultiMesh instances directly into minimal depth-only (16-byte) or
 	// alpha-tested depth (32-byte) vertices using per-instance TransformMode3D fast-paths.
 	const GeometryInstanceSurface *p_surface = static_cast<const GeometryInstanceSurface *>(p_ref.surface);
@@ -1950,7 +1950,7 @@ void RasterizerSceneGLES2::_batch_fill_multimesh_depth(const BatchType::BItemRef
 	_batch_fill_indices_multimesh(r_inds, indices, v_count, instances, p_start_vert, p_surface->primitive);
 }
 
-void RasterizerSceneGLES2::_batch_fill_mpi_template(const BatchType::BItemRef3D &p_ref, uint32_t p_palette_count, uint8_t *r_bvs, uint16_t *r_inds) {
+void RasterizerSceneGLES2::batch_fill_mpi_template(const BatchType::BItemRef3D &p_ref, uint32_t p_palette_count, uint8_t *r_bvs, uint16_t *r_inds) {
 	// Packs K local-space copies of the mesh tagged with matrix_index 0..K-1 into Tier 4 layout.
 	const GeometryInstanceSurface *p_surface = static_cast<const GeometryInstanceSurface *>(p_ref.surface);
 	if (!p_surface || p_surface->vertex_cache.is_empty() || p_palette_count == 0) {
@@ -1969,7 +1969,7 @@ void RasterizerSceneGLES2::_batch_fill_mpi_template(const BatchType::BItemRef3D 
 	_batch_fill_indices_multimesh(r_inds, p_surface->index_cache, v_count, static_cast<int>(p_palette_count), 0, p_surface->primitive);
 }
 
-void RasterizerSceneGLES2::_batch_fill_mpi_depth_template(const BatchType::BItemRef3D &p_ref, uint32_t p_palette_count, uint8_t *r_bvs, uint16_t *r_inds) {
+void RasterizerSceneGLES2::batch_fill_mpi_depth_template(const BatchType::BItemRef3D &p_ref, uint32_t p_palette_count, uint8_t *r_bvs, uint16_t *r_inds) {
 	// Packs K local-space copies of the mesh tagged with matrix_index 0..K-1 into minimal depth layout.
 	const GeometryInstanceSurface *p_surface = static_cast<const GeometryInstanceSurface *>(p_ref.surface);
 	if (!p_surface || p_surface->vertex_cache.is_empty() || p_palette_count == 0) {
@@ -1989,7 +1989,7 @@ void RasterizerSceneGLES2::_batch_fill_mpi_depth_template(const BatchType::BItem
 	_batch_fill_indices_multimesh(r_inds, p_surface->index_cache, v_count, static_cast<int>(p_palette_count), 0, p_surface->primitive);
 }
 
-bool RasterizerSceneGLES2::_batch_try_reuse_cached_vbo_slot_3d(BatchType::Batch3D &r_batch, uint64_t p_content_hash) {
+bool RasterizerSceneGLES2::batch_try_reuse_cached_vbo_slot_3d(BatchType::Batch3D &r_batch, uint64_t p_content_hash) {
 	// Don't reuse for Android emulators since they may not like
 	// or speediness.
 	if (GLES2_CONFIG->is_android_emulator || p_content_hash == 0) {
@@ -2373,9 +2373,9 @@ _FORCE_INLINE_ bool RasterizerSceneGLES2::_batch_buffer_orphan_and_upload_3d(uns
 	return true;
 }
 
-void RasterizerSceneGLES2::_batch_threshold_flush() {
+void RasterizerSceneGLES2::batch_threshold_flush() {
 	glFlush();
-	GL_CHECK_ERROR("GLES2::RasterizerSceneGLES2::RasterizerSceneGLES2::_batch_threshold_flush: glFlush");
+	GL_CHECK_ERROR("GLES2::RasterizerSceneGLES2::RasterizerSceneGLES2::batch_threshold_flush: glFlush");
 }
 
 bool RasterizerSceneGLES2::_batch_bind_pass_material_and_state(GLES2::SceneMaterialData *p_material_data, GLES2::SceneShaderData *p_shader, RS::CullMode p_cull_mode, uint64_t p_state_hash, SceneShaderGLES2::ShaderVariant p_variant, uint64_t p_spec_constants, bool p_transparent) {
@@ -2471,7 +2471,7 @@ bool RasterizerSceneGLES2::_batch_bind_material(GLES2::SceneMaterialData *p_mate
 		GLES2::SceneShaderData *dummy_shader = nullptr;
 		_batch_resolve_pass_surface_state(first_surf, dummy_mat, dummy_shader, cull_mode);
 		if (first_surf) {
-			batch_state_hash = _batch_get_state_hash(first_surf) & BatchType::MASK_ID;
+			batch_state_hash = batch_get_state_hash(first_surf) & BatchType::MASK_ID;
 		}
 	}
 
@@ -2663,7 +2663,7 @@ bool RasterizerSceneGLES2::_batch_bind_single_mesh_fallback_buffers(bool p_has_c
 	return true;
 }
 
-bool RasterizerSceneGLES2::_batch_render_items(GLES2::SceneMaterialData *p_material_data, RS::PrimitiveType p_primitive, BatchType::Batch3D &p_batch, bool p_transparent) {
+bool RasterizerSceneGLES2::batch_render_items(GLES2::SceneMaterialData *p_material_data, RS::PrimitiveType p_primitive, BatchType::Batch3D &p_batch, bool p_transparent) {
 	if (
 		scene_state.is_directional_additive_replay &&
 		p_material_data &&
@@ -2878,7 +2878,7 @@ bool RasterizerSceneGLES2::_batch_render_mpi(GLES2::SceneMaterialData *p_materia
 	return true;
 }
 
-void RasterizerSceneGLES2::_render_single_item_immediate(const GeometryInstanceSurface *p_surface) {
+void RasterizerSceneGLES2::render_single_item_immediate(const GeometryInstanceSurface *p_surface) {
 	GLES2::SceneMaterialData *active_mat = nullptr;
 	GLES2::SceneShaderData *shader = nullptr;
 
@@ -2897,7 +2897,7 @@ void RasterizerSceneGLES2::_render_single_item_immediate(const GeometryInstanceS
 		return;
 	}
 
-	const uint64_t item_hash = _batch_get_state_hash(p_surface);
+	const uint64_t item_hash = batch_get_state_hash(p_surface);
 	const bool promote_to_instancing = _batch_util_promote_to_instancing(bdata.fvf, p_surface->flags);
 	const SceneShaderGLES2::ShaderVariant variant = _get_shader_variant(promote_to_instancing);
 	const uint64_t spec_constants = _get_pass_spec_constants();
@@ -2927,7 +2927,7 @@ void RasterizerSceneGLES2::_render_single_item_immediate(const GeometryInstanceS
 		scene_state.instancing_attribs_dirty = true;
 		_gl_reset_instancing_attributes();
 		scene_state.instancing_attribs_dirty = true;
-		GL_CHECK_ERROR("GLES2::RasterizerSceneGLES2::RasterizerSceneGLES2::_render_single_item_immediate: glVertexAttrib4f instancing defaults");
+		GL_CHECK_ERROR("GLES2::RasterizerSceneGLES2::RasterizerSceneGLES2::render_single_item_immediate: glVertexAttrib4f instancing defaults");
 	}
 
 	LaneDrawContextGLES2 lane_ctx{};
