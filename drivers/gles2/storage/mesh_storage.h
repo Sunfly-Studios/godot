@@ -48,6 +48,7 @@
 // TODO(GLES2): Why does it not detect?
 // It should by having it on `texture_storage.h`
 #include "drivers/gles_common/common_defines.h"
+#include "drivers/rasterizer_common/rasterizer_mesh_decode.h"
 
 #include "platform_gl.h"
 

@@ -57,58 +57,6 @@ MeshStorage::~MeshStorage() {
 	skeleton_shader.shader.version_free(skeleton_shader.shader_version);
 }
 
-/* STATIC */
-
-static _FORCE_INLINE_ Vector3 _gles1_decode_octahedral_normal(uint16_t p_x, uint16_t p_y) {
-	// Decode 16-bit UNORM components into the [-1.0, 1.0] range
-	float x = (p_x / 65535.0f) * 2.0f - 1.0f;
-	float y = (p_y / 65535.0f) * 2.0f - 1.0f;
-	float z = 1.0f - ABS(x) - ABS(y);
-
-	Vector3 normal(x, y, z);
-	float t = CLAMP(-z, 0.0f, 1.0f);
-	normal.x += normal.x >= 0.0f ? -t : t;
-	normal.y += normal.y >= 0.0f ? -t : t;
-
-	return normal.normalized();
-}
-
-static _FORCE_INLINE_ void _gles1_decode_octahedral_tangent(uint16_t p_x, uint16_t p_y, Vector3 &r_tangent, float &r_binormal_sign) {
-	// Decode X from standard 16-bit UNORM (65535) into [-1.0, 1.0]
-	float x = (p_x / 65535.0f) * 2.0f - 1.0f;
-	float y = (p_y / 65535.0f) * 2.0f - 1.0f;
-
-	// Godot 4 encodes binormal sign = -1.0f by
-	// mapping oct.y into [0.5, 1.0] (or the 0xFFFF sentinel)
-	r_binormal_sign = 1.0f;
-	if (x == -1.0f && y == 1.0f) {
-		y = -1.0f;
-		r_binormal_sign = -1.0f;
-	} else if (y >= 0.0f) {
-		y = y * 2.0f - 1.0f;
-		r_binormal_sign = -1.0f;
-	} else {
-		y = y * 2.0f + 1.0f;
-		r_binormal_sign = 1.0f;
-	}
-
-	float z = 1.0f - ABS(x) - ABS(y);
-
-	r_tangent = Vector3(x, y, z);
-	float t = CLAMP(-z, 0.0f, 1.0f);
-	r_tangent.x += r_tangent.x >= 0.0f ? -t : t;
-	r_tangent.y += r_tangent.y >= 0.0f ? -t : t;
-
-	r_tangent.normalize();
-}
-
-static _FORCE_INLINE_ float _gles1_decode_uv_unorm16(uint16_t p_v, float p_scale) {
-	const float u = p_v / 65535.0f;
-	// Nonzero scale: centered/scaled encoding.
-	// Zero scale: plain UNORM16 in [0,1].
-	return (p_scale != 0.0f) ? (u - 0.5f) * p_scale : u;
-}
-
 /* MESH API */
 
 RID MeshStorage::mesh_allocate() {
@@ -1812,7 +1760,7 @@ void MeshStorage::_decompress_surface_data_2d(RS::SurfaceData &r_surface, Mesh::
 					memcpy(norm_dst, src_v + src_norm_offset + i * src_norm_stride, 16);
 				} else if (src_norm_stride >= 4) {
 					const uint16_t *norm_src = reinterpret_cast<const uint16_t *>(src_v + src_norm_offset + i * src_norm_stride);
-					Vector3 n = _gles1_decode_octahedral_normal(norm_src[0], norm_src[1]);
+					Vector3 n = _raster_mesh_decode_octahedral_normal(norm_src[0], norm_src[1]);
 					norm_dst[0] = n.x;
 					norm_dst[1] = n.y;
 					norm_dst[2] = n.z;
@@ -1992,8 +1940,8 @@ void MeshStorage::_decompress_attribute_buffer_3d(RS::SurfaceData &r_surface, ui
 			float *du = reinterpret_cast<float *>(da + dst_offset);
 			if (src_uv1_bytes == 4) {
 				const uint16_t *uv_src = reinterpret_cast<const uint16_t *>(sa + src_offset);
-				du[0] = _gles1_decode_uv_unorm16(uv_src[0], r_surface.uv_scale.x);
-				du[1] = _gles1_decode_uv_unorm16(uv_src[1], r_surface.uv_scale.y);
+				du[0] = _raster_mesh_decode_uv_unorm16(uv_src[0], r_surface.uv_scale.x);
+				du[1] = _raster_mesh_decode_uv_unorm16(uv_src[1], r_surface.uv_scale.y);
 			} else {
 				memcpy(du, sa + src_offset, 8);
 			}
@@ -2006,8 +1954,8 @@ void MeshStorage::_decompress_attribute_buffer_3d(RS::SurfaceData &r_surface, ui
 			float *du2 = reinterpret_cast<float *>(da + dst_offset);
 			if (src_uv2_bytes == 4) {
 				const uint16_t *uv2_src = reinterpret_cast<const uint16_t *>(sa + src_offset);
-				du2[0] = _gles1_decode_uv_unorm16(uv2_src[0], r_surface.uv_scale.z);
-				du2[1] = _gles1_decode_uv_unorm16(uv2_src[1], r_surface.uv_scale.w);
+				du2[0] = _raster_mesh_decode_uv_unorm16(uv2_src[0], r_surface.uv_scale.z);
+				du2[1] = _raster_mesh_decode_uv_unorm16(uv2_src[1], r_surface.uv_scale.w);
 			} else {
 				memcpy(du2, sa + src_offset, 8);
 			}
@@ -2143,10 +2091,10 @@ void MeshStorage::_decompress_3d_buffer(const uint8_t *p_src, uint8_t *p_dst, ui
 				const uint8_t *norm_u8 = src_pos_ptr + 6;
 				uint16_t nx = static_cast<uint16_t>(norm_u8[0]) * 257;
 				uint16_t ny = static_cast<uint16_t>(norm_u8[1]) * 257;
-				normal = _gles1_decode_octahedral_normal(nx, ny);
+				normal = _raster_mesh_decode_octahedral_normal(nx, ny);
 			} else {
 				const uint16_t *norm_u16 = reinterpret_cast<const uint16_t *>(src_nt_ptr);
-				normal = _gles1_decode_octahedral_normal(norm_u16[0], norm_u16[1]);
+				normal = _raster_mesh_decode_octahedral_normal(norm_u16[0], norm_u16[1]);
 			}
 			norm_dst[0] = normal.x;
 			norm_dst[1] = normal.y;
@@ -2164,11 +2112,11 @@ void MeshStorage::_decompress_3d_buffer(const uint8_t *p_src, uint8_t *p_dst, ui
 				const uint8_t *tang_u8 = src_pos_ptr + 6;
 				uint16_t tx = static_cast<uint16_t>(tang_u8[0]) * 257;
 				uint16_t ty = static_cast<uint16_t>(tang_u8[1]) * 257;
-				_gles1_decode_octahedral_tangent(tx, ty, tangent, binormal_sign);
+				_raster_mesh_decode_octahedral_tangent(tx, ty, tangent, binormal_sign);
 			} else {
 				const uint32_t tang_src_offset = has_normal ? 4 : 0;
 				const uint16_t *tang_u16 = reinterpret_cast<const uint16_t *>(src_nt_ptr + tang_src_offset);
-				_gles1_decode_octahedral_tangent(tang_u16[0], tang_u16[1], tangent, binormal_sign);
+				_raster_mesh_decode_octahedral_tangent(tang_u16[0], tang_u16[1], tangent, binormal_sign);
 			}
 
 			tang_dst[0] = tangent.x;

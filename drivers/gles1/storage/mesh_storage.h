@@ -46,6 +46,7 @@
 
 #include "platform_gl.h"
 #include "drivers/gles1/polyfill_gles1.h"
+#include "drivers/rasterizer_common/rasterizer_mesh_decode.h"
 
 namespace GLES1 {
 
