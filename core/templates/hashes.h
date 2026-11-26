@@ -42,11 +42,11 @@ struct HashGroup {
 private:
 #if defined(IS_32_BIT)
 	static constexpr USize ONES = 0x01010101U;
-	static constexpr USize HIGHS = 0x80808080U;
+	static constexpr USize LOWS = 0x7F7F7F7FU;
 	static constexpr USize HIGH_BIT = 0x80000000U;
 #else
 	static constexpr USize ONES = 0x0101010101010101ULL;
-	static constexpr USize HIGHS = 0x8080808080808080ULL;
+	static constexpr USize LOWS = 0x7F7F7F7F7F7F7F7FULL;
 	static constexpr USize HIGH_BIT = 0x8000000000000000ULL;
 #endif
 
@@ -57,8 +57,9 @@ public:
 			word(unaligned_read<USize>(p_begin)) {}
 
 	_FORCE_INLINE_ USize get_compare_mask(uint8_t p_value) const {
+		// Non-propagating SWAR zero-byte test: (x & LOWS) + LOWS is <= 0xFE per lane.
 		USize x = word ^ (ONES * static_cast<USize>(p_value));
-		return (x - ONES) & ~x & HIGHS;
+		return ~(((x & LOWS) + LOWS) | x | LOWS);
 	}
 
 	// Precondition: p_mask != 0. Returns byte offset [0, GROUP_SIZE - 1] of the first match.
