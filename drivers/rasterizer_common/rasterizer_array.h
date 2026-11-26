@@ -278,8 +278,9 @@ public:
 private:
 	void grow() {
 		unsigned int new_max_size = _list.size() * 2;
-		if (!new_max_size)
+		if (!new_max_size) {
 			new_max_size = 1;
+		}
 		_list.resize(new_max_size);
 	}
 
@@ -363,9 +364,7 @@ public:
 	~RasterizerPooledIndirectList() {
 		// autodelete
 		for (int n = 0; n < _list.size(); n++) {
-			if (_list[n]) {
-				memdelete_notnull(_list[n]);
-			}
+			memdelete_notnull(_list[n]);
 		}
 	}
 

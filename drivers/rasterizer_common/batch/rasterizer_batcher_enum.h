@@ -28,8 +28,8 @@
 /* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                 */
 /**************************************************************************/
 
-#ifndef BATCHER_ENUMS_H
-#define BATCHER_ENUMS_H
+#ifndef RASTERIZER_BATCHER_ENUMS_H
+#define RASTERIZER_BATCHER_ENUMS_H
 
 class BatcherEnums {
 public:
@@ -112,4 +112,4 @@ public:
 	};
 };
 
-#endif // BATCHER_ENUMS_H
+#endif // RASTERIZER_BATCHER_ENUMS_H

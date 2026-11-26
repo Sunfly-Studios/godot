@@ -33,9 +33,9 @@
 
 #include "core/os/os.h"
 #include "core/templates/local_vector.h"
-#include "batcher_enum.h"
-#include "rasterizer_array.h"
-#include "rasterizer_asserts.h"
+#include "rasterizer_batcher_enum.h"
+#include "drivers/rasterizer_common/rasterizer_array.h"
+#include "drivers/rasterizer_common/rasterizer_asserts.h"
 #include "core/config/project_settings.h"
 #include "servers/rendering/renderer_compositor.h"
 
@@ -662,7 +662,7 @@ protected:
 
 	// no need to compile these in in release, they are unneeded outside the editor and only add to executable size
 #if defined(TOOLS_ENABLED) && defined(DEBUG_ENABLED)
-//#include "batch_diagnose.inc"
+//#include "rasterizer_canvas_batch_diagnose.inc"
 #endif
 };
 
