@@ -28,6 +28,7 @@
 /* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                 */
 /**************************************************************************/
 
+#include "gdscript_vm.h"
 #include "gdscript.h"
 #include "gdscript_function.h"
 #include "gdscript_lambda_callable.h"
@@ -730,14 +731,14 @@ Variant GDScriptFunction::call(GDScriptInstance *p_instance, const Variant **p_a
 				GET_VARIANT_PTR(b, 1);
 				GET_VARIANT_PTR(dst, 2);
 				// Compute signatures (types of operands) so it can be optimized when matching.
-				uint32_t op_signature = _code_ptr[ip + 5];
+				uint32_t op_signature = _gdscript_vm_atomic_load_acquire(&_code_ptr[ip + 5]);
 				uint32_t actual_signature = (a->get_type() << 8) | (b->get_type());
 
 #ifdef DEBUG_ENABLED
 				if (op == Variant::OP_DIVIDE || op == Variant::OP_MODULE) {
 					// Don't optimize division and modulo since there's not check for division by zero with validated calls.
 					op_signature = 0xFFFF;
-					_code_ptr[ip + 5] = op_signature;
+					_gdscript_vm_atomic_store_release(&_code_ptr[ip + 5], op_signature);
 				}
 #endif
 
@@ -762,10 +763,12 @@ Variant GDScriptFunction::call(GDScriptInstance *p_instance, const Variant **p_a
 						op_func(a, b, dst);
 
 						// Check again in case another thread already set it.
-						if (_code_ptr[ip + 5] == 0) {
-							_code_ptr[ip + 5] = actual_signature;
+						if (_gdscript_vm_atomic_load_acquire(&_code_ptr[ip + 5]) == 0) {
 							_code_ptr[ip + 6] = static_cast<int>(ret_type);
 							unaligned_write<Variant::ValidatedOperatorEvaluator>(&_code_ptr[ip + 7], op_func);
+							// Store the signature last, so that other threads either use the
+							// fast path with everything stored, or block till we are done.
+							_gdscript_vm_atomic_store_release(&_code_ptr[ip + 5], actual_signature);
 						}
 					}
 					initializer_mutex.unlock();
