@@ -94,12 +94,16 @@ void RasterizerSceneBatcherCommon<T_API>::batch_scene_end() {
 template <typename T_API>
 template <typename BatcherEnums::PassMode p_pass_mode, class T_SURFACE>
 void RasterizerSceneBatcherCommon<T_API>::batch_scene_render_items(T_SURFACE **p_surfaces, int p_count, const Transform3D &p_camera_transform, bool p_transparent, bool p_replay) {
-	if (!bdata.is_initialized || !bdata.settings_use_batching || p_count <= 0 || !p_surfaces) {
+	if (p_count <= 0 || !p_surfaces) {
+		return;
+	}
+
+	// Bypass the batcher entirely and dispatch directly through RSII
+	// if staging buffers failed to initialize or batching is disabled.
+	if (!bdata.is_initialized || !bdata.settings_use_batching) {
 		bdata.pass_mode = p_pass_mode;
 		_render_item_state.reset();
-		if (p_count > 0 && p_surfaces) {
-			get_this()->scene_render_items_implementation(p_surfaces, p_count, p_camera_transform, p_transparent);
-		}
+		get_this()->scene_render_items_implementation(p_surfaces, p_count, p_camera_transform, p_transparent);
 		return;
 	}
 
